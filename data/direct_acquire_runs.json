@@ -1,0 +1,68 @@
+{
+  "runs": [
+    {
+      "run_id": "dhrun_1771443533238_mblvvghp",
+      "source_url": "https://isitas.org/",
+      "max_pages": 5,
+      "body_snippet_chars": 600,
+      "pages_total": 5,
+      "pages_succeeded": 5,
+      "pages_failed": 0,
+      "started_at": "2026-02-18T19:38:53.238Z",
+      "finished_at": "2026-02-18T19:39:00.337Z",
+      "pages": [
+        {
+          "url": "https://isitas.org/",
+          "title": "ISITAS | Seekers Welcome!",
+          "meta_desc": "",
+          "body_snippet": "ISITAS | Seekers Welcome! Home What is ISITAS? ISIT Construct ISIT Game Izzy ITCoin Mentor Select Page Welcome to ISITAS A Community of Collaborators Making Sense of Reality. Humanity is facing a coordination problem. Not because we lack intelligence or information — but because we lack a shared way to make sense of what’s happening. Based on the deceptively simple ISIT Construct, The ISIT Awareness System is intended and designed to enable a vast number of humans to systematically raise their Awareness by learning the power of Abstraction. The ISIT Game serves as our training ground as well a",
+          "emails": [],
+          "phones": [],
+          "links_count": 55,
+          "fetched_at": "2026-02-18T19:38:56.261Z"
+        },
+        {
+          "url": "https://isitas.org/what-is-isitas/",
+          "title": "What is ISITAS? | ISITAS",
+          "meta_desc": "",
+          "body_snippet": "What is ISITAS? | ISITAS Home What is ISITAS? ISIT Construct ISIT Game Izzy ITCoin Mentor Select Page What is ISITAS? 1. The Problem Humanity is facing a growing coordination failure. Across politics, economics, culture, technology, and AI, people increasingly: disagree about basic facts, talk past one another, optimize locally while failing globally. This breakdown is not primarily caused by bad intentions, lack of intelligence, or insufficient data. It is caused by the absence of a shared abstraction of reality that different perspectives can reliably map to. Without a common abstraction lay",
+          "emails": [],
+          "phones": [],
+          "links_count": 43,
+          "fetched_at": "2026-02-18T19:38:57.226Z"
+        },
+        {
+          "url": "https://isitas.org/the-isit-construct/",
+          "title": "The ISIT Construct | ISITAS",
+          "meta_desc": "",
+          "body_snippet": "The ISIT Construct | ISITAS Home What is ISITAS? ISIT Construct ISIT Game Izzy ITCoin Mentor Select Page Introducing the ISIT Contruct The ISIT Construct is a modern approach to the fundamental concepts of Duality and Polarity. Instead of relying on ancient metaphors like Yin|Yang, God|Devil, Order|Chaos, Male|Female, and all the others that evolved over the centuries in ancient religions and philosophies, the ISIT Construct establishes a new Prime Duality based on the words/symbols: IS and IT . In this model, the words serve as symbolic representations. The symbol IS represents the animating ",
+          "emails": [],
+          "phones": [],
+          "links_count": 21,
+          "fetched_at": "2026-02-18T19:38:58.252Z"
+        },
+        {
+          "url": "https://isitas.org/the-isit-game/",
+          "title": "The ISIT Game | ISITAS",
+          "meta_desc": "",
+          "body_snippet": "The ISIT Game | ISITAS Home What is ISITAS? ISIT Construct ISIT Game Izzy ITCoin Mentor Select Page Introducing the ISIT Game The ISIT Game is a proposed multi-player collaborative game with a purpose. While the various types of brain-teaser puzzles, scoring and rewards will be extremely engaging on an individual level, on a collective level, the players will collectively be developing a consensus model of reality that can help us solve our world’s most critical problems. This ‘Consensus Model of Reality’ — based on the elegantly simple and ISIT Construct — will serve as a fundamental ‘sensema",
+          "emails": [],
+          "phones": [],
+          "links_count": 32,
+          "fetched_at": "2026-02-18T19:38:59.404Z"
+        },
+        {
+          "url": "https://isitas.org/izzy/",
+          "title": "Izzy: The Oracle of ISITAS | ISITAS",
+          "meta_desc": "",
+          "body_snippet": "Izzy: The Oracle of ISITAS | ISITAS Home What is ISITAS? ISIT Construct ISIT Game Izzy ITCoin Mentor Select Page Let Izzy help you solve your most challenging issues and make sense of this turbulent world. Meet Izzy the Oracle of ISITAS Our custom GPT trained to make sense of any situation in terms of the ISIT Construct and ISITism. Izzy has been trained on the collected writings of Mentor of AIO about the ISIT Construct, ISITism, and all related topics, and is capable of providing insightful analyses on any issue, situation, person, place, or thing you choose to pose to it. Read Izzy&#8217;s ",
+          "emails": [],
+          "phones": [],
+          "links_count": 23,
+          "fetched_at": "2026-02-18T19:39:00.337Z"
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

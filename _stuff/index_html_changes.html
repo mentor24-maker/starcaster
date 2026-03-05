@@ -1,0 +1,46 @@
+<!--
+  ============================================================
+  INSTRUCTIONS: index.html changes needed
+  ============================================================
+
+  1. SCRIPT TAG — add this line alongside the other youtube/harvest
+     script tags (before app.js):
+
+     (no new script tag needed — youtubeCommentRuns.js is backend only)
+
+
+  2. COMMENT RUNS TABLE — paste this section below the existing
+     YouTube Details runs table (look for youtubeRunsTable in your HTML).
+     Add it as a new subsection within the same gatherYoutubePage div:
+
+  ============================================================
+-->
+
+<!-- ── YouTube Comment Runs ─────────────────────────────── -->
+<div class="section-block" style="margin-top: 32px;">
+  <h3 class="section-heading">Comment Harvest History</h3>
+
+  <!-- Filters -->
+  <div class="filter-row" style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <input type="date" id="commentRunsFromDate" title="From date">
+      <input type="date" id="commentRunsToDate" title="To date">
+    </div>
+    <input type="text" id="commentRunsTitleFilter"   placeholder="Video Title" style="width:180px;">
+    <input type="text" id="commentRunsChannelFilter" placeholder="Channel"     style="width:140px;">
+  </div>
+
+  <!-- Table -->
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Video Title</th>
+        <th>Channel</th>
+        <th>Comments</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="youtubeCommentRunsTable"></tbody>
+  </table>
+</div>

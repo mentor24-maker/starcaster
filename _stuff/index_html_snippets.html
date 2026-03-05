@@ -1,0 +1,66 @@
+<!--
+  #7 — Formal Environment Configuration: index.html snippets
+  ─────────────────────────────────────────────────────────────────────────────
+  Make 3 edits to index.html:
+
+  1. NAV LINK — add inside the Settings submenu <ul>:
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<li>
+  <a class="menu-link" data-page="envConfigPage" href="#">Env Config</a>
+</li>
+
+<!--
+  2. SCRIPT TAG — add just before the app.js <script> tag:
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<script src="/js/envConfig.js"></script>
+
+<!--
+  3. PAGE SECTION — paste after the existing settingsPage <section>:
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<section id="envConfigPage" class="page-section" style="display:none">
+  <div class="page-header">
+    <h1>Environment Configuration</h1>
+    <p class="page-subtitle">
+      One source of truth for all infrastructure credentials.
+      Secrets are masked. Changes update <code>process.env</code> immediately
+      and write to Vercel's environment variables for the next deployment.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>Environment Variables</h2>
+      <span class="env-legend">
+        <span class="env-dot env-dot--set"></span> Set &nbsp;
+        <span class="env-dot env-dot--missing"></span> Not set
+      </span>
+    </div>
+
+    <table class="env-table">
+      <thead>
+        <tr>
+          <th class="env-th-status"></th>
+          <th class="env-th-key">Variable</th>
+          <th class="env-th-value">Value</th>
+          <th class="env-th-action"></th>
+        </tr>
+      </thead>
+      <tbody id="envConfigTable">
+        <tr><td colspan="4" class="env-loading">Loading…</td></tr>
+      </tbody>
+    </table>
+
+    <div class="card-footer env-footer">
+      <p>
+        <strong>Local dev:</strong> edit <code>.env</code> (gitignored) and restart the server.<br>
+        <strong>Production:</strong> set <code>VERCEL_TOKEN</code> and <code>VERCEL_PROJECT_ID</code>
+        above to enable automatic Vercel sync, or use the
+        <a href="https://vercel.com/docs/cli" target="_blank" rel="noopener">Vercel CLI</a>:
+        <code>vercel env add SUPABASE_URL</code>
+      </p>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,4276 @@
+/**
+ * public/js/develop.js
+ * Develop menu: Agents, Templates, and Extensions forms for OpenClaw job control.
+ */
+
+window.App = window.App || {};
+App.develop = (function () {
+  const { state, els, api, notify, parseJsonInput, setPreview } = App;
+  const LANDING_TEMPLATES = [
+    {
+      id: 'standard-right-form',
+      name: 'Standard Right-Form',
+      summary: 'Classic conversion layout with message left, form right, and a clean supporting body section.',
+      eyebrow: 'Standard Page Template',
+      headline: 'Build a clean, conversion-focused offer page with a form on the right.',
+      lead: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
+      primaryCta: 'Primary CTA',
+      secondaryCta: 'Secondary CTA',
+      featureOneTitle: 'Feature One',
+      featureOneCopy: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod.',
+      featureTwoTitle: 'Feature Two',
+      featureTwoCopy: 'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi.',
+      formTitle: 'Request More Information',
+      formCopy: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
+      bodyTitle: 'Lorem Ipsum Content Block',
+    },
+    {
+      id: 'founder-story',
+      name: 'Founder Story',
+      summary: 'A warm narrative-first template that leads with origin story and trust-building copy.',
+      eyebrow: 'Founder-Led Story',
+      headline: 'Lead with the founder story, then convert with a focused inquiry form.',
+      lead: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.',
+      primaryCta: 'Work With Us',
+      secondaryCta: 'Read The Story',
+      featureOneTitle: 'Origin Story',
+      featureOneCopy: 'Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.',
+      featureTwoTitle: 'Credibility Layer',
+      featureTwoCopy: 'Totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto.',
+      formTitle: 'Start The Conversation',
+      formCopy: 'Tell us what you are building and what support you need.',
+      bodyTitle: 'Founder-Led Narrative',
+    },
+    {
+      id: 'lead-magnet-download',
+      name: 'PDF Download',
+      summary: 'Optimized for giving away a guide, checklist, or PDF in exchange for lead capture.',
+      eyebrow: 'PDF Focus',
+      headline: 'Offer a downloadable resource and keep the call-to-action simple.',
+      lead: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Excepteur sint occaecat cupidatat non proident.',
+      primaryCta: 'Download Now',
+      secondaryCta: 'See What’s Inside',
+      featureOneTitle: 'Quick Value',
+      featureOneCopy: 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.',
+      featureTwoTitle: 'Fast Conversion',
+      featureTwoCopy: 'Sunt in culpa qui officia deserunt mollit anim id est laborum.',
+      formTitle: 'Get The PDF',
+      formCopy: 'Enter your details and we will send the resource instantly.',
+      bodyTitle: 'Resource Overview',
+    },
+    {
+      id: 'webinar-registration',
+      name: 'Webinar Registration',
+      summary: 'Event-driven template that highlights urgency, speaker value, and a registration form.',
+      eyebrow: 'Event Registration',
+      headline: 'Promote a webinar, training, or live session with urgency and clarity.',
+      lead: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.',
+      primaryCta: 'Reserve My Spot',
+      secondaryCta: 'View Agenda',
+      featureOneTitle: 'What You’ll Learn',
+      featureOneCopy: 'Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur.',
+      featureTwoTitle: 'Why Attend Live',
+      featureTwoCopy: 'Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae.',
+      formTitle: 'Register For The Session',
+      formCopy: 'Save your seat and we will send event details to your inbox.',
+      bodyTitle: 'Session Details',
+    },
+    {
+      id: 'case-study-showcase',
+      name: 'Case Study Showcase',
+      summary: 'A proof-oriented template built around outcomes, transformation, and inquiry.',
+      eyebrow: 'Results-Driven',
+      headline: 'Use a case-study-style page to prove the offer before asking for the lead.',
+      lead: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.',
+      primaryCta: 'See The Results',
+      secondaryCta: 'Request A Strategy Call',
+      featureOneTitle: 'Before / After',
+      featureOneCopy: 'Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.',
+      featureTwoTitle: 'Measured Outcome',
+      featureTwoCopy: 'Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur.',
+      formTitle: 'Ask About Your Project',
+      formCopy: 'Share a few details and we will outline what this could look like for you.',
+      bodyTitle: 'Case Study Breakdown',
+    },
+    {
+      id: 'newsletter-signup',
+      name: 'Newsletter Signup',
+      summary: 'A lighter, editorial-style layout for list building, content subscriptions, and updates.',
+      eyebrow: 'Audience Building',
+      headline: 'Grow a newsletter or content list with a cleaner, lower-friction signup page.',
+      lead: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. At vero eos et accusamus et iusto odio dignissimos ducimus.',
+      primaryCta: 'Join The List',
+      secondaryCta: 'Read A Sample',
+      featureOneTitle: 'Editorial Promise',
+      featureOneCopy: 'Et harum quidem rerum facilis est et expedita distinctio nam libero tempore.',
+      featureTwoTitle: 'Reader Benefit',
+      featureTwoCopy: 'Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet.',
+      formTitle: 'Subscribe For Updates',
+      formCopy: 'Add your email to receive ongoing content, offers, and updates.',
+      bodyTitle: 'What Subscribers Get',
+    },
+  ];
+  const FORM_TEMPLATES = [
+    {
+      id: 'squeeze-form',
+      name: 'Squeeze Form',
+      defaultHeading: 'Get Instant Access',
+      defaultSubmitLabel: 'Submit',
+      fields: [
+        { key: 'first_name', label: 'First Name', type: 'text', required: true },
+        { key: 'email', label: 'Email', type: 'email', required: true },
+      ],
+    },
+    {
+      id: 'short-form',
+      name: 'Short Form',
+      defaultHeading: 'Tell Us About Yourself',
+      defaultSubmitLabel: 'Send Request',
+      fields: [
+        { key: 'first_name', label: 'First Name', type: 'text', required: true },
+        { key: 'last_name', label: 'Last Name', type: 'text', required: false },
+        { key: 'email', label: 'Email', type: 'email', required: true },
+        { key: 'phone', label: 'Phone Number', type: 'tel', required: false },
+      ],
+    },
+    {
+      id: 'long-form',
+      name: 'Long Form',
+      defaultHeading: 'Complete The Form',
+      defaultSubmitLabel: 'Submit Form',
+      fields: [
+        { key: 'first_name', label: 'First Name', type: 'text', required: true },
+        { key: 'last_name', label: 'Last Name', type: 'text', required: false },
+        { key: 'email', label: 'Email', type: 'email', required: true },
+        { key: 'phone', label: 'Phone Number', type: 'tel', required: false },
+        { key: 'city', label: 'City', type: 'text', required: false },
+        { key: 'state', label: 'State', type: 'text', required: false },
+        { key: 'country', label: 'Country', type: 'text', required: false },
+      ],
+    },
+  ];
+  const CONTACT_TYPE_OPTIONS = [
+    { value: 'lead', label: 'Lead' },
+    { value: 'prospect', label: 'Prospect' },
+    { value: 'subscriber', label: 'Subscriber' },
+    { value: 'member', label: 'Member' },
+    { value: 'partner', label: 'Partner' },
+    { value: 'other', label: 'Other' },
+  ];
+  let selectedTemplateId = LANDING_TEMPLATES[0].id;
+  let selectedFormTemplateId = FORM_TEMPLATES[0].id;
+  let formBuilderState = null;
+  const DEFAULT_FORM_ACCENT = '#0b82d4';
+  const MATCH_LANDING_GREY = '#6b7280';
+  const DEFAULT_LANDING_PRIMARY = '#0b82d4';
+  const DEFAULT_LANDING_BACKGROUND = '#f5fbff';
+  const DEFAULT_LANDING_ACCENT = '#1a4f81';
+  let landingPageColors = {
+    primary: DEFAULT_LANDING_PRIMARY,
+    background: DEFAULT_LANDING_BACKGROUND,
+    accent: DEFAULT_LANDING_ACCENT,
+  };
+  let savedForms = [];
+  let savedLandingPages = [];
+  let savedExtensions = [];
+  let landingPageHeadlines = [];
+  let landingPageSubheadings = [];
+  let landingPagePitches = [];
+  let landingPageCtas = [];
+  const landingPageSelectorFilterState = {};
+  let pendingLandingPageFormRecord = null;
+  let selectedLandingPageIds = new Set();
+  let activeLandingPagePreviewRecord = null;
+  let activeLandingPageVisualRecord = null;
+  let landingPageVisualEditMode = true;
+  let landingPageVisualDraft = {};
+  let landingPageThankYouState = null;
+  const activeLandingPageVisualEditors = new Set();
+  const collapsedExtensionIds = new Set();
+  const formTableState = {
+    sort: {
+      key: 'updatedAt',
+      dir: 'desc',
+    },
+  };
+  const landingPageTableState = {
+    filters: {
+      name: '',
+      templateId: '',
+    },
+    sort: {
+      key: 'updatedAt',
+      dir: 'desc',
+    },
+  };
+  const EXTENSION_TYPE_OPTIONS = [
+    { value: 'manager', label: 'Manager' },
+    { value: 'utility', label: 'Utility' },
+    { value: 'generator', label: 'Generator' },
+    { value: 'connector', label: 'Connector' },
+    { value: 'workflow', label: 'Workflow' },
+    { value: 'automation', label: 'Automation' },
+    { value: 'analytics', label: 'Analytics' },
+    { value: 'catalog', label: 'Catalog' },
+    { value: 'custom', label: 'Custom' },
+  ];
+  const extensionTableState = {
+    filters: {
+      name: '',
+      extensionType: '',
+      status: '',
+      tags: '',
+    },
+    sort: {
+      key: 'updatedAt',
+      dir: 'desc',
+    },
+  };
+  const LANDING_THANK_YOU_STATE_KEY = 'develop_landing_thank_you_state_v1';
+  let extensionManagerConfig = {
+    defaultFilters: {},
+    defaultSortKey: 'updatedAt',
+    defaultSortDir: 'desc',
+  };
+
+  function safeText(value) {
+    return String(value || '').trim();
+  }
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function setSelectOptions(select, options, placeholder, currentValue) {
+    if (!select) return;
+    const desired = String(currentValue || '');
+    select.innerHTML = '';
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = placeholder;
+    select.appendChild(first);
+
+    (Array.isArray(options) ? options : []).forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item.value);
+      option.textContent = item.label;
+      select.appendChild(option);
+    });
+
+    if (desired && Array.from(select.options).some((option) => option.value === desired)) {
+      select.value = desired;
+    }
+  }
+
+  function assetLabel(asset, fallbackLabel) {
+    return safeText(asset?.assetName) || fallbackLabel;
+  }
+
+  function isValidUrl(value) {
+    const text = safeText(value);
+    if (!text) return false;
+    try {
+      const parsed = new URL(text);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  function extractDriveId(url) {
+    const text = safeText(url);
+    if (!text) return '';
+    const byProxyPath = text.match(/\/api\/assets\/drive-file\/([a-zA-Z0-9_-]{10,})/);
+    if (byProxyPath) return byProxyPath[1];
+    const byProxyPathNoLeadingSlash = text.match(/^api\/assets\/drive-file\/([a-zA-Z0-9_-]{10,})/);
+    if (byProxyPathNoLeadingSlash) return byProxyPathNoLeadingSlash[1];
+    const byPath = text.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+    if (byPath) return byPath[1];
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(text)) return text;
+    try {
+      const parsed = new URL(text);
+      const byParam = parsed.searchParams.get('id');
+      if (byParam) return byParam;
+      const byPathInUrl = parsed.pathname.match(/\/api\/assets\/drive-file\/([a-zA-Z0-9_-]{10,})/);
+      if (byPathInUrl) return byPathInUrl[1];
+      return '';
+    } catch {
+      return '';
+    }
+  }
+
+  function toDirectAssetUrl(url) {
+    const text = safeText(url);
+    if (!text) return '';
+    if (text.startsWith('/api/assets/drive-file/')) return text;
+    if (text.startsWith('api/assets/drive-file/')) return `/${text}`;
+    const driveId = extractDriveId(text);
+    if (driveId) return `/api/assets/drive-file/${encodeURIComponent(driveId)}`;
+    if (isValidUrl(text)) return text;
+    if (text.startsWith('/')) return text;
+    return text;
+  }
+
+  function getAssetsByType(assetType) {
+    return (Array.isArray(state.assets) ? state.assets : []).filter(
+      (asset) => safeText(asset?.assetType) === safeText(assetType)
+    );
+  }
+
+  function getAssetTypeDisplayLabel(assetType) {
+    return safeText(assetType) === 'Lead Magnet' ? 'PDF' : safeText(assetType);
+  }
+
+  function getAssetsByCategory(category) {
+    return (Array.isArray(state.assets) ? state.assets : []).filter(
+      (asset) => safeText(asset?.category) === safeText(category)
+    );
+  }
+
+  function getAssetsByCategoryAliases(categories, assetType) {
+    const allowedCategories = new Set(
+      (Array.isArray(categories) ? categories : [])
+        .map((item) => safeText(item))
+        .filter(Boolean)
+    );
+    const normalizedType = safeText(assetType);
+    return (Array.isArray(state.assets) ? state.assets : []).filter((asset) => {
+      if (normalizedType && safeText(asset?.assetType) !== normalizedType) return false;
+      return allowedCategories.has(safeText(asset?.category));
+    });
+  }
+
+  async function submitToolJob(toolName, input, workspaceId, requestPreviewEl, responsePreviewEl, successMessage) {
+    const request = {
+      manual_confirmed: true,
+      type:             'tool.run',
+      workspace_id:     safeText(workspaceId) || 'alphire-main',
+      requested_by:     { user_id: 'alphire-ui', email: 'ops@alphire.ai' },
+      payload:          { tool_name: safeText(toolName), input },
+      policy:           { requires_manual_approval: true }
+    };
+    setPreview(requestPreviewEl, { action: 'create_job', request });
+    const result = await api('/api/openclaw/create_job', { method: 'POST', body: JSON.stringify(request) });
+    setPreview(responsePreviewEl, result);
+    notify(successMessage);
+    return result;
+  }
+
+  function renderIconBuilderResult(icon) {
+    if (!els.iconBuilderResultCard || !els.iconBuilderResultImage) return;
+    const hasIcon = Boolean(icon?.dataUrl);
+    els.iconBuilderResultCard.classList.toggle('hidden', !hasIcon);
+    if (!hasIcon) {
+      els.iconBuilderResultImage.removeAttribute('src');
+      if (els.iconBuilderResultTitle) els.iconBuilderResultTitle.textContent = 'Generated Icon';
+      if (els.iconBuilderResultCaption) els.iconBuilderResultCaption.textContent = '';
+      return;
+    }
+    els.iconBuilderResultImage.src = String(icon.dataUrl);
+    if (els.iconBuilderResultTitle) {
+      els.iconBuilderResultTitle.textContent = safeText(icon.objectName) || 'Generated Icon';
+    }
+    if (els.iconBuilderResultCaption) {
+      const bits = [safeText(icon.objectType), safeText(icon.visualStyle), safeText(icon.size)].filter(Boolean);
+      els.iconBuilderResultCaption.textContent = bits.join(' | ');
+    }
+  }
+
+  function renderScreenshotResult(asset) {
+    const card = byId('developScreenshotResultCard');
+    const image = byId('developScreenshotResultImage');
+    const title = byId('developScreenshotResultTitle');
+    const caption = byId('developScreenshotResultCaption');
+    const hasAsset = Boolean(asset && safeText(asset.location));
+    if (card) card.classList.toggle('hidden', !hasAsset);
+    if (!image) return;
+    if (!hasAsset) {
+      image.removeAttribute('src');
+      if (title) title.textContent = 'Captured Screenshot';
+      if (caption) caption.textContent = '';
+      return;
+    }
+    image.src = safeText(asset.location);
+    if (title) title.textContent = safeText(asset.assetName) || 'Captured Screenshot';
+    if (caption) {
+      const bits = [safeText(asset.assetType), safeText(asset.category), asset.imageWidth && asset.imageHeight ? `${asset.imageWidth}x${asset.imageHeight}` : '']
+        .filter(Boolean);
+      caption.textContent = bits.join(' | ');
+    }
+  }
+
+  function renderThumbnailResult(asset) {
+    const card = byId('developThumbnailResultCard');
+    const image = byId('developThumbnailResultImage');
+    const title = byId('developThumbnailResultTitle');
+    const caption = byId('developThumbnailResultCaption');
+    const hasAsset = Boolean(asset && safeText(asset.location));
+    if (card) card.classList.toggle('hidden', !hasAsset);
+    if (!image) return;
+    if (!hasAsset) {
+      image.removeAttribute('src');
+      if (title) title.textContent = 'Generated Thumbnail';
+      if (caption) caption.textContent = '';
+      return;
+    }
+    image.src = safeText(asset.location);
+    if (title) title.textContent = safeText(asset.assetName) || 'Generated Thumbnail';
+    if (caption) {
+      const bits = [safeText(asset.assetType), safeText(asset.category), asset.imageWidth && asset.imageHeight ? `${asset.imageWidth}x${asset.imageHeight}` : '']
+        .filter(Boolean);
+      caption.textContent = bits.join(' | ');
+    }
+  }
+
+  function renderThumbnailSourceAssetOptions() {
+    const select = byId('developThumbnailSourceAssetSelect');
+    if (!select) return;
+    const items = (Array.isArray(state.assets) ? state.assets : [])
+      .slice()
+      .sort((a, b) => safeText(a?.assetName).localeCompare(safeText(b?.assetName)))
+      .map((asset) => ({
+        value: safeText(asset.id),
+        label: `${assetLabel(asset, 'Asset')} (${safeText(asset.assetType) || 'Unknown'})`,
+      }));
+    setSelectOptions(select, items, 'Source Asset (Optional)');
+  }
+
+  function getTemplateById(templateId) {
+    const id = safeText(templateId);
+    return LANDING_TEMPLATES.find((item) => item.id === id) || LANDING_TEMPLATES[0];
+  }
+
+  function getFormTemplateById(templateId) {
+    const id = safeText(templateId);
+    return FORM_TEMPLATES.find((item) => item.id === id) || FORM_TEMPLATES[0];
+  }
+
+  function buildDefaultFormState(templateId) {
+    const template = getFormTemplateById(templateId);
+    return {
+      id: '',
+      name: '',
+      formType: template.id,
+      contactType: 'lead',
+      leadMagnetType: '',
+      leadMagnetId: '',
+      ctaId: '',
+      heading: template.defaultHeading,
+      submitLabel: template.defaultSubmitLabel,
+      successMessage: 'Thanks. Your request has been received.',
+      errorMessage: 'Something went wrong. Please try again.',
+      accentColor: DEFAULT_FORM_ACCENT,
+      matchLandingColor: false,
+      landingColorMode: 'primary',
+      useLandingBackground: false,
+      required: Object.fromEntries(template.fields.map((field) => [field.key, Boolean(field.required)])),
+    };
+  }
+
+  function ensureFormBuilderState(templateId) {
+    const requestedTemplate = getFormTemplateById(templateId);
+    if (!formBuilderState || formBuilderState.formType !== requestedTemplate.id) {
+      formBuilderState = buildDefaultFormState(requestedTemplate.id);
+    }
+    return formBuilderState;
+  }
+
+  function renderFormBuilderFieldConfig() {
+    const host = byId('developFormFieldsConfig');
+    if (!host) return;
+
+    const current = ensureFormBuilderState(byId('developFormTypeSelect')?.value || FORM_TEMPLATES[0].id);
+    const template = getFormTemplateById(current.formType);
+    host.innerHTML = '';
+
+    template.fields.forEach((field) => {
+      const row = document.createElement('div');
+      row.className = 'develop-form-config-row';
+
+      const label = document.createElement('div');
+      label.className = 'develop-form-config-label';
+      label.textContent = field.label;
+
+      const toggleWrap = document.createElement('label');
+      toggleWrap.className = 'checkbox-row';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = Boolean(current.required[field.key]);
+      checkbox.addEventListener('change', () => {
+        current.required[field.key] = checkbox.checked;
+        renderFormBuilderPreview();
+      });
+      toggleWrap.appendChild(checkbox);
+      toggleWrap.appendChild(document.createTextNode('Required'));
+
+      row.appendChild(label);
+      row.appendChild(toggleWrap);
+      host.appendChild(row);
+    });
+  }
+
+  function renderFormBuilderPreview() {
+    const host = byId('developFormPreviewHost');
+    if (!host) return;
+
+    const current = ensureFormBuilderState(byId('developFormTypeSelect')?.value || FORM_TEMPLATES[0].id);
+    const template = getFormTemplateById(current.formType);
+    const accentColor = current.matchLandingColor
+      ? MATCH_LANDING_GREY
+      : (safeText(current.accentColor) || DEFAULT_FORM_ACCENT);
+    const previewBackground = current.matchLandingColor && current.useLandingBackground
+      ? landingPageColors.background
+      : '';
+
+    host.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'develop-form-preview';
+    card.style.borderColor = accentColor;
+    card.style.boxShadow = `0 10px 22px ${accentColor}22`;
+    card.style.background = previewBackground || 'linear-gradient(135deg, #ffffff 0%, #f5fbff 100%)';
+
+    const heading = document.createElement('h3');
+    heading.textContent = current.heading || template.defaultHeading;
+    heading.style.color = accentColor;
+    card.appendChild(heading);
+
+    template.fields.forEach((field) => {
+      const input = document.createElement('input');
+      input.type = field.type;
+      input.placeholder = field.label;
+      if (current.required[field.key]) input.required = true;
+      card.appendChild(input);
+    });
+
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.textContent = getLandingPageCtaLabel(current.ctaId) || current.submitLabel || template.defaultSubmitLabel;
+    submitBtn.style.background = accentColor;
+    submitBtn.style.borderColor = accentColor;
+    submitBtn.style.color = '#ffffff';
+    card.appendChild(submitBtn);
+
+    if (current.leadMagnetId) {
+      const helper = document.createElement('p');
+      helper.style.margin = '0.75rem 0 0 0';
+      helper.style.fontSize = '0.84rem';
+      helper.style.color = '#36516a';
+      helper.textContent = `Lead Magnet: ${getLandingPageAssetName(current.leadMagnetId, 'Selected Asset')}`;
+      card.appendChild(helper);
+    }
+
+    host.appendChild(card);
+  }
+
+  function buildCurrentFormPayload(nameOverride) {
+    const current = ensureFormBuilderState(byId('developFormTypeSelect')?.value || FORM_TEMPLATES[0].id);
+    const template = getFormTemplateById(current.formType);
+    const ctaLabel = getLandingPageCtaLabel(current.ctaId) || current.submitLabel || template.defaultSubmitLabel;
+    return {
+      id: safeText(current.id),
+      name: safeText(nameOverride || byId('developFormNameInput')?.value),
+      formType: template.id,
+      contactType: safeText(current.contactType) || 'lead',
+      leadMagnetType: safeText(current.leadMagnetType),
+      leadMagnetId: safeText(current.leadMagnetId),
+      ctaId: safeText(current.ctaId),
+      heading: current.heading || template.defaultHeading,
+      submitLabel: ctaLabel,
+      successMessage: safeText(current.successMessage),
+      errorMessage: safeText(current.errorMessage),
+      accentColor: safeText(current.accentColor) || DEFAULT_FORM_ACCENT,
+      matchLandingColor: Boolean(current.matchLandingColor),
+      landingColorMode: current.matchLandingColor ? (safeText(current.landingColorMode) || 'primary') : '',
+      useLandingBackground: Boolean(current.matchLandingColor && current.useLandingBackground),
+      fields: template.fields.map((field) => ({
+        key: field.key,
+        label: field.label,
+        type: field.type,
+        required: Boolean(current.required[field.key]),
+      })),
+    };
+  }
+
+  function formatRequiredFieldsSummary(form) {
+    const requiredLabels = (Array.isArray(form?.fields) ? form.fields : [])
+      .filter((field) => Boolean(field?.required))
+      .map((field) => safeText(field?.label))
+      .filter(Boolean);
+    return requiredLabels.length ? requiredLabels.join(', ') : 'None';
+  }
+
+  function getFilteredSortedForms() {
+    const rows = savedForms.slice();
+    const direction = formTableState.sort.dir === 'asc' ? 1 : -1;
+    const getValue = (row, key) => {
+      switch (key) {
+        case 'name':
+          return safeText(row?.name).toLowerCase();
+        case 'formType':
+          return safeText(getFormTemplateById(row?.formType).name).toLowerCase();
+        case 'leadMagnetType':
+          return safeText(getAssetTypeDisplayLabel(row?.leadMagnetType)).toLowerCase();
+        case 'leadMagnetId':
+          return safeText(getLandingPageAssetName(row?.leadMagnetId, '')).toLowerCase();
+        case 'ctaId':
+          return safeText(getLandingPageCtaLabel(row?.ctaId)).toLowerCase();
+        case 'contactType':
+          return safeText(row?.contactType).toLowerCase();
+        case 'updatedAt':
+        default:
+          return new Date(row?.updatedAt || row?.createdAt || 0).getTime();
+      }
+    };
+    rows.sort((a, b) => {
+      const left = getValue(a, formTableState.sort.key);
+      const right = getValue(b, formTableState.sort.key);
+      if (typeof left === 'number' && typeof right === 'number') return (left - right) * direction;
+      return String(left).localeCompare(String(right)) * direction;
+    });
+    return rows;
+  }
+
+  function applySavedFormToBuilder(form) {
+    const template = getFormTemplateById(form?.formType);
+    const required = Object.fromEntries(template.fields.map((field) => [field.key, false]));
+    (Array.isArray(form?.fields) ? form.fields : []).forEach((field) => {
+      const key = safeText(field?.key);
+      if (key && Object.prototype.hasOwnProperty.call(required, key)) {
+        required[key] = Boolean(field?.required);
+      }
+    });
+
+    formBuilderState = {
+      id: safeText(form?.id),
+      name: safeText(form?.name),
+      formType: template.id,
+      contactType: safeText(form?.contactType) || 'lead',
+      leadMagnetType: safeText(form?.leadMagnetType),
+      leadMagnetId: safeText(form?.leadMagnetId),
+      ctaId: safeText(form?.ctaId),
+      heading: safeText(form?.heading) || template.defaultHeading,
+      submitLabel: safeText(form?.submitLabel) || template.defaultSubmitLabel,
+      successMessage: safeText(form?.successMessage) || 'Thanks. Your request has been received.',
+      errorMessage: safeText(form?.errorMessage) || 'Something went wrong. Please try again.',
+      accentColor: safeText(form?.accentColor) || DEFAULT_FORM_ACCENT,
+      matchLandingColor: Boolean(form?.matchLandingColor),
+      landingColorMode: safeText(form?.landingColorMode) || 'primary',
+      useLandingBackground: Boolean(form?.useLandingBackground),
+      required,
+    };
+
+    const nameInput = byId('developFormNameInput');
+    if (nameInput) nameInput.value = safeText(form?.name);
+    const editorTitle = byId('developFormsEditorTitle');
+    if (editorTitle) editorTitle.textContent = 'Edit Form';
+    byId('developFormEditorPanel')?.classList.remove('hidden');
+    syncFormBuilderInputs();
+    renderFormBuilderFieldConfig();
+    renderFormBuilderPreview();
+  }
+
+  function renderSavedForms() {
+    const tbody = byId('developFormsTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (!savedForms.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 8;
+      cell.textContent = 'No saved forms yet.';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
+
+    getFilteredSortedForms().forEach((form) => {
+      const row = document.createElement('tr');
+
+      const nameTd = document.createElement('td');
+      nameTd.textContent = safeText(form.name) || '-';
+
+      const typeTd = document.createElement('td');
+      typeTd.textContent = getFormTemplateById(form.formType).name;
+
+      const leadMagnetTypeTd = document.createElement('td');
+      leadMagnetTypeTd.textContent = getAssetTypeDisplayLabel(form.leadMagnetType) || '-';
+
+      const leadMagnetTd = document.createElement('td');
+      leadMagnetTd.textContent = getLandingPageAssetName(form.leadMagnetId, '-') || '-';
+
+      const ctaTd = document.createElement('td');
+      ctaTd.textContent = getLandingPageCtaLabel(form.ctaId) || '-';
+
+      const contactTypeTd = document.createElement('td');
+      contactTypeTd.textContent = CONTACT_TYPE_OPTIONS.find((item) => item.value === safeText(form.contactType))?.label || safeText(form.contactType) || '-';
+
+      const updatedTd = document.createElement('td');
+      updatedTd.textContent = form.updatedAt ? new Date(form.updatedAt).toLocaleString() : '-';
+
+      const actionsTd = document.createElement('td');
+      const editBtn = App.makeIconButton('edit', 'Edit Form', () => {
+        applySavedFormToBuilder(form);
+        notify(`Editing form: ${safeText(form.name) || form.id}`);
+      });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Form', async () => {
+        try {
+          const payload = {
+            name: safeText(form.name),
+            formType: safeText(form.formType),
+            contactType: safeText(form.contactType),
+            leadMagnetType: safeText(form.leadMagnetType),
+            leadMagnetId: safeText(form.leadMagnetId),
+            ctaId: safeText(form.ctaId),
+            heading: safeText(form.heading),
+            submitLabel: safeText(form.submitLabel),
+            successMessage: safeText(form.successMessage),
+            errorMessage: safeText(form.errorMessage),
+            accentColor: safeText(form.accentColor),
+            matchLandingColor: Boolean(form.matchLandingColor),
+            landingColorMode: safeText(form.landingColorMode),
+            useLandingBackground: Boolean(form.useLandingBackground),
+            fields: Array.isArray(form.fields)
+              ? form.fields.map((field) => ({
+                  key: safeText(field?.key),
+                  label: safeText(field?.label),
+                  type: safeText(field?.type),
+                  required: Boolean(field?.required),
+                }))
+              : [],
+          };
+          await api('/api/develop/forms', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          await refresh();
+          notify('Form cloned');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Form', async () => {
+        if (!window.confirm(`Delete form "${safeText(form.name) || form.id}"?`)) return;
+        try {
+          await api(`/api/develop/forms/${encodeURIComponent(form.id)}`, { method: 'DELETE' });
+          await refresh();
+          notify('Form deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
+      actionsTd.appendChild(deleteBtn);
+
+      row.appendChild(nameTd);
+      row.appendChild(typeTd);
+      row.appendChild(leadMagnetTypeTd);
+      row.appendChild(leadMagnetTd);
+      row.appendChild(ctaTd);
+      row.appendChild(contactTypeTd);
+      row.appendChild(updatedTd);
+      row.appendChild(actionsTd);
+      tbody.appendChild(row);
+    });
+  }
+
+  async function loadSavedForms() {
+    const result = await api('/api/develop/forms');
+    savedForms = Array.isArray(result.forms) ? result.forms : [];
+  }
+
+  async function loadSavedLandingPages() {
+    const result = await api('/api/develop/landing-pages');
+    savedLandingPages = Array.isArray(result.landingPages) ? result.landingPages : [];
+  }
+
+  async function loadSavedExtensions() {
+    const result = await api('/api/develop/extensions');
+    savedExtensions = Array.isArray(result.extensions) ? result.extensions : [];
+  }
+
+  async function loadExtensionManagerConfig() {
+    try {
+      const result = await api('/api/develop/extensions-manager');
+      const manager = result.manager || result.data || {};
+      extensionManagerConfig = {
+        defaultFilters: manager.defaultFilters && typeof manager.defaultFilters === 'object' ? manager.defaultFilters : {},
+        defaultSortKey: safeText(manager.defaultSortKey) || 'updatedAt',
+        defaultSortDir: safeText(manager.defaultSortDir) || 'desc',
+      };
+      extensionTableState.filters = {
+        name: safeText(extensionManagerConfig.defaultFilters.name),
+        extensionType: safeText(extensionManagerConfig.defaultFilters.extensionType),
+        status: safeText(extensionManagerConfig.defaultFilters.status),
+        tags: safeText(extensionManagerConfig.defaultFilters.tags),
+      };
+      extensionTableState.sort = {
+        key: safeText(extensionManagerConfig.defaultSortKey) || 'updatedAt',
+        dir: safeText(extensionManagerConfig.defaultSortDir) || 'desc',
+      };
+    } catch (_) {
+      extensionManagerConfig = {
+        defaultFilters: {},
+        defaultSortKey: 'updatedAt',
+        defaultSortDir: 'desc',
+      };
+    }
+  }
+
+  async function saveExtensionManagerConfig() {
+    try {
+      await api('/api/develop/extensions-manager', {
+        method: 'POST',
+        body: JSON.stringify({
+          defaultFilters: { ...extensionTableState.filters },
+          defaultSortKey: extensionTableState.sort.key,
+          defaultSortDir: extensionTableState.sort.dir,
+        }),
+      });
+    } catch (_) {
+      // Non-blocking UI preference persistence.
+    }
+  }
+
+  function getExtensionTypeLabel(value) {
+    return EXTENSION_TYPE_OPTIONS.find((item) => item.value === safeText(value))?.label || safeText(value) || '-';
+  }
+
+  function buildExtensionPath(id, map, seen = new Set()) {
+    const cleanId = safeText(id);
+    if (!cleanId || seen.has(cleanId)) return '';
+    const item = map.get(cleanId);
+    if (!item) return '';
+    seen.add(cleanId);
+    const parentPath = buildExtensionPath(item.parentId, map, seen);
+    const name = safeText(item.name) || cleanId;
+    return parentPath ? `${parentPath} / ${name}` : name;
+  }
+
+  function populateExtensionParentSelect(currentId) {
+    const select = byId('developExtensionParentSelect');
+    if (!select) return;
+    const current = safeText(currentId);
+    const map = new Map(savedExtensions.map((item) => [safeText(item.id), item]));
+    const options = savedExtensions
+      .filter((item) => safeText(item.id) && safeText(item.id) !== current)
+      .map((item) => ({
+        value: item.id,
+        label: buildExtensionPath(item.id, map),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    setSelectOptions(select, options, 'Parent Extension (Optional)');
+  }
+
+  function resetExtensionManagerForm() {
+    const form = byId('developExtensionManagerForm');
+    if (form) form.reset();
+    const idInput = byId('developExtensionIdInput');
+    const statusSelect = byId('developExtensionStatusSelect');
+    const submitBtn = byId('developExtensionSubmitBtn');
+    if (idInput) idInput.value = '';
+    if (statusSelect) statusSelect.value = 'active';
+    if (submitBtn) submitBtn.textContent = 'Save Extension';
+    populateExtensionParentSelect('');
+  }
+
+  function deriveExtensionSlug(name) {
+    return safeText(name)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 160);
+  }
+
+  function applyExtensionToForm(item) {
+    const idInput = byId('developExtensionIdInput');
+    const nameInput = byId('developExtensionNameInput');
+    const typeSelect = byId('developExtensionTypeSelect');
+    const parentSelect = byId('developExtensionParentSelect');
+    const statusSelect = byId('developExtensionStatusSelect');
+    const tagsInput = byId('developExtensionTagsInput');
+    const summaryInput = byId('developExtensionSummaryInput');
+    const definitionInput = byId('developExtensionDefinitionInput');
+    const submitBtn = byId('developExtensionSubmitBtn');
+    if (idInput) idInput.value = safeText(item?.id);
+    if (nameInput) nameInput.value = safeText(item?.name);
+    if (typeSelect) typeSelect.value = safeText(item?.extensionType);
+    populateExtensionParentSelect(safeText(item?.id));
+    if (parentSelect) parentSelect.value = safeText(item?.parentId);
+    if (statusSelect) statusSelect.value = safeText(item?.status) || 'active';
+    if (tagsInput) tagsInput.value = safeText(item?.tags);
+    if (summaryInput) summaryInput.value = safeText(item?.summary, 1000);
+    if (definitionInput) definitionInput.value = safeText(item?.definition, 10000);
+    if (submitBtn) submitBtn.textContent = 'Update Extension';
+    App.setActivePage('developExtensionsManagerPage');
+  }
+
+  function sortExtensionsForLanding(rows) {
+    return rows.slice().sort((a, b) => {
+      const featuredDelta = (b.isFeatured === true ? 1 : 0) - (a.isFeatured === true ? 1 : 0);
+      if (featuredDelta) return featuredDelta;
+      const usageDelta = (Number(b.usageCount || 0) || 0) - (Number(a.usageCount || 0) || 0);
+      if (usageDelta) return usageDelta;
+      const left = new Date(b.lastUsedAt || b.updatedAt || 0).getTime();
+      const right = new Date(a.lastUsedAt || a.updatedAt || 0).getTime();
+      if (left !== right) return left - right;
+      return safeText(a.name).localeCompare(safeText(b.name));
+    });
+  }
+
+  async function openExtensionItem(item) {
+    if (!item) return;
+    try {
+      if (safeText(item.id)) {
+        await api(`/api/develop/extensions/${encodeURIComponent(item.id)}/use`, { method: 'POST' });
+      }
+    } catch (_) {
+      // Non-blocking usage tracking.
+    }
+    await refresh();
+    const launchPageId = safeText(item.launchPageId);
+    if (launchPageId) {
+      App.setActivePage(launchPageId);
+      return;
+    }
+    applyExtensionToForm(item);
+  }
+
+  function renderExtensionsLanding() {
+    const host = byId('developExtensionsFeaturedGrid');
+    if (!host) return;
+    host.innerHTML = '';
+    if (!savedExtensions.length) {
+      const empty = document.createElement('div');
+      empty.className = 'messaging-content-node';
+      empty.textContent = 'No extensions yet.';
+      host.appendChild(empty);
+      return;
+    }
+
+    const header = document.createElement('div');
+    header.className = 'develop-extensions-header';
+    ['Extension Name', 'Extension Type', 'Summary'].forEach((label) => {
+      const cell = document.createElement('div');
+      cell.className = 'develop-extensions-header-cell';
+      cell.textContent = label;
+      header.appendChild(cell);
+    });
+    host.appendChild(header);
+
+    const byParent = new Map();
+    savedExtensions.forEach((item) => {
+      const parentKey = safeText(item.parentId) || 'root';
+      if (!byParent.has(parentKey)) byParent.set(parentKey, []);
+      byParent.get(parentKey).push(item);
+    });
+
+    const renderNode = (item, depth = 0) => {
+      const id = safeText(item.id);
+      const children = sortExtensionsForLanding(byParent.get(id) || []);
+      const hasChildren = children.length > 0;
+      const isCollapsed = hasChildren && collapsedExtensionIds.has(id);
+
+      const row = document.createElement('div');
+      row.className = 'develop-extension-table-row';
+
+      const nameCell = document.createElement('div');
+      nameCell.className = 'develop-extension-name-cell';
+      nameCell.style.setProperty('--extension-depth', String(depth));
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = `develop-extension-tree-toggle${hasChildren ? '' : ' is-empty'}`;
+      toggle.textContent = hasChildren ? (isCollapsed ? '▶' : '▼') : '▶';
+      toggle.disabled = !hasChildren;
+      toggle.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!hasChildren) return;
+        if (collapsedExtensionIds.has(id)) collapsedExtensionIds.delete(id);
+        else collapsedExtensionIds.add(id);
+        renderExtensionsLanding();
+      });
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'develop-extension-name-link';
+      button.addEventListener('click', () => {
+        openExtensionItem(item).catch((err) => {
+          notify(err.message, true);
+        });
+      });
+
+      button.textContent = safeText(item.name) || 'Extension';
+
+      const typeCell = document.createElement('div');
+      typeCell.className = 'develop-extension-table-cell';
+      typeCell.textContent = getExtensionTypeLabel(item.extensionType);
+
+      const summaryCell = document.createElement('div');
+      summaryCell.className = 'develop-extension-table-cell develop-extension-summary-cell';
+      summaryCell.textContent = safeText(item.summary, 220) || 'Open extension';
+
+      nameCell.appendChild(toggle);
+      nameCell.appendChild(button);
+      row.appendChild(nameCell);
+      row.appendChild(typeCell);
+      row.appendChild(summaryCell);
+
+      return row;
+    };
+
+    const appendVisibleNodes = (item, depth = 0) => {
+      const id = safeText(item.id);
+      const children = sortExtensionsForLanding(byParent.get(id) || []);
+      const hasChildren = children.length > 0;
+      const isCollapsed = hasChildren && collapsedExtensionIds.has(id);
+      host.appendChild(renderNode(item, depth));
+      if (hasChildren && !isCollapsed) {
+        children.forEach((child) => {
+          appendVisibleNodes(child, depth + 1);
+        });
+      }
+    };
+
+    const roots = sortExtensionsForLanding(byParent.get('root') || []);
+    roots.forEach((item) => {
+      appendVisibleNodes(item, 0);
+    });
+  }
+
+  function getFilteredSortedExtensions() {
+    const map = new Map(savedExtensions.map((item) => [safeText(item.id), item]));
+    const filters = extensionTableState.filters;
+    const rows = savedExtensions
+      .filter((item) => {
+        const name = safeText(item.name).toLowerCase();
+        const tags = safeText(item.tags).toLowerCase();
+        const type = safeText(item.extensionType);
+        const status = safeText(item.status);
+        if (filters.name && !name.includes(filters.name.toLowerCase())) return false;
+        if (filters.extensionType && type !== filters.extensionType) return false;
+        if (filters.status && status !== filters.status) return false;
+        if (filters.tags && !tags.includes(filters.tags.toLowerCase())) return false;
+        return true;
+      })
+      .map((item) => ({
+        ...item,
+        taxonomyPath: buildExtensionPath(item.id, map),
+      }));
+
+    const { key, dir } = extensionTableState.sort;
+    rows.sort((a, b) => {
+      let left = '';
+      let right = '';
+      if (key === 'updatedAt') {
+        left = new Date(a.updatedAt || 0).getTime();
+        right = new Date(b.updatedAt || 0).getTime();
+      } else if (key === 'taxonomyPath') {
+        left = safeText(a.taxonomyPath).toLowerCase();
+        right = safeText(b.taxonomyPath).toLowerCase();
+      } else {
+        left = safeText(a[key]).toLowerCase();
+        right = safeText(b[key]).toLowerCase();
+      }
+      if (left < right) return dir === 'asc' ? -1 : 1;
+      if (left > right) return dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }
+
+  function renderExtensionsTable() {
+    const tbody = byId('developExtensionsTableBody');
+    const typeFilter = byId('developExtensionsFilterType');
+    const nameFilter = byId('developExtensionsFilterName');
+    const statusFilter = byId('developExtensionsFilterStatus');
+    const tagsFilter = byId('developExtensionsFilterTags');
+    if (!tbody) return;
+    if (nameFilter) nameFilter.value = extensionTableState.filters.name;
+    if (typeFilter) {
+      setSelectOptions(typeFilter, EXTENSION_TYPE_OPTIONS, 'All Types', extensionTableState.filters.extensionType);
+    }
+    if (statusFilter) statusFilter.value = extensionTableState.filters.status;
+    if (tagsFilter) tagsFilter.value = extensionTableState.filters.tags;
+
+    tbody.innerHTML = '';
+    const rows = getFilteredSortedExtensions();
+    if (!rows.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 6;
+      cell.textContent = 'No extensions yet.';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
+
+    rows.forEach((item) => {
+      const row = document.createElement('tr');
+
+      const nameTd = document.createElement('td');
+      nameTd.textContent = safeText(item.name) || '-';
+
+      const typeTd = document.createElement('td');
+      typeTd.textContent = getExtensionTypeLabel(item.extensionType);
+
+      const pathTd = document.createElement('td');
+      pathTd.textContent = safeText(item.taxonomyPath) || '-';
+
+      const statusTd = document.createElement('td');
+      statusTd.textContent = safeText(item.status) || '-';
+
+      const updatedTd = document.createElement('td');
+      updatedTd.textContent = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-';
+
+      const actionsTd = document.createElement('td');
+      const viewBtn = App.makeIconButton('view', 'Open Extension', () => {
+        openExtensionItem(item).catch((err) => {
+          notify(err.message, true);
+        });
+      });
+      const editBtn = App.makeIconButton('edit', 'Edit Extension', () => {
+        applyExtensionToForm(item);
+        notify(`Loaded extension: ${safeText(item.name) || item.id}`);
+      }, { marginLeft: '8px' });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Extension', async () => {
+        if (!window.confirm(`Delete extension "${safeText(item.name) || item.id}"?`)) return;
+        try {
+          await api(`/api/develop/extensions/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+          await refresh();
+          notify('Extension deleted');
+          resetExtensionManagerForm();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(deleteBtn);
+
+      row.appendChild(nameTd);
+      row.appendChild(typeTd);
+      row.appendChild(pathTd);
+      row.appendChild(statusTd);
+      row.appendChild(updatedTd);
+      row.appendChild(actionsTd);
+      tbody.appendChild(row);
+    });
+  }
+
+  function getLandingPageFormPayload(formData) {
+    const landingPageId = safeText(formData.get('landing_page_id'));
+    const existing = savedLandingPages.find((item) => safeText(item.id) === landingPageId) || null;
+    return {
+      name: safeText(formData.get('landing_page_name')),
+      templateId: safeText(formData.get('template_id')) || selectedTemplateId,
+      primaryColor: landingPageColors.primary,
+      backgroundColor: landingPageColors.background,
+      accentColor: landingPageColors.accent,
+      formId: safeText(formData.get('form_id')),
+      leadMagnetId: safeText(formData.get('lead_magnet_id')),
+      headlineId: safeText(formData.get('headline_id')),
+      pitchId: safeText(formData.get('pitch_id')),
+      ctaId: safeText(formData.get('cta_id')),
+      websiteBannerImageId: safeText(formData.get('website_banner_image_id')),
+      backgroundImageId: safeText(formData.get('background_image_id')),
+      featureImageId: safeText(formData.get('feature_image_id')),
+      highlightImageId: safeText(formData.get('highlight_image_id')),
+      featureHeadlineId: safeText(formData.get('feature_headline_id')),
+      featureSubheadingId: safeText(formData.get('feature_subheading_id')),
+      featureTitle: safeText(formData.get('feature_title'), 500),
+      featureCopy: safeText(formData.get('feature_copy'), 5000),
+      highlightHeadlineId: safeText(formData.get('highlight_headline_id')),
+      highlightPitchId: safeText(formData.get('highlight_pitch_id')),
+      highlightTitle: safeText(formData.get('highlight_title'), 500),
+      highlightCopy: safeText(formData.get('highlight_copy'), 5000),
+      bodyHeadlineId: safeText(formData.get('body_headline_id')),
+      bodySubheadingId: safeText(formData.get('body_subheading_id')),
+      bodyPitchId: safeText(formData.get('body_pitch_id')),
+      logoWideId: safeText(formData.get('logo_wide_id')),
+      logoSquareId: safeText(formData.get('logo_square_id')),
+      contentOverrides: normalizeLandingPageContentOverrides(existing?.contentOverrides),
+    };
+  }
+
+  function getLandingPageTemplateName(templateId) {
+    return getTemplateById(templateId).name;
+  }
+
+  function getLandingPageFieldRows(key) {
+    const fieldKey = safeText(key);
+    if (fieldKey === 'formId') return savedForms.slice();
+    if (fieldKey === 'leadMagnetId') return getAssetsByType('Lead Magnet');
+    if (fieldKey === 'headlineId' || fieldKey === 'featureHeadlineId' || fieldKey === 'highlightHeadlineId' || fieldKey === 'bodyHeadlineId') {
+      return landingPageHeadlines.slice();
+    }
+    if (fieldKey === 'featureSubheadingId' || fieldKey === 'bodySubheadingId') {
+      return landingPageSubheadings.slice();
+    }
+    if (fieldKey === 'pitchId' || fieldKey === 'highlightPitchId' || fieldKey === 'bodyPitchId') {
+      return landingPagePitches.slice();
+    }
+    if (fieldKey === 'ctaId') return landingPageCtas.slice();
+    if (fieldKey === 'websiteBannerImageId') {
+      return getAssetsByCategoryAliases(
+        ['Banner Image', 'Website Banner', 'Website Banner Image', 'Hero Banner', 'Article Banner'],
+        'Image'
+      );
+    }
+    if (fieldKey === 'backgroundImageId') {
+      return getAssetsByCategoryAliases(['Background Image'], 'Image');
+    }
+    if (fieldKey === 'featureImageId') {
+      return getAssetsByCategoryAliases(['Feature Image', 'Feature', 'Feature Graphic', 'Featured Image'], 'Image');
+    }
+    if (fieldKey === 'highlightImageId') {
+      return getAssetsByCategoryAliases(['Highlight Image', 'Highlight'], 'Image');
+    }
+    if (fieldKey === 'logoSquareId') {
+      return getAssetsByCategoryAliases(['Logo - Square', 'Square Logo'], 'Image');
+    }
+    return [];
+  }
+
+  function getLandingPageFieldOptionLabel(key, row) {
+    const fieldKey = safeText(key);
+    if (fieldKey === 'formId') {
+      return safeText(row?.name) || getFormTemplateById(row?.formType).name;
+    }
+    if (fieldKey === 'headlineId' || fieldKey === 'featureHeadlineId' || fieldKey === 'highlightHeadlineId' || fieldKey === 'bodyHeadlineId') {
+      return safeText(row?.headline) || `Headline ${safeText(row?.id)}`;
+    }
+    if (fieldKey === 'featureSubheadingId' || fieldKey === 'bodySubheadingId') {
+      return safeText(row?.subheading) || `Sub-heading ${safeText(row?.id)}`;
+    }
+    if (fieldKey === 'pitchId' || fieldKey === 'highlightPitchId' || fieldKey === 'bodyPitchId') {
+      return safeText(row?.pitch) || `Pitch ${safeText(row?.id)}`;
+    }
+    if (fieldKey === 'ctaId') {
+      return safeText(row?.cta) || `CTA ${safeText(row?.id)}`;
+    }
+    return assetLabel(row, `Item ${safeText(row?.id)}`);
+  }
+
+  function getLandingPageFieldFilterMeta(key) {
+    const fieldKey = safeText(key);
+    if (fieldKey === 'formId') {
+      return {
+        placeholder: 'All Form Types',
+        label: 'Form Type Filter',
+        getValue: (row) => safeText(row?.formType),
+        getLabel: (value) => getFormTemplateById(value).name,
+      };
+    }
+    if ([
+      'leadMagnetId',
+      'headlineId',
+      'featureHeadlineId',
+      'highlightHeadlineId',
+      'bodyHeadlineId',
+      'featureSubheadingId',
+      'bodySubheadingId',
+      'pitchId',
+      'highlightPitchId',
+      'bodyPitchId',
+      'ctaId',
+      'websiteBannerImageId',
+      'backgroundImageId',
+      'featureImageId',
+      'highlightImageId',
+      'logoSquareId',
+    ].includes(fieldKey)) {
+      return {
+        placeholder: 'All Categories',
+        label: 'Category Filter',
+        getValue: (row) => safeText(row?.category),
+        getLabel: (value) => value || 'Uncategorized',
+      };
+    }
+    return null;
+  }
+
+  function getLandingPageDefaultSelectorFilters() {
+    try {
+      const raw = window.localStorage.getItem(LANDING_SELECTOR_DEFAULTS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function getLandingPageFilterState(fieldKey) {
+    const key = safeText(fieldKey);
+    if (!landingPageSelectorFilterState[key]) {
+      const defaults = getLandingPageDefaultSelectorFilters();
+      const saved = defaults && typeof defaults[key] === 'object' ? defaults[key] : {};
+      if (key === 'formId') {
+        landingPageSelectorFilterState[key] = {
+          formType: safeText(saved.formType),
+        };
+      } else if ([
+        'leadMagnetId',
+        'websiteBannerImageId',
+        'backgroundImageId',
+        'featureImageId',
+        'highlightImageId',
+        'logoSquareId',
+      ].includes(key)) {
+        landingPageSelectorFilterState[key] = {
+          asset_name: safeText(saved.asset_name),
+          asset_type: safeText(saved.asset_type),
+          category: safeText(saved.category),
+          tags: safeText(saved.tags),
+        };
+      } else if (getLandingPageFieldFilterMeta(key)) {
+        landingPageSelectorFilterState[key] = {
+          category: safeText(saved.category),
+        };
+      } else {
+        landingPageSelectorFilterState[key] = {};
+      }
+    }
+    return landingPageSelectorFilterState[key];
+  }
+
+  function saveLandingPageSelectorDefaults() {
+    try {
+      window.localStorage.setItem(LANDING_SELECTOR_DEFAULTS_KEY, JSON.stringify(landingPageSelectorFilterState));
+      notify('Selector defaults saved');
+    } catch {
+      notify('Could not save selector defaults', true);
+    }
+  }
+
+  function getLandingPageVisualEditorOptions(key, filterValue = '') {
+    if (safeText(key) === 'templateId') {
+      return LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name }));
+    }
+    const rows = getLandingPageFieldRows(key);
+    const meta = getLandingPageFieldFilterMeta(key);
+    const state = (filterValue && typeof filterValue === 'object')
+      ? filterValue
+      : { category: safeText(filterValue) };
+    const filteredRows = rows.filter((row) => {
+      if (state.asset_name) {
+        const name = assetLabel(row, '').toLowerCase();
+        if (!name.includes(String(state.asset_name).trim().toLowerCase())) return false;
+      }
+      if (state.asset_type && safeText(row?.assetType) !== safeText(state.asset_type)) {
+        return false;
+      }
+      if (state.tags) {
+        const tagText = Array.isArray(row?.tags) ? row.tags.join(', ').toLowerCase() : '';
+        if (!tagText.includes(String(state.tags).trim().toLowerCase())) return false;
+      }
+      if (state.formType && safeText(row?.formType) !== safeText(state.formType)) {
+        return false;
+      }
+      if (state.category && meta && safeText(meta.getValue(row)) !== safeText(state.category)) {
+        return false;
+      }
+      return true;
+    });
+    return filteredRows.map((row) => ({
+      value: row.id,
+      label: getLandingPageFieldOptionLabel(key, row),
+    }));
+  }
+
+  function clearLandingPageSelectorFilters() {
+    Object.keys(landingPageSelectorFilterState).forEach((key) => {
+      delete landingPageSelectorFilterState[key];
+    });
+  }
+
+  function ensureLandingPageFieldFilterSelect(select, fieldKey) {
+    if (!select) return null;
+    const key = safeText(fieldKey);
+    const meta = getLandingPageFieldFilterMeta(key);
+    const state = getLandingPageFilterState(key);
+    const wrapId = `${select.id}FilterWrap`;
+    let wrap = byId(wrapId);
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = wrapId;
+      wrap.className = 'develop-selector-filter-wrap';
+      wrap.dataset.filterFor = select.id;
+      select.parentNode.insertBefore(wrap, select);
+    }
+    wrap.innerHTML = '';
+
+    const rerender = () => {
+      renderLandingPageBuilderSelect(select.id, key, select.dataset.placeholder || select.options[0]?.textContent || '');
+    };
+
+    if ([
+      'leadMagnetId',
+      'websiteBannerImageId',
+      'backgroundImageId',
+      'featureImageId',
+      'highlightImageId',
+      'logoSquareId',
+    ].includes(key)) {
+      const rows = getLandingPageFieldRows(key);
+      const typeValues = Array.from(new Set(rows.map((row) => safeText(row?.assetType)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      const categoryValues = Array.from(new Set(rows.map((row) => safeText(row?.category)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'Filter: Asset Name';
+      nameInput.value = safeText(state.asset_name);
+      nameInput.addEventListener('input', () => {
+        state.asset_name = safeText(nameInput.value);
+        rerender();
+      });
+      wrap.appendChild(nameInput);
+
+      const typeSelect = document.createElement('select');
+      setSelectOptions(
+        typeSelect,
+        typeValues.map((value) => ({ value, label: value })),
+        'All Asset Types',
+        state.asset_type
+      );
+      typeSelect.addEventListener('change', () => {
+        state.asset_type = safeText(typeSelect.value);
+        rerender();
+      });
+      wrap.appendChild(typeSelect);
+
+      const categorySelect = document.createElement('select');
+      setSelectOptions(
+        categorySelect,
+        categoryValues.map((value) => ({ value, label: value })),
+        'All Categories',
+        state.category
+      );
+      categorySelect.addEventListener('change', () => {
+        state.category = safeText(categorySelect.value);
+        rerender();
+      });
+      wrap.appendChild(categorySelect);
+
+      const tagsInput = document.createElement('input');
+      tagsInput.type = 'text';
+      tagsInput.placeholder = 'Filter: Tags';
+      tagsInput.value = safeText(state.tags);
+      tagsInput.addEventListener('input', () => {
+        state.tags = safeText(tagsInput.value);
+        rerender();
+      });
+      wrap.appendChild(tagsInput);
+      return wrap;
+    }
+
+    if (key === 'formId') {
+      const typeSelect = document.createElement('select');
+      const values = Array.from(new Set(savedForms.map((row) => safeText(row?.formType)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      setSelectOptions(
+        typeSelect,
+        values.map((value) => ({ value, label: getFormTemplateById(value).name })),
+        'All Form Types',
+        state.formType
+      );
+      typeSelect.addEventListener('change', () => {
+        state.formType = safeText(typeSelect.value);
+        rerender();
+      });
+      wrap.appendChild(typeSelect);
+      return wrap;
+    }
+
+    if (meta) {
+      const categorySelect = document.createElement('select');
+      const rows = getLandingPageFieldRows(key);
+      const values = Array.from(new Set(rows.map((row) => safeText(meta.getValue(row))).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      setSelectOptions(
+        categorySelect,
+        values.map((value) => ({ value, label: meta.getLabel(value) })),
+        meta.placeholder,
+        state.category
+      );
+      categorySelect.addEventListener('change', () => {
+        state.category = safeText(categorySelect.value);
+        rerender();
+      });
+      wrap.appendChild(categorySelect);
+      return wrap;
+    }
+
+    return null;
+  }
+
+  function renderLandingPageBuilderSelect(selectId, fieldKey, placeholder) {
+    const select = byId(selectId);
+    if (!select) return;
+    select.dataset.placeholder = placeholder;
+    const currentValue = safeText(select.value);
+    ensureLandingPageFieldFilterSelect(select, fieldKey);
+    setSelectOptions(
+      select,
+      getLandingPageVisualEditorOptions(fieldKey, getLandingPageFilterState(fieldKey)),
+      placeholder,
+      currentValue
+    );
+  }
+
+  function getSavedFormName(formId) {
+    const id = safeText(formId);
+    if (!id) return '';
+    const match = savedForms.find((form) => safeText(form.id) === id);
+    return match ? (safeText(match.name) || getFormTemplateById(match.formType).name) : '';
+  }
+
+  function getLandingMessageLabel(rows, id, field, fallbackPrefix) {
+    const targetId = safeText(id);
+    if (!targetId) return '';
+    const match = (Array.isArray(rows) ? rows : []).find((item) => safeText(item.id) === targetId);
+    return match ? (safeText(match[field]) || `${fallbackPrefix} ${targetId}`) : '';
+  }
+
+  function getLandingPageHeadlineLabel(headlineId) {
+    return getLandingMessageLabel(landingPageHeadlines, headlineId, 'headline', 'Headline');
+  }
+
+  function getLandingPageSubheadingLabel(subheadingId) {
+    return getLandingMessageLabel(landingPageSubheadings, subheadingId, 'subheading', 'Sub-heading');
+  }
+
+  function getLandingPagePitchLabel(pitchId) {
+    return getLandingMessageLabel(landingPagePitches, pitchId, 'pitch', 'Pitch');
+  }
+
+  function getLandingPageCtaLabel(ctaId) {
+    return getLandingMessageLabel(landingPageCtas, ctaId, 'cta', 'CTA');
+  }
+
+  function getAssetById(assetId) {
+    const targetId = safeText(assetId);
+    if (!targetId) return null;
+    return (Array.isArray(state.assets) ? state.assets : []).find((asset) => safeText(asset?.id) === targetId) || null;
+  }
+
+  function getLandingPageAssetUrl(assetId) {
+    const candidates = getLandingPageAssetUrlCandidates(assetId);
+    return candidates[0] || '';
+  }
+
+  function getLandingPageAssetUrlCandidates(assetId) {
+    const asset = getAssetById(assetId);
+    if (!asset) return [];
+    const location = safeText(asset.location);
+    const driveId = extractDriveId(location);
+    const urls = [];
+    if (driveId && safeText(asset.assetType) === 'Image') {
+      urls.push(`/api/assets/drive-file/${encodeURIComponent(driveId)}`);
+      urls.push(`https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveId)}`);
+      urls.push(`https://drive.google.com/thumbnail?id=${encodeURIComponent(driveId)}&sz=w2400`);
+    }
+    const direct = toDirectAssetUrl(location);
+    if (direct) urls.push(direct);
+    if (location) urls.push(location);
+    return Array.from(new Set(urls.filter(Boolean)));
+  }
+
+  function buildLandingAssetImage(assetId, altText, className = '') {
+    const candidates = getLandingPageAssetUrlCandidates(assetId);
+    if (!candidates.length) return '';
+    const primary = candidates[0];
+    const fallbackSrcs = candidates.slice(1);
+    const classAttr = className ? ` class="${className}"` : '';
+    const fallbackAttr = fallbackSrcs.length
+      ? ` data-fallback-srcs="${encodeURIComponent(JSON.stringify(fallbackSrcs))}" data-fallback-idx="0"`
+      : '';
+    return `<img src="${primary}" alt="${safeText(altText)}"${classAttr}${fallbackAttr} />`;
+  }
+
+  function bindLandingImageFallbacks(host) {
+    if (!host) return;
+    host.querySelectorAll('img[data-fallback-srcs]').forEach((img) => {
+      if (img.dataset.fallbackBound === '1') return;
+      img.dataset.fallbackBound = '1';
+      img.addEventListener('error', () => {
+        let fallbacks = [];
+        try {
+          const raw = decodeURIComponent(safeText(img.dataset.fallbackSrcs));
+          const parsed = JSON.parse(raw);
+          fallbacks = Array.isArray(parsed) ? parsed.map((item) => safeText(item)).filter(Boolean) : [];
+        } catch (_) {
+          fallbacks = [];
+        }
+        const idx = Math.max(0, Number(img.dataset.fallbackIdx || 0) || 0);
+        if (idx >= fallbacks.length) return;
+        img.dataset.fallbackIdx = String(idx + 1);
+        img.src = fallbacks[idx];
+      });
+    });
+  }
+
+  function getLandingPageAssetName(assetId, fallbackLabel) {
+    const asset = getAssetById(assetId);
+    return assetLabel(asset, fallbackLabel);
+  }
+
+  async function ensureAssetsLoaded() {
+    if (Array.isArray(state.assets) && state.assets.length) return;
+    const result = await api('/api/assets');
+    state.assets = Array.isArray(result?.assets) ? result.assets : [];
+  }
+
+  function normalizeLandingPageContentOverrides(value) {
+    if (!value) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      const next = {};
+      Object.entries(value).forEach(([key, raw]) => {
+        const cleanKey = safeText(key, 120);
+        if (!cleanKey) return;
+        next[cleanKey] = safeText(raw, 10000);
+      });
+      return next;
+    }
+    if (typeof value === 'string') {
+      try {
+        return normalizeLandingPageContentOverrides(JSON.parse(value));
+      } catch (_) {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  function getLandingPageMergedContentOverrides(record) {
+    const base = normalizeLandingPageContentOverrides(record?.contentOverrides);
+    const draft = normalizeLandingPageContentOverrides(landingPageVisualDraft.contentOverrides);
+    return {
+      ...base,
+      ...draft,
+    };
+  }
+
+  const LANDING_TEXT_SCALE_OPTIONS = ['0.80', '0.90', '1.00', '1.10', '1.20'];
+
+  function getLandingPageTextStyleKey(slot) {
+    return `__style__${safeText(slot)}`;
+  }
+
+  function parseLandingPageTextStyle(value) {
+    if (!value) return { fontScale: '1.00', sizeToFit: false };
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      const scale = LANDING_TEXT_SCALE_OPTIONS.includes(String(parsed?.fontScale || ''))
+        ? String(parsed.fontScale)
+        : '1.00';
+      return {
+        fontScale: scale,
+        sizeToFit: parsed?.sizeToFit === true,
+      };
+    } catch {
+      return { fontScale: '1.00', sizeToFit: false };
+    }
+  }
+
+  function getLandingPageTextStyle(record, slot) {
+    const overrides = getLandingPageMergedContentOverrides(record);
+    return parseLandingPageTextStyle(overrides[getLandingPageTextStyleKey(slot)]);
+  }
+
+  function setLandingPageTextStyle(slot, nextStyle) {
+    const overrides = getLandingPageMergedContentOverrides(getActiveLandingPageVisualRecord());
+    const current = getLandingPageTextStyle(getActiveLandingPageVisualRecord(), slot);
+    const merged = {
+      fontScale: LANDING_TEXT_SCALE_OPTIONS.includes(String(nextStyle?.fontScale || ''))
+        ? String(nextStyle.fontScale)
+        : current.fontScale,
+      sizeToFit: nextStyle?.sizeToFit === true,
+    };
+    overrides[getLandingPageTextStyleKey(slot)] = JSON.stringify(merged);
+    landingPageVisualDraft.contentOverrides = overrides;
+  }
+
+  function buildLandingPageTextAttrs(record, slot, extraStyle = '') {
+    const textStyle = getLandingPageTextStyle(record, slot);
+    const styles = [];
+    if (extraStyle) styles.push(extraStyle);
+    if (textStyle.fontScale && textStyle.fontScale !== '1.00') {
+      styles.push(`font-size:${Number(textStyle.fontScale).toFixed(2)}em;`);
+    }
+    const styleAttr = styles.length ? ` style="${styles.join(' ')}"` : '';
+    return ` data-text-slot="${slot}" data-size-to-fit="${textStyle.sizeToFit ? '1' : '0'}"${styleAttr}`;
+  }
+
+  function setLandingPageContentOverride(slot, value) {
+    const overrides = getLandingPageMergedContentOverrides(getActiveLandingPageVisualRecord());
+    const nextValue = safeText(value, 10000);
+    if (nextValue) {
+      overrides[slot] = nextValue;
+    } else {
+      delete overrides[slot];
+    }
+    landingPageVisualDraft.contentOverrides = overrides;
+  }
+
+  function getLandingPageTextSlotFieldKey(slot) {
+    return {
+    }[safeText(slot)] || '';
+  }
+
+  function getLandingPageSlotSelectSpec(slot) {
+    return {
+      'feature-one-title': { fieldKey: 'featureHeadlineId', label: 'Feature One Headline', placeholder: 'No Headline' },
+      'feature-one-copy': { fieldKey: 'featureSubheadingId', label: 'Feature One Sub-heading', placeholder: 'No Sub-heading' },
+      'feature-two-title': { fieldKey: 'highlightHeadlineId', label: 'Feature Two Headline', placeholder: 'No Headline' },
+      'feature-two-copy': { fieldKey: 'highlightPitchId', label: 'Feature Two Pitch', placeholder: 'No Pitch' },
+      'body-title': { fieldKey: 'bodyHeadlineId', label: 'Body Headline', placeholder: 'No Headline' },
+      'body-lead': { fieldKey: 'bodySubheadingId', label: 'Body Sub-heading', placeholder: 'No Sub-heading' },
+      'body-copy': { fieldKey: 'bodyPitchId', label: 'Body Pitch', placeholder: 'No Pitch' },
+    }[safeText(slot)] || null;
+  }
+
+  function getLandingPageEditorId(key, slot) {
+    const cleanKey = safeText(key);
+    const cleanSlot = safeText(slot);
+    return cleanSlot ? `${cleanKey}::${cleanSlot}` : cleanKey;
+  }
+
+  function parseLandingPageEditorId(editorId) {
+    const [key, slot] = safeText(editorId).split('::');
+    return {
+      key: safeText(key),
+      slot: safeText(slot),
+    };
+  }
+
+  function getLandingPagePreviewContext(record) {
+    const template = getTemplateById(record?.templateId);
+    const overrides = getLandingPageMergedContentOverrides(record);
+    const headline = overrides.headline || getLandingPageHeadlineLabel(record?.headlineId) || template.headline;
+    const pitch = overrides.pitch || getLandingPagePitchLabel(record?.pitchId) || template.lead;
+    const cta = overrides['primary-cta'] || getLandingPageCtaLabel(record?.ctaId) || template.primaryCta;
+    const form = savedForms.find((item) => safeText(item.id) === safeText(record?.formId)) || null;
+    const formFields = Array.isArray(form?.fields) && form.fields.length
+      ? form.fields
+      : [
+          { key: 'first_name', label: 'First Name', type: 'text', required: true },
+          { key: 'email', label: 'Email', type: 'email', required: true },
+          { key: 'company', label: 'Company', type: 'text', required: false },
+        ];
+
+    return {
+      template,
+      overrides,
+      headline,
+      pitch,
+      cta,
+      form,
+      formFields,
+      bannerUrl: getLandingPageAssetUrl(record?.websiteBannerImageId),
+      backgroundUrl: getLandingPageAssetUrl(record?.backgroundImageId),
+      featureUrl: getLandingPageAssetUrl(record?.featureImageId),
+      highlightUrl: getLandingPageAssetUrl(record?.highlightImageId),
+      logoWideUrl: getLandingPageAssetUrl(record?.logoWideId),
+      logoSquareUrl: getLandingPageAssetUrl(record?.logoSquareId),
+      primaryColor: safeText(record?.primaryColor) || DEFAULT_LANDING_PRIMARY,
+      backgroundColor: safeText(record?.backgroundColor) || DEFAULT_LANDING_BACKGROUND,
+      accentColor: safeText(record?.accentColor) || DEFAULT_LANDING_ACCENT,
+      eyebrow: overrides.eyebrow || template.eyebrow,
+      secondaryCta: overrides['secondary-cta'] || template.secondaryCta,
+      featureOneTitle: getLandingPageHeadlineLabel(record?.featureHeadlineId) || safeText(record?.featureTitle, 500) || overrides['feature-one-title'] || template.featureOneTitle,
+      featureOneCopy: getLandingPageSubheadingLabel(record?.featureSubheadingId) || safeText(record?.featureCopy, 5000) || overrides['feature-one-copy'] || template.featureOneCopy,
+      featureTwoTitle: getLandingPageHeadlineLabel(record?.highlightHeadlineId) || safeText(record?.highlightTitle, 500) || overrides['feature-two-title'] || template.featureTwoTitle,
+      featureTwoCopy: getLandingPagePitchLabel(record?.highlightPitchId) || safeText(record?.highlightCopy, 5000) || overrides['feature-two-copy'] || template.featureTwoCopy,
+      formTitle: overrides['form-heading'] || safeText(form?.heading) || template.formTitle,
+      formCopy: overrides['form-copy'] || template.formCopy,
+      formSubmitLabel: overrides['form-submit'] || safeText(form?.submitLabel) || 'Submit Form',
+      bodyTitle: getLandingPageHeadlineLabel(record?.bodyHeadlineId) || overrides['body-title'] || template.bodyTitle,
+      bodyLead: getLandingPageSubheadingLabel(record?.bodySubheadingId) || overrides['body-lead'] || template.lead,
+      bodyCopy: getLandingPagePitchLabel(record?.bodyPitchId) || overrides['body-copy'] || template.featureOneCopy,
+    };
+  }
+
+  function buildLandingPageMarkup(record, options = {}) {
+    if (!record) return '';
+    const {
+      interactive = false,
+      editableClass = 'develop-landing-editable',
+    } = options;
+        const ctx = getLandingPagePreviewContext(record);
+    const attr = (key, label, slot = '') => (
+      interactive
+        ? ` data-edit-key="${key}" data-edit-label="${label}"${slot ? ` data-edit-slot="${slot}"` : ''}`
+        : ''
+    );
+    const editable = (baseClass = '') => {
+      const classes = [];
+      if (baseClass) classes.push(baseClass);
+      if (interactive) classes.push(editableClass);
+      return classes.length ? ` class="${classes.join(' ')}"` : '';
+    };
+    const runtimeFieldMarkup = ctx.formFields.map((field, index) => {
+      const fieldType = safeText(field?.type) || 'text';
+      const fieldLabel = safeText(field?.label) || 'Field';
+      const fieldKey = safeText(field?.key) || `field_${index}`;
+      const required = Boolean(field?.required);
+      return `<input name="${fieldKey}" type="${fieldType}" placeholder="${fieldLabel}${required ? ' *' : ''}"${required ? ' required' : ''}${editable()}${attr('formId', 'Form', 'form-fields')} />`;
+    }).join('');
+
+    return `
+        <div class="develop-template-canvas">
+          <div${editable('develop-template-banner')}${attr('websiteBannerImageId', 'Website Banner Image', 'banner')}>${
+          ctx.bannerUrl
+            ? buildLandingAssetImage(record.websiteBannerImageId, getLandingPageAssetName(record.websiteBannerImageId, 'Page Banner Image'), 'develop-template-banner-img')
+            : getLandingPageAssetName(record.websiteBannerImageId, 'Page Banner Image')
+        }</div>
+        <div class="develop-template-hero" style="background:${ctx.backgroundColor};">
+          <div class="develop-template-copy">
+            <div${editable('develop-template-eyebrow')}${attr('theme', 'Theme', 'eyebrow')}${buildLandingPageTextAttrs(record, 'eyebrow', `color:${ctx.accentColor};`)}>${ctx.eyebrow}</div>
+            <h3${editable()}${attr('headlineId', 'Headline', 'headline')}${buildLandingPageTextAttrs(record, 'headline', `color:${ctx.primaryColor};`)}>${ctx.headline}</h3>
+            <p${editable()}${attr('pitchId', 'Pitch', 'pitch')}${buildLandingPageTextAttrs(record, 'pitch')}>${ctx.pitch}</p>
+            <div class="develop-template-cta-row">
+              <button type="button"${editable()}${attr('ctaId', 'Call To Action', 'primary-cta')}${buildLandingPageTextAttrs(record, 'primary-cta', `background:${ctx.primaryColor}; border-color:${ctx.primaryColor};`)}>${ctx.cta}</button>
+              <button type="button"${editable('develop-template-secondary-btn')}${attr('theme', 'Theme', 'secondary-cta')}${buildLandingPageTextAttrs(record, 'secondary-cta', `border-color:${ctx.accentColor}; color:${ctx.accentColor};`)}>${ctx.secondaryCta}</button>
+            </div>
+            <div class="develop-template-feature-grid">
+              <div class="develop-template-feature-card">
+                <div${editable('develop-template-image-slot')}${attr('featureImageId', 'Feature Image', 'feature-image')}>${
+                  ctx.featureUrl
+                    ? buildLandingAssetImage(record.featureImageId, getLandingPageAssetName(record.featureImageId, 'Feature Image'))
+                    : getLandingPageAssetName(record.featureImageId, 'Feature Image')
+                }</div>
+                <h4${editable()}${attr('theme', 'Theme', 'feature-one-title')}${buildLandingPageTextAttrs(record, 'feature-one-title')}>${ctx.featureOneTitle}</h4>
+                <p${editable()}${attr('theme', 'Theme', 'feature-one-copy')}${buildLandingPageTextAttrs(record, 'feature-one-copy')}>${ctx.featureOneCopy}</p>
+              </div>
+              <div class="develop-template-feature-card">
+                <div${editable('develop-template-image-slot')}${attr('highlightImageId', 'Highlight Image', 'highlight-image')}>${
+                  ctx.highlightUrl
+                    ? buildLandingAssetImage(record.highlightImageId, getLandingPageAssetName(record.highlightImageId, 'Highlight Image'))
+                    : getLandingPageAssetName(record.highlightImageId, 'Highlight Image')
+                }</div>
+                <h4${editable()}${attr('theme', 'Theme', 'feature-two-title')}${buildLandingPageTextAttrs(record, 'feature-two-title')}>${ctx.featureTwoTitle}</h4>
+                <p${editable()}${attr('theme', 'Theme', 'feature-two-copy')}${buildLandingPageTextAttrs(record, 'feature-two-copy')}>${ctx.featureTwoCopy}</p>
+              </div>
+            </div>
+          </div>
+          <aside${editable('develop-template-form-card')}${attr('formId', 'Form', 'form-card')}>
+            <div class="develop-template-logo-row">
+              <div${editable('develop-template-logo-slot develop-template-logo-square')}${attr('logoSquareId', 'Logo - Square', 'logo-square')}>${
+                ctx.logoSquareUrl
+                  ? buildLandingAssetImage(record.logoSquareId, 'Logo - Square')
+                  : 'Logo - Square'
+              }</div>
+            </div>
+            <form class="develop-template-runtime-form${interactive ? ' develop-template-runtime-form-disabled' : ''}" data-landing-page-id="${safeText(record.id)}" data-form-id="${safeText(record.formId)}">
+              <h3${editable()}${attr('formId', 'Form', 'form-heading')}${buildLandingPageTextAttrs(record, 'form-heading', `color:${ctx.accentColor};`)}>${ctx.formTitle}</h3>
+              <p${editable()}${attr('formId', 'Form', 'form-copy')}${buildLandingPageTextAttrs(record, 'form-copy')}>${ctx.formCopy}</p>
+              ${runtimeFieldMarkup}
+              <button type="${interactive ? 'button' : 'submit'}"${editable()}${attr('formId', 'Form', 'form-submit')}${buildLandingPageTextAttrs(record, 'form-submit', `background:${ctx.primaryColor}; border-color:${ctx.primaryColor};`)}>${ctx.formSubmitLabel}</button>
+              <div class="develop-template-form-status" aria-live="polite"></div>
+            </form>
+          </aside>
+        </div>
+        <div class="develop-template-content">
+          <div class="develop-template-body-copy">
+            <h3${editable()}${attr('theme', 'Theme', 'body-title')}${buildLandingPageTextAttrs(record, 'body-title')}>${ctx.bodyTitle}</h3>
+            <p${editable()}${attr('theme', 'Theme', 'body-lead')}${buildLandingPageTextAttrs(record, 'body-lead')}>${ctx.bodyLead}</p>
+            <p${editable()}${attr('theme', 'Theme', 'body-copy')}${buildLandingPageTextAttrs(record, 'body-copy')}>${ctx.bodyCopy}</p>
+          </div>
+          <div${editable('develop-template-side-image')}${attr('backgroundImageId', 'Background Image', 'background-image')}>${
+            ctx.backgroundUrl
+              ? buildLandingAssetImage(record.backgroundImageId, getLandingPageAssetName(record.backgroundImageId, 'Background Image / Supporting Visual'))
+              : getLandingPageAssetName(record.backgroundImageId, 'Background Image / Supporting Visual')
+          }</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindLandingPageRuntimeForms(host, record) {
+    if (!host || !record) return;
+    const formConfig = savedForms.find((item) => safeText(item.id) === safeText(record.formId)) || null;
+    const leadMagnetId = safeText(formConfig?.leadMagnetId) || safeText(record?.leadMagnetId);
+    const leadMagnetAsset = getAssetById(leadMagnetId);
+    const leadMagnetUrl = leadMagnetAsset ? toDirectAssetUrl(leadMagnetAsset.location) : '';
+    host.querySelectorAll('.develop-template-runtime-form').forEach((form) => {
+      const submitButton = form.querySelector('button[type="submit"]');
+      const status = form.querySelector('.develop-template-form-status');
+      if (!submitButton) return;
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        submitButton.disabled = true;
+        if (status) {
+          status.textContent = 'Submitting...';
+          status.classList.remove('is-error', 'is-success');
+        }
+        try {
+          const formData = new FormData(form);
+          const fields = {};
+          formData.forEach((value, key) => {
+            fields[String(key)] = String(value || '').trim();
+          });
+          await api(`/api/develop/landing-pages/${encodeURIComponent(record.id)}/submit`, {
+            method: 'POST',
+            body: JSON.stringify({
+              formId: safeText(record.formId),
+              fields,
+            }),
+          });
+          form.reset();
+          if (status) {
+            status.textContent = safeText(formConfig?.successMessage) || 'Contact saved.';
+            status.classList.remove('is-error');
+            status.classList.add('is-success');
+          }
+          openLandingPageThankYouPage({
+            title: 'Thank You',
+            message: safeText(formConfig?.successMessage) || 'Thank you. Your request has been received.',
+            leadMagnetUrl,
+            leadMagnetId: leadMagnetAsset ? safeText(leadMagnetAsset.id) : '',
+            landingPageId: safeText(record.id),
+            leadMagnetLabel: leadMagnetAsset ? `Download ${assetLabel(leadMagnetAsset, 'Lead Magnet')}` : 'Open Lead Magnet',
+          });
+        } catch (err) {
+          if (status) {
+            status.textContent = safeText(formConfig?.errorMessage) || err.message || 'Could not save contact';
+            status.classList.remove('is-success');
+            status.classList.add('is-error');
+          }
+        } finally {
+          submitButton.disabled = false;
+        }
+      });
+    });
+  }
+
+  function getActiveLandingPageVisualRecord() {
+    if (!activeLandingPageVisualRecord) return null;
+    const baseOverrides = normalizeLandingPageContentOverrides(activeLandingPageVisualRecord.contentOverrides);
+    const draftOverrides = normalizeLandingPageContentOverrides(landingPageVisualDraft.contentOverrides);
+    return {
+      ...activeLandingPageVisualRecord,
+      ...landingPageVisualDraft,
+      contentOverrides: {
+        ...baseOverrides,
+        ...draftOverrides,
+      },
+    };
+  }
+
+  function getLandingPageVisualEditorTitle(key) {
+    return {
+      theme: 'Theme',
+      headlineId: 'Headline',
+      pitchId: 'Pitch',
+      ctaId: 'Call To Action',
+      formId: 'Form',
+      websiteBannerImageId: 'Website Banner Image',
+      featureImageId: 'Feature Image',
+      highlightImageId: 'Highlight Image',
+      backgroundImageId: 'Background Image',
+      logoWideId: 'Logo - Wide',
+      logoSquareId: 'Logo - Square',
+    }[key] || key;
+  }
+
+  function setLandingPageVisualDraftValue(fieldKey, value, options = {}) {
+    const nextValue = safeText(value);
+    landingPageVisualDraft[fieldKey] = nextValue;
+    if (fieldKey === 'templateId') {
+      activeLandingPageVisualRecord.templateId = nextValue || activeLandingPageVisualRecord.templateId;
+    }
+    if (!options.skipRender) {
+      renderLandingPageVisualEditor();
+    }
+  }
+
+  function createLandingPageVisualSelectControl(record, fieldKey, label, placeholder) {
+    const wrap = document.createElement('label');
+    wrap.className = 'develop-inline-editor-field';
+
+    const text = document.createElement('span');
+    text.className = 'develop-inline-editor-field-label';
+    text.textContent = label;
+    wrap.appendChild(text);
+
+    const meta = getLandingPageFieldFilterMeta(fieldKey);
+    let activeFilter = '';
+    if (meta) {
+      const filter = document.createElement('select');
+      const rows = getLandingPageFieldRows(fieldKey);
+      const values = Array.from(new Set(rows.map((row) => safeText(meta.getValue(row))).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      setSelectOptions(
+        filter,
+        values.map((value) => ({ value, label: meta.getLabel(value) })),
+        meta.placeholder,
+        getLandingPageFilterState(fieldKey).category
+      );
+      activeFilter = safeText(filter.value);
+      filter.addEventListener('change', () => {
+        getLandingPageFilterState(fieldKey).category = safeText(filter.value);
+        renderLandingPageVisualEditor();
+      });
+      wrap.appendChild(filter);
+    }
+
+    const select = document.createElement('select');
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = placeholder;
+    select.appendChild(first);
+    const optionFilterState = meta
+      ? { ...getLandingPageFilterState(fieldKey), category: activeFilter }
+      : getLandingPageFilterState(fieldKey);
+    getLandingPageVisualEditorOptions(fieldKey, optionFilterState).forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item.value);
+      option.textContent = item.label;
+      select.appendChild(option);
+    });
+    select.value = safeText(record[fieldKey]);
+    select.addEventListener('change', () => {
+      setLandingPageVisualDraftValue(fieldKey, select.value);
+    });
+    wrap.appendChild(select);
+    return wrap;
+  }
+
+  function createLandingPageVisualColorControl(record, fieldKey, label, fallback) {
+    const wrap = document.createElement('label');
+    wrap.className = 'develop-inline-editor-field';
+
+    const text = document.createElement('span');
+    text.className = 'develop-inline-editor-field-label';
+    text.textContent = label;
+    wrap.appendChild(text);
+
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = safeText(record[fieldKey]) || fallback;
+    input.addEventListener('input', () => {
+      setLandingPageVisualDraftValue(fieldKey, input.value);
+    });
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function createLandingPageVisualAssetNavigator(record, fieldKey, label, placeholder) {
+    const wrap = document.createElement('div');
+    wrap.className = 'develop-inline-editor-field';
+
+    const title = document.createElement('span');
+    title.className = 'develop-inline-editor-field-label';
+    title.textContent = label;
+    wrap.appendChild(title);
+
+    const controls = document.createElement('div');
+    controls.className = 'develop-inline-asset-nav';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.textContent = 'Prev';
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.textContent = 'Next';
+
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear';
+
+    const status = document.createElement('div');
+    status.className = 'develop-inline-asset-status';
+
+    const preview = document.createElement('div');
+    preview.className = 'develop-inline-asset-preview';
+
+    const options = getLandingPageVisualEditorOptions(fieldKey);
+    let currentValue = safeText(record[fieldKey]);
+    let currentIndex = options.findIndex((item) => safeText(item.value) === currentValue);
+
+    const updateStatus = () => {
+      currentValue = safeText(getActiveLandingPageVisualRecord()?.[fieldKey] || currentValue);
+      currentIndex = options.findIndex((item) => safeText(item.value) === currentValue);
+      const active = currentIndex >= 0 ? options[currentIndex] : null;
+      status.textContent = active ? active.label : placeholder;
+      const asset = getAssetById(active ? active.value : '');
+      const assetUrl = asset ? toDirectAssetUrl(asset.location) : '';
+      preview.innerHTML = '';
+      if (assetUrl) {
+        const img = document.createElement('img');
+        img.src = assetUrl;
+        img.alt = active?.label || label;
+        preview.appendChild(img);
+      } else {
+        const fallback = document.createElement('span');
+        fallback.textContent = active ? active.label : 'No asset selected';
+        preview.appendChild(fallback);
+      }
+      prevBtn.disabled = options.length < 2;
+      nextBtn.disabled = options.length < 2;
+    };
+
+    const cycle = (direction) => {
+      if (!options.length) return;
+      let nextIndex = currentIndex;
+      if (nextIndex < 0) {
+        nextIndex = direction > 0 ? 0 : options.length - 1;
+      } else {
+        nextIndex = (nextIndex + direction + options.length) % options.length;
+      }
+      const nextItem = options[nextIndex];
+      setLandingPageVisualDraftValue(fieldKey, nextItem?.value || '');
+    };
+
+    prevBtn.addEventListener('click', () => cycle(-1));
+    nextBtn.addEventListener('click', () => cycle(1));
+    clearBtn.addEventListener('click', () => {
+      setLandingPageVisualDraftValue(fieldKey, '');
+    });
+
+    controls.appendChild(prevBtn);
+    controls.appendChild(status);
+    controls.appendChild(nextBtn);
+    controls.appendChild(clearBtn);
+    wrap.appendChild(controls);
+    wrap.appendChild(preview);
+    updateStatus();
+    return wrap;
+  }
+
+  function createLandingPageInlineEditor(key, record) {
+    const panel = document.createElement('section');
+    panel.className = 'develop-inline-editor';
+
+    const header = document.createElement('div');
+    header.className = 'develop-inline-editor-header';
+
+    const title = document.createElement('strong');
+    title.textContent = getLandingPageVisualEditorTitle(key);
+    header.appendChild(title);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      activeLandingPageVisualEditors.delete(key);
+      renderLandingPageVisualEditor();
+    });
+    header.appendChild(closeBtn);
+    panel.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'develop-inline-editor-body';
+
+    if (key === 'theme') {
+      body.appendChild(createLandingPageVisualSelectControl(record, 'templateId', 'Template', 'Template'));
+      body.appendChild(createLandingPageVisualColorControl(record, 'primaryColor', 'Primary Color', DEFAULT_LANDING_PRIMARY));
+      body.appendChild(createLandingPageVisualColorControl(record, 'backgroundColor', 'Background Color', DEFAULT_LANDING_BACKGROUND));
+      body.appendChild(createLandingPageVisualColorControl(record, 'accentColor', 'Accent Color', DEFAULT_LANDING_ACCENT));
+    } else if (key === 'headlineId') {
+      body.appendChild(createLandingPageVisualSelectControl(record, 'headlineId', 'Headline', 'No Headline'));
+    } else if (key === 'pitchId') {
+      body.appendChild(createLandingPageVisualSelectControl(record, 'pitchId', 'Pitch', 'No Pitch'));
+    } else if (key === 'ctaId') {
+      body.appendChild(createLandingPageVisualSelectControl(record, 'ctaId', 'Call To Action', 'No CTA'));
+    } else if (key === 'formId') {
+      body.appendChild(createLandingPageVisualSelectControl(record, 'formId', 'Form', 'No Form'));
+    } else if (key === 'websiteBannerImageId') {
+      body.appendChild(createLandingPageVisualAssetNavigator(record, 'websiteBannerImageId', 'Website Banner Image', 'No Banner Image'));
+    } else if (key === 'featureImageId') {
+      body.appendChild(createLandingPageVisualAssetNavigator(record, 'featureImageId', 'Feature Image', 'No Feature Image'));
+    } else if (key === 'backgroundImageId') {
+      body.appendChild(createLandingPageVisualAssetNavigator(record, 'backgroundImageId', 'Background Image', 'No Background Image'));
+    } else if (key === 'logoWideId') {
+      body.appendChild(createLandingPageVisualAssetNavigator(record, 'logoWideId', 'Logo - Wide', 'No Wide Logo'));
+    } else if (key === 'logoSquareId') {
+      body.appendChild(createLandingPageVisualAssetNavigator(record, 'logoSquareId', 'Logo - Square', 'No Square Logo'));
+    }
+
+    panel.appendChild(body);
+    return panel;
+  }
+
+  function isLandingPageImageEditorKey(key) {
+    return [
+      'websiteBannerImageId',
+      'featureImageId',
+      'highlightImageId',
+      'backgroundImageId',
+      'logoWideId',
+      'logoSquareId',
+    ].includes(safeText(key));
+  }
+
+  function mountLandingPageInlineAssetSelect(target, key, record, editorId, config = {}) {
+    const label = safeText(config.label) || getLandingPageVisualEditorTitle(key);
+    const current = safeText(record?.[key]);
+    const wrap = document.createElement('div');
+    wrap.className = 'develop-inline-image-select';
+    const state = getLandingPageFilterState(key);
+    const rows = getLandingPageFieldRows(key);
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Filter: Asset Name';
+    nameInput.value = safeText(state.asset_name);
+    nameInput.addEventListener('click', (event) => event.stopPropagation());
+    nameInput.addEventListener('input', () => {
+      state.asset_name = safeText(nameInput.value);
+      renderLandingPageVisualEditor();
+    });
+    wrap.appendChild(nameInput);
+
+    const typeValues = Array.from(new Set(rows.map((row) => safeText(row?.assetType)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    const typeSelect = document.createElement('select');
+    setSelectOptions(
+      typeSelect,
+      typeValues.map((value) => ({ value, label: value })),
+      'All Asset Types',
+      state.asset_type
+    );
+    typeSelect.addEventListener('click', (event) => event.stopPropagation());
+    typeSelect.addEventListener('change', () => {
+      state.asset_type = safeText(typeSelect.value);
+      renderLandingPageVisualEditor();
+    });
+    wrap.appendChild(typeSelect);
+
+    const categoryValues = Array.from(new Set(rows.map((row) => safeText(row?.category)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    const categorySelect = document.createElement('select');
+    setSelectOptions(
+      categorySelect,
+      categoryValues.map((value) => ({ value, label: value })),
+      'All Categories',
+      state.category
+    );
+    categorySelect.addEventListener('click', (event) => event.stopPropagation());
+    categorySelect.addEventListener('change', () => {
+      state.category = safeText(categorySelect.value);
+      renderLandingPageVisualEditor();
+    });
+    wrap.appendChild(categorySelect);
+
+    const tagsInput = document.createElement('input');
+    tagsInput.type = 'text';
+    tagsInput.placeholder = 'Filter: Tags';
+    tagsInput.value = safeText(state.tags);
+    tagsInput.addEventListener('click', (event) => event.stopPropagation());
+    tagsInput.addEventListener('input', () => {
+      state.tags = safeText(tagsInput.value);
+      renderLandingPageVisualEditor();
+    });
+    wrap.appendChild(tagsInput);
+
+    const select = document.createElement('select');
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = safeText(config.placeholder) || `Select ${label}`;
+    select.appendChild(first);
+    getLandingPageVisualEditorOptions(key, state).forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item.value);
+      option.textContent = item.label;
+      select.appendChild(option);
+    });
+    select.value = current;
+    select.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+    select.addEventListener('change', () => {
+      setLandingPageVisualDraftValue(key, select.value);
+    });
+
+    if (config.textSlot) {
+      wrap.appendChild(createLandingPageTextStyleControls(config.textSlot));
+    }
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      activeLandingPageVisualEditors.delete(editorId);
+      renderLandingPageVisualEditor();
+    });
+
+    wrap.appendChild(select);
+    wrap.appendChild(closeBtn);
+    target.innerHTML = '';
+    target.appendChild(wrap);
+    target.classList.add('develop-inline-image-editor-target');
+  }
+
+  function mountLandingPageInlineFormSelect(target, record, editorId) {
+    const key = 'formId';
+    const current = safeText(record?.formId);
+    const state = getLandingPageFilterState(key);
+    const rows = getLandingPageFieldRows(key);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'develop-inline-image-select';
+
+    const templateSelect = document.createElement('select');
+    const templateValues = Array.from(new Set(rows.map((row) => safeText(row?.formType)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    setSelectOptions(
+      templateSelect,
+      templateValues.map((value) => ({ value, label: getFormTemplateById(value).name })),
+      'All Form Templates',
+      state.formType
+    );
+    templateSelect.addEventListener('click', (event) => event.stopPropagation());
+    templateSelect.addEventListener('change', () => {
+      state.formType = safeText(templateSelect.value);
+      renderLandingPageVisualEditor();
+    });
+    wrap.appendChild(templateSelect);
+
+    const select = document.createElement('select');
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = 'No Form';
+    select.appendChild(first);
+    getLandingPageVisualEditorOptions(key, state).forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item.value);
+      option.textContent = item.label;
+      select.appendChild(option);
+    });
+    select.value = current;
+    select.addEventListener('click', (event) => event.stopPropagation());
+    select.addEventListener('change', () => {
+      setLandingPageVisualDraftValue(key, select.value);
+    });
+    wrap.appendChild(select);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      activeLandingPageVisualEditors.delete(editorId);
+      renderLandingPageVisualEditor();
+    });
+    wrap.appendChild(closeBtn);
+
+    target.innerHTML = '';
+    target.appendChild(wrap);
+    target.classList.add('develop-inline-image-editor-target');
+  }
+
+  function mountLandingPageInlineTextEditor(target, slot, record, editorId) {
+    const slotSelectSpec = getLandingPageSlotSelectSpec(slot);
+    if (slotSelectSpec) {
+      mountLandingPageInlineAssetSelect(target, slotSelectSpec.fieldKey, record, editorId, {
+        label: slotSelectSpec.label,
+        placeholder: slotSelectSpec.placeholder,
+        textSlot: slot,
+      });
+      return;
+    }
+    const directFieldKey = getLandingPageTextSlotFieldKey(slot);
+    const overrides = getLandingPageMergedContentOverrides(record);
+    const fallbackText = safeText(
+      target.textContent || target.getAttribute('placeholder') || target.value || '',
+      10000
+    );
+    const currentText = directFieldKey
+      ? safeText(record?.[directFieldKey], 10000) || fallbackText
+      : (safeText(overrides[slot], 10000) || fallbackText);
+    const wrap = document.createElement('div');
+    wrap.className = 'develop-inline-textarea-wrap';
+    const textArea = document.createElement('textarea');
+    textArea.className = 'develop-inline-textarea';
+    textArea.value = currentText;
+    textArea.rows = Math.max(2, Math.min(8, Math.ceil((currentText || fallbackText || 'X').length / 42)));
+    textArea.style.minHeight = `${Math.max(target.offsetHeight || 72, 56)}px`;
+    textArea.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+    textArea.addEventListener('input', () => {
+      if (directFieldKey) {
+        setLandingPageVisualDraftValue(directFieldKey, textArea.value, { skipRender: true });
+      } else {
+        setLandingPageContentOverride(slot, textArea.value);
+      }
+    });
+    textArea.addEventListener('blur', () => {
+      renderLandingPageVisualEditor();
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Close';
+    closeBtn.className = 'develop-inline-textarea-close';
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      activeLandingPageVisualEditors.delete(editorId);
+      renderLandingPageVisualEditor();
+    });
+
+    wrap.appendChild(textArea);
+    wrap.appendChild(createLandingPageTextStyleControls(slot));
+    wrap.appendChild(closeBtn);
+    target.classList.add('develop-inline-hidden-target');
+    target.insertAdjacentElement('afterend', wrap);
+    setTimeout(() => {
+      textArea.focus();
+      textArea.select();
+    }, 0);
+  }
+
+  function applyLandingPageAutoFit(host) {
+    if (!host) return;
+    host.querySelectorAll('[data-text-slot][data-size-to-fit="1"]').forEach((node) => {
+      const inlineScale = Number(node.style.fontSize.replace('em', '')) || 1;
+      const parentFontPx = Number(window.getComputedStyle(node.parentElement || node).fontSize.replace('px', '')) || 16;
+      const basePx = parentFontPx * inlineScale;
+      let nextPx = Math.max(10, Math.min(72, basePx));
+      node.style.fontSize = `${nextPx}px`;
+
+      let guard = 0;
+      while (guard < 12 && (node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1)) {
+        nextPx -= 1;
+        if (nextPx <= 10) break;
+        node.style.fontSize = `${nextPx}px`;
+        guard += 1;
+      }
+      while (
+        guard < 24 &&
+        node.scrollHeight <= node.clientHeight * 0.9 &&
+        node.scrollWidth <= node.clientWidth * 0.9 &&
+        nextPx < 72
+      ) {
+        nextPx += 1;
+        node.style.fontSize = `${nextPx}px`;
+        guard += 1;
+        if (node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1) {
+          nextPx -= 1;
+          node.style.fontSize = `${nextPx}px`;
+          break;
+        }
+      }
+    });
+  }
+
+  function createLandingPageTextStyleControls(slot) {
+    const textStyle = getLandingPageTextStyle(getActiveLandingPageVisualRecord(), slot);
+    const controls = document.createElement('div');
+    controls.className = 'develop-inline-text-controls';
+
+    const title = document.createElement('div');
+    title.className = 'develop-inline-text-controls-label';
+    title.textContent = 'Text Size';
+
+    const sizeRow = document.createElement('div');
+    sizeRow.className = 'develop-inline-fontsize-row';
+
+    const currentIndex = Math.max(0, LANDING_TEXT_SCALE_OPTIONS.indexOf(textStyle.fontScale));
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.textContent = '◀';
+    prevBtn.disabled = currentIndex <= 0;
+    prevBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const currentIndex = Math.max(0, LANDING_TEXT_SCALE_OPTIONS.indexOf(getLandingPageTextStyle(getActiveLandingPageVisualRecord(), slot).fontScale));
+      const nextIndex = Math.max(0, currentIndex - 1);
+      setLandingPageTextStyle(slot, {
+        ...getLandingPageTextStyle(getActiveLandingPageVisualRecord(), slot),
+        fontScale: LANDING_TEXT_SCALE_OPTIONS[nextIndex],
+      });
+      renderLandingPageVisualEditor();
+    });
+
+    const sizeLabel = document.createElement('span');
+    sizeLabel.className = 'develop-inline-fontsize-label';
+    sizeLabel.textContent = `${Number(textStyle.fontScale).toFixed(2)}x${textStyle.fontScale === '1.00' ? ' (Default)' : ''}`;
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.textContent = '▶';
+    nextBtn.disabled = currentIndex >= LANDING_TEXT_SCALE_OPTIONS.length - 1;
+    nextBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const currentIndex = Math.max(0, LANDING_TEXT_SCALE_OPTIONS.indexOf(getLandingPageTextStyle(getActiveLandingPageVisualRecord(), slot).fontScale));
+      const nextIndex = Math.min(LANDING_TEXT_SCALE_OPTIONS.length - 1, currentIndex + 1);
+      setLandingPageTextStyle(slot, {
+        ...getLandingPageTextStyle(getActiveLandingPageVisualRecord(), slot),
+        fontScale: LANDING_TEXT_SCALE_OPTIONS[nextIndex],
+      });
+      renderLandingPageVisualEditor();
+    });
+
+    const fitToggle = document.createElement('label');
+    fitToggle.className = 'checkbox-row';
+    fitToggle.addEventListener('click', (event) => event.stopPropagation());
+    const fitCheckbox = document.createElement('input');
+    fitCheckbox.type = 'checkbox';
+    fitCheckbox.checked = Boolean(textStyle.sizeToFit);
+    fitCheckbox.addEventListener('change', () => {
+      setLandingPageTextStyle(slot, {
+        ...getLandingPageTextStyle(getActiveLandingPageVisualRecord(), slot),
+        sizeToFit: fitCheckbox.checked,
+      });
+      renderLandingPageVisualEditor();
+    });
+    fitToggle.appendChild(fitCheckbox);
+    fitToggle.appendChild(document.createTextNode('Size to fit'));
+
+    const hint = document.createElement('div');
+    hint.className = 'develop-inline-fontsize-hint';
+    hint.textContent = 'Steps: 0.80x, 0.90x, 1.00x, 1.10x, 1.20x';
+
+    controls.appendChild(title);
+    sizeRow.appendChild(prevBtn);
+    sizeRow.appendChild(sizeLabel);
+    sizeRow.appendChild(nextBtn);
+    controls.appendChild(sizeRow);
+    controls.appendChild(fitToggle);
+    controls.appendChild(hint);
+    return controls;
+  }
+
+  function setLandingPageFormMode(isEditing) {
+    const title = byId('developLandingPagesFormTitle');
+    const submitBtn = byId('developLandingPagesSubmitBtn');
+    const form = els.developLandingPagesForm;
+    if (title) title.textContent = isEditing ? 'Edit Page' : 'Create Page';
+    if (submitBtn) submitBtn.textContent = isEditing ? 'Update Page' : 'Save Page';
+    if (form) {
+      form.classList.toggle('develop-landing-page-editing', Boolean(isEditing));
+    }
+    updateLandingPageFieldOutlines();
+  }
+
+  function updateLandingPageFieldOutlines() {
+    const form = els.developLandingPagesForm;
+    if (!form) return;
+    const isEditing = form.classList.contains('develop-landing-page-editing');
+    const fields = form.querySelectorAll('input, select, textarea');
+    fields.forEach((field) => {
+      if (!field || field.type === 'hidden') return;
+      field.classList.remove('develop-field-complete', 'develop-field-missing');
+      if (!isEditing) return;
+      const hasValue = safeText(field.value) !== '';
+      field.classList.add(hasValue ? 'develop-field-complete' : 'develop-field-missing');
+    });
+  }
+
+  function applyLandingPageRecordToForm(record) {
+    if (!record) return;
+    const form = els.developLandingPagesForm;
+    if (!form) return;
+
+    const idInput = byId('developLandingPageIdInput');
+    const nameInput = byId('developLandingPageNameInput');
+    if (idInput) idInput.value = safeText(record.id);
+    if (nameInput) nameInput.value = safeText(record.name);
+
+    landingPageColors = {
+      primary: safeText(record.primaryColor) || DEFAULT_LANDING_PRIMARY,
+      background: safeText(record.backgroundColor) || DEFAULT_LANDING_BACKGROUND,
+      accent: safeText(record.accentColor) || DEFAULT_LANDING_ACCENT,
+    };
+
+    const primaryInput = byId('developLandingPrimaryColorInput');
+    const backgroundInput = byId('developLandingBackgroundColorInput');
+    const accentInput = byId('developLandingAccentColorInput');
+    if (primaryInput) primaryInput.value = landingPageColors.primary;
+    if (backgroundInput) backgroundInput.value = landingPageColors.background;
+    if (accentInput) accentInput.value = landingPageColors.accent;
+
+    const setValue = (id, value) => {
+      const select = byId(id);
+      if (select) select.value = safeText(value);
+    };
+    setValue('developLandingTemplateSelect', record.templateId);
+    setValue('developLandingFormSelect', record.formId);
+    setValue('developLandingLeadMagnetSelect', record.leadMagnetId);
+    setValue('developLandingHeadlineSelect', record.headlineId);
+    setValue('developLandingPitchSelect', record.pitchId);
+    setValue('developLandingCtaSelect', record.ctaId);
+    setValue('developLandingBannerImageSelect', record.websiteBannerImageId);
+    setValue('developLandingBackgroundImageSelect', record.backgroundImageId);
+    setValue('developLandingFeatureImageSelect', record.featureImageId);
+    setValue('developLandingHighlightImageSelect', record.highlightImageId);
+    setValue('developLandingFeatureHeadlineSelect', record.featureHeadlineId);
+    setValue('developLandingFeatureSubheadingSelect', record.featureSubheadingId);
+    setValue('developLandingHighlightHeadlineSelect', record.highlightHeadlineId);
+    setValue('developLandingHighlightPitchSelect', record.highlightPitchId);
+    setValue('developLandingBodyHeadlineSelect', record.bodyHeadlineId);
+    setValue('developLandingBodySubheadingSelect', record.bodySubheadingId);
+    setValue('developLandingBodyPitchSelect', record.bodyPitchId);
+    setValue('developLandingLogoSquareSelect', record.logoSquareId);
+
+    selectedTemplateId = safeText(record.templateId) || selectedTemplateId;
+    renderTemplateLibrary();
+    renderTemplatePreview(selectedTemplateId);
+    setLandingPageFormMode(Boolean(safeText(record.id)));
+    pendingLandingPageFormRecord = null;
+  }
+
+  function resetLandingPageForm() {
+    pendingLandingPageFormRecord = null;
+    clearLandingPageSelectorFilters();
+    const form = els.developLandingPagesForm;
+    if (form) form.reset();
+    const idInput = byId('developLandingPageIdInput');
+    if (idInput) idInput.value = '';
+    landingPageColors = {
+      primary: DEFAULT_LANDING_PRIMARY,
+      background: DEFAULT_LANDING_BACKGROUND,
+      accent: DEFAULT_LANDING_ACCENT,
+    };
+    const primaryInput = byId('developLandingPrimaryColorInput');
+    const backgroundInput = byId('developLandingBackgroundColorInput');
+    const accentInput = byId('developLandingAccentColorInput');
+    if (primaryInput) primaryInput.value = landingPageColors.primary;
+    if (backgroundInput) backgroundInput.value = landingPageColors.background;
+    if (accentInput) accentInput.value = landingPageColors.accent;
+    selectedTemplateId = LANDING_TEMPLATES[0].id;
+    const templateSelect = byId('developLandingTemplateSelect');
+    if (templateSelect) templateSelect.value = selectedTemplateId;
+    renderTemplateLibrary();
+    renderTemplatePreview(selectedTemplateId);
+    setLandingPageFormMode(false);
+    updateLandingPageFieldOutlines();
+  }
+
+  function openCreateLandingPage() {
+    resetLandingPageForm();
+    loadLandingPageBuilderOptions().catch(() => {});
+    App.setActivePage('developLandingPagesPage');
+  }
+
+  function openEditLandingPage(record) {
+    if (!record) return;
+    clearLandingPageSelectorFilters();
+    pendingLandingPageFormRecord = { ...record };
+    setLandingPageFormMode(true);
+    loadLandingPageBuilderOptions().catch(() => {
+      if (pendingLandingPageFormRecord) applyLandingPageRecordToForm(pendingLandingPageFormRecord);
+    });
+    App.setActivePage('developLandingPagesPage');
+  }
+
+  function renderLandingPagePreview(record) {
+    const host = byId('developLandingPagePreviewHost');
+    const title = byId('developLandingPagePreviewTitle');
+    const modeBtn = byId('developLandingPagePreviewModeBtn');
+    if (!host || !record) return;
+
+    activeLandingPagePreviewRecord = record;
+    if (title) title.textContent = safeText(record.name) || 'Page Preview';
+    if (modeBtn) modeBtn.disabled = false;
+    host.innerHTML = buildLandingPageMarkup(record);
+    bindLandingImageFallbacks(host);
+    applyLandingPageAutoFit(host);
+    bindLandingPageRuntimeForms(host, record);
+  }
+
+  function saveLandingPageThankYouState(payload) {
+    landingPageThankYouState = payload && typeof payload === 'object' ? payload : null;
+    try {
+      if (landingPageThankYouState) {
+        window.sessionStorage.setItem(LANDING_THANK_YOU_STATE_KEY, JSON.stringify(landingPageThankYouState));
+      } else {
+        window.sessionStorage.removeItem(LANDING_THANK_YOU_STATE_KEY);
+      }
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  function getLandingPageThankYouState() {
+    if (landingPageThankYouState) return landingPageThankYouState;
+    try {
+      const raw = window.sessionStorage.getItem(LANDING_THANK_YOU_STATE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      landingPageThankYouState = parsed && typeof parsed === 'object' ? parsed : null;
+      return landingPageThankYouState;
+    } catch {
+      return null;
+    }
+  }
+
+  function getAssetTags(asset) {
+    if (!asset) return [];
+    if (Array.isArray(asset.tags)) return asset.tags.map((item) => safeText(item)).filter(Boolean);
+    return safeText(asset.tags)
+      .split(',')
+      .map((item) => safeText(item))
+      .filter(Boolean);
+  }
+
+  function getLeadMagnetThumbnailUrl(asset) {
+    if (!asset) return '';
+    if (safeText(asset.assetType) === 'Image') return toDirectAssetUrl(asset.location);
+    const sourceAssetId = safeText(asset.id);
+    const sourceLocation = safeText(asset.location);
+    const thumbnail = (Array.isArray(state.assets) ? state.assets : []).find((item) => {
+      if (safeText(item?.assetType) !== 'Image') return false;
+      if (safeText(item?.category) !== 'Thumbnail') return false;
+      const tags = getAssetTags(item);
+      if (sourceAssetId && tags.includes(`source_asset_id:${sourceAssetId}`)) return true;
+      if (sourceLocation && tags.includes(`source_location:${sourceLocation}`)) return true;
+      return false;
+    });
+    return thumbnail ? toDirectAssetUrl(thumbnail.location) : '';
+  }
+
+  function renderLandingPageThankYouPage() {
+    const host = byId('developLandingThankYouHost');
+    if (!host) return;
+    const state = getLandingPageThankYouState();
+    const message = safeText(state?.message, 2000) || 'Thank you. Your request has been received.';
+    const leadMagnetUrl = safeText(state?.leadMagnetUrl);
+    const label = safeText(state?.leadMagnetLabel) || 'Open Lead Magnet';
+    const title = safeText(state?.title) || 'Thank You';
+    const hasLink = Boolean(leadMagnetUrl);
+    const landingPageId = safeText(state?.landingPageId);
+    const leadMagnetId = safeText(state?.leadMagnetId);
+    const sourceRecord = savedLandingPages.find((item) => safeText(item.id) === landingPageId)
+      || activeLandingPagePreviewRecord
+      || null;
+    const ctx = sourceRecord ? getLandingPagePreviewContext(sourceRecord) : null;
+    const fallbackLabel = leadMagnetId ? getLandingPageAssetName(leadMagnetId, '') : '';
+    const leadMagnetAsset = getAssetById(leadMagnetId)
+      || (leadMagnetUrl ? (Array.isArray(state.assets) ? state.assets : []).find((asset) => toDirectAssetUrl(asset?.location) === leadMagnetUrl) : null)
+      || null;
+    const downloadThumbUrl = getLeadMagnetThumbnailUrl(leadMagnetAsset);
+    const displayLabel = hasLink ? (label || fallbackLabel || 'Open Lead Magnet') : 'Lead Magnet Unavailable';
+
+    host.innerHTML = `
+      <div class="develop-template-canvas develop-thankyou-canvas">
+        <div class="develop-template-banner">${
+          ctx?.bannerUrl
+            ? `<img src="${ctx.bannerUrl}" alt="${getLandingPageAssetName(sourceRecord?.websiteBannerImageId, 'Page Banner Image')}" class="develop-template-banner-img" />`
+            : 'Page Banner Image'
+        }</div>
+        <div class="develop-template-hero develop-thankyou-hero-shell" style="${ctx ? `background:${ctx.backgroundColor};` : ''}">
+          <div class="develop-thankyou-center">
+            <h3 style="${ctx ? `color:${ctx.primaryColor};` : ''}">${title}</h3>
+            <p>${message}</p>
+            <a
+              class="develop-thankyou-download${hasLink ? '' : ' is-disabled'}"
+              href="${hasLink ? leadMagnetUrl : '#'}"
+              ${hasLink ? 'target="_blank" rel="noopener noreferrer"' : ''}
+              aria-label="${displayLabel}"
+            >
+              <span class="develop-thankyou-download-icon-wrap" aria-hidden="true">${
+                downloadThumbUrl
+                  ? `<img src="${downloadThumbUrl}" alt="${displayLabel}" class="develop-thankyou-download-thumb" />`
+                  : '<span class="develop-thankyou-download-icon">⬇</span>'
+              }</span>
+              <span class="develop-thankyou-download-label">${displayLabel}</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+    bindLandingImageFallbacks(host);
+  }
+
+  function openLandingPageThankYouPage(payload) {
+    saveLandingPageThankYouState(payload);
+    ensureAssetsLoaded()
+      .catch(() => {})
+      .finally(() => {
+        renderLandingPageThankYouPage();
+        App.setActivePage('developLandingPageThankYouPage');
+      });
+  }
+
+  function openLandingPagePreview(record) {
+    if (!record) return;
+    ensureAssetsLoaded()
+      .catch(() => {})
+      .finally(() => {
+        renderLandingPagePreview(record);
+        App.setActivePage('developLandingPagePreviewPage');
+      });
+  }
+
+  function renderLandingPageVisualEditor() {
+    const host = byId('developLandingPageVisualEditorHost');
+    const title = byId('developLandingPageVisualEditorTitle');
+    const saveBtn = byId('developLandingPageVisualSaveBtn');
+    const modeBtn = byId('developLandingPageVisualModeBtn');
+    const record = getActiveLandingPageVisualRecord();
+    if (!host) return;
+    if (saveBtn) saveBtn.disabled = !record || !landingPageVisualEditMode;
+    if (modeBtn) {
+      modeBtn.textContent = landingPageVisualEditMode ? 'Display Mode' : 'Edit Mode';
+    }
+    if (!record) {
+      host.innerHTML = '';
+      if (title) title.textContent = 'Visual Page Editor';
+      return;
+    }
+    if (title) title.textContent = `Visual Editor: ${safeText(record.name) || 'Page'}`;
+    host.innerHTML = buildLandingPageMarkup(record, { interactive: landingPageVisualEditMode });
+    bindLandingImageFallbacks(host);
+    applyLandingPageAutoFit(host);
+    if (!landingPageVisualEditMode) {
+      bindLandingPageRuntimeForms(host, record);
+      return;
+    }
+    host.querySelectorAll('[data-edit-key]').forEach((node) => {
+      node.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const key = safeText(node.dataset.editKey);
+        const slot = safeText(node.dataset.editSlot);
+        if (!key) return;
+        const editorId = key === 'formId' ? 'formId' : getLandingPageEditorId(key, slot || key);
+        activeLandingPageVisualEditors.add(editorId);
+        renderLandingPageVisualEditor();
+      });
+    });
+    Array.from(activeLandingPageVisualEditors).forEach((editorId) => {
+      const { key, slot } = parseLandingPageEditorId(editorId);
+      let target = null;
+      if (slot) {
+        target = host.querySelector(`[data-edit-key="${key}"][data-edit-slot="${slot}"]`);
+      }
+      if (!target && key) {
+        target = host.querySelector(`[data-edit-key="${key}"]`);
+      }
+      if (!target) return;
+      target.classList.add('develop-landing-editing-active');
+      if (key === 'formId') {
+        target = host.querySelector('[data-edit-key="formId"][data-edit-slot="form-card"]') || target;
+        mountLandingPageInlineFormSelect(target, record, editorId);
+      } else if (isLandingPageImageEditorKey(key)) {
+        mountLandingPageInlineAssetSelect(target, key, record, editorId);
+      } else {
+        mountLandingPageInlineTextEditor(target, slot || key, record, editorId);
+      }
+    });
+  }
+
+  function openLandingPageVisualEditor(record) {
+    if (!record) return;
+    ensureAssetsLoaded()
+      .catch(() => {})
+      .finally(() => {
+        activeLandingPageVisualRecord = {
+          ...record,
+          contentOverrides: normalizeLandingPageContentOverrides(record.contentOverrides),
+        };
+        landingPageVisualEditMode = true;
+        landingPageVisualDraft = {};
+        activeLandingPageVisualEditors.clear();
+        renderLandingPageVisualEditor();
+        App.setActivePage('developLandingPageVisualEditorPage');
+      });
+  }
+
+  function getFilteredSortedLandingPages() {
+    const nameFilter = safeText(landingPageTableState.filters.name).toLowerCase();
+    const templateFilter = safeText(landingPageTableState.filters.templateId);
+
+    const rows = savedLandingPages.filter((item) => {
+      const name = safeText(item.name).toLowerCase();
+      const templateId = safeText(item.templateId);
+      if (nameFilter && !name.includes(nameFilter)) return false;
+      if (templateFilter && templateId !== templateFilter) return false;
+      return true;
+    });
+
+    const key = safeText(landingPageTableState.sort.key);
+    const dir = landingPageTableState.sort.dir === 'asc' ? 'asc' : 'desc';
+    rows.sort((a, b) => {
+      let left = '';
+      let right = '';
+      if (key === 'name') {
+        left = safeText(a.name).toLowerCase();
+        right = safeText(b.name).toLowerCase();
+      } else if (key === 'templateId') {
+        left = getLandingPageTemplateName(a.templateId).toLowerCase();
+        right = getLandingPageTemplateName(b.templateId).toLowerCase();
+      } else if (key === 'headlineId') {
+        left = getLandingPageHeadlineLabel(a.headlineId).toLowerCase();
+        right = getLandingPageHeadlineLabel(b.headlineId).toLowerCase();
+      } else if (key === 'formId') {
+        left = getSavedFormName(a.formId).toLowerCase();
+        right = getSavedFormName(b.formId).toLowerCase();
+      } else {
+        left = safeText(a.updatedAt);
+        right = safeText(b.updatedAt);
+      }
+      if (left === right) return 0;
+      const result = left < right ? -1 : 1;
+      return dir === 'asc' ? result : -result;
+    });
+
+    return rows;
+  }
+
+  function syncLandingPageTableControls() {
+    const visibleIds = getFilteredSortedLandingPages().map((item) => safeText(item.id)).filter(Boolean);
+    selectedLandingPageIds = new Set(Array.from(selectedLandingPageIds).filter((id) => visibleIds.includes(id) || savedLandingPages.some((item) => safeText(item.id) === id)));
+
+    const selectAll = byId('developLandingPagesSelectAllVisible');
+    const bulkBtn = byId('developLandingPagesBulkEditBtn');
+    if (selectAll) {
+      const selectedVisibleCount = visibleIds.filter((id) => selectedLandingPageIds.has(id)).length;
+      selectAll.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+      selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+      selectAll.disabled = visibleIds.length === 0;
+    }
+    if (bulkBtn) bulkBtn.disabled = !selectedLandingPageIds.size;
+  }
+
+  function renderLandingPagesTable() {
+    const tbody = byId('developLandingPagesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const sortButtons = [
+      ['developLandingPagesSortNameBtn', 'name', 'Name'],
+      ['developLandingPagesSortTemplateBtn', 'templateId', 'Template'],
+      ['developLandingPagesSortHeadlineBtn', 'headlineId', 'Headline'],
+      ['developLandingPagesSortFormBtn', 'formId', 'Form'],
+      ['developLandingPagesSortUpdatedBtn', 'updatedAt', 'Updated'],
+    ];
+    sortButtons.forEach(([id, key, label]) => {
+      const button = byId(id);
+      if (!button) return;
+      const marker = landingPageTableState.sort.key === key
+        ? (landingPageTableState.sort.dir === 'asc' ? ' ▲' : ' ▼')
+        : '';
+      button.textContent = `${label}${marker}`;
+    });
+
+    const templateFilter = byId('developLandingPagesTemplateFilter');
+    if (templateFilter) {
+      const current = safeText(landingPageTableState.filters.templateId);
+      setSelectOptions(
+        templateFilter,
+        LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+        'All Templates',
+        current
+      );
+    }
+
+    const rows = getFilteredSortedLandingPages();
+    if (!rows.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.textContent = 'No pages yet.';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      syncLandingPageTableControls();
+      return;
+    }
+
+    rows.forEach((item) => {
+      const row = document.createElement('tr');
+      const id = safeText(item.id);
+
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selectedLandingPageIds.has(id);
+      checkbox.setAttribute('aria-label', `Select page ${safeText(item.name) || id}`);
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selectedLandingPageIds.add(id);
+        else selectedLandingPageIds.delete(id);
+        syncLandingPageTableControls();
+      });
+      selectTd.appendChild(checkbox);
+      row.appendChild(selectTd);
+
+      const append = (text) => {
+        const td = document.createElement('td');
+        td.textContent = text || '-';
+        row.appendChild(td);
+      };
+
+      append(safeText(item.name) || '-');
+      append(getLandingPageTemplateName(item.templateId) || '-');
+      append(getLandingPageHeadlineLabel(item.headlineId) || '-');
+      append(getSavedFormName(item.formId) || '-');
+      append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-');
+
+      const actionsTd = document.createElement('td');
+      const viewBtn = App.makeIconButton('view', 'View Page', () => {
+        openLandingPagePreview(item);
+      });
+      const editBtn = App.makeIconButton('edit', 'Edit Page', () => {
+        openLandingPageVisualEditor(item);
+      });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Page', async () => {
+        if (!window.confirm(`Delete page "${safeText(item.name) || id}"?`)) return;
+        try {
+          await api(`/api/develop/landing-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          selectedLandingPageIds.delete(id);
+          await refresh();
+          notify('Landing page deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(deleteBtn);
+      row.appendChild(actionsTd);
+      tbody.appendChild(row);
+    });
+
+    syncLandingPageTableControls();
+  }
+
+  function syncFormBuilderInputs() {
+    const current = ensureFormBuilderState(byId('developFormTypeSelect')?.value || FORM_TEMPLATES[0].id);
+    const idInput = byId('developFormIdInput');
+    const nameInput = byId('developFormNameInput');
+    const typeSelect = byId('developFormTypeSelect');
+    const contactTypeSelect = byId('developFormContactTypeSelect');
+    const leadMagnetTypeSelect = byId('developFormLeadMagnetTypeSelect');
+    const leadMagnetSelect = byId('developFormLeadMagnetSelect');
+    const ctaSelect = byId('developFormCtaSelect');
+    const headingInput = byId('developFormHeadingInput');
+    const successMessageInput = byId('developFormSuccessMessageInput');
+    const errorMessageInput = byId('developFormErrorMessageInput');
+    const accentInput = byId('developFormAccentColorInput');
+    const matchInput = byId('developFormMatchLandingColorInput');
+    const landingColorModeWrap = byId('developFormLandingColorModeWrap');
+    const landingColorModeSelect = byId('developFormLandingColorModeSelect');
+    const useLandingBackgroundWrap = byId('developFormUseLandingBackgroundWrap');
+    const useLandingBackgroundInput = byId('developFormUseLandingBackgroundInput');
+
+    if (idInput) idInput.value = current.id || '';
+    if (nameInput) nameInput.value = current.name || '';
+    if (typeSelect) typeSelect.value = current.formType;
+    if (contactTypeSelect) contactTypeSelect.value = current.contactType || 'lead';
+    if (leadMagnetTypeSelect) {
+      const typeValues = Array.from(new Set((Array.isArray(state.assets) ? state.assets : []).map((asset) => safeText(asset?.assetType)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      setSelectOptions(
+        leadMagnetTypeSelect,
+        typeValues.map((value) => ({ value, label: getAssetTypeDisplayLabel(value) })),
+        'Lead Magnet Type',
+        current.leadMagnetType || ''
+      );
+    }
+    if (leadMagnetSelect) {
+      const selectedType = safeText(current.leadMagnetType);
+      const options = selectedType
+        ? (Array.isArray(state.assets) ? state.assets : []).filter((asset) => safeText(asset?.assetType) === selectedType)
+        : (Array.isArray(state.assets) ? state.assets : []);
+      setSelectOptions(
+        leadMagnetSelect,
+        options.map((asset) => ({ value: String(asset.id), label: assetLabel(asset, String(asset.id)) })),
+        'Lead Magnet (Optional)',
+        current.leadMagnetId || ''
+      );
+      if (current.leadMagnetId && !options.some((asset) => safeText(asset.id) === safeText(current.leadMagnetId))) {
+        current.leadMagnetId = '';
+        leadMagnetSelect.value = '';
+      }
+    }
+    if (ctaSelect) {
+      setSelectOptions(
+        ctaSelect,
+        landingPageCtas.map((row) => ({ value: String(row.id), label: safeText(row.cta) || `CTA ${row.id}` })),
+        'Call To Action',
+        current.ctaId || ''
+      );
+    }
+    if (headingInput) headingInput.value = current.heading;
+    if (successMessageInput) successMessageInput.value = current.successMessage || '';
+    if (errorMessageInput) errorMessageInput.value = current.errorMessage || '';
+    if (accentInput) accentInput.value = current.accentColor || DEFAULT_FORM_ACCENT;
+    if (accentInput) accentInput.disabled = Boolean(current.matchLandingColor);
+    if (matchInput) matchInput.checked = Boolean(current.matchLandingColor);
+    if (landingColorModeSelect) landingColorModeSelect.value = current.landingColorMode || 'primary';
+    if (useLandingBackgroundInput) useLandingBackgroundInput.checked = Boolean(current.useLandingBackground);
+    if (landingColorModeWrap) landingColorModeWrap.classList.toggle('hidden', !current.matchLandingColor);
+    if (useLandingBackgroundWrap) useLandingBackgroundWrap.classList.toggle('hidden', !current.matchLandingColor);
+  }
+
+  function renderTemplatePreview(templateId) {
+    const host = byId('developTemplatesPreviewHost');
+    if (!host) return;
+    const template = getTemplateById(templateId);
+    selectedTemplateId = template.id;
+
+    host.innerHTML = buildTemplatePreviewMarkup(template);
+  }
+
+  function openCreateFormEditor() {
+    formBuilderState = buildDefaultFormState(FORM_TEMPLATES[0].id);
+    const editorTitle = byId('developFormsEditorTitle');
+    if (editorTitle) editorTitle.textContent = 'Create Form';
+    byId('developFormEditorPanel')?.classList.remove('hidden');
+    syncFormBuilderInputs();
+    renderFormBuilderFieldConfig();
+    renderFormBuilderPreview();
+  }
+
+  function closeFormEditor() {
+    byId('developFormEditorPanel')?.classList.add('hidden');
+    const editorTitle = byId('developFormsEditorTitle');
+    if (editorTitle) editorTitle.textContent = 'Create Form';
+  }
+
+  function buildFormTemplatePreviewMarkup(template) {
+    const fields = Array.isArray(template?.fields) ? template.fields : [];
+    const fieldMarkup = fields.map((field) => `<input type="${safeText(field.type) || 'text'}" placeholder="${safeText(field.label) || 'Field'}${field.required ? ' *' : ''}" />`).join('');
+    return `
+      <div class="develop-form-preview">
+        <h3>${safeText(template?.defaultHeading) || 'Form Template'}</h3>
+        ${fieldMarkup}
+        <button type="button">${safeText(template?.defaultSubmitLabel) || 'Submit'}</button>
+      </div>
+    `;
+  }
+
+  function renderFormTemplatePreview(templateId) {
+    const host = byId('developFormTemplatesPreviewHost');
+    if (!host) return;
+    const template = getFormTemplateById(templateId);
+    selectedFormTemplateId = template.id;
+    host.innerHTML = buildFormTemplatePreviewMarkup(template);
+  }
+
+  function renderFormTemplateLibrary() {
+    const host = byId('developFormTemplatesLibrary');
+    if (!host) return;
+    host.innerHTML = '';
+    FORM_TEMPLATES.forEach((template) => {
+      const card = document.createElement('article');
+      card.className = `develop-template-library-card${template.id === selectedFormTemplateId ? ' is-selected' : ''}`;
+      const copyWrap = document.createElement('div');
+      copyWrap.className = 'develop-template-library-copy';
+      const mediaWrap = document.createElement('div');
+      mediaWrap.className = 'develop-template-library-media';
+      mediaWrap.innerHTML = `
+        <div class="develop-template-preview-frame" aria-hidden="true">
+          <div class="develop-template-preview-scale">
+            ${buildFormTemplatePreviewMarkup(template)}
+          </div>
+        </div>
+      `;
+      const title = document.createElement('h3');
+      title.textContent = template.name;
+      const summary = document.createElement('p');
+      summary.textContent = `${template.fields.length} fields · ${template.defaultSubmitLabel}`;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = template.id === selectedFormTemplateId ? 'Selected' : 'Use Template';
+      button.addEventListener('click', () => {
+        selectedFormTemplateId = template.id;
+        renderFormTemplateLibrary();
+        renderFormTemplatePreview(template.id);
+      });
+      copyWrap.appendChild(title);
+      copyWrap.appendChild(summary);
+      copyWrap.appendChild(button);
+      card.appendChild(copyWrap);
+      card.appendChild(mediaWrap);
+      host.appendChild(card);
+    });
+  }
+
+  function buildTemplatePreviewMarkup(template, canvasClass = '') {
+    return `
+      <div class="develop-template-canvas${canvasClass ? ` ${canvasClass}` : ''}">
+        <div class="develop-template-banner">Page Banner Image</div>
+        <div class="develop-template-hero">
+          <div class="develop-template-copy">
+            <div class="develop-template-eyebrow">${template.eyebrow}</div>
+            <h3>${template.headline}</h3>
+            <p>${template.lead}</p>
+            <div class="develop-template-cta-row">
+              <button type="button">${template.primaryCta}</button>
+              <button type="button" class="develop-template-secondary-btn">${template.secondaryCta}</button>
+            </div>
+            <div class="develop-template-feature-grid">
+              <div class="develop-template-feature-card">
+                <div class="develop-template-image-slot">Feature Image</div>
+                <h4>${template.featureOneTitle}</h4>
+                <p>${template.featureOneCopy}</p>
+              </div>
+              <div class="develop-template-feature-card">
+                <div class="develop-template-image-slot">Logo - Wide</div>
+                <h4>${template.featureTwoTitle}</h4>
+                <p>${template.featureTwoCopy}</p>
+              </div>
+            </div>
+          </div>
+          <aside class="develop-template-form-card">
+            <div class="develop-template-logo-row">
+              <div class="develop-template-logo-slot develop-template-logo-wide">Logo - Wide</div>
+              <div class="develop-template-logo-slot develop-template-logo-square">Logo - Square</div>
+            </div>
+            <h3>${template.formTitle}</h3>
+            <p>${template.formCopy}</p>
+            <input type="text" placeholder="First Name" />
+            <input type="email" placeholder="Email Address" />
+            <input type="text" placeholder="Company" />
+            <textarea rows="4" placeholder="What are you looking for?"></textarea>
+            <button type="button">Submit Form</button>
+          </aside>
+        </div>
+        <div class="develop-template-content">
+          <div class="develop-template-body-copy">
+            <h3>${template.bodyTitle}</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
+              ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
+              laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
+              voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+            </p>
+            <p>
+              Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit
+              anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium
+              doloremque laudantium, totam rem aperiam.
+            </p>
+          </div>
+          <div class="develop-template-side-image">Background Image / Supporting Visual</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTemplateLibrary() {
+    const host = byId('developTemplatesLibrary');
+    if (!host) return;
+
+    host.innerHTML = '';
+    LANDING_TEMPLATES.forEach((template) => {
+      const card = document.createElement('article');
+      card.className = `develop-template-library-card${template.id === selectedTemplateId ? ' is-selected' : ''}`;
+
+      const copyWrap = document.createElement('div');
+      copyWrap.className = 'develop-template-library-copy';
+
+      const mediaWrap = document.createElement('div');
+      mediaWrap.className = 'develop-template-library-media';
+      mediaWrap.innerHTML = `
+        <div class="develop-template-preview-frame" aria-hidden="true">
+          <div class="develop-template-preview-scale">
+            ${buildTemplatePreviewMarkup(template, 'develop-template-canvas-mini')}
+          </div>
+        </div>
+      `;
+
+      const title = document.createElement('h3');
+      title.textContent = template.name;
+
+      const summary = document.createElement('p');
+      summary.textContent = template.summary;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = template.id === selectedTemplateId ? 'Selected' : 'Use Template';
+      button.addEventListener('click', () => {
+        selectedTemplateId = template.id;
+        renderTemplateLibrary();
+        renderTemplatePreview(template.id);
+        const landingTemplateSelect = byId('developLandingTemplateSelect');
+        if (landingTemplateSelect) landingTemplateSelect.value = template.id;
+      });
+
+      copyWrap.appendChild(title);
+      copyWrap.appendChild(summary);
+      copyWrap.appendChild(button);
+      card.appendChild(copyWrap);
+      card.appendChild(mediaWrap);
+      host.appendChild(card);
+    });
+  }
+
+  async function loadLandingPageBuilderOptions() {
+    if (!byId('developLandingTemplateSelect')) return;
+    const [assetsResult, headlinesResult, subheadingsResult, pitchesResult, ctasResult] = await Promise.allSettled([
+      api('/api/assets'),
+      api('/api/messaging/headlines?limit=200'),
+      api('/api/messaging/subheadings?limit=200'),
+      api('/api/messaging/pitches?limit=200'),
+      api('/api/messaging/ctas?limit=200'),
+    ]);
+
+    if (assetsResult.status !== 'fulfilled') {
+      throw assetsResult.reason || new Error('Could not load assets');
+    }
+
+    state.assets = assetsResult.value.assets || [];
+
+    landingPageHeadlines = headlinesResult.status === 'fulfilled'
+      ? (Array.isArray(headlinesResult.value.headlines) ? headlinesResult.value.headlines : [])
+      : [];
+    landingPageSubheadings = subheadingsResult.status === 'fulfilled'
+      ? (Array.isArray(subheadingsResult.value.subheadings) ? subheadingsResult.value.subheadings : [])
+      : [];
+    landingPagePitches = pitchesResult.status === 'fulfilled'
+      ? (Array.isArray(pitchesResult.value.pitches) ? pitchesResult.value.pitches : [])
+      : [];
+    landingPageCtas = ctasResult.status === 'fulfilled'
+      ? (Array.isArray(ctasResult.value.ctas) ? ctasResult.value.ctas : [])
+      : [];
+
+    setSelectOptions(
+      byId('developLandingTemplateSelect'),
+      LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+      'Template',
+      selectedTemplateId
+    );
+
+    const landingPrimaryInput = byId('developLandingPrimaryColorInput');
+    const landingBackgroundInput = byId('developLandingBackgroundColorInput');
+    const landingAccentInput = byId('developLandingAccentColorInput');
+    if (landingPrimaryInput) landingPrimaryInput.value = landingPageColors.primary;
+    if (landingBackgroundInput) landingBackgroundInput.value = landingPageColors.background;
+    if (landingAccentInput) landingAccentInput.value = landingPageColors.accent;
+
+    renderLandingPageBuilderSelect('developLandingFormSelect', 'formId', savedForms.length ? 'Form' : 'Form (save a form first)');
+    renderLandingPageBuilderSelect('developLandingLeadMagnetSelect', 'leadMagnetId', getLandingPageFieldRows('leadMagnetId').length ? 'PDF' : 'PDF (add assets with type "Lead Magnet")');
+    renderLandingPageBuilderSelect('developLandingHeadlineSelect', 'headlineId', landingPageHeadlines.length ? 'Headline' : 'Headline (add Messaging > Headlines first)');
+    renderLandingPageBuilderSelect('developLandingPitchSelect', 'pitchId', landingPagePitches.length ? 'Pitch' : 'Pitch (add Messaging > Pitches first)');
+    renderLandingPageBuilderSelect('developLandingCtaSelect', 'ctaId', landingPageCtas.length ? 'CTA' : 'CTA (add Messaging > Calls to Action first)');
+    renderLandingPageBuilderSelect('developLandingBannerImageSelect', 'websiteBannerImageId', getLandingPageFieldRows('websiteBannerImageId').length ? 'Website Banner Image' : 'Website Banner Image (add image assets in "Banner Image")');
+    renderLandingPageBuilderSelect('developLandingBackgroundImageSelect', 'backgroundImageId', getLandingPageFieldRows('backgroundImageId').length ? 'Background Image' : 'Background Image (add image assets in "Background Image")');
+    renderLandingPageBuilderSelect('developLandingFeatureImageSelect', 'featureImageId', getLandingPageFieldRows('featureImageId').length ? 'Feature Image' : 'Feature Image (add image assets in "Feature Image")');
+    renderLandingPageBuilderSelect('developLandingHighlightImageSelect', 'highlightImageId', getLandingPageFieldRows('highlightImageId').length ? 'Highlight Image' : 'Highlight Image (add image assets in "Highlight Image")');
+    renderLandingPageBuilderSelect('developLandingFeatureHeadlineSelect', 'featureHeadlineId', landingPageHeadlines.length ? 'Feature One Headline' : 'Feature One Headline (add Messaging > Headlines first)');
+    renderLandingPageBuilderSelect('developLandingFeatureSubheadingSelect', 'featureSubheadingId', landingPageSubheadings.length ? 'Feature One Sub-heading' : 'Feature One Sub-heading (add Messaging > Sub-headings first)');
+    renderLandingPageBuilderSelect('developLandingHighlightHeadlineSelect', 'highlightHeadlineId', landingPageHeadlines.length ? 'Feature Two Headline' : 'Feature Two Headline (add Messaging > Headlines first)');
+    renderLandingPageBuilderSelect('developLandingHighlightPitchSelect', 'highlightPitchId', landingPagePitches.length ? 'Feature Two Pitch' : 'Feature Two Pitch (add Messaging > Pitches first)');
+    renderLandingPageBuilderSelect('developLandingBodyHeadlineSelect', 'bodyHeadlineId', landingPageHeadlines.length ? 'Body Headline' : 'Body Headline (add Messaging > Headlines first)');
+    renderLandingPageBuilderSelect('developLandingBodySubheadingSelect', 'bodySubheadingId', landingPageSubheadings.length ? 'Body Sub-heading' : 'Body Sub-heading (add Messaging > Sub-headings first)');
+    renderLandingPageBuilderSelect('developLandingBodyPitchSelect', 'bodyPitchId', landingPagePitches.length ? 'Body Pitch' : 'Body Pitch (add Messaging > Pitches first)');
+    renderLandingPageBuilderSelect('developLandingLogoSquareSelect', 'logoSquareId', getLandingPageFieldRows('logoSquareId').length ? 'Logo - Square' : 'Logo - Square (add image assets in "Logo - Square")');
+
+    if (pendingLandingPageFormRecord) {
+      applyLandingPageRecordToForm(pendingLandingPageFormRecord);
+    }
+  }
+
+  async function refresh() {
+    await Promise.all([
+      loadSavedForms(),
+      loadSavedLandingPages(),
+      loadSavedExtensions(),
+      loadExtensionManagerConfig(),
+    ]);
+    try {
+      await loadLandingPageBuilderOptions();
+    } catch (_) {
+      await ensureAssetsLoaded().catch(() => {});
+    }
+    ensureFormBuilderState(formBuilderState?.formType || FORM_TEMPLATES[0].id);
+    syncFormBuilderInputs();
+    renderFormBuilderFieldConfig();
+    renderFormBuilderPreview();
+    renderSavedForms();
+    renderExtensionsLanding();
+    populateExtensionParentSelect(byId('developExtensionIdInput')?.value);
+    renderExtensionsTable();
+    renderLandingPagesTable();
+    renderLandingPageThankYouPage();
+    renderThumbnailSourceAssetOptions();
+    renderFormTemplateLibrary();
+    renderFormTemplatePreview(selectedFormTemplateId);
+    renderTemplateLibrary();
+    renderTemplatePreview(selectedTemplateId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Request builders
+  // ---------------------------------------------------------------------------
+
+  function buildAgentsRequest(formData) {
+    const action          = String(formData.get('action') || 'create_job');
+    const manualConfirmed = formData.get('manual_confirmed') === 'on';
+    const payload         = parseJsonInput(formData.get('payload_json'), {});
+    const requestedBy     = {
+      user_id: String(formData.get('requested_by_user_id') || '').trim() || 'alphire-ui',
+      email:   String(formData.get('requested_by_email')   || '').trim() || 'ops@alphire.ai'
+    };
+    const jobId = String(formData.get('job_id') || '').trim();
+
+    if (!manualConfirmed) throw new Error('Manual confirmation is required');
+
+    const request = { manual_confirmed: true };
+
+    if (action === 'create_job') {
+      request.type         = String(formData.get('type')         || '').trim() || 'acquire.web';
+      request.workspace_id = String(formData.get('workspace_id') || '').trim() || 'alphire-main';
+      request.requested_by = requestedBy;
+      request.payload      = payload;
+      request.policy       = { requires_manual_approval: true };
+      return { action, request };
+    }
+
+    if (!jobId) throw new Error('job_id is required for this action');
+    request.job_id = jobId;
+
+    if (action === 'preview_job') {
+      request.requested_by = requestedBy;
+      request.options      = { include_confidence: true, sample_size: 25 };
+      return { action, request };
+    }
+    if (action === 'approve_job') {
+      request.decision    = String(formData.get('approval_decision') || 'APPROVE');
+      request.approver    = requestedBy;
+      request.comment     = String(formData.get('approval_comment') || '').trim();
+      request.constraints = { expires_in_minutes: 30 };
+      return { action, request };
+    }
+    if (action === 'execute_job') {
+      const approvalToken = String(formData.get('approval_token') || '').trim();
+      if (!approvalToken) throw new Error('approval_token is required for execute_job');
+      request.requested_by  = requestedBy;
+      request.approval_token = approvalToken;
+      request.execution     = { priority: 'normal', dry_run: false };
+      return { action, request };
+    }
+    if (action === 'job_status') return { action, request };
+
+    throw new Error('Unsupported action');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Init — wire up form handlers
+  // ---------------------------------------------------------------------------
+
+  function init() {
+    const formIdInput = byId('developFormIdInput');
+    const formNameInput = byId('developFormNameInput');
+    const openCreateFormBtn = byId('developOpenCreateFormBtn');
+    const cancelFormEditBtn = byId('developCancelFormEditBtn');
+    const formTypeSelect = byId('developFormTypeSelect');
+    const formContactTypeSelect = byId('developFormContactTypeSelect');
+    const formLeadMagnetTypeSelect = byId('developFormLeadMagnetTypeSelect');
+    const formLeadMagnetSelect = byId('developFormLeadMagnetSelect');
+    const formCtaSelect = byId('developFormCtaSelect');
+    const formHeadingInput = byId('developFormHeadingInput');
+    const formSuccessMessageInput = byId('developFormSuccessMessageInput');
+    const formErrorMessageInput = byId('developFormErrorMessageInput');
+    const formAccentInput = byId('developFormAccentColorInput');
+    const formMatchLandingInput = byId('developFormMatchLandingColorInput');
+    const formLandingColorModeSelect = byId('developFormLandingColorModeSelect');
+    const formUseLandingBackgroundInput = byId('developFormUseLandingBackgroundInput');
+    const formBuilderForm = byId('developFormBuilderForm');
+    const landingTemplateSelect = byId('developLandingTemplateSelect');
+    const landingPrimaryInput = byId('developLandingPrimaryColorInput');
+    const landingBackgroundInput = byId('developLandingBackgroundColorInput');
+    const landingAccentInput = byId('developLandingAccentColorInput');
+
+    if (openCreateFormBtn) {
+      openCreateFormBtn.addEventListener('click', () => {
+        openCreateFormEditor();
+      });
+    }
+
+    if (cancelFormEditBtn) {
+      cancelFormEditBtn.addEventListener('click', () => {
+        closeFormEditor();
+      });
+    }
+
+    if (formNameInput) {
+      formNameInput.addEventListener('input', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.name = safeText(formNameInput.value);
+      });
+    }
+
+    if (formTypeSelect) {
+      formTypeSelect.addEventListener('change', () => {
+        const next = buildDefaultFormState(formTypeSelect.value || FORM_TEMPLATES[0].id);
+        next.id = safeText(formIdInput?.value);
+        next.name = safeText(formNameInput?.value);
+        next.leadMagnetType = safeText(formLeadMagnetTypeSelect?.value);
+        next.leadMagnetId = safeText(formLeadMagnetSelect?.value);
+        next.ctaId = safeText(formCtaSelect?.value);
+        next.successMessage = safeText(formSuccessMessageInput?.value) || next.successMessage;
+        next.errorMessage = safeText(formErrorMessageInput?.value) || next.errorMessage;
+        formBuilderState = next;
+        syncFormBuilderInputs();
+        renderFormBuilderFieldConfig();
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formContactTypeSelect) {
+      setSelectOptions(
+        formContactTypeSelect,
+        CONTACT_TYPE_OPTIONS,
+        'Contact Type',
+        ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id).contactType
+      );
+      formContactTypeSelect.addEventListener('change', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.contactType = safeText(formContactTypeSelect.value) || 'lead';
+      });
+    }
+
+    if (formLeadMagnetSelect) {
+      formLeadMagnetSelect.addEventListener('change', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.leadMagnetId = safeText(formLeadMagnetSelect.value);
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formLeadMagnetTypeSelect) {
+      formLeadMagnetTypeSelect.addEventListener('change', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.leadMagnetType = safeText(formLeadMagnetTypeSelect.value);
+        current.leadMagnetId = '';
+        syncFormBuilderInputs();
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formCtaSelect) {
+      formCtaSelect.addEventListener('change', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.ctaId = safeText(formCtaSelect.value);
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formHeadingInput) {
+      formHeadingInput.addEventListener('input', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.heading = safeText(formHeadingInput.value) || getFormTemplateById(current.formType).defaultHeading;
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formSuccessMessageInput) {
+      formSuccessMessageInput.addEventListener('input', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.successMessage = safeText(formSuccessMessageInput.value);
+      });
+    }
+
+    if (formErrorMessageInput) {
+      formErrorMessageInput.addEventListener('input', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.errorMessage = safeText(formErrorMessageInput.value);
+      });
+    }
+
+    if (formAccentInput) {
+      formAccentInput.addEventListener('input', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.accentColor = safeText(formAccentInput.value) || DEFAULT_FORM_ACCENT;
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formMatchLandingInput) {
+      formMatchLandingInput.addEventListener('change', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.matchLandingColor = formMatchLandingInput.checked;
+        syncFormBuilderInputs();
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formLandingColorModeSelect) {
+      formLandingColorModeSelect.addEventListener('change', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.landingColorMode = safeText(formLandingColorModeSelect.value) || 'primary';
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (formUseLandingBackgroundInput) {
+      formUseLandingBackgroundInput.addEventListener('change', () => {
+        const current = ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id);
+        current.useLandingBackground = formUseLandingBackgroundInput.checked;
+        renderFormBuilderPreview();
+      });
+    }
+
+    if (landingPrimaryInput) {
+      landingPrimaryInput.addEventListener('input', () => {
+        landingPageColors.primary = safeText(landingPrimaryInput.value) || '#0b82d4';
+        updateLandingPageFieldOutlines();
+        if (ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id).matchLandingColor) {
+          renderFormBuilderPreview();
+        }
+      });
+    }
+
+    if (landingBackgroundInput) {
+      landingBackgroundInput.addEventListener('input', () => {
+        landingPageColors.background = safeText(landingBackgroundInput.value) || '#f5fbff';
+        updateLandingPageFieldOutlines();
+        if (ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id).matchLandingColor
+          && ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id).useLandingBackground) {
+          renderFormBuilderPreview();
+        }
+      });
+    }
+
+    if (landingAccentInput) {
+      landingAccentInput.addEventListener('input', () => {
+        landingPageColors.accent = safeText(landingAccentInput.value) || '#1a4f81';
+        updateLandingPageFieldOutlines();
+        if (ensureFormBuilderState(formTypeSelect?.value || FORM_TEMPLATES[0].id).matchLandingColor) {
+          renderFormBuilderPreview();
+        }
+      });
+    }
+
+    if (landingTemplateSelect) {
+      landingTemplateSelect.addEventListener('change', () => {
+        selectedTemplateId = safeText(landingTemplateSelect.value) || LANDING_TEMPLATES[0].id;
+        renderTemplateLibrary();
+        renderTemplatePreview(selectedTemplateId);
+        updateLandingPageFieldOutlines();
+      });
+    }
+
+    if (els.developLandingPagesForm) {
+      els.developLandingPagesForm.querySelectorAll('input, select, textarea').forEach((field) => {
+        if (!field || field.type === 'hidden') return;
+        field.addEventListener('input', () => {
+          updateLandingPageFieldOutlines();
+        });
+        field.addEventListener('change', () => {
+          updateLandingPageFieldOutlines();
+        });
+      });
+    }
+
+    const openCreateLandingPageBtn = byId('developOpenCreateLandingPageBtn');
+    if (openCreateLandingPageBtn) {
+      openCreateLandingPageBtn.addEventListener('click', () => {
+        openCreateLandingPage();
+      });
+    }
+
+    const visualSaveBtn = byId('developLandingPageVisualSaveBtn');
+    const visualModeBtn = byId('developLandingPageVisualModeBtn');
+    const previewModeBtn = byId('developLandingPagePreviewModeBtn');
+    const thankYouBackBtn = byId('developLandingThankYouBackBtn');
+    const saveSelectorDefaultsBtn = byId('developLandingSaveSelectorDefaultsBtn');
+
+    if (saveSelectorDefaultsBtn) {
+      saveSelectorDefaultsBtn.addEventListener('click', () => {
+        saveLandingPageSelectorDefaults();
+      });
+    }
+
+    if (visualModeBtn) {
+      visualModeBtn.addEventListener('click', () => {
+        landingPageVisualEditMode = !landingPageVisualEditMode;
+        if (!landingPageVisualEditMode) {
+          activeLandingPageVisualEditors.clear();
+        }
+        renderLandingPageVisualEditor();
+      });
+    }
+
+    if (previewModeBtn) {
+      previewModeBtn.addEventListener('click', () => {
+        if (!activeLandingPagePreviewRecord) {
+          notify('Open a page preview first', true);
+          return;
+        }
+        openLandingPageVisualEditor(activeLandingPagePreviewRecord);
+      });
+    }
+
+    if (thankYouBackBtn) {
+      thankYouBackBtn.addEventListener('click', () => {
+        if (activeLandingPagePreviewRecord) {
+          App.setActivePage('developLandingPagePreviewPage');
+        } else {
+          App.setActivePage('developManageLandingPagesPage');
+        }
+      });
+    }
+
+    if (visualSaveBtn) {
+      visualSaveBtn.addEventListener('click', async () => {
+        const record = getActiveLandingPageVisualRecord();
+        if (!record || !safeText(record.id)) {
+          notify('Open a page in the visual editor first', true);
+          return;
+        }
+        try {
+          const result = await api(`/api/develop/landing-pages/${encodeURIComponent(record.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              name: safeText(record.name),
+              templateId: safeText(record.templateId),
+              primaryColor: safeText(record.primaryColor),
+              backgroundColor: safeText(record.backgroundColor),
+              accentColor: safeText(record.accentColor),
+              formId: safeText(record.formId),
+              leadMagnetId: safeText(record.leadMagnetId),
+              headlineId: safeText(record.headlineId),
+              pitchId: safeText(record.pitchId),
+              ctaId: safeText(record.ctaId),
+              websiteBannerImageId: safeText(record.websiteBannerImageId),
+              backgroundImageId: safeText(record.backgroundImageId),
+              featureImageId: safeText(record.featureImageId),
+              highlightImageId: safeText(record.highlightImageId),
+              featureHeadlineId: safeText(record.featureHeadlineId),
+              featureSubheadingId: safeText(record.featureSubheadingId),
+              featureTitle: safeText(record.featureTitle, 500),
+              featureCopy: safeText(record.featureCopy, 5000),
+              highlightHeadlineId: safeText(record.highlightHeadlineId),
+              highlightPitchId: safeText(record.highlightPitchId),
+              highlightTitle: safeText(record.highlightTitle, 500),
+              highlightCopy: safeText(record.highlightCopy, 5000),
+              bodyHeadlineId: safeText(record.bodyHeadlineId),
+              bodySubheadingId: safeText(record.bodySubheadingId),
+              bodyPitchId: safeText(record.bodyPitchId),
+              logoWideId: safeText(record.logoWideId),
+              logoSquareId: safeText(record.logoSquareId),
+              contentOverrides: normalizeLandingPageContentOverrides(record.contentOverrides),
+            }),
+          });
+          activeLandingPageVisualRecord = result?.landingPage || result?.data || record;
+          landingPageVisualDraft = {};
+          await refresh();
+          renderLandingPageVisualEditor();
+          notify('Landing page updated');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    const landingPageNameFilter = byId('developLandingPagesNameFilter');
+    const landingPageTemplateFilter = byId('developLandingPagesTemplateFilter');
+    const landingPageSelectAll = byId('developLandingPagesSelectAllVisible');
+    const landingPageBulkEditBtn = byId('developLandingPagesBulkEditBtn');
+    const landingPageBulkEditForm = byId('developLandingPagesBulkEditForm');
+    const landingPageBulkEditSummary = byId('developLandingPagesBulkEditSummary');
+    const landingPageBackFromBulkEditBtn = byId('developLandingPagesBackFromBulkEditBtn');
+
+    if (landingPageNameFilter) {
+      landingPageNameFilter.addEventListener('input', () => {
+        landingPageTableState.filters.name = safeText(landingPageNameFilter.value);
+        renderLandingPagesTable();
+      });
+    }
+
+    if (landingPageTemplateFilter) {
+      landingPageTemplateFilter.addEventListener('change', () => {
+        landingPageTableState.filters.templateId = safeText(landingPageTemplateFilter.value);
+        renderLandingPagesTable();
+      });
+    }
+
+    [
+      ['developLandingPagesSortNameBtn', 'name', 'asc'],
+      ['developLandingPagesSortTemplateBtn', 'templateId', 'asc'],
+      ['developLandingPagesSortHeadlineBtn', 'headlineId', 'asc'],
+      ['developLandingPagesSortFormBtn', 'formId', 'asc'],
+      ['developLandingPagesSortUpdatedBtn', 'updatedAt', 'desc'],
+    ].forEach(([id, key, defaultDir]) => {
+      const button = byId(id);
+      if (!button) return;
+      button.addEventListener('click', () => {
+        if (landingPageTableState.sort.key === key) {
+          landingPageTableState.sort.dir = landingPageTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          landingPageTableState.sort.key = key;
+          landingPageTableState.sort.dir = defaultDir;
+        }
+        renderLandingPagesTable();
+      });
+    });
+
+    if (landingPageSelectAll) {
+      landingPageSelectAll.addEventListener('change', () => {
+        const visibleIds = getFilteredSortedLandingPages().map((item) => safeText(item.id)).filter(Boolean);
+        if (landingPageSelectAll.checked) visibleIds.forEach((id) => selectedLandingPageIds.add(id));
+        else visibleIds.forEach((id) => selectedLandingPageIds.delete(id));
+        renderLandingPagesTable();
+      });
+    }
+
+    if (landingPageBulkEditBtn) {
+      landingPageBulkEditBtn.addEventListener('click', () => {
+        const ids = Array.from(selectedLandingPageIds);
+        if (!ids.length) {
+          notify('Select at least one page first', true);
+          return;
+        }
+        if (landingPageBulkEditSummary) {
+          landingPageBulkEditSummary.textContent = `${ids.length} page${ids.length === 1 ? '' : 's'} selected.`;
+        }
+        setSelectOptions(
+          byId('developLandingPagesBulkTemplateSelect'),
+          LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+          'Leave Unchanged'
+        );
+        const applyPrimary = byId('developLandingPagesBulkApplyPrimaryColor');
+        const applyBackground = byId('developLandingPagesBulkApplyBackgroundColor');
+        const applyAccent = byId('developLandingPagesBulkApplyAccentColor');
+        const bulkPrimary = byId('developLandingPagesBulkPrimaryColorInput');
+        const bulkBackground = byId('developLandingPagesBulkBackgroundColorInput');
+        const bulkAccent = byId('developLandingPagesBulkAccentColorInput');
+        if (applyPrimary) applyPrimary.checked = false;
+        if (applyBackground) applyBackground.checked = false;
+        if (applyAccent) applyAccent.checked = false;
+        if (bulkPrimary) bulkPrimary.value = DEFAULT_LANDING_PRIMARY;
+        if (bulkBackground) bulkBackground.value = DEFAULT_LANDING_BACKGROUND;
+        if (bulkAccent) bulkAccent.value = DEFAULT_LANDING_ACCENT;
+        App.setActivePage('developLandingPagesBulkEditPage');
+      });
+    }
+
+    if (landingPageBackFromBulkEditBtn) {
+      landingPageBackFromBulkEditBtn.addEventListener('click', () => {
+        App.setActivePage('developManageLandingPagesPage');
+      });
+    }
+
+    if (landingPageBulkEditForm) {
+      landingPageBulkEditForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const ids = Array.from(selectedLandingPageIds);
+        if (!ids.length) {
+          notify('Select at least one page first', true);
+          return;
+        }
+        const formData = new FormData(landingPageBulkEditForm);
+        const nextTemplateId = safeText(formData.get('template_id'));
+        const applyPrimary = formData.get('apply_primary_color') === 'on';
+        const applyBackground = formData.get('apply_background_color') === 'on';
+        const applyAccent = formData.get('apply_accent_color') === 'on';
+
+        if (!nextTemplateId && !applyPrimary && !applyBackground && !applyAccent) {
+          notify('Choose at least one field to update', true);
+          return;
+        }
+
+        try {
+          for (const id of ids) {
+            const item = savedLandingPages.find((entry) => safeText(entry.id) === id);
+            if (!item) continue;
+            await api(`/api/develop/landing-pages/${encodeURIComponent(id)}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                name: safeText(item.name),
+                templateId: nextTemplateId || safeText(item.templateId),
+                primaryColor: applyPrimary ? safeText(formData.get('primary_color')) : safeText(item.primaryColor),
+                backgroundColor: applyBackground ? safeText(formData.get('background_color')) : safeText(item.backgroundColor),
+                accentColor: applyAccent ? safeText(formData.get('accent_color')) : safeText(item.accentColor),
+                formId: safeText(item.formId),
+                leadMagnetId: safeText(item.leadMagnetId),
+                headlineId: safeText(item.headlineId),
+                pitchId: safeText(item.pitchId),
+                ctaId: safeText(item.ctaId),
+                websiteBannerImageId: safeText(item.websiteBannerImageId),
+                backgroundImageId: safeText(item.backgroundImageId),
+                featureImageId: safeText(item.featureImageId),
+                highlightImageId: safeText(item.highlightImageId),
+                featureHeadlineId: safeText(item.featureHeadlineId),
+                featureSubheadingId: safeText(item.featureSubheadingId),
+                featureTitle: safeText(item.featureTitle, 500),
+                featureCopy: safeText(item.featureCopy, 5000),
+                highlightHeadlineId: safeText(item.highlightHeadlineId),
+                highlightPitchId: safeText(item.highlightPitchId),
+                highlightTitle: safeText(item.highlightTitle, 500),
+                highlightCopy: safeText(item.highlightCopy, 5000),
+                bodyHeadlineId: safeText(item.bodyHeadlineId),
+                bodySubheadingId: safeText(item.bodySubheadingId),
+                bodyPitchId: safeText(item.bodyPitchId),
+                logoWideId: safeText(item.logoWideId),
+                logoSquareId: safeText(item.logoSquareId),
+                contentOverrides: normalizeLandingPageContentOverrides(item.contentOverrides),
+              }),
+            });
+          }
+          selectedLandingPageIds = new Set();
+          await refresh();
+          notify('Landing pages updated');
+          App.setActivePage('developManageLandingPagesPage');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (formBuilderForm) {
+      formBuilderForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const payload = buildCurrentFormPayload();
+          if (!payload.name) throw new Error('Form name is required');
+          if (!payload.ctaId) throw new Error('Call To Action is required');
+          if (!payload.heading) throw new Error('Heading is required');
+          if (!payload.successMessage) throw new Error('Success confirmation message is required');
+          if (!payload.errorMessage) throw new Error('Error confirmation message is required');
+          if (payload.id) {
+            await api(`/api/develop/forms/${encodeURIComponent(payload.id)}`, {
+              method: 'PATCH',
+              body: JSON.stringify(payload),
+            });
+            notify('Form updated');
+          } else {
+            await api('/api/develop/forms', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+            notify('Form created');
+          }
+          await refresh();
+          closeFormEditor();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    [
+      ['developFormsSortNameBtn', 'name', 'asc'],
+      ['developFormsSortTypeBtn', 'formType', 'asc'],
+      ['developFormsSortLeadMagnetTypeBtn', 'leadMagnetType', 'asc'],
+      ['developFormsSortLeadMagnetBtn', 'leadMagnetId', 'asc'],
+      ['developFormsSortCtaBtn', 'ctaId', 'asc'],
+      ['developFormsSortContactTypeBtn', 'contactType', 'asc'],
+      ['developFormsSortUpdatedBtn', 'updatedAt', 'desc'],
+    ].forEach(([id, key, defaultDir]) => {
+      const button = byId(id);
+      if (!button) return;
+      button.addEventListener('click', () => {
+        if (formTableState.sort.key === key) {
+          formTableState.sort.dir = formTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          formTableState.sort.key = key;
+          formTableState.sort.dir = defaultDir;
+        }
+        renderSavedForms();
+      });
+    });
+
+    const extensionManagerForm = byId('developExtensionManagerForm');
+    const extensionResetBtn = byId('developExtensionResetBtn');
+    const extensionNameFilter = byId('developExtensionsFilterName');
+    const extensionTypeFilter = byId('developExtensionsFilterType');
+    const extensionStatusFilter = byId('developExtensionsFilterStatus');
+    const extensionTagsFilter = byId('developExtensionsFilterTags');
+
+    if (extensionResetBtn) {
+      extensionResetBtn.addEventListener('click', () => {
+        resetExtensionManagerForm();
+      });
+    }
+
+    if (extensionManagerForm) {
+      extensionManagerForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(extensionManagerForm);
+          const extensionId = safeText(formData.get('extension_id'));
+          const existing = savedExtensions.find((item) => safeText(item.id) === extensionId) || null;
+          const payload = {
+            slug: existing?.slug || deriveExtensionSlug(formData.get('name')),
+            name: safeText(formData.get('name')),
+            extensionType: safeText(formData.get('extension_type')),
+            parentId: safeText(formData.get('parent_id')),
+            status: safeText(formData.get('status')) || 'active',
+            tags: safeText(formData.get('tags')),
+            summary: safeText(formData.get('summary'), 1000),
+            definition: safeText(formData.get('definition'), 10000),
+            launchPageId: existing?.launchPageId || '',
+            isFeatured: existing?.isFeatured === true,
+            usageCount: Number(existing?.usageCount || 0) || 0,
+            lastUsedAt: existing?.lastUsedAt || '',
+          };
+          if (!payload.name) throw new Error('Extension name is required');
+          if (!payload.extensionType) throw new Error('Extension type is required');
+          if (payload.parentId && payload.parentId === extensionId) throw new Error('An extension cannot be its own parent');
+
+          if (extensionId) {
+            await api(`/api/develop/extensions/${encodeURIComponent(extensionId)}`, {
+              method: 'PATCH',
+              body: JSON.stringify(payload),
+            });
+          } else {
+            await api('/api/develop/extensions', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+          }
+
+          await refresh();
+          resetExtensionManagerForm();
+          notify(extensionId ? 'Extension updated' : 'Extension saved');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (extensionNameFilter) {
+      extensionNameFilter.addEventListener('input', () => {
+        extensionTableState.filters.name = safeText(extensionNameFilter.value);
+        renderExtensionsTable();
+        saveExtensionManagerConfig();
+      });
+    }
+
+    if (extensionTypeFilter) {
+      extensionTypeFilter.addEventListener('change', () => {
+        extensionTableState.filters.extensionType = safeText(extensionTypeFilter.value);
+        renderExtensionsTable();
+        saveExtensionManagerConfig();
+      });
+    }
+
+    if (extensionStatusFilter) {
+      extensionStatusFilter.addEventListener('change', () => {
+        extensionTableState.filters.status = safeText(extensionStatusFilter.value);
+        renderExtensionsTable();
+        saveExtensionManagerConfig();
+      });
+    }
+
+    if (extensionTagsFilter) {
+      extensionTagsFilter.addEventListener('input', () => {
+        extensionTableState.filters.tags = safeText(extensionTagsFilter.value);
+        renderExtensionsTable();
+        saveExtensionManagerConfig();
+      });
+    }
+
+    [
+      ['developExtensionsSortNameBtn', 'name', 'asc'],
+      ['developExtensionsSortTypeBtn', 'extensionType', 'asc'],
+      ['developExtensionsSortTaxonomyBtn', 'taxonomyPath', 'asc'],
+      ['developExtensionsSortStatusBtn', 'status', 'asc'],
+      ['developExtensionsSortUpdatedBtn', 'updatedAt', 'desc'],
+    ].forEach(([id, key, defaultDir]) => {
+      const button = byId(id);
+      if (!button) return;
+      button.addEventListener('click', () => {
+        if (extensionTableState.sort.key === key) {
+          extensionTableState.sort.dir = extensionTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          extensionTableState.sort.key = key;
+          extensionTableState.sort.dir = defaultDir;
+        }
+        renderExtensionsTable();
+        saveExtensionManagerConfig();
+      });
+    });
+
+    if (els.developLandingPagesForm) {
+      els.developLandingPagesForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(els.developLandingPagesForm);
+          const landingPageId = safeText(formData.get('landing_page_id'));
+          const payload = getLandingPageFormPayload(formData);
+          if (!payload.name) throw new Error('Landing page name is required');
+          if (!payload.templateId) throw new Error('Template is required');
+          selectedTemplateId = payload.templateId;
+          renderTemplateLibrary();
+          renderTemplatePreview(selectedTemplateId);
+
+          let result;
+          if (landingPageId) {
+            result = await api(`/api/develop/landing-pages/${encodeURIComponent(landingPageId)}`, {
+              method: 'PATCH',
+              body: JSON.stringify(payload),
+            });
+          } else {
+            result = await api('/api/develop/landing-pages', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+          }
+
+          await refresh();
+          notify(landingPageId ? 'Landing page updated' : 'Landing page saved');
+          App.setActivePage('developManageLandingPagesPage');
+          resetLandingPageForm();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (els.developAgentsForm) {
+      els.developAgentsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(els.developAgentsForm);
+          const built    = buildAgentsRequest(formData);
+          setPreview(els.agentsRequestPreview, built);
+          const result = await api(`/api/openclaw/${built.action}`, {
+            method: 'POST',
+            body: JSON.stringify(built.request)
+          });
+          setPreview(els.agentsResponsePreview, result);
+          notify(`OpenClaw ${built.action} request sent`);
+        } catch (err) { notify(err.message, true); }
+      });
+    }
+
+    if (els.developToolsForm) {
+      els.developToolsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData        = new FormData(els.developToolsForm);
+          const manualConfirmed = formData.get('manual_confirmed') === 'on';
+          if (!manualConfirmed) throw new Error('Manual confirmation is required');
+          const toolName = safeText(formData.get('tool_name'));
+          if (toolName === 'icon.builder') {
+            throw new Error('Use the dedicated Icon Builder form above for icon generation.');
+          }
+          const input   = parseJsonInput(formData.get('input_json'), {});
+          await submitToolJob(
+            toolName,
+            input,
+            formData.get('workspace_id'),
+            els.toolsRequestPreview,
+            els.toolsResponsePreview,
+            'Tool job sent to OpenClaw'
+          );
+        } catch (err) {
+          setPreview(els.toolsResponsePreview, {
+            ok: false,
+            error: err.message || 'Tool job failed'
+          });
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (els.iconBuilderForm) {
+      els.iconBuilderForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(els.iconBuilderForm);
+          const manualConfirmed = formData.get('manual_confirmed') === 'on';
+          if (!manualConfirmed) throw new Error('Manual confirmation is required');
+          const objectType = safeText(formData.get('object_type'));
+          const objectName = safeText(formData.get('object_name'));
+          if (!objectName) throw new Error('Object name is required');
+          const input = {
+            manual_confirmed: true,
+            workspace_id: safeText(formData.get('workspace_id')) || 'alphire-main',
+            object_type: objectType || 'custom',
+            object_name: objectName,
+            category: safeText(formData.get('category')),
+            summary: safeText(formData.get('object_summary')),
+            icon_spec: {
+              visual_style: safeText(formData.get('visual_style')) || 'clean-flat',
+              palette: safeText(formData.get('palette')),
+              destination: safeText(formData.get('destination')) || 'menu-bar',
+              size: safeText(formData.get('size')) || '64x64',
+              usage: 'Generate a compact icon for use between the main navigation and the right-side system menu.'
+            }
+          };
+          setPreview(els.iconBuilderRequestPreview, { action: 'build_icon', request: input });
+          const result = await api('/api/develop/icon-builder', {
+            method: 'POST',
+            body: JSON.stringify(input)
+          });
+          setPreview(els.iconBuilderResponsePreview, result);
+          renderIconBuilderResult(result?.data || result?.icon || null);
+          notify('Icon generated');
+        } catch (err) {
+          setPreview(els.iconBuilderResponsePreview, {
+            ok: false,
+            error: err.message || 'Icon Builder job failed'
+          });
+          renderIconBuilderResult(null);
+          notify(err.message, true);
+        }
+      });
+    }
+
+    const screenshotForm = byId('developScreenshotForm');
+    const screenshotResponsePreview = byId('developScreenshotResponsePreview');
+    if (screenshotForm) {
+      screenshotForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(screenshotForm);
+          const url = safeText(formData.get('url'));
+          if (!url) throw new Error('URL is required');
+          const payload = {
+            url,
+            assetName: safeText(formData.get('asset_name')),
+            tags: safeText(formData.get('tags')),
+          };
+          const result = await api('/api/develop/extensions/screenshot-capture', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          setPreview(screenshotResponsePreview, result);
+          renderScreenshotResult(result?.asset || result?.data || null);
+          notify('Screenshot captured');
+        } catch (err) {
+          setPreview(screenshotResponsePreview, {
+            ok: false,
+            error: err.message || 'Could not capture screenshot',
+          });
+          renderScreenshotResult(null);
+          notify(err.message, true);
+        }
+      });
+    }
+
+    const thumbnailForm = byId('developThumbnailForm');
+    const thumbnailResponsePreview = byId('developThumbnailResponsePreview');
+    if (thumbnailForm) {
+      thumbnailForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(thumbnailForm);
+          const fileLocation = safeText(formData.get('file_location'));
+          if (!fileLocation) throw new Error('PDF file location is required');
+          const payload = {
+            fileLocation,
+            sourceAssetId: safeText(formData.get('source_asset_id')),
+            assetName: safeText(formData.get('asset_name')),
+            tags: safeText(formData.get('tags')),
+          };
+          const result = await api('/api/develop/extensions/thumbnail-capture', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          setPreview(thumbnailResponsePreview, result);
+          renderThumbnailResult(result?.asset || result?.data || null);
+          notify('Thumbnail generated');
+        } catch (err) {
+          setPreview(thumbnailResponsePreview, {
+            ok: false,
+            error: err.message || 'Could not generate thumbnail',
+          });
+          renderThumbnailResult(null);
+          notify(err.message, true);
+        }
+      });
+    }
+  }
+
+  return {
+    manifest: { id: 'develop', label: 'Develop', pageId: 'developPage' },
+    init,
+    refresh
+  };
+})();
