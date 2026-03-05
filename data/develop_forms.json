@@ -1,0 +1,166 @@
+{
+  "forms": [
+    {
+      "id": "dform_1772653514454_vp5q6q",
+      "name": "ITcoin Meme Coin White Paper",
+      "formType": "squeeze-form",
+      "contactType": "lead",
+      "leadMagnetType": "Lead Magnet",
+      "leadMagnetId": "49",
+      "ctaId": "2",
+      "heading": "Get Instant Access",
+      "submitLabel": "Read the White Paper",
+      "successMessage": "Thank you for your interest in the ITcoin Meme Coin White Paper.",
+      "errorMessage": "Something went wrong. Please try again.",
+      "accentColor": "#d58b0b",
+      "matchLandingColor": false,
+      "landingColorMode": "",
+      "useLandingBackground": false,
+      "fields": [
+        {
+          "key": "first_name",
+          "label": "First Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true
+        }
+      ],
+      "createdAt": "2026-03-04T19:45:14.454Z",
+      "updatedAt": "2026-03-04T19:45:58.179Z"
+    },
+    {
+      "id": "dform_1772651190819_1gfpml",
+      "name": "ISITAS AI Alignment Protocol (IAAP) White Paper",
+      "formType": "squeeze-form",
+      "contactType": "lead",
+      "leadMagnetType": "Lead Magnet",
+      "leadMagnetId": "38",
+      "ctaId": "2",
+      "heading": "Get Instant Access",
+      "submitLabel": "Read the White Paper",
+      "successMessage": "Thank you for your interest in the ISITAS AI Alignment Protocol (IAAP) White Paper.",
+      "errorMessage": "Something went wrong. Please try again.",
+      "accentColor": "#d58b0b",
+      "matchLandingColor": false,
+      "landingColorMode": "",
+      "useLandingBackground": false,
+      "fields": [
+        {
+          "key": "first_name",
+          "label": "First Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true
+        }
+      ],
+      "createdAt": "2026-03-04T19:06:30.819Z",
+      "updatedAt": "2026-03-04T19:38:30.014Z"
+    },
+    {
+      "id": "dform_1772347701019_9rah8x",
+      "name": "Test Short Form - Red",
+      "formType": "short-form",
+      "heading": "Tell Us About Yourself",
+      "submitLabel": "Send Request",
+      "accentColor": "#d50b48",
+      "matchLandingColor": false,
+      "landingColorMode": "",
+      "useLandingBackground": false,
+      "fields": [
+        {
+          "key": "first_name",
+          "label": "First Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "last_name",
+          "label": "Last Name",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true
+        },
+        {
+          "key": "phone",
+          "label": "Phone Number",
+          "type": "tel",
+          "required": false
+        }
+      ],
+      "createdAt": "2026-03-01T06:48:21.019Z",
+      "updatedAt": "2026-03-01T06:48:21.019Z"
+    },
+    {
+      "id": "dform_1772347650206_x5k6r4",
+      "name": "First Test Form",
+      "formType": "long-form",
+      "heading": "Get it Now!",
+      "submitLabel": "Get It!",
+      "accentColor": "#5c0bd5",
+      "matchLandingColor": true,
+      "landingColorMode": "primary",
+      "useLandingBackground": false,
+      "fields": [
+        {
+          "key": "first_name",
+          "label": "First Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "last_name",
+          "label": "Last Name",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true
+        },
+        {
+          "key": "phone",
+          "label": "Phone Number",
+          "type": "tel",
+          "required": false
+        },
+        {
+          "key": "city",
+          "label": "City",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "state",
+          "label": "State",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "country",
+          "label": "Country",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "createdAt": "2026-03-01T06:47:30.206Z",
+      "updatedAt": "2026-03-01T06:47:30.206Z"
+    }
+  ]
+}

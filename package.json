@@ -1,0 +1,26 @@
+{
+  "name": "mini-mailchimp-clone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Basic email marketing MVP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "import:contacts-csv:dry-run": "node scripts/import_contacts_csv_to_supabase.js",
+    "import:contacts-csv:apply": "node scripts/import_contacts_csv_to_supabase.js --apply",
+    "backfill:assets-drive-meta:dry-run": "node scripts/backfill_asset_metadata_from_drive.js",
+    "backfill:assets-drive-meta:apply": "node scripts/backfill_asset_metadata_from_drive.js --apply",
+    "backfill:channels-passwords:dry-run": "node scripts/backfill_channels_password_encryption.js",
+    "backfill:channels-passwords:apply": "node scripts/backfill_channels_password_encryption.js --apply",
+    "migrate:assets-drive-to-blob:dry-run": "node scripts/migrate_assets_drive_to_blob.js",
+    "migrate:assets-drive-to-blob:apply": "node scripts/migrate_assets_drive_to_blob.js --apply",
+    "check:vercel-cutover": "node scripts/vercel_cutover_check.js"
+  },
+  "devDependencies": {
+    "dotenv": "^17.3.1"
+  },
+  "dependencies": {
+    "@vercel/blob": "^1.1.1",
+    "playwright": "^1.58.2"
+  }
+}

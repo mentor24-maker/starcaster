@@ -1,0 +1,127 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   #7 — Formal Environment Configuration: CSS additions
+   Append these rules to public/styles.css
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Env config table ─────────────────────────────────────────────────── */
+.env-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.env-table th,
+.env-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e8eaed);
+}
+
+.env-th-status  { width: 32px; }
+.env-th-key     { width: 40%; }
+.env-th-value   { width: 40%; }
+.env-th-action  { width: 120px; text-align: right; }
+
+.env-group-row td.env-group-label {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #5f6368);
+  background: var(--bg-subtle, #f8f9fa);
+  padding: 8px 12px;
+}
+
+.env-row:hover {
+  background: var(--bg-hover, #f8f9fa);
+}
+
+.env-row--editing {
+  background: var(--bg-subtle, #f8f9fa);
+}
+
+/* ── Status dot ───────────────────────────────────────────────────────── */
+.env-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.env-dot--set     { background: #34a853; }
+.env-dot--missing { background: #dadce0; border: 1px solid #bdc1c6; }
+
+.env-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted, #5f6368);
+}
+
+/* ── Key / description ────────────────────────────────────────────────── */
+.env-key {
+  display: block;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  color: var(--text-primary, #202124);
+}
+
+.env-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted, #5f6368);
+  margin-top: 2px;
+}
+
+/* ── Values ───────────────────────────────────────────────────────────── */
+.env-value {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.env-value--missing {
+  color: var(--text-muted, #9aa0a6);
+  font-style: italic;
+}
+
+.env-action-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Edit input ───────────────────────────────────────────────────────── */
+.env-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid var(--border-focus, #1a73e8);
+  border-radius: 4px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.15);
+}
+
+.env-loading {
+  text-align: center;
+  color: var(--text-muted, #9aa0a6);
+  padding: 24px;
+}
+
+.env-footer {
+  font-size: 12px;
+  color: var(--text-muted, #5f6368);
+  padding: 12px 16px;
+  border-top: 1px solid var(--border, #e8eaed);
+  line-height: 1.8;
+}
+
+.env-footer code {
+  background: var(--bg-subtle, #f8f9fa);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}

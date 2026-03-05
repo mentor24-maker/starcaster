@@ -1,0 +1,24 @@
+{
+  "landingPages": [
+    {
+      "id": "dlp_1772600397842_iemitl",
+      "name": "ITcoin: To the Moon and Beyond!",
+      "templateId": "standard-right-form",
+      "primaryColor": "#d19900",
+      "backgroundColor": "#f5fbff",
+      "accentColor": "#0d7fa5",
+      "formId": "dform_1772347701019_9rah8x",
+      "leadMagnetId": "38",
+      "headlineId": "21",
+      "pitchId": "1",
+      "ctaId": "1",
+      "websiteBannerImageId": "40",
+      "backgroundImageId": "",
+      "featureImageId": "6",
+      "logoWideId": "",
+      "logoSquareId": "",
+      "createdAt": "2026-03-04T04:59:57.842Z",
+      "updatedAt": "2026-03-04T05:53:20.248Z"
+    }
+  ]
+}
