@@ -117,7 +117,7 @@ async function handleRequest(req, res) {
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
   const sessionToken = auth.readSessionToken(req);
-  const authUser = getUserFromSessionToken(sessionToken);
+  const authUser = await getUserFromSessionToken(sessionToken);
   req.authUser = authUser || null;
 
   if (!isAuthRoute && !isDebugRoute && !authUser) {
