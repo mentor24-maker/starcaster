@@ -68,6 +68,10 @@ App.state = {
   acquireBusyByJob: {},
   directAcquireRuns: [],
   directAcquireCurrentRun: null,
+  xHarvestRuns: [],
+  xHarvestCurrentRun: null,
+  redditHarvestRuns: [],
+  redditHarvestCurrentRun: null,
   youtubeAcquireResult: null,
   acquireYoutubeDetails: [],
   acquireYoutubeCategories: [],
@@ -210,6 +214,7 @@ App.els = {
   csvMapperSection: document.getElementById('csvMapperSection'),
   promoLeadsSection: document.getElementById('promoLeadsSection'),
   contactsSearchFirstName: document.getElementById('contactsSearchFirstName'),
+  contactsCheckAll: document.getElementById('contactsCheckAll'),
   contactsSearchLastName: document.getElementById('contactsSearchLastName'),
   contactsSearchCompany: document.getElementById('contactsSearchCompany'),
   contactsSearchEmail: document.getElementById('contactsSearchEmail'),
@@ -217,6 +222,8 @@ App.els = {
   contactsSearchYoutube: document.getElementById('contactsSearchYoutube'),
   contactsSearchInstagram: document.getElementById('contactsSearchInstagram'),
   contactsFiltersGoBtn: document.getElementById('contactsFiltersGoBtn'),
+  contactsCreateSegmentForm: document.getElementById('contactsCreateSegmentForm'),
+  contactsCreateSegmentName: document.getElementById('contactsCreateSegmentName'),
   segmentsSearchEmail: document.getElementById('segmentsSearchEmail'),
   segmentsSearchName: document.getElementById('segmentsSearchName'),
   segmentsSearchCity: document.getElementById('segmentsSearchCity'),
@@ -224,6 +231,9 @@ App.els = {
   segmentsList: document.getElementById('segmentsList'),
   returnToSegmentsBtn: document.getElementById('returnToSegmentsBtn'),
   activeSegmentName: document.getElementById('activeSegmentName'),
+  segmentPreviewSection: document.getElementById('segmentPreviewSection'),
+  segmentPreviewTableHead: document.getElementById('segmentPreviewTableHead'),
+  segmentPreviewTableBody: document.getElementById('segmentPreviewTableBody'),
   segmentsPageTableHead: document.getElementById('segmentsPageTableHead'),
   segmentsTableBody: document.getElementById('segmentsTableBody'),
   segmentsLeadFilters: document.getElementById('segmentsLeadFilters'),
@@ -318,6 +328,16 @@ App.els = {
   directAcquireRunsTable: document.getElementById('directAcquireRunsTable'),
   directAcquirePagesTable: document.getElementById('directAcquirePagesTable'),
   directAcquireErrorsPreview: document.getElementById('directAcquireErrorsPreview'),
+  xHarvestForm: document.getElementById('xHarvestForm'),
+  xHarvestRefreshBtn: document.getElementById('xHarvestRefreshBtn'),
+  xHarvestRunsTable: document.getElementById('xHarvestRunsTable'),
+  xHarvestItemsTable: document.getElementById('xHarvestItemsTable'),
+  xHarvestRawPreview: document.getElementById('xHarvestRawPreview'),
+  redditHarvestForm: document.getElementById('redditHarvestForm'),
+  redditHarvestRefreshBtn: document.getElementById('redditHarvestRefreshBtn'),
+  redditHarvestRunsTable: document.getElementById('redditHarvestRunsTable'),
+  redditHarvestItemsTable: document.getElementById('redditHarvestItemsTable'),
+  redditHarvestRawPreview: document.getElementById('redditHarvestRawPreview'),
   youtubeAcquireForm: document.getElementById('youtubeAcquireForm'),
   youtubeRunsRefreshBtn: document.getElementById('youtubeRunsRefreshBtn'),
   youtubeRunsTable: document.getElementById('youtubeRunsTable'),
@@ -415,10 +435,28 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
 App.api = async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...options
   });
 
-  const body = await res.json();
+  const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+  const raw = await res.text();
+  let body = null;
+  if (raw) {
+    try {
+      body = JSON.parse(raw);
+    } catch (_) {
+      body = null;
+    }
+  }
+
+  const nonJsonMessage = (!body && raw)
+    ? `Non-JSON response (${res.status}) from ${path}: ${raw.slice(0, 140).replace(/\s+/g, ' ').trim()}`
+    : '';
+
+  if (!body) {
+    throw new Error(nonJsonMessage || `Invalid API response (${res.status}) from ${path}`);
+  }
 
   if (!res.ok) {
     // New structured error envelope: { ok: false, error: { message, code, details } }
@@ -430,6 +468,9 @@ App.api = async function api(path, options = {}) {
       res.statusText ||
       'Request failed'
     );
+    if (res.status === 401 && App.auth && typeof App.auth.handleUnauthorized === 'function') {
+      App.auth.handleUnauthorized();
+    }
     throw new Error(String(text).trim());
   }
 

@@ -9,6 +9,44 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <section id="authLanding" class="auth-landing hidden">
+      <div class="auth-hero">
+        <img src="/alphire_promo_platform_500x75.png" alt="Alphire Promo Platform" class="auth-logo" />
+        <h1>Alphire Promo Platform</h1>
+        <p>
+          Plan, build, and run campaigns across channels from one workspace. Sign in to manage
+          contacts, messaging, assets, and publishing workflows.
+        </p>
+      </div>
+      <div class="auth-card">
+        <div class="auth-mode-toggle">
+          <button id="authShowLogin" class="active" type="button">Login</button>
+          <button id="authShowRegister" type="button">Register</button>
+        </div>
+        <h2 id="authModeLabel">Sign in</h2>
+        <p id="authMessage" class="auth-message"></p>
+        <form id="authLoginForm" class="stack-form">
+          <label>Email</label>
+          <input name="email" type="email" placeholder="you@example.com" required />
+          <label>Password</label>
+          <input name="password" type="password" placeholder="Password" required />
+          <button type="submit">Login</button>
+        </form>
+        <form id="authRegisterForm" class="stack-form hidden">
+          <label>Name</label>
+          <input name="name" type="text" placeholder="Your name" required />
+          <label>Email</label>
+          <input name="email" type="email" placeholder="you@example.com" required />
+          <label>Password</label>
+          <input name="password" type="password" placeholder="At least 8 characters" required />
+          <label>Confirm Password</label>
+          <input name="confirm_password" type="password" placeholder="Repeat password" required />
+          <button type="submit">Create Account</button>
+        </form>
+      </div>
+    </section>
+
+    <div id="appShell" class="hidden">
     <header>
       <img
         src="/alphire_promo_platform_1920x280.png"
@@ -17,6 +55,8 @@
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';"
       />
       <h1 id="brandFallback" class="brand-fallback">Alphire AI Agency</h1>
+      <span id="authWelcomeName" class="auth-welcome-name"></span>
+      <button id="authLogoutButton" class="auth-logout-button hidden" type="button">Logout</button>
       <button id="brandProfileButton" class="brand-profile-button" type="button" title="Edit profile">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
         <span id="brandProfileLabel">Edit Profile</span>
@@ -65,8 +105,9 @@
           </div>
         </li>
         <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="developPage">Develop</a>
+          <a href="#" class="menu-link" data-page="developPage">Builder</a>
           <div class="submenu">
+            <a href="#" class="menu-link submenu-link" data-page="developThemesPage">Themes</a>
             <a href="#" class="menu-link submenu-link" data-page="developTemplatesPage">Templates</a>
             <a href="#" class="menu-link submenu-link" data-page="developFormsPage">Forms</a>
             <a href="#" class="menu-link submenu-link" data-page="developManageLandingPagesPage">Pages</a>
@@ -117,7 +158,7 @@
             <a href="#" class="menu-link submenu-link" data-page="envConfigPage">Env Config</a>
           </div>
         </li>
-        <li class="menu-item has-submenu">
+        <li class="menu-item has-submenu docs-menu-anchor">
           <a href="#" class="menu-link" data-page="docsPage">Docs</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" data-page="docsPage">Overview</a>
@@ -126,7 +167,7 @@
             <a href="#" class="menu-link submenu-link" data-page="docsMessagingPage">Messaging</a>
             <a href="#" class="menu-link submenu-link" data-page="docsAssetsPage">Assets</a>
             <a href="#" class="menu-link submenu-link" data-page="docsChannelsPage">Channels</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsDevelopPage">Develop</a>
+            <a href="#" class="menu-link submenu-link" data-page="docsDevelopPage">Builder</a>
             <a href="#" class="menu-link submenu-link" data-page="docsCampaignsPage">Campaigns</a>
             <a href="#" class="menu-link submenu-link" data-page="docsEngagePage">Engage</a>
             <a href="#" class="menu-link submenu-link" data-page="docsObservePage">Observe</a>
@@ -182,6 +223,7 @@
           <table>
             <thead>
               <tr class="contacts-filter-row">
+                <th class="contacts-go-cell"><input id="contactsCheckAll" type="checkbox" title="Select all filtered contacts" /></th>
                 <th><input id="contactsSearchFirstName" placeholder="First" /></th>
                 <th><input id="contactsSearchLastName" placeholder="Last" /></th>
                 <th><input id="contactsSearchCompany" placeholder="Company" /></th>
@@ -192,6 +234,7 @@
                 <th class="contacts-go-cell"><button id="contactsFiltersGoBtn" type="button">Go</button></th>
               </tr>
               <tr>
+                <th></th>
                 <th>First Name</th>
                 <th>Last Name</th>
                 <th>Company</th>
@@ -205,6 +248,13 @@
             <tbody id="contactsTable"></tbody>
           </table>
         </div>
+        <form id="contactsCreateSegmentForm" class="stack-form hidden" style="margin-top: 1.25rem;">
+          <div style="width: 100%; max-width: 420px; margin: 0 auto;">
+            <h4 style="font-size: 1.25rem; font-weight: 700; margin: 0 0 0.75rem 0; text-align: center;">Save as Segment</h4>
+            <input id="contactsCreateSegmentName" name="name" placeholder="Segment Name" required />
+            <button type="submit" style="width: 100%;">Save Segment</button>
+          </div>
+        </form>
 
       </section>
 
@@ -265,91 +315,206 @@
 
       <section id="segmentsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Segment</h2>
+          <h2>Segments</h2>
           <div class="page-heading-actions">
-            <button id="returnToSegmentsBtn" type="button" class="hidden">Return to Segments</button>
+            <button id="returnToSegmentsBtn" type="button" class="hidden">Close Preview</button>
           </div>
         </div>
-        <div id="activeSegmentName" class="hidden" style="text-align: center; font-size: 1.35rem; font-weight: 700; margin: 0 0 1rem 0;"></div>
+        <p>View, edit, and manage all saved segments.</p>
+        <h3>Segment Editor</h3>
         <div class="table-wrap">
           <table>
             <thead id="segmentsPageTableHead"></thead>
             <tbody id="segmentsTableBody"></tbody>
           </table>
         </div>
+        <section id="segmentPreviewSection" class="hidden" style="margin-top: 1.25rem;">
+          <div id="activeSegmentName" class="hidden" style="text-align: left; font-size: 1.2rem; font-weight: 700; margin: 0 0 0.75rem 0;"></div>
+          <div class="table-wrap">
+            <table>
+              <thead id="segmentPreviewTableHead"></thead>
+              <tbody id="segmentPreviewTableBody"></tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <section id="campaignsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Campaigns</h2>
           <div class="page-heading-actions">
+            <button id="campaignToggleRulesBtn" type="button">Channel Rules</button>
             <button id="campaignToggleFormBtn" type="button">Add Campaign</button>
           </div>
         </div>
         <p>Assemble channels, audiences, messaging, assets, and build components into deployable campaigns.</p>
+        <section id="campaignChannelRulesPanel" class="stack-form hidden" style="border: 1px solid #b7cde6; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+          <h3 style="margin: 0;">Channel Field Rules</h3>
+          <p class="meta" style="margin-top: 0.35rem;">Choose a channel, then define which fields are shown and which mechanics fields are required.</p>
+          <div class="form-row">
+            <label for="campaignRulesChannelSelect">Channel</label>
+            <select id="campaignRulesChannelSelect"></select>
+          </div>
+          <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+            <div>
+              <h4 style="margin: 0.25rem 0;">Visible Mechanics</h4>
+              <div id="campaignRulesVisibleMechanicsList" class="stack-form" style="margin: 0;"></div>
+            </div>
+            <div>
+              <h4 style="margin: 0.25rem 0;">Required Mechanics</h4>
+              <div id="campaignRulesRequiredMechanicsList" class="stack-form" style="margin: 0;"></div>
+            </div>
+          </div>
+          <div>
+            <h4 style="margin: 0.25rem 0;">Visible Content</h4>
+            <div id="campaignRulesVisibleContentList" class="grid-form" style="grid-template-columns: repeat(2, minmax(0, 1fr));"></div>
+          </div>
+          <div class="page-heading-actions" style="justify-content: flex-start;">
+            <button id="campaignRulesSaveBtn" type="button">Save Rules</button>
+            <button id="campaignRulesResetBtn" type="button">Reset Defaults</button>
+          </div>
+        </section>
         <form id="campaignForm" class="stack-form hidden">
+          <input id="campaignIdInput" name="campaignId" type="hidden" />
           <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
             <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Mechanics</h3>
               <input name="name" placeholder="Campaign Name" required />
+              <input name="status" id="campaignStatusInput" type="hidden" value="pending" />
               <select name="channelId" id="campaignChannelSelect" required>
                 <option value="">Channel</option>
               </select>
-              <select name="segmentId" id="campaignSegmentSelect">
-                <option value="">Segment (optional)</option>
-              </select>
-              <select name="landingPageId" id="campaignLandingPageSelect">
-                <option value="">Page (placeholder)</option>
-              </select>
-              <select name="formObjectId" id="campaignFormObjectSelect">
-                <option value="">Form (placeholder)</option>
-              </select>
-              <select name="leadMagnetId" id="campaignLeadMagnetSelect">
-                <option value="">PDF (placeholder)</option>
-              </select>
+              <div id="campaignMechanicsConditional" class="stack-form" style="margin: 0; display: none;">
+                <select name="emailTemplateId" id="campaignEmailTemplateSelect">
+                  <option value="">Template (optional)</option>
+                </select>
+                <select name="themeId" id="campaignThemeSelect">
+                  <option value="">Theme (optional)</option>
+                </select>
+                <select name="landingPageId" id="campaignLandingPageSelect">
+                  <option value="">Page</option>
+                </select>
+                <select name="segmentId" id="campaignSegmentSelect">
+                  <option value="">Segment (optional)</option>
+                </select>
+              </div>
             </div>
             <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Content</h3>
-              <select name="headlineId" id="campaignHeadlineSelect">
-                <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
-              </select>
-              <select name="blurbId" id="campaignBlurbSelect">
-                <option value="">Blurb (reserved)</option>
-              </select>
-              <select name="pitchId" id="campaignPitchSelect">
-                <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
-              </select>
-              <select name="tweetId" id="campaignTweetSelect">
-                <option value="">Tweet (optional)</option>
-              </select>
-              <select name="ctaId" id="campaignCtaSelect">
-                <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
-              </select>
-              <select name="primaryImageId" id="campaignPrimaryImageSelect">
-                <option value="">Primary Image</option>
-              </select>
-              <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
-                <option value="">Primary Video (optional)</option>
-              </select>
-              <select name="hashtagGroupId" id="campaignHashtagGroupSelect">
-                <option value="">Hashtags</option>
-              </select>
+              <p id="campaignContentChannelHint" class="meta">Select a channel to load content fields.</p>
+              <div id="campaignContentConditional" class="stack-form" style="margin: 0; display: none;">
+                <select name="headlineId" id="campaignHeadlineSelect">
+                  <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
+                </select>
+                <select name="subjectLineId" id="campaignSubjectLineSelect">
+                  <option value="">Subject Line</option>
+                </select>
+                <select name="blurbId" id="campaignBlurbSelect">
+                  <option value="">Blurb (reserved)</option>
+                </select>
+                <select name="pitchId" id="campaignPitchSelect">
+                  <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
+                </select>
+                <select name="subheadingId" id="campaignSubheadingSelect">
+                  <option value="">Sub-heading</option>
+                </select>
+                <select name="taglineId" id="campaignTaglineSelect">
+                  <option value="">Tagline</option>
+                </select>
+                <select name="articleId" id="campaignArticleSelect">
+                  <option value="">Article</option>
+                </select>
+                <select name="reportId" id="campaignReportSelect">
+                  <option value="">Report</option>
+                </select>
+                <select name="whitePaperId" id="campaignWhitePaperSelect">
+                  <option value="">White Paper</option>
+                </select>
+                <select name="ebookId" id="campaignEbookSelect">
+                  <option value="">eBook</option>
+                </select>
+                <select name="postId" id="campaignPostSelect">
+                  <option value="">Post</option>
+                </select>
+                <select name="descriptionId" id="campaignDescriptionSelect">
+                  <option value="">Description</option>
+                </select>
+                <select name="transcriptId" id="campaignTranscriptSelect">
+                  <option value="">Transcript</option>
+                </select>
+                <select name="commentId" id="campaignCommentSelect">
+                  <option value="">Comment</option>
+                </select>
+                <select name="tweetId" id="campaignTweetSelect">
+                  <option value="">Tweet (optional)</option>
+                </select>
+                <select name="ctaId" id="campaignCtaSelect">
+                  <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
+                </select>
+                <select name="primaryImageId" id="campaignPrimaryImageSelect">
+                  <option value="">Primary Image</option>
+                </select>
+                <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
+                  <option value="">Primary Video (optional)</option>
+                </select>
+                <textarea name="hashtagsText" id="campaignHashtagGroupSelect" rows="4" placeholder="Hashtags"></textarea>
+              </div>
             </div>
           </div>
 
-          <button type="submit" style="display: block; margin: 1rem auto 0;">Create Campaign</button>
+          <button id="campaignSubmitBtn" type="submit" style="display: block; margin: 1rem auto 0;">Create Campaign</button>
         </form>
 
         <h3>Saved Campaigns</h3>
         <div class="table-wrap">
           <table>
             <thead>
+              <tr class="table-filter-row">
+                <th><input id="campaignFilterName" placeholder="Name" /></th>
+                <th>
+                  <select id="campaignFilterStatus">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="paused">Paused</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="ready">Ready</option>
+                    <option value="complete">Complete</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="sent">Sent</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterSegment">
+                    <option value="">All Segments</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterChannel">
+                    <option value="">All Channels</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterTemplate">
+                    <option value="">All Templates</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterPage">
+                    <option value="">All Pages</option>
+                  </select>
+                </th>
+                <th><input id="campaignFilterSubject" placeholder="Subject" /></th>
+                <th></th>
+              </tr>
               <tr>
-                <th>Campaign Name</th>
-                <th>Channel</th>
-                <th>Headline</th>
-                <th>Primary Image</th>
-                <th>CTA</th>
+                <th><button id="campaignSortNameBtn" type="button" class="tiny-btn">Campaign Name</button></th>
+                <th><button id="campaignSortStatusBtn" type="button" class="tiny-btn">Status</button></th>
+                <th><button id="campaignSortSegmentBtn" type="button" class="tiny-btn">Segment</button></th>
+                <th><button id="campaignSortChannelBtn" type="button" class="tiny-btn">Channel</button></th>
+                <th><button id="campaignSortTemplateBtn" type="button" class="tiny-btn">Template</button></th>
+                <th><button id="campaignSortPageBtn" type="button" class="tiny-btn">Page</button></th>
+                <th><button id="campaignSortSubjectBtn" type="button" class="tiny-btn">Subject</button></th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="campaignCards"></tbody>
@@ -854,13 +1019,186 @@
       </section>
 
       <section id="acquireXPage" class="app-page hidden">
-        <h2>Acquire: X</h2>
-        <p>X acquire module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Acquire: X</h2>
+          <div class="page-heading-actions">
+            <button id="xHarvestRefreshBtn" type="button">Refresh Runs</button>
+          </div>
+        </div>
+        <p>Harvest recent X posts by query/hashtags, optionally include replies, and store runs for later analysis.</p>
+
+        <form id="xHarvestForm" class="stack-form labeled-form" style="max-width: 980px;">
+          <div class="form-row">
+            <label for="xHarvestQuery">Query Keywords</label>
+            <input id="xHarvestQuery" name="query" placeholder="e.g. ai agents OR autonomous marketing" />
+          </div>
+          <div class="form-row">
+            <label for="xHarvestHashtags">Hashtags</label>
+            <input id="xHarvestHashtags" name="hashtags" placeholder="e.g. ai,marketing,automation" />
+          </div>
+          <div class="grid-form">
+            <div class="form-row">
+              <label for="xHarvestLang">Language</label>
+              <input id="xHarvestLang" name="lang" placeholder="e.g. en" />
+            </div>
+            <div class="form-row">
+              <label for="xHarvestMaxTweets">Max Posts</label>
+              <input id="xHarvestMaxTweets" name="max_tweets" type="number" min="10" max="100" value="25" />
+            </div>
+          </div>
+          <div class="grid-form">
+            <div class="form-row">
+              <label for="xHarvestStartTime">Start Time (UTC)</label>
+              <input id="xHarvestStartTime" name="start_time" type="datetime-local" />
+            </div>
+            <div class="form-row">
+              <label for="xHarvestEndTime">End Time (UTC)</label>
+              <input id="xHarvestEndTime" name="end_time" type="datetime-local" />
+            </div>
+          </div>
+          <div class="grid-form">
+            <div class="form-row">
+              <label for="xHarvestIncludeReplies">Include Replies</label>
+              <input id="xHarvestIncludeReplies" name="include_replies" type="checkbox" checked />
+            </div>
+            <div class="form-row">
+              <label for="xHarvestMaxRepliesPerTweet">Max Replies/Post</label>
+              <input id="xHarvestMaxRepliesPerTweet" name="max_replies_per_tweet" type="number" min="1" max="100" value="10" />
+            </div>
+          </div>
+          <div class="grid-form">
+            <label class="checkbox-inline" for="xHarvestExcludeRetweets">
+              <input id="xHarvestExcludeRetweets" name="exclude_retweets" type="checkbox" checked />
+              Exclude Reposts
+            </label>
+            <label class="checkbox-inline" for="xHarvestExcludeReplies">
+              <input id="xHarvestExcludeReplies" name="exclude_replies" type="checkbox" />
+              Exclude Replies in Primary Search
+            </label>
+          </div>
+          <button type="submit">Run X Harvest</button>
+        </form>
+
+        <h3 style="margin-top: 1rem;">X Harvest Runs</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Created</th>
+                <th>Query</th>
+                <th>Posts</th>
+                <th>Replies</th>
+                <th>Errors</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="xHarvestRunsTable"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top: 1rem;">Run Detail</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Tweet ID</th>
+                <th>Author</th>
+                <th>Created</th>
+                <th>Text</th>
+              </tr>
+            </thead>
+            <tbody id="xHarvestItemsTable"></tbody>
+          </table>
+        </div>
+        <pre id="xHarvestRawPreview" class="mono-preview">{}</pre>
       </section>
 
       <section id="acquireRedditPage" class="app-page hidden">
-        <h2>Acquire: Reddit</h2>
-        <p>Reddit acquire module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Acquire: Reddit</h2>
+          <div class="page-heading-actions">
+            <button id="redditHarvestRefreshBtn" type="button">Refresh Runs</button>
+          </div>
+        </div>
+        <p>Provide a subreddit link/name or specific post link. APP will harvest posts (and comments for post mode) and store runs for later analysis.</p>
+
+        <form id="redditHarvestForm" class="stack-form labeled-form" style="max-width: 980px;">
+          <div class="form-row">
+            <label for="redditHarvestTarget">Subreddit or Post URL</label>
+            <input id="redditHarvestTarget" name="target" placeholder="https://www.reddit.com/r/subreddit or https://www.reddit.com/r/subreddit/comments/postid/..." required />
+          </div>
+          <div class="grid-form">
+            <div class="form-row">
+              <label for="redditHarvestMode">Mode</label>
+              <select id="redditHarvestMode" name="mode">
+                <option value="auto">Auto detect</option>
+                <option value="subreddit">Subreddit posts</option>
+                <option value="post">Single post + comments</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="redditHarvestSort">Sort (subreddit mode)</label>
+              <select id="redditHarvestSort" name="sort">
+                <option value="new">new</option>
+                <option value="hot">hot</option>
+                <option value="top">top</option>
+                <option value="rising">rising</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-form">
+            <div class="form-row">
+              <label for="redditHarvestMaxPosts">Max Posts</label>
+              <input id="redditHarvestMaxPosts" name="max_posts" type="number" min="1" max="500" value="100" />
+            </div>
+            <div class="form-row">
+              <label for="redditHarvestMaxComments">Max Comments (post mode)</label>
+              <input id="redditHarvestMaxComments" name="max_comments" type="number" min="1" max="5000" value="500" />
+            </div>
+          </div>
+          <label class="checkbox-inline" for="redditHarvestIncludeReplies">
+            <input id="redditHarvestIncludeReplies" name="include_replies" type="checkbox" checked />
+            Include nested replies (post mode)
+          </label>
+          <button type="submit">Run Reddit Harvest</button>
+        </form>
+
+        <h3 style="margin-top: 1rem;">Reddit Harvest Runs</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Created</th>
+                <th>Mode</th>
+                <th>Target/Subreddit</th>
+                <th>Posts</th>
+                <th>Comments</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="redditHarvestRunsTable"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top: 1rem;">Run Detail</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>ID</th>
+                <th>Author</th>
+                <th>Score</th>
+                <th>Text/Title</th>
+              </tr>
+            </thead>
+            <tbody id="redditHarvestItemsTable"></tbody>
+          </table>
+        </div>
+        <pre id="redditHarvestRawPreview" class="mono-preview">{}</pre>
       </section>
 
       <section id="acquireQuoraPage" class="app-page hidden">
@@ -909,8 +1247,48 @@
       </section>
 
       <section id="engageCommentResponsesPage" class="app-page hidden">
-        <h2>Engage: Comments</h2>
-        <p>Comment response workspace placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Engage: Comments</h2>
+          <div class="page-heading-actions">
+            <button id="engageCommentsStatusBtn" type="button">Check Reddit Connection</button>
+            <button id="engageCommentsOpenSettingsBtn" type="button">API Settings</button>
+          </div>
+        </div>
+        <p>Post a comment to a Reddit discussion by providing a post/comment URL or a Reddit thing ID.</p>
+        <form id="engageCommentsForm" class="stack-form" style="max-width: 900px;">
+          <div class="form-row">
+            <label for="engageCommentsTargetInput">Reddit Discussion URL or Thing ID</label>
+            <input
+              id="engageCommentsTargetInput"
+              name="target"
+              placeholder="https://www.reddit.com/r/subreddit/comments/postid/... or t3_postid"
+              required
+            />
+          </div>
+          <div class="form-row">
+            <label for="engageCommentsTargetKindSelect">Target Type</label>
+            <select id="engageCommentsTargetKindSelect" name="target_kind">
+              <option value="post">Post (default)</option>
+              <option value="comment">Comment reply</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="engageCommentsBodyInput">Comment</label>
+            <textarea
+              id="engageCommentsBodyInput"
+              name="comment"
+              rows="8"
+              maxlength="10000"
+              placeholder="Write your Reddit comment"
+              required
+            ></textarea>
+          </div>
+          <div class="page-heading-actions">
+            <button id="engageCommentsSubmitBtn" type="submit">Post Comment</button>
+          </div>
+        </form>
+        <p id="engageCommentsStatus" class="meta"></p>
+        <pre id="engageCommentsPreview" class="code-box">{}</pre>
       </section>
 
       <section id="engageDiscussionResponsesPage" class="app-page hidden">
@@ -919,8 +1297,60 @@
       </section>
 
       <section id="engageEmailPage" class="app-page hidden">
-        <h2>Promote: Email</h2>
-        <p>Email promotion module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Promote: Email</h2>
+        </div>
+        <p>Select an unsent email campaign, set delivery details, then send immediately or schedule delivery.</p>
+        <div class="promote-email-layout">
+          <section class="promote-email-panel">
+            <form id="promoteEmailForm" class="stack-form">
+              <div class="form-row">
+                <label for="promoteEmailCampaignSelect">Campaign</label>
+                <select id="promoteEmailCampaignSelect" name="campaign_id" required>
+                  <option value="">No content available</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="promoteEmailScheduleAt">Schedule Date/Time</label>
+                <input id="promoteEmailScheduleAt" name="scheduled_for" type="datetime-local" />
+              </div>
+              <div class="form-row">
+                <label for="promoteEmailSegmentLink">Segment</label>
+                <a id="promoteEmailSegmentLink" href="#page=campaignsPage">No segment selected</a>
+              </div>
+              <div class="form-row">
+                <label for="promoteEmailSenderSelect">Sender</label>
+                <select id="promoteEmailSenderSelect" name="sender" required>
+                  <option value="">Loading senders...</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="promoteEmailSubjectInput">Subject Line</label>
+                <input id="promoteEmailSubjectInput" name="subject" placeholder="Email subject line" required />
+              </div>
+              <div class="page-heading-actions">
+                <button id="promoteEmailSendNowBtn" type="button">Send Now</button>
+                <button id="promoteEmailScheduleBtn" type="button">Schedule</button>
+                <button id="promoteEmailDiagnosticsBtn" type="button">Run Diagnostics</button>
+              </div>
+            </form>
+            <p id="promoteEmailStatus" class="meta"></p>
+            <pre id="promoteEmailDiagnosticsPreview" class="code-box">{}</pre>
+          </section>
+
+          <aside class="promote-email-panel promote-email-preview-panel">
+            <div class="engage-social-eyebrow">Email Preview</div>
+            <div class="promote-email-preview-meta">
+              <div class="promote-email-preview-meta-row"><strong>Send:</strong> <span id="promoteEmailPreviewSend">-</span></div>
+              <div class="promote-email-preview-meta-row"><strong>From:</strong> <span id="promoteEmailPreviewFrom">-</span></div>
+              <div class="promote-email-preview-meta-row"><strong>To:</strong> <span id="promoteEmailPreviewTo">-</span></div>
+              <div class="promote-email-preview-meta-row"><strong>Subject:</strong> <span id="promoteEmailPreviewSubject">-</span></div>
+            </div>
+            <div id="promoteEmailPreviewCanvas" class="promote-email-preview-canvas">
+              <div class="promote-email-preview-empty">Select a campaign to preview the assembled email.</div>
+            </div>
+          </aside>
+        </div>
       </section>
 
       <section id="engageSocialPage" class="app-page hidden">
@@ -928,41 +1358,57 @@
           <h2>Promote: Social</h2>
           <div class="page-heading-actions">
             <button id="engageSocialPublishDueBtn" type="button">Publish Due Posts</button>
-            <button id="engageSocialOpenSettingsBtn" type="button">X Credentials</button>
+            <button id="engageSocialDiagnosticsBtn" type="button">Run Diagnostics</button>
+            <button id="engageSocialOpenSettingsBtn" type="button">API Settings</button>
           </div>
         </div>
-        <p class="meta">APP Social is a basic Buffer-style publisher for one channel: X. Compose, queue, schedule, and publish promotional posts from here.</p>
+        <p class="meta">Build a social drop from a Social campaign, choose platforms, review/edit each platform draft, then queue or publish.</p>
 
         <div class="engage-social-layout">
           <section class="engage-social-panel">
             <div class="engage-social-channel-bar">
               <div>
-                <div class="engage-social-eyebrow">Connected Channel</div>
-                <div class="engage-social-channel-name">X</div>
+                <div class="engage-social-eyebrow">Publisher Status</div>
+                <div class="engage-social-channel-name">Social Platforms</div>
               </div>
               <span id="engageSocialXStatus" class="status-pill status-warn">Checking…</span>
             </div>
 
             <form id="engageSocialComposerForm" class="stack-form">
-              <label for="engageSocialText">Compose Post</label>
-              <textarea id="engageSocialText" name="text" rows="8" placeholder="Write your X post here..." required></textarea>
+              <div class="form-row">
+                <label for="engageSocialCampaignSelect">Social Campaign</label>
+                <select id="engageSocialCampaignSelect" name="campaignId" required>
+                  <option value="">No content available</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <h4 class="engage-social-section-title">Platforms</h4>
+                <div id="engageSocialPlatformList" class="grid-form" style="grid-template-columns: repeat(3, minmax(0, 1fr));"></div>
+              </div>
+              <hr class="engage-social-section-divider" />
+              <h4 class="engage-social-section-title">Post</h4>
+              <div id="engageSocialPlatformEditors" class="stack-form" style="margin: 0;"></div>
+              <hr class="engage-social-section-divider" />
               <div class="engage-social-meta-row">
                 <div class="form-row engage-social-schedule-field">
-                  <label for="engageSocialSchedule">Schedule For (optional)</label>
+                  <h4 class="engage-social-section-title">Schedule</h4>
                   <input id="engageSocialSchedule" name="scheduled_for" type="datetime-local" />
                 </div>
                 <div class="engage-social-counter-wrap">
-                  <span id="engageSocialCharCount" class="engage-social-counter">0 / 280</span>
+                  <span id="engageSocialCharCount" class="engage-social-counter">0 selected</span>
                 </div>
               </div>
               <div class="engage-social-action-row">
-                <button id="engageSocialQueueBtn" type="submit">Add to Queue</button>
+                <button id="engageSocialQueueBtn" type="submit">Queue Selected</button>
                 <button id="engageSocialPublishNowBtn" type="button">Publish Now</button>
               </div>
             </form>
           </section>
 
           <aside class="engage-social-panel engage-social-side-panel">
+            <div id="engageSocialCampaignImageWrap" class="engage-social-campaign-image hidden">
+              <img id="engageSocialCampaignImage" alt="Campaign image preview" />
+            </div>
             <div class="engage-social-eyebrow">Queue Snapshot</div>
             <div class="engage-social-stats-grid">
               <div class="engage-social-stat-card">
@@ -987,10 +1433,12 @@
         </div>
 
         <h3>Queue &amp; History</h3>
+        <pre id="engageSocialDiagnosticsPreview" class="code-box">{}</pre>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th>Platform</th>
                 <th>Status</th>
                 <th>Scheduled</th>
                 <th>Published</th>
@@ -1054,6 +1502,10 @@
         </div>
         <p>Use the content library to move between short-form, social, and long-form messaging assets.</p>
         <div class="messaging-content-map">
+          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.messaging.openContentTypesLanding()">
+            <span class="messaging-content-node-kicker">Configuration</span>
+            <span class="messaging-content-node-title">Content Types</span>
+          </button>
           <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingHeadlinesPage')">
             <span class="messaging-content-node-kicker">Short Form</span>
             <span class="messaging-content-node-title">Headlines</span>
@@ -1069,6 +1521,10 @@
           <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingPitchesPage')">
             <span class="messaging-content-node-kicker">Short Form</span>
             <span class="messaging-content-node-title">Pitches</span>
+          </button>
+          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingSubjectLinesPage')">
+            <span class="messaging-content-node-kicker">Short Form</span>
+            <span class="messaging-content-node-title">Subject Lines</span>
           </button>
           <button class="messaging-content-node messaging-content-node-social" type="button" onclick="App.setActivePage('messagingTweetsPage')">
             <span class="messaging-content-node-kicker">Social</span>
@@ -1121,6 +1577,7 @@
         <div class="page-heading-row">
           <h2>Manage Messaging Content</h2>
           <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('messagingContentTypesPage')">Manage Content Types</button>
             <button type="button" onclick="App.setActivePage('messagingContentPage')">Back To Content</button>
             <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
           </div>
@@ -1129,68 +1586,80 @@
           <span id="messagingContentFilterLabel"></span>
           <button id="messagingContentClearFilterBtn" type="button">Clear Filter</button>
         </div>
-        <p>Open a content type below to manage its library, with the selected category applied where that content type supports category filtering.</p>
-        <div class="messaging-content-map">
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.messaging.openContentTarget('messagingHeadlinesPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Headlines</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.messaging.openContentTarget('messagingSubheadingsPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Sub-headings</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.messaging.openContentTarget('messagingTaglinesPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Taglines</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.messaging.openContentTarget('messagingPitchesPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Pitches</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-social" type="button" onclick="App.messaging.openContentTarget('messagingTweetsPage')">
-            <span class="messaging-content-node-kicker">Social</span>
-            <span class="messaging-content-node-title">Tweets</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-social" type="button" onclick="App.messaging.openContentTarget('messagingPostsPage')">
-            <span class="messaging-content-node-kicker">Social</span>
-            <span class="messaging-content-node-title">Posts</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.messaging.openContentTarget('messagingArticlesPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">Articles</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.messaging.openContentTarget('messagingReportsPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">Reports</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.messaging.openContentTarget('messagingWhitePapersPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">White Papers</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.messaging.openContentTarget('messagingEbooksPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">eBooks</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.messaging.openContentTarget('messagingDescriptionsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Descriptions</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.messaging.openContentTarget('messagingTranscriptsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Transcripts</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.messaging.openContentTarget('messagingCommentsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Comments</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.messaging.openContentTarget('messagingHashtagsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Hashtags</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.messaging.openContentTarget('messagingCtasPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Calls to Action</span>
-          </button>
+        <p>Open a content editor to run full CRUD for that messaging type.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Family</th>
+                <th>Editor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Headlines</td><td>Short Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingHeadlinesPage')">Open Editor</button></td></tr>
+              <tr><td>Sub-headings</td><td>Short Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingSubheadingsPage')">Open Editor</button></td></tr>
+              <tr><td>Taglines</td><td>Short Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingTaglinesPage')">Open Editor</button></td></tr>
+              <tr><td>Pitches</td><td>Short Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingPitchesPage')">Open Editor</button></td></tr>
+              <tr><td>Subject Lines</td><td>Short Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingSubjectLinesPage')">Open Editor</button></td></tr>
+              <tr><td>Tweets</td><td>Social</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingTweetsPage')">Open Editor</button></td></tr>
+              <tr><td>Posts</td><td>Social</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingPostsPage')">Open Editor</button></td></tr>
+              <tr><td>Articles</td><td>Long Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingArticlesPage')">Open Editor</button></td></tr>
+              <tr><td>Reports</td><td>Long Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingReportsPage')">Open Editor</button></td></tr>
+              <tr><td>White Papers</td><td>Long Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingWhitePapersPage')">Open Editor</button></td></tr>
+              <tr><td>eBooks</td><td>Long Form</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingEbooksPage')">Open Editor</button></td></tr>
+              <tr><td>Descriptions</td><td>Support Copy</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingDescriptionsPage')">Open Editor</button></td></tr>
+              <tr><td>Transcripts</td><td>Support Copy</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingTranscriptsPage')">Open Editor</button></td></tr>
+              <tr><td>Comments</td><td>Support Copy</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingCommentsPage')">Open Editor</button></td></tr>
+              <tr><td>Hashtags</td><td>Support Copy</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingHashtagsPage')">Open Editor</button></td></tr>
+              <tr><td>Calls to Action</td><td>Support Copy</td><td><button type="button" onclick="App.messaging.openContentTarget('messagingCtasPage')">Open Editor</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="messagingContentTypesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Content Types</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('messagingManageContentPage')">Back To Manage Content</button>
+            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          </div>
+        </div>
+        <p>Create a content type by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
+
+        <form id="messagingContentTypeForm" class="stack-form">
+          <input type="hidden" name="id" />
+          <div class="grid-form">
+            <input name="content_type_name" placeholder="Content Type Name (example: Abstract)" required />
+            <select name="family" required>
+              <option value="">Select Family</option>
+              <option value="Short Form">Short Form</option>
+              <option value="Long Form">Long Form</option>
+              <option value="Social">Social</option>
+              <option value="Support Copy">Support Copy</option>
+            </select>
+            <label><input name="enabled" type="checkbox" checked /> Enabled</label>
+          </div>
+          <div class="page-heading-actions">
+            <button id="messagingContentTypeSaveBtn" type="submit">Create Content Type</button>
+            <button id="messagingContentTypeCancelEditBtn" type="button" class="hidden">Cancel Edit</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingContentTypesSortLabelBtn" type="button" class="tiny-btn">Name</button></th>
+                <th><button id="messagingContentTypesSortFamilyBtn" type="button" class="tiny-btn">Family</button></th>
+                <th><button id="messagingContentTypesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th>Enabled</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingContentTypesTable"></tbody>
+          </table>
         </div>
       </section>
 
@@ -2151,7 +2620,11 @@
                 </select>
                 <input id="assetUploadName" name="asset_name" placeholder="Asset Name (optional)" />
                 <input id="assetUploadTags" name="tags" placeholder="Tags (comma-separated)" />
-                <button type="submit">Upload To Google Drive</button>
+                <button type="submit">Upload Asset(s)</button>
+                <div id="assetUploadProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+                  <div id="assetUploadProgressText" class="asset-upload-progress-text">Uploading...</div>
+                  <progress id="assetUploadProgressBar" max="100" value="0"></progress>
+                </div>
               </form>
             </div>
             <div class="stack-form" style="margin: 0;">
@@ -2169,7 +2642,11 @@
                 <select id="assetMultiUploadCategory" name="category">
                   <option value="">Select Category</option>
                 </select>
-                <button type="submit">Upload To Google Drive</button>
+                <button type="submit">Upload Asset(s)</button>
+                <div id="assetMultiUploadProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+                  <div id="assetMultiUploadProgressText" class="asset-upload-progress-text">Uploading...</div>
+                  <progress id="assetMultiUploadProgressBar" max="100" value="0"></progress>
+                </div>
               </form>
             </div>
           </div>
@@ -2488,7 +2965,7 @@
       </section>
 
       <section id="developPage" class="app-page hidden">
-        <h2>Develop</h2>
+        <h2>Builder</h2>
         <p>Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
         <div class="develop-flow-map">
           <button class="develop-flow-node develop-flow-node-top" type="button" onclick="App.setActivePage('developTemplatesPage')">
@@ -2514,12 +2991,165 @@
         </div>
       </section>
 
+      <section id="developThemesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Themes</h2>
+          <div class="page-heading-actions">
+            <button id="developThemesCreateBtn" type="button">Create Theme</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Create reusable named themes and persist color, style, and asset settings in Supabase.</p>
+        <section class="develop-themes-card">
+          <div class="develop-themes-builder-header">
+            <h3>Theme Builder</h3>
+            <button id="developThemesBuilderToggleBtn" type="button" class="tiny-btn" aria-expanded="false" aria-controls="developThemesBuilderPanel">▸</button>
+          </div>
+        </section>
+        <section id="developThemesBuilderPanel" class="hidden">
+          <section class="develop-themes-toolbar">
+            <label for="developThemesThemeSelect">Saved Theme</label>
+            <select id="developThemesThemeSelect">
+              <option value="">Select Theme</option>
+            </select>
+            <label for="developThemesNameInput">Theme Name</label>
+            <input id="developThemesNameInput" name="theme_name" placeholder="Theme Name" />
+            <button id="developThemesNewBtn" type="button">New Theme</button>
+            <button id="developThemesSaveBtn" type="button">Save Theme</button>
+            <button id="developThemesDeleteBtn" type="button">Delete Theme</button>
+          </section>
+          <div id="developThemesStatusMsg" class="develop-themes-status hidden" role="status" aria-live="polite"></div>
+          <section class="develop-themes-columns">
+            <article class="develop-themes-card">
+              <h3>Palette</h3>
+              <div class="develop-themes-stack">
+                <div class="develop-color-control">
+                  <label for="developThemesPrimaryColorInput" class="develop-color-control-label">
+                    <span class="develop-color-control-icon" aria-hidden="true"></span>
+                    Primary Color
+                  </label>
+                  <input id="developThemesPrimaryColorInput" name="themes_primary_color" type="color" value="#0b82d4" />
+                </div>
+                <div class="develop-color-control">
+                  <label for="developThemesBackgroundColorInput" class="develop-color-control-label">
+                    <span class="develop-color-control-icon" aria-hidden="true"></span>
+                    Background Color
+                  </label>
+                  <input id="developThemesBackgroundColorInput" name="themes_background_color" type="color" value="#f5fbff" />
+                </div>
+                <div class="develop-color-control">
+                  <label for="developThemesAccentColorInput" class="develop-color-control-label">
+                    <span class="develop-color-control-icon" aria-hidden="true"></span>
+                    Accent Color
+                  </label>
+                  <input id="developThemesAccentColorInput" name="themes_accent_color" type="color" value="#1a4f81" />
+                </div>
+              </div>
+            </article>
+            <article class="develop-themes-card">
+              <h3>Styles</h3>
+              <div class="develop-themes-stack">
+                <div class="form-row">
+                  <label for="developThemesBorderThicknessInput">Thickness</label>
+                  <input id="developThemesBorderThicknessInput" type="range" min="0" max="20" step="1" value="1" />
+                  <span id="developThemesBorderThicknessValue">1</span>
+                </div>
+                <div class="form-row">
+                  <label for="developThemesBorderRadiusInput">Radius</label>
+                  <input id="developThemesBorderRadiusInput" type="range" min="0" max="50" step="1" value="12" />
+                  <span id="developThemesBorderRadiusValue">12</span>
+                </div>
+                <div class="form-row">
+                  <label for="developThemesContainerBlurInput">Blur</label>
+                  <input id="developThemesContainerBlurInput" type="range" min="0" max="24" step="1" value="0" />
+                  <span id="developThemesContainerBlurValue">0</span>
+                </div>
+                <div class="form-row">
+                  <label for="developThemesContrastLevelInput">Contrast</label>
+                  <input id="developThemesContrastLevelInput" type="range" min="0" max="100" step="1" value="0" />
+                  <span id="developThemesContrastLevelValue">0</span>
+                </div>
+              </div>
+            </article>
+            <article class="develop-themes-card">
+              <h3>Assets</h3>
+              <div class="develop-themes-stack">
+                <div class="form-row">
+                  <label for="developThemesLogoWideSelect">Logo - Wide</label>
+                  <select id="developThemesLogoWideSelect">
+                    <option value="">None</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="developThemesLogoSquareSelect">Logo - Square</label>
+                  <select id="developThemesLogoSquareSelect">
+                    <option value="">None</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="developThemesFeatureImageSelect">Feature</label>
+                  <select id="developThemesFeatureImageSelect">
+                    <option value="">None</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="developThemesBackgroundImageSelect">Background</label>
+                  <select id="developThemesBackgroundImageSelect">
+                    <option value="">None</option>
+                  </select>
+                </div>
+              </div>
+            </article>
+          </section>
+          <section class="develop-themes-card">
+            <h3>Preview</h3>
+            <div id="developThemesPreviewHost" class="develop-themes-preview-host"></div>
+          </section>
+        </section>
+        <section class="develop-themes-card">
+          <h3>Theme Library</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Feature Image</th>
+                  <th>Logo Square</th>
+                  <th>Name</th>
+                  <th>Palette</th>
+                  <th>Styles</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="developThemesTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="develop-themes-card">
+          <h3>Consolidation Targets</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Area</th>
+                  <th>Current Controls</th>
+                  <th>Persistence</th>
+                  <th>Target Consolidation</th>
+                </tr>
+              </thead>
+              <tbody id="developThemesInventoryBody"></tbody>
+            </table>
+          </div>
+          <ul id="developThemesConsolidationList" class="develop-themes-plan"></ul>
+        </section>
+      </section>
+
       <section id="developManageLandingPagesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Develop: Pages</h2>
+          <h2>Builder: Pages</h2>
           <div class="page-heading-actions">
             <button id="developOpenCreateLandingPageBtn" type="button">Create Page</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
@@ -2546,7 +3176,7 @@
                 <th><button id="developLandingPagesSortHeadlineBtn" type="button" class="tiny-btn">Headline</button></th>
                 <th><button id="developLandingPagesSortFormBtn" type="button" class="tiny-btn">Form</button></th>
                 <th><button id="developLandingPagesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
-                <th>Actions</th>
+                <th class="develop-pages-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody id="developLandingPagesTableBody"></tbody>
@@ -2610,12 +3240,12 @@
           <div class="page-heading-actions">
             <button id="developLandingSaveSelectorDefaultsBtn" type="button">Save Selector Defaults</button>
             <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <form id="developLandingPagesForm" class="stack-form">
-          <input id="developLandingPageIdInput" name="landing_page_id" type="hidden" />
-          <input id="developLandingPageNameInput" name="landing_page_name" placeholder="Page Name" required />
+          <input id="developLandingPageIdInput" name="page_id" type="hidden" />
+          <input id="developLandingPageNameInput" name="page_name" placeholder="Page Name" required />
           <select id="developLandingTemplateSelect" name="template_id">
             <option value="">Template</option>
           </select>
@@ -2701,7 +3331,7 @@
           <div class="page-heading-actions">
             <button id="developLandingPagePreviewModeBtn" type="button">Edit Mode</button>
             <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <div id="developLandingPagePreviewHost"></div>
@@ -2711,12 +3341,22 @@
         <div class="page-heading-row">
           <h2 id="developLandingPageVisualEditorTitle">Visual Page Editor</h2>
           <div class="page-heading-actions">
-            <button id="developLandingPageVisualModeBtn" type="button">Display Mode</button>
+            <button id="developLandingPageVisualModeBtn" type="button">Preview Mode</button>
             <button id="developLandingPageVisualSaveBtn" type="button">Save All Changes</button>
             <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
           </div>
         </div>
+        <div class="develop-visual-toolbar">
+          <label for="developLandingVisualThemeSelect">Theme</label>
+          <select id="developLandingVisualThemeSelect">
+            <option value="">Custom</option>
+          </select>
+          <label for="developLandingVisualTemplateSelect">Template</label>
+          <select id="developLandingVisualTemplateSelect">
+            <option value="">Template</option>
+          </select>
+        </div>
+        <div id="developLandingVisualSaveNotice" class="develop-save-notice hidden" role="status" aria-live="polite"></div>
         <p>Click any highlighted element to open an inline editor next to that item. You can leave multiple editors open, then save all changes together.</p>
         <div id="developLandingPageVisualEditorHost"></div>
       </section>
@@ -2734,10 +3374,10 @@
 
       <section id="developFormsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Develop: Forms</h2>
+          <h2>Builder: Forms</h2>
           <div class="page-heading-actions">
             <button id="developOpenCreateFormBtn" type="button">Create Form</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <p>Assemble reusable forms from a form template, PDF, CTA, and confirmation behavior. Save them for use throughout the platform.</p>
@@ -2830,10 +3470,12 @@
       </section>
 
       <section id="developAgentsPage" class="app-page hidden">
-        <h2>Develop: Agents</h2>
+        <h2>Builder: Agents</h2>
+        <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
         <form id="developAgentsForm" class="stack-form">
           <div class="grid-form">
             <select name="action" id="agentsActionSelect">
+              <option value="agent_api_setup_orchestrator">agent_api_setup_orchestrator</option>
               <option value="create_job">create_job</option>
               <option value="preview_job">preview_job</option>
               <option value="approve_job">approve_job</option>
@@ -2873,18 +3515,111 @@
         <pre id="agentsRequestPreview" class="code-box">{}</pre>
         <h3>Response</h3>
         <pre id="agentsResponsePreview" class="code-box">{}</pre>
+
+        <section class="docs-panel" style="margin-top: 1.25rem;">
+          <h3>Agent: API Setup Orchestrator</h3>
+          <p class="docs-intro">Run the orchestrator from Builder and track setup progress across all Promote channels.</p>
+          <div class="page-heading-actions" style="justify-content: flex-start; margin: 0 0 0.85rem 0;">
+            <button id="docsOrchestratorRunBtn" type="button">Run Orchestrator</button>
+            <button type="button" onclick="App.docsApiSetup.runOrchestrator()">Open Builder Form</button>
+            <button type="button" onclick="App.setActivePage('settingsApisPage')">Open Settings &gt; APIs</button>
+            <label class="checkbox-row" style="width:auto; margin-left: 0.65rem;">
+              <input id="docsOrchestratorIncompleteOnly" type="checkbox" />
+              Only incomplete steps
+            </label>
+            <button id="docsOrchestratorDownloadJsonBtn" type="button">Download JSON</button>
+            <button id="docsOrchestratorDownloadMdBtn" type="button">Download Markdown</button>
+          </div>
+          <p id="docsOrchestratorStatus" class="meta">No orchestrator run loaded.</p>
+          <div class="docs-panel" style="margin-bottom: 0.9rem;">
+            <h4 style="margin: 0 0 0.45rem;">Latest Run Summary</h4>
+            <div id="docsOrchestratorSummary" class="docs-kv-grid"></div>
+          </div>
+          <div class="table-wrap" style="margin-bottom: 0.9rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Provider</th>
+                  <th>Configured</th>
+                  <th>Manual Steps</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="docsOrchestratorChannelsBody"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Phase</th>
+                  <th>Agent-Owned Work</th>
+                  <th>Human-Minimum Work</th>
+                  <th>Output</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Inventory</td>
+                  <td>Scan provider schemas, current config completeness, and channel readiness.</td>
+                  <td>None</td>
+                  <td>Channel readiness matrix with missing fields.</td>
+                </tr>
+                <tr>
+                  <td>Preflight</td>
+                  <td>Generate exact per-provider forms/checklists and validation tests.</td>
+                  <td>None</td>
+                  <td>Actionable setup packet per channel.</td>
+                </tr>
+                <tr>
+                  <td>Credential Capture</td>
+                  <td>Validate formatting, normalize endpoints, and stage secure storage plan.</td>
+                  <td>Obtain external credentials/tokens where provider requires human login/2FA/captcha.</td>
+                  <td>Credential intake checklist and status.</td>
+                </tr>
+                <tr>
+                  <td>Verification</td>
+                  <td>Run status and smoke checks, classify failures, propose remediation.</td>
+                  <td>Approve/retry when provider-side approval gates are present.</td>
+                  <td>Pass/fail diagnostics + next actions.</td>
+                </tr>
+                <tr>
+                  <td>Handoff</td>
+                  <td>Emit final report: ready channels, blocked channels, required human follow-ups.</td>
+                  <td>Execute only unresolved external confirmation steps.</td>
+                  <td>Go-live readiness report.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <section id="developTemplatesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Develop: Templates</h2>
-          <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
+          <h2>Builder: Templates</h2>
+          <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
         </div>
         <p>Manage the reusable structural templates that power forms and pages.</p>
+        <section id="developTemplateEditorPanel" class="develop-template-editor hidden">
+          <div class="page-heading-row">
+            <h3 id="developTemplateEditorTitle" style="margin:0;">Template Editor</h3>
+            <button id="developTemplateEditorCloseBtn" type="button">Close Editor</button>
+          </div>
+          <p id="developTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
+          <div id="developTemplateEditorModules" class="develop-template-module-list"></div>
+        </section>
         <h3>Forms</h3>
         <p>These are the reusable form templates used as the foundation for saved forms.</p>
         <div id="developFormTemplatesLibrary" class="develop-template-library"></div>
         <div id="developFormTemplatesPreviewHost"></div>
+        <hr style="margin: 2rem 0;" />
+        <h3 style="margin-top: 2rem;">Email</h3>
+        <p>Choose an email template type to pair with a theme and campaign delivery.</p>
+        <div id="developEmailTemplatesLibrary" class="develop-template-library"></div>
+        <div id="developEmailTemplatesPreviewHost"></div>
+        <hr style="margin: 2rem 0;" />
         <h3 style="margin-top: 2rem;">Pages</h3>
         <p>Select a reusable page template. The Page Builder uses this same template library.</p>
         <div id="developTemplatesLibrary" class="develop-template-library"></div>
@@ -2893,10 +3628,10 @@
 
       <section id="developToolsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Develop: Extensions</h2>
+          <h2>Builder: Extensions</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <p>Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
@@ -2905,10 +3640,10 @@
 
       <section id="developExtensionsManagerPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Develop: Extension Manager</h2>
+          <h2>Builder: Extension Manager</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Develop</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <p>Maintain a searchable extension repository with recursive parent-child taxonomy, definitions, and descriptive metadata.</p>
@@ -3081,7 +3816,7 @@
             <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
           </div>
         </div>
-        <p>Paste a website URL to create a `640x360` screenshot, upload it into Google Drive, and store it in Assets as type `Image` with category `Screenshot`.</p>
+        <p>Paste a website URL to create a `640x360` screenshot, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Screenshot`.</p>
         <form id="developScreenshotForm" class="stack-form">
           <div class="grid-form">
             <input name="url" placeholder="https://example.com" />
@@ -3109,7 +3844,7 @@
             <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
           </div>
         </div>
-        <p>Generate an image thumbnail from the first page of a PDF file location, upload it into Google Drive, and store it in Assets as type `Image` with category `Thumbnail`.</p>
+        <p>Generate an image thumbnail from the first page of a PDF file location, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Thumbnail`.</p>
         <form id="developThumbnailForm" class="stack-form">
           <div class="grid-form">
             <input name="file_location" placeholder="PDF file location (https://...pdf)" />
@@ -3243,7 +3978,7 @@
             <button class="docs-flow-node docs-flow-node-build" type="button" onclick="App.setActivePage('docsDevelopPage')">
               <span class="docs-flow-node-copy">
                 <span class="docs-flow-node-kicker">Build</span>
-                <span class="docs-flow-node-title">Develop</span>
+                <span class="docs-flow-node-title">Builder</span>
                 <span class="docs-flow-node-meta">Pages, forms, tools</span>
               </span>
               <span class="docs-flow-node-icon">BLD</span>
@@ -3473,7 +4208,7 @@
             <ul class="docs-list">
               <li>The Add Assets panel supports both single-file and multi-file uploads.</li>
               <li>Assets can be typed as Image, Video, Audio, or PDF before upload.</li>
-              <li>The current upload action is wired around Google Drive as the storage destination.</li>
+              <li>The current upload action is wired around Vercel Blob as the storage destination.</li>
             </ul>
           </section>
           <section class="docs-panel">
@@ -3548,7 +4283,7 @@
             <ul class="docs-list">
               <li>The form builder supports squeeze, short, and long form variants with configurable labels, colors, and required fields.</li>
               <li>Saved forms are listed in a reusable table, making them available to pages and campaigns.</li>
-              <li>The Templates page provides a reusable landing-page template library plus a preview host.</li>
+              <li>The Templates page provides a reusable page template library plus a preview host.</li>
             </ul>
           </section>
           <section class="docs-panel">
@@ -3706,6 +4441,93 @@
               <li>Changes update runtime environment variables immediately and are designed to sync to Vercel for subsequent deployments.</li>
               <li>This page is the single source of truth for operational credentials used across the platform.</li>
             </ul>
+          </section>
+        </div>
+
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Meta Quickstart (No Guessing)</h3>
+            <ul class="docs-list">
+              <li>Use Graph API Explorer with <code>GET /me/accounts</code> to list Pages.</li>
+              <li>Choose the object where <code>name</code> matches your Page name.</li>
+              <li><strong>APP Meta &gt; Page ID</strong> = that object <code>id</code>.</li>
+              <li><strong>APP Meta &gt; Access Token</strong> = that object <code>access_token</code>.</li>
+              <li><code>paging</code> in the response is cursor metadata, not Page ID.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Instagram Account ID Mapping</h3>
+            <ul class="docs-list">
+              <li>Run <code>GET /{PAGE_ID}?fields=instagram_business_account</code>.</li>
+              <li><strong>APP Instagram &gt; Business Account ID</strong> = <code>instagram_business_account.id</code>.</li>
+              <li>Instagram posting requires a campaign primary image.</li>
+              <li>Default endpoint URL: <code>https://graph.facebook.com/v22.0</code>.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Meta Family (Facebook, Instagram, Threads)</h3>
+            <ul class="docs-list">
+              <li>Collect App ID and App Secret from Meta Developers.</li>
+              <li>Generate User Access Token and long-lived token in Graph API Explorer.</li>
+              <li>Capture Page ID and Instagram Business Account ID for IG publishing.</li>
+              <li>Use <code>meta</code> for consolidated setup or <code>instagram</code>/<code>threads</code> provider keys directly.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>OAuth Channels (LinkedIn, Pinterest, Reddit, Quora, Patreon)</h3>
+            <ul class="docs-list">
+              <li>Store app client ID/client secret first, then complete OAuth to obtain refresh token.</li>
+              <li>For Reddit comments, include a stable user-agent string and refresh token.</li>
+              <li>Quora and Patreon provider schemas are available in Settings &gt; APIs; publish routes are still planned.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Token/PWD Channels (Bluesky, Telegram, Substack, Medium, YouTube)</h3>
+            <ul class="docs-list">
+              <li>Bluesky: <code>identifier</code> + <code>app_password</code>.</li>
+              <li>Telegram: bot token from BotFather, plus chat ID for posting target.</li>
+              <li>Substack and Medium: publication/integration tokens as primary credentials.</li>
+              <li>YouTube key is currently used for Acquire workflows; Promote publishing is separate.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Operational Sequence</h3>
+            <ul class="docs-list">
+              <li>Step 1: Save credentials in Settings &gt; APIs.</li>
+              <li>Step 2: Run channel-specific status/diagnostics checks.</li>
+              <li>Step 3: Execute a one-recipient/one-post smoke test.</li>
+              <li>Step 4: Enable campaign-level publishing flow for that channel.</li>
+            </ul>
+          </section>
+        </div>
+
+      </section>
+
+      <section id="docsSettingsPlatformPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2 id="docsSettingsPlatformTitle">Docs: Platform API Setup</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('docsSettingsPage')">Back To Settings Docs</button>
+            <button type="button" onclick="App.setActivePage('settingsApisPage')">Open Settings &gt; APIs</button>
+          </div>
+        </div>
+        <p id="docsSettingsPlatformIntro" class="docs-intro"></p>
+        <div class="docs-platform-detail-layout">
+          <section class="docs-panel">
+            <h3>Credential Form</h3>
+            <form id="docsPlatformApiForm" class="stack-form labeled-form">
+              <div class="form-row">
+                <label for="docsPlatformProviderKey">Provider</label>
+                <input id="docsPlatformProviderKey" name="provider_display" readonly />
+              </div>
+              <div id="docsPlatformApiFields" class="stack-form"></div>
+              <button id="docsPlatformApiSaveBtn" type="submit">Save Platform Credentials</button>
+            </form>
+            <p id="docsPlatformApiStatus" class="meta"></p>
+          </section>
+          <section class="docs-panel">
+            <h3>Platform Documentation</h3>
+            <div id="docsPlatformDocsBody" class="docs-platform-docs-body"></div>
           </section>
         </div>
       </section>
@@ -3917,45 +4739,162 @@
 
       <section id="settingsApisPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Settings: APIs</h2>
+          <h2 id="settingsApisHeading">Settings: APIs</h2>
           <div class="page-heading-actions">
+            <button id="apiSettingsAllBtn" type="button">All APIs</button>
             <button id="apiSettingsToggleBtn" type="button">Add API</button>
           </div>
         </div>
-        <form id="apiSettingsForm" class="stack-form labeled-form hidden">
-          <div class="page-heading-row">
-            <h3 id="apiSettingsFormTitle">Add API</h3>
-          </div>
-          <div class="form-row">
-            <label for="apiProviderSelect">Provider</label>
-            <select id="apiProviderSelect" name="provider" required></select>
-          </div>
-          <div id="apiFieldsContainer" class="stack-form"></div>
-          <button type="submit">Save Credentials</button>
-        </form>
+        <div class="api-setup-top-grid">
+          <section id="connectionOpsPanel" class="docs-panel hidden">
+            <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+              <h3 id="connectionOpsPanelTitle">Connection</h3>
+            </div>
+            <div id="connectionOpsChannelLabel" class="meta"></div>
+            <div class="connection-ops-accordion">
+              <section class="connection-ops-section">
+                <button type="button" class="connection-ops-section-toggle" data-ops-target="connectionOpsSetupLinksBody" aria-expanded="true">
+                  <span>Setup Links</span>
+                  <span class="connection-ops-arrow">▾</span>
+                </button>
+                <div id="connectionOpsSetupLinksBody" class="connection-ops-section-body">
+                  <div id="connectionOpsSetupLinks" class="docs-intro"></div>
+                </div>
+              </section>
 
-        <h3>Configured Providers</h3>
+              <section class="connection-ops-section">
+                <button type="button" class="connection-ops-section-toggle" data-ops-target="connectionOpsStatusBody" aria-expanded="true">
+                  <span>Status</span>
+                  <span class="connection-ops-arrow">▾</span>
+                </button>
+                <div id="connectionOpsStatusBody" class="connection-ops-section-body">
+                  <div id="connectionOpsStatus" class="meta">Loading Connection Ops...</div>
+                  <div id="connectionOpsSummary" class="docs-kv-grid"></div>
+                </div>
+              </section>
+
+              <section class="connection-ops-section">
+                <button type="button" class="connection-ops-section-toggle" data-ops-target="connectionOpsGatesBody" aria-expanded="true">
+                  <span>Human Gates</span>
+                  <span class="connection-ops-arrow">▾</span>
+                </button>
+                <div id="connectionOpsGatesBody" class="connection-ops-section-body">
+                  <div id="connectionOpsGates"></div>
+                </div>
+              </section>
+
+              <section class="connection-ops-section">
+                <button type="button" class="connection-ops-section-toggle" data-ops-target="connectionOpsAttemptsLogBody" aria-expanded="true">
+                  <span>Log Attempts (Diagnostics)</span>
+                  <span class="connection-ops-arrow">▾</span>
+                </button>
+                <div id="connectionOpsAttemptsLogBody" class="connection-ops-section-body">
+                  <form id="connectionOpsAttemptForm" class="stack-form labeled-form">
+                    <div class="form-row">
+                      <label for="connectionOpsAttemptStatus">Status</label>
+                      <select id="connectionOpsAttemptStatus" name="status">
+                        <option value="blocked">Blocked</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="success">Success</option>
+                        <option value="info">Info</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="connectionOpsAttemptCode">Blocker Code</label>
+                      <input id="connectionOpsAttemptCode" name="blocker_code" placeholder="e.g. CHAT_ID_NOT_FOUND" />
+                    </div>
+                    <div class="form-row">
+                      <label for="connectionOpsAttemptSummary">Summary</label>
+                      <input id="connectionOpsAttemptSummary" name="summary" placeholder="Short outcome summary" />
+                    </div>
+                    <div class="form-row">
+                      <label for="connectionOpsAttemptDetails">Details</label>
+                      <textarea id="connectionOpsAttemptDetails" name="details" rows="5" placeholder="What happened, steps taken, and current blocker"></textarea>
+                    </div>
+                    <button type="submit">Log Attempt</button>
+                  </form>
+                  <div class="table-wrap" style="margin-top: 0.75rem;">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Status</th>
+                          <th>Code</th>
+                          <th>Summary</th>
+                        </tr>
+                      </thead>
+                      <tbody id="connectionOpsAttemptsBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+
+              <section class="connection-ops-section">
+                <button type="button" class="connection-ops-section-toggle" data-ops-target="connectionOpsPlaybookWrapBody" aria-expanded="true">
+                  <span>Blocker Playbook</span>
+                  <span class="connection-ops-arrow">▾</span>
+                </button>
+                <div id="connectionOpsPlaybookWrapBody" class="connection-ops-section-body">
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Code</th>
+                          <th>Likely Cause</th>
+                          <th>Fix</th>
+                          <th>Portal</th>
+                        </tr>
+                      </thead>
+                      <tbody id="connectionOpsPlaybookBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <form id="apiSettingsForm" class="stack-form labeled-form hidden">
+            <div class="page-heading-row">
+              <h3 id="apiSettingsFormTitle">Credentials</h3>
+            </div>
+            <div id="apiSettingsFormContext" class="meta"></div>
+            <div class="form-row">
+              <label for="apiProviderSelect">Provider</label>
+              <select id="apiProviderSelect" name="provider" required></select>
+            </div>
+            <div id="apiFieldsContainer" class="stack-form"></div>
+            <button type="submit">Save Credentials</button>
+          </form>
+        </div>
+
+        <h3 style="margin-top:1rem;">Channel Connections</h3>
+        <p class="docs-intro">Click a channel to open its API form. Connection Ops expands for channels that support gate tracking.</p>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Provider</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th>Saved Values</th>
+                <th>Channel</th>
+                <th>Core Fields / Saved</th>
+                <th id="channelGateHeader0">Gate 1</th>
+                <th id="channelGateHeader1">Gate 2</th>
+                <th id="channelGateHeader2">Gate 3</th>
+                <th id="channelGateHeader3">Gate 4</th>
+                <th id="channelGateHeader4">Gate 5</th>
                 <th class="api-actions-col">Actions</th>
               </tr>
             </thead>
-            <tbody id="apiConfigsTable"></tbody>
+            <tbody id="apiChannelsTableBody"></tbody>
           </table>
         </div>
       </section>
     </main>
 
     <p id="message"></p>
+    </div>
 
     <!-- Module order matters: core first, then features, then app (orchestrator) last -->
     <script src="/js/core.js"></script>
+    <script src="/js/auth.js"></script>
     <script src="/js/components.js"></script>
     <script src="/js/contacts.js"></script>
     <script src="/js/segments.js"></script>
@@ -3966,7 +4905,10 @@
     <script src="/js/youtube.js"></script>
     <script src="/js/youtubeComments.js"></script>
     <script src="/js/messaging.js"></script>
+    <script src="/js/promoteEmail.js"></script>
     <script src="/js/engageSocial.js"></script>
+    <script src="/js/engageComments.js"></script>
+    <script src="/js/docsApiSetup.js"></script>
     <script src="/js/develop.js"></script>
     <script src="/js/activityLog.js"></script>
     <script src="/js/assets.js"></script>
