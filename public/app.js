@@ -31,7 +31,10 @@ App.manifests = [
   App.youtube,
   App.youtubeComments,
   App.messaging,
+  App.promoteEmail,
   App.engageSocial,
+  App.engageComments,
+  App.docsApiSetup,
   App.develop,
   App.activityLog,
   App.envConfig,        // #7 — Env Configuration
@@ -44,6 +47,18 @@ App.manifests = [
 
 App.refresh = async function refresh() {
   const { state, api, notify } = App;
+  const activePageId = String(state.activePage || '');
+  const shouldNotifySharedDataErrors = (() => {
+    if (!activePageId) return true;
+    const relevantPrefixes = [
+      'contacts',
+      'segments',
+      'campaigns',
+      'promoteEmailPage',
+      'engageEmailPage'
+    ];
+    return relevantPrefixes.some((prefix) => activePageId.startsWith(prefix));
+  })();
 
   const [contactsRes, segmentsRes, campaignsRes] = await Promise.allSettled([
     api('/api/contacts'),
@@ -55,21 +70,27 @@ App.refresh = async function refresh() {
     state.contacts = contactsRes.value.contacts || [];
   } else {
     state.contacts = [];
-    notify(`Contacts load failed: ${contactsRes.reason?.message || 'unknown error'}`, true);
+    if (shouldNotifySharedDataErrors) {
+      notify(`Contacts load failed: ${contactsRes.reason?.message || 'unknown error'}`, true);
+    }
   }
 
   if (segmentsRes.status === 'fulfilled') {
     state.segments = segmentsRes.value.segments || [];
   } else {
     state.segments = [];
-    notify(`Segments load failed: ${segmentsRes.reason?.message || 'unknown error'}`, true);
+    if (shouldNotifySharedDataErrors) {
+      notify(`Segments load failed: ${segmentsRes.reason?.message || 'unknown error'}`, true);
+    }
   }
 
   if (campaignsRes.status === 'fulfilled') {
     state.campaigns = campaignsRes.value.campaigns || [];
   } else {
     state.campaigns = [];
-    notify(`Campaigns load failed: ${campaignsRes.reason?.message || 'unknown error'}`, true);
+    if (shouldNotifySharedDataErrors) {
+      notify(`Campaigns load failed: ${campaignsRes.reason?.message || 'unknown error'}`, true);
+    }
   }
 
   // Render modules that depend on shared state
@@ -77,9 +98,19 @@ App.refresh = async function refresh() {
   App.segments.renderSegments();
   App.campaigns.renderCampaigns();
 
-  // Call refresh() on any registered module that exposes it
+  // Refresh only active-page modules (or global modules without page binding).
+  // This prevents unrelated API calls/noise while the user is on another section.
   for (const mod of App.manifests) {
     if (typeof mod.refresh === 'function') {
+      const pageId = String(mod?.manifest?.pageId || '');
+      const pagePrefixes = Array.isArray(mod?.manifest?.pagePrefixes)
+        ? mod.manifest.pagePrefixes.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+      const matchesPrefix = Boolean(
+        activePageId
+        && pagePrefixes.some((prefix) => activePageId.startsWith(prefix))
+      );
+      if (pageId && activePageId && pageId !== activePageId && !matchesPrefix) continue;
       try {
         await mod.refresh();
       } catch (err) {
@@ -113,10 +144,16 @@ if (App.els.topNav) {
     }
 
     App.setActivePage(targetPage);
+    App.refresh().catch((err) => App.notify(err.message, true));
 
     // Trigger on-activation callbacks for modules that want them
     for (const mod of App.manifests) {
-      if (mod.manifest && mod.manifest.pageId === targetPage &&
+      const pageId = String(mod?.manifest?.pageId || '');
+      const pagePrefixes = Array.isArray(mod?.manifest?.pagePrefixes)
+        ? mod.manifest.pagePrefixes.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+      const matchesPrefix = pagePrefixes.some((prefix) => targetPage.startsWith(prefix));
+      if (mod.manifest && (pageId === targetPage || matchesPrefix) &&
           typeof mod.onPageActivated === 'function') {
         mod.onPageActivated();
       }
@@ -128,12 +165,23 @@ if (App.els.topNav) {
 // Boot — init all registered modules, then start
 // ---------------------------------------------------------------------------
 
-for (const mod of App.manifests) {
-  if (typeof mod.init === 'function') {
-    mod.init();
-  }
-}
+App.bootMainApp = function bootMainApp() {
+  if (App._bootedMainApp) return;
+  App._bootedMainApp = true;
 
-App.setActivePage(App.getInitialPage(), { persist: false });
-App.youtube.renderYoutubeAcquireResult();
-App.refresh().catch((err) => App.notify(err.message, true));
+  for (const mod of App.manifests) {
+    if (typeof mod.init === 'function') {
+      mod.init();
+    }
+  }
+
+  App.setActivePage(App.getInitialPage(), { persist: false });
+  App.youtube.renderYoutubeAcquireResult();
+  App.refresh().catch((err) => App.notify(err.message, true));
+};
+
+if (App.auth && typeof App.auth.init === 'function') {
+  App.auth.init(App.bootMainApp);
+} else {
+  App.bootMainApp();
+}

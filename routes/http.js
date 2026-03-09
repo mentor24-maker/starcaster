@@ -54,6 +54,26 @@ function nextId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function parseCookies(rawCookie) {
+  const text = String(rawCookie || '');
+  if (!text.trim()) return {};
+  return text.split(';').reduce((acc, part) => {
+    const trimmed = String(part || '').trim();
+    if (!trimmed) return acc;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx <= 0) return acc;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+    if (!key) return acc;
+    try {
+      acc[key] = decodeURIComponent(value);
+    } catch (_) {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+}
+
 // =============================================================================
 // #9 — Standardized API Response Envelope
 // Append these helpers to the bottom of routes/http.js, above module.exports.
@@ -103,4 +123,14 @@ function sendErr(res, status, message, { code = null, details = [] } = {}) {
   if (details.length) error.details = details;
   return sendJson(res, status, { ok: false, error });
 }
-module.exports = { sendJson, sendOk, sendErr, parseJsonBody, setCors, getUrlObj, normalizeEmail, nextId };
+module.exports = {
+  sendJson,
+  sendOk,
+  sendErr,
+  parseJsonBody,
+  setCors,
+  getUrlObj,
+  normalizeEmail,
+  nextId,
+  parseCookies,
+};

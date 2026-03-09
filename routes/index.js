@@ -24,7 +24,9 @@
 const { sendJson, sendErr, setCors, getUrlObj } = require('./http');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
+const { getUserFromSessionToken } = require('../lib/authStore');
 
+const auth        = require('./auth');
 const settings    = require('./settings');
 const acquire     = require('./acquire');
 const promoLeads  = require('./promoLeads');
@@ -33,6 +35,7 @@ const channels    = require('./channels');
 const contacts    = require('./contacts');
 const activityLog = require('./activityLog');
 const config      = require('./config');
+const content     = require('./content');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
 const develop     = require('./develop');
@@ -40,12 +43,14 @@ const develop     = require('./develop');
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
 const ROUTE_MODULES = [
+  auth,
   settings,
   acquire,
   promoLeads,
   assets,
   channels,
   contacts,
+  content,
   engage,
   develop,
   messaging,
@@ -109,6 +114,15 @@ async function handleRequest(req, res) {
   const urlObj   = getUrlObj(req);
   const pathname = urlObj.pathname;
   const method   = req.method;
+  const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
+  const isDebugRoute = pathname === '/api/debug-routes';
+  const sessionToken = auth.readSessionToken(req);
+  const authUser = getUserFromSessionToken(sessionToken);
+  req.authUser = authUser || null;
+
+  if (!isAuthRoute && !isDebugRoute && !authUser) {
+    return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
+  }
 
   if (pathname === '/api/debug-routes' && method === 'GET') {
     const google = getProviderValues('google_drive');
