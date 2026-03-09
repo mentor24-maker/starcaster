@@ -35,7 +35,6 @@ const channels    = require('./channels');
 const contacts    = require('./contacts');
 const activityLog = require('./activityLog');
 const config      = require('./config');
-const content     = require('./content');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
 const develop     = require('./develop');
@@ -50,7 +49,6 @@ const ROUTE_MODULES = [
   assets,
   channels,
   contacts,
-  content,
   engage,
   develop,
   messaging,
