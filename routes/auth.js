@@ -64,7 +64,7 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/auth/me' && method === 'GET') {
     const token = readSessionToken(req);
-    const user = getUserFromSessionToken(token);
+    const user = await getUserFromSessionToken(token);
     if (!user) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
     return sendOk(res, 200, { user }, { user }), true;
   }
@@ -75,10 +75,10 @@ async function handle(req, res, pathname, method) {
     const email = normalizeEmail(body.email);
     const password = String(body.password || '');
 
-    const created = createUser({ name, email, password });
+    const created = await createUser({ name, email, password });
     if (!created.ok) return sendErr(res, created.status || 400, created.error || 'Unable to register', { code: 'REGISTER_FAILED' }), true;
 
-    const session = createSession(created.data.id);
+    const session = await createSession(created.data.id);
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
     setSessionCookie(res, session.data.token, req);
@@ -90,10 +90,10 @@ async function handle(req, res, pathname, method) {
     const email = normalizeEmail(body.email);
     const password = String(body.password || '');
 
-    const matched = authenticateUser({ email, password });
+    const matched = await authenticateUser({ email, password });
     if (!matched.ok) return sendErr(res, matched.status || 401, matched.error || 'Invalid login', { code: 'LOGIN_FAILED' }), true;
 
-    const session = createSession(matched.data.id);
+    const session = await createSession(matched.data.id);
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
     setSessionCookie(res, session.data.token, req);
@@ -102,7 +102,7 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/auth/logout' && method === 'POST') {
     const token = readSessionToken(req);
-    if (token) deleteSession(token);
+    if (token) await deleteSession(token);
     clearSessionCookie(res, req);
     return sendOk(res, 200, { loggedOut: true }, { loggedOut: true }), true;
   }
