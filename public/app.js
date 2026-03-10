@@ -101,6 +101,7 @@ App.refresh = async function refresh() {
   // Refresh only active-page modules (or global modules without page binding).
   // This prevents unrelated API calls/noise while the user is on another section.
   for (const mod of App.manifests) {
+    if (!mod || typeof mod !== 'object') continue;
     if (typeof mod.refresh === 'function') {
       const pageId = String(mod?.manifest?.pageId || '');
       const pagePrefixes = Array.isArray(mod?.manifest?.pagePrefixes)
@@ -148,6 +149,7 @@ if (App.els.topNav) {
 
     // Trigger on-activation callbacks for modules that want them
     for (const mod of App.manifests) {
+      if (!mod || typeof mod !== 'object') continue;
       const pageId = String(mod?.manifest?.pageId || '');
       const pagePrefixes = Array.isArray(mod?.manifest?.pagePrefixes)
         ? mod.manifest.pagePrefixes.map((item) => String(item || '').trim()).filter(Boolean)
@@ -170,6 +172,7 @@ App.bootMainApp = function bootMainApp() {
   App._bootedMainApp = true;
 
   for (const mod of App.manifests) {
+    if (!mod || typeof mod !== 'object') continue;
     if (typeof mod.init === 'function') {
       mod.init();
     }
