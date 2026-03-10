@@ -97,6 +97,20 @@ App.auth._startMainApp = function _startMainApp() {
   }
 };
 
+App.auth._syncProjectContext = async function _syncProjectContext() {
+  try {
+    const res = await App.api('/api/projects/current', { method: 'GET' });
+    const project = res.project || res.currentProject || null;
+    const projectId = String(project?.id || '').trim();
+    if (projectId) {
+      App.state.currentProjectId = projectId;
+      window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', projectId);
+    }
+  } catch (_) {
+    // Non-fatal during auth boot; project context can still be selected later.
+  }
+};
+
 App.auth.handleUnauthorized = function handleUnauthorized() {
   App.auth.user = null;
   App.auth._showLanding('login');
@@ -167,6 +181,7 @@ App.auth.init = function init(bootMainApp) {
           password: form.get('password'),
         });
         App.auth.user = user;
+        await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
         App.auth._setMessage('');
@@ -194,6 +209,7 @@ App.auth.init = function init(bootMainApp) {
           password,
         });
         App.auth.user = user;
+        await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
         App.auth._setMessage('');
@@ -229,9 +245,11 @@ App.auth.init = function init(bootMainApp) {
   App.auth._me()
     .then((user) => {
       App.auth.user = user;
-      App.auth._showApp();
-      App.auth._startMainApp();
-      App.auth._setMessage('');
+      return App.auth._syncProjectContext().then(() => {
+        App.auth._showApp();
+        App.auth._startMainApp();
+        App.auth._setMessage('');
+      });
     })
     .catch(() => {
       App.auth.user = null;

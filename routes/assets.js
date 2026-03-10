@@ -48,9 +48,13 @@ function estimatedBytesFromBase64(base64Text) {
 async function handle(req, res, pathname, method) {
   const isAssetsPath = ASSETS_PATH_RE.test(String(pathname || ''));
   const requestMethod = String(method || '').toUpperCase();
+  const scope = {
+    projectId: String(req?.projectContext?.project?.id || '').trim(),
+    userId: String(req?.authUser?.id || '').trim(),
+  };
 
   if (isAssetsPath && requestMethod === 'GET') {
-    const result = await listAssets();
+    const result = await listAssets(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const assets = (Array.isArray(result.data) ? result.data : []).map(rowToAsset);
     return sendOk(res, 200, assets, { assets }, { total: assets.length }), true;
@@ -77,7 +81,7 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
 
-    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight });
+    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
@@ -100,7 +104,7 @@ async function handle(req, res, pathname, method) {
       }
     }
 
-    const result = await updateAsset(assetId, body);
+    const result = await updateAsset(assetId, body, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!updated) return sendErr(res, 404, 'Asset not found', { code: 'NOT_FOUND' }), true;
@@ -109,7 +113,7 @@ async function handle(req, res, pathname, method) {
 
   if (assetIdMatch && requestMethod === 'DELETE') {
     const assetId = Number(assetIdMatch[1]);
-    const result = await deleteAsset(assetId);
+    const result = await deleteAsset(assetId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!deleted) return sendErr(res, 404, 'Asset not found', { code: 'NOT_FOUND' }), true;
@@ -166,7 +170,7 @@ async function handle(req, res, pathname, method) {
       ),
       imageWidth: Math.max(0, Number(upload.data.imageWidth || 0) || 0) || null,
       imageHeight: Math.max(0, Number(upload.data.imageHeight || 0) || 0) || null,
-    });
+    }, scope);
     if (!save.ok) return sendErr(res, save.status || 500, save.error), true;
 
     const created = Array.isArray(save.data) ? save.data[0] : save.data;

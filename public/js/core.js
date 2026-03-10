@@ -64,6 +64,8 @@ App.state = {
   apiConfigs: [],
   apiFormValues: {},
   profile: {},
+  projects: [],
+  currentProjectId: '',
   acquireJobs: [],
   acquireBusyByJob: {},
   directAcquireRuns: [],
@@ -125,6 +127,13 @@ App.state = {
 // Shorthand used throughout — avoids typing App.state everywhere
 const state = App.state;
 const ACTIVE_PAGE_STORAGE_KEY = 'alphire.activePage';
+const CURRENT_PROJECT_ID_STORAGE_KEY = 'alphire.currentProjectId';
+App.CURRENT_PROJECT_ID_STORAGE_KEY = CURRENT_PROJECT_ID_STORAGE_KEY;
+
+try {
+  const savedProjectId = String(window.localStorage.getItem(CURRENT_PROJECT_ID_STORAGE_KEY) || '').trim();
+  if (savedProjectId) state.currentProjectId = savedProjectId;
+} catch (_) {}
 
 // ---------------------------------------------------------------------------
 // DOM element refs
@@ -287,6 +296,10 @@ App.els = {
   apiProviderSelect: document.getElementById('apiProviderSelect'),
   apiFieldsContainer: document.getElementById('apiFieldsContainer'),
   apiConfigsTable: document.getElementById('apiConfigsTable'),
+  settingsProjectSelector: document.getElementById('settingsProjectSelector'),
+  settingsNewProjectName: document.getElementById('settingsNewProjectName'),
+  settingsNewProjectDescription: document.getElementById('settingsNewProjectDescription'),
+  settingsCreateProjectBtn: document.getElementById('settingsCreateProjectBtn'),
   settingsProfileForm: document.getElementById('settingsProfileForm'),
   settingsProjectName: document.getElementById('settingsProjectName'),
   settingsAccountName: document.getElementById('settingsAccountName'),
@@ -435,8 +448,11 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
  * unchanged so any endpoints not yet migrated continue to work.
  */
 App.api = async function api(path, options = {}) {
+  const projectId = String(state.currentProjectId || '').trim();
+  const baseHeaders = { 'Content-Type': 'application/json' };
+  if (projectId) baseHeaders['X-Project-ID'] = projectId;
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...baseHeaders, ...(options.headers || {}) },
     credentials: 'include',
     ...options
   });
