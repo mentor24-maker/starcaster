@@ -46,13 +46,13 @@ body {
 .auth-hero p {
   margin: 0;
   max-width: 52ch;
-  font-size: 1.05rem;
+  font-size: 1.32rem;
   line-height: 1.6;
   color: #d7e7f8;
 }
 
 .auth-logo {
-  width: min(100%, 420px);
+  width: min(100%, 840px);
   height: auto;
 }
 
@@ -238,6 +238,13 @@ header {
   margin: 0.6rem 0 0.8rem;
 }
 
+.settings-project-inline-list {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  color: #20384f;
+}
+
 .settings-project-list-item {
   border: 1px solid #b8d7f0;
   border-radius: 8px;
@@ -260,6 +267,38 @@ header {
 .settings-project-list-item-meta {
   font-size: 0.82rem;
   color: #3d5870;
+}
+
+.project-details-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.project-details-form,
+.project-details-media {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.project-logo-preview-wrap {
+  min-height: 220px;
+  border: 1px solid #c8ddef;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #f7fbff;
+  padding: 0.8rem;
+}
+
+#settingsProjectLogoPreview {
+  max-width: 100%;
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 .top-nav {
@@ -949,6 +988,10 @@ th {
 
   .media-edit-preview {
     justify-items: center;
+  }
+
+  .project-details-layout {
+    grid-template-columns: 1fr;
   }
 }
 

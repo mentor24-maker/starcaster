@@ -29,6 +29,7 @@ App.settings = (function () {
     supported: [],
     byPlatform: {},
   };
+  const PROJECT_LOGO_STORAGE_KEY = 'alphire.projectLogoMap';
   let activeChannelLabel = '';
 
   async function readFileAsDataUrl(file) {
@@ -52,7 +53,7 @@ App.settings = (function () {
   function applyProjectToHeader() {
     const projects = Array.isArray(state.projects) ? state.projects : [];
     const activeProject = projects.find((project) => String(project?.id || '') === String(state.currentProjectId || '')) || null;
-    const projectLogo = String(activeProject?.logoDataUrl || activeProject?.logo_data_url || state.profile?.logoDataUrl || '').trim();
+    const projectLogo = getProjectLogoDataUrl(activeProject);
     const hasActiveProject = Boolean(activeProject);
     const hasLogo = hasActiveProject && Boolean(projectLogo);
 
@@ -79,6 +80,47 @@ App.settings = (function () {
     }
   }
 
+  function readProjectLogoMap() {
+    try {
+      const raw = String(window.localStorage.getItem(PROJECT_LOGO_STORAGE_KEY) || '').trim();
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeProjectLogoMap(map) {
+    try {
+      window.localStorage.setItem(PROJECT_LOGO_STORAGE_KEY, JSON.stringify(map || {}));
+    } catch (_) {}
+  }
+
+  function getProjectLogoDataUrl(project) {
+    const id = String(project?.id || '').trim();
+    if (!id) return '';
+    const map = readProjectLogoMap();
+    const mapped = String(map[id] || '').trim();
+    if (mapped) return mapped;
+    const fromProject = String(project?.logoDataUrl || project?.logo_data_url || '').trim();
+    if (fromProject) return fromProject;
+    return String(state.profile?.logoDataUrl || '').trim();
+  }
+
+  function setProjectLogoDataUrl(projectIdInput, dataUrlInput) {
+    const projectId = String(projectIdInput || '').trim();
+    const dataUrl = String(dataUrlInput || '').trim();
+    if (!projectId) return;
+    const map = readProjectLogoMap();
+    if (!dataUrl) {
+      delete map[projectId];
+    } else {
+      map[projectId] = dataUrl;
+    }
+    writeProjectLogoMap(map);
+  }
+
   function formatDateLabel(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
@@ -89,6 +131,21 @@ App.settings = (function () {
 
   function renderProjectLists() {
     const projects = Array.isArray(state.projects) ? state.projects : [];
+    if (els.settingsProfileProjectsList) {
+      els.settingsProfileProjectsList.innerHTML = '';
+      if (!projects.length) {
+        els.settingsProfileProjectsList.textContent = 'No projects found.';
+      } else {
+        const labels = projects.map((project) => {
+          const id = String(project?.id || '').trim();
+          const name = String(project?.name || project?.slug || id || 'Untitled').trim();
+          const role = String(project?.membership?.role || 'member').trim();
+          const marker = id === String(state.currentProjectId || '') ? ' (active)' : '';
+          return `${name}${marker} - ${role}`;
+        });
+        els.settingsProfileProjectsList.innerHTML = labels.map((label) => `<div>${label}</div>`).join('');
+      }
+    }
     const renderInto = (container) => {
       if (!container) return;
       container.innerHTML = '';
@@ -123,7 +180,6 @@ App.settings = (function () {
       });
     };
     renderInto(els.settingsProjectsList);
-    renderInto(els.settingsProfileProjectsList);
   }
 
   function renderProjectDetails() {
@@ -151,6 +207,19 @@ App.settings = (function () {
     if (els.settingsProjectDetailsCreatedAt) {
       els.settingsProjectDetailsCreatedAt.value = formatDateLabel(active?.createdAt || active?.created_at || '');
     }
+    const logoDataUrl = getProjectLogoDataUrl(active);
+    if (els.settingsProjectLogoPreview) {
+      const hasLogo = Boolean(logoDataUrl);
+      els.settingsProjectLogoPreview.classList.toggle('hidden', !hasLogo);
+      if (hasLogo) {
+        els.settingsProjectLogoPreview.src = logoDataUrl;
+      } else {
+        els.settingsProjectLogoPreview.removeAttribute('src');
+      }
+    }
+    if (els.settingsProjectLogoPlaceholder) {
+      els.settingsProjectLogoPlaceholder.classList.toggle('hidden', Boolean(logoDataUrl));
+    }
   }
 
   function getAccountIdentity(profile) {
@@ -164,7 +233,6 @@ App.settings = (function () {
 
   function renderProfileForm(profile) {
     const account = getAccountIdentity(profile);
-    if (els.settingsProjectName) els.settingsProjectName.value = String(profile?.projectName || '');
     if (els.settingsAccountName) els.settingsAccountName.value = account.name;
     if (els.settingsAccountEmail) els.settingsAccountEmail.value = account.email;
     if (els.settingsContactName) {
@@ -1192,12 +1260,9 @@ App.settings = (function () {
         e.preventDefault();
         const formData = new FormData(els.settingsProfileForm);
         const account = getAccountIdentity(state.profile);
-        const projectName = String(formData.get('project_name') || '').trim();
-        if (!projectName) return notify('Project name is required', true);
         const contactNameInput = String(formData.get('contact_name') || '').trim();
         const emailInput = String(formData.get('email') || '').trim();
         const payload = {
-          project_name: projectName,
           contact_name: contactNameInput || account.name,
           email: emailInput || account.email,
           phone: String(formData.get('phone') || '').trim(),
@@ -1262,6 +1327,26 @@ App.settings = (function () {
           notify('Project created');
         } catch (err) {
           notify(err.message, true);
+        }
+      });
+    }
+
+    if (els.settingsProjectLogoFile) {
+      els.settingsProjectLogoFile.addEventListener('change', async () => {
+        const file = els.settingsProjectLogoFile.files?.[0];
+        if (!file) return;
+        const activeId = String(state.currentProjectId || '').trim();
+        if (!activeId) return notify('Select a project first', true);
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          setProjectLogoDataUrl(activeId, dataUrl);
+          renderProjectDetails();
+          applyProjectToHeader();
+          notify('Project logo updated');
+        } catch (err) {
+          notify(err.message, true);
+        } finally {
+          els.settingsProjectLogoFile.value = '';
         }
       });
     }
