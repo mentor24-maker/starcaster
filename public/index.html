@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Omni-channel Engagement Engine (APP)</title>
+    <title>Alphire Promo Platform (APP)</title>
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
     <link rel="stylesheet" href="/styles.css" />
@@ -11,10 +11,11 @@
   <body>
     <section id="authLanding" class="auth-landing hidden">
       <div class="auth-hero">
-        <img src="/images/logo_isit_app.png" alt="ISIT App" class="auth-logo" />
-        <h1>Omni-channel Engagement Engine</h1>
+        <img src="/alphire_promo_platform_500x75.png" alt="Alphire Promo Platform" class="auth-logo" />
+        <h1>Alphire Promo Platform</h1>
         <p>
-          Engage with your followers and fans wherever they may be.
+          Plan, build, and run campaigns across channels from one workspace. Sign in to manage
+          contacts, messaging, assets, and publishing workflows.
         </p>
       </div>
       <div class="auth-card">
@@ -49,15 +50,13 @@
     <header>
       <img
         src="/alphire_promo_platform_1920x280.png"
-        alt="Omni-channel Engagement Engine"
+        alt="Alphire Promo Platform"
         class="brand-wordmark"
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';"
       />
       <h1 id="brandFallback" class="brand-fallback">Alphire AI Agency</h1>
-      <div class="auth-header-meta">
-        <span id="authWelcomeName" class="auth-welcome-name"></span>
-        <a id="authLogoutLink" class="auth-logout-link hidden" href="#">Logout</a>
-      </div>
+      <span id="authWelcomeName" class="auth-welcome-name"></span>
+      <button id="authLogoutButton" class="auth-logout-button hidden" type="button">Logout</button>
       <button id="brandProfileButton" class="brand-profile-button" type="button" title="Edit profile">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
         <span id="brandProfileLabel">Edit Profile</span>
@@ -1155,7 +1154,7 @@
               <input id="redditHarvestMaxPosts" name="max_posts" type="number" min="1" max="500" value="100" />
             </div>
             <div class="form-row">
-              <label for="redditHarvestMaxComments">Max Comments (post mode)</label>
+              <label for="redditHarvestMaxComments">Max Comments (total budget)</label>
               <input id="redditHarvestMaxComments" name="max_comments" type="number" min="1" max="5000" value="500" />
             </div>
           </div>
@@ -1257,6 +1256,13 @@
         </div>
         <p>Post a comment to a Reddit discussion by providing a post/comment URL or a Reddit thing ID.</p>
         <form id="engageCommentsForm" class="stack-form" style="max-width: 900px;">
+          <div class="form-row">
+            <label for="engageCommentsSubmitModeSelect">Submit Mode</label>
+            <select id="engageCommentsSubmitModeSelect" name="submit_mode">
+              <option value="reddit_api">Direct Reddit API</option>
+              <option value="openclaw">Queue via OpenClaw Agent</option>
+            </select>
+          </div>
           <div class="form-row">
             <label for="engageCommentsTargetInput">Reddit Discussion URL or Thing ID</label>
             <input
@@ -3925,7 +3931,7 @@
         <div class="page-heading-row">
           <h2>Documentation</h2>
         </div>
-        <p class="docs-intro">This section is the system manual for the Omni-channel Engagement Engine. The process map below mirrors the operating flow: acquire inputs, organize people and reach paths, prepare message and assets, build campaign infrastructure, execute, and then observe the result. Each stage links directly to its documentation page.</p>
+        <p class="docs-intro">This section is the system manual for the Alphire Promo Platform. The process map below mirrors the operating flow: acquire inputs, organize people and reach paths, prepare message and assets, build campaign infrastructure, execute, and then observe the result. Each stage links directly to its documentation page.</p>
 
         <div class="docs-flow-infographic" aria-label="System workflow infographic">
           <div class="docs-flow-row">
