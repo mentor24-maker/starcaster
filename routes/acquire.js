@@ -263,7 +263,11 @@ async function handle(req, res, pathname, method) {
     const harvest = await runRedditHarvest(inputPayload);
     if (!harvest.ok) {
       return sendErr(res, harvest.status || 500, harvest.error || 'Reddit harvest failed', {
-        details: [String(harvest.endpoint || ''), JSON.stringify(harvest.data || {})].filter(Boolean),
+        details: [
+          String(harvest.endpoint || ''),
+          String(harvest.data?.type || ''),
+          String(harvest.data?.source || ''),
+        ].filter(Boolean),
       }), true;
     }
     const saved = createRedditHarvestRun(inputPayload, harvest.data || {});
