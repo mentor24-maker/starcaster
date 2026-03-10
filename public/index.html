@@ -54,8 +54,10 @@
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';"
       />
       <h1 id="brandFallback" class="brand-fallback">Alphire AI Agency</h1>
-      <span id="authWelcomeName" class="auth-welcome-name"></span>
-      <button id="authLogoutButton" class="auth-logout-button hidden" type="button">Logout</button>
+      <div class="auth-header-meta">
+        <span id="authWelcomeName" class="auth-welcome-name"></span>
+        <a id="authLogoutLink" class="auth-logout-link hidden" href="#">Logout</a>
+      </div>
       <button id="brandProfileButton" class="brand-profile-button" type="button" title="Edit profile">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
         <span id="brandProfileLabel">Edit Profile</span>

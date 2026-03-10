@@ -94,18 +94,26 @@ body {
 }
 
 .auth-welcome-name {
-  margin: 0 0.5rem 0 0;
+  margin: 0;
   color: #07325a;
   font-weight: 700;
 }
 
-.auth-logout-button {
-  width: auto;
-  margin: 0 0.75rem 0 0;
-  border-radius: 999px;
-  background: #0f4f8f;
-  color: #fff;
-  border-color: #0f4f8f;
+.auth-header-meta {
+  margin-left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.auth-logout-link {
+  color: #07325a;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.auth-logout-link:hover {
+  text-decoration: underline;
 }
 
 header {
