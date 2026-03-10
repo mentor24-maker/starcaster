@@ -2,18 +2,172 @@
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { logActivity } = require('../lib/activityLog');
+const { listCampaigns, rowToCampaign } = require('../lib/store');
+const { getAssetById, rowToAsset } = require('../lib/assetsStore');
 const socialStore = require('../lib/engageSocialStore');
 const xClient = require('../lib/xClient');
+const telegramClient = require('../lib/telegramClient');
+const blueskyClient = require('../lib/blueskyClient');
+const metaClients = require('../lib/metaClients');
+const redditClient = require('../lib/redditClient');
+const { relayOpenClaw } = require('../lib/openclawGateway');
+const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram'];
 
-async function publishStoredPost(post) {
+function safeText(value) {
+  return String(value || '').trim();
+}
+
+function parseJsonObject(raw) {
+  try {
+    const obj = JSON.parse(String(raw || '{}'));
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function requestOrigin(req) {
+  const proto = safeText(req?.headers?.['x-forwarded-proto']) || 'http';
+  const host = safeText(req?.headers?.host);
+  if (!host) return '';
+  return `${proto}://${host}`;
+}
+
+function configuredPublicOrigin(req) {
+  const configured = safeText(process.env.PUBLIC_APP_ORIGIN || process.env.APP_PUBLIC_ORIGIN || process.env.PUBLIC_BASE_URL);
+  if (configured) return configured.replace(/\/+$/, '');
+  const vercel = safeText(process.env.VERCEL_URL);
+  if (vercel) return `https://${vercel.replace(/\/+$/, '')}`;
+  return requestOrigin(req);
+}
+
+function isPublicMediaUrl(value, requireHttps = false) {
+  const text = safeText(value);
+  if (!text) return false;
+  try {
+    const parsed = new URL(text);
+    const protocol = String(parsed.protocol || '').toLowerCase();
+    if (requireHttps && protocol !== 'https:') return false;
+    if (protocol !== 'https:' && protocol !== 'http:') return false;
+    const host = String(parsed.hostname || '').toLowerCase();
+    if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
+    if (/^10\./.test(host)) return false;
+    if (/^192\.168\./.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveCampaignImageMeta(campaignIdInput, req) {
+  const campaignId = safeText(campaignIdInput);
+  if (!campaignId) return { imageUrl: '', imageAlt: '' };
+  const res = await listCampaigns();
+  if (!res.ok) return { imageUrl: '', imageAlt: '' };
+  const campaigns = (Array.isArray(res.data) ? res.data : []).map(rowToCampaign);
+  const campaign = campaigns.find((item) => safeText(item?.id) === campaignId);
+  if (!campaign) return { imageUrl: '', imageAlt: '' };
+  const content = parseJsonObject(campaign.content);
+  const primaryImageId = safeText(content?.primaryImageId);
+  if (!primaryImageId) return { imageUrl: '', imageAlt: '' };
+  let imageUrl = '';
+  const assetRes = await getAssetById(primaryImageId);
+  if (assetRes.ok) {
+    const assetRow = Array.isArray(assetRes.data) ? assetRes.data[0] : assetRes.data;
+    const asset = rowToAsset(assetRow);
+    const location = safeText(asset?.location);
+    if (isPublicMediaUrl(location, true)) imageUrl = location;
+  }
+  if (!imageUrl) {
+    const origin = configuredPublicOrigin(req);
+    if (!origin) return { imageUrl: '', imageAlt: '' };
+    imageUrl = `${origin}/api/assets/file/${encodeURIComponent(primaryImageId)}`;
+  }
+  return {
+    imageUrl,
+    imageAlt: `${safeText(campaign?.name) || 'Campaign'} image`,
+  };
+}
+
+async function resolvePostImageMeta(post, req, requireHttps = false) {
+  const currentUrl = safeText(post?.imageUrl);
+  if (isPublicMediaUrl(currentUrl, requireHttps)) {
+    return { imageUrl: currentUrl, imageAlt: safeText(post?.imageAlt) };
+  }
+  const campaignId = safeText(post?.campaignId);
+  if (!campaignId) return { imageUrl: '', imageAlt: safeText(post?.imageAlt) };
+  const fallback = await resolveCampaignImageMeta(campaignId, req);
+  return {
+    imageUrl: safeText(fallback.imageUrl),
+    imageAlt: safeText(post?.imageAlt || fallback.imageAlt),
+  };
+}
+
+async function publishStoredPost(post, req) {
   if (!post) return { ok: false, status: 404, error: 'Post not found' };
+  const channel = String(post.channel || 'x').trim().toLowerCase();
+
+  if (!PUBLISH_NOW_CHANNELS.includes(channel)) {
+    const skipped = socialStore.updatePost(post.id, {
+      status: 'failed',
+      error: `Publishing for ${channel.toUpperCase()} is not configured yet`,
+      diagnostics: {
+        checkedAt: new Date().toISOString(),
+        channel,
+        attempts: [{
+          endpoint: '',
+          ok: false,
+          status: 400,
+          message: `Publishing for ${channel.toUpperCase()} is not configured yet`,
+        }],
+      },
+    });
+    return { ok: false, status: 400, error: `Publishing for ${channel.toUpperCase()} is not configured yet`, post: skipped };
+  }
 
   socialStore.updatePost(post.id, { status: 'publishing', error: '' });
-  const result = await xClient.createPost(post.text);
+  const imageOpts = {
+    imageUrl: String(post.imageUrl || '').trim(),
+    imageAlt: String(post.imageAlt || '').trim(),
+  };
+  if (channel === 'facebook' || channel === 'instagram' || channel === 'threads') {
+    const resolved = await resolvePostImageMeta(post, req, true);
+    imageOpts.imageUrl = safeText(resolved.imageUrl);
+    imageOpts.imageAlt = safeText(resolved.imageAlt);
+  } else if (channel === 'bluesky') {
+    const resolved = await resolvePostImageMeta(post, req, false);
+    if (safeText(resolved.imageUrl)) {
+      imageOpts.imageUrl = safeText(resolved.imageUrl);
+      imageOpts.imageAlt = safeText(resolved.imageAlt);
+    }
+  }
+  let result;
+  if (channel === 'telegram') {
+    result = await telegramClient.sendMessage(post.text);
+  } else if (channel === 'bluesky') {
+    result = await blueskyClient.createPost(post.text, imageOpts);
+  } else if (channel === 'facebook') {
+    result = await metaClients.createFacebookPost(post.text, imageOpts);
+  } else if (channel === 'threads') {
+    result = await metaClients.createThreadsPost(post.text, imageOpts);
+  } else if (channel === 'instagram') {
+    result = await metaClients.createInstagramPost(post.text, imageOpts);
+  } else {
+    result = await xClient.createPost(post.text);
+  }
   if (!result.ok) {
     const failed = socialStore.updatePost(post.id, {
       status: 'failed',
       error: String(result.error || 'Unknown publish error'),
+      diagnostics: {
+        checkedAt: new Date().toISOString(),
+        channel,
+        endpoint: String(result.endpoint || ''),
+        status: Number(result.status || 0) || 0,
+        attempts: Array.isArray(result.attempts) ? result.attempts : [],
+        payload: result.data || null,
+      },
     });
     return { ...result, post: failed };
   }
@@ -21,15 +175,31 @@ async function publishStoredPost(post) {
   const published = socialStore.updatePost(post.id, {
     status: 'published',
     publishedAt: new Date().toISOString(),
-    remoteId: String(result.data?.id || ''),
+    remoteId: String(result.data?.id || result.data?.messageId || ''),
     error: '',
+    diagnostics: {
+      checkedAt: new Date().toISOString(),
+      channel,
+      endpoint: String(result.data?.endpoint || ''),
+      status: Number(result.status || 0) || 0,
+      imageUrl: safeText(imageOpts.imageUrl || post?.imageUrl || ''),
+      attempts: Array.isArray(result.data?.attempts) ? result.data.attempts : [],
+    },
   });
 
   logActivity({
-    action: 'engage.social.x_posted',
+    action: channel === 'telegram'
+      ? 'engage.social.telegram_posted'
+      : (channel === 'bluesky'
+        ? 'engage.social.bluesky_posted'
+        : (channel === 'facebook'
+          ? 'engage.social.facebook_posted'
+          : (channel === 'threads'
+            ? 'engage.social.threads_posted'
+            : (channel === 'instagram' ? 'engage.social.instagram_posted' : 'engage.social.x_posted')))),
     entityType: 'engage_social_post',
     entityId: published?.id || null,
-    summary: `Published X post ${published?.id || ''}`,
+    summary: `Published ${channel.toUpperCase()} post ${published?.id || ''}`,
     meta: { remoteId: published?.remoteId || '' },
   });
 
@@ -38,6 +208,120 @@ async function publishStoredPost(post) {
 
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
+
+  if (pathname === '/api/engage/reddit/status' && requestMethod === 'GET') {
+    const creds = redditClient.getRedditCredentials();
+    const status = {
+      configured: redditClient.isConfigured(creds),
+      hasClientId: Boolean(creds.clientId),
+      hasClientSecret: Boolean(creds.clientSecret),
+      hasRefreshToken: Boolean(creds.refreshToken),
+      username: creds.username || '',
+      userAgent: creds.userAgent || '',
+    };
+    if (!status.configured) {
+      return sendOk(res, 200, { ...status, authOk: false, auth: null }, { status: { ...status, authOk: false, auth: null } }), true;
+    }
+    const auth = await redditClient.checkAuth(creds);
+    return sendOk(
+      res,
+      200,
+      {
+        ...status,
+        authOk: Boolean(auth.ok),
+        auth: auth.ok ? { name: String(auth.data?.name || '') } : { error: String(auth.error || 'Auth failed') },
+      },
+      {
+        status: {
+          ...status,
+          authOk: Boolean(auth.ok),
+          auth: auth.ok ? { name: String(auth.data?.name || '') } : { error: String(auth.error || 'Auth failed') },
+        },
+      }
+    ), true;
+  }
+
+  if (pathname === '/api/engage/reddit/comment' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const target = String(body?.target || '').trim();
+    const targetKind = String(body?.targetKind || 'post').trim().toLowerCase() === 'comment' ? 'comment' : 'post';
+    const text = String(body?.text || '').trim();
+    if (!target) return sendErr(res, 400, 'target is required (Reddit URL or thing id)', { code: 'VALIDATION_ERROR' }), true;
+    if (!text) return sendErr(res, 400, 'text is required', { code: 'VALIDATION_ERROR' }), true;
+    if (text.length > 10000) return sendErr(res, 400, 'Reddit comments must be 10000 characters or fewer', { code: 'VALIDATION_ERROR' }), true;
+
+    const thingId = redditClient.parseThingId(target, targetKind);
+    if (!thingId) {
+      return sendErr(res, 400, 'Could not resolve Reddit thing id. Use a discussion URL or thing id (t3_xxx/t1_xxx).', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const publish = await redditClient.createComment({ thingId, text });
+    if (!publish.ok) {
+      return sendErr(res, publish.status || 502, `Reddit API error: ${String(publish.error || 'unknown error')}`, {
+        code: 'REDDIT_COMMENT_FAILED',
+      }), true;
+    }
+
+    const result = {
+      thingId,
+      targetKind,
+      comment: publish.data?.comment || null,
+      response: publish.data?.response || null,
+      postedAt: new Date().toISOString(),
+    };
+    logActivity({
+      action: 'engage.reddit.comment_posted',
+      entityType: 'engage_reddit_comment',
+      entityId: String(result.comment?.data?.id || ''),
+      summary: `Posted Reddit comment on ${thingId}`,
+      meta: { thingId, targetKind },
+    });
+    return sendOk(res, 200, result, { result }), true;
+  }
+
+  if (pathname === '/api/engage/reddit/comment-openclaw' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const target = String(body?.target || '').trim();
+    const targetKind = String(body?.targetKind || 'post').trim().toLowerCase() === 'comment' ? 'comment' : 'post';
+    const text = String(body?.text || '').trim();
+    if (!target) return sendErr(res, 400, 'target is required (Reddit URL or thing id)', { code: 'VALIDATION_ERROR' }), true;
+    if (!text) return sendErr(res, 400, 'text is required', { code: 'VALIDATION_ERROR' }), true;
+    if (text.length > 10000) return sendErr(res, 400, 'Reddit comments must be 10000 characters or fewer', { code: 'VALIDATION_ERROR' }), true;
+
+    const relay = await relayOpenClaw('create_job', {
+      manual_confirmed: true,
+      role: 'operator',
+      type: 'engage.reddit.comment',
+      payload: {
+        target,
+        target_kind: targetKind,
+        text,
+        instructions: 'Open Reddit, authenticate as the configured user profile, and submit this comment safely to the specified target.',
+      },
+    });
+    if (!relay.ok) {
+      return sendErr(res, relay.status || 502, `OpenClaw error: ${String(relay.error || 'failed to queue Reddit comment job')}`, {
+        code: 'OPENCLAW_COMMENT_JOB_FAILED',
+        details: relay.data ? [JSON.stringify(relay.data)] : [],
+      }), true;
+    }
+
+    const result = {
+      mode: 'openclaw',
+      queuedAt: new Date().toISOString(),
+      job: relay.data || {},
+      target,
+      targetKind,
+    };
+    logActivity({
+      action: 'engage.reddit.comment_openclaw_queued',
+      entityType: 'engage_reddit_comment',
+      entityId: String(relay.data?.id || relay.data?.job_id || ''),
+      summary: `Queued OpenClaw Reddit comment job for ${targetKind}`,
+      meta: { target, targetKind },
+    });
+    return sendOk(res, 202, result, { result }), true;
+  }
 
   if (pathname === '/api/engage/social/x/status' && requestMethod === 'GET') {
     const creds = xClient.getXCredentials();
@@ -52,39 +336,367 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
+  if (pathname === '/api/engage/social/x/auth-test' && requestMethod === 'GET') {
+    const creds = xClient.getXCredentials();
+    const configured = xClient.isConfigured();
+    if (!configured) {
+      return sendOk(res, 200, {
+        configured: false,
+        authOk: false,
+        error: 'Missing X credentials',
+      }, {
+        configured: false,
+        authOk: false,
+      }), true;
+    }
+    const auth = await xClient.checkAuth();
+    if (!auth.ok) {
+      return sendOk(res, 200, {
+        configured: true,
+        authOk: false,
+        status: Number(auth.status || 0) || 0,
+        error: String(auth.error || 'X auth test failed'),
+        attempts: Array.isArray(auth.attempts) ? auth.attempts : [],
+        accountName: creds.accountName || '',
+      }, {
+        configured: true,
+        authOk: false,
+      }), true;
+    }
+    return sendOk(res, 200, {
+      configured: true,
+      authOk: true,
+      status: Number(auth.status || 200) || 200,
+      accountName: creds.accountName || '',
+      user: auth.data?.user || null,
+      attempts: Array.isArray(auth.data?.attempts) ? auth.data.attempts : [],
+    }, {
+      configured: true,
+      authOk: true,
+    }), true;
+  }
+
+  if (pathname === '/api/engage/social/telegram/status' && requestMethod === 'GET') {
+    const creds = telegramClient.getTelegramCredentials();
+    const payload = {
+      configured: telegramClient.isConfigured(creds),
+      hasBotToken: Boolean(creds.botToken),
+      hasChatId: Boolean(creds.chatId),
+      baseUrl: creds.baseUrl || '',
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/engage/social/bluesky/status' && requestMethod === 'GET') {
+    const creds = blueskyClient.getBlueskyCredentials();
+    const payload = {
+      configured: blueskyClient.isConfigured(creds),
+      hasIdentifier: Boolean(creds.identifier),
+      hasAppPassword: Boolean(creds.appPassword),
+      serviceUrl: creds.serviceUrl || '',
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/engage/social/bluesky/auth-test' && requestMethod === 'GET') {
+    const creds = blueskyClient.getBlueskyCredentials();
+    const configured = blueskyClient.isConfigured(creds);
+    if (!configured) {
+      return sendOk(res, 200, {
+        configured: false,
+        authOk: false,
+        error: 'Missing Bluesky identifier/app password',
+      }, {
+        configured: false,
+        authOk: false,
+      }), true;
+    }
+    const auth = await blueskyClient.createSession(creds);
+    if (!auth.ok) {
+      return sendOk(res, 200, {
+        configured: true,
+        authOk: false,
+        status: Number(auth.status || 0) || 0,
+        endpoint: String(auth.endpoint || ''),
+        error: String(auth.error || 'Auth failed'),
+      }, {
+        configured: true,
+        authOk: false,
+      }), true;
+    }
+    return sendOk(res, 200, {
+      configured: true,
+      authOk: true,
+      did: String(auth.did || ''),
+      endpoint: String(auth.endpoint || ''),
+      status: Number(auth.status || 200) || 200,
+    }, {
+      configured: true,
+      authOk: true,
+    }), true;
+  }
+
+  if (pathname === '/api/engage/social/facebook/status' && requestMethod === 'GET') {
+    const creds = metaClients.getFacebookCredentials();
+    const payload = {
+      configured: metaClients.isFacebookConfigured(creds),
+      hasAccessToken: Boolean(creds.accessToken),
+      hasPageId: Boolean(creds.pageId),
+      baseUrl: creds.baseUrl || '',
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/engage/social/facebook/auth-test' && requestMethod === 'GET') {
+    const creds = metaClients.getFacebookCredentials();
+    if (!metaClients.isFacebookConfigured(creds)) {
+      return sendOk(res, 200, { configured: false, authOk: false, error: 'Missing Facebook access_token/page_id' }, { configured: false, authOk: false }), true;
+    }
+    const auth = await metaClients.checkFacebookAuth(creds);
+    if (!auth.ok) {
+      return sendOk(res, 200, {
+        configured: true,
+        authOk: false,
+        status: Number(auth.status || 0) || 0,
+        endpoint: String(auth.endpoint || ''),
+        error: String(auth.error || 'Auth failed'),
+      }, { configured: true, authOk: false }), true;
+    }
+    return sendOk(res, 200, {
+      configured: true,
+      authOk: true,
+      status: Number(auth.status || 200) || 200,
+      endpoint: String(auth.endpoint || ''),
+      page: auth.data || null,
+    }, { configured: true, authOk: true }), true;
+  }
+
+  if (pathname === '/api/engage/social/threads/status' && requestMethod === 'GET') {
+    const creds = metaClients.getThreadsCredentials();
+    const payload = {
+      configured: metaClients.isThreadsConfigured(creds),
+      hasAccessToken: Boolean(creds.accessToken),
+      hasUserId: Boolean(creds.userId),
+      baseUrl: creds.baseUrl || '',
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/engage/social/threads/auth-test' && requestMethod === 'GET') {
+    const creds = metaClients.getThreadsCredentials();
+    if (!metaClients.isThreadsConfigured(creds)) {
+      return sendOk(res, 200, { configured: false, authOk: false, error: 'Missing Threads access_token/user_id' }, { configured: false, authOk: false }), true;
+    }
+    const auth = await metaClients.checkThreadsAuth(creds);
+    if (!auth.ok) {
+      return sendOk(res, 200, {
+        configured: true,
+        authOk: false,
+        status: Number(auth.status || 0) || 0,
+        endpoint: String(auth.endpoint || ''),
+        error: String(auth.error || 'Auth failed'),
+      }, { configured: true, authOk: false }), true;
+    }
+    return sendOk(res, 200, {
+      configured: true,
+      authOk: true,
+      status: Number(auth.status || 200) || 200,
+      endpoint: String(auth.endpoint || ''),
+      user: auth.data || null,
+    }, { configured: true, authOk: true }), true;
+  }
+
+  if (pathname === '/api/engage/social/instagram/status' && requestMethod === 'GET') {
+    const creds = metaClients.getInstagramCredentials();
+    const payload = {
+      configured: metaClients.isInstagramConfigured(creds),
+      hasAccessToken: Boolean(creds.accessToken),
+      hasBusinessAccountId: Boolean(creds.igUserId),
+      baseUrl: creds.baseUrl || '',
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/engage/social/instagram/auth-test' && requestMethod === 'GET') {
+    const creds = metaClients.getInstagramCredentials();
+    if (!metaClients.isInstagramConfigured(creds)) {
+      return sendOk(res, 200, { configured: false, authOk: false, error: 'Missing Instagram access_token/business_account_id' }, { configured: false, authOk: false }), true;
+    }
+    const auth = await metaClients.checkInstagramAuth(creds);
+    if (!auth.ok) {
+      return sendOk(res, 200, {
+        configured: true,
+        authOk: false,
+        status: Number(auth.status || 0) || 0,
+        endpoint: String(auth.endpoint || ''),
+        error: String(auth.error || 'Auth failed'),
+      }, { configured: true, authOk: false }), true;
+    }
+    return sendOk(res, 200, {
+      configured: true,
+      authOk: true,
+      status: Number(auth.status || 200) || 200,
+      endpoint: String(auth.endpoint || ''),
+      user: auth.data || null,
+    }, { configured: true, authOk: true }), true;
+  }
+
+  if (pathname === '/api/engage/social/capabilities' && requestMethod === 'GET') {
+    return sendOk(
+      res,
+      200,
+      {
+        publishNowChannels: PUBLISH_NOW_CHANNELS,
+      },
+      {
+        publishNowChannels: PUBLISH_NOW_CHANNELS,
+      }
+    ), true;
+  }
+
   if (pathname === '/api/engage/social/posts' && requestMethod === 'GET') {
     const posts = socialStore.listPosts();
     return sendOk(res, 200, posts, { posts }, { total: posts.length }), true;
   }
 
+  if (pathname === '/api/engage/social/diagnostics' && requestMethod === 'GET') {
+    const posts = socialStore.listPosts();
+    const failures = posts
+      .filter((post) => String(post.status || '').toLowerCase() === 'failed')
+      .slice(0, 10)
+      .map((post) => ({
+        id: post.id,
+        channel: post.channel,
+        campaignId: post.campaignId,
+        scheduledFor: post.scheduledFor,
+        createdAt: post.createdAt,
+        error: post.error,
+        diagnostics: post.diagnostics || null,
+      }));
+    const creds = xClient.getXCredentials();
+    const payload = {
+      checkedAt: new Date().toISOString(),
+      xConfig: {
+        configured: xClient.isConfigured(),
+        accountName: creds.accountName || '',
+        hasApiKey: Boolean(creds.apiKey),
+        hasApiSecret: Boolean(creds.apiSecret),
+        hasAccessToken: Boolean(creds.accessToken),
+        hasAccessTokenSecret: Boolean(creds.accessTokenSecret),
+      },
+      telegramConfig: (() => {
+        const tg = telegramClient.getTelegramCredentials();
+        return {
+          configured: telegramClient.isConfigured(tg),
+          hasBotToken: Boolean(tg.botToken),
+          hasChatId: Boolean(tg.chatId),
+          baseUrl: tg.baseUrl || '',
+        };
+      })(),
+      blueskyConfig: (() => {
+        const bs = blueskyClient.getBlueskyCredentials();
+        return {
+          configured: blueskyClient.isConfigured(bs),
+          hasIdentifier: Boolean(bs.identifier),
+          hasAppPassword: Boolean(bs.appPassword),
+          serviceUrl: bs.serviceUrl || '',
+        };
+      })(),
+      facebookConfig: (() => {
+        const fb = metaClients.getFacebookCredentials();
+        return {
+          configured: metaClients.isFacebookConfigured(fb),
+          hasAccessToken: Boolean(fb.accessToken),
+          hasPageId: Boolean(fb.pageId),
+          baseUrl: fb.baseUrl || '',
+        };
+      })(),
+      threadsConfig: (() => {
+        const th = metaClients.getThreadsCredentials();
+        return {
+          configured: metaClients.isThreadsConfigured(th),
+          hasAccessToken: Boolean(th.accessToken),
+          hasUserId: Boolean(th.userId),
+          baseUrl: th.baseUrl || '',
+        };
+      })(),
+      instagramConfig: (() => {
+        const ig = metaClients.getInstagramCredentials();
+        return {
+          configured: metaClients.isInstagramConfigured(ig),
+          hasAccessToken: Boolean(ig.accessToken),
+          hasBusinessAccountId: Boolean(ig.igUserId),
+          baseUrl: ig.baseUrl || '',
+        };
+      })(),
+      queue: {
+        total: posts.length,
+        failed: posts.filter((post) => String(post.status || '').toLowerCase() === 'failed').length,
+        scheduled: posts.filter((post) => String(post.status || '').toLowerCase() === 'scheduled').length,
+        published: posts.filter((post) => String(post.status || '').toLowerCase() === 'published').length,
+      },
+      recentFailures: failures,
+    };
+    return sendOk(res, 200, payload, { diagnostics: payload }), true;
+  }
+
   if (pathname === '/api/engage/social/posts' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const text = String(body.text || '').trim();
+    const channel = String(body.channel || 'x').trim().toLowerCase() || 'x';
+    const campaignId = String(body.campaignId || '').trim();
+    let imageUrl = safeText(body.imageUrl);
+    let imageAlt = safeText(body.imageAlt);
     const publishNow = Boolean(body.publishNow);
     const scheduledFor = String(body.scheduledFor || '').trim();
+    const maxLengths = {
+      x: 280,
+      facebook: 63206,
+      instagram: 2200,
+      linkedin: 3000,
+      threads: 500,
+      bluesky: 300,
+      pinterest: 500,
+      reddit: 40000,
+      telegram: 4096,
+    };
+    const maxLen = Number(maxLengths[channel] || 5000);
 
     if (!text) return sendErr(res, 400, 'Post text is required', { code: 'VALIDATION_ERROR' }), true;
-    if (text.length > 280) return sendErr(res, 400, 'X posts must be 280 characters or fewer', { code: 'VALIDATION_ERROR' }), true;
+    if (text.length > maxLen) return sendErr(res, 400, `${channel.toUpperCase()} posts must be ${maxLen} characters or fewer`, { code: 'VALIDATION_ERROR' }), true;
+    if (channel === 'bluesky' && !imageUrl && campaignId) {
+      try {
+        const fallback = await resolveCampaignImageMeta(campaignId, req);
+        imageUrl = safeText(fallback.imageUrl);
+        imageAlt = safeText(imageAlt || fallback.imageAlt);
+      } catch {
+        // Leave image fields empty if fallback lookup fails.
+      }
+    }
 
     const created = socialStore.createPost({
       text,
+      channel,
+      campaignId,
+      imageUrl,
+      imageAlt,
       scheduledFor: publishNow ? '' : scheduledFor,
-      status: publishNow ? 'queued' : 'scheduled',
+      status: publishNow && PUBLISH_NOW_CHANNELS.includes(channel) ? 'queued' : 'scheduled',
     });
 
     logActivity({
       action: publishNow ? 'engage.social.publish_now_requested' : 'engage.social.scheduled',
       entityType: 'engage_social_post',
       entityId: created.id,
-      summary: publishNow ? 'Publish now requested for X post' : 'Scheduled X post',
-      meta: { scheduledFor: created.scheduledFor || '' },
+      summary: publishNow ? `Publish now requested for ${channel.toUpperCase()} post` : `Scheduled ${channel.toUpperCase()} post`,
+      meta: { scheduledFor: created.scheduledFor || '', channel, campaignId },
     });
 
-    if (publishNow) {
-      const publishResult = await publishStoredPost(created);
+    if (publishNow && PUBLISH_NOW_CHANNELS.includes(channel)) {
+      const publishResult = await publishStoredPost(created, req);
       if (!publishResult.ok) {
         return sendErr(res, publishResult.status || 500, publishResult.error, {
-          code: 'X_PUBLISH_FAILED',
+          code: 'SOCIAL_PUBLISH_FAILED',
         }), true;
       }
       return sendOk(res, 201, publishResult.data, publishResult.data), true;
@@ -97,7 +709,7 @@ async function handle(req, res, pathname, method) {
     const duePosts = socialStore.listDuePosts();
     const results = [];
     for (const post of duePosts) {
-      const result = await publishStoredPost(post);
+      const result = await publishStoredPost(post, req);
       results.push({
         id: post.id,
         ok: !!result.ok,
@@ -113,8 +725,8 @@ async function handle(req, res, pathname, method) {
     const postId = decodeURIComponent(publishMatch[1] || '');
     const post = socialStore.getPost(postId);
     if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
-    const result = await publishStoredPost(post);
-    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: 'X_PUBLISH_FAILED' }), true;
+    const result = await publishStoredPost(post, req);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: 'SOCIAL_PUBLISH_FAILED' }), true;
     return sendOk(res, 200, result.data, result.data), true;
   }
 
@@ -127,7 +739,7 @@ async function handle(req, res, pathname, method) {
       action: 'engage.social.deleted',
       entityType: 'engage_social_post',
       entityId: deleted.id,
-      summary: 'Deleted X post from queue',
+      summary: `Deleted ${String(deleted.channel || '').toUpperCase() || 'social'} post from queue`,
     });
     return sendOk(res, 200, { post: deleted }, { post: deleted }), true;
   }
