@@ -33,14 +33,14 @@ body {
   gap: 2rem;
   align-items: center;
   padding: 2rem 2.5rem;
-  background: #000000;
+  background: linear-gradient(135deg, #e8f5ff 0%, #f7fbff 45%, #d5ebff 100%);
 }
 
 .auth-hero h1 {
   margin: 0.6rem 0 0.9rem;
   font-size: 2.6rem;
   line-height: 1.1;
-  color: #ffffff;
+  color: #02213a;
 }
 
 .auth-hero p {
@@ -48,7 +48,7 @@ body {
   max-width: 52ch;
   font-size: 1.05rem;
   line-height: 1.6;
-  color: #d7e8ff;
+  color: #19344a;
 }
 
 .auth-logo {
@@ -97,21 +97,31 @@ body {
   margin: 0;
   color: #07325a;
   font-weight: 700;
+  text-decoration: none;
 }
 
 .auth-header-meta {
-  margin-left: 0;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.8rem;
+  justify-content: flex-end;
+  gap: 0.7rem;
 }
 
 .auth-logout-link {
+  width: auto;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
   color: #07325a;
-  text-decoration: none;
+  font: inherit;
   font-weight: 700;
+  cursor: pointer;
 }
 
+.auth-welcome-name:hover,
 .auth-logout-link:hover {
   text-decoration: underline;
 }
@@ -143,7 +153,7 @@ header {
 }
 
 .brand-profile-button {
-  margin-left: auto;
+  margin-left: 1rem;
   display: inline-flex;
   flex: 0 0 auto;
   width: fit-content;

@@ -21,7 +21,7 @@ App.auth._els = {
   authShowLogin: null,
   authShowRegister: null,
   authWelcomeName: null,
-  authLogoutLink: null,
+  authLogoutButton: null,
 };
 
 App.auth._cacheEls = function _cacheEls() {
@@ -35,7 +35,7 @@ App.auth._cacheEls = function _cacheEls() {
     'authShowLogin',
     'authShowRegister',
     'authWelcomeName',
-    'authLogoutLink',
+    'authLogoutButton',
   ];
   ids.forEach((id) => {
     App.auth._els[id] = document.getElementById(id);
@@ -70,19 +70,23 @@ App.auth._setMode = function _setMode(modeInput) {
 };
 
 App.auth._showLanding = function _showLanding(mode = 'login') {
-  const { appShell, authLanding, authLogoutLink } = App.auth._els;
+  const { appShell, authLanding, authLogoutButton, authWelcomeName } = App.auth._els;
   if (appShell) appShell.classList.add('hidden');
   if (authLanding) authLanding.classList.remove('hidden');
-  if (authLogoutLink) authLogoutLink.classList.add('hidden');
+  if (authLogoutButton) authLogoutButton.classList.add('hidden');
+  if (authWelcomeName) authWelcomeName.textContent = '';
   App.auth._setMode(mode);
 };
 
 App.auth._showApp = function _showApp() {
-  const { appShell, authLanding, authLogoutLink, authWelcomeName } = App.auth._els;
+  const { appShell, authLanding, authLogoutButton, authWelcomeName } = App.auth._els;
   if (authLanding) authLanding.classList.add('hidden');
   if (appShell) appShell.classList.remove('hidden');
-  if (authLogoutLink) authLogoutLink.classList.remove('hidden');
-  if (authWelcomeName) authWelcomeName.textContent = App.auth.user?.name || '';
+  if (authLogoutButton) authLogoutButton.classList.remove('hidden');
+  if (authWelcomeName) {
+    const accountLabel = String(App.auth.user?.name || App.auth.user?.email || '').trim();
+    authWelcomeName.textContent = accountLabel || 'Account';
+  }
 };
 
 App.auth._startMainApp = function _startMainApp() {
@@ -141,7 +145,8 @@ App.auth.init = function init(bootMainApp) {
     authShowRegister,
     authLoginForm,
     authRegisterForm,
-    authLogoutLink,
+    authWelcomeName,
+    authLogoutButton,
   } = App.auth._els;
 
   if (authShowLogin) {
@@ -198,9 +203,8 @@ App.auth.init = function init(bootMainApp) {
     });
   }
 
-  if (authLogoutLink) {
-    authLogoutLink.addEventListener('click', async (event) => {
-      event.preventDefault();
+  if (authLogoutButton) {
+    authLogoutButton.addEventListener('click', async () => {
       try {
         await App.auth._logout();
       } catch (_) {
@@ -208,6 +212,15 @@ App.auth.init = function init(bootMainApp) {
       }
       App.auth.user = null;
       App.auth._showLanding('login');
+    });
+  }
+
+  if (authWelcomeName) {
+    authWelcomeName.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (typeof App.setActivePage === 'function') {
+        App.setActivePage('settingsProfilePage');
+      }
     });
   }
 
