@@ -190,6 +190,223 @@ App.acquire = (function () {
     }
   }
 
+  function buildUserIndex(users) {
+    const map = new Map();
+    (Array.isArray(users) ? users : []).forEach((user) => {
+      const id = String(user && user.id || '').trim();
+      if (!id) return;
+      map.set(id, user);
+    });
+    return map;
+  }
+
+  function toIsoFromLocal(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString();
+  }
+
+  function renderXHarvestItemsTable() {
+    if (!els.xHarvestItemsTable) return;
+    els.xHarvestItemsTable.innerHTML = '';
+    const run = state.xHarvestCurrentRun;
+    const result = run && run.result ? run.result : null;
+    const tweets = Array.isArray(result && result.tweets) ? result.tweets : [];
+    const replies = Array.isArray(result && result.replies) ? result.replies : [];
+    const usersById = buildUserIndex(result && result.users);
+    const rows = []
+      .concat(tweets.map((item) => ({ type: 'tweet', item })))
+      .concat(replies.map((item) => ({ type: 'reply', item })));
+
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.textContent = 'No tweets/replies loaded yet.';
+      tr.appendChild(td);
+      els.xHarvestItemsTable.appendChild(tr);
+    } else {
+      rows.forEach((row) => {
+        const tweet = row.item || {};
+        const tr = document.createElement('tr');
+        const author = usersById.get(String(tweet.author_id || '').trim()) || {};
+        const cells = [
+          row.type,
+          String(tweet.id || ''),
+          String(author.username || author.name || tweet.author_id || '-'),
+          String(tweet.created_at || '-'),
+          String(tweet.text || '').trim(),
+        ];
+        cells.forEach((value) => {
+          const td = document.createElement('td');
+          td.textContent = value || '-';
+          tr.appendChild(td);
+        });
+        els.xHarvestItemsTable.appendChild(tr);
+      });
+    }
+
+    if (els.xHarvestRawPreview) {
+      els.xHarvestRawPreview.textContent = run ? prettyJson(run) : '{}';
+    }
+  }
+
+  function renderRedditHarvestItemsTable() {
+    if (!els.redditHarvestItemsTable) return;
+    els.redditHarvestItemsTable.innerHTML = '';
+    const run = state.redditHarvestCurrentRun;
+    const result = run && run.result ? run.result : null;
+    const posts = Array.isArray(result && result.posts) ? result.posts : [];
+    const comments = Array.isArray(result && result.comments) ? result.comments : [];
+    const rows = []
+      .concat(posts.map((item) => ({ type: 'post', item })))
+      .concat(comments.map((item) => ({ type: 'comment', item })));
+
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.textContent = 'No posts/comments loaded yet.';
+      tr.appendChild(td);
+      els.redditHarvestItemsTable.appendChild(tr);
+    } else {
+      rows.forEach((row) => {
+        const item = row.item || {};
+        const tr = document.createElement('tr');
+        const cols = [
+          row.type,
+          String(item.id || item.name || ''),
+          String(item.author || '-'),
+          String(item.score != null ? item.score : '-'),
+          row.type === 'post' ? String(item.title || item.selftext || '').trim() : String(item.body || '').trim(),
+        ];
+        cols.forEach((value) => {
+          const td = document.createElement('td');
+          td.textContent = value || '-';
+          tr.appendChild(td);
+        });
+        els.redditHarvestItemsTable.appendChild(tr);
+      });
+    }
+
+    if (els.redditHarvestRawPreview) {
+      els.redditHarvestRawPreview.textContent = run ? prettyJson(run) : '{}';
+    }
+  }
+
+  function renderXHarvestRunsTable() {
+    if (!els.xHarvestRunsTable) return;
+    els.xHarvestRunsTable.innerHTML = '';
+    const runs = Array.isArray(state.xHarvestRuns) ? state.xHarvestRuns : [];
+    if (!runs.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.textContent = 'No X harvest runs yet.';
+      tr.appendChild(td);
+      els.xHarvestRunsTable.appendChild(tr);
+      return;
+    }
+
+    runs.forEach((run) => {
+      const tr = document.createElement('tr');
+      const cols = [
+        String(run.run_id || ''),
+        String(run.created_at || ''),
+        String(run.query || '').trim() || (Array.isArray(run.hashtags) ? run.hashtags.map((tag) => `#${tag}`).join(' ') : '-'),
+        String(run.total_tweets != null ? run.total_tweets : '-'),
+        String(run.total_replies != null ? run.total_replies : '-'),
+        String(run.errors != null ? run.errors : '-'),
+      ];
+      cols.forEach((value) => {
+        const td = document.createElement('td');
+        td.textContent = value || '-';
+        tr.appendChild(td);
+      });
+      const actionsTd = document.createElement('td');
+      const viewBtn = App.makeIconButton('view', 'Load', () => {
+        loadXHarvestRun(run.run_id).catch((err) => notify(err.message, true));
+      }, { marginRight: '8px' });
+      const deleteBtn = App.makeIconButton('delete', 'Delete', async () => {
+        if (!confirm(`Delete X run ${run.run_id}?`)) return;
+        try {
+          await api(`/api/acquire/x-runs/${encodeURIComponent(run.run_id)}`, { method: 'DELETE' });
+          state.xHarvestRuns = state.xHarvestRuns.filter((item) => String(item.run_id) !== String(run.run_id));
+          if (String(state.xHarvestCurrentRun && state.xHarvestCurrentRun.run_id || '') === String(run.run_id)) {
+            state.xHarvestCurrentRun = null;
+            renderXHarvestItemsTable();
+          }
+          renderXHarvestRunsTable();
+          notify('X harvest run deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true });
+      actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(deleteBtn);
+      tr.appendChild(actionsTd);
+      els.xHarvestRunsTable.appendChild(tr);
+    });
+  }
+
+  function renderRedditHarvestRunsTable() {
+    if (!els.redditHarvestRunsTable) return;
+    els.redditHarvestRunsTable.innerHTML = '';
+    const runs = Array.isArray(state.redditHarvestRuns) ? state.redditHarvestRuns : [];
+    if (!runs.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.textContent = 'No Reddit harvest runs yet.';
+      tr.appendChild(td);
+      els.redditHarvestRunsTable.appendChild(tr);
+      return;
+    }
+
+    runs.forEach((run) => {
+      const tr = document.createElement('tr');
+      const cols = [
+        String(run.run_id || ''),
+        String(run.created_at || ''),
+        String(run.mode || ''),
+        String(run.subreddit || run.target || ''),
+        String(run.total_posts != null ? run.total_posts : '-'),
+        String(run.total_comments != null ? run.total_comments : '-'),
+      ];
+      cols.forEach((value) => {
+        const td = document.createElement('td');
+        td.textContent = value || '-';
+        tr.appendChild(td);
+      });
+
+      const actionsTd = document.createElement('td');
+      const viewBtn = App.makeIconButton('view', 'Load', () => {
+        loadRedditHarvestRun(run.run_id).catch((err) => notify(err.message, true));
+      }, { marginRight: '8px' });
+      const deleteBtn = App.makeIconButton('delete', 'Delete', async () => {
+        if (!confirm(`Delete Reddit run ${run.run_id}?`)) return;
+        try {
+          await api(`/api/acquire/reddit-runs/${encodeURIComponent(run.run_id)}`, { method: 'DELETE' });
+          state.redditHarvestRuns = state.redditHarvestRuns.filter((item) => String(item.run_id) !== String(run.run_id));
+          if (String(state.redditHarvestCurrentRun && state.redditHarvestCurrentRun.run_id || '') === String(run.run_id)) {
+            state.redditHarvestCurrentRun = null;
+            renderRedditHarvestItemsTable();
+          }
+          renderRedditHarvestRunsTable();
+          notify('Reddit harvest run deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true });
+      actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(deleteBtn);
+      tr.appendChild(actionsTd);
+      els.redditHarvestRunsTable.appendChild(tr);
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Data fetching
   // -------------------------------------------------------------------------
@@ -217,10 +434,36 @@ App.acquire = (function () {
     renderDirectHarvestRunsTable();
   }
 
+  async function refreshXHarvestRuns() {
+    if (!els.xHarvestRunsTable) return;
+    const res = await api('/api/acquire/x-runs?limit=50');
+    state.xHarvestRuns = Array.isArray(res.runs) ? res.runs : [];
+    renderXHarvestRunsTable();
+  }
+
+  async function refreshRedditHarvestRuns() {
+    if (!els.redditHarvestRunsTable) return;
+    const res = await api('/api/acquire/reddit-runs?limit=50');
+    state.redditHarvestRuns = Array.isArray(res.runs) ? res.runs : [];
+    renderRedditHarvestRunsTable();
+  }
+
   async function loadDirectHarvestRun(runId) {
     const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}`);
     state.directAcquireCurrentRun = res.run || null;
     renderDirectHarvestPagesTable();
+  }
+
+  async function loadXHarvestRun(runId) {
+    const res = await api(`/api/acquire/x-runs/${encodeURIComponent(runId)}`);
+    state.xHarvestCurrentRun = res.run || null;
+    renderXHarvestItemsTable();
+  }
+
+  async function loadRedditHarvestRun(runId) {
+    const res = await api(`/api/acquire/reddit-runs/${encodeURIComponent(runId)}`);
+    state.redditHarvestCurrentRun = res.run || null;
+    renderRedditHarvestItemsTable();
   }
 
   // -------------------------------------------------------------------------
@@ -408,10 +651,103 @@ App.acquire = (function () {
         } catch (err) { notify(err.message, true); }
       });
     }
+    if (els.xHarvestRefreshBtn) {
+      els.xHarvestRefreshBtn.addEventListener('click', async () => {
+        try {
+          await refreshXHarvestRuns();
+          notify('X harvest runs refreshed');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+    if (els.xHarvestForm) {
+      els.xHarvestForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const formData = new FormData(els.xHarvestForm);
+          const payload = {
+            query: String(formData.get('query') || '').trim(),
+            hashtags: String(formData.get('hashtags') || '').split(/[,\s]+/g).map((item) => item.trim()).filter(Boolean),
+            lang: String(formData.get('lang') || '').trim(),
+            start_time: toIsoFromLocal(formData.get('start_time')),
+            end_time: toIsoFromLocal(formData.get('end_time')),
+            max_tweets: Number(formData.get('max_tweets') || 25) || 25,
+            include_replies: formData.get('include_replies') === 'on',
+            max_replies_per_tweet: Number(formData.get('max_replies_per_tweet') || 10) || 10,
+            exclude_retweets: formData.get('exclude_retweets') === 'on',
+            exclude_replies: formData.get('exclude_replies') === 'on',
+          };
+          if (!payload.query && !payload.hashtags.length) {
+            throw new Error('Add at least one query keyword or hashtag.');
+          }
+          const res = await api('/api/acquire/x-harvest', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          state.xHarvestCurrentRun = res.run || null;
+          renderXHarvestItemsTable();
+          await refreshXHarvestRuns();
+          notify(`X harvest complete (${(state.xHarvestCurrentRun?.stats?.total_tweets || 0)} tweets, ${(state.xHarvestCurrentRun?.stats?.total_replies || 0)} replies)`);
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+    if (els.redditHarvestRefreshBtn) {
+      els.redditHarvestRefreshBtn.addEventListener('click', async () => {
+        try {
+          await refreshRedditHarvestRuns();
+          notify('Reddit harvest runs refreshed');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+    if (els.redditHarvestForm) {
+      els.redditHarvestForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const formData = new FormData(els.redditHarvestForm);
+          const payload = {
+            target: String(formData.get('target') || '').trim(),
+            mode: String(formData.get('mode') || 'auto').trim().toLowerCase(),
+            source_mode: String(formData.get('source_mode') || 'auto').trim().toLowerCase(),
+            sort: String(formData.get('sort') || 'new').trim().toLowerCase(),
+            max_posts: Number(formData.get('max_posts') || 100) || 100,
+            max_comments: Number(formData.get('max_comments') || 500) || 500,
+            keyword: String(formData.get('keyword') || '').trim(),
+            start_time: String(formData.get('start_time') || '').trim(),
+            end_time: String(formData.get('end_time') || '').trim(),
+            include_replies: formData.get('include_replies') === 'on',
+          };
+          if (!payload.target) throw new Error('Subreddit or post URL is required.');
+          const res = await api('/api/acquire/reddit-harvest', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          state.redditHarvestCurrentRun = res.run || null;
+          renderRedditHarvestItemsTable();
+          await refreshRedditHarvestRuns();
+          notify(`Reddit harvest complete (${(state.redditHarvestCurrentRun?.stats?.total_posts || 0)} posts, ${(state.redditHarvestCurrentRun?.stats?.total_comments || 0)} comments)`);
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (els.xHarvestRunsTable) {
+      refreshXHarvestRuns().catch((err) => notify(err.message, true));
+      renderXHarvestItemsTable();
+    }
+    if (els.redditHarvestRunsTable) {
+      refreshRedditHarvestRuns().catch((err) => notify(err.message, true));
+      renderRedditHarvestItemsTable();
+    }
   }
 
   return {
     manifest: { id: 'acquire', label: 'Acquire', pageId: 'acquirePage' },
-    init, refreshHarvestJobs, refreshDirectHarvestRuns, renderHarvestJobsTable
+    init, refreshHarvestJobs, refreshDirectHarvestRuns, refreshXHarvestRuns, refreshRedditHarvestRuns, renderHarvestJobsTable
   };
 })();
