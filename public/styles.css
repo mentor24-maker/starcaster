@@ -33,14 +33,14 @@ body {
   gap: 2rem;
   align-items: center;
   padding: 2rem 2.5rem;
-  background: linear-gradient(135deg, #e8f5ff 0%, #f7fbff 45%, #d5ebff 100%);
+  background: #000000;
 }
 
 .auth-hero h1 {
   margin: 0.6rem 0 0.9rem;
   font-size: 2.6rem;
   line-height: 1.1;
-  color: #02213a;
+  color: #ffffff;
 }
 
 .auth-hero p {
@@ -48,7 +48,7 @@ body {
   max-width: 52ch;
   font-size: 1.05rem;
   line-height: 1.6;
-  color: #19344a;
+  color: #d7e7f8;
 }
 
 .auth-logo {
