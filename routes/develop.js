@@ -1,6 +1,5 @@
 'use strict';
 
-const { chromium } = require('playwright');
 const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/developFormsStore');
 const {
@@ -30,6 +29,14 @@ const {
   saveManagerConfig,
 } = require('../lib/developExtensionsManagerStore');
 const { listContacts, createContact, updateContact, rowToContact } = require('../lib/ContactsStore');
+
+let playwrightChromium = null;
+function getChromium() {
+  if (playwrightChromium) return playwrightChromium;
+  // Lazy-load Playwright so missing optional dependency does not crash unrelated APIs.
+  playwrightChromium = require('playwright').chromium;
+  return playwrightChromium;
+}
 
 function nextId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -244,6 +251,7 @@ async function handle(req, res, pathname, method) {
 
     let screenshotBuffer;
     try {
+      const chromium = getChromium();
       const browser = await chromium.launch({ headless: true });
       try {
         const context = await browser.newContext({
