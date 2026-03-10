@@ -192,6 +192,7 @@ header {
   cursor: pointer;
   font: inherit;
   font-weight: 700;
+  text-decoration: none;
 }
 
 .brand-profile-button:hover {
@@ -211,7 +212,54 @@ header {
 }
 
 .brand-profile-button span {
+  display: inline;
+  color: #07325a;
+  font-weight: 700;
+}
+
+.brand-profile-button.has-logo span {
   display: none;
+}
+
+.settings-projects-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.settings-project-column {
+  min-height: 320px;
+}
+
+.settings-project-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.8rem;
+}
+
+.settings-project-list-item {
+  border: 1px solid #b8d7f0;
+  border-radius: 8px;
+  background: #f7fbff;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-project-list-item.is-active {
+  border-color: #0b82d4;
+  background: #e7f4ff;
+}
+
+.settings-project-list-item-name {
+  font-weight: 700;
+  color: #0f2f4c;
+}
+
+.settings-project-list-item-meta {
+  font-size: 0.82rem;
+  color: #3d5870;
 }
 
 .top-nav {

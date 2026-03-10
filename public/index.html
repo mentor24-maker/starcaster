@@ -62,9 +62,9 @@
           </div>
         </div>
       </div>
-      <button id="brandProfileButton" class="brand-profile-button" type="button" title="Edit profile">
+      <button id="brandProfileButton" class="brand-profile-button" type="button" title="Projects" onclick="if(window.App&&typeof App.setActivePage==='function'){App.setActivePage('settingsProjectsPage');}">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
-        <span id="brandProfileLabel">Edit Profile</span>
+        <span id="brandProfileLabel">Projects</span>
       </button>
     </header>
     <nav class="top-nav" id="topNav">
@@ -157,6 +157,7 @@
           <a href="#" class="menu-link" data-page="settingsPage">Settings</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" data-page="settingsProfilePage">Profile</a>
+            <a href="#" class="menu-link submenu-link" data-page="settingsProjectsPage">Projects</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsAgentsPage">Agents</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsDatabasePage">Database</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsApisPage">APIs</a>
@@ -4618,27 +4619,11 @@
 
       <section id="settingsProfilePage" class="app-page hidden">
         <h2>Settings: Profile</h2>
-        <p>Set the core identity for this workspace, including the project name and the logo shown in the top banner.</p>
-        <div class="card" style="margin-bottom: 1rem; max-width: 760px;">
-          <h3 style="margin-top: 0;">Projects</h3>
-          <div class="grid-form">
-            <div class="form-row">
-              <label for="settingsProjectSelector">Active Project</label>
-              <select id="settingsProjectSelector"></select>
-            </div>
-            <div class="form-row">
-              <label for="settingsNewProjectName">New Project Name</label>
-              <input id="settingsNewProjectName" placeholder="e.g. IZZIT Growth" />
-            </div>
-            <div class="form-row">
-              <label for="settingsNewProjectDescription">Project Description</label>
-              <input id="settingsNewProjectDescription" placeholder="Optional description" />
-            </div>
-          </div>
-          <div class="stack-form-actions">
-            <button id="settingsCreateProjectBtn" type="button">Create Project</button>
-          </div>
-          <p class="meta">All new records are scoped to the active project where project columns exist in the database schema.</p>
+        <p>Set the core identity for your account, including account contact details and profile branding.</p>
+        <div class="card settings-project-card">
+          <h3>My Projects</h3>
+          <p class="meta">Projects associated with this account.</p>
+          <div id="settingsProfileProjectsList" class="settings-project-list"></div>
         </div>
         <form id="settingsProfileForm" class="stack-form labeled-form">
           <div class="media-edit-layout">
@@ -4689,6 +4674,62 @@
           </div>
           <input id="settingsProfileLogoDataUrl" name="logo_data_url" type="hidden" />
         </form>
+      </section>
+
+      <section id="settingsProjectsPage" class="app-page hidden">
+        <h2>Settings: Projects</h2>
+        <p>Manage projects and choose the active project context used across contacts, assets, segments, and campaigns.</p>
+        <div class="settings-projects-layout">
+          <div class="card settings-project-column">
+            <h3 style="margin-top: 0;">Your Projects</h3>
+            <div class="form-row">
+              <label for="settingsProjectSelector">Active Project</label>
+              <select id="settingsProjectSelector"></select>
+            </div>
+            <div id="settingsProjectsList" class="settings-project-list"></div>
+            <hr />
+            <h4>Create New Project</h4>
+            <div class="form-row">
+              <label for="settingsNewProjectName">Project Name</label>
+              <input id="settingsNewProjectName" placeholder="e.g. IZZIT Growth" />
+            </div>
+            <div class="form-row">
+              <label for="settingsNewProjectDescription">Description</label>
+              <input id="settingsNewProjectDescription" placeholder="Optional description" />
+            </div>
+            <div class="stack-form-actions">
+              <button id="settingsCreateProjectBtn" type="button">Create Project</button>
+            </div>
+          </div>
+
+          <div class="card settings-project-column">
+            <h3 style="margin-top: 0;">Project Details</h3>
+            <div id="settingsProjectDetailsEmpty" class="meta">Select a project to view details.</div>
+            <div id="settingsProjectDetailsPanel" class="stack-form labeled-form hidden">
+              <div class="form-row">
+                <label>Project Name</label>
+                <input id="settingsProjectDetailsName" readonly />
+              </div>
+              <div class="form-row">
+                <label>Slug</label>
+                <input id="settingsProjectDetailsSlug" readonly />
+              </div>
+              <div class="form-row">
+                <label>Description</label>
+                <textarea id="settingsProjectDetailsDescription" rows="4" readonly></textarea>
+              </div>
+              <div class="form-row">
+                <label>Role</label>
+                <input id="settingsProjectDetailsRole" readonly />
+              </div>
+              <div class="form-row">
+                <label>Created</label>
+                <input id="settingsProjectDetailsCreatedAt" readonly />
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="meta">If no project is selected in your session, the top-right banner shows a Projects link. When active, its logo/name entry links here.</p>
       </section>
 
       <section id="settingsAgentsPage" class="app-page hidden">
