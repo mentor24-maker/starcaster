@@ -105,7 +105,30 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.7rem;
+}
+
+.auth-user-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.auth-user-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  display: none;
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #cde4ff;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15);
+  z-index: 40;
+}
+
+.auth-user-menu:hover .auth-user-dropdown {
+  display: block;
 }
 
 .auth-logout-link {
@@ -188,7 +211,7 @@ header {
 }
 
 .brand-profile-button span {
-  text-align: right;
+  display: none;
 }
 
 .top-nav {
