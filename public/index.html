@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Alphire Promo Platform (APP)</title>
+    <title>Omni-channel Engagement Engine (APP)</title>
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
     <link rel="stylesheet" href="/styles.css" />
@@ -11,11 +11,10 @@
   <body>
     <section id="authLanding" class="auth-landing hidden">
       <div class="auth-hero">
-        <img src="/alphire_promo_platform_500x75.png" alt="Alphire Promo Platform" class="auth-logo" />
-        <h1>Alphire Promo Platform</h1>
+        <img src="/images/logo_isit_app.png" alt="ISIT App" class="auth-logo" />
+        <h1>Omni-channel Engagement Engine</h1>
         <p>
-          Plan, build, and run campaigns across channels from one workspace. Sign in to manage
-          contacts, messaging, assets, and publishing workflows.
+          Engage with your followers and fans wherever they may be.
         </p>
       </div>
       <div class="auth-card">
@@ -50,13 +49,15 @@
     <header>
       <img
         src="/alphire_promo_platform_1920x280.png"
-        alt="Alphire Promo Platform"
+        alt="Omni-channel Engagement Engine"
         class="brand-wordmark"
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';"
       />
       <h1 id="brandFallback" class="brand-fallback">Alphire AI Agency</h1>
-      <span id="authWelcomeName" class="auth-welcome-name"></span>
-      <button id="authLogoutButton" class="auth-logout-button hidden" type="button">Logout</button>
+      <div class="auth-header-meta">
+        <span id="authWelcomeName" class="auth-welcome-name"></span>
+        <a id="authLogoutLink" class="auth-logout-link hidden" href="#">Logout</a>
+      </div>
       <button id="brandProfileButton" class="brand-profile-button" type="button" title="Edit profile">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
         <span id="brandProfileLabel">Edit Profile</span>
@@ -1139,6 +1140,14 @@
               </select>
             </div>
             <div class="form-row">
+              <label for="redditHarvestSourceMode">Source Mode</label>
+              <select id="redditHarvestSourceMode" name="source_mode">
+                <option value="auto">Auto (OAuth then Public)</option>
+                <option value="public">Public scrape only</option>
+                <option value="oauth">Reddit API only</option>
+              </select>
+            </div>
+            <div class="form-row">
               <label for="redditHarvestSort">Sort (subreddit mode)</label>
               <select id="redditHarvestSort" name="sort">
                 <option value="new">new</option>
@@ -1156,6 +1165,20 @@
             <div class="form-row">
               <label for="redditHarvestMaxComments">Max Comments (total budget)</label>
               <input id="redditHarvestMaxComments" name="max_comments" type="number" min="1" max="5000" value="500" />
+            </div>
+          </div>
+          <div class="grid-form">
+            <div class="form-row">
+              <label for="redditHarvestKeyword">Keyword Filter (optional)</label>
+              <input id="redditHarvestKeyword" name="keyword" placeholder="e.g. launch, bug, onboarding" />
+            </div>
+            <div class="form-row">
+              <label for="redditHarvestStartTime">Start Date (optional)</label>
+              <input id="redditHarvestStartTime" name="start_time" type="date" />
+            </div>
+            <div class="form-row">
+              <label for="redditHarvestEndTime">End Date (optional)</label>
+              <input id="redditHarvestEndTime" name="end_time" type="date" />
             </div>
           </div>
           <label class="checkbox-inline" for="redditHarvestIncludeReplies">

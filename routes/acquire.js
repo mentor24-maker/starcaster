@@ -17,6 +17,20 @@ const { listAcquireJobs }    = require('../lib/acquireJobs');
 const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
 const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
 const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
+const { runXHarvest } = require('../lib/harvest/XHarvestRun');
+const { runRedditHarvest } = require('../lib/harvest/RedditHarvestRun');
+const {
+  createXHarvestRun,
+  listXHarvestRuns,
+  getXHarvestRun,
+  deleteXHarvestRun,
+} = require('../lib/harvest/XHarvestStore');
+const {
+  createRedditHarvestRun,
+  listRedditHarvestRuns,
+  getRedditHarvestRun,
+  deleteRedditHarvestRun,
+} = require('../lib/harvest/RedditHarvestStore');
 const { runYoutubeCommentHarvest } = require('../lib/harvest/YoutubeCommentsRun');
 const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
 const { generateYoutubeCommentSuggestions } = require('../lib/harvest/YoutubeCommentSuggestions');
@@ -144,6 +158,162 @@ async function handle(req, res, pathname, method) {
     }
     const payload = { result, run: summary, contactCapture };
     return sendOk(res, 200, payload, payload), true;
+  }
+
+  // POST /api/acquire/x-harvest — ⚡ RATE LIMITED (hits X recent search API)
+  if (pathname === '/api/acquire/x-harvest' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'harvest.x')) return true;
+
+    const body = await parseJsonBody(req);
+    const inputPayload = {
+      query: String(body?.query || '').trim(),
+      hashtags: Array.isArray(body?.hashtags)
+        ? body.hashtags
+        : String(body?.hashtags || '').split(/[,\s]+/g).map((item) => item.trim()).filter(Boolean),
+      lang: String(body?.lang || '').trim(),
+      start_time: String(body?.start_time || '').trim(),
+      end_time: String(body?.end_time || '').trim(),
+      max_tweets: Number(body?.max_tweets || 25) || 25,
+      max_replies_per_tweet: Number(body?.max_replies_per_tweet || 10) || 10,
+      include_replies: body?.include_replies === true,
+      exclude_retweets: body?.exclude_retweets !== false,
+      exclude_replies: body?.exclude_replies === true,
+      segment_id: String(body?.segment_id || '').trim(),
+      segment_label: String(body?.segment_label || '').trim(),
+    };
+    const harvest = await runXHarvest(inputPayload);
+    if (!harvest.ok) {
+      return sendErr(res, harvest.status || 500, harvest.error || 'X harvest failed', {
+        details: [
+          String(harvest.endpoint || ''),
+          harvest.oauth1 ? `oauth1: ${JSON.stringify(harvest.oauth1)}` : '',
+          harvest.oauth2 ? `oauth2: ${JSON.stringify(harvest.oauth2)}` : '',
+          JSON.stringify(harvest.data || {}),
+        ].filter(Boolean),
+      }), true;
+    }
+    const saved = createXHarvestRun(inputPayload, harvest.data || {});
+    const run = saved.data || null;
+    logActivity({
+      action: 'acquire.x',
+      entityType: 'acquire',
+      entityId: run?.run_id || null,
+      summary: `X harvest acquired ${Number(run?.stats?.total_tweets || 0) || 0} tweets`,
+      meta: {
+        query: String(run?.query || ''),
+        hashtags: Array.isArray(run?.hashtags) ? run.hashtags.join(',') : '',
+        total_tweets: Number(run?.stats?.total_tweets || 0) || 0,
+        total_replies: Number(run?.stats?.total_replies || 0) || 0,
+      },
+    });
+    return sendOk(res, 200, { run: run || null, result: harvest.data || {} }, { run: run || null, result: harvest.data || {} }), true;
+  }
+
+  // GET /api/acquire/x-runs — read-only
+  if (pathname === '/api/acquire/x-runs' && method === 'GET') {
+    const limit = Number(urlObj.searchParams.get('limit') || 20);
+    const result = listXHarvestRuns(limit);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const runs = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
+  }
+
+  // GET /api/acquire/x-runs/:id — read-only
+  const xRunMatch = pathname.match(/^\/api\/acquire\/x-runs\/([^/]+)$/);
+  if (xRunMatch && method === 'GET') {
+    const id = decodeURIComponent(xRunMatch[1]);
+    const result = getXHarvestRun(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { run: result.data }), true;
+  }
+
+  // DELETE /api/acquire/x-runs/:id
+  if (xRunMatch && method === 'DELETE') {
+    const id = decodeURIComponent(xRunMatch[1]);
+    const result = deleteXHarvestRun(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    logActivity({
+      action: 'acquire.x_deleted',
+      entityType: 'acquire',
+      entityId: id,
+      summary: `X harvest run deleted: ${id}`,
+    });
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  // POST /api/acquire/reddit-harvest — ⚡ RATE LIMITED (hits Reddit API)
+  if (pathname === '/api/acquire/reddit-harvest' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'harvest.reddit')) return true;
+
+    const body = await parseJsonBody(req);
+    const inputPayload = {
+      target: String(body?.target || '').trim(),
+      mode: String(body?.mode || 'auto').trim().toLowerCase(),
+      source_mode: String(body?.source_mode || body?.sourceMode || 'auto').trim().toLowerCase(),
+      subreddit: String(body?.subreddit || '').trim(),
+      post_id: String(body?.post_id || body?.postId || '').trim(),
+      sort: String(body?.sort || 'new').trim().toLowerCase(),
+      max_posts: Number(body?.max_posts || body?.maxPosts || 100) || 100,
+      max_comments: Number(body?.max_comments || body?.maxComments || 500) || 500,
+      keyword: String(body?.keyword || '').trim(),
+      start_time: String(body?.start_time || body?.startTime || '').trim(),
+      end_time: String(body?.end_time || body?.endTime || '').trim(),
+      include_replies: body?.include_replies !== false,
+    };
+    const harvest = await runRedditHarvest(inputPayload);
+    if (!harvest.ok) {
+      return sendErr(res, harvest.status || 500, harvest.error || 'Reddit harvest failed', {
+        details: [String(harvest.endpoint || ''), JSON.stringify(harvest.data || {})].filter(Boolean),
+      }), true;
+    }
+    const saved = createRedditHarvestRun(inputPayload, harvest.data || {});
+    const run = saved.data || null;
+    logActivity({
+      action: 'acquire.reddit',
+      entityType: 'acquire',
+      entityId: run?.run_id || null,
+      summary: `Reddit harvest acquired ${Number(run?.stats?.total_posts || 0) || 0} posts`,
+      meta: {
+        mode: String(run?.mode || ''),
+        target: String(run?.target || ''),
+        subreddit: String(run?.subreddit || ''),
+        total_posts: Number(run?.stats?.total_posts || 0) || 0,
+        total_comments: Number(run?.stats?.total_comments || 0) || 0,
+      },
+    });
+    return sendOk(res, 200, { run: run || null, result: harvest.data || {} }, { run: run || null, result: harvest.data || {} }), true;
+  }
+
+  // GET /api/acquire/reddit-runs — read-only
+  if (pathname === '/api/acquire/reddit-runs' && method === 'GET') {
+    const limit = Number(urlObj.searchParams.get('limit') || 20);
+    const result = listRedditHarvestRuns(limit);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const runs = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
+  }
+
+  // GET /api/acquire/reddit-runs/:id
+  const redditRunMatch = pathname.match(/^\/api\/acquire\/reddit-runs\/([^/]+)$/);
+  if (redditRunMatch && method === 'GET') {
+    const id = decodeURIComponent(redditRunMatch[1]);
+    const result = getRedditHarvestRun(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { run: result.data }), true;
+  }
+
+  // DELETE /api/acquire/reddit-runs/:id
+  if (redditRunMatch && method === 'DELETE') {
+    const id = decodeURIComponent(redditRunMatch[1]);
+    const result = deleteRedditHarvestRun(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    logActivity({
+      action: 'acquire.reddit_deleted',
+      entityType: 'acquire',
+      entityId: id,
+      summary: `Reddit harvest run deleted: ${id}`,
+    });
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   if (pathname === '/api/acquire/youtube-categories' && method === 'GET') {
