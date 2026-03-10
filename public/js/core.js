@@ -289,6 +289,8 @@ App.els = {
   apiConfigsTable: document.getElementById('apiConfigsTable'),
   settingsProfileForm: document.getElementById('settingsProfileForm'),
   settingsProjectName: document.getElementById('settingsProjectName'),
+  settingsAccountName: document.getElementById('settingsAccountName'),
+  settingsAccountEmail: document.getElementById('settingsAccountEmail'),
   settingsContactName: document.getElementById('settingsContactName'),
   settingsProfileEmail: document.getElementById('settingsProfileEmail'),
   settingsProfilePhone: document.getElementById('settingsProfilePhone'),

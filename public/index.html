@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Omni-channel Engagement Engine (APP)</title>
+    <title>Alphire Promo Platform (APP)</title>
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
     <link rel="stylesheet" href="/styles.css" />
@@ -11,10 +11,11 @@
   <body>
     <section id="authLanding" class="auth-landing hidden">
       <div class="auth-hero">
-        <img src="/images/logo_isit_app.png" alt="ISIT App" class="auth-logo" />
-        <h1>Omni-channel Engagement Engine</h1>
+        <img src="/alphire_promo_platform_500x75.png" alt="Alphire Promo Platform" class="auth-logo" />
+        <h1>Alphire Promo Platform</h1>
         <p>
-          Engage with your followers and fans wherever they may be.
+          Plan, build, and run campaigns across channels from one workspace. Sign in to manage
+          contacts, messaging, assets, and publishing workflows.
         </p>
       </div>
       <div class="auth-card">
@@ -49,14 +50,14 @@
     <header>
       <img
         src="/alphire_promo_platform_1920x280.png"
-        alt="Omni-channel Engagement Engine"
+        alt="Alphire Promo Platform"
         class="brand-wordmark"
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';"
       />
       <h1 id="brandFallback" class="brand-fallback">Alphire AI Agency</h1>
       <div class="auth-header-meta">
-        <span id="authWelcomeName" class="auth-welcome-name"></span>
-        <a id="authLogoutLink" class="auth-logout-link hidden" href="#">Logout</a>
+        <a id="authWelcomeName" class="auth-welcome-name" href="#page=settingsProfilePage">Account</a>
+        <button id="authLogoutButton" class="auth-logout-link hidden" type="button">Logout</button>
       </div>
       <button id="brandProfileButton" class="brand-profile-button" type="button" title="Edit profile">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
@@ -4623,11 +4624,19 @@
                 <input id="settingsProjectName" name="project_name" placeholder="APP" required />
               </div>
               <div class="form-row">
-                <label for="settingsContactName">Primary Contact Name</label>
+                <label for="settingsAccountName">Account Name</label>
+                <input id="settingsAccountName" readonly />
+              </div>
+              <div class="form-row">
+                <label for="settingsAccountEmail">Account Email</label>
+                <input id="settingsAccountEmail" type="email" readonly />
+              </div>
+              <div class="form-row">
+                <label for="settingsContactName">Primary Contact Name (defaults to account)</label>
                 <input id="settingsContactName" name="contact_name" placeholder="Your name" />
               </div>
               <div class="form-row">
-                <label for="settingsProfileEmail">Email</label>
+                <label for="settingsProfileEmail">Contact Email (defaults to account)</label>
                 <input id="settingsProfileEmail" name="email" type="email" placeholder="name@example.com" />
               </div>
               <div class="form-row">
