@@ -38,6 +38,13 @@ function normalizeEmail(raw) {
   return String(raw || '').trim().toLowerCase();
 }
 
+function requestScope(req) {
+  return {
+    projectId: String(req?.projectContext?.project?.id || '').trim(),
+    userId: String(req?.authUser?.id || '').trim(),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Validation schemas
 // ---------------------------------------------------------------------------
@@ -312,7 +319,7 @@ async function handleContacts(req, res, pathname, method) {
   // GET /api/contacts — list, optionally filtered by type
   if (pathname === '/api/contacts' && method === 'GET') {
     const contactType = urlObj.searchParams.get('type') || undefined;
-    const result = await listContacts({ contactType });
+    const result = await listContacts({ contactType, scope: requestScope(req) });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const contacts = (Array.isArray(result.data) ? result.data : []).map(rowToContact);
     return sendOk(res, 200, contacts, { contacts }, { total: contacts.length }), true;
@@ -339,7 +346,7 @@ async function handleContacts(req, res, pathname, method) {
       contactType: v.data.contactType || 'lead',
       email,
       ...v.data,
-    });
+    }, requestScope(req));
 
     if (!result.ok) {
       const isDupe = result.status === 409 || String(result.error).toLowerCase().includes('unique');
@@ -360,7 +367,7 @@ async function handleContacts(req, res, pathname, method) {
   // GET /api/contacts/:id
   const contactMatch = pathname.match(/^\/api\/contacts\/([^/]+)$/);
   if (contactMatch && method === 'GET') {
-    const result = await getContact(decodeURIComponent(contactMatch[1]));
+    const result = await getContact(decodeURIComponent(contactMatch[1]), requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const contact = rowToContact(result.data);
     return sendOk(res, 200, contact, { contact }), true;
@@ -373,7 +380,7 @@ async function handleContacts(req, res, pathname, method) {
     if (!v.ok) return sendErr(res, 400, v.errors[0], { code: 'VALIDATION_ERROR', details: v.errors }), true;
 
     const id     = decodeURIComponent(contactMatch[1]);
-    const result = await updateContact(id, v.data);
+    const result = await updateContact(id, v.data, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!updated) return sendErr(res, 404, 'Contact not found', { code: 'NOT_FOUND' }), true;
@@ -387,7 +394,7 @@ async function handleContacts(req, res, pathname, method) {
   // DELETE /api/contacts/:id
   if (contactMatch && method === 'DELETE') {
     const id     = decodeURIComponent(contactMatch[1]);
-    const result = await deleteContact(id);
+    const result = await deleteContact(id, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'contact.deleted', entityType: 'contact', entityId: id,
@@ -403,7 +410,7 @@ async function handleContacts(req, res, pathname, method) {
     if (!v.ok) return sendErr(res, 400, v.errors[0], { code: 'VALIDATION_ERROR', details: v.errors }), true;
 
     const rows = v.data.contacts.map(row => ({ ...row, id: nextId('contact') }));
-    const result = await importContacts(rows, { defaultType: v.data.contactType || 'lead' });
+    const result = await importContacts(rows, { defaultType: v.data.contactType || 'lead', scope: requestScope(req) });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
 
     const imported = result.data?.imported || 0;
@@ -424,7 +431,8 @@ async function handleContacts(req, res, pathname, method) {
 
 async function handleSegments(req, res, pathname, method) {
   if (pathname === '/api/segments' && method === 'GET') {
-    const [segRes, conRes] = await Promise.all([listSegments(), listContacts()]);
+    const scope = requestScope(req);
+    const [segRes, conRes] = await Promise.all([listSegments(scope), listContacts({ scope })]);
     if (!segRes.ok) return sendErr(res, segRes.status || 500, segRes.error), true;
     const contacts = conRes.ok && Array.isArray(conRes.data) ? conRes.data.map(rowToContact) : [];
     const segments = (Array.isArray(segRes.data) ? segRes.data : []).map(seg => ({
@@ -441,7 +449,7 @@ async function handleSegments(req, res, pathname, method) {
     const result = await createSegment({
       id: nextId('segment'), name: v.data.name,
       rules: cleanSegmentRules(v.data.rules), definition: v.data.definition ?? null,
-    });
+    }, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     logActivity({ action: 'segment.created', entityType: 'segment', entityId: created.id, summary: `Segment created: "${v.data.name}"` });
@@ -459,7 +467,7 @@ async function handleSegments(req, res, pathname, method) {
     if (v.data.name       !== undefined) patch.name       = v.data.name;
     if (v.data.rules      !== undefined) patch.rules      = cleanSegmentRules(v.data.rules);
     if (v.data.definition !== undefined) patch.definition = v.data.definition ?? null;
-    const result = await updateSegment(id, patch);
+    const result = await updateSegment(id, patch, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!updated) return sendErr(res, 404, 'Segment not found', { code: 'NOT_FOUND' }), true;
@@ -469,7 +477,7 @@ async function handleSegments(req, res, pathname, method) {
 
   if (segmentMatch && method === 'DELETE') {
     const id     = decodeURIComponent(segmentMatch[1]);
-    const result = await deleteSegment(id);
+    const result = await deleteSegment(id, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({ action: 'segment.deleted', entityType: 'segment', entityId: id, summary: `Segment deleted: ${id}` });
     return sendOk(res, 200, { deleted: true, segmentId: id }, { deleted: true }), true;
@@ -484,7 +492,7 @@ async function handleSegments(req, res, pathname, method) {
 
 async function handleCampaigns(req, res, pathname, method) {
   if (pathname === '/api/campaigns' && method === 'GET') {
-    const result = await listCampaigns();
+    const result = await listCampaigns(requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const campaigns = (Array.isArray(result.data) ? result.data : []).map(rowToCampaign);
     await Promise.all(campaigns.map(async (c) => {
@@ -498,7 +506,7 @@ async function handleCampaigns(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const v    = validate(CAMPAIGN_CREATE_SCHEMA, body);
     if (!v.ok) return sendErr(res, 400, v.errors[0], { code: 'VALIDATION_ERROR', details: v.errors }), true;
-    const result = await createCampaign({ id: nextId('campaign'), ...v.data, segmentId: v.data.segmentId || null });
+    const result = await createCampaign({ id: nextId('campaign'), ...v.data, segmentId: v.data.segmentId || null }, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created  = Array.isArray(result.data) ? result.data[0] : result.data;
     const campaign = rowToCampaign(created);
@@ -509,7 +517,8 @@ async function handleCampaigns(req, res, pathname, method) {
   const sendMatch = pathname.match(/^\/api\/campaigns\/([^/]+)\/send$/);
   if (sendMatch && method === 'POST') {
     const campaignId = sendMatch[1];
-    const [campRes, segRes, conRes] = await Promise.all([listCampaigns(), listSegments(), listContacts()]);
+    const scope = requestScope(req);
+    const [campRes, segRes, conRes] = await Promise.all([listCampaigns(scope), listSegments(scope), listContacts({ scope })]);
     if (!campRes.ok) return sendErr(res, campRes.status || 500, campRes.error), true;
     const campaigns  = (Array.isArray(campRes.data) ? campRes.data : []).map(rowToCampaign);
     const campaign   = campaigns.find(c => c.id === campaignId);
@@ -518,7 +527,7 @@ async function handleCampaigns(req, res, pathname, method) {
     const contacts   = conRes.ok && Array.isArray(conRes.data) ? conRes.data.map(rowToContact) : [];
     const segment    = campaign.segmentId ? segments.find(s => s.id === campaign.segmentId) : null;
     const recipients = contacts.filter(c => !segment || contactMatchesSegment(c, segment));
-    await updateCampaign(campaignId, { status: 'sent', sent_count: recipients.length, last_sent_at: new Date().toISOString() });
+    await updateCampaign(campaignId, { status: 'sent', sent_count: recipients.length, last_sent_at: new Date().toISOString() }, requestScope(req));
     const newEvents  = [];
     recipients.forEach(r => {
       if (Math.random() < 0.45) newEvents.push({ id: nextId('event'), campaignId, contactId: r.id, type: 'open' });

@@ -125,6 +125,37 @@ App.settings = (function () {
     }
   }
 
+  function renderProjectSelector() {
+    if (!els.settingsProjectSelector) return;
+    els.settingsProjectSelector.innerHTML = '';
+    const projects = Array.isArray(state.projects) ? state.projects : [];
+    projects.forEach((project) => {
+      const option = document.createElement('option');
+      option.value = String(project?.id || '').trim();
+      option.textContent = String(project?.name || project?.slug || option.value || 'Untitled');
+      els.settingsProjectSelector.appendChild(option);
+    });
+    if (state.currentProjectId && projects.some((project) => String(project?.id || '') === state.currentProjectId)) {
+      els.settingsProjectSelector.value = state.currentProjectId;
+    }
+  }
+
+  async function refreshProjectContext() {
+    try {
+      const current = await api('/api/projects/current', { method: 'GET' });
+      const projectsRes = await api('/api/projects', { method: 'GET' });
+      state.projects = Array.isArray(projectsRes.projects) ? projectsRes.projects : (projectsRes.data || []);
+      const currentProject = current.project || null;
+      if (currentProject?.id) {
+        state.currentProjectId = String(currentProject.id);
+        window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', state.currentProjectId);
+      }
+      renderProjectSelector();
+    } catch (err) {
+      notify(`Could not load projects: ${err.message}`, true);
+    }
+  }
+
   function getApiToggleBtn() {
     return document.getElementById('apiSettingsToggleBtn');
   }
@@ -1085,6 +1116,42 @@ App.settings = (function () {
         }
       });
       refreshProfile();
+    }
+
+    if (els.settingsProjectSelector) {
+      els.settingsProjectSelector.addEventListener('change', async () => {
+        const projectId = String(els.settingsProjectSelector.value || '').trim();
+        if (!projectId) return;
+        state.currentProjectId = projectId;
+        window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', projectId);
+        notify('Active project updated');
+      });
+      refreshProjectContext();
+    }
+
+    if (els.settingsCreateProjectBtn) {
+      els.settingsCreateProjectBtn.addEventListener('click', async () => {
+        const name = String(els.settingsNewProjectName?.value || '').trim();
+        const description = String(els.settingsNewProjectDescription?.value || '').trim();
+        if (!name) return notify('Project name is required', true);
+        try {
+          const res = await api('/api/projects', {
+            method: 'POST',
+            body: JSON.stringify({ name, description }),
+          });
+          const projectId = String(res.project?.id || res.id || '').trim();
+          if (projectId) {
+            state.currentProjectId = projectId;
+            window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', projectId);
+          }
+          if (els.settingsNewProjectName) els.settingsNewProjectName.value = '';
+          if (els.settingsNewProjectDescription) els.settingsNewProjectDescription.value = '';
+          await refreshProjectContext();
+          notify('Project created');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
     }
 
     if (els.dbConnectionForm) {

@@ -4619,6 +4619,27 @@
       <section id="settingsProfilePage" class="app-page hidden">
         <h2>Settings: Profile</h2>
         <p>Set the core identity for this workspace, including the project name and the logo shown in the top banner.</p>
+        <div class="card" style="margin-bottom: 1rem; max-width: 760px;">
+          <h3 style="margin-top: 0;">Projects</h3>
+          <div class="grid-form">
+            <div class="form-row">
+              <label for="settingsProjectSelector">Active Project</label>
+              <select id="settingsProjectSelector"></select>
+            </div>
+            <div class="form-row">
+              <label for="settingsNewProjectName">New Project Name</label>
+              <input id="settingsNewProjectName" placeholder="e.g. IZZIT Growth" />
+            </div>
+            <div class="form-row">
+              <label for="settingsNewProjectDescription">Project Description</label>
+              <input id="settingsNewProjectDescription" placeholder="Optional description" />
+            </div>
+          </div>
+          <div class="stack-form-actions">
+            <button id="settingsCreateProjectBtn" type="button">Create Project</button>
+          </div>
+          <p class="meta">All new records are scoped to the active project where project columns exist in the database schema.</p>
+        </div>
         <form id="settingsProfileForm" class="stack-form labeled-form">
           <div class="media-edit-layout">
             <div class="media-edit-primary">

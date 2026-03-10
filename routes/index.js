@@ -25,8 +25,10 @@ const { sendJson, sendErr, setCors, getUrlObj } = require('./http');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
 const { getUserFromSessionToken } = require('../lib/authStore');
+const { resolveCurrentProject } = require('../lib/projectsStore');
 
 const auth        = require('./auth');
+const projects    = require('./projects');
 const settings    = require('./settings');
 const acquire     = require('./acquire');
 const promoLeads  = require('./promoLeads');
@@ -43,6 +45,7 @@ const develop     = require('./develop');
 // Put more specific / higher-traffic modules first.
 const ROUTE_MODULES = [
   auth,
+  projects,
   settings,
   acquire,
   promoLeads,
@@ -117,9 +120,22 @@ async function handleRequest(req, res) {
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);
   req.authUser = authUser || null;
+  req.projectContext = null;
 
   if (!isAuthRoute && !isDebugRoute && !authUser) {
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
+  }
+
+  if (authUser && pathname.startsWith('/api/') && !isAuthRoute && !isDebugRoute) {
+    const requestedProjectId = String(req.headers['x-project-id'] || '').trim();
+    const projectContextResult = await resolveCurrentProject({
+      userId: String(authUser.id || '').trim(),
+      requestedProjectId,
+      autoCreateDefault: true,
+    });
+    if (projectContextResult.ok) {
+      req.projectContext = projectContextResult.data || null;
+    }
   }
 
   if (pathname === '/api/debug-routes' && method === 'GET') {
