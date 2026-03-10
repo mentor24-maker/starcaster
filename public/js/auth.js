@@ -21,7 +21,7 @@ App.auth._els = {
   authShowLogin: null,
   authShowRegister: null,
   authWelcomeName: null,
-  authLogoutButton: null,
+  authLogoutLink: null,
 };
 
 App.auth._cacheEls = function _cacheEls() {
@@ -35,7 +35,7 @@ App.auth._cacheEls = function _cacheEls() {
     'authShowLogin',
     'authShowRegister',
     'authWelcomeName',
-    'authLogoutButton',
+    'authLogoutLink',
   ];
   ids.forEach((id) => {
     App.auth._els[id] = document.getElementById(id);
@@ -70,18 +70,18 @@ App.auth._setMode = function _setMode(modeInput) {
 };
 
 App.auth._showLanding = function _showLanding(mode = 'login') {
-  const { appShell, authLanding, authLogoutButton } = App.auth._els;
+  const { appShell, authLanding, authLogoutLink } = App.auth._els;
   if (appShell) appShell.classList.add('hidden');
   if (authLanding) authLanding.classList.remove('hidden');
-  if (authLogoutButton) authLogoutButton.classList.add('hidden');
+  if (authLogoutLink) authLogoutLink.classList.add('hidden');
   App.auth._setMode(mode);
 };
 
 App.auth._showApp = function _showApp() {
-  const { appShell, authLanding, authLogoutButton, authWelcomeName } = App.auth._els;
+  const { appShell, authLanding, authLogoutLink, authWelcomeName } = App.auth._els;
   if (authLanding) authLanding.classList.add('hidden');
   if (appShell) appShell.classList.remove('hidden');
-  if (authLogoutButton) authLogoutButton.classList.remove('hidden');
+  if (authLogoutLink) authLogoutLink.classList.remove('hidden');
   if (authWelcomeName) authWelcomeName.textContent = App.auth.user?.name || '';
 };
 
@@ -141,7 +141,7 @@ App.auth.init = function init(bootMainApp) {
     authShowRegister,
     authLoginForm,
     authRegisterForm,
-    authLogoutButton,
+    authLogoutLink,
   } = App.auth._els;
 
   if (authShowLogin) {
@@ -198,8 +198,9 @@ App.auth.init = function init(bootMainApp) {
     });
   }
 
-  if (authLogoutButton) {
-    authLogoutButton.addEventListener('click', async () => {
+  if (authLogoutLink) {
+    authLogoutLink.addEventListener('click', async (event) => {
+      event.preventDefault();
       try {
         await App.auth._logout();
       } catch (_) {
