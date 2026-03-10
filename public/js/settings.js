@@ -32,6 +32,12 @@ App.settings = (function () {
   const PROJECT_LOGO_STORAGE_KEY = 'alphire.projectLogoMap';
   let activeChannelLabel = '';
 
+  async function refreshPromoLeadsIfAvailable() {
+    if (App.promoLeads && typeof App.promoLeads.refresh === 'function') {
+      await App.promoLeads.refresh();
+    }
+  }
+
   async function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1373,7 +1379,7 @@ App.settings = (function () {
           await refreshDbConnectionForm();
           await refreshApiSettings();
           await refreshDatabaseTables();
-          await App.promoLeads.refresh();
+          await refreshPromoLeadsIfAvailable();
         } catch (err) {
           notify(err.message, true);
         }
@@ -1403,7 +1409,7 @@ App.settings = (function () {
           notify(result.message || 'Field created');
           els.databaseFieldForm.reset();
           renderDatabaseFieldNameOptions();
-          await App.promoLeads.refresh();
+          await refreshPromoLeadsIfAvailable();
           await refreshDatabaseTables();
         } catch (err) { notify(err.message, true); }
       });
@@ -1482,7 +1488,7 @@ App.settings = (function () {
           } catch {
             // Ignore connection ops refresh failures after successful credential save.
           }
-          await App.promoLeads.refresh();
+          await refreshPromoLeadsIfAvailable();
         } catch (err) { notify(err.message, true); }
       });
     }
