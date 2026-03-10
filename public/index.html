@@ -4623,17 +4623,13 @@
         <div class="card settings-project-card">
           <h3>My Projects</h3>
           <p class="meta">Projects associated with this account.</p>
-          <div id="settingsProfileProjectsList" class="settings-project-list"></div>
+          <div id="settingsProfileProjectsList" class="settings-project-inline-list"></div>
         </div>
         <form id="settingsProfileForm" class="stack-form labeled-form">
           <div class="media-edit-layout">
             <div class="media-edit-primary">
               <div class="form-row">
-                <label for="settingsProjectName">Project Name</label>
-                <input id="settingsProjectName" name="project_name" placeholder="APP" required />
-              </div>
-              <div class="form-row">
-                <label for="settingsAccountName">Account Name</label>
+                <label for="settingsAccountName">User Name</label>
                 <input id="settingsAccountName" readonly />
               </div>
               <div class="form-row">
@@ -4657,7 +4653,7 @@
                 <input id="settingsProfileWebsite" name="website" placeholder="https://example.com" />
               </div>
               <div class="form-row">
-                <label for="settingsProfileLogoFile">Logo Upload</label>
+                <label for="settingsProfileLogoFile">Avatar Upload</label>
                 <input id="settingsProfileLogoFile" name="logo_file" type="file" accept="image/*" />
               </div>
               <div class="profile-save-row">
@@ -4667,7 +4663,7 @@
             <div class="media-edit-sidebar">
               <div id="settingsProfileLogoPreviewWrap" class="profile-logo-preview media-edit-preview hidden">
                 <a id="settingsProfileLogoLink" href="#" target="_blank" rel="noopener" class="profile-logo-preview-link">
-                  <img id="settingsProfileLogoPreview" alt="Current logo preview" />
+                  <img id="settingsProfileLogoPreview" alt="Current avatar preview" />
                 </a>
               </div>
             </div>
@@ -4706,25 +4702,39 @@
             <h3 style="margin-top: 0;">Project Details</h3>
             <div id="settingsProjectDetailsEmpty" class="meta">Select a project to view details.</div>
             <div id="settingsProjectDetailsPanel" class="stack-form labeled-form hidden">
-              <div class="form-row">
-                <label>Project Name</label>
-                <input id="settingsProjectDetailsName" readonly />
-              </div>
-              <div class="form-row">
-                <label>Slug</label>
-                <input id="settingsProjectDetailsSlug" readonly />
-              </div>
-              <div class="form-row">
-                <label>Description</label>
-                <textarea id="settingsProjectDetailsDescription" rows="4" readonly></textarea>
-              </div>
-              <div class="form-row">
-                <label>Role</label>
-                <input id="settingsProjectDetailsRole" readonly />
-              </div>
-              <div class="form-row">
-                <label>Created</label>
-                <input id="settingsProjectDetailsCreatedAt" readonly />
+              <div class="project-details-layout">
+                <div class="project-details-form">
+                  <div class="form-row">
+                    <label>Project Name</label>
+                    <input id="settingsProjectDetailsName" readonly />
+                  </div>
+                  <div class="form-row">
+                    <label>Slug</label>
+                    <input id="settingsProjectDetailsSlug" readonly />
+                  </div>
+                  <div class="form-row">
+                    <label>Description</label>
+                    <textarea id="settingsProjectDetailsDescription" rows="4" readonly></textarea>
+                  </div>
+                  <div class="form-row">
+                    <label>Role</label>
+                    <input id="settingsProjectDetailsRole" readonly />
+                  </div>
+                  <div class="form-row">
+                    <label>Created</label>
+                    <input id="settingsProjectDetailsCreatedAt" readonly />
+                  </div>
+                </div>
+                <div class="project-details-media">
+                  <div class="form-row">
+                    <label for="settingsProjectLogoFile">Project Logo</label>
+                    <input id="settingsProjectLogoFile" type="file" accept="image/*" />
+                  </div>
+                  <div class="project-logo-preview-wrap">
+                    <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
+                    <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
