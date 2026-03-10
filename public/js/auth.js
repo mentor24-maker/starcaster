@@ -254,6 +254,6 @@ App.auth.init = function init(bootMainApp) {
     .catch(() => {
       App.auth.user = null;
       App.auth._showLanding('login');
-      App.auth._setMessage('Sign in to continue.');
+      App.auth._setMessage('');
     });
 };

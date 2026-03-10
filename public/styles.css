@@ -65,7 +65,8 @@ body {
 }
 
 .auth-card h2 {
-  margin: 0.6rem 0 0.2rem;
+  margin: 0.1rem 0 0.8rem;
+  text-align: center;
 }
 
 .auth-mode-toggle {
@@ -81,6 +82,13 @@ body {
 .auth-mode-toggle button.active {
   background: #0a6aaa;
   color: #fff;
+}
+
+#authLoginForm button[type="submit"],
+#authRegisterForm button[type="submit"] {
+  width: 100%;
+  min-width: 0;
+  align-self: stretch;
 }
 
 .auth-message {

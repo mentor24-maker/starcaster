@@ -255,7 +255,7 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/settings/profile' && method === 'GET') {
-    const profile = getProfile();
+    const profile = await getProfile(req.authUser?.id || req.authUser?.email || '');
     const account = {
       name: safeText(req.authUser?.name),
       email: safeText(req.authUser?.email).toLowerCase(),
@@ -273,14 +273,13 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const accountName = safeText(req.authUser?.name);
     const accountEmail = safeText(req.authUser?.email).toLowerCase();
-    const profile = saveProfile({
-      projectName: body.project_name || body.projectName,
+    const profile = await saveProfile({
       contactName: safeText(body.contact_name || body.contactName) || accountName,
       email: safeText(body.email) || accountEmail,
       phone: body.phone,
       website: body.website,
       logoDataUrl: body.logo_data_url || body.logoDataUrl,
-    });
+    }, req.authUser?.id || req.authUser?.email || '');
     const result = {
       ...profile,
       account: { name: accountName, email: accountEmail },
@@ -288,13 +287,13 @@ async function handle(req, res, pathname, method) {
     logActivity({
       action: 'settings.profile_saved',
       entityType: 'settings',
-      summary: `Profile saved: ${profile.projectName || 'Untitled project'}`
+      summary: `Profile saved: ${profile.contactName || accountName || accountEmail || 'user'}`
     });
     return sendOk(res, 200, result, { profile: result }), true;
   }
 
   if (pathname === '/api/settings/email-senders' && method === 'GET') {
-    const profile = getProfile();
+    const profile = await getProfile(req.authUser?.id || req.authUser?.email || '');
     const resend = getProviderValues('resend');
     const items = [];
     const seen = new Set();
@@ -326,7 +325,7 @@ async function handle(req, res, pathname, method) {
     );
     pushSender(
       profile?.email,
-      profile?.contactName || profile?.projectName || '',
+      profile?.contactName || '',
       'profile',
       items.length === 0
     );
