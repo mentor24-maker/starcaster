@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "functions": {
+    "api/[...slug].js": {
+      "maxDuration": 300
+    }
+  },
   "builds": [
     {
       "src": "api/[...slug].js",

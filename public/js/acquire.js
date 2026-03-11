@@ -6,6 +6,7 @@
 window.App = window.App || {};
 App.acquire = (function () {
   const { state, els, api, notify, setPreview, prettyJson } = App;
+  let redditHarvestProgressTimer = null;
 
   // -------------------------------------------------------------------------
   // Stage helpers
@@ -208,6 +209,65 @@ App.acquire = (function () {
     return date.toISOString();
   }
 
+  function estimateRedditHarvestSeconds(payload) {
+    const mode = String(payload?.mode || 'auto');
+    const maxPosts = Number(payload?.max_posts || 0);
+    const maxComments = Number(payload?.max_comments || 0);
+    const includeReplies = !!payload?.include_replies;
+    let estimate = 18;
+    if (mode === 'post') {
+      estimate += Math.ceil(maxComments * 0.18);
+    } else {
+      estimate += Math.ceil(maxPosts * 0.9);
+      estimate += Math.ceil(maxComments * 0.12);
+    }
+    if (includeReplies) estimate += 24;
+    return Math.max(30, Math.min(900, estimate));
+  }
+
+  function setRedditHarvestProgress(percent, text) {
+    const wrap = document.getElementById('redditHarvestProgressWrap');
+    const bar = document.getElementById('redditHarvestProgressBar');
+    const label = document.getElementById('redditHarvestProgressText');
+    if (!wrap || !bar || !label) return;
+    wrap.classList.remove('hidden');
+    bar.value = Math.max(0, Math.min(100, Number(percent) || 0));
+    label.textContent = String(text || '').trim() || 'Running…';
+  }
+
+  function clearRedditHarvestProgress() {
+    if (redditHarvestProgressTimer) {
+      clearInterval(redditHarvestProgressTimer);
+      redditHarvestProgressTimer = null;
+    }
+  }
+
+  function beginRedditHarvestProgress(payload) {
+    clearRedditHarvestProgress();
+    const startedAt = Date.now();
+    const estimateSeconds = estimateRedditHarvestSeconds(payload);
+    setRedditHarvestProgress(4, 'Queued request (phase 1 of 3)…');
+    redditHarvestProgressTimer = setInterval(() => {
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      const remainingSeconds = Math.max(0, estimateSeconds - elapsedSeconds);
+      const ratio = estimateSeconds > 0 ? Math.min(1, elapsedSeconds / estimateSeconds) : 0;
+      const pct = Math.min(92, 12 + Math.round(ratio * 80));
+      const eta = remainingSeconds > 0 ? `~${remainingSeconds}s remaining (estimated)` : 'finalizing…';
+      setRedditHarvestProgress(pct, `Running OpenClaw harvest (phase 2 of 3)… ${eta}`);
+    }, 1000);
+    return {
+      finishSuccess() {
+        const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+        clearRedditHarvestProgress();
+        setRedditHarvestProgress(100, `Completed in ${elapsedSeconds}s.`);
+      },
+      finishError(message) {
+        clearRedditHarvestProgress();
+        setRedditHarvestProgress(100, `Stopped: ${safeText(message) || 'request failed'}`);
+      },
+    };
+  }
+
   function renderXHarvestItemsTable() {
     if (!els.xHarvestItemsTable) return;
     els.xHarvestItemsTable.innerHTML = '';
@@ -259,6 +319,17 @@ App.acquire = (function () {
     const run = state.redditHarvestCurrentRun;
     const result = run && run.result ? run.result : null;
     const posts = Array.isArray(result && result.posts) ? result.posts : [];
+    const primaryPost = (result && result.post) ? result.post : (posts[0] || null);
+    App.setKeyValueRows(els.redditHarvestPostDetailsBody, primaryPost ? [
+      ['Title', String(primaryPost.title || '').trim() || '-'],
+      ['Subreddit', String(primaryPost.subreddit || run?.subreddit || '-')],
+      ['Author', String(primaryPost.author || '-')],
+      ['Score', String(primaryPost.score != null ? primaryPost.score : '-')],
+      ['Created', String(primaryPost.created_utc ? new Date(Number(primaryPost.created_utc) * 1000).toISOString() : '-')],
+      ['Permalink', String(primaryPost.permalink ? `https://www.reddit.com${primaryPost.permalink}` : '-')],
+    ] : [
+      ['Post', 'No post details loaded yet.'],
+    ]);
     const comments = Array.isArray(result && result.comments) ? result.comments : [];
     const rows = []
       .concat(posts.map((item) => ({ type: 'post', item })))
@@ -601,6 +672,13 @@ App.acquire = (function () {
   // -------------------------------------------------------------------------
 
   function init() {
+    clearRedditHarvestProgress();
+    const redditProgressWrap = document.getElementById('redditHarvestProgressWrap');
+    const redditProgressBar = document.getElementById('redditHarvestProgressBar');
+    const redditProgressText = document.getElementById('redditHarvestProgressText');
+    if (redditProgressWrap) redditProgressWrap.classList.remove('hidden');
+    if (redditProgressBar) redditProgressBar.value = 0;
+    if (redditProgressText) redditProgressText.textContent = 'Idle — ready to run Reddit harvest.';
     if (els.acquireForm) {
       els.acquireForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -706,7 +784,9 @@ App.acquire = (function () {
     }
     if (els.redditHarvestForm) {
       els.redditHarvestForm.addEventListener('submit', async (e) => {
+        const submitBtn = els.redditHarvestForm.querySelector('button[type="submit"]');
         e.preventDefault();
+        let progress = null;
         try {
           const formData = new FormData(els.redditHarvestForm);
           const payload = {
@@ -722,16 +802,25 @@ App.acquire = (function () {
             include_replies: formData.get('include_replies') === 'on',
           };
           if (!payload.target) throw new Error('Subreddit or post URL is required.');
+          if (submitBtn) submitBtn.disabled = true;
+          progress = beginRedditHarvestProgress(payload);
           const res = await api('/api/acquire/reddit-harvest', {
             method: 'POST',
             body: JSON.stringify(payload),
           });
           state.redditHarvestCurrentRun = res.run || null;
+          if (progress) {
+            setRedditHarvestProgress(96, 'Saving harvest results (phase 3 of 3)…');
+            progress.finishSuccess();
+          }
           renderRedditHarvestItemsTable();
           await refreshRedditHarvestRuns();
           notify(`Reddit harvest complete (${(state.redditHarvestCurrentRun?.stats?.total_posts || 0)} posts, ${(state.redditHarvestCurrentRun?.stats?.total_comments || 0)} comments)`);
         } catch (err) {
+          if (progress) progress.finishError(err?.message || 'request failed');
           notify(err.message, true);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
         }
       });
     }

@@ -1202,6 +1202,10 @@
             Include nested replies (post mode)
           </label>
           <button type="submit">Run Reddit Harvest</button>
+          <div id="redditHarvestProgressWrap" class="asset-upload-progress" aria-live="polite">
+            <div id="redditHarvestProgressText" class="asset-upload-progress-text">Idle — ready to run Reddit harvest.</div>
+            <progress id="redditHarvestProgressBar" max="100" value="0"></progress>
+          </div>
         </form>
 
         <h3 style="margin-top: 1rem;">Reddit Harvest Runs</h3>
