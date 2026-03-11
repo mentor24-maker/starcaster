@@ -98,11 +98,60 @@ function extractOpenClawOutputText(payload) {
   for (const message of output) {
     const content = Array.isArray(message?.content) ? message.content : [];
     for (const part of content) {
-      const text = safeText(part?.text || part?.value || '');
+      const text = safeText(
+        part?.text
+        || part?.value
+        || (typeof part?.json === 'string' ? part.json : '')
+        || (part?.json && typeof part.json === 'object' ? JSON.stringify(part.json) : '')
+      );
       if (text) chunks.push(text);
     }
   }
   return chunks.join('\n').trim();
+}
+
+function extractBalancedJsonCandidates(raw) {
+  const text = safeText(raw);
+  if (!text) return [];
+  const out = [];
+  const starts = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '{' || ch === '[') {
+      starts.push({ idx: i, ch });
+      continue;
+    }
+    if (ch === '}' || ch === ']') {
+      for (let s = starts.length - 1; s >= 0; s -= 1) {
+        const start = starts[s];
+        const match = (start.ch === '{' && ch === '}') || (start.ch === '[' && ch === ']');
+        if (!match) continue;
+        const candidate = text.slice(start.idx, i + 1);
+        if (candidate.length >= 2) out.push(candidate);
+        starts.splice(s, 1);
+        break;
+      }
+    }
+  }
+  // Favor larger candidates first (more likely full payload shape).
+  out.sort((a, b) => b.length - a.length);
+  return out;
 }
 
 function extractJsonFromText(text) {
@@ -128,6 +177,11 @@ function extractJsonFromText(text) {
   if (startArr >= 0 && endArr > startArr) {
     const slice = raw.slice(startArr, endArr + 1);
     const parsed = maybeParseJson(slice);
+    if (parsed) return parsed;
+  }
+  const candidates = extractBalancedJsonCandidates(raw);
+  for (const candidate of candidates) {
+    const parsed = maybeParseJson(candidate);
     if (parsed) return parsed;
   }
   return null;
@@ -238,7 +292,7 @@ async function callOpenClawResponses(inputPayload) {
 }
 
 function findHarvestShape(node, depth = 0) {
-  if (!node || depth > 6) return null;
+  if (!node || depth > 12) return null;
   if (typeof node === 'string') {
     const parsedFromMixed = extractJsonFromText(node);
     if (parsedFromMixed) {
