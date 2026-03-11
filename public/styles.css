@@ -4710,3 +4710,15 @@ th {
 .comment-reply-row {
   background: #fafafa;
 }
+
+/* Temporary, high-visibility deploy verification marker */
+.deploy-test-banner {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 2px solid #7c2d12;
+  border-radius: 8px;
+  background: #fef08a;
+  color: #7c2d12;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
