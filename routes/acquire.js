@@ -371,6 +371,8 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
       const backup = await runRedditHarvest({
         ...inputPayload,
         source_mode: 'public',
+        max_posts: Math.min(Number(inputPayload?.max_posts || 100) || 100, 5),
+        max_comments: Math.min(Number(inputPayload?.max_comments || 500) || 500, 100),
       });
       if (backup?.ok && backup?.data) {
         return {
@@ -440,6 +442,8 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
       const backup = await runRedditHarvest({
         ...inputPayload,
         source_mode: 'public',
+        max_posts: Math.min(Number(inputPayload?.max_posts || 100) || 100, 5),
+        max_comments: Math.min(Number(inputPayload?.max_comments || 500) || 500, 100),
       });
       if (backup?.ok && backup?.data) {
         return {
