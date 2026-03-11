@@ -57,7 +57,7 @@ const {
   rowToYoutubeCategory,
 } = require('../lib/harvest/YoutubeCategoriesStore');
 const { logActivity } = require('../lib/activityLog');
-const { relayOpenClaw } = require('../lib/openclawGateway');
+const { getProviderValues } = require('../lib/apiSettings');
 
 function safeText(value) {
   return String(value || '').trim();
@@ -79,6 +79,102 @@ function maybeParseJson(value) {
     return JSON.parse(text);
   } catch {
     return null;
+  }
+}
+
+function extractOpenClawOutputText(payload) {
+  const output = Array.isArray(payload?.output) ? payload.output : [];
+  for (const message of output) {
+    const content = Array.isArray(message?.content) ? message.content : [];
+    for (const part of content) {
+      const text = safeText(part?.text || part?.value || '');
+      if (text) return text;
+    }
+  }
+  return '';
+}
+
+function extractJsonFromText(text) {
+  const raw = safeText(text);
+  if (!raw) return null;
+  const direct = maybeParseJson(raw);
+  if (direct) return direct;
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch && fencedMatch[1]) {
+    const parsed = maybeParseJson(fencedMatch[1]);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+async function callOpenClawResponses(inputPayload) {
+  const cfg = getProviderValues('openclaw');
+  const baseUrl = safeText(cfg?.base_url).replace(/\/+$/, '');
+  const apiKey = safeText(cfg?.api_key);
+  const timeoutMs = Math.max(5000, Number(cfg?.timeout_ms || 120000) || 120000);
+  if (!baseUrl) {
+    return { ok: false, status: 400, error: 'OpenClaw API is not configured in Settings > APIs' };
+  }
+  if (!apiKey) {
+    return { ok: false, status: 400, error: 'OpenClaw API key is missing in Settings > APIs' };
+  }
+
+  const prompt = [
+    'You are harvesting Reddit data for analytics.',
+    'Use browser automation with human-in-the-loop as needed.',
+    `Target: ${safeText(inputPayload?.target)}`,
+    `Mode: ${safeText(inputPayload?.mode || 'auto')}`,
+    `Sort: ${safeText(inputPayload?.sort || 'new')}`,
+    `Max posts: ${Number(inputPayload?.max_posts || 100) || 100}`,
+    `Max comments: ${Number(inputPayload?.max_comments || 500) || 500}`,
+    `Keyword: ${safeText(inputPayload?.keyword) || '(none)'}`,
+    `Start date: ${safeText(inputPayload?.start_time) || '(none)'}`,
+    `End date: ${safeText(inputPayload?.end_time) || '(none)'}`,
+    `Include replies: ${inputPayload?.include_replies !== false}`,
+    '',
+    'Return ONLY valid JSON with this shape:',
+    '{"subreddit":"","post":{},"posts":[],"comments":[],"errors":[]}',
+    'Each comment should include id, author, score, body, created_utc, permalink when available.',
+  ].join('\n');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'openclaw:main',
+        input: prompt,
+      }),
+      signal: controller.signal,
+    });
+    const raw = await response.text();
+    let payload = null;
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      payload = { raw };
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status || 502,
+        error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
+        data: payload,
+      };
+    }
+    return { ok: true, status: response.status || 200, data: payload };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
+    }
+    return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -148,95 +244,16 @@ function normalizeOpenClawHarvestResult(rawPayload, inputPayload, trace = {}) {
 }
 
 async function runRedditHarvestViaOpenClaw(inputPayload) {
-  const requestBody = {
-    manual_confirmed: true,
-    role: 'operator',
-    type: 'acquire.reddit.harvest',
-    workspace_id: 'alphire-main',
-    requested_by: {
-      user_id: 'alphire-ui',
-      email: 'ops@alphire.ai',
-    },
-    payload: {
-      target: safeText(inputPayload?.target),
-      mode: safeText(inputPayload?.mode || 'auto').toLowerCase(),
-      sort: safeText(inputPayload?.sort || 'new').toLowerCase(),
-      max_posts: Number(inputPayload?.max_posts || 100) || 100,
-      max_comments: Number(inputPayload?.max_comments || 500) || 500,
-      keyword: safeText(inputPayload?.keyword),
-      start_time: safeText(inputPayload?.start_time),
-      end_time: safeText(inputPayload?.end_time),
-      include_replies: inputPayload?.include_replies !== false,
-      source_mode: 'openclaw',
-      instructions: 'Use a logged-in browser session to navigate the Reddit target and return structured JSON with fields: post (optional), posts (array), comments (array).',
-    },
-    policy: { requires_manual_approval: true },
-  };
-
-  const steps = [];
-  const created = await relayOpenClaw('create_job', requestBody);
-  steps.push({ action: 'create_job', ok: Boolean(created?.ok), status: Number(created?.status || 0) || 0 });
-  if (!created.ok) {
-    return { ok: false, status: created.status || 502, error: created.error || 'OpenClaw create_job failed', data: { steps } };
+  const responseCall = await callOpenClawResponses(inputPayload);
+  if (!responseCall.ok) {
+    return responseCall;
   }
-
-  const jobId = firstNonEmpty(
-    created?.data?.result?.job?.id,
-    created?.data?.result?.job_id,
-    created?.data?.job?.id,
-    created?.data?.job_id,
-    created?.data?.id
-  );
-  if (!jobId) {
-    return { ok: false, status: 502, error: 'OpenClaw create_job did not return job_id', data: { steps, raw: created.data || {} } };
-  }
-
-  const preview = await relayOpenClaw('preview_job', {
-    manual_confirmed: true,
-    role: 'marketer',
-    job_id: jobId,
-  });
-  steps.push({ action: 'preview_job', ok: Boolean(preview?.ok), status: Number(preview?.status || 0) || 0 });
-  if (!preview.ok) {
-    return { ok: false, status: preview.status || 502, error: preview.error || 'OpenClaw preview_job failed', data: { steps, job_id: jobId } };
-  }
-
-  const approved = await relayOpenClaw('approve_job', {
-    manual_confirmed: true,
-    role: 'approver',
-    job_id: jobId,
-    decision: 'APPROVE',
-  });
-  steps.push({ action: 'approve_job', ok: Boolean(approved?.ok), status: Number(approved?.status || 0) || 0 });
-  if (!approved.ok) {
-    return { ok: false, status: approved.status || 502, error: approved.error || 'OpenClaw approve_job failed', data: { steps, job_id: jobId } };
-  }
-
-  const approvalToken = firstNonEmpty(
-    approved?.data?.result?.approval?.approval_token,
-    approved?.data?.result?.approval_token,
-    approved?.data?.approval?.approval_token,
-    approved?.data?.approval_token
-  );
-  if (!approvalToken) {
-    return { ok: false, status: 502, error: 'OpenClaw approve_job did not return approval token', data: { steps, job_id: jobId, raw: approved.data || {} } };
-  }
-
-  const executed = await relayOpenClaw('execute_job', {
-    manual_confirmed: true,
-    role: 'approver',
-    job_id: jobId,
-    approval_token: approvalToken,
-  });
-  steps.push({ action: 'execute_job', ok: Boolean(executed?.ok), status: Number(executed?.status || 0) || 0 });
-  if (!executed.ok) {
-    return { ok: false, status: executed.status || 502, error: executed.error || 'OpenClaw execute_job failed', data: { steps, job_id: jobId } };
-  }
-
-  const normalized = normalizeOpenClawHarvestResult(executed.data || {}, inputPayload, {
-    jobId,
-    approvalToken,
-    steps,
+  const outputText = extractOpenClawOutputText(responseCall.data || {});
+  const parsedFromText = extractJsonFromText(outputText);
+  const rawPayload = parsedFromText || responseCall.data || {};
+  const normalized = normalizeOpenClawHarvestResult(rawPayload, inputPayload, {
+    jobId: safeText(responseCall.data?.id),
+    steps: [{ action: 'responses', ok: true, status: Number(responseCall.status || 0) || 200 }],
   });
 
   if (!normalized.posts.length && !normalized.comments.length && !normalized.post) {
@@ -244,11 +261,11 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
       ok: false,
       status: 502,
       error: 'OpenClaw finished but did not return structured Reddit harvest data.',
-      data: { steps, job_id: jobId, hint: 'Return JSON with post/posts/comments from the OpenClaw Reddit harvest job.' },
+      data: { job_id: safeText(responseCall.data?.id), hint: 'Return JSON with post/posts/comments from the OpenClaw Reddit harvest job.' },
     };
   }
 
-  return { ok: true, status: 200, data: normalized };
+  return { ok: true, status: responseCall.status || 200, data: normalized };
 }
 
 async function handle(req, res, pathname, method) {
