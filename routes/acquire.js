@@ -64,6 +64,10 @@ function safeText(value) {
   return String(value || '').trim();
 }
 
+function waitFor(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(1, Number(ms) || 1)));
+}
+
 function firstNonEmpty(...values) {
   for (const value of values) {
     const text = safeText(value);
@@ -708,7 +712,27 @@ async function handle(req, res, pathname, method) {
       include_replies: body?.include_replies !== false,
       source_mode: 'openclaw',
     };
-    const harvest = await runRedditHarvestViaOpenClaw(inputPayload);
+    const startedAt = Date.now();
+    const routeBudgetMs = Math.max(20000, Number(process.env.REDDIT_ROUTE_TIMEOUT_MS || 120000) || 120000);
+    console.log('[acquire.reddit] start', {
+      target: inputPayload.target,
+      mode: inputPayload.mode,
+      max_posts: inputPayload.max_posts,
+      max_comments: inputPayload.max_comments,
+      routeBudgetMs,
+    });
+    const harvest = await Promise.race([
+      runRedditHarvestViaOpenClaw(inputPayload),
+      (async () => {
+        await waitFor(routeBudgetMs);
+        return { ok: false, status: 504, error: `Reddit harvest route timed out after ${routeBudgetMs}ms` };
+      })(),
+    ]);
+    console.log('[acquire.reddit] harvest-finished', {
+      ok: !!harvest?.ok,
+      status: Number(harvest?.status || 0) || 0,
+      elapsedMs: Date.now() - startedAt,
+    });
     if (!harvest.ok) {
       return sendErr(res, harvest.status || 500, harvest.error || 'Reddit harvest failed', {
         details: [
@@ -718,8 +742,27 @@ async function handle(req, res, pathname, method) {
         ].filter(Boolean),
       }), true;
     }
-    const saved = createRedditHarvestRun(inputPayload, harvest.data || {});
+    const saved = await Promise.race([
+      Promise.resolve(createRedditHarvestRun(inputPayload, harvest.data || {})),
+      (async () => {
+        await waitFor(10000);
+        return { ok: false, status: 504, error: 'Reddit harvest save timed out after 10000ms' };
+      })(),
+    ]);
+    if (!saved?.ok) {
+      console.log('[acquire.reddit] save-failed', {
+        status: Number(saved?.status || 0) || 0,
+        error: safeText(saved?.error),
+      });
+      return sendErr(res, saved.status || 500, saved.error || 'Failed to save Reddit harvest run'), true;
+    }
     const run = saved.data || null;
+    console.log('[acquire.reddit] done', {
+      run_id: run?.run_id || null,
+      elapsedMs: Date.now() - startedAt,
+      posts: Number(run?.stats?.total_posts || 0) || 0,
+      comments: Number(run?.stats?.total_comments || 0) || 0,
+    });
     logActivity({
       action: 'acquire.reddit',
       entityType: 'acquire',
