@@ -239,6 +239,13 @@ async function callOpenClawResponses(inputPayload) {
 
 function findHarvestShape(node, depth = 0) {
   if (!node || depth > 6) return null;
+  if (typeof node === 'string') {
+    const parsedFromMixed = extractJsonFromText(node);
+    if (parsedFromMixed) {
+      return findHarvestShape(parsedFromMixed, depth + 1);
+    }
+    return null;
+  }
   if (Array.isArray(node)) {
     for (const item of node) {
       const found = findHarvestShape(item, depth + 1);
