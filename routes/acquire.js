@@ -18,7 +18,6 @@ const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
 const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
 const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
 const { runXHarvest } = require('../lib/harvest/XHarvestRun');
-const { runRedditHarvest } = require('../lib/harvest/RedditHarvestRun');
 const {
   createXHarvestRun,
   listXHarvestRuns,
@@ -58,6 +57,199 @@ const {
   rowToYoutubeCategory,
 } = require('../lib/harvest/YoutubeCategoriesStore');
 const { logActivity } = require('../lib/activityLog');
+const { relayOpenClaw } = require('../lib/openclawGateway');
+
+function safeText(value) {
+  return String(value || '').trim();
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const text = safeText(value);
+    if (text) return text;
+  }
+  return '';
+}
+
+function maybeParseJson(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!text || (text[0] !== '{' && text[0] !== '[')) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function findHarvestShape(node, depth = 0) {
+  if (!node || depth > 6) return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findHarvestShape(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof node !== 'object') return null;
+
+  const hasPost = node.post && typeof node.post === 'object';
+  const hasPosts = Array.isArray(node.posts);
+  const hasComments = Array.isArray(node.comments);
+  if (hasPost || hasPosts || hasComments) {
+    return node;
+  }
+
+  for (const value of Object.values(node)) {
+    const parsed = maybeParseJson(value);
+    if (parsed) {
+      const foundParsed = findHarvestShape(parsed, depth + 1);
+      if (foundParsed) return foundParsed;
+    }
+    const found = findHarvestShape(value, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function normalizeOpenClawHarvestResult(rawPayload, inputPayload, trace = {}) {
+  const shaped = findHarvestShape(rawPayload) || {};
+  const postsFromShape = Array.isArray(shaped.posts) ? shaped.posts : [];
+  const postFromShape = shaped.post && typeof shaped.post === 'object' ? shaped.post : null;
+  const comments = Array.isArray(shaped.comments) ? shaped.comments : [];
+  const posts = postsFromShape.length
+    ? postsFromShape
+    : (postFromShape ? [postFromShape] : []);
+  const primaryPost = postFromShape || posts[0] || null;
+  const subreddit = firstNonEmpty(
+    primaryPost?.subreddit,
+    shaped?.subreddit,
+    inputPayload?.subreddit
+  );
+
+  return {
+    mode: safeText(inputPayload?.mode || 'auto') || 'auto',
+    source_mode: 'openclaw',
+    target: safeText(inputPayload?.target),
+    subreddit,
+    post: primaryPost || null,
+    posts,
+    comments,
+    errors: [],
+    endpoint: firstNonEmpty(shaped?.endpoint, 'openclaw'),
+    auth_mode: 'openclaw',
+    openclaw: {
+      job_id: safeText(trace?.jobId),
+      approval_token_present: Boolean(trace?.approvalToken),
+      steps: trace?.steps || [],
+    },
+    raw: rawPayload && typeof rawPayload === 'object' ? rawPayload : {},
+  };
+}
+
+async function runRedditHarvestViaOpenClaw(inputPayload) {
+  const requestBody = {
+    manual_confirmed: true,
+    role: 'operator',
+    type: 'acquire.reddit.harvest',
+    workspace_id: 'alphire-main',
+    requested_by: {
+      user_id: 'alphire-ui',
+      email: 'ops@alphire.ai',
+    },
+    payload: {
+      target: safeText(inputPayload?.target),
+      mode: safeText(inputPayload?.mode || 'auto').toLowerCase(),
+      sort: safeText(inputPayload?.sort || 'new').toLowerCase(),
+      max_posts: Number(inputPayload?.max_posts || 100) || 100,
+      max_comments: Number(inputPayload?.max_comments || 500) || 500,
+      keyword: safeText(inputPayload?.keyword),
+      start_time: safeText(inputPayload?.start_time),
+      end_time: safeText(inputPayload?.end_time),
+      include_replies: inputPayload?.include_replies !== false,
+      source_mode: 'openclaw',
+      instructions: 'Use a logged-in browser session to navigate the Reddit target and return structured JSON with fields: post (optional), posts (array), comments (array).',
+    },
+    policy: { requires_manual_approval: true },
+  };
+
+  const steps = [];
+  const created = await relayOpenClaw('create_job', requestBody);
+  steps.push({ action: 'create_job', ok: Boolean(created?.ok), status: Number(created?.status || 0) || 0 });
+  if (!created.ok) {
+    return { ok: false, status: created.status || 502, error: created.error || 'OpenClaw create_job failed', data: { steps } };
+  }
+
+  const jobId = firstNonEmpty(
+    created?.data?.result?.job?.id,
+    created?.data?.result?.job_id,
+    created?.data?.job?.id,
+    created?.data?.job_id,
+    created?.data?.id
+  );
+  if (!jobId) {
+    return { ok: false, status: 502, error: 'OpenClaw create_job did not return job_id', data: { steps, raw: created.data || {} } };
+  }
+
+  const preview = await relayOpenClaw('preview_job', {
+    manual_confirmed: true,
+    role: 'marketer',
+    job_id: jobId,
+  });
+  steps.push({ action: 'preview_job', ok: Boolean(preview?.ok), status: Number(preview?.status || 0) || 0 });
+  if (!preview.ok) {
+    return { ok: false, status: preview.status || 502, error: preview.error || 'OpenClaw preview_job failed', data: { steps, job_id: jobId } };
+  }
+
+  const approved = await relayOpenClaw('approve_job', {
+    manual_confirmed: true,
+    role: 'approver',
+    job_id: jobId,
+    decision: 'APPROVE',
+  });
+  steps.push({ action: 'approve_job', ok: Boolean(approved?.ok), status: Number(approved?.status || 0) || 0 });
+  if (!approved.ok) {
+    return { ok: false, status: approved.status || 502, error: approved.error || 'OpenClaw approve_job failed', data: { steps, job_id: jobId } };
+  }
+
+  const approvalToken = firstNonEmpty(
+    approved?.data?.result?.approval?.approval_token,
+    approved?.data?.result?.approval_token,
+    approved?.data?.approval?.approval_token,
+    approved?.data?.approval_token
+  );
+  if (!approvalToken) {
+    return { ok: false, status: 502, error: 'OpenClaw approve_job did not return approval token', data: { steps, job_id: jobId, raw: approved.data || {} } };
+  }
+
+  const executed = await relayOpenClaw('execute_job', {
+    manual_confirmed: true,
+    role: 'approver',
+    job_id: jobId,
+    approval_token: approvalToken,
+  });
+  steps.push({ action: 'execute_job', ok: Boolean(executed?.ok), status: Number(executed?.status || 0) || 0 });
+  if (!executed.ok) {
+    return { ok: false, status: executed.status || 502, error: executed.error || 'OpenClaw execute_job failed', data: { steps, job_id: jobId } };
+  }
+
+  const normalized = normalizeOpenClawHarvestResult(executed.data || {}, inputPayload, {
+    jobId,
+    approvalToken,
+    steps,
+  });
+
+  if (!normalized.posts.length && !normalized.comments.length && !normalized.post) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'OpenClaw finished but did not return structured Reddit harvest data.',
+      data: { steps, job_id: jobId, hint: 'Return JSON with post/posts/comments from the OpenClaw Reddit harvest job.' },
+    };
+  }
+
+  return { ok: true, status: 200, data: normalized };
+}
 
 async function handle(req, res, pathname, method) {
   const urlObj = getUrlObj(req);
@@ -241,7 +433,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, result.data), true;
   }
 
-  // POST /api/acquire/reddit-harvest — ⚡ RATE LIMITED (hits Reddit API)
+  // POST /api/acquire/reddit-harvest — ⚡ RATE LIMITED (OpenClaw browser-based harvest)
   if (pathname === '/api/acquire/reddit-harvest' && method === 'POST') {
     if (checkEndpointLimit(req, res, 'harvest.reddit')) return true;
 
@@ -259,14 +451,15 @@ async function handle(req, res, pathname, method) {
       start_time: String(body?.start_time || body?.startTime || '').trim(),
       end_time: String(body?.end_time || body?.endTime || '').trim(),
       include_replies: body?.include_replies !== false,
+      source_mode: 'openclaw',
     };
-    const harvest = await runRedditHarvest(inputPayload);
+    const harvest = await runRedditHarvestViaOpenClaw(inputPayload);
     if (!harvest.ok) {
       return sendErr(res, harvest.status || 500, harvest.error || 'Reddit harvest failed', {
         details: [
-          String(harvest.endpoint || ''),
+          String(harvest.data?.hint || ''),
           String(harvest.data?.type || ''),
-          String(harvest.data?.source || ''),
+          String(harvest.data?.job_id || ''),
         ].filter(Boolean),
       }), true;
     }

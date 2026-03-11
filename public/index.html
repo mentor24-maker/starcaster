@@ -1104,6 +1104,19 @@
         </div>
 
         <h3 style="margin-top: 1rem;">Run Detail</h3>
+        <h4 style="margin-top: 0.6rem;">Post Details</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody id="redditHarvestPostDetailsBody"></tbody>
+          </table>
+        </div>
+        <h4 style="margin-top: 0.8rem;">Posts + Comments</h4>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1128,7 +1141,7 @@
             <button id="redditHarvestRefreshBtn" type="button">Refresh Runs</button>
           </div>
         </div>
-        <p>Provide a subreddit link/name or specific post link. APP will harvest posts (and comments for post mode) and store runs for later analysis.</p>
+        <p>Provide a subreddit link/name or specific post link. Reddit harvest is currently routed through OpenClaw browser automation (human-in-the-loop) and stored for later analysis.</p>
 
         <form id="redditHarvestForm" class="stack-form labeled-form" style="max-width: 980px;">
           <div class="form-row">
@@ -1147,9 +1160,7 @@
             <div class="form-row">
               <label for="redditHarvestSourceMode">Source Mode</label>
               <select id="redditHarvestSourceMode" name="source_mode">
-                <option value="auto">Auto (OAuth then Public)</option>
-                <option value="public">Public scrape only</option>
-                <option value="oauth">Reddit API only</option>
+                <option value="openclaw" selected>OpenClaw Browser (human-in-the-loop)</option>
               </select>
             </div>
             <div class="form-row">
