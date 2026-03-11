@@ -119,7 +119,7 @@ async function callOpenClawResponses(inputPayload) {
     return { ok: false, status: 400, error: 'OpenClaw API key is missing in Settings > APIs' };
   }
 
-  const prompt = [
+  const basePrompt = [
     'You are harvesting Reddit data for analytics.',
     'Use browser automation with human-in-the-loop as needed.',
     `Target: ${safeText(inputPayload?.target)}`,
@@ -133,49 +133,82 @@ async function callOpenClawResponses(inputPayload) {
     `Include replies: ${inputPayload?.include_replies !== false}`,
     '',
     'Return ONLY valid JSON with this shape:',
-    '{"subreddit":"","post":{},"posts":[],"comments":[],"errors":[]}',
+    '{"subreddit":"","post":null,"posts":[],"comments":[],"errors":[]}',
     'Each comment should include id, author, score, body, created_utc, permalink when available.',
+    'No markdown fences. No prose. JSON only.',
   ].join('\n');
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(`${baseUrl}/v1/responses`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openclaw:main',
-        input: prompt,
-      }),
-      signal: controller.signal,
-    });
-    const raw = await response.text();
-    let payload = null;
+  async function sendPrompt(inputText) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      payload = raw ? JSON.parse(raw) : {};
-    } catch {
-      payload = { raw };
+      const response = await fetch(`${baseUrl}/v1/responses`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'openclaw:main',
+          input: inputText,
+        }),
+        signal: controller.signal,
+      });
+      const raw = await response.text();
+      let payload = null;
+      try {
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        payload = { raw };
+      }
+      if (!response.ok) {
+        return {
+          ok: false,
+          status: response.status || 502,
+          error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
+          data: payload,
+        };
+      }
+      return { ok: true, status: response.status || 200, data: payload };
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
+      }
+      return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
+    } finally {
+      clearTimeout(timer);
     }
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status || 502,
-        error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
-        data: payload,
-      };
-    }
-    return { ok: true, status: response.status || 200, data: payload };
-  } catch (err) {
-    if (err?.name === 'AbortError') {
-      return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
-    }
-    return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
-  } finally {
-    clearTimeout(timer);
   }
+
+  const first = await sendPrompt(basePrompt);
+  if (!first.ok) return first;
+  const firstText = extractOpenClawOutputText(first.data || {});
+  const firstJson = extractJsonFromText(firstText);
+  if (firstJson) return first;
+
+  // Retry once with an explicit JSON-repair instruction when model responds with prose.
+  const retryPrompt = [
+    'Convert the following content into strict JSON with keys:',
+    '{"subreddit":"","post":null,"posts":[],"comments":[],"errors":[]}',
+    'If content is not harvest data, return empty arrays and set errors with a short explanation.',
+    'No markdown. No prose. JSON only.',
+    '',
+    'CONTENT START',
+    firstText || '(empty)',
+    'CONTENT END',
+  ].join('\n');
+  const second = await sendPrompt(retryPrompt);
+  if (!second.ok) return second;
+  const secondText = extractOpenClawOutputText(second.data || {});
+  const secondJson = extractJsonFromText(secondText);
+  if (secondJson) return second;
+
+  return {
+    ok: false,
+    status: 502,
+    error: 'OpenClaw returned non-JSON output.',
+    data: { first_output: firstText || '', second_output: secondText || '' },
+  };
 }
 
 function findHarvestShape(node, depth = 0) {
