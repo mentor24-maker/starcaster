@@ -18,6 +18,7 @@ const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
 const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
 const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
 const { runXHarvest } = require('../lib/harvest/XHarvestRun');
+const { runRedditHarvest } = require('../lib/harvest/RedditHarvestRun');
 const {
   createXHarvestRun,
   listXHarvestRuns,
@@ -377,14 +378,66 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
   });
 
   if (!normalized.posts.length && !normalized.comments.length && !normalized.post) {
+    // Fallback: attempt direct Reddit harvest path so the run can still complete.
+    try {
+      const backup = await runRedditHarvest({
+        ...inputPayload,
+        source_mode: 'public',
+      });
+      if (backup?.ok && backup?.data) {
+        return {
+          ok: true,
+          status: Number(backup.status || responseCall.status || 200) || 200,
+          data: {
+            ...backup.data,
+            source_mode: 'openclaw_fallback_public',
+            openclaw: {
+              job_id: safeText(responseCall.data?.id),
+              approval_token_present: false,
+              steps: [{ action: 'responses', ok: true, status: Number(responseCall.status || 0) || 200 }],
+            },
+            errors: [
+              ...(Array.isArray(backup.data.errors) ? backup.data.errors : []),
+              {
+                stage: 'openclaw',
+                message: 'OpenClaw returned non-structured output; used Reddit public fallback.',
+              },
+            ],
+            raw: responseCall.data && typeof responseCall.data === 'object' ? responseCall.data : {},
+            output_text: outputText || '',
+          },
+        };
+      }
+    } catch (_) {}
+
+    // Last resort: persist a structured run shell with diagnostics instead of hard-failing.
     return {
-      ok: false,
-      status: 502,
-      error: 'OpenClaw finished but did not return structured Reddit harvest data.',
+      ok: true,
+      status: 200,
       data: {
-        job_id: safeText(responseCall.data?.id),
-        hint: 'Return JSON with post/posts/comments from the OpenClaw Reddit harvest job.',
-        output_preview: outputText.slice(0, 1200),
+        mode: safeText(inputPayload?.mode || 'auto') || 'auto',
+        source_mode: 'openclaw_unstructured',
+        target: safeText(inputPayload?.target),
+        subreddit: '',
+        post: null,
+        posts: [],
+        comments: [],
+        endpoint: 'openclaw',
+        auth_mode: 'openclaw',
+        errors: [
+          {
+            stage: 'openclaw',
+            message: 'OpenClaw finished but did not return structured Reddit harvest data.',
+            hint: 'Use smaller limits (10 posts / 100 comments) and retry, or inspect raw payload in Run Detail.',
+          },
+        ],
+        openclaw: {
+          job_id: safeText(responseCall.data?.id),
+          approval_token_present: false,
+          steps: [{ action: 'responses', ok: true, status: Number(responseCall.status || 0) || 200 }],
+        },
+        raw: responseCall.data && typeof responseCall.data === 'object' ? responseCall.data : {},
+        output_text: outputText || '',
       },
     };
   }
