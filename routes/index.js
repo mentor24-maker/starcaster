@@ -140,8 +140,18 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/debug-routes' && method === 'GET') {
     const google = getProviderValues('google_drive');
+    const openclaw = getProviderValues('openclaw');
+    const openclawEnvBase = String(process.env.OPENCLAW_BASE_URL || '').trim();
+    const openclawEnvKey = String(process.env.OPENCLAW_API_KEY || '').trim();
+    const openclawEnvTimeout = String(process.env.OPENCLAW_TIMEOUT_MS || '').trim();
     const payload = {
       now: new Date().toISOString(),
+      build: {
+        commit: String(process.env.VERCEL_GIT_COMMIT_SHA || '').trim() || null,
+        branch: String(process.env.VERCEL_GIT_COMMIT_REF || '').trim() || null,
+        deployment_url: String(process.env.VERCEL_URL || '').trim() || null,
+        region: String(process.env.VERCEL_REGION || '').trim() || null,
+      },
       routeModules: ROUTE_MODULES.map((mod) => ({
         id: mod?.manifest?.id || '',
         label: mod?.manifest?.label || '',
@@ -159,6 +169,15 @@ async function handleRequest(req, res) {
         ),
         client_id_hint: maskSecret(google?.client_id || ''),
         refresh_token_hint: maskSecret(google?.refresh_token || ''),
+      },
+      openclawConfig: {
+        configured: Boolean(String(openclaw?.base_url || '').trim() && String(openclaw?.api_key || '').trim()),
+        base_url: String(openclaw?.base_url || '').trim(),
+        api_key_hint: maskSecret(openclaw?.api_key || ''),
+        timeout_ms: String(openclaw?.timeout_ms || '').trim(),
+        base_url_source: openclawEnvBase ? 'env' : 'settings',
+        api_key_source: openclawEnvKey ? 'env' : 'settings',
+        timeout_source: openclawEnvTimeout ? 'env' : 'settings',
       },
       expectedAcquireRoutes: [
         'POST /api/acquire/youtube-comment-suggestions',
