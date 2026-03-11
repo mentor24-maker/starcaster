@@ -74,24 +74,35 @@ function firstNonEmpty(...values) {
 function maybeParseJson(value) {
   if (typeof value !== 'string') return null;
   const text = value.trim();
-  if (!text || (text[0] !== '{' && text[0] !== '[')) return null;
+  if (!text) return null;
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    if (typeof parsed === 'string') {
+      try {
+        const reparsed = JSON.parse(parsed);
+        if (reparsed && typeof reparsed === 'object') return reparsed;
+      } catch {
+        // ignore
+      }
+    }
+    if (parsed && typeof parsed === 'object') return parsed;
   } catch {
-    return null;
+    // ignore
   }
+  return null;
 }
 
 function extractOpenClawOutputText(payload) {
   const output = Array.isArray(payload?.output) ? payload.output : [];
+  const chunks = [];
   for (const message of output) {
     const content = Array.isArray(message?.content) ? message.content : [];
     for (const part of content) {
       const text = safeText(part?.text || part?.value || '');
-      if (text) return text;
+      if (text) chunks.push(text);
     }
   }
-  return '';
+  return chunks.join('\n').trim();
 }
 
 function extractJsonFromText(text) {
@@ -102,6 +113,21 @@ function extractJsonFromText(text) {
   const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fencedMatch && fencedMatch[1]) {
     const parsed = maybeParseJson(fencedMatch[1]);
+    if (parsed) return parsed;
+  }
+  // Try extracting the largest JSON-like object/array from mixed prose.
+  const startObj = raw.indexOf('{');
+  const endObj = raw.lastIndexOf('}');
+  if (startObj >= 0 && endObj > startObj) {
+    const slice = raw.slice(startObj, endObj + 1);
+    const parsed = maybeParseJson(slice);
+    if (parsed) return parsed;
+  }
+  const startArr = raw.indexOf('[');
+  const endArr = raw.lastIndexOf(']');
+  if (startArr >= 0 && endArr > startArr) {
+    const slice = raw.slice(startArr, endArr + 1);
+    const parsed = maybeParseJson(slice);
     if (parsed) return parsed;
   }
   return null;
@@ -294,7 +320,11 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
       ok: false,
       status: 502,
       error: 'OpenClaw finished but did not return structured Reddit harvest data.',
-      data: { job_id: safeText(responseCall.data?.id), hint: 'Return JSON with post/posts/comments from the OpenClaw Reddit harvest job.' },
+      data: {
+        job_id: safeText(responseCall.data?.id),
+        hint: 'Return JSON with post/posts/comments from the OpenClaw Reddit harvest job.',
+        output_preview: outputText.slice(0, 1200),
+      },
     };
   }
 
