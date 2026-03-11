@@ -247,6 +247,7 @@ App.acquire = (function () {
     const startedAt = Date.now();
     const estimateSeconds = estimateRedditHarvestSeconds(payload);
     setRedditHarvestProgress(4, 'Queued request (phase 1 of 3)…');
+    setRedditHarvestProgress(12, `Running OpenClaw harvest (phase 2 of 3)… ~${estimateSeconds}s remaining (estimated)`);
     redditHarvestProgressTimer = setInterval(() => {
       const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
       const remainingSeconds = Math.max(0, estimateSeconds - elapsedSeconds);
@@ -787,6 +788,8 @@ App.acquire = (function () {
         const submitBtn = els.redditHarvestForm.querySelector('button[type="submit"]');
         e.preventDefault();
         let progress = null;
+        let controller = null;
+        let timer = null;
         try {
           const formData = new FormData(els.redditHarvestForm);
           const payload = {
@@ -804,9 +807,12 @@ App.acquire = (function () {
           if (!payload.target) throw new Error('Subreddit or post URL is required.');
           if (submitBtn) submitBtn.disabled = true;
           progress = beginRedditHarvestProgress(payload);
+          controller = new AbortController();
+          timer = setTimeout(() => controller.abort(), 180000);
           const res = await api('/api/acquire/reddit-harvest', {
             method: 'POST',
             body: JSON.stringify(payload),
+            signal: controller.signal,
           });
           state.redditHarvestCurrentRun = res.run || null;
           if (progress) {
@@ -817,9 +823,13 @@ App.acquire = (function () {
           await refreshRedditHarvestRuns();
           notify(`Reddit harvest complete (${(state.redditHarvestCurrentRun?.stats?.total_posts || 0)} posts, ${(state.redditHarvestCurrentRun?.stats?.total_comments || 0)} comments)`);
         } catch (err) {
+          if (err?.name === 'AbortError') {
+            err = new Error('Reddit harvest timed out after 180s. Try smaller limits (10 posts / 20 comments) and retry.');
+          }
           if (progress) progress.finishError(err?.message || 'request failed');
           notify(err.message, true);
         } finally {
+          if (timer) clearTimeout(timer);
           if (submitBtn) submitBtn.disabled = false;
         }
       });
