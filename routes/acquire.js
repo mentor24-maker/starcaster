@@ -367,40 +367,64 @@ function normalizeOpenClawHarvestResult(rawPayload, inputPayload, trace = {}) {
 async function runRedditHarvestViaOpenClaw(inputPayload) {
   const responseCall = await callOpenClawResponses(inputPayload);
   if (!responseCall.ok) {
-    const errorText = safeText(responseCall.error).toLowerCase();
-    const canFallback = errorText.includes('non-json output');
-    if (canFallback) {
-      try {
-        const backup = await runRedditHarvest({
-          ...inputPayload,
-          source_mode: 'public',
-        });
-        if (backup?.ok && backup?.data) {
-          return {
-            ok: true,
-            status: Number(backup.status || 200) || 200,
-            data: {
-              ...backup.data,
-              source_mode: 'openclaw_fallback_public',
-              openclaw: {
-                job_id: safeText(responseCall?.data?.id),
-                approval_token_present: false,
-                steps: [{ action: 'responses', ok: false, status: Number(responseCall.status || 0) || 502 }],
-              },
-              errors: [
-                ...(Array.isArray(backup.data.errors) ? backup.data.errors : []),
-                {
-                  stage: 'openclaw',
-                  message: 'OpenClaw returned non-JSON output; used Reddit public fallback.',
-                },
-              ],
-              raw: responseCall.data && typeof responseCall.data === 'object' ? responseCall.data : {},
+    try {
+      const backup = await runRedditHarvest({
+        ...inputPayload,
+        source_mode: 'public',
+      });
+      if (backup?.ok && backup?.data) {
+        return {
+          ok: true,
+          status: Number(backup.status || 200) || 200,
+          data: {
+            ...backup.data,
+            source_mode: 'openclaw_fallback_public',
+            openclaw: {
+              job_id: safeText(responseCall?.data?.id),
+              approval_token_present: false,
+              steps: [{ action: 'responses', ok: false, status: Number(responseCall.status || 0) || 502 }],
             },
-          };
-        }
-      } catch (_) {}
-    }
-    return responseCall;
+            errors: [
+              ...(Array.isArray(backup.data.errors) ? backup.data.errors : []),
+              {
+                stage: 'openclaw',
+                message: safeText(responseCall.error) || 'OpenClaw request failed; used Reddit public fallback.',
+              },
+            ],
+            raw: responseCall.data && typeof responseCall.data === 'object' ? responseCall.data : {},
+          },
+        };
+      }
+    } catch (_) {}
+
+    // Never hard-stop the run on OpenClaw transport/format errors.
+    return {
+      ok: true,
+      status: 200,
+      data: {
+        mode: safeText(inputPayload?.mode || 'auto') || 'auto',
+        source_mode: 'openclaw_unavailable',
+        target: safeText(inputPayload?.target),
+        subreddit: '',
+        post: null,
+        posts: [],
+        comments: [],
+        endpoint: 'openclaw',
+        auth_mode: 'openclaw',
+        errors: [
+          {
+            stage: 'openclaw',
+            message: safeText(responseCall.error) || 'OpenClaw request failed.',
+          },
+        ],
+        openclaw: {
+          job_id: safeText(responseCall?.data?.id),
+          approval_token_present: false,
+          steps: [{ action: 'responses', ok: false, status: Number(responseCall.status || 0) || 502 }],
+        },
+        raw: responseCall.data && typeof responseCall.data === 'object' ? responseCall.data : {},
+      },
+    };
   }
   const outputText = extractOpenClawOutputText(responseCall.data || {});
   const parsedFromText = extractJsonFromText(outputText);
