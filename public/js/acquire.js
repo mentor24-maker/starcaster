@@ -790,6 +790,7 @@ App.acquire = (function () {
         let progress = null;
         let controller = null;
         let timer = null;
+        let watchdog = null;
         try {
           const formData = new FormData(els.redditHarvestForm);
           const payload = {
@@ -809,11 +810,15 @@ App.acquire = (function () {
           progress = beginRedditHarvestProgress(payload);
           controller = new AbortController();
           timer = setTimeout(() => controller.abort(), 180000);
-          const res = await api('/api/acquire/reddit-harvest', {
+          const apiPromise = api('/api/acquire/reddit-harvest', {
             method: 'POST',
             body: JSON.stringify(payload),
             signal: controller.signal,
           });
+          const watchdogPromise = new Promise((_, reject) => {
+            watchdog = setTimeout(() => reject(new Error('Reddit harvest watchdog timeout after 190s. Please retry with lower limits.')), 190000);
+          });
+          const res = await Promise.race([apiPromise, watchdogPromise]);
           state.redditHarvestCurrentRun = res.run || null;
           if (progress) {
             setRedditHarvestProgress(96, 'Saving harvest results (phase 3 of 3)…');
@@ -830,6 +835,7 @@ App.acquire = (function () {
           notify(err.message, true);
         } finally {
           if (timer) clearTimeout(timer);
+          if (watchdog) clearTimeout(watchdog);
           if (submitBtn) submitBtn.disabled = false;
         }
       });
