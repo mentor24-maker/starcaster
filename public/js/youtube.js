@@ -21,6 +21,7 @@ App.youtube = (function () {
   var activeCommentsLoadToken = 0;
   var inlineCommentsCache = [];
   var suggestionLoadToken = 0;
+  var youtubeMinerMode = 'training';
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
 
@@ -536,21 +537,53 @@ App.youtube = (function () {
     if (!comments.length) {
       var emptyTr = document.createElement('tr');
       var emptyTd = document.createElement('td');
-      emptyTd.colSpan = 7;
+      emptyTd.colSpan = 10;
       emptyTd.textContent = 'No filtered comments found for current settings.';
       emptyTr.appendChild(emptyTd);
       tableEl.appendChild(emptyTr);
       return;
     }
 
+    function feedbackKeyForRow(row) {
+      return 'yt_miner_feedback:' + [safeText(row && row.video_id), safeText(row && row.id)].join(':');
+    }
+
+    function readFeedback(row) {
+      try {
+        var raw = window.localStorage.getItem(feedbackKeyForRow(row));
+        if (!raw) return { label: '', notes: '' };
+        var parsed = JSON.parse(raw);
+        return {
+          label: safeText(parsed && parsed.label),
+          notes: safeText(parsed && parsed.notes),
+        };
+      } catch (_) {
+        return { label: '', notes: '' };
+      }
+    }
+
+    function saveFeedback(row, label, notes) {
+      try {
+        window.localStorage.setItem(feedbackKeyForRow(row), JSON.stringify({
+          label: safeText(label),
+          notes: safeText(notes),
+          updated_at: new Date().toISOString(),
+        }));
+      } catch (_) { /* ignore */ }
+    }
+
     comments.forEach(function(row) {
       var tr = document.createElement('tr');
+      var feedback = readFeedback(row);
 
       var scoreTd = document.createElement('td');
       scoreTd.textContent = String(Number(row && row.score || 0) || 0);
 
       var categoryTd = document.createElement('td');
       categoryTd.textContent = safeText(row && row.category) || '-';
+
+      var whyTd = document.createElement('td');
+      whyTd.textContent = toArray(row && row.why).join(' | ') || '-';
 
       var tagsTd = document.createElement('td');
       tagsTd.textContent = toArray(row && row.tags).join(', ') || '-';
@@ -578,15 +611,55 @@ App.youtube = (function () {
       var draftTd = document.createElement('td');
       draftTd.textContent = safeText(row && row.reply_draft) || '-';
 
+      var labelTd = document.createElement('td');
+      var labelSelect = document.createElement('select');
+      labelSelect.className = 'youtube-miner-training-label';
+      ['','target_now','target_later','not_a_target','review'].forEach(function(opt) {
+        var option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt ? opt : 'label...';
+        labelSelect.appendChild(option);
+      });
+      labelSelect.value = feedback.label;
+      labelSelect.addEventListener('change', function() {
+        saveFeedback(row, labelSelect.value, notesInput.value);
+      });
+      labelTd.appendChild(labelSelect);
+
+      var notesTd = document.createElement('td');
+      var notesInput = document.createElement('input');
+      notesInput.type = 'text';
+      notesInput.placeholder = 'trainer notes...';
+      notesInput.value = feedback.notes;
+      notesInput.addEventListener('change', function() {
+        saveFeedback(row, labelSelect.value, notesInput.value);
+      });
+      notesTd.appendChild(notesInput);
+
       tr.appendChild(scoreTd);
       tr.appendChild(categoryTd);
+      tr.appendChild(whyTd);
       tr.appendChild(tagsTd);
       tr.appendChild(authorTd);
       tr.appendChild(videoTd);
       tr.appendChild(commentTd);
       tr.appendChild(draftTd);
+      tr.appendChild(labelTd);
+      tr.appendChild(notesTd);
       tableEl.appendChild(tr);
     });
+  }
+
+  function setYoutubeMinerMode(mode) {
+    youtubeMinerMode = mode === 'production' ? 'production' : 'training';
+    var trainingBtn = document.getElementById('youtubeMinerTrainingBtn');
+    var productionBtn = document.getElementById('youtubeMinerProductionBtn');
+    var trainingPanel = document.getElementById('youtubeMinerTrainingPanel');
+    var productionPanel = document.getElementById('youtubeMinerProductionPanel');
+    if (trainingBtn) trainingBtn.classList.toggle('active', youtubeMinerMode === 'training');
+    if (productionBtn) productionBtn.classList.toggle('active', youtubeMinerMode === 'production');
+    if (trainingPanel) trainingPanel.classList.toggle('hidden', youtubeMinerMode !== 'training');
+    if (productionPanel) productionPanel.classList.toggle('hidden', youtubeMinerMode !== 'production');
   }
 
   function renderYoutubeRunsTable() {
@@ -1125,6 +1198,8 @@ App.youtube = (function () {
             sort_by: String(formData.get('sort_by') || 'relevance'),
             include_replies: formData.get('include_replies') === 'on',
             exclude_noise: formData.get('exclude_noise') === 'on',
+            include_phrases_text: String(formData.get('include_phrases_text') || '').trim(),
+            exclude_phrases_text: String(formData.get('exclude_phrases_text') || '').trim(),
           };
           if (!payload.targets_text) throw new Error('Add at least one video/channel target.');
           if (submitBtn) submitBtn.disabled = true;
@@ -1142,6 +1217,16 @@ App.youtube = (function () {
         }
       });
     }
+
+    var youtubeMinerTrainingBtn = document.getElementById('youtubeMinerTrainingBtn');
+    var youtubeMinerProductionBtn = document.getElementById('youtubeMinerProductionBtn');
+    if (youtubeMinerTrainingBtn) {
+      youtubeMinerTrainingBtn.addEventListener('click', function() { setYoutubeMinerMode('training'); });
+    }
+    if (youtubeMinerProductionBtn) {
+      youtubeMinerProductionBtn.addEventListener('click', function() { setYoutubeMinerMode('production'); });
+    }
+    setYoutubeMinerMode('training');
 
     if (youtubeRunEditForm) {
       youtubeRunEditForm.addEventListener('submit', function(e) {
