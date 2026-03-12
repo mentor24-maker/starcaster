@@ -743,44 +743,47 @@
 
           <section id="youtubeMinerTrainingPanel" class="youtube-miner-mode-panel">
             <form id="youtubeCommentMinerForm" class="stack-form labeled-form">
-              <div class="form-row">
-                <label for="youtubeMinerTargets">Video/Channel Targets</label>
-                <textarea id="youtubeMinerTargets" name="targets" rows="8" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-              </div>
+              <div class="youtube-miner-training-grid">
+                <div class="youtube-miner-col-left">
+                  <div class="form-row">
+                    <label for="youtubeMinerTargets">Video/Channel Targets</label>
+                    <textarea id="youtubeMinerTargets" name="targets" rows="14" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+                  </div>
+                </div>
 
-              <div class="youtube-miner-filters-grid">
-                <div class="form-row">
-                  <label for="youtubeMinerIncludePhrases">Include Phrases</label>
-                  <input id="youtubeMinerIncludePhrases" name="include_phrases_text" placeholder="wanting more, outgrowing, next level" />
+                <div class="youtube-miner-col-right">
+                  <div class="form-row">
+                    <label for="youtubeMinerIncludePhrases">Include Phrases</label>
+                    <input id="youtubeMinerIncludePhrases" name="include_phrases_text" placeholder="wanting more, outgrowing, next level" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
+                    <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" placeholder="first, lol, sub4sub" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
+                    <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" type="number" min="1" max="20" value="5" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
+                    <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerMinScore">Minimum Score</label>
+                    <input id="youtubeMinerMinScore" name="min_score" type="number" min="0" max="20" value="3" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerSortBy">Sort</label>
+                    <select id="youtubeMinerSortBy" name="sort_by">
+                      <option value="relevance" selected>relevance</option>
+                      <option value="time">time</option>
+                    </select>
+                  </div>
+                  <div class="form-row checkbox-row youtube-miner-filter-checks">
+                    <label><input id="youtubeMinerIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
+                    <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" type="checkbox" checked /> Exclude obvious noise</label>
+                  </div>
                 </div>
-                <div class="form-row">
-                  <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
-                  <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" placeholder="first, lol, sub4sub" />
-                </div>
-                <div class="form-row">
-                  <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
-                  <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" type="number" min="1" max="20" value="5" />
-                </div>
-                <div class="form-row">
-                  <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
-                  <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
-                </div>
-                <div class="form-row">
-                  <label for="youtubeMinerMinScore">Minimum Score</label>
-                  <input id="youtubeMinerMinScore" name="min_score" type="number" min="0" max="20" value="3" />
-                </div>
-                <div class="form-row">
-                  <label for="youtubeMinerSortBy">Sort</label>
-                  <select id="youtubeMinerSortBy" name="sort_by">
-                    <option value="relevance" selected>relevance</option>
-                    <option value="time">time</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="form-row checkbox-row youtube-miner-filter-checks">
-                <label><input id="youtubeMinerIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
-                <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" type="checkbox" checked /> Exclude obvious noise</label>
               </div>
 
               <div class="form-row youtube-miner-category-config">

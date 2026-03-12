@@ -4769,14 +4769,29 @@ th {
   min-width: 130px;
 }
 
-.youtube-miner-filters-grid {
+.youtube-miner-training-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(440px, 1.25fr) minmax(460px, 1fr);
+  gap: 16px;
   align-items: start;
 }
 
-.youtube-miner-filters-grid .form-row > label {
+.youtube-miner-col-left,
+.youtube-miner-col-right {
+  min-width: 0;
+}
+
+#youtubeCommentMinerForm.labeled-form .form-row {
+  display: block;
+}
+
+#youtubeCommentMinerForm.labeled-form .form-row > label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.youtube-miner-col-right .form-row > label {
   white-space: nowrap;
 }
 
@@ -4784,6 +4799,10 @@ th {
   justify-content: flex-start;
   gap: 18px;
   margin-top: 8px;
+}
+
+#youtubeCommentMinerForm .youtube-miner-filter-checks {
+  display: flex;
 }
 
 #youtubeMinerCategoryConfigTable input[type="text"],
@@ -4878,20 +4897,16 @@ th {
 }
 
 @media (max-width: 1200px) {
-  .youtube-miner-filters-grid {
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  .youtube-miner-training-grid {
+    grid-template-columns: 1fr;
   }
 
-  .youtube-miner-filters-grid .form-row > label {
+  .youtube-miner-col-right .form-row > label {
     white-space: normal;
   }
 }
 
 @media (max-width: 860px) {
-  .youtube-miner-filters-grid {
-    grid-template-columns: 1fr;
-  }
-
   .youtube-miner-category-header-row {
     flex-direction: column;
     align-items: stretch;
@@ -4900,9 +4915,5 @@ th {
   .youtube-miner-category-toolbar-right {
     justify-content: flex-start;
     flex-wrap: wrap;
-  }
-
-  .youtube-miner-filters-grid .form-row > label {
-    white-space: normal;
   }
 }
