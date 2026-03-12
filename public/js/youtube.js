@@ -25,6 +25,7 @@ App.youtube = (function () {
   var youtubeMinerCategoryConfig = [];
   var youtubeMinerCategorySelectedIds = new Set();
   var youtubeMinerCategoryEditingIds = new Set();
+  var youtubeMinerLastResult = null;
   var YT_MINER_CATEGORY_CONFIG_KEY = 'yt_miner_category_config_v1';
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
@@ -794,25 +795,79 @@ App.youtube = (function () {
   }
 
   function renderYoutubeCommentMinerResult(result) {
+    if (result && typeof result === 'object') {
+      youtubeMinerLastResult = result;
+    }
+    var activeResult = youtubeMinerLastResult || {};
     var summaryEl = document.getElementById('youtubeCommentMinerSummary');
     var metaEl = document.getElementById('youtubeCommentMinerMeta');
     var tableEl = document.getElementById('youtubeCommentMinerTable');
     if (!summaryEl || !metaEl || !tableEl) return;
 
-    var stats = result && result.stats ? result.stats : {};
-    var comments = toArray(result && result.comments).slice(0, 200);
+    var stats = activeResult && activeResult.stats ? activeResult.stats : {};
+    var comments = toArray(activeResult && activeResult.comments).slice(0, 200);
+    var contentSearchInput = document.getElementById('youtubeMinerContentSearch');
+    var contentCategoryInput = document.getElementById('youtubeMinerContentCategoryFilter');
+    var contentSortInput = document.getElementById('youtubeMinerContentSort');
+    var searchQuery = safeText(contentSearchInput && contentSearchInput.value).toLowerCase();
+    var categoryFilter = safeText(contentCategoryInput && contentCategoryInput.value);
+    var sortBy = safeText(contentSortInput && contentSortInput.value) || 'score_desc';
+
+    if (contentCategoryInput) {
+      var categories = Array.from(new Set(comments.map(function(row) {
+        return safeText(row && row.category);
+      }).filter(Boolean))).sort(function(a, b) {
+        return a.localeCompare(b);
+      });
+      var previousValue = contentCategoryInput.value;
+      contentCategoryInput.innerHTML = '<option value="">All categories</option>';
+      categories.forEach(function(cat) {
+        var option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        contentCategoryInput.appendChild(option);
+      });
+      if (previousValue && categories.indexOf(previousValue) !== -1) {
+        contentCategoryInput.value = previousValue;
+      }
+    }
+
+    comments = comments.filter(function(row) {
+      var rowCategory = safeText(row && row.category);
+      if (categoryFilter && rowCategory !== categoryFilter) return false;
+      if (!searchQuery) return true;
+      var haystack = [
+        safeText(row && row.text),
+        safeText(row && row.author),
+        safeText(row && row.video_title),
+        safeText(row && row.video_id),
+        toArray(row && row.tags).join(' '),
+        toArray(row && row.why).join(' '),
+      ].join(' ').toLowerCase();
+      return haystack.indexOf(searchQuery) !== -1;
+    });
+
+    comments.sort(function(a, b) {
+      var scoreA = Number(a && a.score || 0) || 0;
+      var scoreB = Number(b && b.score || 0) || 0;
+      if (sortBy === 'score_asc') return scoreA - scoreB;
+      if (sortBy === 'category_asc') return safeText(a && a.category).localeCompare(safeText(b && b.category));
+      if (sortBy === 'author_asc') return safeText(a && a.author).localeCompare(safeText(b && b.author));
+      return scoreB - scoreA;
+    });
+
     var harvestedVideos = Number(stats.harvested_videos || 0) || 0;
     var totalRaw = Number(stats.total_comments_raw || 0) || 0;
     var totalFiltered = Number(stats.total_comments_filtered || 0) || 0;
-    summaryEl.textContent = 'Videos harvested: ' + harvestedVideos + ' | Raw comments: ' + totalRaw + ' | Filtered comments: ' + totalFiltered;
+    summaryEl.textContent = 'Videos harvested: ' + harvestedVideos + ' | Raw comments: ' + totalRaw + ' | Filtered comments: ' + totalFiltered + ' | Visible rows: ' + comments.length;
 
     metaEl.textContent = App.prettyJson({
-      input: result && result.input ? result.input : {},
+      input: activeResult && activeResult.input ? activeResult.input : {},
       stats: stats,
-      category_counts: result && result.category_counts ? result.category_counts : {},
-      tag_counts: result && result.tag_counts ? result.tag_counts : {},
-      warnings: toArray(result && result.warnings),
-      errors: toArray(result && result.errors),
+      category_counts: activeResult && activeResult.category_counts ? activeResult.category_counts : {},
+      tag_counts: activeResult && activeResult.tag_counts ? activeResult.tag_counts : {},
+      warnings: toArray(activeResult && activeResult.warnings),
+      errors: toArray(activeResult && activeResult.errors),
     });
 
     tableEl.innerHTML = '';
@@ -944,6 +999,23 @@ App.youtube = (function () {
     if (productionBtn) productionBtn.classList.toggle('active', youtubeMinerMode === 'production');
     if (trainingPanel) trainingPanel.classList.toggle('hidden', youtubeMinerMode !== 'training');
     if (productionPanel) productionPanel.classList.toggle('hidden', youtubeMinerMode !== 'production');
+  }
+
+  function setupYoutubeMinerCollapsibles() {
+    var toggles = Array.prototype.slice.call(document.querySelectorAll('.youtube-miner-collapsible-toggle[data-target-id]'));
+    toggles.forEach(function(toggle) {
+      toggle.addEventListener('click', function() {
+        var targetId = safeText(toggle.getAttribute('data-target-id'));
+        if (!targetId) return;
+        var body = document.getElementById(targetId);
+        if (!body) return;
+        var container = toggle.closest('.youtube-miner-collapsible');
+        if (!container) return;
+        var isOpen = container.classList.contains('is-open');
+        container.classList.toggle('is-open', !isOpen);
+        toggle.setAttribute('aria-expanded', String(!isOpen));
+      });
+    });
   }
 
   function renderYoutubeRunsTable() {
@@ -1511,6 +1583,9 @@ App.youtube = (function () {
     var youtubeMinerEditCheckedBtn = document.getElementById('youtubeMinerEditCheckedBtn');
     var youtubeMinerDeleteCheckedBtn = document.getElementById('youtubeMinerDeleteCheckedBtn');
     var youtubeMinerCategorySelectAll = document.getElementById('youtubeMinerCategorySelectAll');
+    var youtubeMinerContentSearch = document.getElementById('youtubeMinerContentSearch');
+    var youtubeMinerContentCategoryFilter = document.getElementById('youtubeMinerContentCategoryFilter');
+    var youtubeMinerContentSort = document.getElementById('youtubeMinerContentSort');
     if (youtubeMinerTrainingBtn) {
       youtubeMinerTrainingBtn.addEventListener('click', function() { setYoutubeMinerMode('training'); });
     }
@@ -1583,6 +1658,22 @@ App.youtube = (function () {
       });
     }
     setYoutubeMinerMode('training');
+    setupYoutubeMinerCollapsibles();
+    if (youtubeMinerContentSearch) {
+      youtubeMinerContentSearch.addEventListener('input', function() {
+        renderYoutubeCommentMinerResult();
+      });
+    }
+    if (youtubeMinerContentCategoryFilter) {
+      youtubeMinerContentCategoryFilter.addEventListener('change', function() {
+        renderYoutubeCommentMinerResult();
+      });
+    }
+    if (youtubeMinerContentSort) {
+      youtubeMinerContentSort.addEventListener('change', function() {
+        renderYoutubeCommentMinerResult();
+      });
+    }
 
     if (youtubeRunEditForm) {
       youtubeRunEditForm.addEventListener('submit', function(e) {
