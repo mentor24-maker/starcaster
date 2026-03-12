@@ -362,6 +362,7 @@ App.els = {
   redditHarvestForm: document.getElementById('redditHarvestForm'),
   redditHarvestRefreshBtn: document.getElementById('redditHarvestRefreshBtn'),
   redditHarvestRunsTable: document.getElementById('redditHarvestRunsTable'),
+  redditHarvestPostDetailsBody: document.getElementById('redditHarvestPostDetailsBody'),
   redditHarvestItemsTable: document.getElementById('redditHarvestItemsTable'),
   redditHarvestRawPreview: document.getElementById('redditHarvestRawPreview'),
   youtubeAcquireForm: document.getElementById('youtubeAcquireForm'),
