@@ -37,6 +37,10 @@ App.youtube = (function () {
     return String(value || '').trim();
   }
 
+  function toArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
   function getYoutubeCategories() {
     return Array.isArray(state.acquireYoutubeCategories) ? state.acquireYoutubeCategories : [];
   }
@@ -504,6 +508,85 @@ App.youtube = (function () {
     setSuggestionStatus('Load video details to generate comment ideas from transcript/description.', true);
     renderInlineComments(comments, 'No comments loaded for this video.');
     setPreview(els.youtubeRawPreview, result || {});
+  }
+
+  function renderYoutubeCommentMinerResult(result) {
+    var summaryEl = document.getElementById('youtubeCommentMinerSummary');
+    var metaEl = document.getElementById('youtubeCommentMinerMeta');
+    var tableEl = document.getElementById('youtubeCommentMinerTable');
+    if (!summaryEl || !metaEl || !tableEl) return;
+
+    var stats = result && result.stats ? result.stats : {};
+    var comments = toArray(result && result.comments).slice(0, 200);
+    var harvestedVideos = Number(stats.harvested_videos || 0) || 0;
+    var totalRaw = Number(stats.total_comments_raw || 0) || 0;
+    var totalFiltered = Number(stats.total_comments_filtered || 0) || 0;
+    summaryEl.textContent = 'Videos harvested: ' + harvestedVideos + ' | Raw comments: ' + totalRaw + ' | Filtered comments: ' + totalFiltered;
+
+    metaEl.textContent = App.prettyJson({
+      input: result && result.input ? result.input : {},
+      stats: stats,
+      category_counts: result && result.category_counts ? result.category_counts : {},
+      tag_counts: result && result.tag_counts ? result.tag_counts : {},
+      warnings: toArray(result && result.warnings),
+      errors: toArray(result && result.errors),
+    });
+
+    tableEl.innerHTML = '';
+    if (!comments.length) {
+      var emptyTr = document.createElement('tr');
+      var emptyTd = document.createElement('td');
+      emptyTd.colSpan = 7;
+      emptyTd.textContent = 'No filtered comments found for current settings.';
+      emptyTr.appendChild(emptyTd);
+      tableEl.appendChild(emptyTr);
+      return;
+    }
+
+    comments.forEach(function(row) {
+      var tr = document.createElement('tr');
+
+      var scoreTd = document.createElement('td');
+      scoreTd.textContent = String(Number(row && row.score || 0) || 0);
+
+      var categoryTd = document.createElement('td');
+      categoryTd.textContent = safeText(row && row.category) || '-';
+
+      var tagsTd = document.createElement('td');
+      tagsTd.textContent = toArray(row && row.tags).join(', ') || '-';
+
+      var authorTd = document.createElement('td');
+      authorTd.textContent = safeText(row && row.author) || '-';
+
+      var videoTd = document.createElement('td');
+      var videoTitle = safeText(row && row.video_title) || safeText(row && row.video_id) || '-';
+      var videoUrl = safeText(row && row.video_url);
+      if (videoUrl) {
+        var link = document.createElement('a');
+        link.href = videoUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = videoTitle;
+        videoTd.appendChild(link);
+      } else {
+        videoTd.textContent = videoTitle;
+      }
+
+      var commentTd = document.createElement('td');
+      commentTd.textContent = safeText(row && row.text) || '-';
+
+      var draftTd = document.createElement('td');
+      draftTd.textContent = safeText(row && row.reply_draft) || '-';
+
+      tr.appendChild(scoreTd);
+      tr.appendChild(categoryTd);
+      tr.appendChild(tagsTd);
+      tr.appendChild(authorTd);
+      tr.appendChild(videoTd);
+      tr.appendChild(commentTd);
+      tr.appendChild(draftTd);
+      tableEl.appendChild(tr);
+    });
   }
 
   function renderYoutubeRunsTable() {
@@ -1024,6 +1107,39 @@ App.youtube = (function () {
             }
           }
         } catch (err) { notify(err.message, true); }
+      });
+    }
+
+    var youtubeCommentMinerForm = document.getElementById('youtubeCommentMinerForm');
+    if (youtubeCommentMinerForm) {
+      youtubeCommentMinerForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        var submitBtn = document.getElementById('youtubeCommentMinerSubmitBtn');
+        try {
+          var formData = new FormData(youtubeCommentMinerForm);
+          var payload = {
+            targets_text: String(formData.get('targets') || '').trim(),
+            videos_per_channel: Number(formData.get('videos_per_channel') || 5) || 5,
+            max_comments_per_video: Number(formData.get('max_comments_per_video') || 100) || 100,
+            min_score: Number(formData.get('min_score') || 3) || 3,
+            sort_by: String(formData.get('sort_by') || 'relevance'),
+            include_replies: formData.get('include_replies') === 'on',
+            exclude_noise: formData.get('exclude_noise') === 'on',
+          };
+          if (!payload.targets_text) throw new Error('Add at least one video/channel target.');
+          if (submitBtn) submitBtn.disabled = true;
+          var res = await api('/api/acquire/youtube-comments/miner', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          var result = res.result || {};
+          renderYoutubeCommentMinerResult(result);
+          notify('YouTube Comment Miner complete (' + String(Number(result?.stats?.total_comments_filtered || 0) || 0) + ' filtered comments)');
+        } catch (err) {
+          notify(err.message, true);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
       });
     }
 

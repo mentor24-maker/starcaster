@@ -32,6 +32,7 @@ const {
   deleteRedditHarvestRun,
 } = require('../lib/harvest/RedditHarvestStore');
 const { runYoutubeCommentHarvest } = require('../lib/harvest/YoutubeCommentsRun');
+const { runYoutubeCommentMiner } = require('../lib/harvest/YoutubeCommentMiner');
 const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
 const { generateYoutubeCommentSuggestions } = require('../lib/harvest/YoutubeCommentSuggestions');
 const {
@@ -900,6 +901,44 @@ async function handle(req, res, pathname, method) {
     } catch (err) {
       return sendErr(res, err.status || 500, err.message || 'YouTube comments acquire failed'), true;
     }
+  }
+
+  // POST /api/acquire/youtube-comments/miner — ⚡ RATE LIMITED (batch comments + filtering/tagging)
+  if (pathname === '/api/acquire/youtube-comments/miner' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+
+    const body = await parseJsonBody(req);
+    const input = {
+      targets: body?.targets || body?.targets_text || '',
+      videos_per_channel: Number(body?.videos_per_channel || 5) || 5,
+      max_comments_per_video: Number(body?.max_comments_per_video || 100) || 100,
+      include_replies: body?.include_replies === true,
+      sort_by: String(body?.sort_by || 'relevance'),
+      min_score: Number(body?.min_score || 3) || 3,
+      exclude_noise: body?.exclude_noise !== false,
+    };
+
+    const mined = await runYoutubeCommentMiner(input);
+    if (!mined.ok) {
+      return sendErr(res, mined.status || 500, mined.error || 'YouTube comment miner failed', {
+        details: Array.isArray(mined?.data?.warnings) ? mined.data.warnings : [],
+      }), true;
+    }
+
+    logActivity({
+      action: 'acquire.youtube_comment_miner',
+      entityType: 'acquire',
+      entityId: null,
+      summary: `YouTube Comment Miner processed ${Number(mined?.data?.stats?.harvested_videos || 0) || 0} videos`,
+      meta: {
+        resolved_videos: Number(mined?.data?.stats?.resolved_videos || 0) || 0,
+        harvested_videos: Number(mined?.data?.stats?.harvested_videos || 0) || 0,
+        total_comments_raw: Number(mined?.data?.stats?.total_comments_raw || 0) || 0,
+        total_comments_filtered: Number(mined?.data?.stats?.total_comments_filtered || 0) || 0,
+      },
+    });
+
+    return sendOk(res, 200, mined.data, { result: mined.data }), true;
   }
 
   // POST /api/acquire/youtube-comment — ⚡ RATE LIMITED (writes to YouTube)
