@@ -4756,3 +4756,12 @@ th {
 .youtube-miner-training-label {
   min-width: 130px;
 }
+
+#youtubeMinerCategoryConfigTable input[type="text"],
+#youtubeMinerCategoryConfigTable input[type="number"] {
+  width: 100%;
+}
+
+#youtubeMinerAddCategoryBtn {
+  margin-top: 8px;
+}
