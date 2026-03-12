@@ -4757,6 +4757,52 @@ th {
   margin-top: 4px;
 }
 
+.youtube-miner-collapsible {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: #ffffff;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.youtube-miner-collapsible-toggle {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--c-border);
+  border-radius: 0;
+  margin: 0;
+  padding: 11px 12px;
+  background: #eef4fb;
+  color: #0f172a;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+}
+
+.youtube-miner-collapsible-toggle:hover {
+  background: #e4edf9;
+}
+
+.youtube-miner-collapsible-arrow::before {
+  content: "\25BE";
+  font-size: 16px;
+  line-height: 1;
+}
+
+.youtube-miner-collapsible:not(.is-open) .youtube-miner-collapsible-arrow::before {
+  content: "\25B8";
+}
+
+.youtube-miner-collapsible-body {
+  padding: 10px 12px 12px;
+}
+
+.youtube-miner-collapsible:not(.is-open) .youtube-miner-collapsible-body {
+  display: none;
+}
+
 .youtube-miner-mode-panel .form-row input[type="text"],
 .youtube-miner-mode-panel .form-row input[type="number"],
 .youtube-miner-mode-panel .form-row input[type="date"],
@@ -4812,6 +4858,7 @@ th {
 
 .youtube-miner-category-config {
   width: 100%;
+  margin-bottom: 0;
 }
 
 .youtube-miner-category-config .table-wrap {
@@ -4823,7 +4870,7 @@ th {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin: 6px 0 10px;
+  margin: 0 0 10px;
 }
 
 .youtube-miner-category-toolbar-right {
@@ -4896,6 +4943,24 @@ th {
   margin: 0;
 }
 
+.youtube-miner-content-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 2fr) minmax(180px, 1fr) minmax(230px, 1fr);
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.youtube-miner-content-controls .form-row {
+  margin-bottom: 0;
+}
+
+.youtube-miner-content-controls label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
 @media (max-width: 1200px) {
   .youtube-miner-training-grid {
     grid-template-columns: 1fr;
@@ -4907,6 +4972,10 @@ th {
 }
 
 @media (max-width: 860px) {
+  .youtube-miner-content-controls {
+    grid-template-columns: 1fr;
+  }
+
   .youtube-miner-category-header-row {
     flex-direction: column;
     align-items: stretch;
