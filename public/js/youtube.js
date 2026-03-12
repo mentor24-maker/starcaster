@@ -23,6 +23,8 @@ App.youtube = (function () {
   var suggestionLoadToken = 0;
   var youtubeMinerMode = 'training';
   var youtubeMinerCategoryConfig = [];
+  var youtubeMinerCategorySelectedIds = new Set();
+  var youtubeMinerCategoryEditingIds = new Set();
   var YT_MINER_CATEGORY_CONFIG_KEY = 'yt_miner_category_config_v1';
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
@@ -44,9 +46,14 @@ App.youtube = (function () {
     return Array.isArray(value) ? value : [];
   }
 
+  function makeYoutubeMinerCategoryId() {
+    return 'cat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  }
+
   function defaultYoutubeMinerCategoryConfig() {
     return [
       {
+        id: makeYoutubeMinerCategoryId(),
         name: 'intent',
         rationale: 'Signals purchase or action intent.',
         factor: 'Highest conversion opportunity.',
@@ -54,6 +61,7 @@ App.youtube = (function () {
         match_tags: ['purchase_intent'],
       },
       {
+        id: makeYoutubeMinerCategoryId(),
         name: 'pain_point',
         rationale: 'Describes struggle, friction, or need for help.',
         factor: 'High likelihood of response to useful guidance.',
@@ -61,6 +69,7 @@ App.youtube = (function () {
         match_tags: ['pain_point', 'solution_seeking'],
       },
       {
+        id: makeYoutubeMinerCategoryId(),
         name: 'growth',
         rationale: 'Shows openness to change or leveling up.',
         factor: 'Good fit for transformational messaging.',
@@ -68,6 +77,7 @@ App.youtube = (function () {
         match_tags: ['growth_openness'],
       },
       {
+        id: makeYoutubeMinerCategoryId(),
         name: 'question',
         rationale: 'Direct question or asks for direction.',
         factor: 'Easy to engage with direct helpful reply.',
@@ -75,6 +85,7 @@ App.youtube = (function () {
         match_tags: ['question'],
       },
       {
+        id: makeYoutubeMinerCategoryId(),
         name: 'positive',
         rationale: 'Positive feedback and appreciation.',
         factor: 'Relationship-building with warm audience.',
@@ -82,6 +93,7 @@ App.youtube = (function () {
         match_tags: ['positive_signal'],
       },
       {
+        id: makeYoutubeMinerCategoryId(),
         name: 'risk',
         rationale: 'Mentions scam/fake/bot/trust concerns.',
         factor: 'Trust education and credibility opportunity.',
@@ -89,6 +101,7 @@ App.youtube = (function () {
         match_tags: ['trust_risk'],
       },
       {
+        id: makeYoutubeMinerCategoryId(),
         name: 'general',
         rationale: 'Fallback when no category-specific signal appears.',
         factor: 'Low-priority background engagement.',
@@ -112,6 +125,7 @@ App.youtube = (function () {
           .filter(Boolean);
       }
       return {
+        id: safeText(row && row.id) || makeYoutubeMinerCategoryId(),
         name: safeText(row && row.name) || 'general',
         rationale: safeText(row && row.rationale),
         factor: safeText(row && row.factor),
@@ -140,18 +154,44 @@ App.youtube = (function () {
   }
 
   function collectYoutubeMinerCategoryConfigFromUi() {
+    syncYoutubeMinerCategoryRowsFromEditingDom();
+    return normalizeCategoryConfigRows(youtubeMinerCategoryConfig);
+  }
+
+  function syncYoutubeMinerCategoryRowsFromEditingDom() {
     var tbody = document.getElementById('youtubeMinerCategoryConfigTable');
-    if (!tbody) return normalizeCategoryConfigRows(youtubeMinerCategoryConfig);
-    var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr')).map(function(tr) {
-      return {
-        name: safeText(tr.querySelector('.yt-miner-cat-name') && tr.querySelector('.yt-miner-cat-name').value),
+    if (!tbody) return;
+    var editRows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-editing="true"]'));
+    if (!editRows.length) return;
+    editRows.forEach(function(tr) {
+      var rowId = safeText(tr.getAttribute('data-row-id'));
+      if (!rowId) return;
+      var idx = youtubeMinerCategoryConfig.findIndex(function(item) { return safeText(item && item.id) === rowId; });
+      if (idx < 0) return;
+      youtubeMinerCategoryConfig[idx] = {
+        id: rowId,
+        name: safeText(tr.querySelector('.yt-miner-cat-name') && tr.querySelector('.yt-miner-cat-name').value) || 'general',
         rationale: safeText(tr.querySelector('.yt-miner-cat-rationale') && tr.querySelector('.yt-miner-cat-rationale').value),
         factor: safeText(tr.querySelector('.yt-miner-cat-factor') && tr.querySelector('.yt-miner-cat-factor').value),
         value_rank: Number(tr.querySelector('.yt-miner-cat-rank') && tr.querySelector('.yt-miner-cat-rank').value),
         match_tags: safeText(tr.querySelector('.yt-miner-cat-tags') && tr.querySelector('.yt-miner-cat-tags').value),
       };
     });
-    return normalizeCategoryConfigRows(rows);
+    youtubeMinerCategoryConfig = normalizeCategoryConfigRows(youtubeMinerCategoryConfig);
+  }
+
+  function syncYoutubeMinerCategoryToolbarState() {
+    var selectAll = document.getElementById('youtubeMinerCategorySelectAll');
+    var editCheckedBtn = document.getElementById('youtubeMinerEditCheckedBtn');
+    var deleteCheckedBtn = document.getElementById('youtubeMinerDeleteCheckedBtn');
+    var visibleIds = youtubeMinerCategoryConfig.map(function(row) { return safeText(row && row.id); }).filter(Boolean);
+    var selectedVisible = visibleIds.filter(function(id) { return youtubeMinerCategorySelectedIds.has(id); });
+    if (selectAll) {
+      selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+      selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
+    }
+    if (editCheckedBtn) editCheckedBtn.disabled = selectedVisible.length === 0;
+    if (deleteCheckedBtn) deleteCheckedBtn.disabled = selectedVisible.length === 0;
   }
 
   function renderYoutubeMinerCategoryConfig() {
@@ -161,59 +201,118 @@ App.youtube = (function () {
     if (!youtubeMinerCategoryConfig.length) {
       youtubeMinerCategoryConfig = defaultYoutubeMinerCategoryConfig();
     }
-    youtubeMinerCategoryConfig.forEach(function(row, idx) {
+    youtubeMinerCategoryConfig.forEach(function(row) {
+      var rowId = safeText(row && row.id) || makeYoutubeMinerCategoryId();
+      row.id = rowId;
+      var editing = youtubeMinerCategoryEditingIds.has(rowId);
       var tr = document.createElement('tr');
+      tr.setAttribute('data-row-id', rowId);
+      tr.setAttribute('data-editing', editing ? 'true' : 'false');
+
+      var selectTd = document.createElement('td');
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = youtubeMinerCategorySelectedIds.has(rowId);
+      checkbox.setAttribute('aria-label', 'Select category ' + (safeText(row && row.name) || rowId));
+      checkbox.addEventListener('change', function() {
+        if (checkbox.checked) youtubeMinerCategorySelectedIds.add(rowId);
+        else youtubeMinerCategorySelectedIds.delete(rowId);
+        syncYoutubeMinerCategoryToolbarState();
+      });
+      selectTd.appendChild(checkbox);
 
       var nameTd = document.createElement('td');
-      var nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.className = 'yt-miner-cat-name';
-      nameInput.value = safeText(row && row.name);
-      nameTd.appendChild(nameInput);
-
       var rationaleTd = document.createElement('td');
-      var rationaleInput = document.createElement('input');
-      rationaleInput.type = 'text';
-      rationaleInput.className = 'yt-miner-cat-rationale';
-      rationaleInput.value = safeText(row && row.rationale);
-      rationaleTd.appendChild(rationaleInput);
-
       var factorTd = document.createElement('td');
-      var factorInput = document.createElement('input');
-      factorInput.type = 'text';
-      factorInput.className = 'yt-miner-cat-factor';
-      factorInput.value = safeText(row && row.factor);
-      factorTd.appendChild(factorInput);
-
       var rankTd = document.createElement('td');
-      var rankInput = document.createElement('input');
-      rankInput.type = 'number';
-      rankInput.min = '1';
-      rankInput.max = '5';
-      rankInput.step = '1';
-      rankInput.className = 'yt-miner-cat-rank';
-      rankInput.value = String(Math.max(1, Math.min(Number(row && row.value_rank) || 3, 5)));
-      rankTd.appendChild(rankInput);
-
       var tagsTd = document.createElement('td');
-      var tagsInput = document.createElement('input');
-      tagsInput.type = 'text';
-      tagsInput.className = 'yt-miner-cat-tags';
-      tagsInput.value = toArray(row && row.match_tags).join(', ');
-      tagsInput.placeholder = 'pain_point, question, purchase_intent';
-      tagsTd.appendChild(tagsInput);
+
+      if (editing) {
+        var nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'yt-miner-cat-name';
+        nameInput.value = safeText(row && row.name);
+        nameTd.appendChild(nameInput);
+
+        var rationaleInput = document.createElement('input');
+        rationaleInput.type = 'text';
+        rationaleInput.className = 'yt-miner-cat-rationale';
+        rationaleInput.value = safeText(row && row.rationale);
+        rationaleTd.appendChild(rationaleInput);
+
+        var factorInput = document.createElement('input');
+        factorInput.type = 'text';
+        factorInput.className = 'yt-miner-cat-factor';
+        factorInput.value = safeText(row && row.factor);
+        factorTd.appendChild(factorInput);
+
+        var rankInput = document.createElement('input');
+        rankInput.type = 'number';
+        rankInput.min = '1';
+        rankInput.max = '5';
+        rankInput.step = '1';
+        rankInput.className = 'yt-miner-cat-rank';
+        rankInput.value = String(Math.max(1, Math.min(Number(row && row.value_rank) || 3, 5)));
+        rankTd.appendChild(rankInput);
+
+        var tagsInput = document.createElement('input');
+        tagsInput.type = 'text';
+        tagsInput.className = 'yt-miner-cat-tags';
+        tagsInput.value = toArray(row && row.match_tags).join(', ');
+        tagsInput.placeholder = 'pain_point, question, purchase_intent';
+        tagsTd.appendChild(tagsInput);
+      } else {
+        nameTd.textContent = safeText(row && row.name) || '-';
+        rationaleTd.textContent = safeText(row && row.rationale) || '-';
+        factorTd.textContent = safeText(row && row.factor) || '-';
+        rankTd.textContent = String(Math.max(1, Math.min(Number(row && row.value_rank) || 3, 5)));
+        tagsTd.textContent = toArray(row && row.match_tags).join(', ') || '-';
+      }
 
       var actionTd = document.createElement('td');
-      var removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.textContent = 'Remove';
-      removeBtn.addEventListener('click', function() {
-        youtubeMinerCategoryConfig.splice(idx, 1);
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = editing ? 'Save' : 'Edit';
+      editBtn.addEventListener('click', function() {
+        if (!editing) {
+          youtubeMinerCategoryEditingIds.add(rowId);
+          renderYoutubeMinerCategoryConfig();
+          return;
+        }
+        syncYoutubeMinerCategoryRowsFromEditingDom();
+        youtubeMinerCategoryEditingIds.delete(rowId);
         saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
         renderYoutubeMinerCategoryConfig();
       });
-      actionTd.appendChild(removeBtn);
+      actionTd.appendChild(editBtn);
 
+      if (editing) {
+        var cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', function() {
+          youtubeMinerCategoryEditingIds.delete(rowId);
+          renderYoutubeMinerCategoryConfig();
+        });
+        actionTd.appendChild(cancelBtn);
+      }
+
+      var deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', function() {
+        if (!window.confirm('Delete category "' + (safeText(row && row.name) || rowId) + '"?')) return;
+        youtubeMinerCategoryConfig = youtubeMinerCategoryConfig.filter(function(item) {
+          return safeText(item && item.id) !== rowId;
+        });
+        youtubeMinerCategorySelectedIds.delete(rowId);
+        youtubeMinerCategoryEditingIds.delete(rowId);
+        saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
+        renderYoutubeMinerCategoryConfig();
+      });
+      actionTd.appendChild(deleteBtn);
+
+      tr.appendChild(selectTd);
       tr.appendChild(nameTd);
       tr.appendChild(rationaleTd);
       tr.appendChild(factorTd);
@@ -222,6 +321,7 @@ App.youtube = (function () {
       tr.appendChild(actionTd);
       tbody.appendChild(tr);
     });
+    syncYoutubeMinerCategoryToolbarState();
   }
 
   function getYoutubeCategories() {
@@ -1408,6 +1508,9 @@ App.youtube = (function () {
     var youtubeMinerTrainingBtn = document.getElementById('youtubeMinerTrainingBtn');
     var youtubeMinerProductionBtn = document.getElementById('youtubeMinerProductionBtn');
     var youtubeMinerAddCategoryBtn = document.getElementById('youtubeMinerAddCategoryBtn');
+    var youtubeMinerEditCheckedBtn = document.getElementById('youtubeMinerEditCheckedBtn');
+    var youtubeMinerDeleteCheckedBtn = document.getElementById('youtubeMinerDeleteCheckedBtn');
+    var youtubeMinerCategorySelectAll = document.getElementById('youtubeMinerCategorySelectAll');
     if (youtubeMinerTrainingBtn) {
       youtubeMinerTrainingBtn.addEventListener('click', function() { setYoutubeMinerMode('training'); });
     }
@@ -1419,13 +1522,62 @@ App.youtube = (function () {
     if (youtubeMinerAddCategoryBtn) {
       youtubeMinerAddCategoryBtn.addEventListener('click', function() {
         youtubeMinerCategoryConfig = collectYoutubeMinerCategoryConfigFromUi();
+        var newId = makeYoutubeMinerCategoryId();
         youtubeMinerCategoryConfig.push({
+          id: newId,
           name: 'new_category',
           rationale: '',
           factor: '',
           value_rank: 3,
           match_tags: [],
         });
+        youtubeMinerCategoryEditingIds.add(newId);
+        youtubeMinerCategorySelectedIds.add(newId);
+        saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
+        renderYoutubeMinerCategoryConfig();
+      });
+    }
+    if (youtubeMinerCategorySelectAll) {
+      youtubeMinerCategorySelectAll.addEventListener('change', function() {
+        if (youtubeMinerCategorySelectAll.checked) {
+          youtubeMinerCategoryConfig.forEach(function(row) {
+            var id = safeText(row && row.id);
+            if (id) youtubeMinerCategorySelectedIds.add(id);
+          });
+        } else {
+          youtubeMinerCategorySelectedIds.clear();
+        }
+        renderYoutubeMinerCategoryConfig();
+      });
+    }
+    if (youtubeMinerEditCheckedBtn) {
+      youtubeMinerEditCheckedBtn.addEventListener('click', function() {
+        if (!youtubeMinerCategorySelectedIds.size) {
+          notify('Select at least one category row to edit.', true);
+          return;
+        }
+        syncYoutubeMinerCategoryRowsFromEditingDom();
+        Array.from(youtubeMinerCategorySelectedIds).forEach(function(id) {
+          youtubeMinerCategoryEditingIds.add(id);
+        });
+        renderYoutubeMinerCategoryConfig();
+      });
+    }
+    if (youtubeMinerDeleteCheckedBtn) {
+      youtubeMinerDeleteCheckedBtn.addEventListener('click', function() {
+        if (!youtubeMinerCategorySelectedIds.size) {
+          notify('Select at least one category row to delete.', true);
+          return;
+        }
+        if (!window.confirm('Delete ' + youtubeMinerCategorySelectedIds.size + ' checked category row(s)?')) return;
+        var selected = new Set(Array.from(youtubeMinerCategorySelectedIds));
+        youtubeMinerCategoryConfig = youtubeMinerCategoryConfig.filter(function(row) {
+          return !selected.has(safeText(row && row.id));
+        });
+        youtubeMinerCategorySelectedIds.clear();
+        youtubeMinerCategoryEditingIds = new Set(
+          Array.from(youtubeMinerCategoryEditingIds).filter(function(id) { return !selected.has(id); })
+        );
         saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
         renderYoutubeMinerCategoryConfig();
       });

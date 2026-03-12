@@ -776,13 +776,21 @@
                   <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" placeholder="first, lol, sub4sub" />
                 </div>
               </div>
-              <div class="form-row">
+              <div class="form-row youtube-miner-category-config">
                 <label>Training Configuration: Categories</label>
                 <p class="muted">Define category meaning and scoring priority. Value rank (1-5) increases how strongly a matched category is preferred.</p>
+                <div class="youtube-miner-category-toolbar">
+                  <button type="button" id="youtubeMinerAddCategoryBtn">Add Category</button>
+                  <div class="youtube-miner-category-toolbar-right">
+                    <button type="button" id="youtubeMinerEditCheckedBtn">Edit Checked</button>
+                    <button type="button" id="youtubeMinerDeleteCheckedBtn">Delete Checked</button>
+                  </div>
+                </div>
                 <div class="table-wrap">
-                  <table>
+                  <table class="youtube-miner-category-table">
                     <thead>
                       <tr>
+                        <th><input id="youtubeMinerCategorySelectAll" type="checkbox" aria-label="Select all category rows" /></th>
                         <th>Category</th>
                         <th>Rationale</th>
                         <th>Factor</th>
@@ -794,7 +802,6 @@
                     <tbody id="youtubeMinerCategoryConfigTable"></tbody>
                   </table>
                 </div>
-                <button type="button" id="youtubeMinerAddCategoryBtn">Add Category</button>
               </div>
               <div class="form-row checkbox-row">
                 <label><input id="youtubeMinerIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
