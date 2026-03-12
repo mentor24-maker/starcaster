@@ -4730,3 +4730,29 @@ th {
   border-radius: 8px;
   background: #fbfcfe;
 }
+
+.mode-toggle {
+  display: inline-flex;
+  gap: 6px;
+  margin: 6px 0 12px;
+}
+
+.mode-toggle button {
+  min-width: 120px;
+}
+
+.youtube-miner-mode-panel {
+  margin-top: 4px;
+}
+
+.youtube-miner-mode-panel .form-row input[type="text"],
+.youtube-miner-mode-panel .form-row input[type="number"],
+.youtube-miner-mode-panel .form-row input[type="date"],
+.youtube-miner-mode-panel .form-row textarea,
+.youtube-miner-mode-panel .form-row select {
+  width: 100%;
+}
+
+.youtube-miner-training-label {
+  min-width: 130px;
+}

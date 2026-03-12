@@ -733,58 +733,97 @@
 
         <section class="youtube-miner-panel">
           <h3>YouTube Comment Miner + Reply Drafts</h3>
-          <p>Paste one target per line (video URL, youtu.be URL, channel URL, or @handle). The miner harvests comments, filters noise, tags intent, and drafts replies.</p>
-          <form id="youtubeCommentMinerForm" class="stack-form labeled-form">
-            <div class="form-row">
-              <label for="youtubeMinerTargets">Video/Channel Targets</label>
-              <textarea id="youtubeMinerTargets" name="targets" rows="6" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+          <p>Use Training mode to fine-tune what gets surfaced and why. Use Production mode for queued continuous processing (next step).</p>
+          <div id="youtubeMinerModeToggle" class="mode-toggle" role="tablist" aria-label="YouTube miner mode">
+            <button id="youtubeMinerTrainingBtn" type="button" class="active" data-mode="training">Training</button>
+            <button id="youtubeMinerProductionBtn" type="button" data-mode="production">Production</button>
+          </div>
+
+          <section id="youtubeMinerTrainingPanel" class="youtube-miner-mode-panel">
+            <form id="youtubeCommentMinerForm" class="stack-form labeled-form">
+              <div class="form-row">
+                <label for="youtubeMinerTargets">Video/Channel Targets</label>
+                <textarea id="youtubeMinerTargets" name="targets" rows="6" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+              </div>
+              <div class="grid-form">
+                <div class="form-row">
+                  <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
+                  <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" type="number" min="1" max="20" value="5" />
+                </div>
+                <div class="form-row">
+                  <label for="youtubeMinerMaxCommentsPerVideo">Max Comments Per Video</label>
+                  <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
+                </div>
+                <div class="form-row">
+                  <label for="youtubeMinerMinScore">Minimum Interest Score</label>
+                  <input id="youtubeMinerMinScore" name="min_score" type="number" min="0" max="20" value="3" />
+                </div>
+                <div class="form-row">
+                  <label for="youtubeMinerSortBy">Sort</label>
+                  <select id="youtubeMinerSortBy" name="sort_by">
+                    <option value="relevance" selected>relevance</option>
+                    <option value="time">time</option>
+                  </select>
+                </div>
+              </div>
+              <div class="grid-form">
+                <div class="form-row">
+                  <label for="youtubeMinerIncludePhrases">Trainer Include Phrases (optional)</label>
+                  <input id="youtubeMinerIncludePhrases" name="include_phrases_text" placeholder="wanting more, outgrowing, next level" />
+                </div>
+                <div class="form-row">
+                  <label for="youtubeMinerExcludePhrases">Trainer Exclude Phrases (optional)</label>
+                  <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" placeholder="first, lol, sub4sub" />
+                </div>
+              </div>
+              <div class="form-row checkbox-row">
+                <label><input id="youtubeMinerIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
+                <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" type="checkbox" checked /> Exclude obvious noise</label>
+              </div>
+              <button type="submit" id="youtubeCommentMinerSubmitBtn">Run Training Miner</button>
+            </form>
+
+            <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
+            <pre id="youtubeCommentMinerMeta" class="code-box">{}</pre>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Score</th>
+                    <th>Category</th>
+                    <th>Why Surfaced</th>
+                    <th>Tags</th>
+                    <th>Author</th>
+                    <th>Video</th>
+                    <th>Comment</th>
+                    <th>Reply Draft</th>
+                    <th>Trainer Label</th>
+                    <th>Trainer Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="youtubeCommentMinerTable"></tbody>
+              </table>
             </div>
+          </section>
+
+          <section id="youtubeMinerProductionPanel" class="youtube-miner-mode-panel hidden">
+            <p class="muted">Production mode queue runner is next. This panel is now reserved for continuous processing criteria and queue controls.</p>
             <div class="grid-form">
               <div class="form-row">
-                <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
-                <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" type="number" min="1" max="20" value="5" />
+                <label for="youtubeProductionSeeds">Seeds (channels/videos)</label>
+                <textarea id="youtubeProductionSeeds" rows="4" placeholder="One channel/video per line"></textarea>
               </div>
               <div class="form-row">
-                <label for="youtubeMinerMaxCommentsPerVideo">Max Comments Per Video</label>
-                <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
-              </div>
-              <div class="form-row">
-                <label for="youtubeMinerMinScore">Minimum Interest Score</label>
-                <input id="youtubeMinerMinScore" name="min_score" type="number" min="0" max="20" value="3" />
-              </div>
-              <div class="form-row">
-                <label for="youtubeMinerSortBy">Sort</label>
-                <select id="youtubeMinerSortBy" name="sort_by">
-                  <option value="relevance" selected>relevance</option>
-                  <option value="time">time</option>
-                </select>
+                <label for="youtubeProductionCriteria">Discovery Criteria</label>
+                <textarea id="youtubeProductionCriteria" rows="4" placeholder="Keywords/segments for expanding to additional videos/channels"></textarea>
               </div>
             </div>
             <div class="form-row checkbox-row">
-              <label><input id="youtubeMinerIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
-              <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" type="checkbox" checked /> Exclude obvious noise</label>
+              <label><input id="youtubeProductionAutoExpand" type="checkbox" checked /> Auto-expand queue from discovered videos</label>
+              <label><input id="youtubeProductionAutoReplies" type="checkbox" /> Auto-draft replies for surfaced comments</label>
             </div>
-            <button type="submit" id="youtubeCommentMinerSubmitBtn">Run Comment Miner</button>
-          </form>
-
-          <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
-          <pre id="youtubeCommentMinerMeta" class="code-box">{}</pre>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Score</th>
-                  <th>Category</th>
-                  <th>Tags</th>
-                  <th>Author</th>
-                  <th>Video</th>
-                  <th>Comment</th>
-                  <th>Reply Draft</th>
-                </tr>
-              </thead>
-              <tbody id="youtubeCommentMinerTable"></tbody>
-            </table>
-          </div>
+            <button type="button" id="youtubeProductionStartBtn" disabled>Start Production Queue (coming next)</button>
+          </section>
         </section>
 
         <h3>YouTube Acquire Runs</h3>
