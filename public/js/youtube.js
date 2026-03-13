@@ -23,24 +23,19 @@ App.youtube = (function () {
   var suggestionLoadToken = 0;
   var youtubeMinerMode = 'training';
   var youtubeMinerCategoryConfig = [];
+  var youtubeMinerAttributeConfig = [];
+  var youtubeMinerApproachConfig = [];
   var youtubeMinerCategorySelectedIds = new Set();
+  var youtubeMinerAttributeSelectedIds = new Set();
+  var youtubeMinerApproachSelectedIds = new Set();
   var youtubeMinerCategoryEditingIds = new Set();
+  var youtubeMinerAttributeEditingIds = new Set();
+  var youtubeMinerApproachEditingIds = new Set();
   var youtubeMinerLastResult = null;
   var YT_MINER_CATEGORY_CONFIG_KEY = 'yt_miner_category_config_v1';
+  var YT_MINER_ATTRIBUTE_CONFIG_KEY = 'yt_miner_attribute_config_v1';
+  var YT_MINER_APPROACH_CONFIG_KEY = 'yt_miner_approach_config_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
-  var YT_MINER_TREATMENT_OPTIONS = [
-    'ignore',
-    'encourage',
-    'intrigue',
-    'inquire',
-    'educate',
-    'empathize',
-    'qualify',
-    'invite_dialog',
-    'trust_repair',
-    'cta_soft',
-    'cta_direct'
-  ];
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
 
@@ -206,81 +201,43 @@ App.youtube = (function () {
     }).slice(0, 500);
   }
 
+  function makeYoutubeMinerConfigId(prefix) {
+    return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  }
+
   function defaultYoutubeMinerCategoryConfig() {
     return [
-      {
-        id: makeYoutubeMinerCategoryId(),
-        name: 'intent',
-        rationale: 'Signals purchase or action intent.',
-        treatment: 'cta_direct',
-        value_rank: 5,
-        match_hashtags: ['purchase_intent'],
-      },
-      {
-        id: makeYoutubeMinerCategoryId(),
-        name: 'pain_point',
-        rationale: 'Describes struggle, friction, or need for help.',
-        treatment: 'inquire',
-        value_rank: 5,
-        match_hashtags: ['pain_point', 'solution_seeking'],
-      },
-      {
-        id: makeYoutubeMinerCategoryId(),
-        name: 'growth',
-        rationale: 'Shows openness to change or leveling up.',
-        treatment: 'encourage',
-        value_rank: 4,
-        match_hashtags: ['growth_openness'],
-      },
-      {
-        id: makeYoutubeMinerCategoryId(),
-        name: 'question',
-        rationale: 'Direct question or asks for direction.',
-        treatment: 'inquire',
-        value_rank: 4,
-        match_hashtags: ['question'],
-      },
-      {
-        id: makeYoutubeMinerCategoryId(),
-        name: 'positive',
-        rationale: 'Positive feedback and appreciation.',
-        treatment: 'encourage',
-        value_rank: 3,
-        match_hashtags: ['positive_signal'],
-      },
-      {
-        id: makeYoutubeMinerCategoryId(),
-        name: 'risk',
-        rationale: 'Mentions scam/fake/bot/trust concerns.',
-        treatment: 'trust_repair',
-        value_rank: 2,
-        match_hashtags: ['trust_risk'],
-      },
-      {
-        id: makeYoutubeMinerCategoryId(),
-        name: 'general',
-        rationale: 'Fallback when no category-specific signal appears.',
-        treatment: 'ignore',
-        value_rank: 1,
-        match_hashtags: [],
-      },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'intent', rationale: 'Signals purchase/action intent.', value_rank: 5, match_hashtags: ['purchase_intent'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'pain_point', rationale: 'Struggle/friction/help needed.', value_rank: 5, match_hashtags: ['pain_point', 'solution_seeking'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'growth', rationale: 'Open to change/next level.', value_rank: 4, match_hashtags: ['growth_openness'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'question', rationale: 'Direct ask for guidance.', value_rank: 4, match_hashtags: ['question'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'positive', rationale: 'Positive/affirming signal.', value_rank: 3, match_hashtags: ['positive_signal'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'risk', rationale: 'Trust/scam/fake concerns.', value_rank: 2, match_hashtags: ['trust_risk'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'general', rationale: 'Fallback category.', value_rank: 1, match_hashtags: [] },
     ];
   }
 
-  function normalizeTreatment(value) {
-    var raw = safeText(value).toLowerCase();
-    if (!raw) return 'ignore';
-    if (YT_MINER_TREATMENT_OPTIONS.indexOf(raw) >= 0) return raw;
-    if (raw.indexOf('conversion') >= 0 || raw.indexOf('direct') >= 0) return 'cta_direct';
-    if (raw.indexOf('trust') >= 0 || raw.indexOf('credib') >= 0) return 'trust_repair';
-    if (raw.indexOf('background') >= 0 || raw.indexOf('low-priority') >= 0) return 'ignore';
-    if (raw.indexOf('transform') >= 0 || raw.indexOf('relationship') >= 0) return 'encourage';
-    if (raw.indexOf('guidance') >= 0 || raw.indexOf('educat') >= 0) return 'educate';
-    if (raw.indexOf('question') >= 0 || raw.indexOf('reply') >= 0) return 'inquire';
-    return raw;
+  function defaultYoutubeMinerAttributeConfig() {
+    return [
+      { id: makeYoutubeMinerConfigId('attr'), name: 'motivated', rationale: 'Shows momentum and willingness to act.', value_rank: 5, match_hashtags: ['growth_openness', 'purchase_intent'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'self_involved', rationale: 'Focuses on self-image/status over substance.', value_rank: 2, match_hashtags: ['social_handle'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'negative_outlook', rationale: 'Language indicates defeatism/cynicism.', value_rank: 2, match_hashtags: ['pain_point'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'fan', rationale: 'Strong appreciation/affinity for creator/topic.', value_rank: 3, match_hashtags: ['positive_signal'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'introvert', rationale: 'Reflective/internal processing style.', value_rank: 3, match_hashtags: ['question'] },
+    ];
   }
 
-  function normalizeCategoryConfigRows(rows) {
+  function defaultYoutubeMinerApproachConfig() {
+    return [
+      { id: makeYoutubeMinerConfigId('approach'), name: 'ignore', rationale: 'Low-signal/background/noise comments.', value_rank: 1, match_hashtags: ['noise'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'encourage', rationale: 'Affirm and support growth-oriented comments.', value_rank: 4, match_hashtags: ['growth_openness', 'positive_signal'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'intrigue', rationale: 'Open loops to spark curiosity.', value_rank: 3, match_hashtags: ['solution_seeking'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'inquire', rationale: 'Ask clarifying questions first.', value_rank: 4, match_hashtags: ['question', 'pain_point'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'direct_cta', rationale: 'Use direct next-step invitation where intent is strong.', value_rank: 5, match_hashtags: ['purchase_intent'] },
+    ];
+  }
+
+  function normalizeYoutubeMinerConfigRows(rows, idPrefix, fallbackName) {
     return toArray(rows).map(function(row) {
       var rankNum = Number(row && row.value_rank);
       var tagsRaw = row && (row.match_hashtags || row.match_tags);
@@ -294,73 +251,180 @@ App.youtube = (function () {
           .filter(Boolean);
       }
       return {
-        id: safeText(row && row.id) || makeYoutubeMinerCategoryId(),
-        name: safeText(row && row.name) || 'general',
+        id: safeText(row && row.id) || makeYoutubeMinerConfigId(idPrefix),
+        name: safeText(row && row.name) || fallbackName,
         rationale: safeText(row && row.rationale),
-        treatment: normalizeTreatment(row && ((row.treatment || row.factor))),
-        factor: normalizeTreatment(row && ((row.treatment || row.factor))),
         value_rank: Math.max(1, Math.min(Number.isFinite(rankNum) ? rankNum : 3, 5)),
         match_hashtags: Array.from(new Set(tags)).slice(0, 20),
       };
     }).filter(function(row) { return Boolean(safeText(row && row.name)); });
   }
 
-  function loadYoutubeMinerCategoryConfig() {
+  function getYoutubeMinerConfigBundle(kind) {
+    if (kind === 'attribute') {
+      return {
+        idPrefix: 'attr',
+        fallbackName: 'new_attribute',
+        tableId: 'youtubeMinerAttributeConfigTable',
+        selectAllId: 'youtubeMinerAttributeSelectAll',
+        addBtnId: 'youtubeMinerAddAttributeBtn',
+        editCheckedBtnId: 'youtubeMinerEditAttributesCheckedBtn',
+        deleteCheckedBtnId: 'youtubeMinerDeleteAttributesCheckedBtn',
+        storageKey: YT_MINER_ATTRIBUTE_CONFIG_KEY,
+        getRows: function() { return youtubeMinerAttributeConfig; },
+        setRows: function(rows) { youtubeMinerAttributeConfig = rows; },
+        getSelected: function() { return youtubeMinerAttributeSelectedIds; },
+        setSelected: function(set) { youtubeMinerAttributeSelectedIds = set; },
+        getEditing: function() { return youtubeMinerAttributeEditingIds; },
+        setEditing: function(set) { youtubeMinerAttributeEditingIds = set; },
+        defaultRows: defaultYoutubeMinerAttributeConfig,
+        entityLabel: 'attribute',
+      };
+    }
+    if (kind === 'approach') {
+      return {
+        idPrefix: 'approach',
+        fallbackName: 'new_approach',
+        tableId: 'youtubeMinerApproachConfigTable',
+        selectAllId: 'youtubeMinerApproachSelectAll',
+        addBtnId: 'youtubeMinerAddApproachBtn',
+        editCheckedBtnId: 'youtubeMinerEditApproachesCheckedBtn',
+        deleteCheckedBtnId: 'youtubeMinerDeleteApproachesCheckedBtn',
+        storageKey: YT_MINER_APPROACH_CONFIG_KEY,
+        getRows: function() { return youtubeMinerApproachConfig; },
+        setRows: function(rows) { youtubeMinerApproachConfig = rows; },
+        getSelected: function() { return youtubeMinerApproachSelectedIds; },
+        setSelected: function(set) { youtubeMinerApproachSelectedIds = set; },
+        getEditing: function() { return youtubeMinerApproachEditingIds; },
+        setEditing: function(set) { youtubeMinerApproachEditingIds = set; },
+        defaultRows: defaultYoutubeMinerApproachConfig,
+        entityLabel: 'approach',
+      };
+    }
+    return {
+      idPrefix: 'cat',
+      fallbackName: 'general',
+      tableId: 'youtubeMinerCategoryConfigTable',
+      selectAllId: 'youtubeMinerCategorySelectAll',
+      addBtnId: 'youtubeMinerAddCategoryBtn',
+      editCheckedBtnId: 'youtubeMinerEditCheckedBtn',
+      deleteCheckedBtnId: 'youtubeMinerDeleteCheckedBtn',
+      storageKey: YT_MINER_CATEGORY_CONFIG_KEY,
+      getRows: function() { return youtubeMinerCategoryConfig; },
+      setRows: function(rows) { youtubeMinerCategoryConfig = rows; },
+      getSelected: function() { return youtubeMinerCategorySelectedIds; },
+      setSelected: function(set) { youtubeMinerCategorySelectedIds = set; },
+      getEditing: function() { return youtubeMinerCategoryEditingIds; },
+      setEditing: function(set) { youtubeMinerCategoryEditingIds = set; },
+      defaultRows: defaultYoutubeMinerCategoryConfig,
+      entityLabel: 'category',
+    };
+  }
+
+  function normalizeYoutubeMinerRows(kind, rows) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
+    return normalizeYoutubeMinerConfigRows(rows, bundle.idPrefix, bundle.fallbackName);
+  }
+
+  function loadYoutubeMinerConfig(kind) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
     try {
-      var raw = window.localStorage.getItem(YT_MINER_CATEGORY_CONFIG_KEY);
-      if (!raw) return defaultYoutubeMinerCategoryConfig();
+      var raw = window.localStorage.getItem(bundle.storageKey);
+      if (!raw) return bundle.defaultRows();
       var parsed = JSON.parse(raw);
-      var normalized = normalizeCategoryConfigRows(parsed);
-      return normalized.length ? normalized : defaultYoutubeMinerCategoryConfig();
+      var normalized = normalizeYoutubeMinerRows(kind, parsed);
+      return normalized.length ? normalized : bundle.defaultRows();
     } catch (_) {
-      return defaultYoutubeMinerCategoryConfig();
+      return bundle.defaultRows();
     }
   }
 
-  function saveYoutubeMinerCategoryConfig(rows) {
+  function saveYoutubeMinerConfig(kind, rows) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
     try {
-      window.localStorage.setItem(YT_MINER_CATEGORY_CONFIG_KEY, JSON.stringify(rows));
+      window.localStorage.setItem(bundle.storageKey, JSON.stringify(rows));
     } catch (_) { /* ignore */ }
   }
 
-  function collectYoutubeMinerCategoryConfigFromUi() {
-    syncYoutubeMinerCategoryRowsFromEditingDom();
-    return normalizeCategoryConfigRows(youtubeMinerCategoryConfig);
+  function makeYoutubeRteToolbar(editorEl) {
+    var toolbar = document.createElement('div');
+    toolbar.className = 'yt-miner-cat-rationale-toolbar';
+
+    function makeBtn(label, title, commandFn) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'yt-miner-rte-btn';
+      btn.textContent = label;
+      btn.title = title;
+      btn.addEventListener('click', commandFn);
+      return btn;
+    }
+
+    toolbar.appendChild(makeBtn('B', 'Bold', function() {
+      editorEl.focus();
+      document.execCommand('bold');
+    }));
+    toolbar.appendChild(makeBtn('I', 'Italic', function() {
+      editorEl.focus();
+      document.execCommand('italic');
+    }));
+    toolbar.appendChild(makeBtn('• List', 'Bullet list', function() {
+      editorEl.focus();
+      document.execCommand('insertUnorderedList');
+    }));
+    toolbar.appendChild(makeBtn('Link', 'Insert link', function() {
+      editorEl.focus();
+      var url = window.prompt('Enter URL (https://...)', 'https://');
+      if (!url) return;
+      var clean = safeText(url);
+      if (!/^https?:\/\//i.test(clean)) {
+        notify('URL must start with http:// or https://', true);
+        return;
+      }
+      document.execCommand('createLink', false, clean);
+    }));
+    return toolbar;
   }
 
-  function syncYoutubeMinerCategoryRowsFromEditingDom() {
-    var tbody = document.getElementById('youtubeMinerCategoryConfigTable');
+  function syncYoutubeMinerRowsFromEditingDom(kind) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
+    var tbody = document.getElementById(bundle.tableId);
     if (!tbody) return;
+    var rows = bundle.getRows();
     var editRows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-editing="true"]'));
     if (!editRows.length) return;
     editRows.forEach(function(tr) {
       var rowId = safeText(tr.getAttribute('data-row-id'));
       if (!rowId) return;
-      var idx = youtubeMinerCategoryConfig.findIndex(function(item) { return safeText(item && item.id) === rowId; });
+      var idx = rows.findIndex(function(item) { return safeText(item && item.id) === rowId; });
       if (idx < 0) return;
-      var rationaleInput = tr.querySelector('.yt-miner-cat-rationale');
-      var rationaleRich = tr.querySelector('.yt-miner-cat-rationale-rich');
-      youtubeMinerCategoryConfig[idx] = {
+      var rationaleRich = tr.querySelector('.yt-miner-config-rationale-rich');
+      rows[idx] = {
         id: rowId,
-        name: safeText(tr.querySelector('.yt-miner-cat-name') && tr.querySelector('.yt-miner-cat-name').value) || 'general',
-        rationale: rationaleRich
-          ? sanitizeRationaleHtml(rationaleRich.innerHTML)
-          : safeText(rationaleInput && rationaleInput.value),
-        treatment: normalizeTreatment(tr.querySelector('.yt-miner-cat-treatment') && tr.querySelector('.yt-miner-cat-treatment').value),
-        factor: normalizeTreatment(tr.querySelector('.yt-miner-cat-treatment') && tr.querySelector('.yt-miner-cat-treatment').value),
-        value_rank: Number(tr.querySelector('.yt-miner-cat-rank') && tr.querySelector('.yt-miner-cat-rank').value),
-        match_hashtags: safeText(tr.querySelector('.yt-miner-cat-tags') && tr.querySelector('.yt-miner-cat-tags').value),
+        name: safeText(tr.querySelector('.yt-miner-config-name') && tr.querySelector('.yt-miner-config-name').value) || bundle.fallbackName,
+        rationale: rationaleRich ? sanitizeRationaleHtml(rationaleRich.innerHTML) : '',
+        value_rank: Number(tr.querySelector('.yt-miner-config-rank') && tr.querySelector('.yt-miner-config-rank').value),
+        match_hashtags: safeText(tr.querySelector('.yt-miner-config-tags') && tr.querySelector('.yt-miner-config-tags').value),
       };
     });
-    youtubeMinerCategoryConfig = normalizeCategoryConfigRows(youtubeMinerCategoryConfig);
+    rows = normalizeYoutubeMinerRows(kind, rows);
+    bundle.setRows(rows);
   }
 
-  function syncYoutubeMinerCategoryToolbarState() {
-    var selectAll = document.getElementById('youtubeMinerCategorySelectAll');
-    var editCheckedBtn = document.getElementById('youtubeMinerEditCheckedBtn');
-    var deleteCheckedBtn = document.getElementById('youtubeMinerDeleteCheckedBtn');
-    var visibleIds = youtubeMinerCategoryConfig.map(function(row) { return safeText(row && row.id); }).filter(Boolean);
-    var selectedVisible = visibleIds.filter(function(id) { return youtubeMinerCategorySelectedIds.has(id); });
+  function collectYoutubeMinerConfigFromUi(kind) {
+    syncYoutubeMinerRowsFromEditingDom(kind);
+    return normalizeYoutubeMinerRows(kind, getYoutubeMinerConfigBundle(kind).getRows());
+  }
+
+  function syncYoutubeMinerToolbarState(kind) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
+    var selectAll = document.getElementById(bundle.selectAllId);
+    var editCheckedBtn = document.getElementById(bundle.editCheckedBtnId);
+    var deleteCheckedBtn = document.getElementById(bundle.deleteCheckedBtnId);
+    var rows = bundle.getRows();
+    var selected = bundle.getSelected();
+    var visibleIds = rows.map(function(row) { return safeText(row && row.id); }).filter(Boolean);
+    var selectedVisible = visibleIds.filter(function(id) { return selected.has(id); });
     if (selectAll) {
       selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
       selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
@@ -369,17 +433,24 @@ App.youtube = (function () {
     if (deleteCheckedBtn) deleteCheckedBtn.disabled = selectedVisible.length === 0;
   }
 
-  function renderYoutubeMinerCategoryConfig() {
-    var tbody = document.getElementById('youtubeMinerCategoryConfigTable');
+  function renderYoutubeMinerConfig(kind) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
+    var tbody = document.getElementById(bundle.tableId);
     if (!tbody) return;
     tbody.innerHTML = '';
-    if (!youtubeMinerCategoryConfig.length) {
-      youtubeMinerCategoryConfig = defaultYoutubeMinerCategoryConfig();
+
+    var rows = bundle.getRows();
+    if (!rows.length) {
+      rows = bundle.defaultRows();
+      bundle.setRows(rows);
     }
-    youtubeMinerCategoryConfig.forEach(function(row) {
-      var rowId = safeText(row && row.id) || makeYoutubeMinerCategoryId();
+    var editingIds = bundle.getEditing();
+    var selectedIds = bundle.getSelected();
+
+    rows.forEach(function(row) {
+      var rowId = safeText(row && row.id) || makeYoutubeMinerConfigId(bundle.idPrefix);
       row.id = rowId;
-      var editing = youtubeMinerCategoryEditingIds.has(rowId);
+      var editing = editingIds.has(rowId);
       var tr = document.createElement('tr');
       tr.setAttribute('data-row-id', rowId);
       tr.setAttribute('data-editing', editing ? 'true' : 'false');
@@ -387,139 +458,74 @@ App.youtube = (function () {
       var selectTd = document.createElement('td');
       var checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
-      checkbox.checked = youtubeMinerCategorySelectedIds.has(rowId);
-      checkbox.setAttribute('aria-label', 'Select category ' + (safeText(row && row.name) || rowId));
+      checkbox.checked = selectedIds.has(rowId);
+      checkbox.setAttribute('aria-label', 'Select ' + bundle.entityLabel + ' ' + (safeText(row && row.name) || rowId));
       checkbox.addEventListener('change', function() {
-        if (checkbox.checked) youtubeMinerCategorySelectedIds.add(rowId);
-        else youtubeMinerCategorySelectedIds.delete(rowId);
-        syncYoutubeMinerCategoryToolbarState();
+        if (checkbox.checked) selectedIds.add(rowId);
+        else selectedIds.delete(rowId);
+        syncYoutubeMinerToolbarState(kind);
       });
       selectTd.appendChild(checkbox);
 
       var nameTd = document.createElement('td');
       var rationaleTd = document.createElement('td');
-      var treatmentTd = document.createElement('td');
       var rankTd = document.createElement('td');
       var tagsTd = document.createElement('td');
+      var actionTd = document.createElement('td');
 
       if (editing) {
         var nameInput = document.createElement('input');
         nameInput.type = 'text';
-        nameInput.className = 'yt-miner-cat-name';
+        nameInput.className = 'yt-miner-config-name';
         nameInput.value = safeText(row && row.name);
         nameTd.appendChild(nameInput);
 
-        var rationaleInput = document.createElement('input');
-        rationaleInput.type = 'hidden';
-        rationaleInput.className = 'yt-miner-cat-rationale';
-        rationaleInput.value = safeText(row && row.rationale);
-
         var rationaleWrap = document.createElement('div');
         rationaleWrap.className = 'yt-miner-cat-rationale-editor';
-
-        var rationaleToolbar = document.createElement('div');
-        rationaleToolbar.className = 'yt-miner-cat-rationale-toolbar';
-
-        function makeRteBtn(label, title, onClick) {
-          var btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'yt-miner-rte-btn';
-          btn.textContent = label;
-          btn.title = title;
-          btn.addEventListener('click', onClick);
-          return btn;
-        }
-
         var rationaleRich = document.createElement('div');
-        rationaleRich.className = 'yt-miner-cat-rationale-rich';
+        rationaleRich.className = 'yt-miner-config-rationale-rich yt-miner-cat-rationale-rich';
         rationaleRich.contentEditable = 'true';
         rationaleRich.innerHTML = sanitizeRationaleHtml(safeText(row && row.rationale));
-
-        rationaleToolbar.appendChild(makeRteBtn('B', 'Bold', function() {
-          rationaleRich.focus();
-          document.execCommand('bold');
-        }));
-        rationaleToolbar.appendChild(makeRteBtn('I', 'Italic', function() {
-          rationaleRich.focus();
-          document.execCommand('italic');
-        }));
-        rationaleToolbar.appendChild(makeRteBtn('• List', 'Bullet list', function() {
-          rationaleRich.focus();
-          document.execCommand('insertUnorderedList');
-        }));
-        rationaleToolbar.appendChild(makeRteBtn('Link', 'Insert link', function() {
-          rationaleRich.focus();
-          var url = window.prompt('Enter URL (https://...)', 'https://');
-          if (!url) return;
-          var clean = safeText(url);
-          if (!/^https?:\/\//i.test(clean)) {
-            notify('URL must start with http:// or https://', true);
-            return;
-          }
-          document.execCommand('createLink', false, clean);
-        }));
-
-        rationaleWrap.appendChild(rationaleToolbar);
+        rationaleWrap.appendChild(makeYoutubeRteToolbar(rationaleRich));
         rationaleWrap.appendChild(rationaleRich);
-        rationaleTd.appendChild(rationaleInput);
         rationaleTd.appendChild(rationaleWrap);
-
-        var currentTreatment = normalizeTreatment(row && (row.treatment || row.factor));
-        var treatmentInput = document.createElement('select');
-        treatmentInput.className = 'yt-miner-cat-treatment';
-        var options = YT_MINER_TREATMENT_OPTIONS.slice();
-        if (currentTreatment && options.indexOf(currentTreatment) < 0) options.unshift(currentTreatment);
-        options.forEach(function(opt) {
-          var optionEl = document.createElement('option');
-          optionEl.value = opt;
-          optionEl.textContent = opt;
-          treatmentInput.appendChild(optionEl);
-        });
-        treatmentInput.value = currentTreatment || 'ignore';
-        treatmentTd.appendChild(treatmentInput);
 
         var rankInput = document.createElement('input');
         rankInput.type = 'number';
         rankInput.min = '1';
         rankInput.max = '5';
         rankInput.step = '1';
-        rankInput.className = 'yt-miner-cat-rank';
+        rankInput.className = 'yt-miner-config-rank';
         rankInput.value = String(Math.max(1, Math.min(Number(row && row.value_rank) || 3, 5)));
         rankTd.appendChild(rankInput);
 
         var tagsInput = document.createElement('input');
         tagsInput.type = 'text';
-        tagsInput.className = 'yt-miner-cat-tags';
+        tagsInput.className = 'yt-miner-config-tags';
         tagsInput.value = toArray(row && (row.match_hashtags || row.match_tags)).join(', ');
-        tagsInput.placeholder = 'pain_point, question, purchase_intent';
+        tagsInput.placeholder = 'pain_point, growth_openness';
         tagsTd.appendChild(tagsInput);
       } else {
         nameTd.textContent = safeText(row && row.name) || '-';
         var rationaleHtml = sanitizeRationaleHtml(safeText(row && row.rationale));
-        if (rationaleHtml) {
-          rationaleTd.innerHTML = rationaleHtml;
-        } else {
-          rationaleTd.textContent = '-';
-        }
-        treatmentTd.textContent = normalizeTreatment(row && (row.treatment || row.factor)) || '-';
+        rationaleTd.innerHTML = rationaleHtml || '-';
         rankTd.textContent = String(Math.max(1, Math.min(Number(row && row.value_rank) || 3, 5)));
         tagsTd.textContent = toArray(row && (row.match_hashtags || row.match_tags)).join(', ') || '-';
       }
 
-      var actionTd = document.createElement('td');
       var editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.textContent = editing ? 'Save' : 'Edit';
       editBtn.addEventListener('click', function() {
         if (!editing) {
-          youtubeMinerCategoryEditingIds.add(rowId);
-          renderYoutubeMinerCategoryConfig();
+          editingIds.add(rowId);
+          renderYoutubeMinerConfig(kind);
           return;
         }
-        syncYoutubeMinerCategoryRowsFromEditingDom();
-        youtubeMinerCategoryEditingIds.delete(rowId);
-        saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
-        renderYoutubeMinerCategoryConfig();
+        syncYoutubeMinerRowsFromEditingDom(kind);
+        editingIds.delete(rowId);
+        saveYoutubeMinerConfig(kind, bundle.getRows());
+        renderYoutubeMinerConfig(kind);
       });
       actionTd.appendChild(editBtn);
 
@@ -528,8 +534,8 @@ App.youtube = (function () {
         cancelBtn.type = 'button';
         cancelBtn.textContent = 'Cancel';
         cancelBtn.addEventListener('click', function() {
-          youtubeMinerCategoryEditingIds.delete(rowId);
-          renderYoutubeMinerCategoryConfig();
+          editingIds.delete(rowId);
+          renderYoutubeMinerConfig(kind);
         });
         actionTd.appendChild(cancelBtn);
       }
@@ -538,27 +544,124 @@ App.youtube = (function () {
       deleteBtn.type = 'button';
       deleteBtn.textContent = 'Delete';
       deleteBtn.addEventListener('click', function() {
-        if (!window.confirm('Delete category "' + (safeText(row && row.name) || rowId) + '"?')) return;
-        youtubeMinerCategoryConfig = youtubeMinerCategoryConfig.filter(function(item) {
+        if (!window.confirm('Delete ' + bundle.entityLabel + ' "' + (safeText(row && row.name) || rowId) + '"?')) return;
+        var nextRows = bundle.getRows().filter(function(item) {
           return safeText(item && item.id) !== rowId;
         });
-        youtubeMinerCategorySelectedIds.delete(rowId);
-        youtubeMinerCategoryEditingIds.delete(rowId);
-        saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
-        renderYoutubeMinerCategoryConfig();
+        bundle.setRows(nextRows);
+        selectedIds.delete(rowId);
+        editingIds.delete(rowId);
+        saveYoutubeMinerConfig(kind, nextRows);
+        renderYoutubeMinerConfig(kind);
       });
       actionTd.appendChild(deleteBtn);
 
       tr.appendChild(selectTd);
       tr.appendChild(nameTd);
       tr.appendChild(rationaleTd);
-      tr.appendChild(treatmentTd);
       tr.appendChild(rankTd);
       tr.appendChild(tagsTd);
       tr.appendChild(actionTd);
       tbody.appendChild(tr);
     });
-    syncYoutubeMinerCategoryToolbarState();
+
+    syncYoutubeMinerToolbarState(kind);
+  }
+
+  function bindYoutubeMinerConfigEvents(kind) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
+    var addBtn = document.getElementById(bundle.addBtnId);
+    var editCheckedBtn = document.getElementById(bundle.editCheckedBtnId);
+    var deleteCheckedBtn = document.getElementById(bundle.deleteCheckedBtnId);
+    var selectAll = document.getElementById(bundle.selectAllId);
+
+    if (addBtn) {
+      addBtn.addEventListener('click', function() {
+        var rows = collectYoutubeMinerConfigFromUi(kind);
+        var id = makeYoutubeMinerConfigId(bundle.idPrefix);
+        rows.push({
+          id: id,
+          name: bundle.fallbackName,
+          rationale: '',
+          value_rank: 3,
+          match_hashtags: [],
+        });
+        bundle.setRows(rows);
+        var editing = bundle.getEditing();
+        var selected = bundle.getSelected();
+        editing.add(id);
+        selected.add(id);
+        saveYoutubeMinerConfig(kind, rows);
+        renderYoutubeMinerConfig(kind);
+      });
+    }
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function() {
+        var rows = bundle.getRows();
+        var selected = bundle.getSelected();
+        if (selectAll.checked) {
+          rows.forEach(function(row) {
+            var id = safeText(row && row.id);
+            if (id) selected.add(id);
+          });
+        } else {
+          selected.clear();
+        }
+        renderYoutubeMinerConfig(kind);
+      });
+    }
+
+    if (editCheckedBtn) {
+      editCheckedBtn.addEventListener('click', function() {
+        var selected = bundle.getSelected();
+        if (!selected.size) {
+          notify('Select at least one ' + bundle.entityLabel + ' row to edit.', true);
+          return;
+        }
+        syncYoutubeMinerRowsFromEditingDom(kind);
+        var editing = bundle.getEditing();
+        Array.from(selected).forEach(function(id) { editing.add(id); });
+        renderYoutubeMinerConfig(kind);
+      });
+    }
+
+    if (deleteCheckedBtn) {
+      deleteCheckedBtn.addEventListener('click', function() {
+        var selected = bundle.getSelected();
+        if (!selected.size) {
+          notify('Select at least one ' + bundle.entityLabel + ' row to delete.', true);
+          return;
+        }
+        if (!window.confirm('Delete ' + selected.size + ' checked ' + bundle.entityLabel + ' row(s)?')) return;
+        var selectedSet = new Set(Array.from(selected));
+        var rows = bundle.getRows().filter(function(row) {
+          return !selectedSet.has(safeText(row && row.id));
+        });
+        bundle.setRows(rows);
+        selected.clear();
+        var editing = bundle.getEditing();
+        bundle.setEditing(new Set(Array.from(editing).filter(function(id) { return !selectedSet.has(id); })));
+        saveYoutubeMinerConfig(kind, rows);
+        renderYoutubeMinerConfig(kind);
+      });
+    }
+  }
+
+  function loadYoutubeMinerCategoryConfig() {
+    return loadYoutubeMinerConfig('category');
+  }
+
+  function saveYoutubeMinerCategoryConfig(rows) {
+    saveYoutubeMinerConfig('category', rows);
+  }
+
+  function collectYoutubeMinerCategoryConfigFromUi() {
+    return collectYoutubeMinerConfigFromUi('category');
+  }
+
+  function renderYoutubeMinerCategoryConfig() {
+    renderYoutubeMinerConfig('category');
   }
 
   function getYoutubeCategories() {
@@ -1078,6 +1181,8 @@ App.youtube = (function () {
         safeText(row && row.video_title),
         safeText(row && row.video_id),
         toArray(row && (row.hashtags || row.tags)).join(' '),
+        toArray(row && (row.attributes || row.attribute_names)).join(' '),
+        safeText(row && (row.approach || row.approach_name)),
         toArray(row && row.why).join(' '),
       ].join(' ').toLowerCase();
       return haystack.indexOf(searchQuery) !== -1;
@@ -1102,6 +1207,8 @@ App.youtube = (function () {
         input: activeResult && activeResult.input ? activeResult.input : {},
         stats: stats,
         category_counts: activeResult && activeResult.category_counts ? activeResult.category_counts : {},
+        attribute_counts: activeResult && activeResult.attribute_counts ? activeResult.attribute_counts : {},
+        approach_counts: activeResult && activeResult.approach_counts ? activeResult.approach_counts : {},
         hashtag_counts: activeResult && (activeResult.hashtag_counts || activeResult.tag_counts)
           ? (activeResult.hashtag_counts || activeResult.tag_counts)
           : {},
@@ -1114,7 +1221,7 @@ App.youtube = (function () {
     if (!comments.length) {
       var emptyTr = document.createElement('tr');
       var emptyTd = document.createElement('td');
-      emptyTd.colSpan = 9;
+      emptyTd.colSpan = 11;
       emptyTd.textContent = 'No filtered comments found for current settings.';
       emptyTr.appendChild(emptyTd);
       tableEl.appendChild(emptyTr);
@@ -1132,6 +1239,12 @@ App.youtube = (function () {
       var categoryName = safeText(row && row.category) || '-';
       var valueRank = Number(row && row.category_value_rank || 0) || 0;
       categoryTd.textContent = valueRank > 0 ? (categoryName + ' (' + valueRank + ')') : categoryName;
+
+      var attributesTd = document.createElement('td');
+      attributesTd.textContent = toArray(row && (row.attributes || row.attribute_names)).join(', ') || '-';
+
+      var approachTd = document.createElement('td');
+      approachTd.textContent = safeText(row && (row.approach || row.approach_name)) || '-';
 
       var whyTd = document.createElement('td');
       whyTd.textContent = toArray(row && row.why).join(' | ') || '-';
@@ -1335,6 +1448,8 @@ App.youtube = (function () {
 
       tr.appendChild(scoreTd);
       tr.appendChild(categoryTd);
+      tr.appendChild(attributesTd);
+      tr.appendChild(approachTd);
       tr.appendChild(whyTd);
       tr.appendChild(tagsTd);
       tr.appendChild(authorTd);
@@ -1945,11 +2060,17 @@ App.youtube = (function () {
             include_phrases_text: String(formData.get('include_phrases_text') || '').trim(),
             exclude_phrases_text: String(formData.get('exclude_phrases_text') || '').trim(),
             category_config: collectYoutubeMinerCategoryConfigFromUi(),
+            attribute_config: collectYoutubeMinerConfigFromUi('attribute'),
+            approach_config: collectYoutubeMinerConfigFromUi('approach'),
             training_feedback: collectYoutubeMinerFeedbackCorpus(),
           };
           if (!payload.targets_text) throw new Error('Add at least one video/channel target.');
           saveYoutubeMinerCategoryConfig(payload.category_config);
           youtubeMinerCategoryConfig = payload.category_config.slice();
+          saveYoutubeMinerConfig('attribute', payload.attribute_config);
+          youtubeMinerAttributeConfig = payload.attribute_config.slice();
+          saveYoutubeMinerConfig('approach', payload.approach_config);
+          youtubeMinerApproachConfig = payload.approach_config.slice();
           if (submitBtn) submitBtn.disabled = true;
           var res = await api('/api/acquire/youtube-comments/miner', {
             method: 'POST',
@@ -1968,10 +2089,6 @@ App.youtube = (function () {
 
     var youtubeMinerTrainingBtn = document.getElementById('youtubeMinerTrainingBtn');
     var youtubeMinerProductionBtn = document.getElementById('youtubeMinerProductionBtn');
-    var youtubeMinerAddCategoryBtn = document.getElementById('youtubeMinerAddCategoryBtn');
-    var youtubeMinerEditCheckedBtn = document.getElementById('youtubeMinerEditCheckedBtn');
-    var youtubeMinerDeleteCheckedBtn = document.getElementById('youtubeMinerDeleteCheckedBtn');
-    var youtubeMinerCategorySelectAll = document.getElementById('youtubeMinerCategorySelectAll');
     var youtubeMinerContentSearch = document.getElementById('youtubeMinerContentSearch');
     var youtubeMinerContentCategoryFilter = document.getElementById('youtubeMinerContentCategoryFilter');
     var youtubeMinerContentSort = document.getElementById('youtubeMinerContentSort');
@@ -1982,71 +2099,14 @@ App.youtube = (function () {
       youtubeMinerProductionBtn.addEventListener('click', function() { setYoutubeMinerMode('production'); });
     }
     youtubeMinerCategoryConfig = loadYoutubeMinerCategoryConfig();
+    youtubeMinerAttributeConfig = loadYoutubeMinerConfig('attribute');
+    youtubeMinerApproachConfig = loadYoutubeMinerConfig('approach');
     renderYoutubeMinerCategoryConfig();
-    if (youtubeMinerAddCategoryBtn) {
-      youtubeMinerAddCategoryBtn.addEventListener('click', function() {
-        youtubeMinerCategoryConfig = collectYoutubeMinerCategoryConfigFromUi();
-        var newId = makeYoutubeMinerCategoryId();
-        youtubeMinerCategoryConfig.push({
-          id: newId,
-          name: 'new_category',
-          rationale: '',
-          treatment: 'ignore',
-          factor: 'ignore',
-          value_rank: 3,
-          match_hashtags: [],
-        });
-        youtubeMinerCategoryEditingIds.add(newId);
-        youtubeMinerCategorySelectedIds.add(newId);
-        saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
-        renderYoutubeMinerCategoryConfig();
-      });
-    }
-    if (youtubeMinerCategorySelectAll) {
-      youtubeMinerCategorySelectAll.addEventListener('change', function() {
-        if (youtubeMinerCategorySelectAll.checked) {
-          youtubeMinerCategoryConfig.forEach(function(row) {
-            var id = safeText(row && row.id);
-            if (id) youtubeMinerCategorySelectedIds.add(id);
-          });
-        } else {
-          youtubeMinerCategorySelectedIds.clear();
-        }
-        renderYoutubeMinerCategoryConfig();
-      });
-    }
-    if (youtubeMinerEditCheckedBtn) {
-      youtubeMinerEditCheckedBtn.addEventListener('click', function() {
-        if (!youtubeMinerCategorySelectedIds.size) {
-          notify('Select at least one category row to edit.', true);
-          return;
-        }
-        syncYoutubeMinerCategoryRowsFromEditingDom();
-        Array.from(youtubeMinerCategorySelectedIds).forEach(function(id) {
-          youtubeMinerCategoryEditingIds.add(id);
-        });
-        renderYoutubeMinerCategoryConfig();
-      });
-    }
-    if (youtubeMinerDeleteCheckedBtn) {
-      youtubeMinerDeleteCheckedBtn.addEventListener('click', function() {
-        if (!youtubeMinerCategorySelectedIds.size) {
-          notify('Select at least one category row to delete.', true);
-          return;
-        }
-        if (!window.confirm('Delete ' + youtubeMinerCategorySelectedIds.size + ' checked category row(s)?')) return;
-        var selected = new Set(Array.from(youtubeMinerCategorySelectedIds));
-        youtubeMinerCategoryConfig = youtubeMinerCategoryConfig.filter(function(row) {
-          return !selected.has(safeText(row && row.id));
-        });
-        youtubeMinerCategorySelectedIds.clear();
-        youtubeMinerCategoryEditingIds = new Set(
-          Array.from(youtubeMinerCategoryEditingIds).filter(function(id) { return !selected.has(id); })
-        );
-        saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
-        renderYoutubeMinerCategoryConfig();
-      });
-    }
+    renderYoutubeMinerConfig('attribute');
+    renderYoutubeMinerConfig('approach');
+    bindYoutubeMinerConfigEvents('category');
+    bindYoutubeMinerConfigEvents('attribute');
+    bindYoutubeMinerConfigEvents('approach');
     setYoutubeMinerMode('training');
     setupYoutubeMinerCollapsibles();
     if (youtubeMinerContentSearch) {
