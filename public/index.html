@@ -753,7 +753,7 @@
                     <div class="youtube-miner-col-left">
                       <div class="form-row">
                         <label for="youtubeMinerTargets">Video/Channel Targets</label>
-                        <textarea id="youtubeMinerTargets" name="targets" rows="6" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+                        <textarea id="youtubeMinerTargets" name="targets" rows="3" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
                       </div>
                     </div>
                     <div class="youtube-miner-col-right">
@@ -884,6 +884,27 @@
                         <tbody id="youtubeMinerApproachConfigTable"></tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="youtube-miner-collapsible is-open">
+                <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerResponseContextBody" aria-expanded="true">
+                  <span>Response Context</span>
+                  <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+                </button>
+                <div id="youtubeMinerResponseContextBody" class="youtube-miner-collapsible-body">
+                  <div class="form-row">
+                    <label for="youtubeMinerResponseContext">
+                      Context used for draft replies (project themes, positioning, references)
+                    </label>
+                    <textarea
+                      id="youtubeMinerResponseContext"
+                      name="response_context"
+                      rows="6"
+                      placeholder="Example: ISITAS focuses on practical self-alignment. Keep references moderate and relevant. Prefer encouraging, non-pushy replies that ask one clarifying question before CTA."
+                    ></textarea>
+                    <p class="muted">Tip: Keep this concise and evergreen. The miner will use this as guidance when creating reply drafts.</p>
                   </div>
                 </div>
               </section>

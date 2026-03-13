@@ -35,6 +35,7 @@ App.youtube = (function () {
   var YT_MINER_CATEGORY_CONFIG_KEY = 'yt_miner_category_config_v1';
   var YT_MINER_ATTRIBUTE_CONFIG_KEY = 'yt_miner_attribute_config_v1';
   var YT_MINER_APPROACH_CONFIG_KEY = 'yt_miner_approach_config_v1';
+  var YT_MINER_RESPONSE_CONTEXT_KEY = 'yt_miner_response_context_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
@@ -207,34 +208,62 @@ App.youtube = (function () {
 
   function defaultYoutubeMinerCategoryConfig() {
     return [
-      { id: makeYoutubeMinerConfigId('cat'), name: 'intent', rationale: 'Signals purchase/action intent.', value_rank: 5, match_hashtags: ['purchase_intent'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'pain_point', rationale: 'Struggle/friction/help needed.', value_rank: 5, match_hashtags: ['pain_point', 'solution_seeking'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'growth', rationale: 'Open to change/next level.', value_rank: 4, match_hashtags: ['growth_openness'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'question', rationale: 'Direct ask for guidance.', value_rank: 4, match_hashtags: ['question'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'positive', rationale: 'Positive/affirming signal.', value_rank: 3, match_hashtags: ['positive_signal'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'risk', rationale: 'Trust/scam/fake concerns.', value_rank: 2, match_hashtags: ['trust_risk'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'general', rationale: 'Fallback category.', value_rank: 1, match_hashtags: [] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'intent', rationale: 'Explicit “how do I start / what should I buy / what does it cost” language. High conversion potential; prioritize for direct follow-up.', value_rank: 5, match_hashtags: ['purchase_intent', 'solution_seeking'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'pain_point', rationale: 'Clear friction, dissatisfaction, or stuck-state statements. Valuable for empathy-first engagement and diagnostic questions.', value_rank: 5, match_hashtags: ['pain_point', 'problem_signal'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'growth', rationale: 'Identity-shift and self-improvement language (“want more,” “outgrowing old self”). Strong fit for aspirational messaging.', value_rank: 5, match_hashtags: ['growth_openness', 'identity_shift'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'question', rationale: 'Genuine information-seeking questions. Good candidates for trust-building, useful replies, and soft invitation to continue.', value_rank: 4, match_hashtags: ['question'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'positive', rationale: 'Supportive/affirming comments with low friction. Useful for community warmth but usually lower urgency than intent or pain.', value_rank: 3, match_hashtags: ['positive_signal'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'risk', rationale: 'Scam/fake/bot/skeptic cues. Requires credibility-first messaging and can be deprioritized unless strategically important.', value_rank: 2, match_hashtags: ['trust_risk'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'general', rationale: 'No strong actionable signal detected. Keep as background unless combined with high-value attributes.', value_rank: 1, match_hashtags: [] },
     ];
   }
 
   function defaultYoutubeMinerAttributeConfig() {
     return [
-      { id: makeYoutubeMinerConfigId('attr'), name: 'motivated', rationale: 'Shows momentum and willingness to act.', value_rank: 5, match_hashtags: ['growth_openness', 'purchase_intent'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'self_involved', rationale: 'Focuses on self-image/status over substance.', value_rank: 2, match_hashtags: ['social_handle'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'negative_outlook', rationale: 'Language indicates defeatism/cynicism.', value_rank: 2, match_hashtags: ['pain_point'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'fan', rationale: 'Strong appreciation/affinity for creator/topic.', value_rank: 3, match_hashtags: ['positive_signal'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'introvert', rationale: 'Reflective/internal processing style.', value_rank: 3, match_hashtags: ['question'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'motivated', rationale: 'Displays readiness to change behavior now (not “someday”). Prioritize because response likelihood and follow-through are high.', value_rank: 5, match_hashtags: ['growth_openness', 'purchase_intent', 'identity_shift'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'self_involved', rationale: 'Language centers status/appearance over substance. Engage lightly unless paired with intent or growth signals.', value_rank: 2, match_hashtags: ['social_handle'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'negative_outlook', rationale: 'Defeatist/cynical framing. Requires careful tone; avoid hard CTA and lead with acknowledgement + reframing.', value_rank: 2, match_hashtags: ['pain_point', 'trust_risk'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'fan', rationale: 'High affinity and goodwill. Useful for amplification and relationship-building, but often lower conversion urgency.', value_rank: 3, match_hashtags: ['positive_signal'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'introvert', rationale: 'Reflective and internal processing style. Better with thoughtful, non-pushy prompts and one clear next question.', value_rank: 3, match_hashtags: ['question', 'growth_openness'] },
     ];
   }
 
   function defaultYoutubeMinerApproachConfig() {
     return [
-      { id: makeYoutubeMinerConfigId('approach'), name: 'ignore', rationale: 'Low-signal/background/noise comments.', value_rank: 1, match_hashtags: ['noise'] },
-      { id: makeYoutubeMinerConfigId('approach'), name: 'encourage', rationale: 'Affirm and support growth-oriented comments.', value_rank: 4, match_hashtags: ['growth_openness', 'positive_signal'] },
-      { id: makeYoutubeMinerConfigId('approach'), name: 'intrigue', rationale: 'Open loops to spark curiosity.', value_rank: 3, match_hashtags: ['solution_seeking'] },
-      { id: makeYoutubeMinerConfigId('approach'), name: 'inquire', rationale: 'Ask clarifying questions first.', value_rank: 4, match_hashtags: ['question', 'pain_point'] },
-      { id: makeYoutubeMinerConfigId('approach'), name: 'direct_cta', rationale: 'Use direct next-step invitation where intent is strong.', value_rank: 5, match_hashtags: ['purchase_intent'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'ignore', rationale: 'Skip low-signal/noise comments to conserve effort for actionable conversations.', value_rank: 5, match_hashtags: ['noise'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'encourage', rationale: 'Affirm momentum and reinforce identity shift. Best for growth-oriented or positive comments.', value_rank: 4, match_hashtags: ['growth_openness', 'positive_signal', 'identity_shift'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'intrigue', rationale: 'Use curiosity/open loops to continue conversation when intent is emerging but not explicit.', value_rank: 3, match_hashtags: ['solution_seeking'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'inquire', rationale: 'Lead with a clarifying question to diagnose context before advising. Best for pain/question comments.', value_rank: 4, match_hashtags: ['question', 'pain_point'] },
+      { id: makeYoutubeMinerConfigId('approach'), name: 'direct_cta', rationale: 'Offer one concrete next step when intent is explicit and friction is low.', value_rank: 5, match_hashtags: ['purchase_intent'] },
     ];
+  }
+
+  function applyRecommendedRows(kind, rows) {
+    var bundle = getYoutubeMinerConfigBundle(kind);
+    var recommended = bundle.defaultRows().map(function(item) {
+      return {
+        name: safeText(item && item.name).toLowerCase(),
+        rationale: safeText(item && item.rationale),
+        value_rank: Number(item && item.value_rank) || 3,
+        match_hashtags: toArray(item && item.match_hashtags).map(function(v) { return safeText(v).toLowerCase(); }).filter(Boolean),
+      };
+    });
+    var byName = {};
+    recommended.forEach(function(item) {
+      if (item.name) byName[item.name] = item;
+    });
+    return normalizeYoutubeMinerRows(kind, rows).map(function(row) {
+      var name = safeText(row && row.name).toLowerCase();
+      var rec = byName[name];
+      if (!rec) return row;
+      return {
+        id: safeText(row && row.id) || makeYoutubeMinerConfigId(bundle.idPrefix),
+        name: safeText(row && row.name),
+        rationale: rec.rationale,
+        value_rank: rec.value_rank,
+        match_hashtags: rec.match_hashtags.slice(),
+      };
+    });
   }
 
   function normalizeYoutubeMinerConfigRows(rows, idPrefix, fallbackName) {
@@ -343,6 +372,20 @@ App.youtube = (function () {
     var bundle = getYoutubeMinerConfigBundle(kind);
     try {
       window.localStorage.setItem(bundle.storageKey, JSON.stringify(rows));
+    } catch (_) { /* ignore */ }
+  }
+
+  function loadYoutubeMinerResponseContext() {
+    try {
+      return safeText(window.localStorage.getItem(YT_MINER_RESPONSE_CONTEXT_KEY) || '');
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function saveYoutubeMinerResponseContext(value) {
+    try {
+      window.localStorage.setItem(YT_MINER_RESPONSE_CONTEXT_KEY, safeText(value || ''));
     } catch (_) { /* ignore */ }
   }
 
@@ -2062,6 +2105,7 @@ App.youtube = (function () {
             category_config: collectYoutubeMinerCategoryConfigFromUi(),
             attribute_config: collectYoutubeMinerConfigFromUi('attribute'),
             approach_config: collectYoutubeMinerConfigFromUi('approach'),
+            response_context: String(formData.get('response_context') || '').trim(),
             training_feedback: collectYoutubeMinerFeedbackCorpus(),
           };
           if (!payload.targets_text) throw new Error('Add at least one video/channel target.');
@@ -2071,6 +2115,7 @@ App.youtube = (function () {
           youtubeMinerAttributeConfig = payload.attribute_config.slice();
           saveYoutubeMinerConfig('approach', payload.approach_config);
           youtubeMinerApproachConfig = payload.approach_config.slice();
+          saveYoutubeMinerResponseContext(payload.response_context);
           if (submitBtn) submitBtn.disabled = true;
           var res = await api('/api/acquire/youtube-comments/miner', {
             method: 'POST',
@@ -2092,15 +2137,25 @@ App.youtube = (function () {
     var youtubeMinerContentSearch = document.getElementById('youtubeMinerContentSearch');
     var youtubeMinerContentCategoryFilter = document.getElementById('youtubeMinerContentCategoryFilter');
     var youtubeMinerContentSort = document.getElementById('youtubeMinerContentSort');
+    var youtubeMinerResponseContext = document.getElementById('youtubeMinerResponseContext');
     if (youtubeMinerTrainingBtn) {
       youtubeMinerTrainingBtn.addEventListener('click', function() { setYoutubeMinerMode('training'); });
     }
     if (youtubeMinerProductionBtn) {
       youtubeMinerProductionBtn.addEventListener('click', function() { setYoutubeMinerMode('production'); });
     }
-    youtubeMinerCategoryConfig = loadYoutubeMinerCategoryConfig();
-    youtubeMinerAttributeConfig = loadYoutubeMinerConfig('attribute');
-    youtubeMinerApproachConfig = loadYoutubeMinerConfig('approach');
+    youtubeMinerCategoryConfig = applyRecommendedRows('category', loadYoutubeMinerCategoryConfig());
+    youtubeMinerAttributeConfig = applyRecommendedRows('attribute', loadYoutubeMinerConfig('attribute'));
+    youtubeMinerApproachConfig = applyRecommendedRows('approach', loadYoutubeMinerConfig('approach'));
+    saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
+    saveYoutubeMinerConfig('attribute', youtubeMinerAttributeConfig);
+    saveYoutubeMinerConfig('approach', youtubeMinerApproachConfig);
+    if (youtubeMinerResponseContext) {
+      youtubeMinerResponseContext.value = loadYoutubeMinerResponseContext();
+      youtubeMinerResponseContext.addEventListener('input', function() {
+        saveYoutubeMinerResponseContext(youtubeMinerResponseContext.value);
+      });
+    }
     renderYoutubeMinerCategoryConfig();
     renderYoutubeMinerConfig('attribute');
     renderYoutubeMinerConfig('approach');
