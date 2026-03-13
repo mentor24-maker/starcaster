@@ -745,7 +745,7 @@
             <form id="youtubeCommentMinerForm" class="stack-form labeled-form">
               <section class="youtube-miner-collapsible is-open">
                 <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerTrainingBody" aria-expanded="true">
-                  <span>Training</span>
+                  <span>Targeting</span>
                   <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
                 </button>
                 <div id="youtubeMinerTrainingBody" class="youtube-miner-collapsible-body">
@@ -795,7 +795,7 @@
 
               <section class="youtube-miner-collapsible is-open">
                 <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerCategoriesBody" aria-expanded="true">
-                  <span>Training: Categories</span>
+                  <span>Training</span>
                   <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
                 </button>
                 <div id="youtubeMinerCategoriesBody" class="youtube-miner-collapsible-body">
@@ -905,59 +905,66 @@
           </section>
         </section>
 
-        <h3>YouTube Acquire Runs</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr class="contacts-filter-row">
-                <th>
-                  <input id="youtubeRunsSelectAllVisible" type="checkbox" aria-label="Select all visible YouTube runs" />
-                </th>
-                <th>
-                  <div class="youtube-date-filter-wrap">
-                    <label class="youtube-date-filter-item">
-                      <span>From</span>
-                      <input id="youtubeRunsFromDate" type="date" />
-                    </label>
-                    <label class="youtube-date-filter-item">
-                      <span>To</span>
-                      <input id="youtubeRunsToDate" type="date" />
-                    </label>
-                  </div>
-                </th>
-                <th><input id="youtubeRunsTitleFilter" placeholder="Video Title" /></th>
-                <th><input id="youtubeRunsChannelFilter" placeholder="Channel" /></th>
-                <th>
-                  <select id="youtubeRunsCategoryFilter">
-                    <option value="">All Categories</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="youtubeRunsTranscriptFilter">
-                    <option value="">All</option>
-                    <option value="found">Found</option>
-                    <option value="unavailable">Unavailable</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                </th>
-                <th>
-                  <button id="youtubeRunsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button>
-                </th>
-              </tr>
-              <tr>
-                <th></th>
-                <th>Created</th>
-                <th>Video Title</th>
-                <th>Channel</th>
-                <th>Category</th>
-                <th>Tags</th>
-                <th>Transcript</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="youtubeRunsTable"></tbody>
-          </table>
-        </div>
+        <section class="youtube-miner-collapsible is-open">
+          <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerRepositoryBody" aria-expanded="true">
+            <span>Repository</span>
+            <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+          </button>
+          <div id="youtubeMinerRepositoryBody" class="youtube-miner-collapsible-body">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr class="contacts-filter-row">
+                    <th>
+                      <input id="youtubeRunsSelectAllVisible" type="checkbox" aria-label="Select all visible YouTube runs" />
+                    </th>
+                    <th>
+                      <div class="youtube-date-filter-wrap">
+                        <label class="youtube-date-filter-item">
+                          <span>From</span>
+                          <input id="youtubeRunsFromDate" type="date" />
+                        </label>
+                        <label class="youtube-date-filter-item">
+                          <span>To</span>
+                          <input id="youtubeRunsToDate" type="date" />
+                        </label>
+                      </div>
+                    </th>
+                    <th><input id="youtubeRunsTitleFilter" placeholder="Video Title" /></th>
+                    <th><input id="youtubeRunsChannelFilter" placeholder="Channel" /></th>
+                    <th>
+                      <select id="youtubeRunsCategoryFilter">
+                        <option value="">All Categories</option>
+                      </select>
+                    </th>
+                    <th>
+                      <select id="youtubeRunsTranscriptFilter">
+                        <option value="">All</option>
+                        <option value="found">Found</option>
+                        <option value="unavailable">Unavailable</option>
+                        <option value="failed">Failed</option>
+                      </select>
+                    </th>
+                    <th>
+                      <button id="youtubeRunsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button>
+                    </th>
+                  </tr>
+                  <tr>
+                    <th></th>
+                    <th>Created</th>
+                    <th>Video Title</th>
+                    <th>Channel</th>
+                    <th>Category</th>
+                    <th>Tags</th>
+                    <th>Transcript</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="youtubeRunsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
 
         <section id="youtubeVideoDetailsSection" class="youtube-video-details-section">
         <div class="youtube-video-details-header">
