@@ -4962,6 +4962,73 @@ th {
   font-weight: 600;
 }
 
+.youtube-miner-comment-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.youtube-miner-comment-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.youtube-miner-feedback-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.youtube-miner-feedback-icon {
+  width: 34px;
+  min-width: 34px;
+  height: 30px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.youtube-miner-feedback-icon.has-feedback {
+  background: #ecfccb;
+  border-color: #84cc16;
+}
+
+.youtube-miner-feedback-pop {
+  position: absolute;
+  right: 0;
+  top: 34px;
+  z-index: 30;
+  width: 340px;
+  padding: 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15);
+}
+
+.youtube-miner-feedback-pop.hidden {
+  display: none;
+}
+
+.youtube-miner-feedback-pop .form-row {
+  margin-bottom: 8px;
+}
+
+.youtube-miner-feedback-pop .form-row > label {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+
+.youtube-miner-feedback-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 @media (max-width: 1200px) {
   .youtube-miner-training-grid {
     grid-template-columns: 1fr;
