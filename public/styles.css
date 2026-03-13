@@ -4842,14 +4842,31 @@ th {
   white-space: nowrap;
 }
 
+.youtube-miner-col-right .form-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 210px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.youtube-miner-col-right .form-row > label {
+  margin-bottom: 0;
+}
+
 .youtube-miner-filter-checks {
   justify-content: flex-start;
   gap: 18px;
-  margin-top: 8px;
+  margin-top: 2px;
 }
 
 #youtubeCommentMinerForm .youtube-miner-filter-checks {
   display: flex;
+  grid-column: 1 / -1;
+}
+
+#youtubeMinerTargets {
+  min-height: 152px;
 }
 
 #youtubeMinerCategoryConfigTable input[type="text"],

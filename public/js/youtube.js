@@ -1036,9 +1036,9 @@ App.youtube = (function () {
     }
     var activeResult = youtubeMinerLastResult || {};
     var summaryEl = document.getElementById('youtubeCommentMinerSummary');
-    var metaEl = document.getElementById('youtubeCommentMinerMeta');
     var tableEl = document.getElementById('youtubeCommentMinerTable');
-    if (!summaryEl || !metaEl || !tableEl) return;
+    var metaEl = document.getElementById('youtubeCommentMinerMeta');
+    if (!summaryEl || !tableEl) return;
 
     var stats = activeResult && activeResult.stats ? activeResult.stats : {};
     var comments = toArray(activeResult && activeResult.comments).slice(0, 200);
@@ -1097,16 +1097,18 @@ App.youtube = (function () {
     var totalFiltered = Number(stats.total_comments_filtered || 0) || 0;
     summaryEl.textContent = 'Videos harvested: ' + harvestedVideos + ' | Raw comments: ' + totalRaw + ' | Filtered comments: ' + totalFiltered + ' | Visible rows: ' + comments.length;
 
-    metaEl.textContent = App.prettyJson({
-      input: activeResult && activeResult.input ? activeResult.input : {},
-      stats: stats,
-      category_counts: activeResult && activeResult.category_counts ? activeResult.category_counts : {},
-      hashtag_counts: activeResult && (activeResult.hashtag_counts || activeResult.tag_counts)
-        ? (activeResult.hashtag_counts || activeResult.tag_counts)
-        : {},
-      warnings: toArray(activeResult && activeResult.warnings),
-      errors: toArray(activeResult && activeResult.errors),
-    });
+    if (metaEl) {
+      metaEl.textContent = App.prettyJson({
+        input: activeResult && activeResult.input ? activeResult.input : {},
+        stats: stats,
+        category_counts: activeResult && activeResult.category_counts ? activeResult.category_counts : {},
+        hashtag_counts: activeResult && (activeResult.hashtag_counts || activeResult.tag_counts)
+          ? (activeResult.hashtag_counts || activeResult.tag_counts)
+          : {},
+        warnings: toArray(activeResult && activeResult.warnings),
+        errors: toArray(activeResult && activeResult.errors),
+      });
+    }
 
     tableEl.innerHTML = '';
     if (!comments.length) {
@@ -1438,6 +1440,7 @@ App.youtube = (function () {
 
       function mkBtn(label, fn) {
         var iconMap = {
+          'Copy URL': 'copy',
           'View': 'view',
           'Edit': 'edit',
           'Add Contact': 'contact',
@@ -1450,6 +1453,31 @@ App.youtube = (function () {
           danger: label === 'Delete'
         });
       }
+
+      function copyTextToClipboard(text) {
+        var value = String(text || '').trim();
+        if (!value) return Promise.reject(new Error('No URL available to copy'));
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          return navigator.clipboard.writeText(value);
+        }
+        return new Promise(function(resolve, reject) {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = value;
+            ta.setAttribute('readonly', 'readonly');
+            ta.style.position = 'absolute';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (!ok) return reject(new Error('Copy command was blocked'));
+            resolve();
+          } catch (err) {
+            reject(err || new Error('Copy failed'));
+          }
+        });
+      }
       
       function findCommentRunForVideoUrl(videoUrl) {
         var url = String(videoUrl || '').trim();
@@ -1459,6 +1487,11 @@ App.youtube = (function () {
         }) || null;
       }
 
+      var copyBtn         = mkBtn('Copy URL',        function() {
+        copyTextToClipboard(run.video_url)
+          .then(function() { notify('Video URL copied'); })
+          .catch(function(e) { notify(safeText(e && e.message) || 'Could not copy URL', true); });
+      });
       var viewBtn         = mkBtn('View',            function() { loadYoutubeRun(run.run_id).catch(function(e) { notify(e.message, true); }); });
       var editBtn         = mkBtn('Edit',            function() { openEditRun(run.run_id).catch(function(e) { notify(e.message, true); }); });
       var addBtn          = mkBtn('Add Contact',      function() { addContactFromRun(run.run_id).catch(function(e) { notify(e.message, true); }); });
@@ -1487,7 +1520,7 @@ App.youtube = (function () {
       addBtn.style.marginLeft = '8px';
       commentsBtn.style.marginLeft = '8px';
       delBtn.style.marginLeft = '8px';
-      actionsTd.appendChild(viewBtn); actionsTd.appendChild(editBtn); actionsTd.appendChild(addBtn);
+      actionsTd.appendChild(copyBtn); actionsTd.appendChild(viewBtn); actionsTd.appendChild(editBtn); actionsTd.appendChild(addBtn);
       actionsTd.appendChild(commentsBtn);
       actionsTd.appendChild(delBtn);
       els.youtubeRunsTable.appendChild(tr);
