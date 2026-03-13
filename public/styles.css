@@ -4902,12 +4902,12 @@ th {
 
 .youtube-miner-category-table th:nth-child(3),
 .youtube-miner-category-table td:nth-child(3) {
-  width: 24%;
+  width: 34%;
 }
 
 .youtube-miner-category-table th:nth-child(4),
 .youtube-miner-category-table td:nth-child(4) {
-  width: 24%;
+  width: 14%;
 }
 
 .youtube-miner-category-table th:nth-child(5),
@@ -4942,6 +4942,50 @@ th {
 .youtube-miner-category-table input[type="checkbox"] {
   width: auto;
   margin: 0;
+}
+
+.yt-miner-cat-rationale-editor {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.yt-miner-cat-rationale-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--c-border);
+  background: #f8fafc;
+}
+
+.yt-miner-rte-btn {
+  width: auto;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.yt-miner-cat-rationale-rich {
+  min-height: 160px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.yt-miner-cat-rationale-rich:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.2);
+  outline-offset: -2px;
+}
+
+.youtube-miner-category-table td:nth-child(3) a {
+  color: #2563eb;
+  text-decoration: underline;
 }
 
 .youtube-miner-content-controls {
