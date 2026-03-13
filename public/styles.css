@@ -4963,25 +4963,26 @@ th {
 }
 
 .youtube-miner-comment-cell {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  position: relative;
+  min-height: 86px;
+  padding-right: 40px;
 }
 
 .youtube-miner-comment-text {
-  flex: 1 1 auto;
   min-width: 0;
+  white-space: pre-wrap;
 }
 
 .youtube-miner-feedback-wrap {
-  position: relative;
-  flex: 0 0 auto;
+  position: absolute;
+  right: 0;
+  bottom: 0;
 }
 
 .youtube-miner-feedback-icon {
-  width: 34px;
-  min-width: 34px;
-  height: 30px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
   border: 1px solid var(--c-border);
   border-radius: 6px;
   background: #ffffff;
@@ -4995,38 +4996,55 @@ th {
   border-color: #84cc16;
 }
 
-.youtube-miner-feedback-pop {
-  position: absolute;
-  right: 0;
-  top: 34px;
-  z-index: 30;
-  width: 340px;
-  padding: 10px;
-  border: 1px solid var(--c-border);
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15);
+.youtube-miner-feedback-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
 }
 
-.youtube-miner-feedback-pop.hidden {
+.youtube-miner-feedback-modal.hidden {
   display: none;
 }
 
-.youtube-miner-feedback-pop .form-row {
-  margin-bottom: 8px;
+.youtube-miner-feedback-dialog {
+  width: min(900px, 95vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid var(--c-border);
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.4);
+  padding: 16px;
 }
 
-.youtube-miner-feedback-pop .form-row > label {
+.youtube-miner-feedback-dialog h4 {
+  margin: 0 0 8px;
+}
+
+.youtube-miner-feedback-dialog .form-row {
+  margin-bottom: 10px;
+}
+
+.youtube-miner-feedback-dialog .form-row > label {
   display: block;
-  margin-bottom: 3px;
-  font-weight: 600;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+.youtube-miner-feedback-dialog textarea {
+  min-height: 180px;
 }
 
 .youtube-miner-feedback-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 @media (max-width: 1200px) {
