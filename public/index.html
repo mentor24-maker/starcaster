@@ -753,7 +753,7 @@
                     <div class="youtube-miner-col-left">
                       <div class="form-row">
                         <label for="youtubeMinerTargets">Video/Channel Targets</label>
-                        <textarea id="youtubeMinerTargets" name="targets" rows="14" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+                        <textarea id="youtubeMinerTargets" name="targets" rows="6" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
                       </div>
                     </div>
                     <div class="youtube-miner-col-right">
@@ -818,13 +818,70 @@
                             <th><input id="youtubeMinerCategorySelectAll" type="checkbox" aria-label="Select all category rows" /></th>
                             <th>Category</th>
                             <th>Rationale</th>
-                            <th>Treatment</th>
                             <th>Value (1-5)</th>
                             <th>Match Hashtags</th>
                             <th>Action</th>
                           </tr>
                         </thead>
                         <tbody id="youtubeMinerCategoryConfigTable"></tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div class="form-row youtube-miner-category-config">
+                    <div class="youtube-miner-category-header-row">
+                      <div>
+                        <label>Training Configuration: Attributes</label>
+                        <p class="muted">Define audience/personality attributes to classify commenters. Value rank (1-5) increases weighting when matched.</p>
+                      </div>
+                      <div class="youtube-miner-category-toolbar-right">
+                        <button type="button" id="youtubeMinerAddAttributeBtn">Add Attribute</button>
+                        <button type="button" id="youtubeMinerEditAttributesCheckedBtn">Edit Attributes</button>
+                        <button type="button" id="youtubeMinerDeleteAttributesCheckedBtn">Delete Attributes</button>
+                      </div>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="youtube-miner-category-table">
+                        <thead>
+                          <tr>
+                            <th><input id="youtubeMinerAttributeSelectAll" type="checkbox" aria-label="Select all attribute rows" /></th>
+                            <th>Attribute</th>
+                            <th>Rationale</th>
+                            <th>Value (1-5)</th>
+                            <th>Match Hashtags</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="youtubeMinerAttributeConfigTable"></tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div class="form-row youtube-miner-category-config">
+                    <div class="youtube-miner-category-header-row">
+                      <div>
+                        <label>Training Configuration: Approaches</label>
+                        <p class="muted">Define the engagement approach to use for matched comment patterns.</p>
+                      </div>
+                      <div class="youtube-miner-category-toolbar-right">
+                        <button type="button" id="youtubeMinerAddApproachBtn">Add Approach</button>
+                        <button type="button" id="youtubeMinerEditApproachesCheckedBtn">Edit Approaches</button>
+                        <button type="button" id="youtubeMinerDeleteApproachesCheckedBtn">Delete Approaches</button>
+                      </div>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="youtube-miner-category-table">
+                        <thead>
+                          <tr>
+                            <th><input id="youtubeMinerApproachSelectAll" type="checkbox" aria-label="Select all approach rows" /></th>
+                            <th>Approach</th>
+                            <th>Rationale</th>
+                            <th>Value (1-5)</th>
+                            <th>Match Hashtags</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="youtubeMinerApproachConfigTable"></tbody>
                       </table>
                     </div>
                   </div>
@@ -861,13 +918,14 @@
                   </div>
                 </div>
                 <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
-                <pre id="youtubeCommentMinerMeta" class="code-box">{}</pre>
                 <div class="table-wrap">
                   <table>
                     <thead>
                       <tr>
                         <th>Score</th>
                         <th>Category</th>
+                        <th>Attributes</th>
+                        <th>Approach</th>
                         <th>Why Surfaced</th>
                         <th>Hashtags</th>
                         <th>Author</th>
