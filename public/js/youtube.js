@@ -28,6 +28,19 @@ App.youtube = (function () {
   var youtubeMinerLastResult = null;
   var YT_MINER_CATEGORY_CONFIG_KEY = 'yt_miner_category_config_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
+  var YT_MINER_TREATMENT_OPTIONS = [
+    'ignore',
+    'encourage',
+    'intrigue',
+    'inquire',
+    'educate',
+    'empathize',
+    'qualify',
+    'invite_dialog',
+    'trust_repair',
+    'cta_soft',
+    'cta_direct'
+  ];
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
 
@@ -42,6 +55,64 @@ App.youtube = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function sanitizeRationaleHtml(input) {
+    var raw = String(input || '');
+    if (!raw) return '';
+    var root = document.createElement('div');
+    root.innerHTML = raw;
+    var allowed = {
+      B: true,
+      STRONG: true,
+      I: true,
+      EM: true,
+      U: true,
+      P: true,
+      BR: true,
+      UL: true,
+      OL: true,
+      LI: true,
+      A: true,
+    };
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+    var toProcess = [];
+    while (walker.nextNode()) toProcess.push(walker.currentNode);
+    toProcess.forEach(function(node) {
+      var tag = String(node.tagName || '').toUpperCase();
+      if (!allowed[tag]) {
+        var parent = node.parentNode;
+        if (!parent) return;
+        while (node.firstChild) parent.insertBefore(node.firstChild, node);
+        parent.removeChild(node);
+        return;
+      }
+      Array.prototype.slice.call(node.attributes || []).forEach(function(attr) {
+        var attrName = String(attr && attr.name || '').toLowerCase();
+        if (tag === 'A' && attrName === 'href') return;
+        node.removeAttribute(attr.name);
+      });
+      if (tag === 'A') {
+        var href = safeText(node.getAttribute('href'));
+        if (!/^https?:\/\//i.test(href)) {
+          node.removeAttribute('href');
+        } else {
+          node.setAttribute('href', href);
+          node.setAttribute('target', '_blank');
+          node.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+    });
+    return safeText(root.innerHTML);
   }
 
   function toArray(value) {
@@ -59,7 +130,7 @@ App.youtube = (function () {
   function readFeedback(row) {
     try {
       var raw = window.localStorage.getItem(feedbackKeyForRow(row));
-      if (!raw) return { quality: 0, categories: [], tags: '', note: '', updated_at: '' };
+      if (!raw) return { quality: 0, categories: [], hashtags: '', note: '', response_type: '', suggested_response: '', updated_at: '' };
       var parsed = JSON.parse(raw);
       var categories = [];
       if (Array.isArray(parsed && parsed.categories)) {
@@ -70,12 +141,14 @@ App.youtube = (function () {
       return {
         quality: Math.max(0, Math.min(Number(parsed && parsed.quality) || 0, 5)),
         categories: Array.from(new Set(categories)).slice(0, 20),
-        tags: safeText(parsed && parsed.tags),
+        hashtags: safeText(parsed && (parsed.hashtags || parsed.tags)),
         note: safeText(parsed && parsed.note),
+        response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
+        suggested_response: safeText(parsed && (parsed.suggested_response || parsed.response_example)),
         updated_at: safeText(parsed && parsed.updated_at),
       };
     } catch (_) {
-      return { quality: 0, categories: [], tags: '', note: '', updated_at: '' };
+      return { quality: 0, categories: [], hashtags: '', note: '', response_type: '', suggested_response: '', updated_at: '' };
     }
   }
 
@@ -85,10 +158,13 @@ App.youtube = (function () {
     merged.quality = Math.max(0, Math.min(Number(merged.quality) || 0, 5));
     merged.categories = toArray(merged.categories).map(function(item) { return safeText(item); }).filter(Boolean);
     merged.categories = Array.from(new Set(merged.categories)).slice(0, 20);
-    merged.tags = safeText(merged.tags);
+    merged.hashtags = safeText(merged.hashtags || merged.tags);
+    delete merged.tags;
     merged.note = safeText(merged.note);
+    merged.response_type = safeText(merged.response_type);
+    merged.suggested_response = safeText(merged.suggested_response);
     merged.updated_at = new Date().toISOString();
-    if (!merged.quality && !merged.categories.length && !merged.tags && !merged.note) {
+    if (!merged.quality && !merged.categories.length && !merged.hashtags && !merged.note && !merged.response_type && !merged.suggested_response) {
       try { window.localStorage.removeItem(feedbackKeyForRow(row)); } catch (_) { /* ignore */ }
       return;
     }
@@ -117,8 +193,10 @@ App.youtube = (function () {
           categories: Array.isArray(parsed && parsed.categories)
             ? parsed.categories.map(function(item) { return safeText(item); }).filter(Boolean)
             : safeText(parsed && parsed.category).split(/\r?\n|,/g).map(function(item) { return safeText(item); }).filter(Boolean),
-          tags: safeText(parsed && parsed.tags),
+          hashtags: safeText(parsed && (parsed.hashtags || parsed.tags)),
           note: safeText(parsed && parsed.note),
+          response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
+          suggested_response: safeText(parsed && (parsed.suggested_response || parsed.response_example)),
           updated_at: safeText(parsed && parsed.updated_at),
         });
       }
@@ -134,65 +212,78 @@ App.youtube = (function () {
         id: makeYoutubeMinerCategoryId(),
         name: 'intent',
         rationale: 'Signals purchase or action intent.',
-        factor: 'Highest conversion opportunity.',
+        treatment: 'cta_direct',
         value_rank: 5,
-        match_tags: ['purchase_intent'],
+        match_hashtags: ['purchase_intent'],
       },
       {
         id: makeYoutubeMinerCategoryId(),
         name: 'pain_point',
         rationale: 'Describes struggle, friction, or need for help.',
-        factor: 'High likelihood of response to useful guidance.',
+        treatment: 'inquire',
         value_rank: 5,
-        match_tags: ['pain_point', 'solution_seeking'],
+        match_hashtags: ['pain_point', 'solution_seeking'],
       },
       {
         id: makeYoutubeMinerCategoryId(),
         name: 'growth',
         rationale: 'Shows openness to change or leveling up.',
-        factor: 'Good fit for transformational messaging.',
+        treatment: 'encourage',
         value_rank: 4,
-        match_tags: ['growth_openness'],
+        match_hashtags: ['growth_openness'],
       },
       {
         id: makeYoutubeMinerCategoryId(),
         name: 'question',
         rationale: 'Direct question or asks for direction.',
-        factor: 'Easy to engage with direct helpful reply.',
+        treatment: 'inquire',
         value_rank: 4,
-        match_tags: ['question'],
+        match_hashtags: ['question'],
       },
       {
         id: makeYoutubeMinerCategoryId(),
         name: 'positive',
         rationale: 'Positive feedback and appreciation.',
-        factor: 'Relationship-building with warm audience.',
+        treatment: 'encourage',
         value_rank: 3,
-        match_tags: ['positive_signal'],
+        match_hashtags: ['positive_signal'],
       },
       {
         id: makeYoutubeMinerCategoryId(),
         name: 'risk',
         rationale: 'Mentions scam/fake/bot/trust concerns.',
-        factor: 'Trust education and credibility opportunity.',
+        treatment: 'trust_repair',
         value_rank: 2,
-        match_tags: ['trust_risk'],
+        match_hashtags: ['trust_risk'],
       },
       {
         id: makeYoutubeMinerCategoryId(),
         name: 'general',
         rationale: 'Fallback when no category-specific signal appears.',
-        factor: 'Low-priority background engagement.',
+        treatment: 'ignore',
         value_rank: 1,
-        match_tags: [],
+        match_hashtags: [],
       },
     ];
+  }
+
+  function normalizeTreatment(value) {
+    var raw = safeText(value).toLowerCase();
+    if (!raw) return 'ignore';
+    if (YT_MINER_TREATMENT_OPTIONS.indexOf(raw) >= 0) return raw;
+    if (raw.indexOf('conversion') >= 0 || raw.indexOf('direct') >= 0) return 'cta_direct';
+    if (raw.indexOf('trust') >= 0 || raw.indexOf('credib') >= 0) return 'trust_repair';
+    if (raw.indexOf('background') >= 0 || raw.indexOf('low-priority') >= 0) return 'ignore';
+    if (raw.indexOf('transform') >= 0 || raw.indexOf('relationship') >= 0) return 'encourage';
+    if (raw.indexOf('guidance') >= 0 || raw.indexOf('educat') >= 0) return 'educate';
+    if (raw.indexOf('question') >= 0 || raw.indexOf('reply') >= 0) return 'inquire';
+    return raw;
   }
 
   function normalizeCategoryConfigRows(rows) {
     return toArray(rows).map(function(row) {
       var rankNum = Number(row && row.value_rank);
-      var tagsRaw = row && row.match_tags;
+      var tagsRaw = row && (row.match_hashtags || row.match_tags);
       var tags = [];
       if (Array.isArray(tagsRaw)) {
         tags = tagsRaw.map(function(v) { return safeText(v).toLowerCase(); }).filter(Boolean);
@@ -206,9 +297,10 @@ App.youtube = (function () {
         id: safeText(row && row.id) || makeYoutubeMinerCategoryId(),
         name: safeText(row && row.name) || 'general',
         rationale: safeText(row && row.rationale),
-        factor: safeText(row && row.factor),
+        treatment: normalizeTreatment(row && ((row.treatment || row.factor))),
+        factor: normalizeTreatment(row && ((row.treatment || row.factor))),
         value_rank: Math.max(1, Math.min(Number.isFinite(rankNum) ? rankNum : 3, 5)),
-        match_tags: Array.from(new Set(tags)).slice(0, 20),
+        match_hashtags: Array.from(new Set(tags)).slice(0, 20),
       };
     }).filter(function(row) { return Boolean(safeText(row && row.name)); });
   }
@@ -246,13 +338,18 @@ App.youtube = (function () {
       if (!rowId) return;
       var idx = youtubeMinerCategoryConfig.findIndex(function(item) { return safeText(item && item.id) === rowId; });
       if (idx < 0) return;
+      var rationaleInput = tr.querySelector('.yt-miner-cat-rationale');
+      var rationaleRich = tr.querySelector('.yt-miner-cat-rationale-rich');
       youtubeMinerCategoryConfig[idx] = {
         id: rowId,
         name: safeText(tr.querySelector('.yt-miner-cat-name') && tr.querySelector('.yt-miner-cat-name').value) || 'general',
-        rationale: safeText(tr.querySelector('.yt-miner-cat-rationale') && tr.querySelector('.yt-miner-cat-rationale').value),
-        factor: safeText(tr.querySelector('.yt-miner-cat-factor') && tr.querySelector('.yt-miner-cat-factor').value),
+        rationale: rationaleRich
+          ? sanitizeRationaleHtml(rationaleRich.innerHTML)
+          : safeText(rationaleInput && rationaleInput.value),
+        treatment: normalizeTreatment(tr.querySelector('.yt-miner-cat-treatment') && tr.querySelector('.yt-miner-cat-treatment').value),
+        factor: normalizeTreatment(tr.querySelector('.yt-miner-cat-treatment') && tr.querySelector('.yt-miner-cat-treatment').value),
         value_rank: Number(tr.querySelector('.yt-miner-cat-rank') && tr.querySelector('.yt-miner-cat-rank').value),
-        match_tags: safeText(tr.querySelector('.yt-miner-cat-tags') && tr.querySelector('.yt-miner-cat-tags').value),
+        match_hashtags: safeText(tr.querySelector('.yt-miner-cat-tags') && tr.querySelector('.yt-miner-cat-tags').value),
       };
     });
     youtubeMinerCategoryConfig = normalizeCategoryConfigRows(youtubeMinerCategoryConfig);
@@ -301,7 +398,7 @@ App.youtube = (function () {
 
       var nameTd = document.createElement('td');
       var rationaleTd = document.createElement('td');
-      var factorTd = document.createElement('td');
+      var treatmentTd = document.createElement('td');
       var rankTd = document.createElement('td');
       var tagsTd = document.createElement('td');
 
@@ -313,16 +410,73 @@ App.youtube = (function () {
         nameTd.appendChild(nameInput);
 
         var rationaleInput = document.createElement('input');
-        rationaleInput.type = 'text';
+        rationaleInput.type = 'hidden';
         rationaleInput.className = 'yt-miner-cat-rationale';
         rationaleInput.value = safeText(row && row.rationale);
-        rationaleTd.appendChild(rationaleInput);
 
-        var factorInput = document.createElement('input');
-        factorInput.type = 'text';
-        factorInput.className = 'yt-miner-cat-factor';
-        factorInput.value = safeText(row && row.factor);
-        factorTd.appendChild(factorInput);
+        var rationaleWrap = document.createElement('div');
+        rationaleWrap.className = 'yt-miner-cat-rationale-editor';
+
+        var rationaleToolbar = document.createElement('div');
+        rationaleToolbar.className = 'yt-miner-cat-rationale-toolbar';
+
+        function makeRteBtn(label, title, onClick) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'yt-miner-rte-btn';
+          btn.textContent = label;
+          btn.title = title;
+          btn.addEventListener('click', onClick);
+          return btn;
+        }
+
+        var rationaleRich = document.createElement('div');
+        rationaleRich.className = 'yt-miner-cat-rationale-rich';
+        rationaleRich.contentEditable = 'true';
+        rationaleRich.innerHTML = sanitizeRationaleHtml(safeText(row && row.rationale));
+
+        rationaleToolbar.appendChild(makeRteBtn('B', 'Bold', function() {
+          rationaleRich.focus();
+          document.execCommand('bold');
+        }));
+        rationaleToolbar.appendChild(makeRteBtn('I', 'Italic', function() {
+          rationaleRich.focus();
+          document.execCommand('italic');
+        }));
+        rationaleToolbar.appendChild(makeRteBtn('• List', 'Bullet list', function() {
+          rationaleRich.focus();
+          document.execCommand('insertUnorderedList');
+        }));
+        rationaleToolbar.appendChild(makeRteBtn('Link', 'Insert link', function() {
+          rationaleRich.focus();
+          var url = window.prompt('Enter URL (https://...)', 'https://');
+          if (!url) return;
+          var clean = safeText(url);
+          if (!/^https?:\/\//i.test(clean)) {
+            notify('URL must start with http:// or https://', true);
+            return;
+          }
+          document.execCommand('createLink', false, clean);
+        }));
+
+        rationaleWrap.appendChild(rationaleToolbar);
+        rationaleWrap.appendChild(rationaleRich);
+        rationaleTd.appendChild(rationaleInput);
+        rationaleTd.appendChild(rationaleWrap);
+
+        var currentTreatment = normalizeTreatment(row && (row.treatment || row.factor));
+        var treatmentInput = document.createElement('select');
+        treatmentInput.className = 'yt-miner-cat-treatment';
+        var options = YT_MINER_TREATMENT_OPTIONS.slice();
+        if (currentTreatment && options.indexOf(currentTreatment) < 0) options.unshift(currentTreatment);
+        options.forEach(function(opt) {
+          var optionEl = document.createElement('option');
+          optionEl.value = opt;
+          optionEl.textContent = opt;
+          treatmentInput.appendChild(optionEl);
+        });
+        treatmentInput.value = currentTreatment || 'ignore';
+        treatmentTd.appendChild(treatmentInput);
 
         var rankInput = document.createElement('input');
         rankInput.type = 'number';
@@ -336,15 +490,20 @@ App.youtube = (function () {
         var tagsInput = document.createElement('input');
         tagsInput.type = 'text';
         tagsInput.className = 'yt-miner-cat-tags';
-        tagsInput.value = toArray(row && row.match_tags).join(', ');
+        tagsInput.value = toArray(row && (row.match_hashtags || row.match_tags)).join(', ');
         tagsInput.placeholder = 'pain_point, question, purchase_intent';
         tagsTd.appendChild(tagsInput);
       } else {
         nameTd.textContent = safeText(row && row.name) || '-';
-        rationaleTd.textContent = safeText(row && row.rationale) || '-';
-        factorTd.textContent = safeText(row && row.factor) || '-';
+        var rationaleHtml = sanitizeRationaleHtml(safeText(row && row.rationale));
+        if (rationaleHtml) {
+          rationaleTd.innerHTML = rationaleHtml;
+        } else {
+          rationaleTd.textContent = '-';
+        }
+        treatmentTd.textContent = normalizeTreatment(row && (row.treatment || row.factor)) || '-';
         rankTd.textContent = String(Math.max(1, Math.min(Number(row && row.value_rank) || 3, 5)));
-        tagsTd.textContent = toArray(row && row.match_tags).join(', ') || '-';
+        tagsTd.textContent = toArray(row && (row.match_hashtags || row.match_tags)).join(', ') || '-';
       }
 
       var actionTd = document.createElement('td');
@@ -393,7 +552,7 @@ App.youtube = (function () {
       tr.appendChild(selectTd);
       tr.appendChild(nameTd);
       tr.appendChild(rationaleTd);
-      tr.appendChild(factorTd);
+      tr.appendChild(treatmentTd);
       tr.appendChild(rankTd);
       tr.appendChild(tagsTd);
       tr.appendChild(actionTd);
@@ -918,7 +1077,7 @@ App.youtube = (function () {
         safeText(row && row.author),
         safeText(row && row.video_title),
         safeText(row && row.video_id),
-        toArray(row && row.tags).join(' '),
+        toArray(row && (row.hashtags || row.tags)).join(' '),
         toArray(row && row.why).join(' '),
       ].join(' ').toLowerCase();
       return haystack.indexOf(searchQuery) !== -1;
@@ -942,7 +1101,9 @@ App.youtube = (function () {
       input: activeResult && activeResult.input ? activeResult.input : {},
       stats: stats,
       category_counts: activeResult && activeResult.category_counts ? activeResult.category_counts : {},
-      tag_counts: activeResult && activeResult.tag_counts ? activeResult.tag_counts : {},
+      hashtag_counts: activeResult && (activeResult.hashtag_counts || activeResult.tag_counts)
+        ? (activeResult.hashtag_counts || activeResult.tag_counts)
+        : {},
       warnings: toArray(activeResult && activeResult.warnings),
       errors: toArray(activeResult && activeResult.errors),
     });
@@ -974,7 +1135,7 @@ App.youtube = (function () {
       whyTd.textContent = toArray(row && row.why).join(' | ') || '-';
 
       var tagsTd = document.createElement('td');
-      tagsTd.textContent = toArray(row && row.tags).join(', ') || '-';
+      tagsTd.textContent = toArray(row && (row.hashtags || row.tags)).join(', ') || '-';
 
       var authorTd = document.createElement('td');
       authorTd.textContent = safeText(row && row.author) || '-';
@@ -1054,14 +1215,36 @@ App.youtube = (function () {
       var tagsRow = document.createElement('div');
       tagsRow.className = 'form-row';
       var tagsLabel = document.createElement('label');
-      tagsLabel.textContent = 'Tags';
+      tagsLabel.textContent = 'Hashtags';
       var tagsInput = document.createElement('input');
       tagsInput.type = 'text';
-      tagsInput.placeholder = 'comma,separated,tags';
-      tagsInput.value = feedback.tags || toArray(row && row.tags).join(', ');
+      tagsInput.placeholder = 'comma,separated,hashtags';
+      tagsInput.value = feedback.hashtags || toArray(row && (row.hashtags || row.tags)).join(', ');
       tagsRow.appendChild(tagsLabel);
       tagsRow.appendChild(tagsInput);
       feedbackPop.appendChild(tagsRow);
+
+      var responseTypeRow = document.createElement('div');
+      responseTypeRow.className = 'form-row';
+      var responseTypeLabel = document.createElement('label');
+      responseTypeLabel.textContent = 'Response Type';
+      var responseTypeInput = document.createElement('select');
+      responseTypeInput.innerHTML = [
+        '<option value="">(unset)</option>',
+        '<option value="empathetic">Empathetic</option>',
+        '<option value="practical">Practical</option>',
+        '<option value="question_back">Question Back</option>',
+        '<option value="challenger">Challenger</option>',
+        '<option value="invitational">Invitational</option>',
+        '<option value="affirming">Affirming</option>',
+        '<option value="resource_drop">Resource Drop</option>',
+        '<option value="cta_soft">Soft CTA</option>',
+        '<option value="cta_direct">Direct CTA</option>'
+      ].join('');
+      responseTypeInput.value = feedback.response_type || '';
+      responseTypeRow.appendChild(responseTypeLabel);
+      responseTypeRow.appendChild(responseTypeInput);
+      feedbackPop.appendChild(responseTypeRow);
 
       var noteRow = document.createElement('div');
       noteRow.className = 'form-row';
@@ -1074,6 +1257,18 @@ App.youtube = (function () {
       noteRow.appendChild(noteLabel);
       noteRow.appendChild(noteInput);
       feedbackPop.appendChild(noteRow);
+
+      var suggestedRow = document.createElement('div');
+      suggestedRow.className = 'form-row';
+      var suggestedLabel = document.createElement('label');
+      suggestedLabel.textContent = 'Suggested Response';
+      var suggestedInput = document.createElement('textarea');
+      suggestedInput.rows = 4;
+      suggestedInput.placeholder = 'Optional: write the exact style or sample response you would want here.';
+      suggestedInput.value = feedback.suggested_response || '';
+      suggestedRow.appendChild(suggestedLabel);
+      suggestedRow.appendChild(suggestedInput);
+      feedbackPop.appendChild(suggestedRow);
 
       var actionRow = document.createElement('div');
       actionRow.className = 'youtube-miner-feedback-actions';
@@ -1105,13 +1300,17 @@ App.youtube = (function () {
         saveFeedback(row, {
           quality: Number(qualityInput.value || 0),
           categories: selectedCategories,
-          tags: tagsInput.value,
+          hashtags: tagsInput.value,
           note: noteInput.value,
+          response_type: responseTypeInput.value,
+          suggested_response: suggestedInput.value,
         });
         var updated = readFeedback(row);
         feedbackBtn.classList.toggle('has-feedback', Number(updated.quality || 0) > 0);
         feedbackTd.textContent = updated.quality > 0
-          ? ('Q' + String(updated.quality) + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : ''))
+          ? ('Q' + String(updated.quality)
+            + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : '')
+            + (updated.response_type ? (' | ' + updated.response_type) : ''))
           : '-';
         feedbackPop.classList.add('hidden');
         notify('Training feedback saved');
@@ -1127,7 +1326,9 @@ App.youtube = (function () {
 
       var feedbackTd = document.createElement('td');
       feedbackTd.textContent = feedback.quality > 0
-        ? ('Q' + String(feedback.quality) + (feedback.categories.length ? (' | ' + feedback.categories.join(', ')) : ''))
+        ? ('Q' + String(feedback.quality)
+          + (feedback.categories.length ? (' | ' + feedback.categories.join(', ')) : '')
+          + (feedback.response_type ? (' | ' + feedback.response_type) : ''))
         : '-';
 
       tr.appendChild(scoreTd);
@@ -1757,9 +1958,10 @@ App.youtube = (function () {
           id: newId,
           name: 'new_category',
           rationale: '',
-          factor: '',
+          treatment: 'ignore',
+          factor: 'ignore',
           value_rank: 3,
-          match_tags: [],
+          match_hashtags: [],
         });
         youtubeMinerCategoryEditingIds.add(newId);
         youtubeMinerCategorySelectedIds.add(newId);
