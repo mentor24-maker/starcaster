@@ -4963,9 +4963,11 @@ th {
 }
 
 .youtube-miner-comment-cell {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   min-height: 86px;
-  padding-right: 40px;
 }
 
 .youtube-miner-comment-text {
@@ -4974,70 +4976,68 @@ th {
 }
 
 .youtube-miner-feedback-wrap {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  align-self: flex-start;
 }
 
 .youtube-miner-feedback-icon {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  border: 1px solid var(--c-border);
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid #c2410c;
   border-radius: 6px;
-  background: #ffffff;
-  font-size: 16px;
+  background: #f97316;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1;
   padding: 0;
 }
 
 .youtube-miner-feedback-icon.has-feedback {
-  background: #ecfccb;
-  border-color: #84cc16;
+  background: #16a34a;
+  border-color: #166534;
 }
 
-.youtube-miner-feedback-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 3000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.youtube-miner-feedback-modal.hidden {
-  display: none;
-}
-
-.youtube-miner-feedback-dialog {
-  width: min(900px, 95vw);
-  max-height: 90vh;
+.youtube-miner-feedback-pop {
+  position: absolute;
+  right: calc(100% + 12px);
+  bottom: 0;
+  z-index: 30;
+  width: min(520px, 70vw);
+  max-height: 72vh;
   overflow: auto;
   background: #ffffff;
   border-radius: 10px;
   border: 1px solid var(--c-border);
-  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.4);
-  padding: 16px;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.28);
+  padding: 12px;
 }
 
-.youtube-miner-feedback-dialog h4 {
+.youtube-miner-feedback-pop.hidden {
+  display: none;
+}
+
+.youtube-miner-feedback-pop h4 {
   margin: 0 0 8px;
 }
 
-.youtube-miner-feedback-dialog .form-row {
+.youtube-miner-feedback-pop .form-row {
   margin-bottom: 10px;
 }
 
-.youtube-miner-feedback-dialog .form-row > label {
+.youtube-miner-feedback-pop .form-row > label {
   display: block;
   margin-bottom: 4px;
   font-weight: 700;
 }
 
-.youtube-miner-feedback-dialog textarea {
-  min-height: 180px;
+.youtube-miner-feedback-pop textarea {
+  min-height: 210px;
+}
+
+.youtube-miner-feedback-pop select[multiple] {
+  min-height: 150px;
 }
 
 .youtube-miner-feedback-actions {
