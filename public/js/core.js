@@ -638,6 +638,7 @@ App.ACTION_ICONS = {
   contact: '<circle cx="8" cy="5.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 12.5c.8-2 2.5-3 4.5-3s3.7 1 4.5 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   comments: '<path d="M3 4.2h10v6.3H7.2L4.4 12.8v-2.3H3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.2 6.5h5.6M5.2 8.4h3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   clone: '<path d="M5.2 5.2V3.8c0-.7.5-1.3 1.3-1.3h5.7c.7 0 1.3.5 1.3 1.3v5.7c0 .7-.5 1.3-1.3 1.3h-1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3.8 5.2h5.7c.7 0 1.3.5 1.3 1.3v5.7c0 .7-.5 1.3-1.3 1.3H3.8c-.7 0-1.3-.5-1.3-1.3V6.5c0-.7.5-1.3 1.3-1.3Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  copy: '<rect x="5.5" y="2.5" width="8" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.6 2.5v-0.7H8.4v0.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5 5.5v8a1.5 1.5 0 0 0 1.5 1.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
 };
 
 App.makeIconButton = function makeIconButton(iconKey, label, onClick, options = {}) {
