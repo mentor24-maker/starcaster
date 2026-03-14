@@ -5061,6 +5061,10 @@ th {
   border-color: #166534;
 }
 
+.youtube-miner-row-reviewed {
+  background: rgba(22, 163, 74, 0.06);
+}
+
 .youtube-miner-feedback-pop {
   position: fixed;
   left: 16px;
