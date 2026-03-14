@@ -1536,6 +1536,37 @@ App.youtube = (function () {
       var feedbackPop = document.createElement('div');
       feedbackPop.className = 'youtube-miner-feedback-pop hidden';
 
+      function placeFeedbackPopup() {
+        if (feedbackPop.classList.contains('hidden')) return;
+        // Reset so we can measure natural size.
+        feedbackPop.style.left = '16px';
+        feedbackPop.style.top = '16px';
+        feedbackPop.style.maxHeight = 'calc(100vh - 24px)';
+        feedbackPop.style.width = 'min(960px, 88vw)';
+
+        var anchorRect = feedbackWrap.getBoundingClientRect();
+        var popRect = feedbackPop.getBoundingClientRect();
+        var margin = 10;
+
+        // Prefer left of anchor.
+        var left = anchorRect.left - popRect.width - 12;
+        if (left < margin) {
+          // If not enough room on left, place right of anchor.
+          left = anchorRect.right + 12;
+        }
+        if (left + popRect.width > window.innerWidth - margin) {
+          left = Math.max(margin, window.innerWidth - popRect.width - margin);
+        }
+
+        var top = anchorRect.top - 8;
+        var maxTop = Math.max(margin, window.innerHeight - popRect.height - margin);
+        if (top > maxTop) top = maxTop;
+        if (top < margin) top = margin;
+
+        feedbackPop.style.left = Math.round(left) + 'px';
+        feedbackPop.style.top = Math.round(top) + 'px';
+      }
+
       var feedbackHeading = document.createElement('h4');
       feedbackHeading.textContent = 'Training Feedback';
       feedbackPop.appendChild(feedbackHeading);
@@ -1671,6 +1702,9 @@ App.youtube = (function () {
           if (node !== feedbackPop) node.classList.add('hidden');
         });
         feedbackPop.classList.toggle('hidden', !isHidden);
+        if (isHidden) {
+          placeFeedbackPopup();
+        }
       });
       closeBtn.addEventListener('click', function() {
         feedbackPop.classList.add('hidden');
@@ -1757,6 +1791,7 @@ App.youtube = (function () {
       tr.appendChild(feedbackTd);
       tableEl.appendChild(tr);
     });
+
   }
 
   function setYoutubeMinerMode(mode) {

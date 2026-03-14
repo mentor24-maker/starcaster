@@ -5062,18 +5062,18 @@ th {
 }
 
 .youtube-miner-feedback-pop {
-  position: absolute;
-  right: calc(100% + 12px);
-  bottom: 0;
+  position: fixed;
+  left: 16px;
+  top: 16px;
   z-index: 30;
-  width: min(520px, 70vw);
-  max-height: 72vh;
+  width: min(960px, 88vw);
+  max-height: calc(100vh - 24px);
   overflow: auto;
   background: #ffffff;
   border-radius: 10px;
   border: 1px solid var(--c-border);
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.28);
-  padding: 12px;
+  padding: 14px;
 }
 
 .youtube-miner-feedback-pop.hidden {
