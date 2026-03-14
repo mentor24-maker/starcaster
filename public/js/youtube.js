@@ -36,6 +36,8 @@ App.youtube = (function () {
   var YT_MINER_ATTRIBUTE_CONFIG_KEY = 'yt_miner_attribute_config_v1';
   var YT_MINER_APPROACH_CONFIG_KEY = 'yt_miner_approach_config_v1';
   var YT_MINER_RESPONSE_CONTEXT_KEY = 'yt_miner_response_context_v1';
+  var YT_MINER_LAST_RESULT_KEY = 'yt_miner_last_result_v1';
+  var YT_MINER_LAST_INPUT_KEY = 'yt_miner_last_input_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
   var youtubeMinerContextSaveTimer = null;
   var youtubeMinerContextSaving = false;
@@ -119,6 +121,22 @@ App.youtube = (function () {
 
   function makeYoutubeMinerCategoryId() {
     return 'cat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  }
+
+  function feedbackHasReview(feedback) {
+    return Boolean(
+      Number(feedback && feedback.quality || 0) > 0
+      || toArray(feedback && feedback.categories).length
+      || safeText(feedback && feedback.category_explain)
+      || toArray(feedback && feedback.attributes).length
+      || safeText(feedback && feedback.attributes_explain)
+      || toArray(feedback && feedback.approaches).length
+      || safeText(feedback && feedback.approaches_explain)
+      || safeText(feedback && feedback.hashtags)
+      || safeText(feedback && feedback.note)
+      || safeText(feedback && feedback.response_type)
+      || safeText(feedback && feedback.suggested_response)
+    );
   }
 
   function feedbackKeyForRow(row) {
@@ -214,19 +232,7 @@ App.youtube = (function () {
     merged.response_type = safeText(merged.response_type) || safeText(merged.approaches[0]);
     merged.suggested_response = safeText(merged.suggested_response);
     merged.updated_at = new Date().toISOString();
-    if (
-      !merged.quality &&
-      !merged.categories.length &&
-      !merged.category_explain &&
-      !merged.attributes.length &&
-      !merged.attributes_explain &&
-      !merged.approaches.length &&
-      !merged.approaches_explain &&
-      !merged.hashtags &&
-      !merged.note &&
-      !merged.response_type &&
-      !merged.suggested_response
-    ) {
+    if (!feedbackHasReview(merged)) {
       try { window.localStorage.removeItem(feedbackKeyForRow(row)); } catch (_) { /* ignore */ }
       return;
     }
@@ -462,6 +468,40 @@ App.youtube = (function () {
     try {
       window.localStorage.setItem(YT_MINER_RESPONSE_CONTEXT_KEY, safeText(value || ''));
     } catch (_) { /* ignore */ }
+  }
+
+  function saveYoutubeMinerLastResult(result) {
+    try {
+      window.localStorage.setItem(YT_MINER_LAST_RESULT_KEY, JSON.stringify(result || {}));
+    } catch (_) { /* ignore */ }
+  }
+
+  function loadYoutubeMinerLastResult() {
+    try {
+      var raw = window.localStorage.getItem(YT_MINER_LAST_RESULT_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveYoutubeMinerLastInput(input) {
+    try {
+      window.localStorage.setItem(YT_MINER_LAST_INPUT_KEY, JSON.stringify(input || {}));
+    } catch (_) { /* ignore */ }
+  }
+
+  function loadYoutubeMinerLastInput() {
+    try {
+      var raw = window.localStorage.getItem(YT_MINER_LAST_INPUT_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   async function loadPersistedYoutubeMinerResponseContext() {
@@ -1381,6 +1421,7 @@ App.youtube = (function () {
   function renderYoutubeCommentMinerResult(result) {
     if (result && typeof result === 'object') {
       youtubeMinerLastResult = result;
+      saveYoutubeMinerLastResult(result);
     }
     var activeResult = youtubeMinerLastResult || {};
     var summaryEl = document.getElementById('youtubeCommentMinerSummary');
@@ -1393,9 +1434,11 @@ App.youtube = (function () {
     var contentSearchInput = document.getElementById('youtubeMinerContentSearch');
     var contentCategoryInput = document.getElementById('youtubeMinerContentCategoryFilter');
     var contentSortInput = document.getElementById('youtubeMinerContentSort');
+    var contentReviewedInput = document.getElementById('youtubeMinerContentReviewedFilter');
     var searchQuery = safeText(contentSearchInput && contentSearchInput.value).toLowerCase();
     var categoryFilter = safeText(contentCategoryInput && contentCategoryInput.value);
     var sortBy = safeText(contentSortInput && contentSortInput.value) || 'score_desc';
+    var reviewedFilter = safeText(contentReviewedInput && contentReviewedInput.value).toLowerCase();
 
     if (contentCategoryInput) {
       var categories = Array.from(new Set(comments.map(function(row) {
@@ -1417,8 +1460,12 @@ App.youtube = (function () {
     }
 
     comments = comments.filter(function(row) {
+      var rowFeedback = readFeedback(row);
+      var isReviewed = feedbackHasReview(rowFeedback);
       var rowCategory = safeText(row && row.category);
       if (categoryFilter && rowCategory !== categoryFilter) return false;
+      if (reviewedFilter === 'reviewed' && !isReviewed) return false;
+      if (reviewedFilter === 'unreviewed' && isReviewed) return false;
       if (!searchQuery) return true;
       var haystack = [
         safeText(row && row.text),
@@ -1445,7 +1492,10 @@ App.youtube = (function () {
     var harvestedVideos = Number(stats.harvested_videos || 0) || 0;
     var totalRaw = Number(stats.total_comments_raw || 0) || 0;
     var totalFiltered = Number(stats.total_comments_filtered || 0) || 0;
-    summaryEl.textContent = 'Videos harvested: ' + harvestedVideos + ' | Raw comments: ' + totalRaw + ' | Filtered comments: ' + totalFiltered + ' | Visible rows: ' + comments.length;
+    var reviewedCount = comments.reduce(function(count, row) {
+      return count + (feedbackHasReview(readFeedback(row)) ? 1 : 0);
+    }, 0);
+    summaryEl.textContent = 'Videos harvested: ' + harvestedVideos + ' | Raw comments: ' + totalRaw + ' | Filtered comments: ' + totalFiltered + ' | Visible rows: ' + comments.length + ' | Reviewed: ' + reviewedCount;
 
     if (metaEl) {
       metaEl.textContent = App.prettyJson({
@@ -1476,6 +1526,8 @@ App.youtube = (function () {
     comments.forEach(function(row) {
       var tr = document.createElement('tr');
       var feedback = readFeedback(row);
+      var isReviewedRow = feedbackHasReview(feedback);
+      if (isReviewedRow) tr.classList.add('youtube-miner-row-reviewed');
 
       var scoreTd = document.createElement('td');
       scoreTd.textContent = String(Number(row && row.score || 0) || 0);
@@ -1531,7 +1583,7 @@ App.youtube = (function () {
       feedbackBtn.className = 'youtube-miner-feedback-icon';
       feedbackBtn.title = 'Training feedback';
       feedbackBtn.textContent = '\u270E';
-      if (feedback.quality > 0) feedbackBtn.classList.add('has-feedback');
+      if (isReviewedRow) feedbackBtn.classList.add('has-feedback');
 
       var feedbackPop = document.createElement('div');
       feedbackPop.className = 'youtube-miner-feedback-pop hidden';
@@ -1735,12 +1787,14 @@ App.youtube = (function () {
           suggested_response: suggestedInput.value,
         });
         var updated = readFeedback(row);
-        feedbackBtn.classList.toggle('has-feedback', Number(updated.quality || 0) > 0);
+        var nowReviewed = feedbackHasReview(updated);
+        feedbackBtn.classList.toggle('has-feedback', nowReviewed);
+        tr.classList.toggle('youtube-miner-row-reviewed', nowReviewed);
         feedbackTd.textContent = updated.quality > 0
           ? ('Q' + String(updated.quality)
             + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : '')
             + (updated.approaches.length ? (' | ' + updated.approaches.join(', ')) : ''))
-          : '-';
+          : (nowReviewed ? 'Reviewed' : '-');
         feedbackPop.classList.add('hidden');
         notify('Training feedback saved');
       });
@@ -1776,7 +1830,7 @@ App.youtube = (function () {
         ? ('Q' + String(feedback.quality)
           + (feedback.categories.length ? (' | ' + feedback.categories.join(', ')) : '')
           + (feedback.approaches.length ? (' | ' + feedback.approaches.join(', ')) : ''))
-        : '-';
+        : (isReviewedRow ? 'Reviewed' : '-');
 
       tr.appendChild(scoreTd);
       tr.appendChild(categoryTd);
@@ -1821,6 +1875,30 @@ App.youtube = (function () {
         toggle.setAttribute('aria-expanded', String(!isOpen));
       });
     });
+  }
+
+  function applyYoutubeMinerInputToForm(formEl, input) {
+    if (!formEl || !input || typeof input !== 'object') return;
+    function setValue(name, value) {
+      var field = formEl.querySelector('[name="' + name + '"]');
+      if (!field) return;
+      if (field.type === 'checkbox') {
+        field.checked = value === true || value === 'on' || value === 1 || value === '1';
+        return;
+      }
+      if (value == null) return;
+      field.value = String(value);
+    }
+    setValue('targets', input.targets_text);
+    setValue('include_phrases_text', input.include_phrases_text);
+    setValue('exclude_phrases_text', input.exclude_phrases_text);
+    setValue('videos_per_channel', input.videos_per_channel);
+    setValue('max_comments_per_video', input.max_comments_per_video);
+    setValue('min_score', input.min_score);
+    setValue('sort_by', input.sort_by);
+    setValue('include_replies', input.include_replies);
+    setValue('exclude_noise', input.exclude_noise);
+    setValue('response_context', input.response_context);
   }
 
   function renderYoutubeRunsTable() {
@@ -1965,6 +2043,7 @@ App.youtube = (function () {
       });
 
       editBtn.style.marginLeft = '8px';
+      viewBtn.style.marginLeft = '8px';
       addBtn.style.marginLeft = '8px';
       commentsBtn.style.marginLeft = '8px';
       delBtn.style.marginLeft = '8px';
@@ -2399,6 +2478,7 @@ App.youtube = (function () {
             training_feedback: collectYoutubeMinerFeedbackCorpus(),
           };
           if (!payload.targets_text) throw new Error('Add at least one video/channel target.');
+          saveYoutubeMinerLastInput(payload);
           saveYoutubeMinerCategoryConfig(payload.category_config);
           youtubeMinerCategoryConfig = payload.category_config.slice();
           saveYoutubeMinerConfig('attribute', payload.attribute_config);
@@ -2428,6 +2508,7 @@ App.youtube = (function () {
     var youtubeMinerContentSearch = document.getElementById('youtubeMinerContentSearch');
     var youtubeMinerContentCategoryFilter = document.getElementById('youtubeMinerContentCategoryFilter');
     var youtubeMinerContentSort = document.getElementById('youtubeMinerContentSort');
+    var youtubeMinerContentReviewedFilter = document.getElementById('youtubeMinerContentReviewedFilter');
     var youtubeMinerResponseContext = document.getElementById('youtubeMinerResponseContext');
     if (youtubeMinerTrainingBtn) {
       youtubeMinerTrainingBtn.addEventListener('click', function() { setYoutubeMinerMode('training'); });
@@ -2461,6 +2542,13 @@ App.youtube = (function () {
     bindYoutubeMinerConfigEvents('approach');
     setYoutubeMinerMode('training');
     setupYoutubeMinerCollapsibles();
+    if (youtubeCommentMinerForm) {
+      applyYoutubeMinerInputToForm(youtubeCommentMinerForm, loadYoutubeMinerLastInput());
+    }
+    var restoredMinerResult = loadYoutubeMinerLastResult();
+    if (restoredMinerResult) {
+      renderYoutubeCommentMinerResult(restoredMinerResult);
+    }
     if (youtubeMinerContentSearch) {
       youtubeMinerContentSearch.addEventListener('input', function() {
         renderYoutubeCommentMinerResult();
@@ -2473,6 +2561,11 @@ App.youtube = (function () {
     }
     if (youtubeMinerContentSort) {
       youtubeMinerContentSort.addEventListener('change', function() {
+        renderYoutubeCommentMinerResult();
+      });
+    }
+    if (youtubeMinerContentReviewedFilter) {
+      youtubeMinerContentReviewedFilter.addEventListener('change', function() {
         renderYoutubeCommentMinerResult();
       });
     }
