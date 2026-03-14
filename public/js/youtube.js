@@ -1511,6 +1511,8 @@ App.youtube = (function () {
 
     var modal = App.components.Modal({
       title: 'Provide Replies',
+      dialogClass: 'youtube-miner-replies-modal',
+      bodyClass: 'youtube-miner-replies-modal-body',
       body: body,
       actions: [
         { label: 'Cancel', onClick: function() { modal.close(); } },
