@@ -710,26 +710,62 @@
           <button type="button" id="youtubeCategoriesOpenBtn">Categories</button>
         </div>
         </div>
-        <p>Acquire data from a YouTube video page and extract description, hashtags, playlists, and transcript.</p>
-        <form id="youtubeAcquireForm" class="stack-form">
-          <div class="youtube-acquire-row">
-            <input
-              id="youtubeVideoUrlInput"
-              name="video_url"
-              placeholder="YouTube video URL"
-              value="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-            />
-            <select id="youtubeCategoryInput" name="category">
-              <option value="">Select Category</option>
-            </select>
-            <label class="checkbox-row youtube-capture-checkbox">
-              <input id="youtubeCaptureContactInput" name="capture_contact" type="checkbox" />
-              Capture Contact
-            </label>
-            <button type="submit" data-acquire-action="details">Acquire Details</button>
-            <button type="submit" data-acquire-action="comments">Acquire Comments</button>
+        <p>Research starts from messaging phrases (articles, tweets, hashtags) and manual terms, discovers top YouTube targets, then distills prospects for Targeting.</p>
+        <form id="youtubeResearchForm" class="stack-form labeled-form">
+          <div class="grid-form" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start;">
+            <div class="form-row">
+              <label for="youtubeResearchManualPhrases">Manual Phrases (optional)</label>
+              <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="4" placeholder="one phrase per line&#10;example: outgrowing old identity&#10;example: want more from life"></textarea>
+            </div>
+            <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
+              <div class="form-row">
+                <label for="youtubeResearchMaxPhrases">Max Phrases</label>
+                <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
+              </div>
+              <div class="form-row">
+                <label for="youtubeResearchVideosPerPhrase">Videos Per Phrase</label>
+                <input id="youtubeResearchVideosPerPhrase" name="videos_per_phrase" type="number" min="1" max="10" value="3" />
+              </div>
+              <div class="form-row">
+                <label for="youtubeResearchDistilledLimit">Distilled Targets</label>
+                <input id="youtubeResearchDistilledLimit" name="distilled_target_limit" type="number" min="1" max="200" value="30" />
+              </div>
+              <div class="form-row">
+                <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
+                <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
+              </div>
+              <div class="form-row checkbox-row" style="grid-column: 1 / -1;">
+                <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
+                <label><input id="youtubeResearchIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
+                <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
+              </div>
+            </div>
           </div>
+          <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
         </form>
+        <div id="youtubeResearchSummary" class="muted">No research run yet.</div>
+        <div class="page-heading-actions" style="justify-content:flex-end; margin: 0 0 0.6rem 0;">
+          <button type="button" id="youtubeResearchRefreshBtn">Refresh Research Runs</button>
+          <button type="button" id="youtubeResearchSendToTargetingBtn">Send Distilled Targets to Targeting</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Created</th>
+                <th>Phrases</th>
+                <th>Discovered</th>
+                <th>Distilled</th>
+                <th>Filtered Comments</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="youtubeResearchRunsTable">
+              <tr><td colspan="7">No research runs yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <section class="youtube-miner-panel">
           <div class="youtube-miner-header">
