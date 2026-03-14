@@ -5146,6 +5146,29 @@ th {
   min-height: 110px;
 }
 
+.youtube-miner-reply-meta {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: auto 180px auto minmax(220px, 1fr);
+  gap: 6px 8px;
+  align-items: center;
+}
+
+.youtube-miner-reply-mini-label {
+  font-size: 0.78rem;
+  color: #4b5d75;
+  white-space: nowrap;
+}
+
+.youtube-miner-reply-rating {
+  min-width: 180px;
+}
+
+.youtube-miner-reply-why {
+  width: 100%;
+  min-width: 220px;
+}
+
 .youtube-miner-feedback-actions {
   display: flex;
   justify-content: flex-end;
@@ -5176,5 +5199,9 @@ th {
   .youtube-miner-category-toolbar-right {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .youtube-miner-reply-meta {
+    grid-template-columns: 1fr;
   }
 }
