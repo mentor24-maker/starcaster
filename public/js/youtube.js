@@ -136,6 +136,9 @@ App.youtube = (function () {
       || safeText(feedback && feedback.note)
       || safeText(feedback && feedback.response_type)
       || safeText(feedback && feedback.suggested_response)
+      || toArray(feedback && feedback.offer_feedback).some(function(item) {
+        return (Number(item && item.rating || 0) > 0) || safeText(item && item.why);
+      })
     );
   }
 
@@ -158,12 +161,14 @@ App.youtube = (function () {
         note: '',
         response_type: '',
         suggested_response: '',
+        offer_feedback: [],
         updated_at: ''
       };
       var parsed = JSON.parse(raw);
       var categories = [];
       var attributes = [];
       var approaches = [];
+      var offerFeedback = [];
       if (Array.isArray(parsed && parsed.categories)) {
         categories = parsed.categories.map(function(item) { return safeText(item); }).filter(Boolean);
       } else if (safeText(parsed && parsed.category)) {
@@ -181,6 +186,19 @@ App.youtube = (function () {
       } else if (safeText(parsed && (parsed.response_type || parsed.response_style))) {
         approaches = [safeText(parsed.response_type || parsed.response_style)];
       }
+      if (Array.isArray(parsed && parsed.offer_feedback)) {
+        offerFeedback = parsed.offer_feedback.map(function(item) {
+          return {
+            index: Math.max(0, Number(item && item.index) || 0),
+            response: safeText(item && (item.response || item.offer || item.text)),
+            rating: Math.max(0, Math.min(Number(item && item.rating) || 0, 5)),
+            why: safeText(item && item.why),
+            selected: Boolean(item && item.selected),
+          };
+        }).filter(function(item) {
+          return item.response || item.rating > 0 || item.why;
+        }).slice(0, 12);
+      }
       return {
         quality: Math.max(0, Math.min(Number(parsed && parsed.quality) || 0, 5)),
         categories: Array.from(new Set(categories)).slice(0, 20),
@@ -193,6 +211,7 @@ App.youtube = (function () {
         note: safeText(parsed && parsed.note),
         response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
         suggested_response: safeText(parsed && (parsed.suggested_response || parsed.response_example)),
+        offer_feedback: offerFeedback,
         updated_at: safeText(parsed && parsed.updated_at),
       };
     } catch (_) {
@@ -208,6 +227,7 @@ App.youtube = (function () {
         note: '',
         response_type: '',
         suggested_response: '',
+        offer_feedback: [],
         updated_at: ''
       };
     }
@@ -231,6 +251,17 @@ App.youtube = (function () {
     merged.note = safeText(merged.note);
     merged.response_type = safeText(merged.response_type) || safeText(merged.approaches[0]);
     merged.suggested_response = safeText(merged.suggested_response);
+    merged.offer_feedback = toArray(merged.offer_feedback).map(function(item) {
+      return {
+        index: Math.max(0, Number(item && item.index) || 0),
+        response: safeText(item && (item.response || item.offer || item.text)),
+        rating: Math.max(0, Math.min(Number(item && item.rating) || 0, 5)),
+        why: safeText(item && item.why),
+        selected: Boolean(item && item.selected),
+      };
+    }).filter(function(item) {
+      return item.response || item.rating > 0 || item.why;
+    }).slice(0, 12);
     merged.updated_at = new Date().toISOString();
     if (!feedbackHasReview(merged)) {
       try { window.localStorage.removeItem(feedbackKeyForRow(row)); } catch (_) { /* ignore */ }
@@ -249,7 +280,25 @@ App.youtube = (function () {
         if (!raw) continue;
         var parsed = JSON.parse(raw);
         var quality = Math.max(0, Math.min(Number(parsed && parsed.quality) || 0, 5));
-        if (!quality) continue;
+        var hasAnyReviewSignal = Boolean(
+          quality
+          || safeText(parsed && parsed.category)
+          || (Array.isArray(parsed && parsed.categories) && parsed.categories.length)
+          || safeText(parsed && parsed.category_explain)
+          || safeText(parsed && parsed.attribute)
+          || (Array.isArray(parsed && parsed.attributes) && parsed.attributes.length)
+          || safeText(parsed && parsed.attributes_explain)
+          || safeText(parsed && parsed.approach)
+          || (Array.isArray(parsed && parsed.approaches) && parsed.approaches.length)
+          || safeText(parsed && parsed.approaches_explain)
+          || safeText(parsed && parsed.note)
+          || safeText(parsed && parsed.suggested_response)
+          || safeText(parsed && parsed.response_example)
+          || (Array.isArray(parsed && parsed.offer_feedback) && parsed.offer_feedback.some(function(item) {
+            return (Number(item && item.rating || 0) > 0) || safeText(item && item.why);
+          }))
+        );
+        if (!hasAnyReviewSignal) continue;
         var idPart = key.slice(YT_MINER_FEEDBACK_KEY_PREFIX.length);
         var splitIdx = idPart.indexOf(':');
         var videoId = splitIdx >= 0 ? idPart.slice(0, splitIdx) : '';
@@ -274,6 +323,19 @@ App.youtube = (function () {
           note: safeText(parsed && parsed.note),
           response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
           suggested_response: safeText(parsed && (parsed.suggested_response || parsed.response_example)),
+          offer_feedback: Array.isArray(parsed && parsed.offer_feedback)
+            ? parsed.offer_feedback.map(function(item) {
+                return {
+                  index: Math.max(0, Number(item && item.index) || 0),
+                  response: safeText(item && (item.response || item.offer || item.text)),
+                  rating: Math.max(0, Math.min(Number(item && item.rating) || 0, 5)),
+                  why: safeText(item && item.why),
+                  selected: Boolean(item && item.selected),
+                };
+              }).filter(function(item) {
+                return item.response || item.rating > 0 || item.why;
+              }).slice(0, 12)
+            : [],
           updated_at: safeText(parsed && parsed.updated_at),
         });
       }
@@ -1375,6 +1437,20 @@ App.youtube = (function () {
     intro.className = 'muted';
     intro.textContent = 'Select the best reply offer:';
     body.appendChild(intro);
+    var existingOfferFeedback = toArray(feedback && feedback.offer_feedback);
+    var offerFeedback = offers.map(function(offer, idx) {
+      var existing = existingOfferFeedback.find(function(item) {
+        return Number(item && item.index) === idx
+          || safeText(item && item.response) === safeText(offer);
+      });
+      return {
+        index: idx,
+        response: safeText(offer),
+        rating: Math.max(0, Math.min(Number(existing && existing.rating) || 0, 5)),
+        why: safeText(existing && existing.why),
+        selected: idx === 0,
+      };
+    });
 
     offers.forEach(function(offer, idx) {
       var label = document.createElement('label');
@@ -1392,9 +1468,44 @@ App.youtube = (function () {
       text.value = offer;
       text.addEventListener('input', function() {
         offers[idx] = safeText(text.value);
+        offerFeedback[idx].response = safeText(text.value);
       });
+      var rateLabel = document.createElement('span');
+      rateLabel.className = 'youtube-miner-reply-mini-label';
+      rateLabel.textContent = 'Rating';
+      var rateInput = document.createElement('select');
+      rateInput.className = 'youtube-miner-reply-rating';
+      rateInput.innerHTML = ''
+        + '<option value="0">\u2606\u2606\u2606\u2606\u2606</option>'
+        + '<option value="1">\u2605\u2606\u2606\u2606\u2606</option>'
+        + '<option value="2">\u2605\u2605\u2606\u2606\u2606</option>'
+        + '<option value="3">\u2605\u2605\u2605\u2606\u2606</option>'
+        + '<option value="4">\u2605\u2605\u2605\u2605\u2606</option>'
+        + '<option value="5">\u2605\u2605\u2605\u2605\u2605</option>';
+      rateInput.value = String(Math.max(0, Math.min(Number(offerFeedback[idx].rating) || 0, 5)));
+      rateInput.addEventListener('change', function() {
+        offerFeedback[idx].rating = Math.max(0, Math.min(Number(rateInput.value) || 0, 5));
+      });
+      var whyLabel = document.createElement('span');
+      whyLabel.className = 'youtube-miner-reply-mini-label';
+      whyLabel.textContent = 'Why?';
+      var whyInput = document.createElement('input');
+      whyInput.type = 'text';
+      whyInput.className = 'youtube-miner-reply-why';
+      whyInput.placeholder = 'Why this works / fails';
+      whyInput.value = safeText(offerFeedback[idx].why);
+      whyInput.addEventListener('input', function() {
+        offerFeedback[idx].why = safeText(whyInput.value);
+      });
+      var meta = document.createElement('div');
+      meta.className = 'youtube-miner-reply-meta';
+      meta.appendChild(rateLabel);
+      meta.appendChild(rateInput);
+      meta.appendChild(whyLabel);
+      meta.appendChild(whyInput);
       label.appendChild(radio);
       label.appendChild(text);
+      label.appendChild(meta);
       body.appendChild(label);
     });
 
@@ -1409,8 +1520,12 @@ App.youtube = (function () {
           onClick: function() {
             var selected = safeText(offers[selectedIndex] || offers[0] || '');
             if (!selected) return notify('Selected reply is empty', true);
+            offerFeedback.forEach(function(item, idx) {
+              item.selected = idx === selectedIndex;
+              item.response = safeText(offers[idx] || item.response);
+            });
             modal.close();
-            onPick(selected);
+            onPick(selected, offerFeedback);
           }
         }
       ],
@@ -1814,10 +1929,13 @@ App.youtube = (function () {
       provideRepliesBtn.className = 'tiny-btn youtube-miner-provide-replies-btn';
       provideRepliesBtn.textContent = 'Provide Replies';
       provideRepliesBtn.addEventListener('click', function() {
-        openProvideRepliesModal(row, readFeedback(row), function(selectedReply) {
+        openProvideRepliesModal(row, readFeedback(row), function(selectedReply, selectedOfferFeedback) {
           row.reply_draft = selectedReply;
           draftText.textContent = selectedReply;
-          saveFeedback(row, { suggested_response: selectedReply });
+          saveFeedback(row, {
+            suggested_response: selectedReply,
+            offer_feedback: selectedOfferFeedback,
+          });
           notify('Reply selected');
         });
       });
