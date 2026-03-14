@@ -232,11 +232,11 @@ App.components.DataGrid = function DataGrid(opts) {
  */
 App.components.Modal = function Modal(opts) {
   const { title = '', body = '', actions = [], onClose = null,
-          closeOnBackdrop = true } = opts;
+          closeOnBackdrop = true, dialogClass = '', bodyClass = '' } = opts;
 
   // ── Build DOM ──────────────────────────────────────────────────────────
   const backdrop = h('div', { class: 'c-modal__backdrop' });
-  const dialog   = h('div', { class: 'c-modal__dialog', role: 'dialog',
+  const dialog   = h('div', { class: 'c-modal__dialog' + (dialogClass ? ' ' + dialogClass : ''), role: 'dialog',
                                'aria-modal': 'true', 'aria-label': title });
 
   const header = h('div', { class: 'c-modal__header' },
@@ -244,7 +244,7 @@ App.components.Modal = function Modal(opts) {
     h('button', { class: 'c-modal__close', 'aria-label': 'Close', onclick: close }, '×')
   );
 
-  const bodyEl = h('div', { class: 'c-modal__body' });
+  const bodyEl = h('div', { class: 'c-modal__body' + (bodyClass ? ' ' + bodyClass : '') });
   setBodyContent(body);
 
   const footer = h('div', { class: 'c-modal__footer' });

@@ -5135,6 +5135,15 @@ th {
   gap: 10px;
 }
 
+.youtube-miner-replies-modal {
+  max-width: min(1120px, 96vw);
+  max-height: 94vh;
+}
+
+.youtube-miner-replies-modal-body {
+  padding: 16px 18px;
+}
+
 .youtube-miner-reply-offer {
   display: grid;
   grid-template-columns: auto 1fr;
