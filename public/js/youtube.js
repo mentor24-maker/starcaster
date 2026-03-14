@@ -37,6 +37,8 @@ App.youtube = (function () {
   var YT_MINER_APPROACH_CONFIG_KEY = 'yt_miner_approach_config_v1';
   var YT_MINER_RESPONSE_CONTEXT_KEY = 'yt_miner_response_context_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
+  var youtubeMinerContextSaveTimer = null;
+  var youtubeMinerContextSaving = false;
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
 
@@ -126,17 +128,49 @@ App.youtube = (function () {
   function readFeedback(row) {
     try {
       var raw = window.localStorage.getItem(feedbackKeyForRow(row));
-      if (!raw) return { quality: 0, categories: [], hashtags: '', note: '', response_type: '', suggested_response: '', updated_at: '' };
+      if (!raw) return {
+        quality: 0,
+        categories: [],
+        category_explain: '',
+        attributes: [],
+        attributes_explain: '',
+        approaches: [],
+        approaches_explain: '',
+        hashtags: '',
+        note: '',
+        response_type: '',
+        suggested_response: '',
+        updated_at: ''
+      };
       var parsed = JSON.parse(raw);
       var categories = [];
+      var attributes = [];
+      var approaches = [];
       if (Array.isArray(parsed && parsed.categories)) {
         categories = parsed.categories.map(function(item) { return safeText(item); }).filter(Boolean);
       } else if (safeText(parsed && parsed.category)) {
         categories = safeText(parsed.category).split(/\r?\n|,/g).map(function(item) { return safeText(item); }).filter(Boolean);
       }
+      if (Array.isArray(parsed && parsed.attributes)) {
+        attributes = parsed.attributes.map(function(item) { return safeText(item); }).filter(Boolean);
+      } else if (safeText(parsed && parsed.attribute)) {
+        attributes = safeText(parsed.attribute).split(/\r?\n|,/g).map(function(item) { return safeText(item); }).filter(Boolean);
+      }
+      if (Array.isArray(parsed && parsed.approaches)) {
+        approaches = parsed.approaches.map(function(item) { return safeText(item); }).filter(Boolean);
+      } else if (safeText(parsed && parsed.approach)) {
+        approaches = safeText(parsed.approach).split(/\r?\n|,/g).map(function(item) { return safeText(item); }).filter(Boolean);
+      } else if (safeText(parsed && (parsed.response_type || parsed.response_style))) {
+        approaches = [safeText(parsed.response_type || parsed.response_style)];
+      }
       return {
         quality: Math.max(0, Math.min(Number(parsed && parsed.quality) || 0, 5)),
         categories: Array.from(new Set(categories)).slice(0, 20),
+        category_explain: safeText(parsed && parsed.category_explain),
+        attributes: Array.from(new Set(attributes)).slice(0, 20),
+        attributes_explain: safeText(parsed && parsed.attributes_explain),
+        approaches: Array.from(new Set(approaches)).slice(0, 20),
+        approaches_explain: safeText(parsed && parsed.approaches_explain),
         hashtags: safeText(parsed && (parsed.hashtags || parsed.tags)),
         note: safeText(parsed && parsed.note),
         response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
@@ -144,7 +178,20 @@ App.youtube = (function () {
         updated_at: safeText(parsed && parsed.updated_at),
       };
     } catch (_) {
-      return { quality: 0, categories: [], hashtags: '', note: '', response_type: '', suggested_response: '', updated_at: '' };
+      return {
+        quality: 0,
+        categories: [],
+        category_explain: '',
+        attributes: [],
+        attributes_explain: '',
+        approaches: [],
+        approaches_explain: '',
+        hashtags: '',
+        note: '',
+        response_type: '',
+        suggested_response: '',
+        updated_at: ''
+      };
     }
   }
 
@@ -154,13 +201,32 @@ App.youtube = (function () {
     merged.quality = Math.max(0, Math.min(Number(merged.quality) || 0, 5));
     merged.categories = toArray(merged.categories).map(function(item) { return safeText(item); }).filter(Boolean);
     merged.categories = Array.from(new Set(merged.categories)).slice(0, 20);
+    merged.category_explain = safeText(merged.category_explain);
+    merged.attributes = toArray(merged.attributes).map(function(item) { return safeText(item); }).filter(Boolean);
+    merged.attributes = Array.from(new Set(merged.attributes)).slice(0, 20);
+    merged.attributes_explain = safeText(merged.attributes_explain);
+    merged.approaches = toArray(merged.approaches).map(function(item) { return safeText(item); }).filter(Boolean);
+    merged.approaches = Array.from(new Set(merged.approaches)).slice(0, 20);
+    merged.approaches_explain = safeText(merged.approaches_explain);
     merged.hashtags = safeText(merged.hashtags || merged.tags);
     delete merged.tags;
     merged.note = safeText(merged.note);
-    merged.response_type = safeText(merged.response_type);
+    merged.response_type = safeText(merged.response_type) || safeText(merged.approaches[0]);
     merged.suggested_response = safeText(merged.suggested_response);
     merged.updated_at = new Date().toISOString();
-    if (!merged.quality && !merged.categories.length && !merged.hashtags && !merged.note && !merged.response_type && !merged.suggested_response) {
+    if (
+      !merged.quality &&
+      !merged.categories.length &&
+      !merged.category_explain &&
+      !merged.attributes.length &&
+      !merged.attributes_explain &&
+      !merged.approaches.length &&
+      !merged.approaches_explain &&
+      !merged.hashtags &&
+      !merged.note &&
+      !merged.response_type &&
+      !merged.suggested_response
+    ) {
       try { window.localStorage.removeItem(feedbackKeyForRow(row)); } catch (_) { /* ignore */ }
       return;
     }
@@ -189,6 +255,15 @@ App.youtube = (function () {
           categories: Array.isArray(parsed && parsed.categories)
             ? parsed.categories.map(function(item) { return safeText(item); }).filter(Boolean)
             : safeText(parsed && parsed.category).split(/\r?\n|,/g).map(function(item) { return safeText(item); }).filter(Boolean),
+          category_explain: safeText(parsed && parsed.category_explain),
+          attributes: Array.isArray(parsed && parsed.attributes)
+            ? parsed.attributes.map(function(item) { return safeText(item); }).filter(Boolean)
+            : safeText(parsed && parsed.attribute).split(/\r?\n|,/g).map(function(item) { return safeText(item); }).filter(Boolean),
+          attributes_explain: safeText(parsed && parsed.attributes_explain),
+          approaches: Array.isArray(parsed && parsed.approaches)
+            ? parsed.approaches.map(function(item) { return safeText(item); }).filter(Boolean)
+            : safeText(parsed && (parsed.approach || parsed.response_type || parsed.response_style)).split(/\r?\n|,/g).map(function(item) { return safeText(item); }).filter(Boolean),
+          approaches_explain: safeText(parsed && parsed.approaches_explain),
           hashtags: safeText(parsed && (parsed.hashtags || parsed.tags)),
           note: safeText(parsed && parsed.note),
           response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
@@ -208,23 +283,23 @@ App.youtube = (function () {
 
   function defaultYoutubeMinerCategoryConfig() {
     return [
-      { id: makeYoutubeMinerConfigId('cat'), name: 'intent', rationale: 'Explicit “how do I start / what should I buy / what does it cost” language. High conversion potential; prioritize for direct follow-up.', value_rank: 5, match_hashtags: ['purchase_intent', 'solution_seeking'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'pain_point', rationale: 'Clear friction, dissatisfaction, or stuck-state statements. Valuable for empathy-first engagement and diagnostic questions.', value_rank: 5, match_hashtags: ['pain_point', 'problem_signal'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'growth', rationale: 'Identity-shift and self-improvement language (“want more,” “outgrowing old self”). Strong fit for aspirational messaging.', value_rank: 5, match_hashtags: ['growth_openness', 'identity_shift'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'question', rationale: 'Genuine information-seeking questions. Good candidates for trust-building, useful replies, and soft invitation to continue.', value_rank: 4, match_hashtags: ['question'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'positive', rationale: 'Supportive/affirming comments with low friction. Useful for community warmth but usually lower urgency than intent or pain.', value_rank: 3, match_hashtags: ['positive_signal'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'risk', rationale: 'Scam/fake/bot/skeptic cues. Requires credibility-first messaging and can be deprioritized unless strategically important.', value_rank: 2, match_hashtags: ['trust_risk'] },
-      { id: makeYoutubeMinerConfigId('cat'), name: 'general', rationale: 'No strong actionable signal detected. Keep as background unless combined with high-value attributes.', value_rank: 1, match_hashtags: [] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'intent', rationale: 'Clear action-seeking language. Prioritize for fast follow-up and concrete next steps.', value_rank: 5, match_hashtags: ['purchase_intent', 'solution_seeking'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'pain_point', rationale: 'Active frustration or blockers. Lead with empathy and one diagnostic question.', value_rank: 5, match_hashtags: ['pain_point', 'problem_signal'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'growth', rationale: 'Self-development or identity-shift signal. Use aspirational but practical framing.', value_rank: 5, match_hashtags: ['growth_openness', 'identity_shift'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'question', rationale: 'Direct information request. Provide concise value, then invite one-step continuation.', value_rank: 4, match_hashtags: ['question'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'positive', rationale: 'Supportive sentiment without clear need. Keep warm and lightweight.', value_rank: 3, match_hashtags: ['positive_signal'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'risk', rationale: 'Trust skepticism or scam concern. Respond with clarity and credibility.', value_rank: 2, match_hashtags: ['trust_risk'] },
+      { id: makeYoutubeMinerConfigId('cat'), name: 'general', rationale: 'Low-actionability baseline. Deprioritize unless paired with strong attributes.', value_rank: 1, match_hashtags: [] },
     ];
   }
 
   function defaultYoutubeMinerAttributeConfig() {
     return [
-      { id: makeYoutubeMinerConfigId('attr'), name: 'motivated', rationale: 'Displays readiness to change behavior now (not “someday”). Prioritize because response likelihood and follow-through are high.', value_rank: 5, match_hashtags: ['growth_openness', 'purchase_intent', 'identity_shift'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'self_involved', rationale: 'Language centers status/appearance over substance. Engage lightly unless paired with intent or growth signals.', value_rank: 2, match_hashtags: ['social_handle'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'negative_outlook', rationale: 'Defeatist/cynical framing. Requires careful tone; avoid hard CTA and lead with acknowledgement + reframing.', value_rank: 2, match_hashtags: ['pain_point', 'trust_risk'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'fan', rationale: 'High affinity and goodwill. Useful for amplification and relationship-building, but often lower conversion urgency.', value_rank: 3, match_hashtags: ['positive_signal'] },
-      { id: makeYoutubeMinerConfigId('attr'), name: 'introvert', rationale: 'Reflective and internal processing style. Better with thoughtful, non-pushy prompts and one clear next question.', value_rank: 3, match_hashtags: ['question', 'growth_openness'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'motivated', rationale: 'Ready to act now. Prioritize with specific, low-friction next steps.', value_rank: 5, match_hashtags: ['growth_openness', 'purchase_intent', 'identity_shift'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'self_involved', rationale: 'Status-centered framing. Keep engagement brief unless stronger intent appears.', value_rank: 2, match_hashtags: ['social_handle'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'negative_outlook', rationale: 'Pessimistic tone. Acknowledge first, then gently reframe toward agency.', value_rank: 2, match_hashtags: ['pain_point', 'trust_risk'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'fan', rationale: 'High affinity and goodwill. Useful for rapport and lightweight engagement.', value_rank: 3, match_hashtags: ['positive_signal'] },
+      { id: makeYoutubeMinerConfigId('attr'), name: 'introvert', rationale: 'Reflective communication style. Prefer thoughtful prompts over hard push.', value_rank: 3, match_hashtags: ['question', 'growth_openness'] },
     ];
   }
 
@@ -387,6 +462,38 @@ App.youtube = (function () {
     try {
       window.localStorage.setItem(YT_MINER_RESPONSE_CONTEXT_KEY, safeText(value || ''));
     } catch (_) { /* ignore */ }
+  }
+
+  async function loadPersistedYoutubeMinerResponseContext() {
+    try {
+      var res = await api('/api/settings/youtube-miner-context', { method: 'GET' });
+      return safeText(res?.youtube_response_context || res?.data?.youtube_response_context || '');
+    } catch (_) {
+      return '';
+    }
+  }
+
+  async function savePersistedYoutubeMinerResponseContext(value) {
+    return api('/api/settings/youtube-miner-context', {
+      method: 'POST',
+      body: JSON.stringify({ youtube_response_context: safeText(value || '') }),
+    });
+  }
+
+  function schedulePersistYoutubeMinerResponseContext(value) {
+    if (youtubeMinerContextSaveTimer) clearTimeout(youtubeMinerContextSaveTimer);
+    var nextValue = safeText(value || '');
+    youtubeMinerContextSaveTimer = setTimeout(async function() {
+      if (youtubeMinerContextSaving) return;
+      youtubeMinerContextSaving = true;
+      try {
+        await savePersistedYoutubeMinerResponseContext(nextValue);
+      } catch (err) {
+        notify(err.message || 'Could not save Response Context', true);
+      } finally {
+        youtubeMinerContextSaving = false;
+      }
+    }, 700);
   }
 
   function makeYoutubeRteToolbar(editorEl) {
@@ -1176,6 +1283,101 @@ App.youtube = (function () {
     setPreview(els.youtubeRawPreview, result || {});
   }
 
+  function buildProvideReplyOffers(row, feedback) {
+    var comment = safeText(row && row.text);
+    var contextEl = document.getElementById('youtubeMinerResponseContext');
+    var responseContext = safeText(contextEl && contextEl.value);
+    var cat = toArray(feedback && feedback.categories).slice(0, 2).join(', ');
+    var attrs = toArray(feedback && feedback.attributes).slice(0, 2).join(', ');
+    var apps = toArray(feedback && feedback.approaches).slice(0, 2);
+    var primaryApproach = safeText(apps[0] || row && (row.approach || row.approach_name) || 'inquire').toLowerCase();
+    var commentShort = comment.length > 260 ? (comment.slice(0, 257) + '...') : comment;
+    var explicitSuggestion = safeText(feedback && feedback.suggested_response);
+
+    if (explicitSuggestion) {
+      return [
+        explicitSuggestion,
+        'Really appreciate this take. ' + (cat ? ('It sounds strongly tied to ' + cat + '. ') : '') + 'What is the one shift you want most right now?',
+        'This resonates. ' + (attrs ? ('Your tone reads as ' + attrs + '. ') : '') + 'If helpful, I can share one practical next step you could test this week.'
+      ].slice(0, 3);
+    }
+
+    var starter = 'Appreciate you sharing this.';
+    if (primaryApproach === 'encourage') {
+      starter = 'Love this perspective.';
+    } else if (primaryApproach === 'intrigue') {
+      starter = 'Interesting angle here.';
+    } else if (primaryApproach === 'direct_cta') {
+      starter = 'This is a strong signal you are ready to move.';
+    }
+
+    var maybeIsitas = /isitas|self-alignment|alignment/i.test(responseContext)
+      ? ' Around ISITAS, we frame this as practical self-alignment.'
+      : '';
+
+    return [
+      starter + ' ' + (cat ? ('I read this as ' + cat + '. ') : '') + 'What outcome matters most to you from here?',
+      'What stood out to me: "' + commentShort + '" ' + maybeIsitas + ' If you want, I can suggest one simple next step based on your situation.',
+      'Thanks for posting this. ' + (attrs ? ('You come across as ' + attrs + '. ') : '') + 'Would you prefer a quick tactical tip, or a deeper strategy?',
+    ];
+  }
+
+  function openProvideRepliesModal(row, feedback, onPick) {
+    if (!App.components || !App.components.Modal) {
+      notify('Reply picker modal is unavailable', true);
+      return;
+    }
+    var offers = buildProvideReplyOffers(row, feedback);
+    var selectedIndex = 0;
+    var body = document.createElement('div');
+    body.className = 'youtube-miner-reply-picker';
+    var intro = document.createElement('p');
+    intro.className = 'muted';
+    intro.textContent = 'Select the best reply offer:';
+    body.appendChild(intro);
+
+    offers.forEach(function(offer, idx) {
+      var label = document.createElement('label');
+      label.className = 'youtube-miner-reply-offer';
+      var radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'ytMinerReplyOffer';
+      radio.value = String(idx);
+      radio.checked = idx === 0;
+      radio.addEventListener('change', function() {
+        selectedIndex = idx;
+      });
+      var text = document.createElement('textarea');
+      text.rows = 4;
+      text.value = offer;
+      text.addEventListener('input', function() {
+        offers[idx] = safeText(text.value);
+      });
+      label.appendChild(radio);
+      label.appendChild(text);
+      body.appendChild(label);
+    });
+
+    var modal = App.components.Modal({
+      title: 'Provide Replies',
+      body: body,
+      actions: [
+        { label: 'Cancel', onClick: function() { modal.close(); } },
+        {
+          label: 'Use Selected',
+          primary: true,
+          onClick: function() {
+            var selected = safeText(offers[selectedIndex] || offers[0] || '');
+            if (!selected) return notify('Selected reply is empty', true);
+            modal.close();
+            onPick(selected);
+          }
+        }
+      ],
+    });
+    modal.open();
+  }
+
   function renderYoutubeCommentMinerResult(result) {
     if (result && typeof result === 'object') {
       youtubeMinerLastResult = result;
@@ -1350,12 +1552,12 @@ App.youtube = (function () {
       feedbackPop.appendChild(qualityRow);
 
       var catRow = document.createElement('div');
-      catRow.className = 'form-row';
+      catRow.className = 'form-row youtube-miner-feedback-factor-row';
       var catLabel = document.createElement('label');
       catLabel.textContent = 'Category (multi-select)';
       var catInput = document.createElement('select');
       catInput.multiple = true;
-      catInput.size = 6;
+      catInput.size = 5;
       var categoryNames = youtubeMinerCategoryConfig.map(function(item) {
         return safeText(item && item.name);
       }).filter(Boolean);
@@ -1366,43 +1568,66 @@ App.youtube = (function () {
         option.selected = feedback.categories.indexOf(name) !== -1;
         catInput.appendChild(option);
       });
+      var catExplain = document.createElement('input');
+      catExplain.type = 'text';
+      catExplain.placeholder = 'Explain';
+      catExplain.value = safeText(feedback.category_explain);
       catRow.appendChild(catLabel);
       catRow.appendChild(catInput);
+      catRow.appendChild(catExplain);
       feedbackPop.appendChild(catRow);
 
-      var tagsRow = document.createElement('div');
-      tagsRow.className = 'form-row';
-      var tagsLabel = document.createElement('label');
-      tagsLabel.textContent = 'Hashtags';
-      var tagsInput = document.createElement('input');
-      tagsInput.type = 'text';
-      tagsInput.placeholder = 'comma,separated,hashtags';
-      tagsInput.value = feedback.hashtags || toArray(row && (row.hashtags || row.tags)).join(', ');
-      tagsRow.appendChild(tagsLabel);
-      tagsRow.appendChild(tagsInput);
-      feedbackPop.appendChild(tagsRow);
+      var attrRow = document.createElement('div');
+      attrRow.className = 'form-row youtube-miner-feedback-factor-row';
+      var attrLabel = document.createElement('label');
+      attrLabel.textContent = 'Attributes (multi-select)';
+      var attrInput = document.createElement('select');
+      attrInput.multiple = true;
+      attrInput.size = 5;
+      var attributeNames = youtubeMinerAttributeConfig.map(function(item) {
+        return safeText(item && item.name);
+      }).filter(Boolean);
+      attributeNames.forEach(function(name) {
+        var option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = feedback.attributes.indexOf(name) !== -1;
+        attrInput.appendChild(option);
+      });
+      var attrExplain = document.createElement('input');
+      attrExplain.type = 'text';
+      attrExplain.placeholder = 'Explain';
+      attrExplain.value = safeText(feedback.attributes_explain);
+      attrRow.appendChild(attrLabel);
+      attrRow.appendChild(attrInput);
+      attrRow.appendChild(attrExplain);
+      feedbackPop.appendChild(attrRow);
 
-      var responseTypeRow = document.createElement('div');
-      responseTypeRow.className = 'form-row';
-      var responseTypeLabel = document.createElement('label');
-      responseTypeLabel.textContent = 'Response Type';
-      var responseTypeInput = document.createElement('select');
-      responseTypeInput.innerHTML = [
-        '<option value="">(unset)</option>',
-        '<option value="empathetic">Empathetic</option>',
-        '<option value="practical">Practical</option>',
-        '<option value="question_back">Question Back</option>',
-        '<option value="challenger">Challenger</option>',
-        '<option value="invitational">Invitational</option>',
-        '<option value="affirming">Affirming</option>',
-        '<option value="resource_drop">Resource Drop</option>',
-        '<option value="cta_soft">Soft CTA</option>',
-        '<option value="cta_direct">Direct CTA</option>'
-      ].join('');
-      responseTypeInput.value = feedback.response_type || '';
-      responseTypeRow.appendChild(responseTypeLabel);
-      responseTypeRow.appendChild(responseTypeInput);
-      feedbackPop.appendChild(responseTypeRow);
+      var approachRow = document.createElement('div');
+      approachRow.className = 'form-row youtube-miner-feedback-factor-row';
+      var approachLabel = document.createElement('label');
+      approachLabel.textContent = 'Approach (multi-select)';
+      var approachInput = document.createElement('select');
+      approachInput.multiple = true;
+      approachInput.size = 5;
+      var approachNames = youtubeMinerApproachConfig.map(function(item) {
+        return safeText(item && item.name);
+      }).filter(Boolean);
+      approachNames.forEach(function(name) {
+        var option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = feedback.approaches.indexOf(name) !== -1;
+        approachInput.appendChild(option);
+      });
+      var approachExplain = document.createElement('input');
+      approachExplain.type = 'text';
+      approachExplain.placeholder = 'Explain';
+      approachExplain.value = safeText(feedback.approaches_explain);
+      approachRow.appendChild(approachLabel);
+      approachRow.appendChild(approachInput);
+      approachRow.appendChild(approachExplain);
+      feedbackPop.appendChild(approachRow);
 
       var noteRow = document.createElement('div');
       noteRow.className = 'form-row';
@@ -1455,12 +1680,24 @@ App.youtube = (function () {
           .filter(function(option) { return option.selected; })
           .map(function(option) { return safeText(option.value); })
           .filter(Boolean);
+        var selectedAttributes = Array.prototype.slice.call(attrInput.options || [])
+          .filter(function(option) { return option.selected; })
+          .map(function(option) { return safeText(option.value); })
+          .filter(Boolean);
+        var selectedApproaches = Array.prototype.slice.call(approachInput.options || [])
+          .filter(function(option) { return option.selected; })
+          .map(function(option) { return safeText(option.value); })
+          .filter(Boolean);
         saveFeedback(row, {
           quality: Number(qualityInput.value || 0),
           categories: selectedCategories,
-          hashtags: tagsInput.value,
+          category_explain: catExplain.value,
+          attributes: selectedAttributes,
+          attributes_explain: attrExplain.value,
+          approaches: selectedApproaches,
+          approaches_explain: approachExplain.value,
           note: noteInput.value,
-          response_type: responseTypeInput.value,
+          response_type: selectedApproaches[0] || '',
           suggested_response: suggestedInput.value,
         });
         var updated = readFeedback(row);
@@ -1468,7 +1705,7 @@ App.youtube = (function () {
         feedbackTd.textContent = updated.quality > 0
           ? ('Q' + String(updated.quality)
             + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : '')
-            + (updated.response_type ? (' | ' + updated.response_type) : ''))
+            + (updated.approaches.length ? (' | ' + updated.approaches.join(', ')) : ''))
           : '-';
         feedbackPop.classList.add('hidden');
         notify('Training feedback saved');
@@ -1480,13 +1717,31 @@ App.youtube = (function () {
       commentTd.appendChild(commentCell);
 
       var draftTd = document.createElement('td');
-      draftTd.textContent = safeText(row && row.reply_draft) || '-';
+      var draftWrap = document.createElement('div');
+      draftWrap.className = 'youtube-miner-draft-wrap';
+      var draftText = document.createElement('div');
+      draftText.textContent = safeText(row && row.reply_draft) || '-';
+      var provideRepliesBtn = document.createElement('button');
+      provideRepliesBtn.type = 'button';
+      provideRepliesBtn.className = 'tiny-btn youtube-miner-provide-replies-btn';
+      provideRepliesBtn.textContent = 'Provide Replies';
+      provideRepliesBtn.addEventListener('click', function() {
+        openProvideRepliesModal(row, readFeedback(row), function(selectedReply) {
+          row.reply_draft = selectedReply;
+          draftText.textContent = selectedReply;
+          saveFeedback(row, { suggested_response: selectedReply });
+          notify('Reply selected');
+        });
+      });
+      draftWrap.appendChild(draftText);
+      draftWrap.appendChild(provideRepliesBtn);
+      draftTd.appendChild(draftWrap);
 
       var feedbackTd = document.createElement('td');
       feedbackTd.textContent = feedback.quality > 0
         ? ('Q' + String(feedback.quality)
           + (feedback.categories.length ? (' | ' + feedback.categories.join(', ')) : '')
-          + (feedback.response_type ? (' | ' + feedback.response_type) : ''))
+          + (feedback.approaches.length ? (' | ' + feedback.approaches.join(', ')) : ''))
         : '-';
 
       tr.appendChild(scoreTd);
@@ -2116,6 +2371,7 @@ App.youtube = (function () {
           saveYoutubeMinerConfig('approach', payload.approach_config);
           youtubeMinerApproachConfig = payload.approach_config.slice();
           saveYoutubeMinerResponseContext(payload.response_context);
+          await savePersistedYoutubeMinerResponseContext(payload.response_context);
           if (submitBtn) submitBtn.disabled = true;
           var res = await api('/api/acquire/youtube-comments/miner', {
             method: 'POST',
@@ -2152,8 +2408,14 @@ App.youtube = (function () {
     saveYoutubeMinerConfig('approach', youtubeMinerApproachConfig);
     if (youtubeMinerResponseContext) {
       youtubeMinerResponseContext.value = loadYoutubeMinerResponseContext();
+      loadPersistedYoutubeMinerResponseContext().then(function(serverValue) {
+        if (!serverValue) return;
+        youtubeMinerResponseContext.value = serverValue;
+        saveYoutubeMinerResponseContext(serverValue);
+      });
       youtubeMinerResponseContext.addEventListener('input', function() {
         saveYoutubeMinerResponseContext(youtubeMinerResponseContext.value);
+        schedulePersistYoutubeMinerResponseContext(youtubeMinerResponseContext.value);
       });
     }
     renderYoutubeMinerCategoryConfig();
