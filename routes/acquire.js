@@ -33,6 +33,7 @@ const {
 } = require('../lib/harvest/RedditHarvestStore');
 const { runYoutubeCommentHarvest } = require('../lib/harvest/YoutubeCommentsRun');
 const { runYoutubeCommentMiner } = require('../lib/harvest/YoutubeCommentMiner');
+const { resolveYoutubeApiKey } = require('../lib/harvest/youtubeApiKey');
 const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
 const { generateYoutubeCommentSuggestions } = require('../lib/harvest/YoutubeCommentSuggestions');
 const {
@@ -49,7 +50,11 @@ const {
   listCommentRuns,
   getCommentRun,
   deleteCommentRun,
+  createResearchRun,
+  listResearchRuns,
+  getResearchRun,
 } = require('../lib/harvest/YoutubeCommentsStore');
+const { sbQuery, tableConfig } = require('../lib/supabase');
 const {
   listYoutubeCategories,
   createYoutubeCategory,
@@ -65,6 +70,10 @@ function safeText(value) {
   return String(value || '').trim();
 }
 
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function waitFor(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(1, Number(ms) || 1)));
 }
@@ -75,6 +84,107 @@ function firstNonEmpty(...values) {
     if (text) return text;
   }
   return '';
+}
+
+function splitPhraseList(value) {
+  return String(value || '')
+    .split(/\r?\n|,/g)
+    .map((item) => safeText(item))
+    .filter(Boolean);
+}
+
+function normalizeKeyword(value) {
+  return safeText(value)
+    .toLowerCase()
+    .replace(/^#/, '')
+    .replace(/[^\w\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function keywordsFromText(value) {
+  const text = normalizeKeyword(value);
+  if (!text) return [];
+  const words = text.split(' ').filter(Boolean);
+  if (!words.length) return [];
+  if (words.length <= 5) return [words.join(' ')];
+  return [words.slice(0, 5).join(' '), words.slice(-5).join(' ')];
+}
+
+function extractPhraseCandidatesFromRow(row = {}) {
+  const out = [];
+  Object.entries(row || {}).forEach(([key, value]) => {
+    const field = String(key || '').toLowerCase();
+    if (field.includes('id') || field.includes('created') || field.includes('updated')) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        keywordsFromText(item).forEach((k) => out.push(k));
+      });
+      return;
+    }
+    if (typeof value === 'string') {
+      if (field.includes('hashtag') || field === 'tag' || field === 'tags') {
+        splitPhraseList(value).forEach((k) => out.push(normalizeKeyword(k)));
+        return;
+      }
+      keywordsFromText(value).forEach((k) => out.push(k));
+    }
+  });
+  return out.filter(Boolean);
+}
+
+function dedupePhrases(phrases = [], limit = 40) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of phrases) {
+    const text = normalizeKeyword(raw);
+    if (!text || text.length < 3) continue;
+    if (seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+async function fetchMessagingRows(tableName, limit = 120) {
+  if (!tableName) return [];
+  const res = await sbQuery({
+    method: 'GET',
+    table: tableName,
+    query: `select=*&order=created_at.desc&limit=${Math.max(1, Math.min(Number(limit) || 120, 500))}`,
+  });
+  if (!res.ok) return [];
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+async function searchYoutubeVideosByPhrase(phrase, apiKey, perPhrase = 4) {
+  const url = new URL('https://www.googleapis.com/youtube/v3/search');
+  url.searchParams.set('part', 'snippet');
+  url.searchParams.set('type', 'video');
+  url.searchParams.set('order', 'relevance');
+  url.searchParams.set('maxResults', String(Math.max(1, Math.min(Number(perPhrase) || 4, 10))));
+  url.searchParams.set('q', safeText(phrase));
+  url.searchParams.set('key', apiKey);
+  const response = await fetch(url.toString(), {
+    headers: { accept: 'application/json', 'user-agent': 'APH-YoutubeResearch/1.0' },
+    signal: AbortSignal.timeout(15000),
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    const message = safeText(body?.error?.message || body?.error?.errors?.[0]?.message) || `YouTube API error (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    throw err;
+  }
+  const items = Array.isArray(body?.items) ? body.items : [];
+  return items.map((item) => ({
+    video_id: safeText(item?.id?.videoId),
+    video_url: safeText(item?.id?.videoId) ? `https://www.youtube.com/watch?v=${safeText(item?.id?.videoId)}` : '',
+    title: safeText(item?.snippet?.title),
+    channel_name: safeText(item?.snippet?.channelTitle),
+    published_at: safeText(item?.snippet?.publishedAt),
+  })).filter((item) => item.video_id && item.video_url);
 }
 
 function maybeParseJson(value) {
@@ -939,6 +1049,171 @@ async function handle(req, res, pathname, method) {
     });
 
     return sendOk(res, 200, mined.data, { result: mined.data }), true;
+  }
+
+  // POST /api/acquire/youtube-research — build targets from messaging + phrases, then mine/distill
+  if (pathname === '/api/acquire/youtube-research' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+
+    const body = await parseJsonBody(req);
+    const apiKey = resolveYoutubeApiKey();
+    if (!apiKey) {
+      return sendErr(res, 400, 'YouTube API key is not configured. Go to Settings > APIs > YouTube and add your key.'), true;
+    }
+
+    const rawManualPhrases = splitPhraseList(body?.manual_phrases_text || body?.manual_phrases || '');
+    const includeMessaging = body?.include_messaging !== false;
+    const maxPhrases = Math.max(1, Math.min(Number(body?.max_phrases || 25) || 25, 120));
+    const videosPerPhrase = Math.max(1, Math.min(Number(body?.videos_per_phrase || 3) || 3, 10));
+    const distilledTargetLimit = Math.max(1, Math.min(Number(body?.distilled_target_limit || 30) || 30, 200));
+
+    let messagingPhrases = [];
+    const phraseSources = [];
+    if (includeMessaging) {
+      const tables = tableConfig();
+      const sourceDefs = [
+        { table: tables.messagingHashtags, label: 'hashtags' },
+        { table: tables.messagingTweets, label: 'tweets' },
+        { table: tables.messagingPosts, label: 'posts' },
+        { table: tables.messagingArticles, label: 'articles' },
+      ];
+      for (const source of sourceDefs) {
+        const rows = await fetchMessagingRows(source.table, 150);
+        const sourcePhrases = dedupePhrases(rows.flatMap(extractPhraseCandidatesFromRow), 50);
+        if (sourcePhrases.length) {
+          messagingPhrases.push(...sourcePhrases);
+          phraseSources.push({ source: source.label, count: sourcePhrases.length });
+        }
+      }
+    }
+
+    const phrases = dedupePhrases([
+      ...rawManualPhrases,
+      ...messagingPhrases,
+    ], maxPhrases);
+    if (!phrases.length) {
+      return sendErr(res, 400, 'No research phrases available. Add manual phrases or enable messaging sources.'), true;
+    }
+
+    const discovered = [];
+    const warnings = [];
+    for (const phrase of phrases) {
+      try {
+        const hits = await searchYoutubeVideosByPhrase(phrase, apiKey, videosPerPhrase);
+        hits.forEach((hit) => {
+          discovered.push({
+            phrase,
+            ...hit,
+          });
+        });
+      } catch (err) {
+        warnings.push(`Phrase "${phrase}": ${safeText(err?.message) || 'search failed'}`);
+      }
+    }
+
+    const dedupedVideos = [];
+    const seenVideoIds = new Set();
+    for (const hit of discovered) {
+      const videoId = safeText(hit.video_id);
+      if (!videoId || seenVideoIds.has(videoId)) continue;
+      seenVideoIds.add(videoId);
+      dedupedVideos.push(hit);
+      if (dedupedVideos.length >= distilledTargetLimit) break;
+    }
+
+    if (!dedupedVideos.length) {
+      return sendErr(res, 400, 'No YouTube targets discovered from research phrases.', { details: warnings }), true;
+    }
+
+    const minerPayload = {
+      targets: dedupedVideos.map((item) => item.video_url),
+      videos_per_channel: Number(body?.videos_per_channel || 5) || 5,
+      max_comments_per_video: Number(body?.max_comments_per_video || 100) || 100,
+      include_replies: body?.include_replies === true,
+      sort_by: String(body?.sort_by || 'relevance'),
+      min_score: Number(body?.min_score || 3) || 3,
+      exclude_noise: body?.exclude_noise !== false,
+      include_phrases_text: String(body?.include_phrases_text || '').trim(),
+      exclude_phrases_text: String(body?.exclude_phrases_text || '').trim(),
+      category_config: body?.category_config || [],
+      attribute_config: body?.attribute_config || [],
+      approach_config: body?.approach_config || [],
+      response_context: String(body?.response_context || '').trim(),
+      training_feedback: Array.isArray(body?.training_feedback) ? body.training_feedback : [],
+    };
+
+    const mined = await runYoutubeCommentMiner(minerPayload);
+    if (!mined.ok) {
+      return sendErr(res, mined.status || 500, mined.error || 'YouTube research miner failed', {
+        details: Array.isArray(mined?.data?.warnings) ? mined.data.warnings : warnings,
+      }), true;
+    }
+
+    const researchInput = {
+      phrase_count: phrases.length,
+      discovered_target_count: discovered.length,
+      distilled_target_count: dedupedVideos.length,
+      phrases,
+      discovered_targets: discovered.map((item) => item.video_url).filter(Boolean),
+      distilled_targets: dedupedVideos.map((item) => item.video_url).filter(Boolean),
+      raw_input: {
+        include_messaging: includeMessaging,
+        manual_phrases_text: String(body?.manual_phrases_text || body?.manual_phrases || '').trim(),
+        max_phrases: maxPhrases,
+        videos_per_phrase: videosPerPhrase,
+        distilled_target_limit: distilledTargetLimit,
+        include_transcript: body?.include_transcript === true,
+      },
+    };
+    const saveRes = await createResearchRun(researchInput, mined.data || {});
+    const runId = saveRes?.ok ? safeText(saveRes?.data?.run_id) : '';
+
+    const resultPayload = {
+      ...(mined.data || {}),
+      research: {
+        run_id: runId,
+        phrase_sources: phraseSources,
+        phrases,
+        discovered_count: discovered.length,
+        distilled_count: dedupedVideos.length,
+        discovered: discovered.slice(0, 500),
+        distilled_targets: dedupedVideos.map((item) => item.video_url).filter(Boolean),
+      },
+      warnings: [...toArray(mined.data?.warnings), ...warnings].slice(0, 300),
+    };
+
+    logActivity({
+      action: 'acquire.youtube_research',
+      entityType: 'acquire',
+      entityId: runId || null,
+      summary: `YouTube Research: ${phrases.length} phrases, ${dedupedVideos.length} distilled targets`,
+      meta: {
+        run_id: runId || null,
+        phrase_count: phrases.length,
+        discovered_target_count: discovered.length,
+        distilled_target_count: dedupedVideos.length,
+        filtered_comments: Number(resultPayload?.stats?.total_comments_filtered || 0) || 0,
+      },
+    });
+
+    return sendOk(res, 200, { run_id: runId, result: resultPayload }, { run_id: runId, result: resultPayload }), true;
+  }
+
+  // GET /api/acquire/youtube-research-runs
+  if (pathname === '/api/acquire/youtube-research-runs' && method === 'GET') {
+    const limit = Number(urlObj.searchParams.get('limit') || 20);
+    const result = await listResearchRuns(limit);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data || [], { runs: result.data || [] }, { total: Array.isArray(result.data) ? result.data.length : 0 }), true;
+  }
+
+  // GET /api/acquire/youtube-research-runs/:id
+  const youtubeResearchRunMatch = pathname.match(/^\/api\/acquire\/youtube-research-runs\/([^/]+)$/);
+  if (youtubeResearchRunMatch && method === 'GET') {
+    const id = decodeURIComponent(youtubeResearchRunMatch[1]);
+    const result = await getResearchRun(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { run: result.data }), true;
   }
 
   // POST /api/acquire/youtube-comment — ⚡ RATE LIMITED (writes to YouTube)
