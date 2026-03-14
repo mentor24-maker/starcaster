@@ -5094,12 +5094,52 @@ th {
   font-weight: 700;
 }
 
+.youtube-miner-feedback-factor-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 2fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.youtube-miner-feedback-factor-row > label {
+  margin-bottom: 0;
+  padding-top: 6px;
+}
+
 .youtube-miner-feedback-pop textarea {
   min-height: 210px;
 }
 
 .youtube-miner-feedback-pop select[multiple] {
   min-height: 150px;
+}
+
+.youtube-miner-provide-replies-btn {
+  margin-top: 8px;
+}
+
+.youtube-miner-draft-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.youtube-miner-reply-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.youtube-miner-reply-offer {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.youtube-miner-reply-offer textarea {
+  min-height: 110px;
 }
 
 .youtube-miner-feedback-actions {
