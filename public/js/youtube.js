@@ -44,6 +44,7 @@ App.youtube = (function () {
   var youtubeMinerContextSaving = false;
   var youtubeResearchLastResult = null;
   var youtubeResearchMessagingCache = null;
+  var youtubeMinerTargetHistory = [];
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
 
@@ -353,6 +354,69 @@ App.youtube = (function () {
     return entries.sort(function(a, b) {
       return safeText(b.updated_at).localeCompare(safeText(a.updated_at));
     }).slice(0, 500);
+  }
+
+  function normalizeYoutubeTarget(value) {
+    return safeText(value)
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function mergeTargetsUnique(existing, incoming) {
+    var out = [];
+    var seen = new Set();
+    function addValue(value) {
+      var normalized = normalizeYoutubeTarget(value);
+      if (!normalized) return;
+      var key = normalized.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(normalized);
+    }
+    toArray(existing).forEach(addValue);
+    toArray(incoming).forEach(addValue);
+    return out;
+  }
+
+  function renderYoutubeMinerTargetHistory() {
+    var selectEl = document.getElementById('youtubeMinerTargetHistorySelect');
+    if (!selectEl) return;
+    var previous = safeText(selectEl.value);
+    selectEl.innerHTML = '<option value="">Previously entered targets…</option>';
+    toArray(youtubeMinerTargetHistory).forEach(function(item) {
+      var target = safeText(item && item.target);
+      if (!target) return;
+      var option = document.createElement('option');
+      option.value = target;
+      option.textContent = target;
+      selectEl.appendChild(option);
+    });
+    if (previous) selectEl.value = previous;
+  }
+
+  async function refreshYoutubeMinerTargetHistory(limit) {
+    var safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
+    var res = await api('/api/acquire/youtube-target-history?limit=' + safeLimit);
+    youtubeMinerTargetHistory = Array.isArray(res.targets) ? res.targets : [];
+    renderYoutubeMinerTargetHistory();
+  }
+
+  function addSelectedTargetHistoryToTextarea() {
+    var selectEl = document.getElementById('youtubeMinerTargetHistorySelect');
+    var textEl = document.getElementById('youtubeMinerTargets');
+    if (!selectEl || !textEl) return;
+    var selected = safeText(selectEl.value);
+    if (!selected) {
+      notify('Select a previously entered target first.', true);
+      return;
+    }
+    var current = String(textEl.value || '')
+      .split(/\r?\n/g)
+      .map(function(line) { return normalizeYoutubeTarget(line); })
+      .filter(Boolean);
+    var merged = mergeTargetsUnique(current, [selected]);
+    textEl.value = merged.join('\n');
+    notify('Target added');
   }
 
   function makeYoutubeMinerConfigId(prefix) {
@@ -1555,43 +1619,165 @@ App.youtube = (function () {
     setPreview(els.youtubeRawPreview, result || {});
   }
 
-  function buildProvideReplyOffers(row, feedback) {
-    var comment = safeText(row && row.text);
-    var contextEl = document.getElementById('youtubeMinerResponseContext');
-    var responseContext = safeText(contextEl && contextEl.value);
-    var cat = toArray(feedback && feedback.categories).slice(0, 2).join(', ');
-    var attrs = toArray(feedback && feedback.attributes).slice(0, 2).join(', ');
-    var apps = toArray(feedback && feedback.approaches).slice(0, 2);
-    var primaryApproach = safeText(apps[0] || row && (row.approach || row.approach_name) || 'inquire').toLowerCase();
-    var commentShort = comment.length > 260 ? (comment.slice(0, 257) + '...') : comment;
-    var explicitSuggestion = safeText(feedback && feedback.suggested_response);
+  function tokenizeReplyText(value) {
+    return safeText(value)
+      .toLowerCase()
+      .replace(/https?:\/\/\S+/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/g)
+      .filter(Boolean)
+      .filter(function(token) { return token.length > 2; });
+  }
 
-    if (explicitSuggestion) {
-      return [
-        explicitSuggestion,
-        'Really appreciate this take. ' + (cat ? ('It sounds strongly tied to ' + cat + '. ') : '') + 'What is the one shift you want most right now?',
-        'This resonates. ' + (attrs ? ('Your tone reads as ' + attrs + '. ') : '') + 'If helpful, I can share one practical next step you could test this week.'
-      ].slice(0, 3);
-    }
+  function commentFocusSnippet(comment) {
+    var text = safeText(comment);
+    if (!text) return '';
+    var firstSentence = text.split(/[.!?]\s+/g)[0] || text;
+    var trimmed = safeText(firstSentence);
+    if (trimmed.length <= 120) return trimmed;
+    return trimmed.slice(0, 117) + '...';
+  }
 
-    var starter = 'Appreciate you sharing this.';
-    if (primaryApproach === 'encourage') {
-      starter = 'Love this perspective.';
-    } else if (primaryApproach === 'intrigue') {
-      starter = 'Interesting angle here.';
-    } else if (primaryApproach === 'direct_cta') {
-      starter = 'This is a strong signal you are ready to move.';
-    }
+  function scoreCorpusMatch(entry, row, feedback) {
+    var score = 0;
+    var rowCats = mergeTargetsUnique(toArray(row && (row.category ? [row.category] : [])), toArray(feedback && feedback.categories)).map(function(v) { return v.toLowerCase(); });
+    var rowAttrs = mergeTargetsUnique(toArray(row && (row.attributes || row.attribute_names)), toArray(feedback && feedback.attributes)).map(function(v) { return v.toLowerCase(); });
+    var rowApps = mergeTargetsUnique(toArray(row && (row.approach || row.approach_name ? [row.approach || row.approach_name] : [])), toArray(feedback && feedback.approaches)).map(function(v) { return v.toLowerCase(); });
+    var entryCats = toArray(entry && entry.categories).map(function(v) { return safeText(v).toLowerCase(); });
+    var entryAttrs = toArray(entry && entry.attributes).map(function(v) { return safeText(v).toLowerCase(); });
+    var entryApps = toArray(entry && entry.approaches).map(function(v) { return safeText(v).toLowerCase(); });
+    rowCats.forEach(function(cat) { if (entryCats.indexOf(cat) >= 0) score += 4; });
+    rowAttrs.forEach(function(attr) { if (entryAttrs.indexOf(attr) >= 0) score += 2; });
+    rowApps.forEach(function(app) { if (entryApps.indexOf(app) >= 0) score += 3; });
+    score += Math.max(0, Math.min(Number(entry && entry.quality) || 0, 5));
+    return score;
+  }
 
-    var maybeIsitas = /isitas|self-alignment|alignment/i.test(responseContext)
-      ? ' Around ISITAS, we frame this as practical self-alignment.'
-      : '';
+  function buildReplyLearningProfile(row, feedback) {
+    var corpus = collectYoutubeMinerFeedbackCorpus();
+    var scored = corpus.map(function(entry) {
+      return { entry: entry, score: scoreCorpusMatch(entry, row, feedback) };
+    }).sort(function(a, b) { return b.score - a.score; });
 
-    return [
-      starter + ' ' + (cat ? ('I read this as ' + cat + '. ') : '') + 'What outcome matters most to you from here?',
-      'What stood out to me: "' + commentShort + '" ' + maybeIsitas + ' If you want, I can suggest one simple next step based on your situation.',
-      'Thanks for posting this. ' + (attrs ? ('You come across as ' + attrs + '. ') : '') + 'Would you prefer a quick tactical tip, or a deeper strategy?',
+    var preferred = [];
+    var discouraged = [];
+    var preferredApproaches = [];
+    scored.forEach(function(item) {
+      var entry = item.entry || {};
+      if ((Number(entry.quality || 0) >= 4 || item.score >= 8) && safeText(entry.suggested_response)) {
+        preferred.push(safeText(entry.suggested_response));
+      }
+      toArray(entry.offer_feedback).forEach(function(of) {
+        var response = safeText(of && of.response);
+        var rating = Number(of && of.rating || 0);
+        if (!response) return;
+        if (rating >= 4 || of && of.selected) preferred.push(response);
+        if (rating > 0 && rating <= 2) discouraged.push(response);
+      });
+      if (Number(entry.quality || 0) >= 4) {
+        preferredApproaches = preferredApproaches.concat(toArray(entry.approaches));
+      }
+      var why = safeText(entry.note + ' ' + entry.category_explain + ' ' + entry.attributes_explain + ' ' + entry.approaches_explain);
+      if (/(generic|mindless|template|robot|canned|vague|surface)/i.test(why)) {
+        var sample = safeText(entry.suggested_response);
+        if (sample) discouraged.push(sample);
+      }
+    });
+
+    var hardBan = [
+      'Appreciate you sharing this.',
+      'If you want, I can suggest one simple next step based on your situation.',
+      'Would you prefer a quick tactical tip, or a deeper strategy?',
+      'What outcome matters most to you from here?',
     ];
+    discouraged = mergeTargetsUnique(discouraged, hardBan);
+
+    return {
+      preferred: mergeTargetsUnique([], preferred).slice(0, 24),
+      discouraged: mergeTargetsUnique([], discouraged).slice(0, 40),
+      preferredApproaches: mergeTargetsUnique([], preferredApproaches).slice(0, 12),
+    };
+  }
+
+  function stripDiscouragedPhrases(text, discouraged) {
+    var out = safeText(text);
+    toArray(discouraged).forEach(function(phrase) {
+      var p = safeText(phrase);
+      if (!p) return;
+      var escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      out = out.replace(new RegExp(escaped, 'ig'), '').replace(/\s{2,}/g, ' ').trim();
+    });
+    return out;
+  }
+
+  function synthesizeReply(row, feedback, learning, variant) {
+    var comment = safeText(row && row.text);
+    var focus = commentFocusSnippet(comment);
+    var category = mergeTargetsUnique(toArray(feedback && feedback.categories), toArray(row && (row.category ? [row.category] : []))).slice(0, 2).join(', ');
+    var attributes = mergeTargetsUnique(toArray(feedback && feedback.attributes), toArray(row && (row.attributes || row.attribute_names))).slice(0, 2).join(', ');
+    var approaches = mergeTargetsUnique(toArray(feedback && feedback.approaches), toArray(row && (row.approach || row.approach_name ? [row.approach || row.approach_name] : [])));
+    var chosenApproach = safeText(approaches[0] || learning.preferredApproaches[0] || 'inquire').toLowerCase();
+    var contextEl = document.getElementById('youtubeMinerResponseContext');
+    var context = safeText(contextEl && contextEl.value);
+    var contextHint = '';
+    if (/isitas|alignment|self-alignment/i.test(context)) {
+      contextHint = ' In ISITAS terms, this reads like a self-alignment moment.';
+    }
+    var prefix = 'You\'re pointing to something real here';
+    if (chosenApproach === 'encourage') prefix = 'This is a strong growth signal';
+    if (chosenApproach === 'intrigue') prefix = 'Interesting inflection point';
+    if (chosenApproach === 'direct_cta') prefix = 'This looks ready for action';
+    if (chosenApproach === 'ignore') prefix = 'This may not need a direct reply';
+    var angle = category ? (' around ' + category) : '';
+    var persona = attributes ? (' (' + attributes + ')') : '';
+    var quote = focus ? (' "' + focus + '"') : '';
+
+    if (variant === 1) {
+      return stripDiscouragedPhrases(
+        prefix + angle + persona + '.' + quote + contextHint +
+        ' If you had to pick one concrete change for the next 7 days, what would it be?',
+        learning.discouraged
+      );
+    }
+    if (variant === 2) {
+      return stripDiscouragedPhrases(
+        'What I hear in your comment is a transition from old patterns to something more intentional.' + quote +
+        (category ? (' The category I\'d map this to is ' + category + '.') : '') +
+        ' A practical move is to define one boundary and one new habit this week.',
+        learning.discouraged
+      );
+    }
+    return stripDiscouragedPhrases(
+      'This comment feels directionally clear: you want movement, not more noise.' + quote +
+      ' I\'d respond with one focused experiment this week and a quick reflection on what changed.' +
+      (contextHint ? contextHint : ''),
+      learning.discouraged
+    );
+  }
+
+  function buildProvideReplyOffers(row, feedback) {
+    var explicitSuggestion = safeText(feedback && feedback.suggested_response);
+    var learning = buildReplyLearningProfile(row, feedback);
+    var offers = [];
+
+    if (explicitSuggestion) offers.push(explicitSuggestion);
+    toArray(learning.preferred).forEach(function(sample) {
+      if (offers.length >= 3) return;
+      var cleaned = stripDiscouragedPhrases(sample, learning.discouraged);
+      if (cleaned) offers.push(cleaned);
+    });
+
+    var variant = 1;
+    while (offers.length < 3 && variant <= 6) {
+      var candidate = synthesizeReply(row, feedback, learning, variant);
+      if (candidate) offers.push(candidate);
+      variant += 1;
+    }
+
+    offers = mergeTargetsUnique([], offers).map(function(item) {
+      return stripDiscouragedPhrases(item, learning.discouraged);
+    }).filter(Boolean);
+    return offers.slice(0, 3);
   }
 
   function openProvideRepliesModal(row, feedback, onPick) {
@@ -2979,6 +3165,8 @@ App.youtube = (function () {
     var youtubeResearchSendToTargetingBtn = document.getElementById('youtubeResearchSendToTargetingBtn');
     var youtubeResearchMessagingCategory = document.getElementById('youtubeResearchMessagingCategory');
     var youtubeResearchHashtagSelect = document.getElementById('youtubeResearchHashtagSelect');
+    var youtubeMinerTargetHistoryAddBtn = document.getElementById('youtubeMinerTargetHistoryAddBtn');
+    var youtubeMinerTargetHistoryRefreshBtn = document.getElementById('youtubeMinerTargetHistoryRefreshBtn');
     if (youtubeResearchForm) {
       youtubeResearchForm.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -3065,6 +3253,18 @@ App.youtube = (function () {
         notify('Sent ' + targets.length + ' distilled targets to Targeting');
       });
     }
+    if (youtubeMinerTargetHistoryAddBtn) {
+      youtubeMinerTargetHistoryAddBtn.addEventListener('click', function() {
+        addSelectedTargetHistoryToTextarea();
+      });
+    }
+    if (youtubeMinerTargetHistoryRefreshBtn) {
+      youtubeMinerTargetHistoryRefreshBtn.addEventListener('click', function() {
+        refreshYoutubeMinerTargetHistory(700)
+          .then(function() { notify('Target history refreshed'); })
+          .catch(function(err) { notify(err.message, true); });
+      });
+    }
 
     var youtubeCommentMinerForm = document.getElementById('youtubeCommentMinerForm');
     if (youtubeCommentMinerForm) {
@@ -3110,6 +3310,7 @@ App.youtube = (function () {
           });
           var result = res.result || {};
           renderYoutubeCommentMinerResult(result);
+          refreshYoutubeMinerTargetHistory(700).catch(function() {});
           notify('YouTube Comment Miner complete (' + String(Number(result?.stats?.total_comments_filtered || 0) || 0) + ' filtered comments)');
         } catch (err) {
           notify(err.message, true);
@@ -3168,6 +3369,7 @@ App.youtube = (function () {
     refreshYoutubeResearchCategoryHashtagHints().catch(function(err) {
       notify(err.message || 'Could not load messaging categories/hashtags for research', true);
     });
+    refreshYoutubeMinerTargetHistory(700).catch(function() {});
     var restoredResearch = loadYoutubeResearchLastResult();
     if (restoredResearch) {
       renderYoutubeResearchResult(restoredResearch);
