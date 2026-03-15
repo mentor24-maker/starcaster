@@ -128,6 +128,8 @@ App.youtube = (function () {
 
   function feedbackHasReview(feedback) {
     return Boolean(
+      Boolean(feedback && feedback.ignored)
+      ||
       Number(feedback && feedback.quality || 0) > 0
       || toArray(feedback && feedback.categories).length
       || safeText(feedback && feedback.category_explain)
@@ -165,6 +167,7 @@ App.youtube = (function () {
         response_type: '',
         suggested_response: '',
         offer_feedback: [],
+        ignored: false,
         updated_at: ''
       };
       var parsed = JSON.parse(raw);
@@ -215,6 +218,7 @@ App.youtube = (function () {
         response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
         suggested_response: safeText(parsed && (parsed.suggested_response || parsed.response_example)),
         offer_feedback: offerFeedback,
+        ignored: Boolean(parsed && parsed.ignored),
         updated_at: safeText(parsed && parsed.updated_at),
       };
     } catch (_) {
@@ -231,6 +235,7 @@ App.youtube = (function () {
         response_type: '',
         suggested_response: '',
         offer_feedback: [],
+        ignored: false,
         updated_at: ''
       };
     }
@@ -254,6 +259,7 @@ App.youtube = (function () {
     merged.note = safeText(merged.note);
     merged.response_type = safeText(merged.response_type) || safeText(merged.approaches[0]);
     merged.suggested_response = safeText(merged.suggested_response);
+    merged.ignored = Boolean(merged.ignored);
     merged.offer_feedback = toArray(merged.offer_feedback).map(function(item) {
       return {
         index: Math.max(0, Number(item && item.index) || 0),
@@ -326,6 +332,7 @@ App.youtube = (function () {
           note: safeText(parsed && parsed.note),
           response_type: safeText(parsed && (parsed.response_type || parsed.response_style)),
           suggested_response: safeText(parsed && (parsed.suggested_response || parsed.response_example)),
+          ignored: Boolean(parsed && parsed.ignored),
           offer_feedback: Array.isArray(parsed && parsed.offer_feedback)
             ? parsed.offer_feedback.map(function(item) {
                 return {
@@ -1698,6 +1705,58 @@ App.youtube = (function () {
     modal.open();
   }
 
+  function openScoreBreakdownModal(row) {
+    if (!App.components || !App.components.Modal) {
+      notify('Score details modal is unavailable', true);
+      return;
+    }
+    var wrap = document.createElement('div');
+    wrap.className = 'youtube-miner-score-modal';
+    var score = Number(row && row.score || 0) || 0;
+    var title = document.createElement('h4');
+    title.textContent = 'Score: ' + String(score);
+    wrap.appendChild(title);
+
+    var whyList = document.createElement('ul');
+    var whyItems = toArray(row && row.why).filter(Boolean);
+    if (!whyItems.length) {
+      var empty = document.createElement('li');
+      empty.textContent = 'No scoring reasons were recorded for this row.';
+      whyList.appendChild(empty);
+    } else {
+      whyItems.forEach(function(reason) {
+        var li = document.createElement('li');
+        li.textContent = String(reason);
+        whyList.appendChild(li);
+      });
+    }
+    wrap.appendChild(whyList);
+
+    var meta = document.createElement('div');
+    meta.className = 'youtube-miner-score-meta';
+    var bits = [
+      ['Category', safeText(row && row.category) || '-'],
+      ['Category Rank', String(Number(row && row.category_value_rank || 0) || 0)],
+      ['Attributes', toArray(row && (row.attributes || row.attribute_names)).join(', ') || '-'],
+      ['Approach', safeText(row && (row.approach || row.approach_name)) || '-'],
+      ['Hashtags', toArray(row && (row.hashtags || row.tags)).join(', ') || '-'],
+      ['Noise Flag', row && row.is_noise ? 'Yes' : 'No'],
+    ];
+    bits.forEach(function(pair) {
+      var p = document.createElement('p');
+      p.innerHTML = '<strong>' + escapeHtml(pair[0]) + ':</strong> ' + escapeHtml(pair[1]);
+      meta.appendChild(p);
+    });
+    wrap.appendChild(meta);
+
+    var modal = App.components.Modal({
+      title: 'Score Breakdown',
+      body: wrap,
+      actions: [{ label: 'Close', primary: true, onClick: function() { modal.close(); } }],
+    });
+    modal.open();
+  }
+
   function renderYoutubeCommentMinerResult(result) {
     if (result && typeof result === 'object') {
       youtubeMinerLastResult = result;
@@ -1807,10 +1866,20 @@ App.youtube = (function () {
       var tr = document.createElement('tr');
       var feedback = readFeedback(row);
       var isReviewedRow = feedbackHasReview(feedback);
+      var isIgnoredRow = Boolean(feedback && feedback.ignored);
       if (isReviewedRow) tr.classList.add('youtube-miner-row-reviewed');
+      if (isIgnoredRow) tr.classList.add('youtube-miner-row-ignored');
 
       var scoreTd = document.createElement('td');
-      scoreTd.textContent = String(Number(row && row.score || 0) || 0);
+      var scoreBtn = document.createElement('button');
+      scoreBtn.type = 'button';
+      scoreBtn.className = 'youtube-miner-score-btn';
+      scoreBtn.textContent = String(Number(row && row.score || 0) || 0);
+      scoreBtn.title = 'Show score breakdown';
+      scoreBtn.addEventListener('click', function() {
+        openScoreBreakdownModal(row);
+      });
+      scoreTd.appendChild(scoreBtn);
 
       var categoryTd = document.createElement('td');
       var categoryName = safeText(row && row.category) || '-';
@@ -2093,8 +2162,15 @@ App.youtube = (function () {
       provideRepliesBtn.type = 'button';
       provideRepliesBtn.className = 'tiny-btn youtube-miner-provide-replies-btn';
       provideRepliesBtn.textContent = 'Provide Replies';
+      var ignoreBtn = document.createElement('button');
+      ignoreBtn.type = 'button';
+      ignoreBtn.className = 'tiny-btn youtube-miner-ignore-btn';
       function updateProvideRepliesBtnState() {
         var currentFeedback = readFeedback(row);
+        var isIgnored = Boolean(currentFeedback && currentFeedback.ignored);
+        ignoreBtn.textContent = isIgnored ? 'Unignore' : 'Ignore';
+        ignoreBtn.classList.toggle('is-ignored', isIgnored);
+        tr.classList.toggle('youtube-miner-row-ignored', isIgnored);
         var hasSubmittedRepliesForm = toArray(currentFeedback && currentFeedback.offer_feedback).some(function(item) {
           return Boolean(
             item
@@ -2110,6 +2186,29 @@ App.youtube = (function () {
         provideRepliesBtn.classList.toggle('is-pending', !hasSubmittedRepliesForm);
       }
       updateProvideRepliesBtnState();
+      ignoreBtn.addEventListener('click', function() {
+        var currentFeedback = readFeedback(row);
+        var nextIgnored = !Boolean(currentFeedback && currentFeedback.ignored);
+        var nextApproaches = toArray(currentFeedback && currentFeedback.approaches);
+        if (nextIgnored && nextApproaches.indexOf('ignore') === -1) nextApproaches.push('ignore');
+        if (!nextIgnored) nextApproaches = nextApproaches.filter(function(item) { return safeText(item).toLowerCase() !== 'ignore'; });
+        saveFeedback(row, {
+          ignored: nextIgnored,
+          approaches: nextApproaches,
+          response_type: nextIgnored ? 'ignore' : safeText(currentFeedback && currentFeedback.response_type),
+        });
+        var updated = readFeedback(row);
+        var nowReviewed = feedbackHasReview(updated);
+        feedbackBtn.classList.toggle('has-feedback', nowReviewed);
+        tr.classList.toggle('youtube-miner-row-reviewed', nowReviewed);
+        feedbackTd.textContent = updated.quality > 0
+          ? ('Q' + String(updated.quality)
+            + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : '')
+            + (updated.approaches.length ? (' | ' + updated.approaches.join(', ')) : ''))
+          : (nowReviewed ? 'Reviewed' : '-');
+        updateProvideRepliesBtnState();
+        notify(nextIgnored ? 'Comment marked ignore' : 'Comment unignored');
+      });
       provideRepliesBtn.addEventListener('click', function() {
         openProvideRepliesModal(row, readFeedback(row), function(selectedReply, selectedOfferFeedback) {
           row.reply_draft = selectedReply;
@@ -2124,6 +2223,7 @@ App.youtube = (function () {
       });
       draftWrap.appendChild(draftText);
       draftWrap.appendChild(provideRepliesBtn);
+      draftWrap.appendChild(ignoreBtn);
       draftTd.appendChild(draftWrap);
 
       var feedbackTd = document.createElement('td');
