@@ -3098,7 +3098,11 @@ App.youtube = (function () {
           saveYoutubeMinerConfig('approach', payload.approach_config);
           youtubeMinerApproachConfig = payload.approach_config.slice();
           saveYoutubeMinerResponseContext(payload.response_context);
-          await savePersistedYoutubeMinerResponseContext(payload.response_context);
+          try {
+            await savePersistedYoutubeMinerResponseContext(payload.response_context);
+          } catch (_) {
+            // Do not block miner execution if context persistence endpoint is unavailable.
+          }
           if (submitBtn) submitBtn.disabled = true;
           var res = await api('/api/acquire/youtube-comments/miner', {
             method: 'POST',
