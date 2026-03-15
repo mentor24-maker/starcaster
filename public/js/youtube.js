@@ -2093,6 +2093,16 @@ App.youtube = (function () {
       provideRepliesBtn.type = 'button';
       provideRepliesBtn.className = 'tiny-btn youtube-miner-provide-replies-btn';
       provideRepliesBtn.textContent = 'Provide Replies';
+      function updateProvideRepliesBtnState() {
+        var currentFeedback = readFeedback(row);
+        var hasReplyDraft = Boolean(
+          safeText(row && row.reply_draft)
+          || safeText(currentFeedback && currentFeedback.suggested_response)
+        );
+        provideRepliesBtn.classList.toggle('is-ready', hasReplyDraft);
+        provideRepliesBtn.classList.toggle('is-pending', !hasReplyDraft);
+      }
+      updateProvideRepliesBtnState();
       provideRepliesBtn.addEventListener('click', function() {
         openProvideRepliesModal(row, readFeedback(row), function(selectedReply, selectedOfferFeedback) {
           row.reply_draft = selectedReply;
@@ -2101,6 +2111,7 @@ App.youtube = (function () {
             suggested_response: selectedReply,
             offer_feedback: selectedOfferFeedback,
           });
+          updateProvideRepliesBtnState();
           notify('Reply selected');
         });
       });
