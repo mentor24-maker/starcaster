@@ -2287,8 +2287,6 @@ App.youtube = (function () {
     var result = run && run.result ? run.result : null;
     if (!result) throw new Error('Research run has no result payload.');
     setYoutubeMinerMode('training');
-    setYoutubeMinerCollapsibleOpen('youtubeResearchBody', true);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerTrainingBody', true);
     setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', true);
     renderYoutubeResearchResult(result);
     renderYoutubeCommentMinerResult(result);
@@ -2298,9 +2296,9 @@ App.youtube = (function () {
     if (comments.length) summary += ' (' + comments.length + ' comments)';
     else if (distilledTargets.length) summary += ' (' + distilledTargets.length + ' distilled targets, 0 comments)';
     notify(summary);
-    var summaryEl = document.getElementById('youtubeResearchSummary');
-    if (summaryEl && typeof summaryEl.scrollIntoView === 'function') {
-      summaryEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var contentEl = document.getElementById('youtubeMinerContentBody');
+    if (contentEl && typeof contentEl.scrollIntoView === 'function') {
+      contentEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 
@@ -3038,6 +3036,13 @@ App.youtube = (function () {
     bindYoutubeMinerConfigEvents('approach');
     setYoutubeMinerMode('training');
     setupYoutubeMinerCollapsibles();
+    // Keep the YouTube miner sections collapsed by default.
+    setYoutubeMinerCollapsibleOpen('youtubeResearchBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerTrainingBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerCategoriesBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerResponseContextBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerRepositoryBody', false);
     refreshYoutubeResearchCategoryHashtagHints().catch(function(err) {
       notify(err.message || 'Could not load messaging categories/hashtags for research', true);
     });
