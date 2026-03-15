@@ -705,10 +705,6 @@
       <section id="acquireYoutubePage" class="app-page hidden">
         <div class="page-heading-row">
         <h2>Acquire: YouTube</h2>
-        <div class="page-heading-actions">
-          <button type="button" onclick="App.setActivePage('youtubeCommentsPage')">Comments</button>
-          <button type="button" id="youtubeCategoriesOpenBtn">Categories</button>
-        </div>
         </div>
         <section class="youtube-miner-collapsible is-open">
           <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeResearchBody" aria-expanded="true">
@@ -719,10 +715,6 @@
             <p>Research starts from messaging phrases (articles, tweets, hashtags) and manual terms, discovers top YouTube targets, then distills prospects for Targeting.</p>
             <form id="youtubeResearchForm" class="stack-form labeled-form">
               <div class="grid-form" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start;">
-                <div class="form-row">
-                  <label for="youtubeResearchManualPhrases">Search Phrases</label>
-                  <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="One phrase per line"></textarea>
-                </div>
                 <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
                   <div class="form-row">
                     <label for="youtubeResearchMessagingCategory">Messaging Category</label>
@@ -735,6 +727,12 @@
                     <select id="youtubeResearchHashtagSelect" name="messaging_hashtag">
                       <option value="">All Hashtags</option>
                     </select>
+                  </div>
+                  <div class="form-row checkbox-row">
+                    <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
+                  </div>
+                  <div class="form-row checkbox-row">
+                    <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
                   </div>
                   <div class="form-row">
                     <label for="youtubeResearchMaxPhrases">Max Phrases</label>
@@ -752,11 +750,10 @@
                     <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
                     <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
                   </div>
-                  <div class="form-row checkbox-row" style="grid-column: 1 / -1;">
-                    <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
-                    <label><input id="youtubeResearchIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
-                    <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
-                  </div>
+                </div>
+                <div class="form-row">
+                  <label for="youtubeResearchManualPhrases">Search Phrases</label>
+                  <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="One phrase per line"></textarea>
                 </div>
               </div>
               <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
@@ -945,7 +942,7 @@
 
               <section class="youtube-miner-collapsible is-open">
                 <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerResponseContextBody" aria-expanded="true">
-                  <span>Response Context</span>
+                  <span>Context</span>
                   <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
                 </button>
                 <div id="youtubeMinerResponseContextBody" class="youtube-miner-collapsible-body">
