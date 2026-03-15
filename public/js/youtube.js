@@ -1986,6 +1986,7 @@ App.youtube = (function () {
 
     comments = comments.filter(function(row) {
       var rowFeedback = readFeedback(row);
+      if (rowFeedback && rowFeedback.ignored) return false;
       var isReviewed = feedbackHasReview(rowFeedback);
       var rowCategory = safeText(row && row.category);
       if (categoryFilter && rowCategory !== categoryFilter) return false;
@@ -2353,10 +2354,9 @@ App.youtube = (function () {
       ignoreBtn.className = 'tiny-btn youtube-miner-ignore-btn';
       function updateProvideRepliesBtnState() {
         var currentFeedback = readFeedback(row);
-        var isIgnored = Boolean(currentFeedback && currentFeedback.ignored);
-        ignoreBtn.textContent = isIgnored ? 'Unignore' : 'Ignore';
-        ignoreBtn.classList.toggle('is-ignored', isIgnored);
-        tr.classList.toggle('youtube-miner-row-ignored', isIgnored);
+        ignoreBtn.textContent = 'Ignore';
+        ignoreBtn.classList.remove('is-ignored');
+        tr.classList.remove('youtube-miner-row-ignored');
         var hasSubmittedRepliesForm = toArray(currentFeedback && currentFeedback.offer_feedback).some(function(item) {
           return Boolean(
             item
@@ -2374,14 +2374,16 @@ App.youtube = (function () {
       updateProvideRepliesBtnState();
       ignoreBtn.addEventListener('click', function() {
         var currentFeedback = readFeedback(row);
-        var nextIgnored = !Boolean(currentFeedback && currentFeedback.ignored);
+        if (Boolean(currentFeedback && currentFeedback.ignored)) {
+          notify('Comment already ignored');
+          return;
+        }
         var nextApproaches = toArray(currentFeedback && currentFeedback.approaches);
-        if (nextIgnored && nextApproaches.indexOf('ignore') === -1) nextApproaches.push('ignore');
-        if (!nextIgnored) nextApproaches = nextApproaches.filter(function(item) { return safeText(item).toLowerCase() !== 'ignore'; });
+        if (nextApproaches.indexOf('ignore') === -1) nextApproaches.push('ignore');
         saveFeedback(row, {
-          ignored: nextIgnored,
+          ignored: true,
           approaches: nextApproaches,
-          response_type: nextIgnored ? 'ignore' : safeText(currentFeedback && currentFeedback.response_type),
+          response_type: 'ignore',
         });
         var updated = readFeedback(row);
         var nowReviewed = feedbackHasReview(updated);
@@ -2392,8 +2394,8 @@ App.youtube = (function () {
             + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : '')
             + (updated.approaches.length ? (' | ' + updated.approaches.join(', ')) : ''))
           : (nowReviewed ? 'Reviewed' : '-');
-        updateProvideRepliesBtnState();
-        notify(nextIgnored ? 'Comment marked ignore' : 'Comment unignored');
+        notify('Comment marked ignore');
+        renderYoutubeCommentMinerResult(youtubeMinerLastResult || {});
       });
       provideRepliesBtn.addEventListener('click', function() {
         openProvideRepliesModal(row, readFeedback(row), function(selectedReply, selectedOfferFeedback) {
