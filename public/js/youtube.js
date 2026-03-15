@@ -2160,6 +2160,19 @@ App.youtube = (function () {
     });
   }
 
+  function setYoutubeMinerCollapsibleOpen(targetId, open) {
+    var id = safeText(targetId);
+    if (!id) return;
+    var body = document.getElementById(id);
+    if (!body) return;
+    var container = body.closest('.youtube-miner-collapsible');
+    if (!container) return;
+    var toggle = container.querySelector('.youtube-miner-collapsible-toggle[data-target-id]');
+    var shouldOpen = open !== false;
+    container.classList.toggle('is-open', shouldOpen);
+    if (toggle) toggle.setAttribute('aria-expanded', String(shouldOpen));
+  }
+
   function applyYoutubeMinerInputToForm(formEl, input) {
     if (!formEl || !input || typeof input !== 'object') return;
     function setValue(name, value) {
@@ -2273,9 +2286,22 @@ App.youtube = (function () {
     var run = res.run || null;
     var result = run && run.result ? run.result : null;
     if (!result) throw new Error('Research run has no result payload.');
+    setYoutubeMinerMode('training');
+    setYoutubeMinerCollapsibleOpen('youtubeResearchBody', true);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerTrainingBody', true);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', true);
     renderYoutubeResearchResult(result);
     renderYoutubeCommentMinerResult(result);
-    notify('Research run loaded');
+    var comments = toArray(result && result.comments);
+    var distilledTargets = toArray(result?.research?.distilled_targets);
+    var summary = 'Research run loaded';
+    if (comments.length) summary += ' (' + comments.length + ' comments)';
+    else if (distilledTargets.length) summary += ' (' + distilledTargets.length + ' distilled targets, 0 comments)';
+    notify(summary);
+    var summaryEl = document.getElementById('youtubeResearchSummary');
+    if (summaryEl && typeof summaryEl.scrollIntoView === 'function') {
+      summaryEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   function renderYoutubeRunsTable() {
