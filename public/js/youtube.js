@@ -1638,6 +1638,35 @@ App.youtube = (function () {
     return trimmed.slice(0, 117) + '...';
   }
 
+  function normalizeReplyCandidate(text) {
+    return safeText(text)
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .trim();
+  }
+
+  function collectUsedRepliesForCurrentRun(excludeRow) {
+    var used = new Set();
+    var excludeVideo = safeText(excludeRow && excludeRow.video_id);
+    var excludeComment = safeText(excludeRow && excludeRow.id);
+    toArray(youtubeMinerLastResult && youtubeMinerLastResult.comments).forEach(function(row) {
+      var rowVideo = safeText(row && row.video_id);
+      var rowComment = safeText(row && row.id);
+      if (excludeVideo && excludeComment && rowVideo === excludeVideo && rowComment === excludeComment) return;
+      var feedback = readFeedback(row);
+      var picked = safeText(feedback && feedback.suggested_response);
+      if (picked) used.add(normalizeReplyCandidate(picked));
+      toArray(feedback && feedback.offer_feedback).forEach(function(item) {
+        if (item && item.selected && safeText(item.response)) {
+          used.add(normalizeReplyCandidate(item.response));
+        }
+      });
+    });
+    return used;
+  }
+
   function scoreCorpusMatch(entry, row, feedback) {
     var score = 0;
     var rowCats = mergeTargetsUnique(toArray(row && (row.category ? [row.category] : [])), toArray(feedback && feedback.categories)).map(function(v) { return v.toLowerCase(); });
@@ -1732,51 +1761,77 @@ App.youtube = (function () {
     var persona = attributes ? (' (' + attributes + ')') : '';
     var quote = focus ? (' "' + focus + '"') : '';
 
-    if (variant === 1) {
-      return stripDiscouragedPhrases(
-        prefix + angle + persona + '.' + quote + contextHint +
-        ' If you had to pick one concrete change for the next 7 days, what would it be?',
-        learning.discouraged
-      );
-    }
-    if (variant === 2) {
-      return stripDiscouragedPhrases(
-        'What I hear in your comment is a transition from old patterns to something more intentional.' + quote +
-        (category ? (' The category I\'d map this to is ' + category + '.') : '') +
-        ' A practical move is to define one boundary and one new habit this week.',
-        learning.discouraged
-      );
-    }
-    return stripDiscouragedPhrases(
-      'This comment feels directionally clear: you want movement, not more noise.' + quote +
-      ' I\'d respond with one focused experiment this week and a quick reflection on what changed.' +
-      (contextHint ? contextHint : ''),
-      learning.discouraged
-    );
+    var templates = [
+      prefix + angle + persona + '.' + quote + contextHint
+        + ' If you had to pick one concrete change for the next 7 days, what would it be?',
+      'What I hear in your comment is a transition from old patterns to something more intentional.' + quote
+        + (category ? (' The category I\'d map this to is ' + category + '.') : '')
+        + ' A practical move is to define one boundary and one new habit this week.',
+      'This comment feels directionally clear: you want movement, not more noise.' + quote
+        + ' I\'d respond with one focused experiment this week and a quick reflection on what changed.'
+        + (contextHint ? contextHint : ''),
+      'You already named the core tension.' + quote
+        + ' The useful next step is deciding what you\'re done tolerating and what standard replaces it.',
+      'There\'s a lot of self-awareness in this.' + quote
+        + ' If you turn that into one public commitment, momentum usually follows.',
+      'This reads like someone outgrowing an old script.' + quote
+        + ' A strong response is to ask: what identity are you ready to practice daily now?',
+      'You\'re not confused, you\'re at an inflection point.' + quote
+        + ' I\'d challenge this with one measurable action this week and a short debrief after.',
+      'I like the honesty here.' + quote
+        + ' Consider reframing it as a design question: what environment would make your next version inevitable?'
+    ];
+    var index = Math.max(0, (Number(variant) || 1) - 1) % templates.length;
+    return stripDiscouragedPhrases(templates[index], learning.discouraged);
   }
 
   function buildProvideReplyOffers(row, feedback) {
     var explicitSuggestion = safeText(feedback && feedback.suggested_response);
     var learning = buildReplyLearningProfile(row, feedback);
+    var usedInRun = collectUsedRepliesForCurrentRun(row);
     var offers = [];
+    var seen = new Set();
 
-    if (explicitSuggestion) offers.push(explicitSuggestion);
+    function pushUnique(candidate) {
+      var text = safeText(candidate);
+      if (!text) return;
+      var cleaned = stripDiscouragedPhrases(text, learning.discouraged);
+      var normalized = normalizeReplyCandidate(cleaned);
+      if (!normalized) return;
+      if (seen.has(normalized)) return;
+      if (usedInRun.has(normalized)) return;
+      seen.add(normalized);
+      offers.push(cleaned);
+    }
+
+    if (explicitSuggestion) pushUnique(explicitSuggestion);
     toArray(learning.preferred).forEach(function(sample) {
       if (offers.length >= 3) return;
-      var cleaned = stripDiscouragedPhrases(sample, learning.discouraged);
-      if (cleaned) offers.push(cleaned);
+      pushUnique(sample);
     });
 
     var variant = 1;
-    while (offers.length < 3 && variant <= 6) {
-      var candidate = synthesizeReply(row, feedback, learning, variant);
-      if (candidate) offers.push(candidate);
+    while (offers.length < 3 && variant <= 24) {
+      pushUnique(synthesizeReply(row, feedback, learning, variant));
       variant += 1;
     }
 
-    offers = mergeTargetsUnique([], offers).map(function(item) {
-      return stripDiscouragedPhrases(item, learning.discouraged);
-    }).filter(Boolean);
+    if (offers.length < 3) {
+      var focus = commentFocusSnippet(safeText(row && row.text));
+      while (offers.length < 3) {
+        var idx = offers.length + 1;
+        var fallback = 'I hear you. ' + (focus ? ('You said "' + focus + '". ') : '')
+          + 'If you had to choose one next move today, what would it be (' + idx + ')?';
+        var normalizedFallback = normalizeReplyCandidate(fallback);
+        if (!seen.has(normalizedFallback)) {
+          seen.add(normalizedFallback);
+          offers.push(fallback);
+        } else {
+          offers.push(fallback + ' ');
+        }
+      }
+    }
+
     return offers.slice(0, 3);
   }
 
