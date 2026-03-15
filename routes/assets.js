@@ -51,6 +51,9 @@ async function handle(req, res, pathname, method) {
   const scope = {
     projectId: String(req?.projectContext?.project?.id || '').trim(),
     userId: String(req?.authUser?.id || '').trim(),
+    projectIds: Array.isArray(req?.projectContext?.projects)
+      ? req.projectContext.projects.map((project) => String(project?.id || '').trim()).filter(Boolean)
+      : [],
   };
 
   if (isAssetsPath && requestMethod === 'GET') {
