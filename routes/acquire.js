@@ -50,6 +50,10 @@ const {
   listCommentRuns,
   getCommentRun,
   deleteCommentRun,
+  createMinerRun,
+  listMinerRuns,
+  getMinerRun,
+  listTargetHistory,
   createResearchRun,
   listResearchRuns,
   getResearchRun,
@@ -1050,6 +1054,13 @@ async function handle(req, res, pathname, method) {
       sort_by: String(body?.sort_by || 'relevance'),
       min_score: Number(body?.min_score || 3) || 3,
       exclude_noise: body?.exclude_noise !== false,
+      include_phrases_text: safeText(body?.include_phrases_text),
+      exclude_phrases_text: safeText(body?.exclude_phrases_text),
+      category_config: Array.isArray(body?.category_config) ? body.category_config : [],
+      attribute_config: Array.isArray(body?.attribute_config) ? body.attribute_config : [],
+      approach_config: Array.isArray(body?.approach_config) ? body.approach_config : [],
+      response_context: safeText(body?.response_context),
+      training_feedback: Array.isArray(body?.training_feedback) ? body.training_feedback : [],
     };
 
     const mined = await runYoutubeCommentMiner(input);
@@ -1059,12 +1070,16 @@ async function handle(req, res, pathname, method) {
       }), true;
     }
 
+    const saveRes = await createMinerRun(input, mined.data || {});
+    const runId = saveRes?.ok ? safeText(saveRes?.data?.run_id) : '';
+
     logActivity({
       action: 'acquire.youtube_comment_miner',
       entityType: 'acquire',
-      entityId: null,
+      entityId: runId || null,
       summary: `YouTube Comment Miner processed ${Number(mined?.data?.stats?.harvested_videos || 0) || 0} videos`,
       meta: {
+        run_id: runId || null,
         resolved_videos: Number(mined?.data?.stats?.resolved_videos || 0) || 0,
         harvested_videos: Number(mined?.data?.stats?.harvested_videos || 0) || 0,
         total_comments_raw: Number(mined?.data?.stats?.total_comments_raw || 0) || 0,
@@ -1072,7 +1087,7 @@ async function handle(req, res, pathname, method) {
       },
     });
 
-    return sendOk(res, 200, mined.data, { result: mined.data }), true;
+    return sendOk(res, 200, { run_id: runId, result: mined.data }, { run_id: runId, result: mined.data }), true;
   }
 
   // POST /api/acquire/youtube-research — build targets from messaging + phrases, then mine/distill
@@ -1248,6 +1263,31 @@ async function handle(req, res, pathname, method) {
     const result = await getResearchRun(id);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
+  }
+
+  // GET /api/acquire/youtube-miner-runs
+  if (pathname === '/api/acquire/youtube-miner-runs' && method === 'GET') {
+    const limit = Number(urlObj.searchParams.get('limit') || 30);
+    const result = await listMinerRuns(limit);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data || [], { runs: result.data || [] }, { total: Array.isArray(result.data) ? result.data.length : 0 }), true;
+  }
+
+  // GET /api/acquire/youtube-miner-runs/:id
+  const youtubeMinerRunMatch = pathname.match(/^\/api\/acquire\/youtube-miner-runs\/([^/]+)$/);
+  if (youtubeMinerRunMatch && method === 'GET') {
+    const id = decodeURIComponent(youtubeMinerRunMatch[1]);
+    const result = await getMinerRun(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { run: result.data }), true;
+  }
+
+  // GET /api/acquire/youtube-target-history
+  if (pathname === '/api/acquire/youtube-target-history' && method === 'GET') {
+    const limit = Number(urlObj.searchParams.get('limit') || 400);
+    const result = await listTargetHistory(limit);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data || [], { targets: result.data || [] }, { total: Array.isArray(result.data) ? result.data.length : 0 }), true;
   }
 
   // POST /api/acquire/youtube-comment — ⚡ RATE LIMITED (writes to YouTube)

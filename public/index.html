@@ -805,6 +805,13 @@
                     <div class="youtube-miner-col-left">
                       <div class="form-row">
                         <label for="youtubeMinerTargets">Video/Channel Targets</label>
+                        <div class="youtube-miner-target-history-row">
+                          <select id="youtubeMinerTargetHistorySelect" aria-label="Previously entered targets">
+                            <option value="">Previously entered targets…</option>
+                          </select>
+                          <button type="button" id="youtubeMinerTargetHistoryAddBtn">Add Selected</button>
+                          <button type="button" id="youtubeMinerTargetHistoryRefreshBtn">Refresh</button>
+                        </div>
                         <textarea id="youtubeMinerTargets" name="targets" rows="3" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
                       </div>
                     </div>
