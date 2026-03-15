@@ -2095,12 +2095,19 @@ App.youtube = (function () {
       provideRepliesBtn.textContent = 'Provide Replies';
       function updateProvideRepliesBtnState() {
         var currentFeedback = readFeedback(row);
-        var hasReplyDraft = Boolean(
-          safeText(row && row.reply_draft)
-          || safeText(currentFeedback && currentFeedback.suggested_response)
-        );
-        provideRepliesBtn.classList.toggle('is-ready', hasReplyDraft);
-        provideRepliesBtn.classList.toggle('is-pending', !hasReplyDraft);
+        var hasSubmittedRepliesForm = toArray(currentFeedback && currentFeedback.offer_feedback).some(function(item) {
+          return Boolean(
+            item
+            && (
+              item.selected === true
+              || Number(item.rating || 0) > 0
+              || safeText(item.why)
+              || safeText(item.response)
+            )
+          );
+        });
+        provideRepliesBtn.classList.toggle('is-ready', hasSubmittedRepliesForm);
+        provideRepliesBtn.classList.toggle('is-pending', !hasSubmittedRepliesForm);
       }
       updateProvideRepliesBtnState();
       provideRepliesBtn.addEventListener('click', function() {
