@@ -93,6 +93,14 @@ function splitPhraseList(value) {
     .filter(Boolean);
 }
 
+function splitTagList(value) {
+  return String(value || '')
+    .split(/[\s,|;]+/g)
+    .map((item) => safeText(item).toLowerCase())
+    .filter(Boolean)
+    .map((item) => (item.startsWith('#') ? item : `#${item}`));
+}
+
 function normalizeKeyword(value) {
   return safeText(value)
     .toLowerCase()
@@ -128,6 +136,22 @@ function extractPhraseCandidatesFromRow(row = {}) {
         return;
       }
       keywordsFromText(value).forEach((k) => out.push(k));
+    }
+  });
+  return out.filter(Boolean);
+}
+
+function extractTagCandidatesFromRow(row = {}) {
+  const out = [];
+  Object.entries(row || {}).forEach(([key, value]) => {
+    const field = String(key || '').toLowerCase();
+    if (field.includes('hashtag') || field === 'tag' || field === 'tags') {
+      splitTagList(value).forEach((tag) => out.push(tag));
+      return;
+    }
+    if (typeof value === 'string' && value.indexOf('#') >= 0) {
+      const matches = value.match(/#[a-z0-9_]+/gi) || [];
+      matches.forEach((tag) => out.push(safeText(tag).toLowerCase()));
     }
   });
   return out.filter(Boolean);
@@ -1063,6 +1087,8 @@ async function handle(req, res, pathname, method) {
 
     const rawManualPhrases = splitPhraseList(body?.manual_phrases_text || body?.manual_phrases || '');
     const includeMessaging = body?.include_messaging !== false;
+    const messagingCategory = safeText(body?.messaging_category || '').toLowerCase();
+    const messagingHashtag = safeText(body?.messaging_hashtag || '').toLowerCase();
     const maxPhrases = Math.max(1, Math.min(Number(body?.max_phrases || 25) || 25, 120));
     const videosPerPhrase = Math.max(1, Math.min(Number(body?.videos_per_phrase || 3) || 3, 10));
     const distilledTargetLimit = Math.max(1, Math.min(Number(body?.distilled_target_limit || 30) || 30, 200));
@@ -1078,7 +1104,13 @@ async function handle(req, res, pathname, method) {
         { table: tables.messagingArticles, label: 'articles' },
       ];
       for (const source of sourceDefs) {
-        const rows = await fetchMessagingRows(source.table, 150);
+        let rows = await fetchMessagingRows(source.table, 150);
+        if (messagingCategory) {
+          rows = rows.filter((row) => safeText(row?.category || '').toLowerCase() === messagingCategory);
+        }
+        if (messagingHashtag) {
+          rows = rows.filter((row) => extractTagCandidatesFromRow(row).includes(messagingHashtag));
+        }
         const sourcePhrases = dedupePhrases(rows.flatMap(extractPhraseCandidatesFromRow), 50);
         if (sourcePhrases.length) {
           messagingPhrases.push(...sourcePhrases);
@@ -1163,6 +1195,8 @@ async function handle(req, res, pathname, method) {
         videos_per_phrase: videosPerPhrase,
         distilled_target_limit: distilledTargetLimit,
         include_transcript: body?.include_transcript === true,
+        messaging_category: messagingCategory,
+        messaging_hashtag: messagingHashtag,
       },
     };
     const saveRes = await createResearchRun(researchInput, mined.data || {});

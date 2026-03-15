@@ -43,6 +43,7 @@ App.youtube = (function () {
   var youtubeMinerContextSaveTimer = null;
   var youtubeMinerContextSaving = false;
   var youtubeResearchLastResult = null;
+  var youtubeResearchMessagingCache = null;
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
 
@@ -582,6 +583,149 @@ App.youtube = (function () {
       return parsed && typeof parsed === 'object' ? parsed : null;
     } catch (_) {
       return null;
+    }
+  }
+
+  function parseTagTokens(value) {
+    return String(value || '')
+      .split(/[\s,|;]+/g)
+      .map(function(item) { return safeText(item).toLowerCase(); })
+      .map(function(item) { return item.startsWith('#') ? item : '#' + item; })
+      .filter(function(item) { return item.length > 1; });
+  }
+
+  function phraseFromTag(tag) {
+    return safeText(String(tag || '').replace(/^#/, '').replace(/[_-]+/g, ' '));
+  }
+
+  function collectTagsFromRecord(record) {
+    var tags = [];
+    Object.keys(record || {}).forEach(function(key) {
+      var field = String(key || '').toLowerCase();
+      if (field.includes('hashtag') || field === 'tags') {
+        tags = tags.concat(parseTagTokens(record[key]));
+        return;
+      }
+      var value = record[key];
+      if (typeof value === 'string' && value.indexOf('#') >= 0) {
+        var matches = value.match(/#[a-z0-9_]+/gi) || [];
+        tags = tags.concat(matches.map(function(item) { return safeText(item).toLowerCase(); }));
+      }
+    });
+    return Array.from(new Set(tags)).slice(0, 200);
+  }
+
+  async function loadYoutubeResearchMessagingCache() {
+    if (youtubeResearchMessagingCache) return youtubeResearchMessagingCache;
+    var requests = [
+      api('/api/messaging/categories?limit=5000'),
+      api('/api/messaging/hashtags?limit=5000'),
+      api('/api/messaging/articles?limit=5000'),
+      api('/api/messaging/posts?limit=5000'),
+      api('/api/messaging/tweets?limit=5000'),
+    ];
+    var results = await Promise.allSettled(requests);
+    var categories = [];
+    var hashtags = [];
+    var articles = [];
+    var posts = [];
+    var tweets = [];
+    if (results[0].status === 'fulfilled') categories = toArray(results[0].value?.categories);
+    if (results[1].status === 'fulfilled') hashtags = toArray(results[1].value?.hashtags);
+    if (results[2].status === 'fulfilled') articles = toArray(results[2].value?.articles);
+    if (results[3].status === 'fulfilled') posts = toArray(results[3].value?.posts);
+    if (results[4].status === 'fulfilled') tweets = toArray(results[4].value?.tweets);
+    youtubeResearchMessagingCache = {
+      categories: categories,
+      hashtags: hashtags,
+      records: [].concat(hashtags, articles, posts, tweets),
+    };
+    return youtubeResearchMessagingCache;
+  }
+
+  function populateYoutubeResearchCategoryOptions(categories, selectedCategory) {
+    var select = document.getElementById('youtubeResearchMessagingCategory');
+    if (!select) return;
+    var current = safeText(selectedCategory || select.value);
+    select.innerHTML = '<option value="">All Categories</option>';
+    var rows = toArray(categories).slice().sort(function(a, b) {
+      return safeText(a && a.category).localeCompare(safeText(b && b.category));
+    });
+    rows.forEach(function(row) {
+      var name = safeText(row && row.category);
+      if (!name) return;
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (name === current) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  function populateYoutubeResearchHashtagOptions(records, category, selectedHashtag) {
+    var select = document.getElementById('youtubeResearchHashtagSelect');
+    if (!select) return;
+    var current = safeText(selectedHashtag || select.value).toLowerCase();
+    var cat = safeText(category).toLowerCase();
+    var tags = [];
+    toArray(records).forEach(function(record) {
+      var recCategory = safeText(record && record.category).toLowerCase();
+      if (cat && recCategory !== cat) return;
+      tags = tags.concat(collectTagsFromRecord(record));
+    });
+    tags = Array.from(new Set(tags)).sort();
+    select.innerHTML = '<option value="">All Hashtags</option>';
+    tags.forEach(function(tag) {
+      var opt = document.createElement('option');
+      opt.value = tag;
+      opt.textContent = tag;
+      if (tag === current) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  function buildYoutubeResearchSuggestedPhrases(records, category, hashtag, limit) {
+    var cap = Math.max(1, Math.min(Number(limit) || 10, 20));
+    var cat = safeText(category).toLowerCase();
+    var hash = safeText(hashtag).toLowerCase();
+    var scores = {};
+
+    toArray(records).forEach(function(record) {
+      var recCategory = safeText(record && record.category).toLowerCase();
+      if (cat && recCategory !== cat) return;
+      var tags = collectTagsFromRecord(record);
+      if (hash && !tags.includes(hash)) return;
+      tags.forEach(function(tag) {
+        if (!tag) return;
+        scores[tag] = Number(scores[tag] || 0) + 1;
+      });
+    });
+
+    return Object.keys(scores)
+      .sort(function(a, b) { return Number(scores[b] || 0) - Number(scores[a] || 0); })
+      .map(phraseFromTag)
+      .filter(Boolean)
+      .slice(0, cap);
+  }
+
+  async function refreshYoutubeResearchCategoryHashtagHints() {
+    var cache = await loadYoutubeResearchMessagingCache();
+    var categorySelect = document.getElementById('youtubeResearchMessagingCategory');
+    var hashtagSelect = document.getElementById('youtubeResearchHashtagSelect');
+    var phrasesArea = document.getElementById('youtubeResearchManualPhrases');
+    if (!categorySelect || !hashtagSelect || !phrasesArea) return;
+
+    var selectedCategory = safeText(categorySelect.value);
+    var selectedHashtag = safeText(hashtagSelect.value).toLowerCase();
+    populateYoutubeResearchCategoryOptions(cache.categories, selectedCategory);
+    populateYoutubeResearchHashtagOptions(cache.records, selectedCategory, selectedHashtag);
+
+    // Re-resolve after options are rebuilt.
+    selectedCategory = safeText(categorySelect.value);
+    selectedHashtag = safeText(hashtagSelect.value).toLowerCase();
+    var suggestions = buildYoutubeResearchSuggestedPhrases(cache.records, selectedCategory, selectedHashtag, 10);
+    if (suggestions.length) {
+      phrasesArea.value = suggestions.join('\n');
     }
   }
 
@@ -2691,6 +2835,8 @@ App.youtube = (function () {
     var youtubeResearchSubmitBtn = document.getElementById('youtubeResearchSubmitBtn');
     var youtubeResearchRefreshBtn = document.getElementById('youtubeResearchRefreshBtn');
     var youtubeResearchSendToTargetingBtn = document.getElementById('youtubeResearchSendToTargetingBtn');
+    var youtubeResearchMessagingCategory = document.getElementById('youtubeResearchMessagingCategory');
+    var youtubeResearchHashtagSelect = document.getElementById('youtubeResearchHashtagSelect');
     if (youtubeResearchForm) {
       youtubeResearchForm.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -2705,6 +2851,8 @@ App.youtube = (function () {
             max_comments_per_video: Number(formData.get('max_comments_per_video') || 100) || 100,
             include_replies: formData.get('include_replies') === 'on',
             include_transcript: formData.get('include_transcript') === 'on',
+            messaging_category: safeText(formData.get('messaging_category')),
+            messaging_hashtag: safeText(formData.get('messaging_hashtag')),
             include_phrases_text: '',
             exclude_phrases_text: '',
             category_config: collectYoutubeMinerCategoryConfigFromUi(),
@@ -2728,6 +2876,20 @@ App.youtube = (function () {
         } finally {
           if (youtubeResearchSubmitBtn) youtubeResearchSubmitBtn.disabled = false;
         }
+      });
+    }
+    if (youtubeResearchMessagingCategory) {
+      youtubeResearchMessagingCategory.addEventListener('change', function() {
+        refreshYoutubeResearchCategoryHashtagHints().catch(function(err) {
+          notify(err.message || 'Could not refresh category suggestions', true);
+        });
+      });
+    }
+    if (youtubeResearchHashtagSelect) {
+      youtubeResearchHashtagSelect.addEventListener('change', function() {
+        refreshYoutubeResearchCategoryHashtagHints().catch(function(err) {
+          notify(err.message || 'Could not refresh hashtag suggestions', true);
+        });
       });
     }
     if (youtubeResearchRefreshBtn) {
@@ -2850,6 +3012,9 @@ App.youtube = (function () {
     bindYoutubeMinerConfigEvents('approach');
     setYoutubeMinerMode('training');
     setupYoutubeMinerCollapsibles();
+    refreshYoutubeResearchCategoryHashtagHints().catch(function(err) {
+      notify(err.message || 'Could not load messaging categories/hashtags for research', true);
+    });
     var restoredResearch = loadYoutubeResearchLastResult();
     if (restoredResearch) {
       renderYoutubeResearchResult(restoredResearch);
