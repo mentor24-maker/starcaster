@@ -967,6 +967,27 @@
                   </div>
                 </div>
               </section>
+
+              <section class="youtube-miner-collapsible is-open">
+                <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerGuidelinesBody" aria-expanded="true">
+                  <span>Guidelines / Rules</span>
+                  <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+                </button>
+                <div id="youtubeMinerGuidelinesBody" class="youtube-miner-collapsible-body">
+                  <div class="form-row">
+                    <label for="youtubeMinerGuidelines">
+                      Operational rules for reply drafting (style, constraints, do/don't)
+                    </label>
+                    <textarea
+                      id="youtubeMinerGuidelines"
+                      name="response_guidelines"
+                      rows="6"
+                      placeholder="- Never reuse the exact same reply text across comments&#10;- Always anchor response to the specific comment text&#10;- Ask one useful follow-up question max&#10;- Avoid generic coaching templates"
+                    ></textarea>
+                    <p class="muted">Use this for tactical rules. Keep project narrative and references in Context.</p>
+                  </div>
+                </div>
+              </section>
               <button type="submit" id="youtubeCommentMinerSubmitBtn">Run Training Miner</button>
             </form>
 
