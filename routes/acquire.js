@@ -331,6 +331,40 @@ function extractJsonFromText(text) {
   return null;
 }
 
+function normalizeOffersFromFreeformText(text) {
+  const raw = safeText(text);
+  if (!raw) return [];
+  const blocks = raw
+    .split(/\n{2,}/g)
+    .map((item) => safeText(item))
+    .filter(Boolean);
+  const lines = raw
+    .split(/\r?\n/g)
+    .map((item) => safeText(item))
+    .filter(Boolean);
+  const candidates = blocks.concat(lines)
+    .map((line) => line
+      .replace(/^[\-\*\u2022]\s*/, '')
+      .replace(/^\d+[\)\].:-]?\s*/, '')
+      .replace(/^offer\s*\d+[:\-]?\s*/i, '')
+      .replace(/^reply\s*\d+[:\-]?\s*/i, '')
+      .replace(/^why[:\-]?\s*/i, '')
+      .trim())
+    .filter((line) => line.length >= 20)
+    .filter((line) => !/^(strict json|json only|return only|no markdown)/i.test(line));
+
+  const deduped = [];
+  const seen = new Set();
+  for (const line of candidates) {
+    const key = line.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push({ text: line, why: '' });
+    if (deduped.length >= 3) break;
+  }
+  return deduped;
+}
+
 async function callOpenClawResponses(inputPayload) {
   const cfg = getProviderValues('openclaw');
   const baseUrl = safeText(cfg?.base_url).replace(/\/+$/, '');
@@ -489,71 +523,124 @@ async function callOpenClawYoutubeReplyOffers(inputPayload) {
     `ALREADY USED REPLIES IN CURRENT RUN (MUST AVOID): ${usedReplies.join(' | ') || '(none)'}`,
   ].join('\n');
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(`${baseUrl}/v1/responses`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openclaw:main',
-        input: prompt,
-      }),
-      signal: controller.signal,
-    });
-    const raw = await response.text();
-    let payload = null;
+  async function sendPrompt(inputText) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      payload = raw ? JSON.parse(raw) : {};
-    } catch {
-      payload = { raw };
+      const response = await fetch(`${baseUrl}/v1/responses`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'openclaw:main',
+          input: inputText,
+        }),
+        signal: controller.signal,
+      });
+      const raw = await response.text();
+      let payload = null;
+      try {
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        payload = { raw };
+      }
+      if (!response.ok) {
+        return {
+          ok: false,
+          status: response.status || 502,
+          error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
+          data: payload,
+        };
+      }
+      return { ok: true, status: response.status || 200, data: payload };
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
+      }
+      return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
+    } finally {
+      clearTimeout(timer);
     }
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status || 502,
-        error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
-        data: payload,
-      };
-    }
-
-    const outputText = extractOpenClawOutputText(payload || {});
-    const parsed = extractJsonFromText(outputText);
-    const offers = toArray(parsed?.offers).map((item) => ({
-      text: safeText(item?.text || item?.offer || item?.response),
-      why: safeText(item?.why || item?.reason),
-    })).filter((item) => item.text);
-
-    const deduped = [];
-    const seen = new Set();
-    for (const offer of offers) {
-      const key = offer.text.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      deduped.push(offer);
-      if (deduped.length >= 3) break;
-    }
-    if (deduped.length < 3) {
-      return {
-        ok: false,
-        status: 502,
-        error: 'OpenClaw returned invalid offers payload',
-        data: { output: outputText },
-      };
-    }
-
-    return { ok: true, status: 200, data: { offers: deduped } };
-  } catch (err) {
-    if (err?.name === 'AbortError') {
-      return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
-    }
-    return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
-  } finally {
-    clearTimeout(timer);
   }
+
+  function normalizeOffersFromParsed(parsed) {
+    const candidateArrays = [
+      parsed?.offers,
+      parsed?.replies,
+      parsed?.options,
+      parsed?.data?.offers,
+      parsed?.result?.offers,
+    ];
+    for (const candidate of candidateArrays) {
+      if (!Array.isArray(candidate)) continue;
+      const normalized = candidate.map((item) => {
+        if (typeof item === 'string') return { text: safeText(item), why: '' };
+        return {
+          text: safeText(item?.text || item?.offer || item?.response || item?.reply),
+          why: safeText(item?.why || item?.reason || item?.rationale),
+        };
+      }).filter((item) => item.text);
+      if (normalized.length) return normalized;
+    }
+    return [];
+  }
+
+  const first = await sendPrompt(prompt);
+  if (!first.ok) return first;
+  const firstText = extractOpenClawOutputText(first.data || {});
+  const firstParsed = extractJsonFromText(firstText);
+  let offers = normalizeOffersFromParsed(firstParsed || {});
+  let secondText = '';
+
+  if (offers.length < 3) {
+    const repairPrompt = [
+      'Convert the following into STRICT JSON with shape:',
+      '{"offers":[{"text":"","why":""},{"text":"","why":""},{"text":"","why":""}]}',
+      'Exactly 3 offers. No markdown fences. No prose. JSON only.',
+      '',
+      'CONTENT START',
+      firstText || '(empty)',
+      'CONTENT END',
+    ].join('\n');
+    const second = await sendPrompt(repairPrompt);
+    if (!second.ok) return second;
+    secondText = extractOpenClawOutputText(second.data || {});
+    const secondParsed = extractJsonFromText(secondText);
+    offers = normalizeOffersFromParsed(secondParsed || {});
+  }
+
+  if (offers.length < 3) {
+    offers = normalizeOffersFromFreeformText(secondText || firstText);
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const offer of offers) {
+    const key = safeText(offer?.text).toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push({
+      text: safeText(offer?.text),
+      why: safeText(offer?.why),
+    });
+    if (deduped.length >= 3) break;
+  }
+  if (deduped.length < 3) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'OpenClaw returned invalid offers payload',
+      data: {
+        offers_count: deduped.length,
+        sample: offers.slice(0, 5),
+        first_output_excerpt: safeText(firstText).slice(0, 1200),
+        second_output_excerpt: safeText(secondText).slice(0, 1200),
+      },
+    };
+  }
+  return { ok: true, status: 200, data: { offers: deduped } };
 }
 
 function findHarvestShape(node, depth = 0) {
