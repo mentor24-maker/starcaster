@@ -435,6 +435,127 @@ async function callOpenClawResponses(inputPayload) {
   };
 }
 
+async function callOpenClawYoutubeReplyOffers(inputPayload) {
+  const cfg = getProviderValues('openclaw');
+  const baseUrl = safeText(cfg?.base_url).replace(/\/+$/, '');
+  const apiKey = safeText(cfg?.api_key);
+  const timeoutMs = Math.max(5000, Number(cfg?.timeout_ms || 90000) || 90000);
+  if (!baseUrl) {
+    return { ok: false, status: 400, error: 'OpenClaw API is not configured in Settings > APIs' };
+  }
+  if (!apiKey) {
+    return { ok: false, status: 400, error: 'OpenClaw API key is missing in Settings > APIs' };
+  }
+
+  const comment = safeText(inputPayload?.comment);
+  const context = safeText(inputPayload?.response_context);
+  const guidelines = safeText(inputPayload?.response_guidelines);
+  const categories = toArray(inputPayload?.categories).map((v) => safeText(v)).filter(Boolean);
+  const attributes = toArray(inputPayload?.attributes).map((v) => safeText(v)).filter(Boolean);
+  const approaches = toArray(inputPayload?.approaches).map((v) => safeText(v)).filter(Boolean);
+  const trainingNotes = safeText(inputPayload?.training_notes);
+  const usedReplies = toArray(inputPayload?.used_replies).map((v) => safeText(v)).filter(Boolean);
+  const discouragedPhrases = toArray(inputPayload?.discouraged_phrases).map((v) => safeText(v)).filter(Boolean);
+  const videoTitle = safeText(inputPayload?.video_title);
+  const videoId = safeText(inputPayload?.video_id);
+
+  if (!comment) {
+    return { ok: false, status: 400, error: 'comment is required' };
+  }
+
+  const prompt = [
+    'You generate high-quality, specific YouTube comment replies.',
+    '',
+    'MANDATORY RULES:',
+    '- Return STRICT JSON only (no markdown, no prose, no code fences).',
+    '- JSON shape exactly: {"offers":[{"text":"","why":""},{"text":"","why":""},{"text":"","why":""}]}',
+    '- Exactly 3 offers.',
+    '- Each offer must be unique and directly grounded in the exact comment text.',
+    '- Avoid generic coaching phrases and generic templates.',
+    '- Do not ask the same stock question across offers.',
+    '- No links unless context explicitly requires one.',
+    '- Each "why" must briefly explain why this reply fits THIS comment.',
+    '',
+    `COMMENT: ${comment}`,
+    `VIDEO TITLE: ${videoTitle || '(unknown)'}`,
+    `VIDEO ID: ${videoId || '(unknown)'}`,
+    `CATEGORY HINTS: ${categories.join(', ') || '(none)'}`,
+    `ATTRIBUTE HINTS: ${attributes.join(', ') || '(none)'}`,
+    `APPROACH HINTS: ${approaches.join(', ') || '(none)'}`,
+    `TRAINING NOTES: ${trainingNotes || '(none)'}`,
+    `RESPONSE CONTEXT: ${context || '(none)'}`,
+    `RESPONSE GUIDELINES: ${guidelines || '(none)'}`,
+    `DISCOURAGED PHRASES (MUST AVOID): ${discouragedPhrases.join(' | ') || '(none)'}`,
+    `ALREADY USED REPLIES IN CURRENT RUN (MUST AVOID): ${usedReplies.join(' | ') || '(none)'}`,
+  ].join('\n');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'openclaw:main',
+        input: prompt,
+      }),
+      signal: controller.signal,
+    });
+    const raw = await response.text();
+    let payload = null;
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      payload = { raw };
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status || 502,
+        error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
+        data: payload,
+      };
+    }
+
+    const outputText = extractOpenClawOutputText(payload || {});
+    const parsed = extractJsonFromText(outputText);
+    const offers = toArray(parsed?.offers).map((item) => ({
+      text: safeText(item?.text || item?.offer || item?.response),
+      why: safeText(item?.why || item?.reason),
+    })).filter((item) => item.text);
+
+    const deduped = [];
+    const seen = new Set();
+    for (const offer of offers) {
+      const key = offer.text.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(offer);
+      if (deduped.length >= 3) break;
+    }
+    if (deduped.length < 3) {
+      return {
+        ok: false,
+        status: 502,
+        error: 'OpenClaw returned invalid offers payload',
+        data: { output: outputText },
+      };
+    }
+
+    return { ok: true, status: 200, data: { offers: deduped } };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
+    }
+    return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function findHarvestShape(node, depth = 0) {
   if (!node || depth > 12) return null;
   if (typeof node === 'string') {
@@ -1060,6 +1181,7 @@ async function handle(req, res, pathname, method) {
       attribute_config: Array.isArray(body?.attribute_config) ? body.attribute_config : [],
       approach_config: Array.isArray(body?.approach_config) ? body.approach_config : [],
       response_context: safeText(body?.response_context),
+      response_guidelines: safeText(body?.response_guidelines),
       training_feedback: Array.isArray(body?.training_feedback) ? body.training_feedback : [],
     };
 
@@ -1088,6 +1210,35 @@ async function handle(req, res, pathname, method) {
     });
 
     return sendOk(res, 200, { run_id: runId, result: mined.data }, { run_id: runId, result: mined.data }), true;
+  }
+
+  // POST /api/acquire/youtube-reply-offers — generate 3 tailored reply offers for one comment
+  if (pathname === '/api/acquire/youtube-reply-offers' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    const body = await parseJsonBody(req);
+    const input = {
+      comment: safeText(body?.comment),
+      video_title: safeText(body?.video_title),
+      video_id: safeText(body?.video_id),
+      categories: toArray(body?.categories),
+      attributes: toArray(body?.attributes),
+      approaches: toArray(body?.approaches),
+      training_notes: safeText(body?.training_notes),
+      response_context: safeText(body?.response_context),
+      response_guidelines: safeText(body?.response_guidelines),
+      discouraged_phrases: toArray(body?.discouraged_phrases),
+      used_replies: toArray(body?.used_replies),
+    };
+    if (!input.comment) {
+      return sendErr(res, 400, 'comment is required'), true;
+    }
+    const ai = await callOpenClawYoutubeReplyOffers(input);
+    if (!ai.ok) {
+      return sendErr(res, ai.status || 502, ai.error || 'Could not generate reply offers', {
+        details: ai?.data || null,
+      }), true;
+    }
+    return sendOk(res, 200, ai.data, ai.data), true;
   }
 
   // POST /api/acquire/youtube-research — build targets from messaging + phrases, then mine/distill
@@ -1186,6 +1337,7 @@ async function handle(req, res, pathname, method) {
       attribute_config: body?.attribute_config || [],
       approach_config: body?.approach_config || [],
       response_context: String(body?.response_context || '').trim(),
+      response_guidelines: String(body?.response_guidelines || '').trim(),
       training_feedback: Array.isArray(body?.training_feedback) ? body.training_feedback : [],
     };
 

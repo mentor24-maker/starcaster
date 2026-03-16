@@ -1816,7 +1816,7 @@ App.youtube = (function () {
     return drafted;
   }
 
-  function buildProvideReplyOffers(row, feedback) {
+  function buildProvideReplyOffersFallback(row, feedback) {
     var explicitSuggestion = safeText(feedback && feedback.suggested_response);
     var learning = buildReplyLearningProfile(row, feedback);
     var usedInRun = collectUsedRepliesForCurrentRun(row);
@@ -1862,12 +1862,65 @@ App.youtube = (function () {
     return offers.slice(0, 3);
   }
 
-  function openProvideRepliesModal(row, feedback, onPick) {
+  async function fetchAiProvideReplyOffers(row, feedback, learning) {
+    var contextEl = document.getElementById('youtubeMinerResponseContext');
+    var contextValue = safeText(contextEl && contextEl.value);
+    var guidelinesEl = document.getElementById('youtubeMinerGuidelines');
+    var guidelinesValue = safeText(guidelinesEl && guidelinesEl.value);
+    var usedInRun = Array.from(collectUsedRepliesForCurrentRun(row));
+    var payload = {
+      comment: safeText(row && row.text),
+      video_title: safeText(row && row.video_title),
+      video_id: safeText(row && row.video_id),
+      categories: mergeTargetsUnique(toArray(feedback && feedback.categories), toArray(row && (row.category ? [row.category] : []))),
+      attributes: mergeTargetsUnique(toArray(feedback && feedback.attributes), toArray(row && (row.attributes || row.attribute_names))),
+      approaches: mergeTargetsUnique(toArray(feedback && feedback.approaches), toArray(row && (row.approach || row.approach_name ? [row.approach || row.approach_name] : []))),
+      training_notes: safeText([
+        feedback && feedback.note,
+        feedback && feedback.category_explain,
+        feedback && feedback.attributes_explain,
+        feedback && feedback.approaches_explain
+      ].join(' ')),
+      response_context: contextValue,
+      response_guidelines: guidelinesValue,
+      discouraged_phrases: toArray(learning && learning.discouraged),
+      used_replies: usedInRun,
+    };
+    var res = await api('/api/acquire/youtube-reply-offers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    var offers = toArray(res && res.offers).map(function(item) {
+      return {
+        text: safeText(item && item.text),
+        why: safeText(item && item.why),
+      };
+    }).filter(function(item) { return item.text; });
+    return offers.slice(0, 3);
+  }
+
+  async function buildProvideReplyOffers(row, feedback) {
+    var learning = buildReplyLearningProfile(row, feedback);
+    try {
+      var aiOffers = await fetchAiProvideReplyOffers(row, feedback, learning);
+      if (aiOffers.length >= 3) return aiOffers.slice(0, 3);
+    } catch (_) {
+      // Fall back to deterministic local templates if AI endpoint fails.
+    }
+    return buildProvideReplyOffersFallback(row, feedback).map(function(text) {
+      return { text: safeText(text), why: '' };
+    });
+  }
+
+  async function openProvideRepliesModal(row, feedback, onPick) {
     if (!App.components || !App.components.Modal) {
       notify('Reply picker modal is unavailable', true);
       return;
     }
-    var offers = buildProvideReplyOffers(row, feedback);
+    var offersWithWhy = await buildProvideReplyOffers(row, feedback);
+    var offers = offersWithWhy.map(function(item) { return safeText(item && item.text); }).filter(Boolean);
+    while (offers.length < 3) offers.push('');
+    offers = offers.slice(0, 3);
     var selectedIndex = 0;
     var body = document.createElement('div');
     body.className = 'youtube-miner-reply-picker';
@@ -1881,11 +1934,12 @@ App.youtube = (function () {
         return Number(item && item.index) === idx
           || safeText(item && item.response) === safeText(offer);
       });
+      var aiWhy = safeText(offersWithWhy[idx] && offersWithWhy[idx].why);
       return {
         index: idx,
         response: safeText(offer),
         rating: Math.max(0, Math.min(Number(existing && existing.rating) || 0, 5)),
-        why: safeText(existing && existing.why),
+        why: safeText(existing && existing.why) || aiWhy,
         selected: idx === 0,
       };
     });
@@ -2497,17 +2551,21 @@ App.youtube = (function () {
         notify('Comment marked ignore');
         renderYoutubeCommentMinerResult(youtubeMinerLastResult || {});
       });
-      provideRepliesBtn.addEventListener('click', function() {
-        openProvideRepliesModal(row, readFeedback(row), function(selectedReply, selectedOfferFeedback) {
-          row.reply_draft = selectedReply;
-          draftText.textContent = selectedReply;
-          saveFeedback(row, {
-            suggested_response: selectedReply,
-            offer_feedback: selectedOfferFeedback,
+      provideRepliesBtn.addEventListener('click', async function() {
+        try {
+          await openProvideRepliesModal(row, readFeedback(row), function(selectedReply, selectedOfferFeedback) {
+            row.reply_draft = selectedReply;
+            draftText.textContent = selectedReply;
+            saveFeedback(row, {
+              suggested_response: selectedReply,
+              offer_feedback: selectedOfferFeedback,
+            });
+            updateProvideRepliesBtnState();
+            notify('Reply selected');
           });
-          updateProvideRepliesBtnState();
-          notify('Reply selected');
-        });
+        } catch (err) {
+          notify(err.message || 'Could not open reply generator', true);
+        }
       });
       draftWrap.appendChild(draftText);
       draftWrap.appendChild(provideRepliesBtn);
