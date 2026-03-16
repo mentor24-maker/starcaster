@@ -36,6 +36,7 @@ App.youtube = (function () {
   var YT_MINER_ATTRIBUTE_CONFIG_KEY = 'yt_miner_attribute_config_v1';
   var YT_MINER_APPROACH_CONFIG_KEY = 'yt_miner_approach_config_v1';
   var YT_MINER_RESPONSE_CONTEXT_KEY = 'yt_miner_response_context_v1';
+  var YT_MINER_RESPONSE_GUIDELINES_KEY = 'yt_miner_response_guidelines_v1';
   var YT_MINER_LAST_RESULT_KEY = 'yt_miner_last_result_v1';
   var YT_MINER_LAST_INPUT_KEY = 'yt_miner_last_input_v1';
   var YT_RESEARCH_LAST_RESULT_KEY = 'yt_research_last_result_v1';
@@ -606,6 +607,20 @@ App.youtube = (function () {
     } catch (_) { /* ignore */ }
   }
 
+  function loadYoutubeMinerResponseGuidelines() {
+    try {
+      return safeText(window.localStorage.getItem(YT_MINER_RESPONSE_GUIDELINES_KEY) || '');
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function saveYoutubeMinerResponseGuidelines(value) {
+    try {
+      window.localStorage.setItem(YT_MINER_RESPONSE_GUIDELINES_KEY, safeText(value || ''));
+    } catch (_) { /* ignore */ }
+  }
+
   function saveYoutubeMinerLastResult(result) {
     try {
       window.localStorage.setItem(YT_MINER_LAST_RESULT_KEY, JSON.stringify(result || {}));
@@ -803,29 +818,36 @@ App.youtube = (function () {
   async function loadPersistedYoutubeMinerResponseContext() {
     try {
       var res = await api('/api/settings/youtube-miner-context', { method: 'GET' });
-      return safeText(res?.youtube_response_context || res?.data?.youtube_response_context || '');
+      return {
+        context: safeText(res?.youtube_response_context || res?.data?.youtube_response_context || ''),
+        guidelines: safeText(res?.youtube_response_guidelines || res?.data?.youtube_response_guidelines || ''),
+      };
     } catch (_) {
-      return '';
+      return { context: '', guidelines: '' };
     }
   }
 
-  async function savePersistedYoutubeMinerResponseContext(value) {
+  async function savePersistedYoutubeMinerResponseContext(contextValue, guidelinesValue) {
     return api('/api/settings/youtube-miner-context', {
       method: 'POST',
-      body: JSON.stringify({ youtube_response_context: safeText(value || '') }),
+      body: JSON.stringify({
+        youtube_response_context: safeText(contextValue || ''),
+        youtube_response_guidelines: safeText(guidelinesValue || ''),
+      }),
     });
   }
 
-  function schedulePersistYoutubeMinerResponseContext(value) {
+  function schedulePersistYoutubeMinerResponseContext(contextValue, guidelinesValue) {
     if (youtubeMinerContextSaveTimer) clearTimeout(youtubeMinerContextSaveTimer);
-    var nextValue = safeText(value || '');
+    var nextContextValue = safeText(contextValue || '');
+    var nextGuidelinesValue = safeText(guidelinesValue || '');
     youtubeMinerContextSaveTimer = setTimeout(async function() {
       if (youtubeMinerContextSaving) return;
       youtubeMinerContextSaving = true;
       try {
-        await savePersistedYoutubeMinerResponseContext(nextValue);
+        await savePersistedYoutubeMinerResponseContext(nextContextValue, nextGuidelinesValue);
       } catch (err) {
-        notify(err.message || 'Could not save Response Context', true);
+        notify(err.message || 'Could not save Context/Guidelines', true);
       } finally {
         youtubeMinerContextSaving = false;
       }
@@ -1748,6 +1770,8 @@ App.youtube = (function () {
     var chosenApproach = safeText(approaches[0] || learning.preferredApproaches[0] || 'inquire').toLowerCase();
     var contextEl = document.getElementById('youtubeMinerResponseContext');
     var context = safeText(contextEl && contextEl.value);
+    var guidelinesEl = document.getElementById('youtubeMinerGuidelines');
+    var guidelines = safeText(guidelinesEl && guidelinesEl.value).toLowerCase();
     var contextHint = '';
     if (/isitas|alignment|self-alignment/i.test(context)) {
       contextHint = ' In ISITAS terms, this reads like a self-alignment moment.';
@@ -1782,7 +1806,14 @@ App.youtube = (function () {
         + ' Consider reframing it as a design question: what environment would make your next version inevitable?'
     ];
     var index = Math.max(0, (Number(variant) || 1) - 1) % templates.length;
-    return stripDiscouragedPhrases(templates[index], learning.discouraged);
+    var drafted = stripDiscouragedPhrases(templates[index], learning.discouraged);
+    if (guidelines.includes('no links') || guidelines.includes('avoid links')) {
+      drafted = drafted.replace(/\s*https?:\/\/\S+/gi, '').trim();
+    }
+    if (guidelines.includes('no question') || guidelines.includes('avoid question')) {
+      drafted = drafted.replace(/\?/g, '.').replace(/\s{2,}/g, ' ').trim();
+    }
+    return drafted;
   }
 
   function buildProvideReplyOffers(row, feedback) {
@@ -1805,10 +1836,6 @@ App.youtube = (function () {
     }
 
     if (explicitSuggestion) pushUnique(explicitSuggestion);
-    toArray(learning.preferred).forEach(function(sample) {
-      if (offers.length >= 3) return;
-      pushUnique(sample);
-    });
 
     var variant = 1;
     while (offers.length < 3 && variant <= 24) {
@@ -2556,6 +2583,7 @@ App.youtube = (function () {
     setValue('include_replies', input.include_replies);
     setValue('exclude_noise', input.exclude_noise);
     setValue('response_context', input.response_context);
+    setValue('response_guidelines', input.response_guidelines);
   }
 
   function renderYoutubeResearchResult(result) {
@@ -3344,6 +3372,7 @@ App.youtube = (function () {
             attribute_config: collectYoutubeMinerConfigFromUi('attribute'),
             approach_config: collectYoutubeMinerConfigFromUi('approach'),
             response_context: String(formData.get('response_context') || '').trim(),
+            response_guidelines: String(formData.get('response_guidelines') || '').trim(),
             training_feedback: collectYoutubeMinerFeedbackCorpus(),
           };
           if (!payload.targets_text) throw new Error('Add at least one video/channel target.');
@@ -3355,8 +3384,9 @@ App.youtube = (function () {
           saveYoutubeMinerConfig('approach', payload.approach_config);
           youtubeMinerApproachConfig = payload.approach_config.slice();
           saveYoutubeMinerResponseContext(payload.response_context);
+          saveYoutubeMinerResponseGuidelines(payload.response_guidelines);
           try {
-            await savePersistedYoutubeMinerResponseContext(payload.response_context);
+            await savePersistedYoutubeMinerResponseContext(payload.response_context, payload.response_guidelines);
           } catch (_) {
             // Do not block miner execution if context persistence endpoint is unavailable.
           }
@@ -3384,6 +3414,7 @@ App.youtube = (function () {
     var youtubeMinerContentSort = document.getElementById('youtubeMinerContentSort');
     var youtubeMinerContentReviewedFilter = document.getElementById('youtubeMinerContentReviewedFilter');
     var youtubeMinerResponseContext = document.getElementById('youtubeMinerResponseContext');
+    var youtubeMinerGuidelines = document.getElementById('youtubeMinerGuidelines');
     if (youtubeMinerTrainingBtn) {
       youtubeMinerTrainingBtn.addEventListener('click', function() { setYoutubeMinerMode('training'); });
     }
@@ -3396,17 +3427,34 @@ App.youtube = (function () {
     saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
     saveYoutubeMinerConfig('attribute', youtubeMinerAttributeConfig);
     saveYoutubeMinerConfig('approach', youtubeMinerApproachConfig);
-    if (youtubeMinerResponseContext) {
-      youtubeMinerResponseContext.value = loadYoutubeMinerResponseContext();
+    if (youtubeMinerResponseContext || youtubeMinerGuidelines) {
+      if (youtubeMinerResponseContext) youtubeMinerResponseContext.value = loadYoutubeMinerResponseContext();
+      if (youtubeMinerGuidelines) youtubeMinerGuidelines.value = loadYoutubeMinerResponseGuidelines();
       loadPersistedYoutubeMinerResponseContext().then(function(serverValue) {
-        if (!serverValue) return;
-        youtubeMinerResponseContext.value = serverValue;
-        saveYoutubeMinerResponseContext(serverValue);
+        var contextValue = safeText(serverValue && serverValue.context);
+        var guidelinesValue = safeText(serverValue && serverValue.guidelines);
+        if (contextValue) {
+          youtubeMinerResponseContext.value = contextValue;
+          saveYoutubeMinerResponseContext(contextValue);
+        }
+        if (youtubeMinerGuidelines && guidelinesValue) {
+          youtubeMinerGuidelines.value = guidelinesValue;
+          saveYoutubeMinerResponseGuidelines(guidelinesValue);
+        }
       });
-      youtubeMinerResponseContext.addEventListener('input', function() {
-        saveYoutubeMinerResponseContext(youtubeMinerResponseContext.value);
-        schedulePersistYoutubeMinerResponseContext(youtubeMinerResponseContext.value);
-      });
+      var persistContextGuidelines = function() {
+        var contextValue = youtubeMinerResponseContext ? youtubeMinerResponseContext.value : '';
+        var guidelinesValue = youtubeMinerGuidelines ? youtubeMinerGuidelines.value : '';
+        saveYoutubeMinerResponseContext(contextValue);
+        saveYoutubeMinerResponseGuidelines(guidelinesValue);
+        schedulePersistYoutubeMinerResponseContext(contextValue, guidelinesValue);
+      };
+      if (youtubeMinerResponseContext) {
+        youtubeMinerResponseContext.addEventListener('input', persistContextGuidelines);
+      }
+      if (youtubeMinerGuidelines) {
+        youtubeMinerGuidelines.addEventListener('input', persistContextGuidelines);
+      }
     }
     renderYoutubeMinerCategoryConfig();
     renderYoutubeMinerConfig('attribute');
@@ -3421,6 +3469,7 @@ App.youtube = (function () {
     setYoutubeMinerCollapsibleOpen('youtubeMinerTrainingBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerCategoriesBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerResponseContextBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerGuidelinesBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerRepositoryBody', false);
     refreshYoutubeResearchCategoryHashtagHints().catch(function(err) {

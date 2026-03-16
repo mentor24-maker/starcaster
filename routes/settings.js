@@ -33,7 +33,14 @@ const {
   hasSupabaseConfig, listDatabaseTables, createDatabaseField
 } = require("../lib/ContactsStore");
 const { logActivity } = require('../lib/activityLog');
-const { getProfile, saveProfile } = require('../lib/profileStore');
+const {
+  getProfile,
+  saveProfile,
+  getYoutubeMinerResponseContext,
+  saveYoutubeMinerResponseContext,
+  getYoutubeMinerPromptConfig,
+  saveYoutubeMinerPromptConfig,
+} = require('../lib/profileStore');
 const config = require('../lib/config');
 
 function safeText(value) {
@@ -290,6 +297,27 @@ async function handle(req, res, pathname, method) {
       summary: `Profile saved: ${profile.contactName || accountName || accountEmail || 'user'}`
     });
     return sendOk(res, 200, result, { profile: result }), true;
+  }
+
+  if (pathname === '/api/settings/youtube-miner-context' && method === 'GET') {
+    const promptCfg = await getYoutubeMinerPromptConfig(req.authUser?.id || req.authUser?.email || '');
+    return sendOk(
+      res,
+      200,
+      { youtube_response_context: promptCfg.context, youtube_response_guidelines: promptCfg.guidelines },
+      { youtube_response_context: promptCfg.context, youtube_response_guidelines: promptCfg.guidelines }
+    ), true;
+  }
+
+  if (pathname === '/api/settings/youtube-miner-context' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await saveYoutubeMinerPromptConfig(
+      safeText(body?.youtube_response_context || body?.response_context),
+      safeText(body?.youtube_response_guidelines || body?.response_guidelines),
+      req.authUser?.id || req.authUser?.email || ''
+    );
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   if (pathname === '/api/settings/email-senders' && method === 'GET') {
