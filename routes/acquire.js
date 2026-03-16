@@ -593,6 +593,7 @@ async function callOpenClawYoutubeReplyOffers(inputPayload) {
   const firstParsed = extractJsonFromText(firstText);
   let offers = normalizeOffersFromParsed(firstParsed || {});
   let secondText = '';
+  let thirdText = '';
 
   if (offers.length < 3) {
     const repairPrompt = [
@@ -615,6 +616,32 @@ async function callOpenClawYoutubeReplyOffers(inputPayload) {
     offers = normalizeOffersFromFreeformText(secondText || firstText);
   }
 
+  if (offers.length < 3) {
+    const thirdPrompt = [
+      'Write exactly 3 unique YouTube replies for the COMMENT below.',
+      'Rules:',
+      '- Keep each reply specific to the comment',
+      '- No generic coaching language',
+      '- No links',
+      '- Output EXACTLY 3 lines and nothing else',
+      '- Each line must start with "1) ", "2) ", "3) " respectively',
+      '',
+      `COMMENT: ${comment}`,
+      `VIDEO TITLE: ${videoTitle || '(unknown)'}`,
+      `CATEGORY HINTS: ${categories.join(', ') || '(none)'}`,
+      `ATTRIBUTE HINTS: ${attributes.join(', ') || '(none)'}`,
+      `APPROACH HINTS: ${approaches.join(', ') || '(none)'}`,
+      `RESPONSE CONTEXT: ${context || '(none)'}`,
+      `RESPONSE GUIDELINES: ${guidelines || '(none)'}`,
+      `DISCOURAGED PHRASES (MUST AVOID): ${discouragedPhrases.join(' | ') || '(none)'}`,
+      `ALREADY USED REPLIES IN CURRENT RUN (MUST AVOID): ${usedReplies.join(' | ') || '(none)'}`,
+    ].join('\n');
+    const third = await sendPrompt(thirdPrompt);
+    if (!third.ok) return third;
+    thirdText = extractOpenClawOutputText(third.data || {});
+    offers = normalizeOffersFromFreeformText(thirdText);
+  }
+
   const deduped = [];
   const seen = new Set();
   for (const offer of offers) {
@@ -628,15 +655,17 @@ async function callOpenClawYoutubeReplyOffers(inputPayload) {
     if (deduped.length >= 3) break;
   }
   if (deduped.length < 3) {
+    const excerpt = safeText(thirdText || secondText || firstText).slice(0, 220).replace(/\s+/g, ' ');
     return {
       ok: false,
       status: 502,
-      error: 'OpenClaw returned invalid offers payload',
+      error: `OpenClaw returned invalid offers payload. Excerpt: ${excerpt || '(empty output)'}`,
       data: {
         offers_count: deduped.length,
         sample: offers.slice(0, 5),
         first_output_excerpt: safeText(firstText).slice(0, 1200),
         second_output_excerpt: safeText(secondText).slice(0, 1200),
+        third_output_excerpt: safeText(thirdText).slice(0, 1200),
       },
     };
   }
