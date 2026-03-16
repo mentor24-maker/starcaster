@@ -252,6 +252,9 @@ App.messaging = (function () {
       document.getElementById('messagingPitchesBulkEditCategorySelect'),
       document.getElementById('messagingPitchesCategoryFilter'),
     ];
+    document.querySelectorAll('select[id^="messaging"][name="category"]').forEach((select) => {
+      selectList.push(select);
+    });
     document.querySelectorAll('[data-messaging-category-select="true"]').forEach((select) => {
       selectList.push(select);
     });
@@ -2829,11 +2832,11 @@ App.messaging = (function () {
   function renderMessagingCategoriesTable(categories) {
     const tbody = document.getElementById('messagingCategoriesTable');
     const sortBtn = document.getElementById('messagingCategoriesSortBtn');
-    if (!tbody) return;
     currentMessagingCategories = Array.isArray(categories) ? categories.slice() : [];
     renderMessagingCategoriesMap(currentMessagingCategories);
-    tbody.innerHTML = '';
     syncHeadlineCategorySelects();
+    if (!tbody) return;
+    tbody.innerHTML = '';
     if (sortBtn) {
       sortBtn.textContent = `Category${messagingCategoryTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
     }
@@ -2878,8 +2881,6 @@ App.messaging = (function () {
   }
 
   async function refreshMessagingCategories() {
-    const tbody = document.getElementById('messagingCategoriesTable');
-    if (!tbody) return;
     try {
       const res = await api('/api/messaging/categories?limit=5000');
       renderMessagingCategoriesTable(Array.isArray(res.categories) ? res.categories : []);
