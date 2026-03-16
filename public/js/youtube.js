@@ -1901,15 +1901,11 @@ App.youtube = (function () {
 
   async function buildProvideReplyOffers(row, feedback) {
     var learning = buildReplyLearningProfile(row, feedback);
-    try {
-      var aiOffers = await fetchAiProvideReplyOffers(row, feedback, learning);
-      if (aiOffers.length >= 3) return aiOffers.slice(0, 3);
-    } catch (_) {
-      // Fall back to deterministic local templates if AI endpoint fails.
+    var aiOffers = await fetchAiProvideReplyOffers(row, feedback, learning);
+    if (aiOffers.length < 3) {
+      throw new Error('AI returned fewer than 3 reply offers');
     }
-    return buildProvideReplyOffersFallback(row, feedback).map(function(text) {
-      return { text: safeText(text), why: '' };
-    });
+    return aiOffers.slice(0, 3);
   }
 
   async function openProvideRepliesModal(row, feedback, onPick) {
@@ -2564,7 +2560,9 @@ App.youtube = (function () {
             notify('Reply selected');
           });
         } catch (err) {
-          notify(err.message || 'Could not open reply generator', true);
+          var detail = safeText(err && err.message) || 'Could not open reply generator';
+          console.error('YouTube Provide Replies AI generation failed', { error: err, row: row });
+          notify('AI reply generation failed: ' + detail, true);
         }
       });
       draftWrap.appendChild(draftText);
