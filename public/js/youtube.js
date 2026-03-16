@@ -2168,7 +2168,25 @@ App.youtube = (function () {
       tagsTd.textContent = toArray(row && (row.hashtags || row.tags)).join(', ') || '-';
 
       var authorTd = document.createElement('td');
-      authorTd.textContent = safeText(row && row.author) || '-';
+      var authorName = safeText(row && row.author) || '-';
+      var authorUrl = safeText(row && row.author_channel_url);
+      var authorChannelId = safeText(row && row.author_channel_id);
+      if (!authorUrl && authorChannelId) {
+        authorUrl = 'https://www.youtube.com/channel/' + encodeURIComponent(authorChannelId);
+      }
+      if (!authorUrl && authorName.startsWith('@')) {
+        authorUrl = 'https://www.youtube.com/' + authorName;
+      }
+      if (authorUrl) {
+        var authorLink = document.createElement('a');
+        authorLink.href = authorUrl;
+        authorLink.target = '_blank';
+        authorLink.rel = 'noopener noreferrer';
+        authorLink.textContent = authorName;
+        authorTd.appendChild(authorLink);
+      } else {
+        authorTd.textContent = authorName;
+      }
 
       var videoTd = document.createElement('td');
       var videoTitle = safeText(row && row.video_title) || safeText(row && row.video_id) || '-';
