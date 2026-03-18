@@ -2520,6 +2520,7 @@ App.youtube = (function () {
         });
         provideRepliesBtn.classList.toggle('is-ready', hasSubmittedRepliesForm);
         provideRepliesBtn.classList.toggle('is-pending', !hasSubmittedRepliesForm);
+        provideRepliesBtn.textContent = hasSubmittedRepliesForm ? 'Replies Provided' : 'Provide Replies';
       }
       updateProvideRepliesBtnState();
       ignoreBtn.addEventListener('click', function() {
@@ -2606,8 +2607,26 @@ App.youtube = (function () {
   }
 
   function setupYoutubeMinerCollapsibles() {
+    var orderedTargetIds = [
+      'youtubeResearchBody',
+      'youtubeMinerTrainingBody',
+      'youtubeMinerCategoriesBody',
+      'youtubeMinerResponseContextBody',
+      'youtubeMinerGuidelinesBody',
+      'youtubeMinerContentBody',
+      'youtubeMinerRepositoryBody'
+    ];
     var toggles = Array.prototype.slice.call(document.querySelectorAll('.youtube-miner-collapsible-toggle[data-target-id]'));
     toggles.forEach(function(toggle) {
+      var targetId = safeText(toggle.getAttribute('data-target-id'));
+      var badgeIndex = orderedTargetIds.indexOf(targetId) + 1;
+      if (badgeIndex > 0 && !toggle.querySelector('.youtube-miner-section-badge')) {
+        var badge = document.createElement('span');
+        badge.className = 'youtube-miner-section-badge';
+        badge.setAttribute('data-step-index', String(badgeIndex));
+        badge.textContent = String(badgeIndex);
+        toggle.insertBefore(badge, toggle.firstChild);
+      }
       toggle.addEventListener('click', function() {
         var targetId = safeText(toggle.getAttribute('data-target-id'));
         if (!targetId) return;
