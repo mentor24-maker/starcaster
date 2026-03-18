@@ -4777,7 +4777,7 @@ th {
   border-radius: 8px;
   background: #ffffff;
   margin-bottom: 10px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .youtube-miner-collapsible-toggle {
@@ -4786,7 +4786,7 @@ th {
   border-bottom: 1px solid var(--c-border);
   border-radius: 0;
   margin: 0;
-  padding: 11px 12px;
+  padding: 11px 12px 11px 30px;
   background: #000000;
   color: #ffffff;
   text-align: left;
@@ -4794,11 +4794,40 @@ th {
   justify-content: space-between;
   align-items: center;
   font-weight: 700;
+  position: relative;
+  overflow: visible;
 }
 
 .youtube-miner-collapsible-toggle:hover {
   background: #111111;
 }
+
+.youtube-miner-section-badge {
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  z-index: 2;
+}
+
+.youtube-miner-section-badge[data-step-index="1"] { background: #2563eb; }
+.youtube-miner-section-badge[data-step-index="2"] { background: #7c3aed; }
+.youtube-miner-section-badge[data-step-index="3"] { background: #ea580c; }
+.youtube-miner-section-badge[data-step-index="4"] { background: #0f766e; }
+.youtube-miner-section-badge[data-step-index="5"] { background: #dc2626; }
+.youtube-miner-section-badge[data-step-index="6"] { background: #ca8a04; }
+.youtube-miner-section-badge[data-step-index="7"] { background: #2563eb; }
 
 .youtube-miner-collapsible-arrow::before {
   content: "\25BE";
