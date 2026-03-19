@@ -65,6 +65,42 @@ create table if not exists public.harvest_youtube_comments (
 create index if not exists harvest_youtube_comments_created_at_idx
   on public.harvest_youtube_comments (created_at desc);
 
+-- harvest_youtube_videos table
+-- Canonical one-row-per-video index used by the Acquire YouTube repository.
+
+create table if not exists public.harvest_youtube_videos (
+  video_record_id text primary key,
+  video_url text not null default '',
+  video_id text not null default '',
+  title text not null default '',
+  channel_name text not null default '',
+  channel_url text not null default '',
+  description text not null default '',
+  hashtags text not null default '',
+  category text not null default '',
+  tags text not null default '',
+  thumbnail_url text not null default '',
+  transcript_status text not null default 'unavailable',
+  transcript_source text not null default 'none',
+  transcript_provider text not null default 'youtube-native',
+  detail_run_id text not null default '',
+  comment_run_id text not null default '',
+  miner_run_id text not null default '',
+  research_run_id text not null default '',
+  comment_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists harvest_youtube_videos_updated_at_idx
+  on public.harvest_youtube_videos (updated_at desc);
+
+create index if not exists harvest_youtube_videos_video_id_idx
+  on public.harvest_youtube_videos (video_id);
+
+create index if not exists harvest_youtube_videos_category_idx
+  on public.harvest_youtube_videos (category);
+
 -- Migration: rename old tables to new names if they exist
 -- Run this once against your existing Supabase project.
 -- Safe to run even if old tables don't exist (DO blocks handle it gracefully).
