@@ -1438,8 +1438,7 @@ App.youtube = (function () {
     var thumbLinkEl = document.getElementById('youtubeVideoThumbLink');
     var thumbImgEl = document.getElementById('youtubeVideoThumbnail');
     var emptyEl = document.getElementById('youtubeVideoMediaEmpty');
-    var openLinkEl = document.getElementById('youtubeVideoOpenLink');
-    if (!playerEl || !thumbLinkEl || !thumbImgEl || !emptyEl || !openLinkEl) return;
+    if (!playerEl || !thumbLinkEl || !thumbImgEl || !emptyEl) return;
 
     var videoUrl = safeText(video && video.url) || safeText(runMeta && runMeta.video_url);
     var videoId = safeText(video && video.id) || extractYoutubeVideoId(videoUrl);
@@ -1448,11 +1447,9 @@ App.youtube = (function () {
 
     playerEl.classList.add('hidden');
     thumbLinkEl.classList.add('hidden');
-    openLinkEl.classList.add('hidden');
     emptyEl.classList.remove('hidden');
     playerEl.removeAttribute('src');
     thumbLinkEl.removeAttribute('href');
-    openLinkEl.removeAttribute('href');
     thumbImgEl.removeAttribute('src');
 
     if (!videoUrl && !videoId) {
@@ -1474,11 +1471,7 @@ App.youtube = (function () {
     }
 
     if (thumbUrl) thumbImgEl.src = thumbUrl;
-    if (videoUrl) {
-      thumbLinkEl.href = videoUrl;
-      openLinkEl.href = videoUrl;
-      openLinkEl.classList.remove('hidden');
-    }
+    if (videoUrl) thumbLinkEl.href = videoUrl;
   }
 
   function renderFallbackVideoDetails(videoUrl, fallbackMeta) {
@@ -3179,6 +3172,10 @@ App.youtube = (function () {
     var safeLimit = Math.max(1, Math.min(Number(limit) || 20, 200));
     var res = await api('/api/acquire/youtube-runs?limit=' + safeLimit);
     state.acquireYoutubeDetails = Array.isArray(res.runs) ? res.runs : [];
+    var activeUrl = safeText(currentDetailsRun && currentDetailsRun.video_url) || safeText(activeVideoSnapshot && activeVideoSnapshot.video_url);
+    if (activeUrl) {
+      syncActiveVideoFromUrl(activeUrl, currentDetailsRun || activeVideoSnapshot || {});
+    }
     renderYoutubeRunsTable();
   }
 
