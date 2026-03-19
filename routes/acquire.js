@@ -110,6 +110,28 @@ function splitTagList(value) {
     .map((item) => (item.startsWith('#') ? item : `#${item}`));
 }
 
+function hasYoutubeVideoDetails(video) {
+  if (!video) return false;
+  return Boolean(
+    safeText(video.title) &&
+    safeText(video.channel_name) &&
+    (safeText(video.description) || safeText(video.thumbnail_url) || safeText(video.detail_run_id))
+  );
+}
+
+function uniqueYoutubeUrls(values) {
+  const seen = new Set();
+  return toArray(values)
+    .map((item) => safeText(item))
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function normalizeKeyword(value) {
   return safeText(value)
     .toLowerCase()
@@ -1629,6 +1651,131 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const videos = result.data || [];
     return sendOk(res, 200, videos, { videos }, { total: videos.length }), true;
+  }
+
+  // POST /api/acquire/youtube-videos/backfill-details
+  if (pathname === '/api/acquire/youtube-videos/backfill-details' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+
+    const body = await parseJsonBody(req);
+    const limit = Math.max(1, Math.min(Number(body?.limit || 25) || 25, 200));
+    const delayMs = Math.max(0, Math.min(Number(body?.delay_ms || 0) || 0, 5000));
+    const force = body?.force === true;
+    const requestedUrls = uniqueYoutubeUrls(body?.video_urls);
+
+    let targets = requestedUrls;
+    if (!targets.length) {
+      const videosRes = await listYoutubeVideos(1000);
+      if (!videosRes.ok) return sendErr(res, videosRes.status || 500, videosRes.error), true;
+      targets = toArray(videosRes.data)
+        .filter((video) => safeText(video.video_url))
+        .filter((video) => force || !hasYoutubeVideoDetails(video))
+        .map((video) => safeText(video.video_url))
+        .slice(0, limit);
+    } else {
+      targets = targets.slice(0, limit);
+    }
+
+    if (!targets.length) {
+      return sendOk(res, 200, {
+        ok: true,
+        requested: 0,
+        processed: 0,
+        created_runs: 0,
+        skipped: 0,
+        failed: 0,
+        items: [],
+      }, {
+        backfill: {
+          requested: 0,
+          processed: 0,
+          created_runs: 0,
+          skipped: 0,
+          failed: 0,
+          items: [],
+        },
+      }), true;
+    }
+
+    const existingVideosRes = await listYoutubeVideos(1000);
+    const existingVideos = existingVideosRes.ok ? toArray(existingVideosRes.data) : [];
+    const byUrl = new Map(existingVideos.map((video) => [safeText(video.video_url), video]));
+    const items = [];
+
+    for (const videoUrl of targets) {
+      const existing = byUrl.get(videoUrl) || null;
+      if (!force && hasYoutubeVideoDetails(existing)) {
+        items.push({
+          video_url: videoUrl,
+          status: 'skipped',
+          reason: 'already_has_details',
+          title: safeText(existing?.title),
+          channel_name: safeText(existing?.channel_name),
+          detail_run_id: safeText(existing?.detail_run_id),
+        });
+        continue;
+      }
+
+      try {
+        const harvestInput = {
+          video_url: videoUrl,
+          category: safeText(existing?.category),
+          tags: safeText(existing?.tags),
+        };
+        const result = await runYoutubeHarvest(harvestInput);
+        const createRes = await createYoutubeHarvestRun(harvestInput, result);
+        if (!createRes.ok) {
+          items.push({
+            video_url: videoUrl,
+            status: 'failed',
+            error: safeText(createRes.error) || 'Failed to save harvested details',
+          });
+        } else {
+          const summary = runSummary(createRes.data);
+          items.push({
+            video_url: videoUrl,
+            status: 'updated',
+            run_id: safeText(summary.run_id),
+            title: safeText(summary.title),
+            channel_name: safeText(summary.channel_name),
+            transcript_status: safeText(summary.transcript_status),
+          });
+        }
+      } catch (err) {
+        items.push({
+          video_url: videoUrl,
+          status: 'failed',
+          error: safeText(err?.message) || 'YouTube detail harvest failed',
+        });
+      }
+
+      if (delayMs > 0) await waitFor(delayMs);
+    }
+
+    const payload = {
+      requested: targets.length,
+      processed: items.filter((item) => item.status !== 'skipped').length,
+      created_runs: items.filter((item) => item.status === 'updated').length,
+      skipped: items.filter((item) => item.status === 'skipped').length,
+      failed: items.filter((item) => item.status === 'failed').length,
+      items,
+    };
+
+    logActivity({
+      action: 'acquire.youtube_backfill_details',
+      entityType: 'acquire',
+      entityId: null,
+      summary: `YouTube details backfill processed ${payload.requested} video(s)`,
+      meta: {
+        requested: payload.requested,
+        created_runs: payload.created_runs,
+        skipped: payload.skipped,
+        failed: payload.failed,
+        force,
+      },
+    });
+
+    return sendOk(res, 200, payload, { backfill: payload }), true;
   }
 
   // GET /api/acquire/youtube-videos/:id
