@@ -1319,6 +1319,12 @@ App.youtube = (function () {
   }
 
   function buildRepositoryRows() {
+    if (Array.isArray(state.acquireYoutubeVideos) && state.acquireYoutubeVideos.length) {
+      return state.acquireYoutubeVideos.slice().sort(function(a, b) {
+        return String(b && (b.updated_at || b.created_at) || '').localeCompare(String(a && (a.updated_at || a.created_at) || ''));
+      });
+    }
+
     var rows = [];
     (state.acquireYoutubeComments || []).filter(function(commentRun) {
       var runId = safeText(commentRun && commentRun.run_id).toLowerCase();
@@ -3066,7 +3072,7 @@ App.youtube = (function () {
       var categoryTd = document.createElement('td');
       if (safeText(run.category)) {
         categoryTd.textContent = safeText(run.category);
-      } else if (safeText(run.detail_run_id)) {
+      } else if (safeText(run.video_record_id) || safeText(run.detail_run_id)) {
         var categorySelect = document.createElement('select');
         categorySelect.innerHTML = '<option value="">Select Category</option>';
         categoryOptions().forEach(function(category) {
@@ -3078,13 +3084,16 @@ App.youtube = (function () {
         categorySelect.addEventListener('change', function() {
           var nextCategory = safeText(categorySelect.value);
           if (!nextCategory) return;
-          api('/api/acquire/youtube-runs/' + encodeURIComponent(run.detail_run_id), {
+          var endpoint = safeText(run.video_record_id)
+            ? '/api/acquire/youtube-videos/' + encodeURIComponent(run.video_record_id)
+            : '/api/acquire/youtube-runs/' + encodeURIComponent(run.detail_run_id);
+          api(endpoint, {
             method: 'PATCH',
             body: JSON.stringify({ category: nextCategory }),
           })
             .then(function() {
               notify('Category updated');
-              return refreshYoutubeRuns(20);
+              return Promise.all([refreshYoutubeVideos(200), refreshYoutubeRuns(20)]);
             })
             .catch(function(e) {
               notify(e.message, true);
@@ -3273,6 +3282,17 @@ App.youtube = (function () {
     var activeUrl = safeText(currentDetailsRun && currentDetailsRun.video_url) || safeText(activeVideoSnapshot && activeVideoSnapshot.video_url);
     if (activeUrl) {
       syncActiveVideoFromUrl(activeUrl, currentDetailsRun || activeVideoSnapshot || {});
+    }
+    renderYoutubeRunsTable();
+  }
+
+  async function refreshYoutubeVideos(limit) {
+    var safeLimit = Math.max(1, Math.min(Number(limit) || 200, 1000));
+    try {
+      var res = await api('/api/acquire/youtube-videos?limit=' + safeLimit);
+      state.acquireYoutubeVideos = Array.isArray(res.videos) ? res.videos : [];
+    } catch (_) {
+      state.acquireYoutubeVideos = [];
     }
     renderYoutubeRunsTable();
   }
@@ -4066,8 +4086,8 @@ App.youtube = (function () {
   return {
     manifest: { id: 'youtube', label: 'YouTube Acquire', pageId: 'acquireYoutubePage' },
     init,
-    refresh:         function() { return Promise.all([refreshYoutubeRuns(20), refreshCommentRuns(20), refreshYoutubeMinerRuns(10), refreshYoutubeResearchRuns(30), refreshYoutubeCategories()]); },
-    onPageActivated: function() { return Promise.all([refreshYoutubeRuns(20), refreshCommentRuns(20), refreshYoutubeMinerRuns(10), refreshYoutubeResearchRuns(30), refreshYoutubeCategories()]); },
+    refresh:         function() { return Promise.all([refreshYoutubeVideos(200), refreshYoutubeRuns(20), refreshCommentRuns(20), refreshYoutubeMinerRuns(10), refreshYoutubeResearchRuns(30), refreshYoutubeCategories()]); },
+    onPageActivated: function() { return Promise.all([refreshYoutubeVideos(200), refreshYoutubeRuns(20), refreshCommentRuns(20), refreshYoutubeMinerRuns(10), refreshYoutubeResearchRuns(30), refreshYoutubeCategories()]); },
     refreshYoutubeRuns,
     refreshCommentRuns,
     refreshYoutubeCategories,

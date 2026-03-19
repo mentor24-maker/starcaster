@@ -58,6 +58,11 @@ const {
   listResearchRuns,
   getResearchRun,
 } = require('../lib/harvest/YoutubeCommentsStore');
+const {
+  listYoutubeVideos,
+  getYoutubeVideo,
+  updateYoutubeVideo,
+} = require('../lib/harvest/YoutubeVideosStore');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const {
   listYoutubeCategories,
@@ -1615,6 +1620,46 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = result.data || [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
+  }
+
+  // GET /api/acquire/youtube-videos — canonical video repository
+  if (pathname === '/api/acquire/youtube-videos' && method === 'GET') {
+    const limit = Number(urlObj.searchParams.get('limit') || 200);
+    const result = await listYoutubeVideos(limit);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const videos = result.data || [];
+    return sendOk(res, 200, videos, { videos }, { total: videos.length }), true;
+  }
+
+  // GET /api/acquire/youtube-videos/:id
+  const youtubeVideoMatch = pathname.match(/^\/api\/acquire\/youtube-videos\/([^/]+)$/);
+  if (youtubeVideoMatch && method === 'GET') {
+    const id = decodeURIComponent(youtubeVideoMatch[1]);
+    const result = await getYoutubeVideo(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { video: result.data }), true;
+  }
+
+  // PATCH /api/acquire/youtube-videos/:id
+  if (youtubeVideoMatch && method === 'PATCH') {
+    const id = decodeURIComponent(youtubeVideoMatch[1]);
+    const body = await parseJsonBody(req);
+    const patch = {};
+    if (body?.category != null) patch.category = safeText(body.category);
+    if (body?.tags != null) patch.tags = safeText(body.tags);
+    if (!Object.keys(patch).length) {
+      return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const result = await updateYoutubeVideo(id, patch);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+
+    // Keep the detail run in sync for flows that still read from the original harvest table.
+    if (safeText(result.data?.detail_run_id)) {
+      await updateYoutubeHarvestRun(result.data.detail_run_id, patch).catch(() => null);
+    }
+
+    return sendOk(res, 200, result.data, { video: result.data }), true;
   }
 
   // GET /api/acquire/youtube-comment-runs/:id
