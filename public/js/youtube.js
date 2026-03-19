@@ -1319,8 +1319,12 @@ App.youtube = (function () {
 
   function buildRepositoryRows() {
     return (state.acquireYoutubeComments || []).filter(function(commentRun) {
-      return safeText(commentRun && commentRun.run_id).indexOf('ytcmt_') === 0
-        && safeText(commentRun && commentRun.video_url);
+      var runId = safeText(commentRun && commentRun.run_id).toLowerCase();
+      var videoUrl = safeText(commentRun && commentRun.video_url);
+      if (!videoUrl) return false;
+      if (runId.indexOf('ytminer_') === 0) return false;
+      if (runId.indexOf('ytresearch_') === 0) return false;
+      return true;
     }).map(function(commentRun) {
       var detailRun = findYoutubeDetailsRunByVideo(safeText(commentRun && commentRun.video_url));
       var detailResult = detailRun && detailRun.result ? detailRun.result : {};
