@@ -3632,13 +3632,22 @@ App.youtube = (function () {
       body: JSON.stringify({ video_urls: videoUrls }),
     }).then(function(res) {
       var diagnostics = Array.isArray(res && res.diagnostics) ? res.diagnostics : [];
+      var repositoryPanel = document.getElementById('youtubeRepositoryDiagnosticsPanel');
+      var repositoryPreview = document.getElementById('youtubeRepositoryDiagnosticsPreview');
+      if (repositoryPreview) {
+        setPreview(repositoryPreview, {
+          selected_video_urls: videoUrls,
+          diagnostics: diagnostics,
+        });
+      }
+      if (repositoryPanel) repositoryPanel.open = true;
       setPreview(document.getElementById('youtubeRawPreview'), {
         selected_video_urls: videoUrls,
         diagnostics: diagnostics,
       });
-      notify('Diagnostics loaded into Raw YouTube JSON result');
-      var rawWrap = document.getElementById('youtubeRawPreview');
-      if (rawWrap && rawWrap.scrollIntoView) rawWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      notify('Diagnostics loaded into Repository Diagnostics');
+      var targetWrap = repositoryPanel || repositoryPreview || document.getElementById('youtubeRawPreview');
+      if (targetWrap && targetWrap.scrollIntoView) targetWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }).catch(function(err) {
       notify(err.message || 'Could not load video diagnostics', true);
     });
