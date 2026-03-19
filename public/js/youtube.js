@@ -1286,7 +1286,9 @@ App.youtube = (function () {
   }
 
   function pruneSelectedRunIds() {
-    var validIds = new Set((state.acquireYoutubeDetails || []).map(function(run) { return String(run && run.run_id || '').trim(); }).filter(Boolean));
+    var validIds = new Set(getFilteredYoutubeRuns().map(function(run) {
+      return String(run && run.detail_run_id || '').trim();
+    }).filter(Boolean));
     Array.from(selectedRunIds).forEach(function(runId) {
       if (!validIds.has(runId)) selectedRunIds.delete(runId);
     });
@@ -1295,7 +1297,7 @@ App.youtube = (function () {
   function syncBulkSelectionUi() {
     var selectAll = document.getElementById('youtubeRunsSelectAllVisible');
     var bulkBtn = document.getElementById('youtubeRunsBulkEditBtn');
-    var visibleIds = getFilteredYoutubeRuns().map(function(run) { return String(run && run.run_id || '').trim(); }).filter(Boolean);
+    var visibleIds = getFilteredYoutubeRuns().map(function(run) { return String(run && run.detail_run_id || '').trim(); }).filter(Boolean);
     var selectedVisible = visibleIds.filter(function(runId) { return selectedRunIds.has(runId); });
 
     if (selectAll) {
@@ -1313,6 +1315,31 @@ App.youtube = (function () {
     summaryEl.textContent = selectedRunIds.size === 1
       ? '1 run selected.'
       : (String(selectedRunIds.size) + ' runs selected.');
+  }
+
+  function buildRepositoryRows() {
+    return (state.acquireYoutubeComments || []).map(function(commentRun) {
+      var detailRun = findYoutubeDetailsRunByVideo(safeText(commentRun && commentRun.video_url));
+      var detailResult = detailRun && detailRun.result ? detailRun.result : {};
+      var detailVideo = detailResult && detailResult.video ? detailResult.video : {};
+      return {
+        repository_run_id: safeText(commentRun && commentRun.run_id),
+        detail_run_id: safeText(detailRun && detailRun.run_id),
+        comment_run_id: safeText(commentRun && commentRun.run_id),
+        created_at: safeText(commentRun && commentRun.created_at) || safeText(detailRun && detailRun.created_at),
+        video_url: safeText(commentRun && commentRun.video_url) || safeText(detailRun && detailRun.video_url),
+        title: safeText(commentRun && commentRun.title) || safeText(detailRun && detailRun.title) || safeText(detailVideo && detailVideo.title),
+        channel_name: safeText(commentRun && commentRun.channel_name) || safeText(detailRun && detailRun.channel_name),
+        channel_url: safeText(detailRun && detailRun.channel_url),
+        category: safeText(detailRun && detailRun.category),
+        tags: safeText(detailRun && detailRun.tags) || formatHashtags(detailVideo && detailVideo.hashtags),
+        transcript_status: safeText(detailRun && detailRun.transcript_status) || safeText(detailVideo && detailVideo.transcript_status) || 'unavailable',
+        comment_count: Number(commentRun && commentRun.comment_count || 0) || 0,
+        has_details: Boolean(detailRun && detailRun.run_id),
+      };
+    }).sort(function(a, b) {
+      return String(b && b.created_at || '').localeCompare(String(a && a.created_at || ''));
+    });
   }
 
   function extractFromXmlTranscript(raw) {
@@ -2951,10 +2978,11 @@ App.youtube = (function () {
       var selectTd = document.createElement('td');
       var checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
-      checkbox.checked = selectedRunIds.has(String(run.run_id || ''));
-      checkbox.setAttribute('aria-label', 'Select YouTube run ' + String(run.run_id || ''));
+      checkbox.checked = selectedRunIds.has(String(run.detail_run_id || ''));
+      checkbox.disabled = !safeText(run.detail_run_id);
+      checkbox.setAttribute('aria-label', 'Select YouTube run ' + String(run.repository_run_id || run.detail_run_id || ''));
       checkbox.addEventListener('change', function() {
-        var runId = String(run.run_id || '');
+        var runId = String(run.detail_run_id || '');
         if (checkbox.checked) selectedRunIds.add(runId);
         else selectedRunIds.delete(runId);
         syncBulkSelectionUi();
@@ -3049,29 +3077,46 @@ App.youtube = (function () {
           .then(function() { notify('Video URL copied'); })
           .catch(function(e) { notify(safeText(e && e.message) || 'Could not copy URL', true); });
       });
-      var viewBtn         = mkBtn('View',            function() { loadYoutubeRun(run.run_id).catch(function(e) { notify(e.message, true); }); });
-      var editBtn         = mkBtn('Edit',            function() { openEditRun(run.run_id).catch(function(e) { notify(e.message, true); }); });
-      var addBtn          = mkBtn('Add Contact',      function() { addContactFromRun(run.run_id).catch(function(e) { notify(e.message, true); }); });
-      
-      var commentMatch = findCommentRunForVideoUrl(run.video_url);
-      var commentsBtnLabel = commentMatch ? 'View Comments' : 'Acquire Comments';
-      var commentsBtn = mkBtn(commentsBtnLabel, function() {
-        if (commentMatch) {
-          App.youtubeComments.openForRun(commentMatch);
+      var viewBtn         = mkBtn('View', function() {
+        if (run.has_details) {
+          loadYoutubeRun(run.detail_run_id).catch(function(e) { notify(e.message, true); });
           return;
         }
-        harvestCommentsFromRun(run)
-          .then(function() { return refreshCommentRuns(50); })
-          .then(function() { renderYoutubeRunsTable(); })
+        api('/api/acquire/youtube-comment-runs/' + encodeURIComponent(run.comment_run_id))
+          .then(function(res) {
+            var commentRun = res.run || {};
+            currentDetailsRun = {
+              video_url: safeText(commentRun.video_url) || safeText(run.video_url),
+              title: safeText(commentRun.title) || safeText(run.title),
+              channel_name: safeText(commentRun.channel_name) || safeText(run.channel_name),
+            };
+            rememberActiveVideo(currentDetailsRun);
+            renderYoutubeCommentsResult(commentRun.result || commentRun.result_json || {});
+            scrollToYoutubeDetails();
+            notify('Loaded analyzed comment run');
+          })
           .catch(function(e) { notify(e.message, true); });
+      });
+      var editBtn         = mkBtn('Edit',            function() { openEditRun(run.detail_run_id).catch(function(e) { notify(e.message, true); }); });
+      var addBtn          = mkBtn('Add Contact',      function() { addContactFromRun(run.detail_run_id).catch(function(e) { notify(e.message, true); }); });
+      
+      var commentMatch = findCommentRunForVideoUrl(run.video_url) || (run.comment_run_id ? { run_id: run.comment_run_id, video_url: run.video_url, title: run.title, channel_name: run.channel_name, comment_count: run.comment_count } : null);
+      var commentsBtn = mkBtn('View Comments', function() {
+        if (!commentMatch) return notify('No comment run found for this video.', true);
+        App.youtubeComments.openForRun(commentMatch);
       });
       if (commentMatch) {
         commentsBtn.classList.add('tiny-btn-blue');
       }
       var delBtn          = mkBtn('Delete',           function() {
-        if (!confirm('Delete YouTube run ' + run.run_id + '?')) return;
-        deleteYoutubeRun(run.run_id).catch(function(e) { notify(e.message, true); });
+        if (!confirm('Delete analyzed comment run ' + (run.comment_run_id || run.repository_run_id) + '?')) return;
+        deleteCommentRun(run.comment_run_id).catch(function(e) { notify(e.message, true); });
       });
+
+      if (!run.has_details) {
+        editBtn.disabled = true;
+        addBtn.disabled = true;
+      }
 
       editBtn.style.marginLeft = '8px';
       viewBtn.style.marginLeft = '8px';
@@ -3118,13 +3163,14 @@ App.youtube = (function () {
   }
 
   function getFilteredYoutubeRuns() {
+    var rows = buildRepositoryRows();
     var from       = normalizeFilterDate(runFilters.from);
     var to         = normalizeFilterDate(runFilters.to);
     var title      = String(runFilters.title      || '').trim().toLowerCase();
     var channel    = String(runFilters.channel    || '').trim().toLowerCase();
     var category   = String(runFilters.category   || '').trim().toLowerCase();
     var transcript = String(runFilters.transcript || '').trim().toLowerCase();
-    return (state.acquireYoutubeDetails || []).filter(function(run) {
+    return rows.filter(function(run) {
       var runDate       = toLocalDateKey(run.created_at);
       var runTitle      = String(run.title || '').toLowerCase();
       var runChannel    = String(run.channel_name || '').toLowerCase();
