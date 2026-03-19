@@ -213,6 +213,30 @@ async function listYoutubeDiagnosticsForUrl(videoUrl) {
   };
 }
 
+async function previewYoutubeHarvestDiagnostics(videoUrl) {
+  const normalizedUrl = safeText(videoUrl);
+  if (!normalizedUrl) {
+    return { video_url: '', ok: false, error: 'video_url is required' };
+  }
+
+  try {
+    const result = await runYoutubeHarvest({ video_url: normalizedUrl });
+    return {
+      video_url: normalizedUrl,
+      ok: true,
+      harvested_at: new Date().toISOString(),
+      result: result || {},
+    };
+  } catch (error) {
+    return {
+      video_url: normalizedUrl,
+      ok: false,
+      harvested_at: new Date().toISOString(),
+      error: safeText(error?.message) || 'YouTube harvest preview failed',
+    };
+  }
+}
+
 function normalizeKeyword(value) {
   return safeText(value)
     .toLowerCase()
@@ -1863,13 +1887,18 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/acquire/youtube-videos/diagnostics' && method === 'POST') {
     const body = await parseJsonBody(req);
     const targets = uniqueYoutubeUrls(body?.video_urls).slice(0, 25);
+    const includeHarvestPreview = body?.include_harvest_preview === true;
     if (!targets.length) {
       return sendErr(res, 400, 'video_urls is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
     const diagnostics = [];
     for (const videoUrl of targets) {
-      diagnostics.push(await listYoutubeDiagnosticsForUrl(videoUrl));
+      const item = await listYoutubeDiagnosticsForUrl(videoUrl);
+      if (includeHarvestPreview) {
+        item.harvest_preview = await previewYoutubeHarvestDiagnostics(videoUrl);
+      }
+      diagnostics.push(item);
     }
 
     return sendOk(res, 200, diagnostics, { diagnostics }, { total: diagnostics.length }), true;

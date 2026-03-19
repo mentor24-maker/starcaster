@@ -3629,7 +3629,10 @@ App.youtube = (function () {
     notify('Running diagnostics for ' + videoUrls.length + ' selected video' + (videoUrls.length === 1 ? '' : 's') + '...');
     return api('/api/acquire/youtube-videos/diagnostics', {
       method: 'POST',
-      body: JSON.stringify({ video_urls: videoUrls }),
+      body: JSON.stringify({
+        video_urls: videoUrls,
+        include_harvest_preview: videoUrls.length === 1,
+      }),
     }).then(function(res) {
       var diagnostics = Array.isArray(res && res.diagnostics) ? res.diagnostics : [];
       var repositoryPanel = document.getElementById('youtubeRepositoryDiagnosticsPanel');
