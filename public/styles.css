@@ -4848,9 +4848,7 @@ th {
   min-height: 210px;
 }
 
-.youtube-video-player,
-.youtube-video-thumb-link,
-.youtube-video-thumbnail {
+.youtube-video-player {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -4858,10 +4856,6 @@ th {
 
 .youtube-video-player {
   border: 0;
-}
-
-.youtube-video-thumbnail {
-  object-fit: cover;
 }
 
 .youtube-video-media-empty {
