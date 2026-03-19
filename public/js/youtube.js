@@ -1288,17 +1288,31 @@ App.youtube = (function () {
 
   function pruneSelectedRunIds() {
     var validIds = new Set(getFilteredYoutubeRuns().map(function(run) {
-      return String(run && run.detail_run_id || '').trim();
+      return getRepositorySelectionKey(run);
     }).filter(Boolean));
     Array.from(selectedRunIds).forEach(function(runId) {
       if (!validIds.has(runId)) selectedRunIds.delete(runId);
     });
   }
 
+  function getRepositorySelectionKey(run) {
+    return safeText(run && run.video_record_id)
+      || safeText(run && run.repository_run_id)
+      || safeText(run && run.detail_run_id)
+      || safeText(run && run.video_url);
+  }
+
+  function getSelectedYoutubeRows() {
+    return getFilteredYoutubeRuns().filter(function(run) {
+      return selectedRunIds.has(getRepositorySelectionKey(run));
+    });
+  }
+
   function syncBulkSelectionUi() {
     var selectAll = document.getElementById('youtubeRunsSelectAllVisible');
     var bulkBtn = document.getElementById('youtubeRunsBulkEditBtn');
-    var visibleIds = getFilteredYoutubeRuns().map(function(run) { return String(run && run.detail_run_id || '').trim(); }).filter(Boolean);
+    var augmentBtn = document.getElementById('youtubeRunsAugmentBtn');
+    var visibleIds = getFilteredYoutubeRuns().map(function(run) { return getRepositorySelectionKey(run); }).filter(Boolean);
     var selectedVisible = visibleIds.filter(function(runId) { return selectedRunIds.has(runId); });
 
     if (selectAll) {
@@ -1306,7 +1320,10 @@ App.youtube = (function () {
       selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
     }
     if (bulkBtn) {
-      bulkBtn.disabled = selectedRunIds.size === 0;
+      bulkBtn.disabled = getSelectedYoutubeRows().filter(function(run) { return safeText(run && run.detail_run_id); }).length === 0;
+    }
+    if (augmentBtn) {
+      augmentBtn.disabled = getSelectedYoutubeRows().filter(function(run) { return safeText(run && run.video_url); }).length === 0;
     }
   }
 
@@ -1314,8 +1331,8 @@ App.youtube = (function () {
     var summaryEl = document.getElementById('youtubeBulkEditSummary');
     if (!summaryEl) return;
     summaryEl.textContent = selectedRunIds.size === 1
-      ? '1 run selected.'
-      : (String(selectedRunIds.size) + ' runs selected.');
+      ? '1 video selected.'
+      : (String(selectedRunIds.size) + ' videos selected.');
   }
 
   function buildRepositoryRows() {
@@ -3036,12 +3053,13 @@ App.youtube = (function () {
 
       var selectTd = document.createElement('td');
       var checkbox = document.createElement('input');
+      var selectionKey = getRepositorySelectionKey(run);
       checkbox.type = 'checkbox';
-      checkbox.checked = selectedRunIds.has(String(run.detail_run_id || ''));
-      checkbox.disabled = !safeText(run.detail_run_id);
-      checkbox.setAttribute('aria-label', 'Select YouTube run ' + String(run.repository_run_id || run.detail_run_id || ''));
+      checkbox.checked = selectedRunIds.has(selectionKey);
+      checkbox.disabled = !selectionKey;
+      checkbox.setAttribute('aria-label', 'Select YouTube video ' + String(run.repository_run_id || run.detail_run_id || run.video_url || ''));
       checkbox.addEventListener('change', function() {
-        var runId = String(run.detail_run_id || '');
+        var runId = selectionKey;
         if (checkbox.checked) selectedRunIds.add(runId);
         else selectedRunIds.delete(runId);
         syncBulkSelectionUi();
@@ -3448,7 +3466,10 @@ App.youtube = (function () {
   }
 
   function openBulkEditPage() {
-    if (!selectedRunIds.size) {
+    var editableRows = getSelectedYoutubeRows().filter(function(run) {
+      return safeText(run && run.detail_run_id);
+    });
+    if (!editableRows.length) {
       notify('Select at least one YouTube run first', true);
       return;
     }
@@ -3540,6 +3561,47 @@ App.youtube = (function () {
     App.youtubeComments.openForRun(match);
   }
 
+  function augmentSelectedYoutubeVideos() {
+    var selectedRows = getSelectedYoutubeRows().filter(function(run) {
+      return safeText(run && run.video_url);
+    });
+    if (!selectedRows.length) {
+      notify('Select at least one YouTube video first', true);
+      return Promise.resolve();
+    }
+
+    var videoUrls = [];
+    var seen = new Set();
+    selectedRows.forEach(function(run) {
+      var videoUrl = safeText(run && run.video_url);
+      if (!videoUrl) return;
+      var key = videoUrl.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      videoUrls.push(videoUrl);
+    });
+
+    notify('Augmenting ' + videoUrls.length + ' selected video' + (videoUrls.length === 1 ? '' : 's') + '...');
+    return api('/api/acquire/youtube-videos/backfill-details', {
+      method: 'POST',
+      body: JSON.stringify({
+        video_urls: videoUrls,
+        limit: videoUrls.length,
+        delay_ms: 500,
+        force: false,
+      }),
+    }).then(function(res) {
+      var backfill = res && res.backfill ? res.backfill : res || {};
+      var updated = Number(backfill.created_runs || 0) || 0;
+      var skipped = Number(backfill.skipped || 0) || 0;
+      var failed = Number(backfill.failed || 0) || 0;
+      notify('Augment complete: ' + updated + ' updated, ' + skipped + ' skipped, ' + failed + ' failed');
+      return Promise.all([refreshYoutubeVideos(200), refreshYoutubeRuns(20), refreshCommentRuns(20)]);
+    }).catch(function(err) {
+      notify(err.message || 'Could not augment selected videos', true);
+    });
+  }
+
   function init() {
     var topBtn = document.getElementById('youtubeDetailsTopBtn');
     var openCategoriesBtn = document.getElementById('youtubeCategoriesOpenBtn');
@@ -3552,6 +3614,7 @@ App.youtube = (function () {
     var youtubeCategoryEditForm = document.getElementById('youtubeCategoryEditForm');
     var selectAllRuns = document.getElementById('youtubeRunsSelectAllVisible');
     var bulkEditBtn = document.getElementById('youtubeRunsBulkEditBtn');
+    var augmentBtn = document.getElementById('youtubeRunsAugmentBtn');
     var backFromEditRunBtn = document.getElementById('backFromEditYoutubeRunBtn');
     var backFromBulkEditBtn = document.getElementById('backFromBulkEditYoutubeRunsBtn');
     var youtubeRunEditForm = document.getElementById('youtubeRunEditForm');
@@ -3597,7 +3660,7 @@ App.youtube = (function () {
     if (selectAllRuns) {
       selectAllRuns.addEventListener('change', function() {
         getFilteredYoutubeRuns().forEach(function(run) {
-          var runId = safeText(run && run.run_id);
+          var runId = getRepositorySelectionKey(run);
           if (!runId) return;
           if (selectAllRuns.checked) selectedRunIds.add(runId);
           else selectedRunIds.delete(runId);
@@ -3607,6 +3670,11 @@ App.youtube = (function () {
     }
     if (bulkEditBtn) {
       bulkEditBtn.addEventListener('click', openBulkEditPage);
+    }
+    if (augmentBtn) {
+      augmentBtn.addEventListener('click', function() {
+        augmentSelectedYoutubeVideos();
+      });
     }
     if (backFromEditRunBtn) {
       backFromEditRunBtn.addEventListener('click', function() {
@@ -4004,8 +4072,10 @@ App.youtube = (function () {
         var tags = safeText(formData.get('tags'));
         if (!category && !tags) return notify('Enter a category, tags, or both', true);
 
-        var runIds = Array.from(selectedRunIds);
-        if (!runIds.length) return notify('Select at least one YouTube run first', true);
+        var runIds = getSelectedYoutubeRows().map(function(run) {
+          return safeText(run && run.detail_run_id);
+        }).filter(Boolean);
+        if (!runIds.length) return notify('Select at least one editable YouTube run first', true);
 
         Promise.all(runIds.map(function(runId) {
           return api('/api/acquire/youtube-runs/' + encodeURIComponent(runId), {
