@@ -785,11 +785,6 @@
         </section>
 
         <section class="youtube-miner-panel">
-          <div class="youtube-miner-header">
-            <h3 style="margin:0;">YouTube Comment Miner</h3>
-          </div>
-          <p>Review target videos and channels, refine how comments are surfaced, and generate reply-ready output from one working flow.</p>
-
           <section id="youtubeMinerTrainingPanel" class="youtube-miner-mode-panel">
             <form id="youtubeCommentMinerForm" class="stack-form labeled-form">
               <section class="youtube-miner-collapsible is-open">
@@ -994,36 +989,87 @@
                 <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
               </button>
               <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
-                <div class="youtube-miner-content-controls">
-                  <div class="form-row">
-                    <label for="youtubeMinerContentSearch">Filter</label>
-                    <input id="youtubeMinerContentSearch" type="text" placeholder="Search comment, author, hashtags, video..." />
+                <div class="youtube-content-top-row">
+                  <div class="youtube-content-filters-panel">
+                    <div class="youtube-miner-content-controls">
+                      <div class="form-row">
+                        <label for="youtubeMinerContentSearch">Filter</label>
+                        <input id="youtubeMinerContentSearch" type="text" placeholder="Search comment, author, hashtags, video..." />
+                      </div>
+                      <div class="form-row">
+                        <label for="youtubeMinerContentCategoryFilter">Category</label>
+                        <select id="youtubeMinerContentCategoryFilter">
+                          <option value="">All categories</option>
+                        </select>
+                      </div>
+                      <div class="form-row">
+                        <label for="youtubeMinerContentSort">Sort</label>
+                        <select id="youtubeMinerContentSort">
+                          <option value="score_desc" selected>Score (high to low)</option>
+                          <option value="score_asc">Score (low to high)</option>
+                          <option value="category_asc">Category (A-Z)</option>
+                          <option value="author_asc">Author (A-Z)</option>
+                        </select>
+                      </div>
+                      <div class="form-row">
+                        <label for="youtubeMinerContentReviewedFilter">Reviewed</label>
+                        <select id="youtubeMinerContentReviewedFilter">
+                          <option value="" selected>All</option>
+                          <option value="reviewed">Reviewed only</option>
+                          <option value="unreviewed">Unreviewed only</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
                   </div>
-                  <div class="form-row">
-                    <label for="youtubeMinerContentCategoryFilter">Category</label>
-                    <select id="youtubeMinerContentCategoryFilter">
-                      <option value="">All categories</option>
-                    </select>
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeMinerContentSort">Sort</label>
-                    <select id="youtubeMinerContentSort">
-                      <option value="score_desc" selected>Score (high to low)</option>
-                      <option value="score_asc">Score (low to high)</option>
-                      <option value="category_asc">Category (A-Z)</option>
-                      <option value="author_asc">Author (A-Z)</option>
-                    </select>
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeMinerContentReviewedFilter">Reviewed</label>
-                    <select id="youtubeMinerContentReviewedFilter">
-                      <option value="" selected>All</option>
-                      <option value="reviewed">Reviewed only</option>
-                      <option value="unreviewed">Unreviewed only</option>
-                    </select>
-                  </div>
+
+                  <section id="youtubeVideoDetailsSection" class="youtube-video-details-section youtube-video-details-inline">
+                    <div class="youtube-video-details-header">
+                      <h2 class="youtube-video-details-heading">Video Details</h2>
+                      <button id="youtubeDetailsTopBtn" type="button" class="youtube-top-btn" aria-label="Return to Top" title="Return to Top">&uarr;</button>
+                    </div>
+                    <h3 id="youtubeVideoTitleHeading" class="youtube-video-title-heading hidden">
+                      <a id="youtubeChannelLink" href="#" target="_blank" rel="noopener noreferrer"></a>
+                      <span id="youtubeHeadingDash" class="youtube-video-heading-dash"> - </span>
+                      <a id="youtubeVideoTitleLink" href="#" target="_blank" rel="noopener noreferrer"></a>
+                    </h3>
+
+                    <div class="youtube-upper-grid">
+                      <div class="youtube-upper-main">
+                        <div class="youtube-detail-block">
+                          <h4>Description</h4>
+                          <div id="youtubeDescriptionText" class="youtube-detail-text">No video loaded yet.</div>
+                        </div>
+
+                        <div class="youtube-detail-block">
+                          <h4>Hashtags</h4>
+                          <div id="youtubeHashtagsText" class="youtube-detail-text">-</div>
+                        </div>
+                      </div>
+                      <aside class="youtube-comment-submit-panel">
+                        <h4>Add Comment</h4>
+                        <textarea id="youtubeCommentInput" rows="6" placeholder="Write a comment..."></textarea>
+                        <div id="youtubeCommentSuggestionsWrap" class="youtube-comment-suggestions">
+                          <div id="youtubeCommentSuggestionsStatus" class="youtube-comment-suggestions-status"></div>
+                          <div id="youtubeCommentSuggestionsList"></div>
+                        </div>
+                        <button id="youtubeCommentSubmitBtn" type="button">Add Comment</button>
+                        <div id="youtubeCommentSubmitStatus" class="youtube-comment-submit-status"></div>
+                      </aside>
+                    </div>
+
+                    <div class="youtube-detail-block">
+                      <h4>Transcript</h4>
+                      <div id="youtubeTranscriptPreview" class="youtube-detail-text youtube-transcript-text youtube-scroll-field">No transcript loaded yet.</div>
+                    </div>
+
+                    <div class="youtube-detail-block">
+                      <h4>Comments</h4>
+                      <div id="youtubeCommentsPreview" class="youtube-detail-text">No comments loaded for this video.</div>
+                    </div>
+                  </section>
                 </div>
-                <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
+
                 <div class="table-wrap">
                   <table>
                     <thead>
@@ -1108,52 +1154,6 @@
               </table>
             </div>
           </div>
-        </section>
-
-        <section id="youtubeVideoDetailsSection" class="youtube-video-details-section">
-        <div class="youtube-video-details-header">
-        <h2 class="youtube-video-details-heading">Video Details</h2>
-        <button id="youtubeDetailsTopBtn" type="button" class="youtube-top-btn" aria-label="Return to Top" title="Return to Top">&uarr;</button>
-        </div>
-        <h3 id="youtubeVideoTitleHeading" class="youtube-video-title-heading hidden">
-          <a id="youtubeChannelLink" href="#" target="_blank" rel="noopener noreferrer"></a>
-          <span id="youtubeHeadingDash" class="youtube-video-heading-dash"> - </span>
-          <a id="youtubeVideoTitleLink" href="#" target="_blank" rel="noopener noreferrer"></a>
-        </h3>
-
-        <div class="youtube-upper-grid">
-          <div class="youtube-upper-main">
-            <div class="youtube-detail-block">
-              <h4>Description</h4>
-              <div id="youtubeDescriptionText" class="youtube-detail-text">No video loaded yet.</div>
-            </div>
-
-            <div class="youtube-detail-block">
-              <h4>Hashtags</h4>
-              <div id="youtubeHashtagsText" class="youtube-detail-text">-</div>
-            </div>
-          </div>
-          <aside class="youtube-comment-submit-panel">
-            <h4>Add Comment</h4>
-            <textarea id="youtubeCommentInput" rows="6" placeholder="Write a comment..."></textarea>
-            <div id="youtubeCommentSuggestionsWrap" class="youtube-comment-suggestions">
-              <div id="youtubeCommentSuggestionsStatus" class="youtube-comment-suggestions-status"></div>
-              <div id="youtubeCommentSuggestionsList"></div>
-            </div>
-            <button id="youtubeCommentSubmitBtn" type="button">Add Comment</button>
-            <div id="youtubeCommentSubmitStatus" class="youtube-comment-submit-status"></div>
-          </aside>
-        </div>
-
-        <div class="youtube-detail-block">
-          <h4>Transcript</h4>
-          <div id="youtubeTranscriptPreview" class="youtube-detail-text youtube-transcript-text youtube-scroll-field">No transcript loaded yet.</div>
-        </div>
-
-        <div class="youtube-detail-block">
-          <h4>Comments</h4>
-          <div id="youtubeCommentsPreview" class="youtube-detail-text">No comments loaded for this video.</div>
-        </div>
         </section>
 
         <details>
