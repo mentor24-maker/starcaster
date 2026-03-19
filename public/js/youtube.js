@@ -1318,7 +1318,10 @@ App.youtube = (function () {
   }
 
   function buildRepositoryRows() {
-    return (state.acquireYoutubeComments || []).map(function(commentRun) {
+    return (state.acquireYoutubeComments || []).filter(function(commentRun) {
+      return safeText(commentRun && commentRun.run_id).indexOf('ytcmt_') === 0
+        && safeText(commentRun && commentRun.video_url);
+    }).map(function(commentRun) {
       var detailRun = findYoutubeDetailsRunByVideo(safeText(commentRun && commentRun.video_url));
       var detailResult = detailRun && detailRun.result ? detailRun.result : {};
       var detailVideo = detailResult && detailResult.video ? detailResult.video : {};
@@ -3011,7 +3014,37 @@ App.youtube = (function () {
       } else { channelTd.textContent = channelText || '-'; }
 
       var categoryTd = document.createElement('td');
-      categoryTd.textContent = safeText(run.category) || '-';
+      if (safeText(run.category)) {
+        categoryTd.textContent = safeText(run.category);
+      } else if (safeText(run.detail_run_id)) {
+        var categorySelect = document.createElement('select');
+        categorySelect.innerHTML = '<option value="">Select Category</option>';
+        categoryOptions().forEach(function(category) {
+          var option = document.createElement('option');
+          option.value = category;
+          option.textContent = category;
+          categorySelect.appendChild(option);
+        });
+        categorySelect.addEventListener('change', function() {
+          var nextCategory = safeText(categorySelect.value);
+          if (!nextCategory) return;
+          api('/api/acquire/youtube-runs/' + encodeURIComponent(run.detail_run_id), {
+            method: 'PATCH',
+            body: JSON.stringify({ category: nextCategory }),
+          })
+            .then(function() {
+              notify('Category updated');
+              return refreshYoutubeRuns(20);
+            })
+            .catch(function(e) {
+              notify(e.message, true);
+              categorySelect.value = '';
+            });
+        });
+        categoryTd.appendChild(categorySelect);
+      } else {
+        categoryTd.textContent = '-';
+      }
 
       var tagsTd = document.createElement('td');
       tagsTd.textContent = safeText(run.tags) || '-';
