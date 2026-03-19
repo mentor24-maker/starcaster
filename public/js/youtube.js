@@ -1292,7 +1292,15 @@ App.youtube = (function () {
     return Array.isArray(state.acquireYoutubeCategories) ? state.acquireYoutubeCategories : [];
   }
 
+  function getYoutubeTrainingCategoryNames() {
+    return (Array.isArray(youtubeMinerCategoryConfig) ? youtubeMinerCategoryConfig : [])
+      .map(function(item) { return safeText(item && item.name); })
+      .filter(Boolean);
+  }
+
   function categoryOptions() {
+    var trainingNames = getYoutubeTrainingCategoryNames();
+    if (trainingNames.length) return trainingNames;
     return getYoutubeCategories()
       .map(function(item) { return safeText(item && item.category); })
       .filter(Boolean);
