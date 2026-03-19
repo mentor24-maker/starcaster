@@ -11,6 +11,7 @@ App.youtubeComments = (function () {
   let currentRunId = null;
   let allComments  = [];
   let currentRun   = null;  // Store run info (title, video_url) for table display
+  let sourcePageId = 'acquireYoutubePage';
 
   const filters = {
     from:    '',
@@ -35,15 +36,63 @@ App.youtubeComments = (function () {
     return `${yyyy}-${mm}-${dd}`;
   }
 
+  function getSourcePageLabel(pageId) {
+    return pageId === 'engageSocialPage' ? 'Promote: Social' : 'Acquire: YouTube';
+  }
+
+  function updateBackButton() {
+    const backBtn = document.getElementById('commentsPageBackBtn');
+    if (!backBtn) return;
+    backBtn.textContent = `Back to ${getSourcePageLabel(sourcePageId)}`;
+  }
+
+  function resetHeader() {
+    const titleEl = document.getElementById('commentsPageVideoTitle');
+    const channelEl = document.getElementById('commentsPageChannel');
+    const countEl = document.getElementById('commentsPageCount');
+    if (titleEl) titleEl.textContent = '-';
+    if (channelEl) channelEl.textContent = '';
+    if (countEl) countEl.textContent = '';
+  }
+
+  function renderEmptyState(message) {
+    const tbody = document.getElementById('commentsTable');
+    const emptyState = document.getElementById('commentsPageEmptyState');
+    const countEl = document.getElementById('commentsFilteredCount');
+    if (countEl) countEl.textContent = '0';
+    if (emptyState) emptyState.classList.remove('hidden');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 7;
+    td.textContent = message || 'No comments loaded yet.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+
   // -------------------------------------------------------------------------
   // Navigation helpers — called from youtube.js
   // -------------------------------------------------------------------------
 
-  function openForRun(run) {
+  function openPage(options) {
+    sourcePageId = String(options?.sourcePage || sourcePageId || 'acquireYoutubePage');
+    updateBackButton();
+    if (!currentRunId) {
+      resetHeader();
+      renderEmptyState('Open a YouTube comment run to review comments here.');
+    }
+    App.setActivePage('youtubeCommentsPage');
+  }
+
+  function openForRun(run, options) {
     // run = { run_id, title, video_url, channel_name, comment_count }
+    sourcePageId = String(options?.sourcePage || sourcePageId || 'acquireYoutubePage');
     currentRunId = run.run_id;
     currentRun  = run;  // Store run info for table display
     allComments  = [];
+
+    updateBackButton();
 
     // Update page header info
     const titleEl   = document.getElementById('commentsPageVideoTitle');
@@ -70,7 +119,7 @@ App.youtubeComments = (function () {
     if (typeEl)   typeEl.value   = 'all';
     if (likesEl)  likesEl.value  = '';
 
-    App.setActivePage('youtubeCommentsPage');
+    openPage({ sourcePage: sourcePageId });
     loadComments(run.run_id);
   }
 
@@ -81,6 +130,8 @@ App.youtubeComments = (function () {
   async function loadComments(runId) {
     const tbody = document.getElementById('commentsTable');
     if (!tbody) return;
+    const emptyState = document.getElementById('commentsPageEmptyState');
+    if (emptyState) emptyState.classList.add('hidden');
     tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
 
     try {
@@ -245,7 +296,12 @@ App.youtubeComments = (function () {
     // Back button
     const backBtn = document.getElementById('commentsPageBackBtn');
     if (backBtn) {
-      backBtn.addEventListener('click', () => App.setActivePage('acquireYoutubePage'));
+      backBtn.addEventListener('click', () => App.setActivePage(sourcePageId || 'acquireYoutubePage'));
+    }
+
+    const openYoutubeBtn = document.getElementById('commentsPageOpenYoutubeBtn');
+    if (openYoutubeBtn) {
+      openYoutubeBtn.addEventListener('click', () => App.setActivePage('acquireYoutubePage'));
     }
 
     // Date filters
@@ -290,11 +346,16 @@ App.youtubeComments = (function () {
         renderCommentsTable();
       });
     }
+
+    resetHeader();
+    updateBackButton();
+    renderEmptyState('Open a YouTube comment run to review comments here.');
   }
 
   return {
     manifest: { id: 'youtubeComments', label: 'YouTube Comments', pageId: 'youtubeCommentsPage' },
     init,
+    openPage,
     openForRun,
   };
 })();

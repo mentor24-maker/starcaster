@@ -2596,14 +2596,8 @@ App.youtube = (function () {
 
   function setYoutubeMinerMode(mode) {
     youtubeMinerMode = mode === 'production' ? 'production' : 'training';
-    var trainingBtn = document.getElementById('youtubeMinerTrainingBtn');
-    var productionBtn = document.getElementById('youtubeMinerProductionBtn');
     var trainingPanel = document.getElementById('youtubeMinerTrainingPanel');
-    var productionPanel = document.getElementById('youtubeMinerProductionPanel');
-    if (trainingBtn) trainingBtn.classList.toggle('active', youtubeMinerMode === 'training');
-    if (productionBtn) productionBtn.classList.toggle('active', youtubeMinerMode === 'production');
-    if (trainingPanel) trainingPanel.classList.toggle('hidden', youtubeMinerMode !== 'training');
-    if (productionPanel) productionPanel.classList.toggle('hidden', youtubeMinerMode !== 'production');
+    if (trainingPanel) trainingPanel.classList.toggle('hidden', false);
   }
 
   function setupYoutubeMinerCollapsibles() {
@@ -3500,20 +3494,12 @@ App.youtube = (function () {
       });
     }
 
-    var youtubeMinerTrainingBtn = document.getElementById('youtubeMinerTrainingBtn');
-    var youtubeMinerProductionBtn = document.getElementById('youtubeMinerProductionBtn');
     var youtubeMinerContentSearch = document.getElementById('youtubeMinerContentSearch');
     var youtubeMinerContentCategoryFilter = document.getElementById('youtubeMinerContentCategoryFilter');
     var youtubeMinerContentSort = document.getElementById('youtubeMinerContentSort');
     var youtubeMinerContentReviewedFilter = document.getElementById('youtubeMinerContentReviewedFilter');
     var youtubeMinerResponseContext = document.getElementById('youtubeMinerResponseContext');
     var youtubeMinerGuidelines = document.getElementById('youtubeMinerGuidelines');
-    if (youtubeMinerTrainingBtn) {
-      youtubeMinerTrainingBtn.addEventListener('click', function() { setYoutubeMinerMode('training'); });
-    }
-    if (youtubeMinerProductionBtn) {
-      youtubeMinerProductionBtn.addEventListener('click', function() { setYoutubeMinerMode('production'); });
-    }
     youtubeMinerCategoryConfig = applyRecommendedRows('category', loadYoutubeMinerCategoryConfig());
     youtubeMinerAttributeConfig = applyRecommendedRows('attribute', loadYoutubeMinerConfig('attribute'));
     youtubeMinerApproachConfig = applyRecommendedRows('approach', loadYoutubeMinerConfig('approach'));
