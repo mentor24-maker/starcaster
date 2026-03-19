@@ -22,6 +22,7 @@ App.youtube = (function () {
   var inlineCommentsCache = [];
   var suggestionLoadToken = 0;
   var youtubeMinerMode = 'training';
+  var activeVideoSnapshot = null;
   var youtubeMinerCategoryConfig = [];
   var youtubeMinerAttributeConfig = [];
   var youtubeMinerApproachConfig = [];
@@ -40,6 +41,7 @@ App.youtube = (function () {
   var YT_MINER_LAST_RESULT_KEY = 'yt_miner_last_result_v1';
   var YT_MINER_LAST_INPUT_KEY = 'yt_miner_last_input_v1';
   var YT_RESEARCH_LAST_RESULT_KEY = 'yt_research_last_result_v1';
+  var YT_ACTIVE_VIDEO_KEY = 'yt_active_video_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
   var youtubeMinerContextSaveTimer = null;
   var youtubeMinerContextSaving = false;
@@ -60,6 +62,30 @@ App.youtube = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  function extractYoutubeVideoId(value) {
+    var raw = safeText(value);
+    if (!raw) return '';
+    if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+    try {
+      var url = new URL(raw);
+      var host = String(url.hostname || '').toLowerCase();
+      if (host.indexOf('youtu.be') >= 0) {
+        var shortId = safeText(url.pathname.split('/').filter(Boolean)[0]);
+        return /^[A-Za-z0-9_-]{11}$/.test(shortId) ? shortId : '';
+      }
+      var queryId = safeText(url.searchParams.get('v'));
+      if (/^[A-Za-z0-9_-]{11}$/.test(queryId)) return queryId;
+      var parts = url.pathname.split('/').filter(Boolean);
+      var embedIndex = parts.indexOf('embed');
+      if (embedIndex >= 0 && /^[A-Za-z0-9_-]{11}$/.test(safeText(parts[embedIndex + 1]))) {
+        return safeText(parts[embedIndex + 1]);
+      }
+    } catch (_) {
+      return '';
+    }
+    return '';
   }
 
   function escapeHtml(value) {
@@ -670,6 +696,51 @@ App.youtube = (function () {
     } catch (_) {
       return null;
     }
+  }
+
+  function saveActiveVideoSnapshot(snapshot) {
+    try {
+      window.localStorage.setItem(YT_ACTIVE_VIDEO_KEY, JSON.stringify(snapshot || {}));
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function loadActiveVideoSnapshot() {
+    try {
+      var raw = window.localStorage.getItem(YT_ACTIVE_VIDEO_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function rememberActiveVideo(snapshot) {
+    var next = {
+      video_url: safeText(snapshot && snapshot.video_url),
+      video_id: safeText(snapshot && snapshot.video_id) || extractYoutubeVideoId(snapshot && snapshot.video_url),
+      title: safeText(snapshot && snapshot.title),
+      channel_name: safeText(snapshot && snapshot.channel_name),
+      channel_url: safeText(snapshot && snapshot.channel_url),
+    };
+    if (!next.video_url && !next.video_id && !next.title) return null;
+    activeVideoSnapshot = Object.assign({}, activeVideoSnapshot || {}, next);
+    saveActiveVideoSnapshot(activeVideoSnapshot);
+    return activeVideoSnapshot;
+  }
+
+  function findYoutubeDetailsRunByVideo(videoUrl) {
+    var targetUrl = safeText(videoUrl);
+    var targetId = extractYoutubeVideoId(videoUrl);
+    return (state.acquireYoutubeDetails || []).find(function(run) {
+      var runUrl = safeText(run && run.video_url);
+      var runId = extractYoutubeVideoId(runUrl);
+      if (targetUrl && runUrl && targetUrl === runUrl) return true;
+      if (targetId && runId && targetId === runId) return true;
+      return false;
+    }) || null;
   }
 
   function parseTagTokens(value) {
@@ -1362,6 +1433,99 @@ App.youtube = (function () {
     headingEl.classList.remove('hidden');
   }
 
+  function renderVideoMedia(video, runMeta) {
+    var playerEl = document.getElementById('youtubeVideoPlayer');
+    var thumbLinkEl = document.getElementById('youtubeVideoThumbLink');
+    var thumbImgEl = document.getElementById('youtubeVideoThumbnail');
+    var emptyEl = document.getElementById('youtubeVideoMediaEmpty');
+    var openLinkEl = document.getElementById('youtubeVideoOpenLink');
+    if (!playerEl || !thumbLinkEl || !thumbImgEl || !emptyEl || !openLinkEl) return;
+
+    var videoUrl = safeText(video && video.url) || safeText(runMeta && runMeta.video_url);
+    var videoId = safeText(video && video.id) || extractYoutubeVideoId(videoUrl);
+    var thumbUrl = videoId ? ('https://i.ytimg.com/vi/' + encodeURIComponent(videoId) + '/hqdefault.jpg') : '';
+    var embedUrl = videoId ? ('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId)) : '';
+
+    playerEl.classList.add('hidden');
+    thumbLinkEl.classList.add('hidden');
+    openLinkEl.classList.add('hidden');
+    emptyEl.classList.remove('hidden');
+    playerEl.removeAttribute('src');
+    thumbLinkEl.removeAttribute('href');
+    openLinkEl.removeAttribute('href');
+    thumbImgEl.removeAttribute('src');
+
+    if (!videoUrl && !videoId) {
+      emptyEl.textContent = 'No video loaded yet.';
+      return;
+    }
+
+    emptyEl.classList.add('hidden');
+    if (embedUrl) {
+      playerEl.src = embedUrl;
+      playerEl.classList.remove('hidden');
+    } else if (thumbUrl) {
+      thumbImgEl.src = thumbUrl;
+      thumbLinkEl.href = videoUrl || '#';
+      thumbLinkEl.classList.remove('hidden');
+    } else {
+      emptyEl.textContent = 'Preview unavailable for this video.';
+      emptyEl.classList.remove('hidden');
+    }
+
+    if (thumbUrl) thumbImgEl.src = thumbUrl;
+    if (videoUrl) {
+      thumbLinkEl.href = videoUrl;
+      openLinkEl.href = videoUrl;
+      openLinkEl.classList.remove('hidden');
+    }
+  }
+
+  function renderFallbackVideoDetails(videoUrl, fallbackMeta) {
+    var meta = Object.assign({}, currentDetailsRun || {}, fallbackMeta || {}, { video_url: safeText(videoUrl) });
+    currentDetailsRun = meta;
+    rememberActiveVideo(meta);
+    renderVideoTitleLink({
+      title: safeText(meta && meta.title),
+      url: safeText(videoUrl),
+      id: safeText(meta && meta.video_id),
+    }, {
+      name: safeText(meta && meta.channel_name),
+      profile_url: safeText(meta && meta.channel_url),
+    }, meta);
+    setDetailsField('youtubeDescriptionText', '', 'Video details are not loaded for this video yet.');
+    setDetailsField('youtubeHashtagsText', '', '-');
+    if (els.youtubeTranscriptPreview) {
+      els.youtubeTranscriptPreview.textContent = 'Transcript unavailable for this video.';
+    }
+    renderVideoMedia({
+      url: safeText(videoUrl),
+      id: safeText(meta && meta.video_id),
+      title: safeText(meta && meta.title),
+    }, meta);
+    loadInlineCommentsForVideo(videoUrl);
+  }
+
+  function syncActiveVideoFromUrl(videoUrl, fallbackMeta) {
+    var url = safeText(videoUrl);
+    if (!url) return false;
+    var matchedRun = findYoutubeDetailsRunByVideo(url);
+    if (matchedRun) {
+      currentDetailsRun = matchedRun;
+      rememberActiveVideo({
+        video_url: matchedRun.video_url,
+        title: matchedRun.title,
+        channel_name: matchedRun.channel_name,
+        channel_url: matchedRun.channel_url,
+      });
+      state.youtubeAcquireResult = matchedRun.result || null;
+      renderYoutubeAcquireResult();
+      return true;
+    }
+    renderFallbackVideoDetails(url, fallbackMeta || {});
+    return true;
+  }
+
   function setDetailsField(id, value, fallback) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -1451,6 +1615,8 @@ App.youtube = (function () {
     if (fromResult) return fromResult;
     var fromRun = String(currentDetailsRun && currentDetailsRun.video_url || '').trim();
     if (fromRun) return fromRun;
+    var fromSnapshot = String(activeVideoSnapshot && activeVideoSnapshot.video_url || '').trim();
+    if (fromSnapshot) return fromSnapshot;
     if (els.youtubeAcquireForm) {
       var input = els.youtubeAcquireForm.querySelector('[name="video_url"]');
       var fromForm = String(input && input.value || '').trim();
@@ -1598,6 +1764,7 @@ App.youtube = (function () {
       setDetailsField('youtubeDescriptionText', '', 'No video loaded yet.');
       setDetailsField('youtubeHashtagsText', '', '-');
       renderVideoTitleLink({}, {}, currentDetailsRun || {});
+      renderVideoMedia({}, currentDetailsRun || {});
       if (els.youtubeTranscriptPreview) {
         els.youtubeTranscriptPreview.textContent = 'No transcript loaded yet.';
       }
@@ -1610,9 +1777,17 @@ App.youtube = (function () {
     }
     const video = result.video || {};
     const owner = result.channel_owner || {};
+    rememberActiveVideo({
+      video_url: video.url || (currentDetailsRun && currentDetailsRun.video_url) || '',
+      video_id: video.id || '',
+      title: video.title || (currentDetailsRun && currentDetailsRun.title) || '',
+      channel_name: owner.name || (currentDetailsRun && currentDetailsRun.channel_name) || '',
+      channel_url: owner.profile_url || (currentDetailsRun && currentDetailsRun.channel_url) || '',
+    });
     setDetailsField('youtubeDescriptionText', video.description, '-');
     setDetailsField('youtubeHashtagsText', formatHashtags(video.hashtags), '-');
     renderVideoTitleLink(video, owner, currentDetailsRun || {});
+    renderVideoMedia(video, currentDetailsRun || {});
     if (els.youtubeTranscriptPreview) {
       var transcriptText = parseTranscriptForDisplay(video.transcript);
       els.youtubeTranscriptPreview.textContent = transcriptText || 'Transcript unavailable for this video.';
@@ -1625,15 +1800,10 @@ App.youtube = (function () {
 
   function renderYoutubeCommentsResult(result) {
     const comments = Array.isArray(result && result.comments) ? result.comments : [];
-    renderVideoTitleLink({
-      title: result && result.title ? result.title : '',
-      url: result && result.video_url ? result.video_url : ''
-    }, {}, currentDetailsRun || {});
-    setDetailsField('youtubeDescriptionText', '', '-');
-    setDetailsField('youtubeHashtagsText', '', '-');
-    if (els.youtubeTranscriptPreview) {
-      els.youtubeTranscriptPreview.textContent = 'Comments acquire runs do not include transcript.';
-    }
+    var videoUrl = safeText(result && result.video_url);
+    syncActiveVideoFromUrl(videoUrl, {
+      title: safeText(result && result.title),
+    });
     setCommentSubmitStatus('', false);
     renderGeneratedCommentOptions([]);
     setSuggestionStatus('Load video details to generate comment ideas from transcript/description.', true);
@@ -2147,6 +2317,18 @@ App.youtube = (function () {
       return scoreB - scoreA;
     });
 
+    var activeVideoUrl = getActiveVideoUrl();
+    var matchingActiveRow = comments.find(function(row) {
+      return safeText(row && row.video_url) && safeText(row && row.video_url) === activeVideoUrl;
+    });
+    var selectedVideoRow = matchingActiveRow || comments[0] || null;
+    if (selectedVideoRow && safeText(selectedVideoRow.video_url)) {
+      syncActiveVideoFromUrl(selectedVideoRow.video_url, {
+        title: safeText(selectedVideoRow.video_title),
+        channel_name: safeText(selectedVideoRow.channel_name),
+      });
+    }
+
     var harvestedVideos = Number(stats.harvested_videos || 0) || 0;
     var totalRaw = Number(stats.total_comments_raw || 0) || 0;
     var totalFiltered = Number(stats.total_comments_filtered || 0) || 0;
@@ -2247,6 +2429,12 @@ App.youtube = (function () {
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.textContent = videoTitle;
+        link.addEventListener('click', function() {
+          syncActiveVideoFromUrl(videoUrl, {
+            title: videoTitle,
+            channel_name: safeText(row && row.channel_name),
+          });
+        });
         videoTd.appendChild(link);
       } else {
         videoTd.textContent = videoTitle;
@@ -3141,6 +3329,12 @@ App.youtube = (function () {
     var res = await api('/api/acquire/youtube-runs/' + encodeURIComponent(runId));
     var run = res.run || null;
     currentDetailsRun = run;
+    rememberActiveVideo({
+      video_url: safeText(run && run.video_url),
+      title: safeText(run && run.title),
+      channel_name: safeText(run && run.channel_name),
+      channel_url: safeText(run && run.channel_url),
+    });
     state.youtubeAcquireResult = run && run.result ? run.result : null;
     if (run && run.video_url && els.youtubeAcquireForm) {
       var input = els.youtubeAcquireForm.querySelector('[name="video_url"]');
@@ -3185,6 +3379,12 @@ App.youtube = (function () {
       method: 'POST', body: JSON.stringify({ video_url: videoUrl }),
     });
     currentDetailsRun = run || currentDetailsRun;
+    rememberActiveVideo({
+      video_url: videoUrl,
+      title: safeText(run && run.title),
+      channel_name: safeText(run && run.channel_name),
+      channel_url: safeText(run && run.channel_url),
+    });
     renderYoutubeCommentsResult(res.result || {});
     var total = Number(res.result && res.result.stats ? res.result.stats.total_comments : 0) || 0;
     notify('YouTube comments acquire complete (' + total + ' comments)');
@@ -3306,6 +3506,7 @@ App.youtube = (function () {
           if (action === 'comments') {
             var res = await api('/api/acquire/youtube-comments', { method: 'POST', body: JSON.stringify(payload) });
             currentDetailsRun = { video_url: payload.video_url, category: selectedCategory };
+            rememberActiveVideo({ video_url: payload.video_url });
             renderYoutubeCommentsResult(res.result || {});
             var total = Number(res.result && res.result.stats ? res.result.stats.total_comments : 0) || 0;
             notify('YouTube comments acquire complete (' + total + ' comments)');
@@ -3313,6 +3514,12 @@ App.youtube = (function () {
           } else {
             var dres = await api('/api/acquire/youtube', { method: 'POST', body: JSON.stringify(payload) });
             currentDetailsRun = dres.run || { video_url: payload.video_url, category: selectedCategory };
+            rememberActiveVideo({
+              video_url: safeText(currentDetailsRun && currentDetailsRun.video_url),
+              title: safeText(currentDetailsRun && currentDetailsRun.title),
+              channel_name: safeText(currentDetailsRun && currentDetailsRun.channel_name),
+              channel_url: safeText(currentDetailsRun && currentDetailsRun.channel_url),
+            });
             state.youtubeAcquireResult = dres.result || null;
             renderCategoryControls();
             renderYoutubeAcquireResult();
@@ -3541,6 +3748,10 @@ App.youtube = (function () {
     bindYoutubeMinerConfigEvents('category');
     bindYoutubeMinerConfigEvents('attribute');
     bindYoutubeMinerConfigEvents('approach');
+    activeVideoSnapshot = loadActiveVideoSnapshot();
+    if (activeVideoSnapshot && !currentDetailsRun) {
+      currentDetailsRun = Object.assign({}, activeVideoSnapshot);
+    }
     setYoutubeMinerMode('training');
     setupYoutubeMinerCollapsibles();
     // Keep the YouTube miner sections collapsed by default.
@@ -3568,6 +3779,8 @@ App.youtube = (function () {
     var restoredMinerResult = loadYoutubeMinerLastResult();
     if (restoredMinerResult) {
       renderYoutubeCommentMinerResult(restoredMinerResult);
+    } else if (activeVideoSnapshot && activeVideoSnapshot.video_url) {
+      syncActiveVideoFromUrl(activeVideoSnapshot.video_url, activeVideoSnapshot);
     }
     if (youtubeMinerContentSearch) {
       youtubeMinerContentSearch.addEventListener('input', function() {
