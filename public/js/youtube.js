@@ -744,6 +744,50 @@ App.youtube = (function () {
     }) || null;
   }
 
+  function youtubeRunHasMeaningfulDetails(run) {
+    return Boolean(
+      safeText(run && run.title) ||
+      safeText(run && run.channel_name) ||
+      safeText(run && run.video_id) ||
+      safeText(run && run.category) ||
+      safeText(run && run.tags)
+    );
+  }
+
+  function compareRunCreatedDesc(left, right) {
+    return String(right && right.created_at || '').localeCompare(String(left && left.created_at || ''));
+  }
+
+  function findBestYoutubeDetailsRunForVideo(videoUrl) {
+    var targetUrl = safeText(videoUrl);
+    var targetId = extractYoutubeVideoId(videoUrl);
+    var matches = (state.acquireYoutubeDetails || []).filter(function(run) {
+      var runUrl = safeText(run && run.video_url);
+      var runId = extractYoutubeVideoId(runUrl) || safeText(run && run.video_id);
+      if (targetUrl && runUrl && targetUrl === runUrl) return true;
+      if (targetId && runId && targetId === runId) return true;
+      return false;
+    }).sort(compareRunCreatedDesc);
+    if (!matches.length) return null;
+    return matches.find(youtubeRunHasMeaningfulDetails) || matches[0];
+  }
+
+  function hydrateRepositoryRow(run) {
+    var row = Object.assign({}, run || {});
+    var detailRun = findBestYoutubeDetailsRunForVideo(row.video_url);
+    if (!detailRun) return row;
+    row.detail_run_id = safeText(detailRun && detailRun.run_id) || safeText(row.detail_run_id);
+    row.has_details = Boolean(row.has_details || (detailRun && detailRun.run_id));
+    row.title = safeText(row.title) || safeText(detailRun && detailRun.title);
+    row.channel_name = safeText(row.channel_name) || safeText(detailRun && detailRun.channel_name);
+    row.channel_url = safeText(row.channel_url) || safeText(detailRun && detailRun.channel_url);
+    row.category = safeText(row.category) || safeText(detailRun && detailRun.category);
+    row.tags = safeText(row.tags) || safeText(detailRun && detailRun.tags);
+    row.transcript_status = safeText(row.transcript_status) || safeText(detailRun && detailRun.transcript_status) || 'unavailable';
+    row.created_at = safeText(row.created_at) || safeText(detailRun && detailRun.created_at);
+    return row;
+  }
+
   function parseTagTokens(value) {
     return String(value || '')
       .split(/[\s,|;]+/g)
@@ -1341,9 +1385,11 @@ App.youtube = (function () {
 
   function buildRepositoryRows() {
     if (Array.isArray(state.acquireYoutubeVideos) && state.acquireYoutubeVideos.length) {
-      return state.acquireYoutubeVideos.slice().sort(function(a, b) {
-        return String(b && (b.updated_at || b.created_at) || '').localeCompare(String(a && (a.updated_at || a.created_at) || ''));
-      });
+      return state.acquireYoutubeVideos
+        .map(hydrateRepositoryRow)
+        .sort(function(a, b) {
+          return String(b && (b.updated_at || b.created_at) || '').localeCompare(String(a && (a.updated_at || a.created_at) || ''));
+        });
     }
 
     var rows = [];
@@ -3191,9 +3237,12 @@ App.youtube = (function () {
           .then(function() { notify('Video URL copied'); })
           .catch(function(e) { notify(safeText(e && e.message) || 'Could not copy URL', true); });
       });
+      var resolvedDetailRun = findBestYoutubeDetailsRunForVideo(run.video_url);
+      var resolvedDetailRunId = safeText(resolvedDetailRun && resolvedDetailRun.run_id) || safeText(run.detail_run_id);
+
       var viewBtn         = mkBtn('View', function() {
-        if (run.has_details) {
-          loadYoutubeRun(run.detail_run_id).catch(function(e) { notify(e.message, true); });
+        if (resolvedDetailRunId) {
+          loadYoutubeRun(resolvedDetailRunId).catch(function(e) { notify(e.message, true); });
           return;
         }
         currentDetailsRun = {
@@ -3207,8 +3256,8 @@ App.youtube = (function () {
         scrollToYoutubeDetails();
         notify('Loaded analyzed video');
       });
-      var editBtn         = mkBtn('Edit',            function() { openEditRun(run.detail_run_id).catch(function(e) { notify(e.message, true); }); });
-      var addBtn          = mkBtn('Add Contact',      function() { addContactFromRun(run.detail_run_id).catch(function(e) { notify(e.message, true); }); });
+      var editBtn         = mkBtn('Edit',            function() { openEditRun(resolvedDetailRunId).catch(function(e) { notify(e.message, true); }); });
+      var addBtn          = mkBtn('Add Contact',      function() { addContactFromRun(resolvedDetailRunId).catch(function(e) { notify(e.message, true); }); });
       
       var commentMatch = findCommentRunForVideoUrl(run.video_url) || (run.comment_run_id ? { run_id: run.comment_run_id, video_url: run.video_url, title: run.title, channel_name: run.channel_name, comment_count: run.comment_count } : null);
       var commentsBtn = mkBtn('View Comments', function() {
@@ -3223,7 +3272,7 @@ App.youtube = (function () {
         deleteCommentRun(run.comment_run_id).catch(function(e) { notify(e.message, true); });
       });
 
-      if (!run.has_details) {
+      if (!resolvedDetailRunId) {
         editBtn.disabled = true;
         addBtn.disabled = true;
       }
