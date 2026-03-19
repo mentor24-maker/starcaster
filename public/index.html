@@ -706,454 +706,454 @@
         <div class="page-heading-row">
         <h2>Acquire: YouTube</h2>
         </div>
-        <section class="youtube-miner-collapsible is-open">
-          <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeResearchBody" aria-expanded="true">
-            <span>Research</span>
-            <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-          </button>
-          <div id="youtubeResearchBody" class="youtube-miner-collapsible-body">
-            <p>Research starts from messaging phrases (articles, tweets, hashtags) and manual terms, discovers top YouTube targets, then distills prospects for Targeting.</p>
-            <form id="youtubeResearchForm" class="stack-form labeled-form">
-              <div class="grid-form" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start;">
-                <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
-                  <div class="form-row">
-                    <label for="youtubeResearchMessagingCategory">Messaging Category</label>
-                    <select id="youtubeResearchMessagingCategory" name="messaging_category">
-                      <option value="">All Categories</option>
-                    </select>
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeResearchHashtagSelect">Hashtag</label>
-                    <select id="youtubeResearchHashtagSelect" name="messaging_hashtag">
-                      <option value="">All Hashtags</option>
-                    </select>
-                  </div>
-                  <div class="form-row checkbox-row">
-                    <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
-                  </div>
-                  <div class="form-row checkbox-row">
-                    <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeResearchMaxPhrases">Max Phrases</label>
-                    <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeResearchVideosPerPhrase">Videos Per Phrase</label>
-                    <input id="youtubeResearchVideosPerPhrase" name="videos_per_phrase" type="number" min="1" max="10" value="3" />
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeResearchDistilledLimit">Distilled Targets</label>
-                    <input id="youtubeResearchDistilledLimit" name="distilled_target_limit" type="number" min="1" max="200" value="30" />
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
-                    <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
-                  </div>
-                </div>
-                <div class="form-row">
-                  <label for="youtubeResearchManualPhrases">Search Phrases</label>
-                  <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="One phrase per line"></textarea>
-                </div>
-              </div>
-              <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
-            </form>
-            <div id="youtubeResearchSummary" class="muted">No research run yet.</div>
-            <div class="page-heading-actions" style="justify-content:flex-end; margin: 0 0 0.6rem 0;">
-              <button type="button" id="youtubeResearchRefreshBtn">Refresh Research Runs</button>
-              <button type="button" id="youtubeResearchSendToTargetingBtn">Send Distilled Targets to Targeting</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Run ID</th>
-                    <th>Created</th>
-                    <th>Phrases</th>
-                    <th>Discovered</th>
-                    <th>Distilled</th>
-                    <th>Filtered Comments</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="youtubeResearchRunsTable">
-                  <tr><td colspan="7">No research runs yet.</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
         <section class="youtube-miner-panel">
-          <section id="youtubeMinerTrainingPanel" class="youtube-miner-mode-panel">
-            <form id="youtubeCommentMinerForm" class="stack-form labeled-form">
-              <section class="youtube-miner-collapsible is-open">
-                <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerTrainingBody" aria-expanded="true">
-                  <span>Targeting</span>
-                  <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-                </button>
-                <div id="youtubeMinerTrainingBody" class="youtube-miner-collapsible-body">
-                  <div class="youtube-miner-training-grid">
-                    <div class="youtube-miner-col-left">
-                      <div class="form-row">
-                        <label for="youtubeMinerTargets">Video/Channel Targets</label>
-                        <div class="youtube-miner-target-history-row">
-                          <select id="youtubeMinerTargetHistorySelect" aria-label="Previously entered targets">
-                            <option value="">Previously entered targets…</option>
-                          </select>
-                          <button type="button" id="youtubeMinerTargetHistoryAddBtn">Add Selected</button>
-                          <button type="button" id="youtubeMinerTargetHistoryRefreshBtn">Refresh</button>
-                        </div>
-                        <textarea id="youtubeMinerTargets" name="targets" rows="3" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-                      </div>
-                    </div>
-                    <div class="youtube-miner-col-right">
-                      <div class="form-row">
-                        <label for="youtubeMinerIncludePhrases">Include Phrases</label>
-                        <input id="youtubeMinerIncludePhrases" name="include_phrases_text" placeholder="wanting more, outgrowing, next level" />
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
-                        <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" placeholder="first, lol, sub4sub" />
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
-                        <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" type="number" min="1" max="20" value="5" />
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
-                        <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerMinScore">Minimum Score</label>
-                        <input id="youtubeMinerMinScore" name="min_score" type="number" min="0" max="20" value="3" />
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerSortBy">Sort</label>
-                        <select id="youtubeMinerSortBy" name="sort_by">
-                          <option value="relevance" selected>relevance</option>
-                          <option value="time">time</option>
-                        </select>
-                      </div>
-                      <div class="form-row checkbox-row youtube-miner-filter-checks">
-                        <label><input id="youtubeMinerIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
-                        <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" type="checkbox" checked /> Exclude obvious noise</label>
-                      </div>
-                    </div>
+          <form id="youtubeCommentMinerForm" class="hidden" aria-hidden="true"></form>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerResponseContextBody" aria-expanded="true">
+              <span>Context</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeMinerResponseContextBody" class="youtube-miner-collapsible-body">
+              <div class="form-row">
+                <label for="youtubeMinerResponseContext">
+                  Context used for draft replies (project themes, positioning, references)
+                </label>
+                <textarea
+                  id="youtubeMinerResponseContext"
+                  name="response_context"
+                  form="youtubeCommentMinerForm"
+                  rows="6"
+                  placeholder="Example: ISITAS focuses on practical self-alignment. Keep references moderate and relevant. Prefer encouraging, non-pushy replies that ask one clarifying question before CTA."
+                ></textarea>
+                <p class="muted">Tip: Keep this concise and evergreen. The miner will use this as guidance when creating reply drafts.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerCategoriesBody" aria-expanded="true">
+              <span>Training</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeMinerCategoriesBody" class="youtube-miner-collapsible-body">
+              <div class="form-row youtube-miner-category-config">
+                <div class="youtube-miner-category-header-row">
+                  <div>
+                    <label>Training Configuration: Categories</label>
+                    <p class="muted">Define category meaning and scoring priority. Value rank (1-5) increases how strongly a matched category is preferred.</p>
+                  </div>
+                  <div class="youtube-miner-category-toolbar-right">
+                    <button type="button" id="youtubeMinerAddCategoryBtn">Add Category</button>
+                    <button type="button" id="youtubeMinerEditCheckedBtn">Edit Categories</button>
+                    <button type="button" id="youtubeMinerDeleteCheckedBtn">Delete Categories</button>
                   </div>
                 </div>
-              </section>
-
-              <section class="youtube-miner-collapsible is-open">
-                <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerCategoriesBody" aria-expanded="true">
-                  <span>Configuration</span>
-                  <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-                </button>
-                <div id="youtubeMinerCategoriesBody" class="youtube-miner-collapsible-body">
-                  <div class="form-row youtube-miner-category-config">
-                    <div class="youtube-miner-category-header-row">
-                      <div>
-                        <label>Training Configuration: Categories</label>
-                        <p class="muted">Define category meaning and scoring priority. Value rank (1-5) increases how strongly a matched category is preferred.</p>
-                      </div>
-                      <div class="youtube-miner-category-toolbar-right">
-                        <button type="button" id="youtubeMinerAddCategoryBtn">Add Category</button>
-                        <button type="button" id="youtubeMinerEditCheckedBtn">Edit Categories</button>
-                        <button type="button" id="youtubeMinerDeleteCheckedBtn">Delete Categories</button>
-                      </div>
-                    </div>
-                    <div class="table-wrap">
-                      <table class="youtube-miner-category-table">
-                        <thead>
-                          <tr>
-                            <th><input id="youtubeMinerCategorySelectAll" type="checkbox" aria-label="Select all category rows" /></th>
-                            <th>Category</th>
-                            <th>Rationale</th>
-                            <th>Value (1-5)</th>
-                            <th>Match Hashtags</th>
-                            <th>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody id="youtubeMinerCategoryConfigTable"></tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div class="form-row youtube-miner-category-config">
-                    <div class="youtube-miner-category-header-row">
-                      <div>
-                        <label>Training Configuration: Attributes</label>
-                        <p class="muted">Define audience/personality attributes to classify commenters. Value rank (1-5) increases weighting when matched.</p>
-                      </div>
-                      <div class="youtube-miner-category-toolbar-right">
-                        <button type="button" id="youtubeMinerAddAttributeBtn">Add Attribute</button>
-                        <button type="button" id="youtubeMinerEditAttributesCheckedBtn">Edit Attributes</button>
-                        <button type="button" id="youtubeMinerDeleteAttributesCheckedBtn">Delete Attributes</button>
-                      </div>
-                    </div>
-                    <div class="table-wrap">
-                      <table class="youtube-miner-category-table">
-                        <thead>
-                          <tr>
-                            <th><input id="youtubeMinerAttributeSelectAll" type="checkbox" aria-label="Select all attribute rows" /></th>
-                            <th>Attribute</th>
-                            <th>Rationale</th>
-                            <th>Value (1-5)</th>
-                            <th>Match Hashtags</th>
-                            <th>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody id="youtubeMinerAttributeConfigTable"></tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div class="form-row youtube-miner-category-config">
-                    <div class="youtube-miner-category-header-row">
-                      <div>
-                        <label>Training Configuration: Approaches</label>
-                        <p class="muted">Define the engagement approach to use for matched comment patterns.</p>
-                      </div>
-                      <div class="youtube-miner-category-toolbar-right">
-                        <button type="button" id="youtubeMinerAddApproachBtn">Add Approach</button>
-                        <button type="button" id="youtubeMinerEditApproachesCheckedBtn">Edit Approaches</button>
-                        <button type="button" id="youtubeMinerDeleteApproachesCheckedBtn">Delete Approaches</button>
-                      </div>
-                    </div>
-                    <div class="table-wrap">
-                      <table class="youtube-miner-category-table">
-                        <thead>
-                          <tr>
-                            <th><input id="youtubeMinerApproachSelectAll" type="checkbox" aria-label="Select all approach rows" /></th>
-                            <th>Approach</th>
-                            <th>Rationale</th>
-                            <th>Value (1-5)</th>
-                            <th>Match Hashtags</th>
-                            <th>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody id="youtubeMinerApproachConfigTable"></tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section class="youtube-miner-collapsible is-open">
-                <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerResponseContextBody" aria-expanded="true">
-                  <span>Context</span>
-                  <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-                </button>
-                <div id="youtubeMinerResponseContextBody" class="youtube-miner-collapsible-body">
-                  <div class="form-row">
-                    <label for="youtubeMinerResponseContext">
-                      Context used for draft replies (project themes, positioning, references)
-                    </label>
-                    <textarea
-                      id="youtubeMinerResponseContext"
-                      name="response_context"
-                      rows="6"
-                      placeholder="Example: ISITAS focuses on practical self-alignment. Keep references moderate and relevant. Prefer encouraging, non-pushy replies that ask one clarifying question before CTA."
-                    ></textarea>
-                    <p class="muted">Tip: Keep this concise and evergreen. The miner will use this as guidance when creating reply drafts.</p>
-                  </div>
-                </div>
-              </section>
-
-              <section class="youtube-miner-collapsible is-open">
-                <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerGuidelinesBody" aria-expanded="true">
-                  <span>Guidelines / Rules</span>
-                  <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-                </button>
-                <div id="youtubeMinerGuidelinesBody" class="youtube-miner-collapsible-body">
-                  <div class="form-row">
-                    <label for="youtubeMinerGuidelines">
-                      Operational rules for reply drafting (style, constraints, do/don't)
-                    </label>
-                    <textarea
-                      id="youtubeMinerGuidelines"
-                      name="response_guidelines"
-                      rows="6"
-                      placeholder="- Never reuse the exact same reply text across comments&#10;- Always anchor response to the specific comment text&#10;- Ask one useful follow-up question max&#10;- Avoid generic coaching templates"
-                    ></textarea>
-                    <p class="muted">Use this for tactical rules. Keep project narrative and references in Context.</p>
-                  </div>
-                </div>
-              </section>
-              <button type="submit" id="youtubeCommentMinerSubmitBtn">Run Comment Miner</button>
-            </form>
-
-            <section class="youtube-miner-collapsible is-open">
-              <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerContentBody" aria-expanded="true">
-                <span>Content</span>
-                <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-              </button>
-              <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
-                <div class="youtube-content-top-row">
-                  <div class="youtube-content-filters-panel">
-                    <div class="youtube-miner-content-controls">
-                      <div class="form-row">
-                        <label for="youtubeMinerContentSearch">Filter</label>
-                        <input id="youtubeMinerContentSearch" type="text" placeholder="Search comment, author, hashtags, video..." />
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerContentCategoryFilter">Category</label>
-                        <select id="youtubeMinerContentCategoryFilter">
-                          <option value="">All categories</option>
-                        </select>
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerContentSort">Sort</label>
-                        <select id="youtubeMinerContentSort">
-                          <option value="score_desc" selected>Score (high to low)</option>
-                          <option value="score_asc">Score (low to high)</option>
-                          <option value="category_asc">Category (A-Z)</option>
-                          <option value="author_asc">Author (A-Z)</option>
-                        </select>
-                      </div>
-                      <div class="form-row">
-                        <label for="youtubeMinerContentReviewedFilter">Reviewed</label>
-                        <select id="youtubeMinerContentReviewedFilter">
-                          <option value="" selected>All</option>
-                          <option value="reviewed">Reviewed only</option>
-                          <option value="unreviewed">Unreviewed only</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
-                  </div>
-
-                  <section id="youtubeVideoDetailsSection" class="youtube-video-details-section youtube-video-details-inline">
-                    <div class="youtube-video-details-header">
-                      <h2 class="youtube-video-details-heading">Video Details</h2>
-                      <button id="youtubeDetailsTopBtn" type="button" class="youtube-top-btn" aria-label="Return to Top" title="Return to Top">&uarr;</button>
-                    </div>
-                    <h3 id="youtubeVideoTitleHeading" class="youtube-video-title-heading hidden">
-                      <a id="youtubeChannelLink" href="#" target="_blank" rel="noopener noreferrer"></a>
-                      <span id="youtubeHeadingDash" class="youtube-video-heading-dash"> - </span>
-                      <a id="youtubeVideoTitleLink" href="#" target="_blank" rel="noopener noreferrer"></a>
-                    </h3>
-
-                    <div class="youtube-upper-grid">
-                      <div class="youtube-upper-main">
-                        <div class="youtube-detail-block">
-                          <h4>Description</h4>
-                          <div id="youtubeDescriptionText" class="youtube-detail-text">No video loaded yet.</div>
-                        </div>
-
-                        <div class="youtube-detail-block">
-                          <h4>Hashtags</h4>
-                          <div id="youtubeHashtagsText" class="youtube-detail-text">-</div>
-                        </div>
-                      </div>
-                      <aside class="youtube-comment-submit-panel">
-                        <h4>Add Comment</h4>
-                        <textarea id="youtubeCommentInput" rows="6" placeholder="Write a comment..."></textarea>
-                        <div id="youtubeCommentSuggestionsWrap" class="youtube-comment-suggestions">
-                          <div id="youtubeCommentSuggestionsStatus" class="youtube-comment-suggestions-status"></div>
-                          <div id="youtubeCommentSuggestionsList"></div>
-                        </div>
-                        <button id="youtubeCommentSubmitBtn" type="button">Add Comment</button>
-                        <div id="youtubeCommentSubmitStatus" class="youtube-comment-submit-status"></div>
-                      </aside>
-                    </div>
-
-                    <div class="youtube-detail-block">
-                      <h4>Transcript</h4>
-                      <div id="youtubeTranscriptPreview" class="youtube-detail-text youtube-transcript-text youtube-scroll-field">No transcript loaded yet.</div>
-                    </div>
-
-                    <div class="youtube-detail-block">
-                      <h4>Comments</h4>
-                      <div id="youtubeCommentsPreview" class="youtube-detail-text">No comments loaded for this video.</div>
-                    </div>
-                  </section>
-                </div>
-
                 <div class="table-wrap">
-                  <table>
+                  <table class="youtube-miner-category-table">
                     <thead>
                       <tr>
-                        <th>Score</th>
+                        <th><input id="youtubeMinerCategorySelectAll" type="checkbox" aria-label="Select all category rows" /></th>
                         <th>Category</th>
-                        <th>Attributes</th>
-                        <th>Approach</th>
-                        <th>Why Surfaced</th>
-                        <th>Hashtags</th>
-                        <th>Author</th>
-                        <th>Video</th>
-                        <th>Comment</th>
-                        <th>Reply Draft</th>
-                        <th>Feedback</th>
+                        <th>Rationale</th>
+                        <th>Value (1-5)</th>
+                        <th>Match Hashtags</th>
+                        <th>Action</th>
                       </tr>
                     </thead>
-                    <tbody id="youtubeCommentMinerTable"></tbody>
+                    <tbody id="youtubeMinerCategoryConfigTable"></tbody>
                   </table>
                 </div>
               </div>
-            </section>
-          </section>
-        </section>
 
-        <section class="youtube-miner-collapsible is-open">
-          <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerRepositoryBody" aria-expanded="true">
-            <span>Repository</span>
-            <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-          </button>
-          <div id="youtubeMinerRepositoryBody" class="youtube-miner-collapsible-body">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr class="contacts-filter-row">
-                    <th>
-                      <input id="youtubeRunsSelectAllVisible" type="checkbox" aria-label="Select all visible YouTube runs" />
-                    </th>
-                    <th>
-                      <div class="youtube-date-filter-wrap">
-                        <label class="youtube-date-filter-item">
-                          <span>From</span>
-                          <input id="youtubeRunsFromDate" type="date" />
-                        </label>
-                        <label class="youtube-date-filter-item">
-                          <span>To</span>
-                          <input id="youtubeRunsToDate" type="date" />
-                        </label>
-                      </div>
-                    </th>
-                    <th><input id="youtubeRunsTitleFilter" placeholder="Video Title" /></th>
-                    <th><input id="youtubeRunsChannelFilter" placeholder="Channel" /></th>
-                    <th>
-                      <select id="youtubeRunsCategoryFilter">
+              <div class="form-row youtube-miner-category-config">
+                <div class="youtube-miner-category-header-row">
+                  <div>
+                    <label>Training Configuration: Attributes</label>
+                    <p class="muted">Define audience/personality attributes to classify commenters. Value rank (1-5) increases weighting when matched.</p>
+                  </div>
+                  <div class="youtube-miner-category-toolbar-right">
+                    <button type="button" id="youtubeMinerAddAttributeBtn">Add Attribute</button>
+                    <button type="button" id="youtubeMinerEditAttributesCheckedBtn">Edit Attributes</button>
+                    <button type="button" id="youtubeMinerDeleteAttributesCheckedBtn">Delete Attributes</button>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="youtube-miner-category-table">
+                    <thead>
+                      <tr>
+                        <th><input id="youtubeMinerAttributeSelectAll" type="checkbox" aria-label="Select all attribute rows" /></th>
+                        <th>Attribute</th>
+                        <th>Rationale</th>
+                        <th>Value (1-5)</th>
+                        <th>Match Hashtags</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="youtubeMinerAttributeConfigTable"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="form-row youtube-miner-category-config">
+                <div class="youtube-miner-category-header-row">
+                  <div>
+                    <label>Training Configuration: Approaches</label>
+                    <p class="muted">Define the engagement approach to use for matched comment patterns.</p>
+                  </div>
+                  <div class="youtube-miner-category-toolbar-right">
+                    <button type="button" id="youtubeMinerAddApproachBtn">Add Approach</button>
+                    <button type="button" id="youtubeMinerEditApproachesCheckedBtn">Edit Approaches</button>
+                    <button type="button" id="youtubeMinerDeleteApproachesCheckedBtn">Delete Approaches</button>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="youtube-miner-category-table">
+                    <thead>
+                      <tr>
+                        <th><input id="youtubeMinerApproachSelectAll" type="checkbox" aria-label="Select all approach rows" /></th>
+                        <th>Approach</th>
+                        <th>Rationale</th>
+                        <th>Value (1-5)</th>
+                        <th>Match Hashtags</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="youtubeMinerApproachConfigTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerGuidelinesBody" aria-expanded="true">
+              <span>Rules / Guidelines</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeMinerGuidelinesBody" class="youtube-miner-collapsible-body">
+              <div class="form-row">
+                <label for="youtubeMinerGuidelines">
+                  Operational rules for reply drafting (style, constraints, do/don't)
+                </label>
+                <textarea
+                  id="youtubeMinerGuidelines"
+                  name="response_guidelines"
+                  form="youtubeCommentMinerForm"
+                  rows="6"
+                  placeholder="- Never reuse the exact same reply text across comments&#10;- Always anchor response to the specific comment text&#10;- Ask one useful follow-up question max&#10;- Avoid generic coaching templates"
+                ></textarea>
+                <p class="muted">Use this for tactical rules. Keep project narrative and references in Context.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeResearchBody" aria-expanded="true">
+              <span>Research</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeResearchBody" class="youtube-miner-collapsible-body">
+              <p>Research starts from messaging phrases (articles, tweets, hashtags) and manual terms, discovers top YouTube targets, then distills prospects for Targeting.</p>
+              <form id="youtubeResearchForm" class="stack-form labeled-form">
+                <div class="grid-form" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start;">
+                  <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
+                    <div class="form-row">
+                      <label for="youtubeResearchMessagingCategory">Messaging Category</label>
+                      <select id="youtubeResearchMessagingCategory" name="messaging_category">
                         <option value="">All Categories</option>
                       </select>
-                    </th>
-                    <th>
-                      <select id="youtubeRunsTranscriptFilter">
-                        <option value="">All</option>
-                        <option value="found">Found</option>
-                        <option value="unavailable">Unavailable</option>
-                        <option value="failed">Failed</option>
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeResearchHashtagSelect">Hashtag</label>
+                      <select id="youtubeResearchHashtagSelect" name="messaging_hashtag">
+                        <option value="">All Hashtags</option>
                       </select>
-                    </th>
-                    <th>
-                      <button id="youtubeRunsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button>
-                    </th>
-                  </tr>
-                  <tr>
-                    <th></th>
-                    <th>Created</th>
-                    <th>Video Title</th>
-                    <th>Channel</th>
-                    <th>Category</th>
-                    <th>Hashtags</th>
-                    <th>Transcript</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="youtubeRunsTable"></tbody>
-              </table>
+                    </div>
+                    <div class="form-row checkbox-row">
+                      <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
+                    </div>
+                    <div class="form-row checkbox-row">
+                      <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeResearchMaxPhrases">Max Phrases</label>
+                      <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeResearchVideosPerPhrase">Videos Per Phrase</label>
+                      <input id="youtubeResearchVideosPerPhrase" name="videos_per_phrase" type="number" min="1" max="10" value="3" />
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeResearchDistilledLimit">Distilled Targets</label>
+                      <input id="youtubeResearchDistilledLimit" name="distilled_target_limit" type="number" min="1" max="200" value="30" />
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
+                      <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeResearchManualPhrases">Search Phrases</label>
+                    <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="One phrase per line"></textarea>
+                  </div>
+                </div>
+                <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
+              </form>
+              <div id="youtubeResearchSummary" class="muted">No research run yet.</div>
+              <div class="page-heading-actions" style="justify-content:flex-end; margin: 0 0 0.6rem 0;">
+                <button type="button" id="youtubeResearchRefreshBtn">Refresh Research Runs</button>
+                <button type="button" id="youtubeResearchSendToTargetingBtn">Send Distilled Targets to Targeting</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Run ID</th>
+                      <th>Created</th>
+                      <th>Phrases</th>
+                      <th>Discovered</th>
+                      <th>Distilled</th>
+                      <th>Filtered Comments</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="youtubeResearchRunsTable">
+                    <tr><td colspan="7">No research runs yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerRepositoryBody" aria-expanded="true">
+              <span>Repository</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeMinerRepositoryBody" class="youtube-miner-collapsible-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr class="contacts-filter-row">
+                      <th>
+                        <input id="youtubeRunsSelectAllVisible" type="checkbox" aria-label="Select all visible YouTube runs" />
+                      </th>
+                      <th>
+                        <div class="youtube-date-filter-wrap">
+                          <label class="youtube-date-filter-item">
+                            <span>From</span>
+                            <input id="youtubeRunsFromDate" type="date" />
+                          </label>
+                          <label class="youtube-date-filter-item">
+                            <span>To</span>
+                            <input id="youtubeRunsToDate" type="date" />
+                          </label>
+                        </div>
+                      </th>
+                      <th><input id="youtubeRunsTitleFilter" placeholder="Video Title" /></th>
+                      <th><input id="youtubeRunsChannelFilter" placeholder="Channel" /></th>
+                      <th>
+                        <select id="youtubeRunsCategoryFilter">
+                          <option value="">All Categories</option>
+                        </select>
+                      </th>
+                      <th>
+                        <select id="youtubeRunsTranscriptFilter">
+                          <option value="">All</option>
+                          <option value="found">Found</option>
+                          <option value="unavailable">Unavailable</option>
+                          <option value="failed">Failed</option>
+                        </select>
+                      </th>
+                      <th>
+                        <button id="youtubeRunsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button>
+                      </th>
+                    </tr>
+                    <tr>
+                      <th></th>
+                      <th>Created</th>
+                      <th>Video Title</th>
+                      <th>Channel</th>
+                      <th>Category</th>
+                      <th>Hashtags</th>
+                      <th>Transcript</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="youtubeRunsTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerTrainingBody" aria-expanded="true">
+              <span>Targeting</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeMinerTrainingBody" class="youtube-miner-collapsible-body">
+              <div class="youtube-miner-training-grid">
+                <div class="youtube-miner-col-left">
+                  <div class="form-row">
+                    <label for="youtubeMinerTargets">Video/Channel Targets</label>
+                    <div class="youtube-miner-target-history-row">
+                      <select id="youtubeMinerTargetHistorySelect" aria-label="Previously entered targets">
+                        <option value="">Previously entered targets…</option>
+                      </select>
+                      <button type="button" id="youtubeMinerTargetHistoryAddBtn">Add Selected</button>
+                      <button type="button" id="youtubeMinerTargetHistoryRefreshBtn">Refresh</button>
+                    </div>
+                    <textarea id="youtubeMinerTargets" name="targets" form="youtubeCommentMinerForm" rows="3" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+                  </div>
+                </div>
+                <div class="youtube-miner-col-right">
+                  <div class="form-row">
+                    <label for="youtubeMinerIncludePhrases">Include Phrases</label>
+                    <input id="youtubeMinerIncludePhrases" name="include_phrases_text" form="youtubeCommentMinerForm" placeholder="wanting more, outgrowing, next level" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
+                    <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" form="youtubeCommentMinerForm" placeholder="first, lol, sub4sub" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
+                    <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" form="youtubeCommentMinerForm" type="number" min="1" max="20" value="5" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
+                    <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" form="youtubeCommentMinerForm" type="number" min="1" max="500" value="100" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerMinScore">Minimum Score</label>
+                    <input id="youtubeMinerMinScore" name="min_score" form="youtubeCommentMinerForm" type="number" min="0" max="20" value="3" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerSortBy">Sort</label>
+                    <select id="youtubeMinerSortBy" name="sort_by" form="youtubeCommentMinerForm">
+                      <option value="relevance" selected>relevance</option>
+                      <option value="time">time</option>
+                    </select>
+                  </div>
+                  <div class="form-row checkbox-row youtube-miner-filter-checks">
+                    <label><input id="youtubeMinerIncludeReplies" name="include_replies" form="youtubeCommentMinerForm" type="checkbox" /> Include replies</label>
+                    <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" form="youtubeCommentMinerForm" type="checkbox" checked /> Exclude obvious noise</label>
+                  </div>
+                </div>
+              </div>
+              <button type="submit" id="youtubeCommentMinerSubmitBtn" form="youtubeCommentMinerForm">Run Comment Miner</button>
+            </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerContentBody" aria-expanded="true">
+              <span>Content</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
+              <div class="youtube-content-top-row">
+                <div class="youtube-content-filters-panel">
+                  <div class="youtube-miner-content-controls">
+                    <div class="form-row">
+                      <label for="youtubeMinerContentSearch">Filter</label>
+                      <input id="youtubeMinerContentSearch" type="text" placeholder="Search comment, author, hashtags, video..." />
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeMinerContentCategoryFilter">Category</label>
+                      <select id="youtubeMinerContentCategoryFilter">
+                        <option value="">All categories</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeMinerContentSort">Sort</label>
+                      <select id="youtubeMinerContentSort">
+                        <option value="score_desc" selected>Score (high to low)</option>
+                        <option value="score_asc">Score (low to high)</option>
+                        <option value="category_asc">Category (A-Z)</option>
+                        <option value="author_asc">Author (A-Z)</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="youtubeMinerContentReviewedFilter">Reviewed</label>
+                      <select id="youtubeMinerContentReviewedFilter">
+                        <option value="" selected>All</option>
+                        <option value="reviewed">Reviewed only</option>
+                        <option value="unreviewed">Unreviewed only</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
+                </div>
+
+                <section id="youtubeVideoDetailsSection" class="youtube-video-details-section youtube-video-details-inline">
+                  <div class="youtube-video-details-header">
+                    <h2 class="youtube-video-details-heading">Video Details</h2>
+                    <button id="youtubeDetailsTopBtn" type="button" class="youtube-top-btn" aria-label="Return to Top" title="Return to Top">&uarr;</button>
+                  </div>
+                  <h3 id="youtubeVideoTitleHeading" class="youtube-video-title-heading hidden">
+                    <a id="youtubeChannelLink" href="#" target="_blank" rel="noopener noreferrer"></a>
+                    <span id="youtubeHeadingDash" class="youtube-video-heading-dash"> - </span>
+                    <a id="youtubeVideoTitleLink" href="#" target="_blank" rel="noopener noreferrer"></a>
+                  </h3>
+
+                  <div class="youtube-upper-grid">
+                    <div class="youtube-upper-main">
+                      <div class="youtube-detail-block">
+                        <h4>Description</h4>
+                        <div id="youtubeDescriptionText" class="youtube-detail-text">No video loaded yet.</div>
+                      </div>
+
+                      <div class="youtube-detail-block">
+                        <h4>Hashtags</h4>
+                        <div id="youtubeHashtagsText" class="youtube-detail-text">-</div>
+                      </div>
+                    </div>
+                    <aside class="youtube-comment-submit-panel">
+                      <h4>Add Comment</h4>
+                      <textarea id="youtubeCommentInput" rows="6" placeholder="Write a comment..."></textarea>
+                      <div id="youtubeCommentSuggestionsWrap" class="youtube-comment-suggestions">
+                        <div id="youtubeCommentSuggestionsStatus" class="youtube-comment-suggestions-status"></div>
+                        <div id="youtubeCommentSuggestionsList"></div>
+                      </div>
+                      <button id="youtubeCommentSubmitBtn" type="button">Add Comment</button>
+                      <div id="youtubeCommentSubmitStatus" class="youtube-comment-submit-status"></div>
+                    </aside>
+                  </div>
+
+                  <div class="youtube-detail-block">
+                    <h4>Transcript</h4>
+                    <div id="youtubeTranscriptPreview" class="youtube-detail-text youtube-transcript-text youtube-scroll-field">No transcript loaded yet.</div>
+                  </div>
+
+                  <div class="youtube-detail-block">
+                    <h4>Comments</h4>
+                    <div id="youtubeCommentsPreview" class="youtube-detail-text">No comments loaded for this video.</div>
+                  </div>
+                </section>
+              </div>
+
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Score</th>
+                      <th>Category</th>
+                      <th>Attributes</th>
+                      <th>Approach</th>
+                      <th>Why Surfaced</th>
+                      <th>Hashtags</th>
+                      <th>Author</th>
+                      <th>Video</th>
+                      <th>Comment</th>
+                      <th>Reply Draft</th>
+                      <th>Feedback</th>
+                    </tr>
+                  </thead>
+                  <tbody id="youtubeCommentMinerTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         </section>
 
         <details>
