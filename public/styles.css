@@ -4687,6 +4687,9 @@ th {
   .youtube-content-top-row {
     grid-template-columns: 1fr;
   }
+  .youtube-content-filters-panel .youtube-miner-content-controls {
+    grid-template-columns: 1fr;
+  }
   .youtube-upper-grid {
     grid-template-columns: 1fr;
   }
@@ -4818,11 +4821,16 @@ th {
   grid-template-columns: 110px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  margin-bottom: 10px;
 }
 
 .youtube-content-filters-panel .youtube-miner-content-controls .form-row label {
   margin: 0;
+}
+
+.youtube-content-filters-panel .youtube-miner-content-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 14px;
 }
 
 .youtube-content-media-panel {
@@ -4864,14 +4872,6 @@ th {
   padding: 18px;
   color: #cbd5e1;
   text-align: center;
-}
-
-.youtube-content-media-actions {
-  min-height: 20px;
-}
-
-.youtube-content-media-link {
-  font-weight: 700;
 }
 
 .youtube-miner-collapsible {
