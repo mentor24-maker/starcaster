@@ -2602,13 +2602,13 @@ App.youtube = (function () {
 
   function setupYoutubeMinerCollapsibles() {
     var orderedTargetIds = [
-      'youtubeResearchBody',
-      'youtubeMinerTrainingBody',
-      'youtubeMinerCategoriesBody',
       'youtubeMinerResponseContextBody',
+      'youtubeMinerCategoriesBody',
       'youtubeMinerGuidelinesBody',
-      'youtubeMinerContentBody',
-      'youtubeMinerRepositoryBody'
+      'youtubeResearchBody',
+      'youtubeMinerRepositoryBody',
+      'youtubeMinerTrainingBody',
+      'youtubeMinerContentBody'
     ];
     var toggles = Array.prototype.slice.call(document.querySelectorAll('.youtube-miner-collapsible-toggle[data-target-id]'));
     toggles.forEach(function(toggle) {
@@ -3544,13 +3544,13 @@ App.youtube = (function () {
     setYoutubeMinerMode('training');
     setupYoutubeMinerCollapsibles();
     // Keep the YouTube miner sections collapsed by default.
-    setYoutubeMinerCollapsibleOpen('youtubeResearchBody', false);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerTrainingBody', false);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerCategoriesBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerResponseContextBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerCategoriesBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerGuidelinesBody', false);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeResearchBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerRepositoryBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerTrainingBody', false);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', true);
     refreshYoutubeResearchCategoryHashtagHints().catch(function(err) {
       notify(err.message || 'Could not load messaging categories/hashtags for research', true);
     });
