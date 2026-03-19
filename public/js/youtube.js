@@ -1312,6 +1312,7 @@ App.youtube = (function () {
     var selectAll = document.getElementById('youtubeRunsSelectAllVisible');
     var bulkBtn = document.getElementById('youtubeRunsBulkEditBtn');
     var augmentBtn = document.getElementById('youtubeRunsAugmentBtn');
+    var diagnoseBtn = document.getElementById('youtubeRunsDiagnoseBtn');
     var visibleIds = getFilteredYoutubeRuns().map(function(run) { return getRepositorySelectionKey(run); }).filter(Boolean);
     var selectedVisible = visibleIds.filter(function(runId) { return selectedRunIds.has(runId); });
 
@@ -1324,6 +1325,9 @@ App.youtube = (function () {
     }
     if (augmentBtn) {
       augmentBtn.disabled = getSelectedYoutubeRows().filter(function(run) { return safeText(run && run.video_url); }).length === 0;
+    }
+    if (diagnoseBtn) {
+      diagnoseBtn.disabled = getSelectedYoutubeRows().filter(function(run) { return safeText(run && run.video_url); }).length === 0;
     }
   }
 
@@ -3602,6 +3606,44 @@ App.youtube = (function () {
     });
   }
 
+  function diagnoseSelectedYoutubeVideos() {
+    var selectedRows = getSelectedYoutubeRows().filter(function(run) {
+      return safeText(run && run.video_url);
+    });
+    if (!selectedRows.length) {
+      notify('Select at least one YouTube video first', true);
+      return Promise.resolve();
+    }
+
+    var videoUrls = [];
+    var seen = new Set();
+    selectedRows.forEach(function(run) {
+      var videoUrl = safeText(run && run.video_url);
+      if (!videoUrl) return;
+      var key = videoUrl.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      videoUrls.push(videoUrl);
+    });
+
+    notify('Running diagnostics for ' + videoUrls.length + ' selected video' + (videoUrls.length === 1 ? '' : 's') + '...');
+    return api('/api/acquire/youtube-videos/diagnostics', {
+      method: 'POST',
+      body: JSON.stringify({ video_urls: videoUrls }),
+    }).then(function(res) {
+      var diagnostics = Array.isArray(res && res.diagnostics) ? res.diagnostics : [];
+      setPreview(document.getElementById('youtubeRawPreview'), {
+        selected_video_urls: videoUrls,
+        diagnostics: diagnostics,
+      });
+      notify('Diagnostics loaded into Raw YouTube JSON result');
+      var rawWrap = document.getElementById('youtubeRawPreview');
+      if (rawWrap && rawWrap.scrollIntoView) rawWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }).catch(function(err) {
+      notify(err.message || 'Could not load video diagnostics', true);
+    });
+  }
+
   function init() {
     var topBtn = document.getElementById('youtubeDetailsTopBtn');
     var openCategoriesBtn = document.getElementById('youtubeCategoriesOpenBtn');
@@ -3615,6 +3657,7 @@ App.youtube = (function () {
     var selectAllRuns = document.getElementById('youtubeRunsSelectAllVisible');
     var bulkEditBtn = document.getElementById('youtubeRunsBulkEditBtn');
     var augmentBtn = document.getElementById('youtubeRunsAugmentBtn');
+    var diagnoseBtn = document.getElementById('youtubeRunsDiagnoseBtn');
     var backFromEditRunBtn = document.getElementById('backFromEditYoutubeRunBtn');
     var backFromBulkEditBtn = document.getElementById('backFromBulkEditYoutubeRunsBtn');
     var youtubeRunEditForm = document.getElementById('youtubeRunEditForm');
@@ -3674,6 +3717,11 @@ App.youtube = (function () {
     if (augmentBtn) {
       augmentBtn.addEventListener('click', function() {
         augmentSelectedYoutubeVideos();
+      });
+    }
+    if (diagnoseBtn) {
+      diagnoseBtn.addEventListener('click', function() {
+        diagnoseSelectedYoutubeVideos();
       });
     }
     if (backFromEditRunBtn) {

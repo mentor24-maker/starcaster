@@ -128,8 +128,89 @@ function uniqueYoutubeUrls(values) {
       const key = item.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
+        return true;
+    });
+}
+
+function extractYoutubeVideoId(value) {
+  const raw = safeText(value);
+  if (!raw) return '';
+  if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    const host = safeText(url.hostname).toLowerCase();
+    if (host.includes('youtu.be')) {
+      const shortId = safeText(url.pathname.split('/').filter(Boolean)[0]);
+      return /^[A-Za-z0-9_-]{11}$/.test(shortId) ? shortId : '';
+    }
+    const queryId = safeText(url.searchParams.get('v'));
+    if (/^[A-Za-z0-9_-]{11}$/.test(queryId)) return queryId;
+  } catch (_) {
+    return '';
+  }
+  return '';
+}
+
+async function listYoutubeDiagnosticsForUrl(videoUrl) {
+  const normalizedUrl = safeText(videoUrl);
+  const videoId = extractYoutubeVideoId(normalizedUrl);
+  const cfg = tableConfig();
+  const [videosRes, detailsByUrlRes, detailsByIdRes, commentsByUrlRes, commentsByIdRes] = await Promise.all([
+    listYoutubeVideos(1000),
+    normalizedUrl ? sbQuery({
+      method: 'GET',
+      table: cfg.harvestYoutubeDetails,
+      query: `video_url=eq.${encodeURIComponent(normalizedUrl)}&select=run_id,video_url,video_id,title,channel_name,category,tags,transcript_status,created_at,updated_at&order=created_at.desc&limit=10`,
+    }) : Promise.resolve({ ok: true, data: [] }),
+    videoId ? sbQuery({
+      method: 'GET',
+      table: cfg.harvestYoutubeDetails,
+      query: `video_id=eq.${encodeURIComponent(videoId)}&select=run_id,video_url,video_id,title,channel_name,category,tags,transcript_status,created_at,updated_at&order=created_at.desc&limit=10`,
+    }) : Promise.resolve({ ok: true, data: [] }),
+    normalizedUrl ? sbQuery({
+      method: 'GET',
+      table: cfg.harvestYoutubeComments,
+      query: `video_url=eq.${encodeURIComponent(normalizedUrl)}&select=run_id,video_url,video_id,title,channel_name,comment_count,created_at,updated_at&order=created_at.desc&limit=10`,
+    }) : Promise.resolve({ ok: true, data: [] }),
+    videoId ? sbQuery({
+      method: 'GET',
+      table: cfg.harvestYoutubeComments,
+      query: `video_id=eq.${encodeURIComponent(videoId)}&select=run_id,video_url,video_id,title,channel_name,comment_count,created_at,updated_at&order=created_at.desc&limit=10`,
+    }) : Promise.resolve({ ok: true, data: [] }),
+  ]);
+
+  const canonicalVideos = videosRes.ok
+    ? toArray(videosRes.data).filter((item) => {
+        const itemUrl = safeText(item?.video_url);
+        const itemId = safeText(item?.video_id);
+        return (normalizedUrl && itemUrl === normalizedUrl) || (videoId && itemId === videoId);
+      })
+    : [];
+
+  const dedupeBy = (rows, keyFn) => {
+    const seen = new Set();
+    return toArray(rows).filter((row) => {
+      const key = safeText(keyFn(row));
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
+  };
+
+  return {
+    video_url: normalizedUrl,
+    video_id: videoId,
+    canonical: canonicalVideos,
+    detail_runs: dedupeBy([...(detailsByUrlRes.data || []), ...(detailsByIdRes.data || [])], (row) => row?.run_id),
+    comment_runs: dedupeBy([...(commentsByUrlRes.data || []), ...(commentsByIdRes.data || [])], (row) => row?.run_id),
+    errors: [
+      !videosRes.ok ? safeText(videosRes.error) : '',
+      !detailsByUrlRes.ok ? safeText(detailsByUrlRes.error) : '',
+      !detailsByIdRes.ok ? safeText(detailsByIdRes.error) : '',
+      !commentsByUrlRes.ok ? safeText(commentsByUrlRes.error) : '',
+      !commentsByIdRes.ok ? safeText(commentsByIdRes.error) : '',
+    ].filter(Boolean),
+  };
 }
 
 function normalizeKeyword(value) {
@@ -1776,6 +1857,22 @@ async function handle(req, res, pathname, method) {
     });
 
     return sendOk(res, 200, payload, { backfill: payload }), true;
+  }
+
+  // POST /api/acquire/youtube-videos/diagnostics
+  if (pathname === '/api/acquire/youtube-videos/diagnostics' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const targets = uniqueYoutubeUrls(body?.video_urls).slice(0, 25);
+    if (!targets.length) {
+      return sendErr(res, 400, 'video_urls is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const diagnostics = [];
+    for (const videoUrl of targets) {
+      diagnostics.push(await listYoutubeDiagnosticsForUrl(videoUrl));
+    }
+
+    return sendOk(res, 200, diagnostics, { diagnostics }, { total: diagnostics.length }), true;
   }
 
   // GET /api/acquire/youtube-videos/:id
