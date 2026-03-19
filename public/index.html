@@ -786,12 +786,9 @@
 
         <section class="youtube-miner-panel">
           <div class="youtube-miner-header">
-            <div id="youtubeMinerModeToggle" class="mode-toggle" role="tablist" aria-label="YouTube miner mode">
-              <button id="youtubeMinerTrainingBtn" type="button" class="active" data-mode="training">Training</button>
-              <button id="youtubeMinerProductionBtn" type="button" data-mode="production">Production</button>
-            </div>
+            <h3 style="margin:0;">YouTube Comment Miner</h3>
           </div>
-          <p>Use Training mode to fine-tune what gets surfaced and why. Use Production mode for queued continuous processing (next step).</p>
+          <p>Review target videos and channels, refine how comments are surfaced, and generate reply-ready output from one working flow.</p>
 
           <section id="youtubeMinerTrainingPanel" class="youtube-miner-mode-panel">
             <form id="youtubeCommentMinerForm" class="stack-form labeled-form">
@@ -854,7 +851,7 @@
 
               <section class="youtube-miner-collapsible is-open">
                 <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerCategoriesBody" aria-expanded="true">
-                  <span>Training</span>
+                  <span>Configuration</span>
                   <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
                 </button>
                 <div id="youtubeMinerCategoriesBody" class="youtube-miner-collapsible-body">
@@ -988,7 +985,7 @@
                   </div>
                 </div>
               </section>
-              <button type="submit" id="youtubeCommentMinerSubmitBtn">Run Training Miner</button>
+              <button type="submit" id="youtubeCommentMinerSubmitBtn">Run Comment Miner</button>
             </form>
 
             <section class="youtube-miner-collapsible is-open">
@@ -1049,25 +1046,6 @@
                 </div>
               </div>
             </section>
-          </section>
-
-          <section id="youtubeMinerProductionPanel" class="youtube-miner-mode-panel hidden">
-            <p class="muted">Production mode queue runner is next. This panel is now reserved for continuous processing criteria and queue controls.</p>
-            <div class="grid-form">
-              <div class="form-row">
-                <label for="youtubeProductionSeeds">Seeds (channels/videos)</label>
-                <textarea id="youtubeProductionSeeds" rows="4" placeholder="One channel/video per line"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="youtubeProductionCriteria">Discovery Criteria</label>
-                <textarea id="youtubeProductionCriteria" rows="4" placeholder="Keywords/segments for expanding to additional videos/channels"></textarea>
-              </div>
-            </div>
-            <div class="form-row checkbox-row">
-              <label><input id="youtubeProductionAutoExpand" type="checkbox" checked /> Auto-expand queue from discovered videos</label>
-              <label><input id="youtubeProductionAutoReplies" type="checkbox" /> Auto-draft replies for surfaced comments</label>
-            </div>
-            <button type="button" id="youtubeProductionStartBtn" disabled>Start Production Queue (coming next)</button>
           </section>
         </section>
 
@@ -1244,7 +1222,7 @@
       <section id="youtubeCommentsPage" class="app-page hidden">
       <div class="page-heading-row">
         <h2>YouTube Comments</h2>
-        <button type="button" id="commentsPageBackBtn">← Back to YouTube</button>
+        <button type="button" id="commentsPageBackBtn">Back</button>
       </div>
 
       <!-- Video info -->
@@ -1252,6 +1230,13 @@
         <strong id="commentsPageVideoTitle">-</strong>
         <span style="margin-left: 16px; color: #666;" id="commentsPageChannel"></span>
         <span style="margin-left: 16px; color: #888; font-size: 0.9em;" id="commentsPageCount"></span>
+      </div>
+
+      <div id="commentsPageEmptyState" class="hidden" style="margin-bottom: 16px; padding: 12px; background: #fff8e8; border: 1px solid #ead9a7; border-radius: 6px;">
+        <p style="margin: 0 0 10px 0;">Open a YouTube comment run from Acquire to review the full comment list here.</p>
+        <div class="page-heading-actions" style="justify-content: flex-start;">
+          <button type="button" id="commentsPageOpenYoutubeBtn">Open Acquire: YouTube</button>
+        </div>
       </div>
 
       <!-- Comments table -->
@@ -1756,6 +1741,7 @@
         <div class="page-heading-row">
           <h2>Promote: Social</h2>
           <div class="page-heading-actions">
+            <button id="engageSocialOpenYoutubeCommentsBtn" type="button">YouTube Comments</button>
             <button id="engageSocialPublishDueBtn" type="button">Publish Due Posts</button>
             <button id="engageSocialDiagnosticsBtn" type="button">Run Diagnostics</button>
             <button id="engageSocialOpenSettingsBtn" type="button">API Settings</button>

@@ -185,6 +185,7 @@ App.engageSocial = (function () {
   function init() {
     const form = el('engageSocialComposerForm');
     const text = el('engageSocialText');
+    const openYoutubeCommentsBtn = el('engageSocialOpenYoutubeCommentsBtn');
     const publishNowBtn = el('engageSocialPublishNowBtn');
     const publishDueBtn = el('engageSocialPublishDueBtn');
     const openSettingsBtn = el('engageSocialOpenSettingsBtn');
@@ -203,6 +204,16 @@ App.engageSocial = (function () {
     if (publishNowBtn) {
       publishNowBtn.addEventListener('click', async function () {
         await submitComposer(true);
+      });
+    }
+
+    if (openYoutubeCommentsBtn) {
+      openYoutubeCommentsBtn.addEventListener('click', function () {
+        if (typeof App.youtubeComments?.openPage === 'function') {
+          App.youtubeComments.openPage({ sourcePage: 'engageSocialPage' });
+          return;
+        }
+        App.setActivePage('youtubeCommentsPage');
       });
     }
 
