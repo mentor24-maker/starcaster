@@ -1435,43 +1435,30 @@ App.youtube = (function () {
 
   function renderVideoMedia(video, runMeta) {
     var playerEl = document.getElementById('youtubeVideoPlayer');
-    var thumbLinkEl = document.getElementById('youtubeVideoThumbLink');
-    var thumbImgEl = document.getElementById('youtubeVideoThumbnail');
     var emptyEl = document.getElementById('youtubeVideoMediaEmpty');
-    if (!playerEl || !thumbLinkEl || !thumbImgEl || !emptyEl) return;
+    if (!playerEl || !emptyEl) return;
 
     var videoUrl = safeText(video && video.url) || safeText(runMeta && runMeta.video_url);
     var videoId = safeText(video && video.id) || extractYoutubeVideoId(videoUrl);
-    var thumbUrl = videoId ? ('https://i.ytimg.com/vi/' + encodeURIComponent(videoId) + '/hqdefault.jpg') : '';
     var embedUrl = videoId ? ('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId)) : '';
 
     playerEl.classList.add('hidden');
-    thumbLinkEl.classList.add('hidden');
     emptyEl.classList.remove('hidden');
     playerEl.removeAttribute('src');
-    thumbLinkEl.removeAttribute('href');
-    thumbImgEl.removeAttribute('src');
 
     if (!videoUrl && !videoId) {
       emptyEl.textContent = 'No video loaded yet.';
       return;
     }
 
-    emptyEl.classList.add('hidden');
     if (embedUrl) {
+      emptyEl.classList.add('hidden');
       playerEl.src = embedUrl;
       playerEl.classList.remove('hidden');
-    } else if (thumbUrl) {
-      thumbImgEl.src = thumbUrl;
-      thumbLinkEl.href = videoUrl || '#';
-      thumbLinkEl.classList.remove('hidden');
     } else {
       emptyEl.textContent = 'Preview unavailable for this video.';
       emptyEl.classList.remove('hidden');
     }
-
-    if (thumbUrl) thumbImgEl.src = thumbUrl;
-    if (videoUrl) thumbLinkEl.href = videoUrl;
   }
 
   function renderFallbackVideoDetails(videoUrl, fallbackMeta) {
@@ -1537,44 +1524,30 @@ App.youtube = (function () {
   function renderInlineComments(comments, fallback) {
     var el = document.getElementById('youtubeCommentsPreview');
     if (!el) return;
-    el.innerHTML = '';
     var rows = Array.isArray(comments) ? comments : [];
     inlineCommentsCache = rows.slice();
     if (!rows.length) {
       el.textContent = String(fallback || 'No comments loaded for this video.');
       return;
     }
-    rows.slice(0, 30).forEach(function(comment) {
-      var wrap = document.createElement('div');
-      wrap.className = 'youtube-comment-item';
-
-      var meta = document.createElement('div');
-      meta.className = 'youtube-comment-meta';
-      var author = String(comment && comment.author ? comment.author : '').trim() || 'Unknown author';
-      var likes = Number(comment && comment.like_count ? comment.like_count : 0) || 0;
-      meta.textContent = author + ' - ' + likes.toLocaleString() + ' likes';
-
-      var body = document.createElement('div');
-      body.className = 'youtube-detail-text';
-      body.textContent = String(comment && comment.text ? comment.text : '').trim() || '-';
-
-      wrap.appendChild(meta);
-      wrap.appendChild(body);
-      el.appendChild(wrap);
-    });
+    var totalLikes = rows.reduce(function(sum, comment) {
+      return sum + (Number(comment && comment.like_count ? comment.like_count : 0) || 0);
+    }, 0);
+    el.textContent = rows.length.toLocaleString() + ' comments loaded'
+      + (totalLikes ? (' | ' + totalLikes.toLocaleString() + ' total likes') : '');
   }
 
   async function loadInlineCommentsForVideo(videoUrl) {
     var url = String(videoUrl || '').trim();
     if (!url) {
-      renderInlineComments([], 'No comments loaded for this video.');
+      renderInlineComments([], 'No comment metadata loaded for this video.');
       return;
     }
     var match = (state.acquireYoutubeComments || []).find(function(r) {
       return String(r.video_url || '').trim() === url;
     });
     if (!match || !match.run_id) {
-      renderInlineComments([], 'No acquired comments found for this video.');
+      renderInlineComments([], 'No acquired comment metadata found for this video.');
       return;
     }
     var token = ++activeCommentsLoadToken;
@@ -1584,10 +1557,10 @@ App.youtube = (function () {
       var run = res.run || {};
       var result = run.result || run.result_json || {};
       var comments = Array.isArray(result.comments) ? result.comments : [];
-      renderInlineComments(comments, 'No comments found in this run.');
+      renderInlineComments(comments, 'No comment metadata found in this run.');
     } catch (err) {
       if (token !== activeCommentsLoadToken) return;
-      renderInlineComments([], 'Comments could not be loaded.');
+      renderInlineComments([], 'Comment metadata could not be loaded.');
     }
   }
 
