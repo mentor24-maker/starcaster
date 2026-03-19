@@ -1050,7 +1050,7 @@
               <span>Content</span>
               <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
             </button>
-            <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
+              <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
               <div class="youtube-content-top-row">
                 <div class="youtube-content-filters-panel">
                   <div class="youtube-miner-content-controls">
@@ -1108,16 +1108,6 @@
                         <div id="youtubeHashtagsText" class="youtube-detail-text">-</div>
                       </div>
                     </div>
-                    <aside class="youtube-comment-submit-panel">
-                      <h4>Add Comment</h4>
-                      <textarea id="youtubeCommentInput" rows="6" placeholder="Write a comment..."></textarea>
-                      <div id="youtubeCommentSuggestionsWrap" class="youtube-comment-suggestions">
-                        <div id="youtubeCommentSuggestionsStatus" class="youtube-comment-suggestions-status"></div>
-                        <div id="youtubeCommentSuggestionsList"></div>
-                      </div>
-                      <button id="youtubeCommentSubmitBtn" type="button">Add Comment</button>
-                      <div id="youtubeCommentSubmitStatus" class="youtube-comment-submit-status"></div>
-                    </aside>
                   </div>
 
                   <div class="youtube-detail-block">
@@ -1130,6 +1120,29 @@
                     <div id="youtubeCommentsPreview" class="youtube-detail-text">No comments loaded for this video.</div>
                   </div>
                 </section>
+
+                <aside class="youtube-content-media-panel">
+                  <div class="youtube-video-media-frame">
+                    <iframe id="youtubeVideoPlayer" class="youtube-video-player hidden" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                    <a id="youtubeVideoThumbLink" class="youtube-video-thumb-link hidden" href="#" target="_blank" rel="noopener noreferrer">
+                      <img id="youtubeVideoThumbnail" class="youtube-video-thumbnail" alt="YouTube video thumbnail" />
+                    </a>
+                    <div id="youtubeVideoMediaEmpty" class="youtube-video-media-empty">No video loaded yet.</div>
+                  </div>
+                  <div class="youtube-content-media-actions">
+                    <a id="youtubeVideoOpenLink" class="youtube-content-media-link hidden" href="#" target="_blank" rel="noopener noreferrer">Open on YouTube</a>
+                  </div>
+                  <section class="youtube-comment-submit-panel">
+                    <h4>Add Comment</h4>
+                    <textarea id="youtubeCommentInput" rows="6" placeholder="Write a comment..."></textarea>
+                    <div id="youtubeCommentSuggestionsWrap" class="youtube-comment-suggestions">
+                      <div id="youtubeCommentSuggestionsStatus" class="youtube-comment-suggestions-status"></div>
+                      <div id="youtubeCommentSuggestionsList"></div>
+                    </div>
+                    <button id="youtubeCommentSubmitBtn" type="button">Add Comment</button>
+                    <div id="youtubeCommentSubmitStatus" class="youtube-comment-submit-status"></div>
+                  </section>
+                </aside>
               </div>
 
               <div class="table-wrap">
