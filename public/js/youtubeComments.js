@@ -59,6 +59,16 @@ App.youtubeComments = (function () {
     return Array.isArray(state.acquireYoutubeVideos) ? state.acquireYoutubeVideos.slice(0, 50) : [];
   }
 
+  async function refreshRepositoryVideos() {
+    try {
+      const res = await api('/api/acquire/youtube-videos?limit=50');
+      state.acquireYoutubeVideos = Array.isArray(res.videos) ? res.videos : [];
+    } catch (_) {
+      state.acquireYoutubeVideos = Array.isArray(state.acquireYoutubeVideos) ? state.acquireYoutubeVideos : [];
+    }
+    renderVideoUrlOptions(currentRun && currentRun.video_url);
+  }
+
   function renderVideoUrlOptions(selectedUrl) {
     const selectEl = document.getElementById('commentsVideoUrlSelect');
     if (!selectEl) return;
@@ -143,10 +153,10 @@ App.youtubeComments = (function () {
   // Navigation helpers — called from youtube.js
   // -------------------------------------------------------------------------
 
-  function openPage(options) {
+  async function openPage(options) {
     sourcePageId = String(options?.sourcePage || sourcePageId || 'acquireYoutubePage');
     updateBackButton();
-    renderVideoUrlOptions(currentRun && currentRun.video_url);
+    await refreshRepositoryVideos();
     updateScheduleUi();
     if (!currentRunId) {
       resetHeader();
