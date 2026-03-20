@@ -970,58 +970,70 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/engage/youtube-comment-agents' && requestMethod === 'GET') {
-    const agents = (await listYoutubeCommentAgents()).map((agent) => normalizeSavedYoutubeAgent(agent));
-    return sendOk(res, 200, agents, { agents }, { total: agents.length }), true;
+    try {
+      const agents = (await listYoutubeCommentAgents()).map((agent) => normalizeSavedYoutubeAgent(agent));
+      return sendOk(res, 200, agents, { agents }, { total: agents.length }), true;
+    } catch (err) {
+      return sendErr(res, 500, safeText(err?.message) || 'Could not load YouTube comment agents', { code: 'YOUTUBE_AGENT_LIST_FAILED' }), true;
+    }
   }
 
   if (pathname === '/api/engage/youtube-comment-agents' && requestMethod === 'POST') {
-    const body = await parseJsonBody(req);
-    const payload = normalizeYoutubeCommentAgentPayload(body);
-    if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!payload.fromDate) return sendErr(res, 400, 'fromDate is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!payload.toDate) return sendErr(res, 400, 'toDate is required', { code: 'VALIDATION_ERROR' }), true;
-    const agentId = safeText(body?.agentId || body?.agent_id);
-    const existingAgent = agentId ? await getYoutubeCommentAgent(agentId) : null;
-    let agent = null;
-    const seed = normalizeSavedYoutubeAgent({
-      ...(existingAgent || {}),
-      ...payload,
-      id: agentId || safeText(existingAgent?.id),
-      lastError: '',
-      scheduleEnabled: payload.scheduleEnabled,
-      scheduleStatus: payload.scheduleEnabled ? 'scheduled' : 'disabled',
-      scheduleNote: payload.scheduleEnabled
-        ? 'Scheduling is active. Posts will run automatically when due.'
-        : 'Scheduling is disabled.',
-    });
-    if (agentId && existingAgent) {
-      agent = await updateYoutubeCommentAgent(agentId, seed);
-    } else {
-      const created = await createYoutubeCommentAgent(seed);
-      agent = created ? normalizeSavedYoutubeAgent(created) : null;
+    try {
+      const body = await parseJsonBody(req);
+      const payload = normalizeYoutubeCommentAgentPayload(body);
+      if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
+      if (!payload.fromDate) return sendErr(res, 400, 'fromDate is required', { code: 'VALIDATION_ERROR' }), true;
+      if (!payload.toDate) return sendErr(res, 400, 'toDate is required', { code: 'VALIDATION_ERROR' }), true;
+      const agentId = safeText(body?.agentId || body?.agent_id);
+      const existingAgent = agentId ? await getYoutubeCommentAgent(agentId) : null;
+      let agent = null;
+      const seed = normalizeSavedYoutubeAgent({
+        ...(existingAgent || {}),
+        ...payload,
+        id: agentId || safeText(existingAgent?.id),
+        lastError: '',
+        scheduleEnabled: payload.scheduleEnabled,
+        scheduleStatus: payload.scheduleEnabled ? 'scheduled' : 'disabled',
+        scheduleNote: payload.scheduleEnabled
+          ? 'Scheduling is active. Posts will run automatically when due.'
+          : 'Scheduling is disabled.',
+      });
+      if (agentId && existingAgent) {
+        agent = await updateYoutubeCommentAgent(agentId, seed);
+      } else {
+        const created = await createYoutubeCommentAgent(seed);
+        agent = created ? normalizeSavedYoutubeAgent(created) : null;
+      }
+      if (!agent || !agent.id) {
+        return sendErr(res, 500, 'Could not persist YouTube comment agent', { code: 'YOUTUBE_AGENT_SAVE_FAILED' }), true;
+      }
+      logActivity({
+        action: 'engage.youtube_comment_agent_saved',
+        entityType: 'engage_youtube_comment_agent',
+        entityId: agent.id,
+        summary: 'Saved scheduled YouTube comment promotion agent',
+        meta: {
+          video_url: agent.videoUrl,
+          frequency: agent.frequency,
+          timeframe: agent.timeframe,
+          max_posts: agent.maxPosts,
+          video_comment_ratio: agent.videoCommentRatio,
+        },
+      });
+      return sendOk(res, 201, { agent }, { agent }), true;
+    } catch (err) {
+      return sendErr(res, 500, safeText(err?.message) || 'Could not persist YouTube comment agent', { code: 'YOUTUBE_AGENT_SAVE_FAILED' }), true;
     }
-    if (!agent || !agent.id) {
-      return sendErr(res, 500, 'Could not persist YouTube comment agent', { code: 'YOUTUBE_AGENT_SAVE_FAILED' }), true;
-    }
-    logActivity({
-      action: 'engage.youtube_comment_agent_saved',
-      entityType: 'engage_youtube_comment_agent',
-      entityId: agent.id,
-      summary: 'Saved scheduled YouTube comment promotion agent',
-      meta: {
-        video_url: agent.videoUrl,
-        frequency: agent.frequency,
-        timeframe: agent.timeframe,
-        max_posts: agent.maxPosts,
-        video_comment_ratio: agent.videoCommentRatio,
-      },
-    });
-    return sendOk(res, 201, { agent }, { agent }), true;
   }
 
   if (pathname === '/api/engage/youtube-comment-agents/run-due' && (requestMethod === 'POST' || requestMethod === 'GET')) {
-    const result = await runDueYoutubeCommentAgents();
-    return sendOk(res, 200, result.data, result.data), true;
+    try {
+      const result = await runDueYoutubeCommentAgents();
+      return sendOk(res, 200, result.data, result.data), true;
+    } catch (err) {
+      return sendErr(res, 500, safeText(err?.message) || 'Could not run due YouTube comment agents', { code: 'YOUTUBE_AGENT_RUN_DUE_FAILED' }), true;
+    }
   }
 
   if (pathname === '/api/engage/youtube-comment-agents/preflight' && requestMethod === 'POST') {
@@ -1032,63 +1044,67 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/engage/youtube-comment-agents/test-post' && requestMethod === 'POST') {
-    const body = await parseJsonBody(req);
-    const payload = normalizeYoutubeCommentAgentPayload(body);
-    if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
-    const existingAgent = safeText(body?.agentId || body?.agent_id)
-      ? await getYoutubeCommentAgent(safeText(body?.agentId || body?.agent_id))
-      : null;
-    const execRes = await executeYoutubeCommentAgent({
-      ...(existingAgent || {}),
-      ...payload,
-    }, { mode: 'test' });
-    if (!execRes.ok) {
-      const issues = Array.isArray(execRes.preflight?.issues) ? execRes.preflight.issues : [];
-      return sendErr(
-        res,
-        execRes.status || 500,
-        execRes.error || 'Could not post YouTube comment',
-        { code: 'YOUTUBE_POST_FAILED', details: issues }
-      ), true;
+    try {
+      const body = await parseJsonBody(req);
+      const payload = normalizeYoutubeCommentAgentPayload(body);
+      if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
+      const existingAgent = safeText(body?.agentId || body?.agent_id)
+        ? await getYoutubeCommentAgent(safeText(body?.agentId || body?.agent_id))
+        : null;
+      const execRes = await executeYoutubeCommentAgent({
+        ...(existingAgent || {}),
+        ...payload,
+      }, { mode: 'test' });
+      if (!execRes.ok) {
+        const issues = Array.isArray(execRes.preflight?.issues) ? execRes.preflight.issues : [];
+        return sendErr(
+          res,
+          execRes.status || 500,
+          execRes.error || 'Could not post YouTube comment',
+          { code: 'YOUTUBE_POST_FAILED', details: issues }
+        ), true;
+      }
+
+      let agent = null;
+      const agentId = safeText(body?.agentId || body?.agent_id);
+      if (agentId) {
+        agent = await updateYoutubeCommentAgent(agentId, {
+          lastTestPostedAt: new Date().toISOString(),
+          lastTestCommentId: safeText(execRes.postedComment?.comment_id),
+          lastTestThreadId: safeText(execRes.postedComment?.thread_id),
+          lastTestCommentText: execRes.selectedComment,
+        }) || await getYoutubeCommentAgent(agentId);
+      }
+
+      const result = {
+        agent,
+        scheduling: payload,
+        preflight: execRes.preflight,
+        harvest: execRes.preflight.harvest,
+        suggestionInput: execRes.preflight.suggestionInput,
+        suggestions: execRes.suggestions,
+        selectedComment: execRes.selectedComment,
+        postedComment: execRes.postedComment,
+        schedulingEnabled: true,
+        schedulingNote: 'Scheduling remains active. This was an on-demand test post.',
+      };
+
+      logActivity({
+        action: 'engage.youtube_comment_test_posted',
+        entityType: 'engage_youtube_comment_agent',
+        entityId: agent?.id || null,
+        summary: `Posted on-demand YouTube comment to ${payload.videoUrl}`,
+        meta: {
+          video_url: payload.videoUrl,
+          comment_id: safeText(execRes.postedComment?.comment_id),
+          thread_id: safeText(execRes.postedComment?.thread_id),
+        },
+      });
+
+      return sendOk(res, 201, result, result), true;
+    } catch (err) {
+      return sendErr(res, 500, safeText(err?.message) || 'Could not post YouTube comment', { code: 'YOUTUBE_POST_FAILED' }), true;
     }
-
-    let agent = null;
-    const agentId = safeText(body?.agentId || body?.agent_id);
-    if (agentId) {
-      agent = await updateYoutubeCommentAgent(agentId, {
-        lastTestPostedAt: new Date().toISOString(),
-        lastTestCommentId: safeText(execRes.postedComment?.comment_id),
-        lastTestThreadId: safeText(execRes.postedComment?.thread_id),
-        lastTestCommentText: execRes.selectedComment,
-      }) || await getYoutubeCommentAgent(agentId);
-    }
-
-    const result = {
-      agent,
-      scheduling: payload,
-      preflight: execRes.preflight,
-      harvest: execRes.preflight.harvest,
-      suggestionInput: execRes.preflight.suggestionInput,
-      suggestions: execRes.suggestions,
-      selectedComment: execRes.selectedComment,
-      postedComment: execRes.postedComment,
-      schedulingEnabled: true,
-      schedulingNote: 'Scheduling remains active. This was an on-demand test post.',
-    };
-
-    logActivity({
-      action: 'engage.youtube_comment_test_posted',
-      entityType: 'engage_youtube_comment_agent',
-      entityId: agent?.id || null,
-      summary: `Posted on-demand YouTube comment to ${payload.videoUrl}`,
-      meta: {
-        video_url: payload.videoUrl,
-        comment_id: safeText(execRes.postedComment?.comment_id),
-        thread_id: safeText(execRes.postedComment?.thread_id),
-      },
-    });
-
-    return sendOk(res, 201, result, result), true;
   }
 
   if (pathname === '/api/engage/social/posts' && requestMethod === 'GET') {
