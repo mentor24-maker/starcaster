@@ -24,7 +24,7 @@ const {
   generateYoutubeCommentSuggestions
 } = require('../lib/harvest/YoutubeCommentSuggestions');
 const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
-const { getAccessToken } = require('../lib/googleDrive');
+const { getAccessToken, config: getGoogleDriveConfig } = require('../lib/googleDrive');
 const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram'];
 
 function safeText(value) {
@@ -181,7 +181,6 @@ async function buildYoutubeCommentAgentPreflight(payload) {
   const result = {
     ready: false,
     providers: {
-      openai: providerRuntimeDebug('openai', 'OPENAI_API_KEY'),
       anthropic: providerRuntimeDebug('anthropic', 'ANTHROPIC_API_KEY'),
     },
     checks: {
@@ -240,9 +239,13 @@ async function buildYoutubeCommentAgentPreflight(payload) {
   }
 
   const tokenRes = await getAccessToken();
+  const googleCfg = getGoogleDriveConfig();
   if (!tokenRes.ok) {
     result.checks.googleOAuth = {
       ok: false,
+      clientIdSource: safeText(googleCfg?.clientIdSource),
+      clientSecretSource: safeText(googleCfg?.clientSecretSource),
+      refreshTokenSource: safeText(googleCfg?.refreshTokenSource),
       error: safeText(tokenRes.error),
     };
     issues.push(safeText(tokenRes.error) || 'Google OAuth is not configured.');
@@ -256,6 +259,9 @@ async function buildYoutubeCommentAgentPreflight(payload) {
   const scopeReady = hasYoutubePostingScope(scopes);
   result.checks.googleOAuth = {
     ok: Boolean(tokenRes.ok && tokenInfoRes.ok),
+    clientIdSource: safeText(googleCfg?.clientIdSource),
+    clientSecretSource: safeText(googleCfg?.clientSecretSource),
+    refreshTokenSource: safeText(googleCfg?.refreshTokenSource),
     scopeLookupOk: Boolean(tokenInfoRes.ok),
     scopes,
     hasYoutubePostingScope: scopeReady,
