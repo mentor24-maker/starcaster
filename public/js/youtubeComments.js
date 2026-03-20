@@ -62,7 +62,9 @@ App.youtubeComments = (function () {
   async function refreshRepositoryVideos() {
     try {
       const res = await api('/api/acquire/youtube-videos?limit=50');
-      state.acquireYoutubeVideos = Array.isArray(res.videos) ? res.videos : [];
+      state.acquireYoutubeVideos = Array.isArray(res.videos)
+        ? res.videos
+        : (Array.isArray(res.data) ? res.data : []);
     } catch (_) {
       state.acquireYoutubeVideos = Array.isArray(state.acquireYoutubeVideos) ? state.acquireYoutubeVideos : [];
     }
@@ -442,6 +444,8 @@ App.youtubeComments = (function () {
   return {
     manifest: { id: 'youtubeComments', label: 'YouTube Comments', pageId: 'youtubeCommentsPage' },
     init,
+    refresh: refreshRepositoryVideos,
+    onPageActivated: refreshRepositoryVideos,
     openPage,
     openForRun,
   };
