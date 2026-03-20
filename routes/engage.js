@@ -11,6 +11,15 @@ const blueskyClient = require('../lib/blueskyClient');
 const metaClients = require('../lib/metaClients');
 const redditClient = require('../lib/redditClient');
 const { relayOpenClaw } = require('../lib/openclawGateway');
+const {
+  listAgents: listYoutubeCommentAgents,
+  createAgent: createYoutubeCommentAgent,
+  updateAgent: updateYoutubeCommentAgent,
+  getAgent: getYoutubeCommentAgent,
+} = require('../lib/youtubeCommentAgentStore');
+const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
+const { generateYoutubeCommentSuggestions } = require('../lib/harvest/YoutubeCommentSuggestions');
+const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
 const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram'];
 
 function safeText(value) {
@@ -39,6 +48,30 @@ function configuredPublicOrigin(req) {
   const vercel = safeText(process.env.VERCEL_URL);
   if (vercel) return `https://${vercel.replace(/\/+$/, '')}`;
   return requestOrigin(req);
+}
+
+function clampInteger(value, min, max, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(num)));
+}
+
+function normalizeYoutubeCommentAgentPayload(body) {
+  const timeframe = safeText(body?.timeframe).toLowerCase() || 'month';
+  const allowedTimeframes = new Set(['minute', 'hour', 'day', 'week', 'month', 'year']);
+  return {
+    videoUrl: safeText(body?.videoUrl || body?.video_url),
+    fromDate: safeText(body?.fromDate || body?.from_date),
+    toDate: safeText(body?.toDate || body?.to_date),
+    frequency: clampInteger(body?.frequency, 1, 60, 1),
+    timeframe: allowedTimeframes.has(timeframe) ? timeframe : 'month',
+    maxPosts: clampInteger(body?.maxPosts || body?.max_posts, 1, 20, 1),
+    videoCommentRatio: safeText(body?.videoCommentRatio || body?.video_comment_ratio) || '100/0',
+    jitterHours: 10,
+    scheduleEnabled: false,
+    scheduleStatus: 'disabled',
+    scheduleNote: 'Scheduling is configured but disabled. Use Post On Demand for testing.',
+  };
 }
 
 function isPublicMediaUrl(value, requireHttps = false) {
@@ -552,6 +585,100 @@ async function handle(req, res, pathname, method) {
         publishNowChannels: PUBLISH_NOW_CHANNELS,
       }
     ), true;
+  }
+
+  if (pathname === '/api/engage/youtube-comment-agents' && requestMethod === 'GET') {
+    const agents = listYoutubeCommentAgents();
+    return sendOk(res, 200, agents, { agents }, { total: agents.length }), true;
+  }
+
+  if (pathname === '/api/engage/youtube-comment-agents' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const payload = normalizeYoutubeCommentAgentPayload(body);
+    if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!payload.fromDate) return sendErr(res, 400, 'fromDate is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!payload.toDate) return sendErr(res, 400, 'toDate is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const agent = createYoutubeCommentAgent(payload);
+    logActivity({
+      action: 'engage.youtube_comment_agent_saved',
+      entityType: 'engage_youtube_comment_agent',
+      entityId: agent.id,
+      summary: 'Saved disabled YouTube comment promotion agent',
+      meta: {
+        video_url: agent.videoUrl,
+        frequency: agent.frequency,
+        timeframe: agent.timeframe,
+        max_posts: agent.maxPosts,
+        video_comment_ratio: agent.videoCommentRatio,
+      },
+    });
+    return sendOk(res, 201, { agent }, { agent }), true;
+  }
+
+  if (pathname === '/api/engage/youtube-comment-agents/test-post' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const payload = normalizeYoutubeCommentAgentPayload(body);
+    if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const harvest = await runYoutubeHarvest({ video_url: payload.videoUrl });
+    const suggestionRes = await generateYoutubeCommentSuggestions({
+      video_url: payload.videoUrl,
+      title: safeText(harvest?.video?.title),
+      channel_name: safeText(harvest?.channel_owner?.name),
+      description: safeText(harvest?.video?.description),
+      transcript: safeText(harvest?.video?.transcript),
+    });
+    if (!suggestionRes.ok) {
+      return sendErr(res, suggestionRes.status || 500, suggestionRes.error || 'Could not generate YouTube comment'), true;
+    }
+    const suggestions = Array.isArray(suggestionRes.data) ? suggestionRes.data : [];
+    const selectedComment = safeText(suggestions[0]);
+    if (!selectedComment) {
+      return sendErr(res, 500, 'No usable YouTube comment suggestion was generated'), true;
+    }
+
+    const postRes = await postYoutubeComment({
+      video_url: payload.videoUrl,
+      comment_text: selectedComment,
+    });
+    if (!postRes.ok) return sendErr(res, postRes.status || 500, postRes.error || 'Could not post YouTube comment'), true;
+
+    let agent = null;
+    const agentId = safeText(body?.agentId || body?.agent_id);
+    if (agentId) {
+      agent = updateYoutubeCommentAgent(agentId, {
+        lastTestPostedAt: new Date().toISOString(),
+        lastTestCommentId: safeText(postRes.data?.comment_id),
+        lastTestThreadId: safeText(postRes.data?.thread_id),
+        lastTestCommentText: selectedComment,
+      }) || getYoutubeCommentAgent(agentId);
+    }
+
+    const result = {
+      agent,
+      scheduling: payload,
+      harvest,
+      suggestions,
+      selectedComment,
+      postedComment: postRes.data,
+      schedulingEnabled: false,
+      schedulingNote: 'Recurring scheduling remains disabled. This was an on-demand test post.',
+    };
+
+    logActivity({
+      action: 'engage.youtube_comment_test_posted',
+      entityType: 'engage_youtube_comment_agent',
+      entityId: agent?.id || null,
+      summary: `Posted on-demand YouTube comment to ${payload.videoUrl}`,
+      meta: {
+        video_url: payload.videoUrl,
+        comment_id: safeText(postRes.data?.comment_id),
+        thread_id: safeText(postRes.data?.thread_id),
+      },
+    });
+
+    return sendOk(res, 201, result, result), true;
   }
 
   if (pathname === '/api/engage/social/posts' && requestMethod === 'GET') {

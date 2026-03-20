@@ -6,12 +6,13 @@
 
 window.App = window.App || {};
 App.youtubeComments = (function () {
-  const { state, els, api, notify } = App;
+  const { state, els, api, notify, setPreview } = App;
 
   let currentRunId = null;
   let allComments  = [];
   let currentRun   = null;  // Store run info (title, video_url) for table display
   let sourcePageId = 'acquireYoutubePage';
+  let currentAgent = null;
 
   const filters = {
     from:    '',
@@ -124,6 +125,60 @@ App.youtubeComments = (function () {
         ? 'Warning: this cadence is faster than once per hour.'
         : '';
     }
+  }
+
+  function collectSchedulerPayload() {
+    const videoUrl = String(document.getElementById('commentsVideoUrlSelect')?.value || '').trim();
+    const fromDate = String(document.getElementById('commentsFromDate')?.value || '').trim();
+    const toDate = String(document.getElementById('commentsToDate')?.value || '').trim();
+    const frequency = Math.max(1, Math.min(Number(document.getElementById('commentsFrequencyInput')?.value || 1) || 1, 60));
+    const timeframe = String(document.getElementById('commentsTimeframeSelect')?.value || 'month').trim().toLowerCase();
+    const maxPosts = Math.max(1, Math.min(Number(document.getElementById('commentsMaxPostsSelect')?.value || 1) || 1, 20));
+    const videoCommentRatio = String(document.getElementById('commentsVideoCommentRatioSelect')?.value || '100/0').trim();
+    return {
+      agentId: currentAgent && currentAgent.id ? currentAgent.id : '',
+      videoUrl,
+      fromDate,
+      toDate,
+      frequency,
+      timeframe,
+      maxPosts,
+      videoCommentRatio,
+    };
+  }
+
+  function syncHeaderFromCurrentRun() {
+    const titleEl = document.getElementById('commentsPageVideoTitle');
+    const channelEl = document.getElementById('commentsPageChannel');
+    const countEl = document.getElementById('commentsPageCount');
+    if (titleEl) titleEl.textContent = currentRun?.title || currentRun?.video_url || '-';
+    if (channelEl) channelEl.textContent = currentRun?.channel_name || '-';
+    if (countEl) countEl.textContent = Number(currentRun?.comment_count || 0).toLocaleString() + ' comments';
+  }
+
+  async function savePromotionAgent() {
+    const payload = collectSchedulerPayload();
+    if (!payload.videoUrl) return notify('Select a repository video first', true);
+    if (!payload.fromDate || !payload.toDate) return notify('Choose From and To dates first', true);
+    const res = await api('/api/engage/youtube-comment-agents', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    currentAgent = res.agent || null;
+    setPreview(document.getElementById('commentsActionPreview'), res);
+    notify('YouTube promotion agent saved with scheduling disabled');
+  }
+
+  async function postOnDemand() {
+    const payload = collectSchedulerPayload();
+    if (!payload.videoUrl) return notify('Select a repository video first', true);
+    const res = await api('/api/engage/youtube-comment-agents/test-post', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    currentAgent = res.agent || currentAgent;
+    setPreview(document.getElementById('commentsActionPreview'), res);
+    notify('Posted YouTube comment on demand');
   }
 
   function resetHeader() {
@@ -415,12 +470,7 @@ App.youtubeComments = (function () {
             channel_name: String(match.channel_name || '').trim(),
             comment_count: Number(match.comment_count || 0) || 0,
           };
-          const titleEl = document.getElementById('commentsPageVideoTitle');
-          const channelEl = document.getElementById('commentsPageChannel');
-          const countEl = document.getElementById('commentsPageCount');
-          if (titleEl) titleEl.textContent = currentRun.title || nextUrl || '-';
-          if (channelEl) channelEl.textContent = currentRun.channel_name || '-';
-          if (countEl) countEl.textContent = Number(currentRun.comment_count || 0).toLocaleString() + ' comments';
+          syncHeaderFromCurrentRun();
         }
       });
     }
@@ -433,11 +483,24 @@ App.youtubeComments = (function () {
     if (timeframeEl) {
       timeframeEl.addEventListener('change', updateScheduleUi);
     }
+    const saveAgentBtn = document.getElementById('commentsSaveAgentBtn');
+    if (saveAgentBtn) {
+      saveAgentBtn.addEventListener('click', () => {
+        savePromotionAgent().catch((err) => notify(err.message, true));
+      });
+    }
+    const postNowBtn = document.getElementById('commentsPostNowBtn');
+    if (postNowBtn) {
+      postNowBtn.addEventListener('click', () => {
+        postOnDemand().catch((err) => notify(err.message, true));
+      });
+    }
 
     resetHeader();
     updateBackButton();
     renderVideoUrlOptions('');
     updateScheduleUi();
+    setPreview(document.getElementById('commentsActionPreview'), {});
     renderEmptyState('Open a YouTube comment run to review comments here.');
   }
 
