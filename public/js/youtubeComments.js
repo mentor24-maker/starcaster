@@ -20,6 +20,15 @@ App.youtubeComments = (function () {
     type:    'all',   // 'all' | 'top' | 'reply'
     minLikes: '',
   };
+
+  const cadenceSecondsByTimeframe = {
+    minute: 60,
+    hour: 3600,
+    day: 86400,
+    week: 604800,
+    month: 2592000,
+    year: 31536000,
+  };
   
   function normalizeFilterDate(v) {
     const s = String(v || '').trim();
@@ -44,6 +53,65 @@ App.youtubeComments = (function () {
     const backBtn = document.getElementById('commentsPageBackBtn');
     if (!backBtn) return;
     backBtn.textContent = `Back to ${getSourcePageLabel(sourcePageId)}`;
+  }
+
+  function getRepositoryVideos() {
+    return Array.isArray(state.acquireYoutubeVideos) ? state.acquireYoutubeVideos.slice(0, 50) : [];
+  }
+
+  function renderVideoUrlOptions(selectedUrl) {
+    const selectEl = document.getElementById('commentsVideoUrlSelect');
+    if (!selectEl) return;
+    const chosen = String(selectedUrl || '').trim();
+    const videos = getRepositoryVideos();
+    selectEl.innerHTML = '<option value="">Select Repository Video</option>';
+    videos.forEach((video) => {
+      const videoUrl = String(video && video.video_url || '').trim();
+      if (!videoUrl) return;
+      const option = document.createElement('option');
+      option.value = videoUrl;
+      const bits = [
+        String(video && video.title || '').trim() || videoUrl,
+        String(video && video.channel_name || '').trim()
+      ].filter(Boolean);
+      option.textContent = bits.join(' | ');
+      if (videoUrl === chosen) option.selected = true;
+      selectEl.appendChild(option);
+    });
+    if (chosen && !videos.some((video) => String(video && video.video_url || '').trim() === chosen)) {
+      const option = document.createElement('option');
+      option.value = chosen;
+      option.textContent = chosen;
+      option.selected = true;
+      selectEl.appendChild(option);
+    }
+  }
+
+  function formatCadenceSummary(frequency, timeframe) {
+    const safeFrequency = Math.max(1, Math.min(Number(frequency) || 1, 60));
+    const safeTimeframe = String(timeframe || 'month').trim().toLowerCase();
+    const singular = safeTimeframe.replace(/s$/, '');
+    const plural = safeFrequency === 1 ? singular : `${singular}s`;
+    return `Scheduled ${safeFrequency} time${safeFrequency === 1 ? '' : 's'} per ${plural}.`;
+  }
+
+  function updateScheduleUi() {
+    const freqInput = document.getElementById('commentsFrequencyInput');
+    const timeframeEl = document.getElementById('commentsTimeframeSelect');
+    const summaryEl = document.getElementById('commentsScheduleSummary');
+    const warningEl = document.getElementById('commentsScheduleWarning');
+    const frequency = Math.max(1, Math.min(Number(freqInput && freqInput.value || 1) || 1, 60));
+    const timeframe = String(timeframeEl && timeframeEl.value || 'month').trim().toLowerCase();
+    if (freqInput) freqInput.value = String(frequency);
+    if (summaryEl) summaryEl.textContent = formatCadenceSummary(frequency, timeframe);
+
+    const intervalSeconds = (cadenceSecondsByTimeframe[timeframe] || cadenceSecondsByTimeframe.month) / frequency;
+    if (warningEl) {
+      warningEl.classList.toggle('hidden', intervalSeconds >= 3600);
+      warningEl.textContent = intervalSeconds < 3600
+        ? 'Warning: this cadence is faster than once per hour.'
+        : '';
+    }
   }
 
   function resetHeader() {
@@ -78,6 +146,8 @@ App.youtubeComments = (function () {
   function openPage(options) {
     sourcePageId = String(options?.sourcePage || sourcePageId || 'acquireYoutubePage');
     updateBackButton();
+    renderVideoUrlOptions(currentRun && currentRun.video_url);
+    updateScheduleUi();
     if (!currentRunId) {
       resetHeader();
       renderEmptyState('Open a YouTube comment run to review comments here.');
@@ -101,6 +171,7 @@ App.youtubeComments = (function () {
     if (titleEl)   titleEl.textContent   = run.title        || run.video_url || run.run_id;
     if (channelEl) channelEl.textContent = run.channel_name || '-';
     if (countEl)   countEl.textContent   = Number(run.comment_count || 0).toLocaleString() + ' comments';
+    renderVideoUrlOptions(run.video_url);
 
     // Reset filters
     filters.from     = '';
@@ -319,36 +390,42 @@ App.youtubeComments = (function () {
         renderCommentsTable();
       });
     }
-
-    // Search filter
-    const searchEl = document.getElementById('commentSearchFilter');
-    if (searchEl) {
-      searchEl.addEventListener('input', () => {
-        filters.search = String(searchEl.value || '');
-        renderCommentsTable();
+    const videoSelectEl = document.getElementById('commentsVideoUrlSelect');
+    if (videoSelectEl) {
+      videoSelectEl.addEventListener('change', () => {
+        const nextUrl = String(videoSelectEl.value || '').trim();
+        const match = getRepositoryVideos().find((video) => String(video && video.video_url || '').trim() === nextUrl) || null;
+        if (match) {
+          currentRun = {
+            ...(currentRun || {}),
+            video_url: nextUrl,
+            title: String(match.title || '').trim(),
+            channel_name: String(match.channel_name || '').trim(),
+            comment_count: Number(match.comment_count || 0) || 0,
+          };
+          const titleEl = document.getElementById('commentsPageVideoTitle');
+          const channelEl = document.getElementById('commentsPageChannel');
+          const countEl = document.getElementById('commentsPageCount');
+          if (titleEl) titleEl.textContent = currentRun.title || nextUrl || '-';
+          if (channelEl) channelEl.textContent = currentRun.channel_name || '-';
+          if (countEl) countEl.textContent = Number(currentRun.comment_count || 0).toLocaleString() + ' comments';
+        }
       });
     }
-
-    // Type filter
-    const typeEl = document.getElementById('commentTypeFilter');
-    if (typeEl) {
-      typeEl.addEventListener('change', () => {
-        filters.type = String(typeEl.value || 'all');
-        renderCommentsTable();
-      });
+    const freqEl = document.getElementById('commentsFrequencyInput');
+    if (freqEl) {
+      freqEl.addEventListener('input', updateScheduleUi);
+      freqEl.addEventListener('change', updateScheduleUi);
     }
-
-    // Min likes filter
-    const likesEl = document.getElementById('commentMinLikesFilter');
-    if (likesEl) {
-      likesEl.addEventListener('input', () => {
-        filters.minLikes = String(likesEl.value || '');
-        renderCommentsTable();
-      });
+    const timeframeEl = document.getElementById('commentsTimeframeSelect');
+    if (timeframeEl) {
+      timeframeEl.addEventListener('change', updateScheduleUi);
     }
 
     resetHeader();
     updateBackButton();
+    renderVideoUrlOptions('');
+    updateScheduleUi();
     renderEmptyState('Open a YouTube comment run to review comments here.');
   }
 
