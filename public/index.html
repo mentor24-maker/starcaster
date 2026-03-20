@@ -78,6 +78,7 @@
             <a href="#" class="menu-link submenu-link" data-page="acquireTiktokPage">Tiktok</a>
             <a href="#" class="menu-link submenu-link" data-page="acquireFacebookPage">Facebook</a>
             <a href="#" class="menu-link submenu-link" data-page="acquireXPage">X</a>
+            <a href="#" class="menu-link submenu-link" data-page="acquireBlueskyPage">BlueSky</a>
             <a href="#" class="menu-link submenu-link" data-page="acquireRedditPage">Reddit</a>
             <a href="#" class="menu-link submenu-link" data-page="acquireQuoraPage">Quora</a>
             <a href="#" class="menu-link submenu-link" data-page="acquireSubstackPage">Substack</a>
@@ -558,6 +559,9 @@
 
           <button class="acquire-flow-node acquire-flow-node-x" type="button" onclick="App.setActivePage('acquireXPage')">
             <span class="acquire-flow-label">X</span>
+          </button>
+          <button class="acquire-flow-node acquire-flow-node-x" type="button" onclick="App.setActivePage('acquireBlueskyPage')">
+            <span class="acquire-flow-label">BlueSky</span>
           </button>
           <button class="acquire-flow-node acquire-flow-node-reddit" type="button" onclick="App.setActivePage('acquireRedditPage')">
             <span class="acquire-flow-label">Reddit</span>
@@ -1856,6 +1860,180 @@
           </table>
         </div>
         <pre id="redditHarvestRawPreview" class="mono-preview">{}</pre>
+      </section>
+
+      <section id="acquireBlueskyPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Acquire: BlueSky</h2>
+          <div class="page-heading-actions">
+            <button id="blueskyRefreshBtn" type="button">Refresh</button>
+          </div>
+        </div>
+        <p>Discover BlueSky posts, draft reply candidates, and stage posting workflows from a page that mirrors the Reddit acquisition flow.</p>
+
+        <div class="settings-card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Thread Discovery</h3>
+            <div class="page-heading-actions">
+              <button id="blueskyDiscoveryStatusBtn" type="button">Check BlueSky Connection</button>
+            </div>
+          </div>
+          <p style="margin-top: 0;">Find and rank candidate BlueSky posts before moving into reply drafting or posting work.</p>
+          <form id="blueskyDiscoveryForm" class="stack-form labeled-form" style="max-width: 980px;">
+            <div class="form-row">
+              <label for="blueskyDiscoveryTarget">Handle, Feed, or Post URL</label>
+              <input id="blueskyDiscoveryTarget" name="target" placeholder="e.g. alice.bsky.social, a feed URL, or a specific post URL" required />
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="blueskyDiscoverySourceMode">Source Mode</label>
+                <select id="blueskyDiscoverySourceMode" name="source_mode">
+                  <option value="auto" selected>Auto</option>
+                  <option value="api">API</option>
+                  <option value="browser">OpenClaw Browser</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="blueskyDiscoverySort">Sort</label>
+                <select id="blueskyDiscoverySort" name="sort">
+                  <option value="new">new</option>
+                  <option value="top">top</option>
+                  <option value="engaging">engaging</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="blueskyDiscoveryMaxPosts">Max Posts</label>
+                <input id="blueskyDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
+              </div>
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="blueskyDiscoveryKeyword">Keyword Filter (optional)</label>
+                <input id="blueskyDiscoveryKeyword" name="keyword" placeholder="e.g. ai, consciousness, simulation" />
+              </div>
+              <div class="form-row">
+                <label for="blueskyDiscoveryMinLikes">Min Likes</label>
+                <input id="blueskyDiscoveryMinLikes" name="min_likes" type="number" min="0" max="100000" value="0" />
+              </div>
+              <div class="form-row">
+                <label for="blueskyDiscoveryMinReplies">Min Replies</label>
+                <input id="blueskyDiscoveryMinReplies" name="min_replies" type="number" min="0" max="100000" value="0" />
+              </div>
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="blueskyDiscoveryStartTime">Start Date (optional)</label>
+                <input id="blueskyDiscoveryStartTime" name="start_time" type="date" />
+              </div>
+              <div class="form-row">
+                <label for="blueskyDiscoveryEndTime">End Date (optional)</label>
+                <input id="blueskyDiscoveryEndTime" name="end_time" type="date" />
+              </div>
+            </div>
+            <div class="page-heading-actions" style="justify-content: flex-start;">
+              <button type="submit">Discover Threads</button>
+              <button type="button" id="blueskyDiscoveryUseTargetBtn">Copy Target To Reply</button>
+            </div>
+            <div id="blueskyDiscoveryStatus" class="youtube-comments-schedule-summary">BlueSky discovery is idle.</div>
+          </form>
+
+          <div class="table-wrap" style="margin-top: 1rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Score</th>
+                  <th>Author</th>
+                  <th>Post</th>
+                  <th>Likes</th>
+                  <th>Replies</th>
+                  <th>Reposts</th>
+                  <th>Created</th>
+                  <th>Why</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="blueskyDiscoveryTable"></tbody>
+            </table>
+          </div>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Discovery Diagnostics</summary>
+            <pre id="blueskyDiscoveryPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
+        <div class="settings-card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Reply Candidate Generator</h3>
+          </div>
+          <p style="margin-top: 0;">Generate several context-aware BlueSky reply options for a selected post without posting anything yet.</p>
+          <form id="blueskyReplyCandidatesForm" class="stack-form labeled-form" style="max-width: 980px;">
+            <div class="form-row">
+              <label for="blueskyReplyTarget">Post URL</label>
+              <input id="blueskyReplyTarget" name="target" placeholder="https://bsky.app/profile/.../post/..." required />
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="blueskyReplySourceMode">Source Mode</label>
+                <select id="blueskyReplySourceMode" name="source_mode">
+                  <option value="auto" selected>Auto</option>
+                  <option value="api">API</option>
+                  <option value="browser">OpenClaw Browser</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="blueskyReplyContextLimit">Thread Context Limit</label>
+                <input id="blueskyReplyContextLimit" name="context_limit" type="number" min="3" max="20" value="8" />
+              </div>
+            </div>
+            <div class="page-heading-actions" style="justify-content: flex-start;">
+              <button type="submit">Generate Reply Candidates</button>
+            </div>
+            <div id="blueskyReplyStatus" class="youtube-comments-schedule-summary">BlueSky reply generation is idle.</div>
+          </form>
+
+          <div class="table-wrap" style="margin-top: 1rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Reply</th>
+                  <th>Tone</th>
+                  <th>Why It Fits</th>
+                </tr>
+              </thead>
+              <tbody id="blueskyReplyCandidatesTable"></tbody>
+            </table>
+          </div>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Reply Diagnostics</summary>
+            <pre id="blueskyReplyCandidatesPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
+        <div class="settings-card">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Posting Operator</h3>
+          </div>
+          <p style="margin-top: 0;">Check auth readiness now, then use this section for dry-run and live-post testing as the BlueSky posting workflow comes online.</p>
+          <form id="blueskyPostingForm" class="stack-form labeled-form" style="max-width: 980px;">
+            <div class="form-row">
+              <label for="blueskyPostingTarget">Post URL</label>
+              <input id="blueskyPostingTarget" name="target" placeholder="https://bsky.app/profile/.../post/..." />
+            </div>
+            <div class="form-row">
+              <label for="blueskyPostingReplyText">Approved Reply</label>
+              <textarea id="blueskyPostingReplyText" name="reply_text" rows="4" placeholder="Paste an approved BlueSky reply here"></textarea>
+            </div>
+            <div class="page-heading-actions" style="justify-content: flex-start;">
+              <button type="button" id="blueskyPostingStatusBtn">Check Posting Setup</button>
+              <button type="submit">Dry Run Posting Operator</button>
+            </div>
+            <div id="blueskyPostingStatus" class="youtube-comments-schedule-summary">BlueSky posting operator is idle.</div>
+          </form>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Posting Diagnostics</summary>
+            <pre id="blueskyPostingPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
       </section>
 
       <section id="acquireQuoraPage" class="app-page hidden">
