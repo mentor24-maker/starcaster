@@ -35,7 +35,10 @@ const { runYoutubeCommentHarvest } = require('../lib/harvest/YoutubeCommentsRun'
 const { runYoutubeCommentMiner } = require('../lib/harvest/YoutubeCommentMiner');
 const { resolveYoutubeApiKey } = require('../lib/harvest/youtubeApiKey');
 const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
-const { generateYoutubeCommentSuggestions } = require('../lib/harvest/YoutubeCommentSuggestions');
+const {
+  buildYoutubeCommentSuggestionInput,
+  generateYoutubeCommentSuggestions
+} = require('../lib/harvest/YoutubeCommentSuggestions');
 const {
   createYoutubeHarvestRun,
   listYoutubeHarvestRuns,
@@ -1726,13 +1729,13 @@ async function handle(req, res, pathname, method) {
     if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
 
     const body = await parseJsonBody(req);
-    const input = {
+    const input = buildYoutubeCommentSuggestionInput({
       video_url: body?.video_url,
       title: body?.title,
       channel_name: body?.channel_name,
       description: body?.description,
       transcript: body?.transcript,
-    };
+    });
     const genRes = await generateYoutubeCommentSuggestions(input);
     if (!genRes.ok) return sendErr(res, genRes.status || 500, genRes.error), true;
 
