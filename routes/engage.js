@@ -997,8 +997,11 @@ async function handle(req, res, pathname, method) {
     if (agentId && existingAgent) {
       agent = await updateYoutubeCommentAgent(agentId, seed);
     } else {
-      agent = await createYoutubeCommentAgent(seed);
-      agent = await updateYoutubeCommentAgent(agent.id, normalizeSavedYoutubeAgent(agent));
+      const created = await createYoutubeCommentAgent(seed);
+      agent = created ? normalizeSavedYoutubeAgent(created) : null;
+    }
+    if (!agent || !agent.id) {
+      return sendErr(res, 500, 'Could not persist YouTube comment agent', { code: 'YOUTUBE_AGENT_SAVE_FAILED' }), true;
     }
     logActivity({
       action: 'engage.youtube_comment_agent_saved',
