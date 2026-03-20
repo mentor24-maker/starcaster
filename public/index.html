@@ -1617,6 +1617,97 @@
         <div class="deploy-test-banner">DEPLOY TEST MARKER: REDDIT V3 (2026-03-11)</div>
         <p>Provide a subreddit link/name or specific post link. Reddit harvest is currently routed through OpenClaw browser automation (human-in-the-loop) and stored for later analysis.</p>
 
+        <div class="settings-card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Thread Discovery</h3>
+            <div class="page-heading-actions">
+              <button id="redditDiscoveryStatusBtn" type="button">Check Reddit Connection</button>
+            </div>
+          </div>
+          <p style="margin-top: 0;">Find and rank candidate Reddit threads directly before moving into harvesting or reply work.</p>
+          <form id="redditDiscoveryForm" class="stack-form labeled-form" style="max-width: 980px;">
+            <div class="form-row">
+              <label for="redditDiscoveryTarget">Subreddit or Post URL</label>
+              <input id="redditDiscoveryTarget" name="target" placeholder="https://www.reddit.com/r/subreddit or https://www.reddit.com/r/subreddit/comments/postid/..." required />
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="redditDiscoverySourceMode">Source Mode</label>
+                <select id="redditDiscoverySourceMode" name="source_mode">
+                  <option value="auto" selected>Auto</option>
+                  <option value="oauth">OAuth</option>
+                  <option value="public">Public JSON</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="redditDiscoverySort">Sort</label>
+                <select id="redditDiscoverySort" name="sort">
+                  <option value="new">new</option>
+                  <option value="hot">hot</option>
+                  <option value="top">top</option>
+                  <option value="rising">rising</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="redditDiscoveryMaxPosts">Max Threads</label>
+                <input id="redditDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
+              </div>
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="redditDiscoveryKeyword">Keyword Filter (optional)</label>
+                <input id="redditDiscoveryKeyword" name="keyword" placeholder="e.g. launch, bug, onboarding" />
+              </div>
+              <div class="form-row">
+                <label for="redditDiscoveryMinScore">Min Score</label>
+                <input id="redditDiscoveryMinScore" name="min_score" type="number" min="0" max="100000" value="0" />
+              </div>
+              <div class="form-row">
+                <label for="redditDiscoveryMinComments">Min Comments</label>
+                <input id="redditDiscoveryMinComments" name="min_comments" type="number" min="0" max="100000" value="0" />
+              </div>
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="redditDiscoveryStartTime">Start Date (optional)</label>
+                <input id="redditDiscoveryStartTime" name="start_time" type="date" />
+              </div>
+              <div class="form-row">
+                <label for="redditDiscoveryEndTime">End Date (optional)</label>
+                <input id="redditDiscoveryEndTime" name="end_time" type="date" />
+              </div>
+            </div>
+            <div class="page-heading-actions" style="justify-content: flex-start;">
+              <button type="submit">Discover Threads</button>
+              <button type="button" id="redditDiscoveryUseTargetBtn">Copy Target To Harvest</button>
+            </div>
+            <div id="redditDiscoveryStatus" class="youtube-comments-schedule-summary">Reddit discovery is idle.</div>
+          </form>
+
+          <div class="table-wrap" style="margin-top: 1rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Score</th>
+                  <th>Subreddit</th>
+                  <th>Title</th>
+                  <th>Author</th>
+                  <th>Score</th>
+                  <th>Comments</th>
+                  <th>Created</th>
+                  <th>Why</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="redditDiscoveryTable"></tbody>
+            </table>
+          </div>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Discovery Diagnostics</summary>
+            <pre id="redditDiscoveryPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
         <form id="redditHarvestForm" class="stack-form labeled-form" style="max-width: 980px;">
           <div class="form-row">
             <label for="redditHarvestTarget">Subreddit or Post URL</label>
