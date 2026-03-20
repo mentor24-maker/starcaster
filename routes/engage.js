@@ -412,14 +412,14 @@ async function executeYoutubeCommentAgent(agentInput, { mode = 'scheduled' } = {
 }
 
 async function runDueYoutubeCommentAgents(nowIso = new Date().toISOString()) {
-  const agents = listYoutubeCommentAgents().map((agent) => normalizeSavedYoutubeAgent(agent, nowIso));
+  const agents = (await listYoutubeCommentAgents()).map((agent) => normalizeSavedYoutubeAgent(agent, nowIso));
   const results = [];
 
   for (const agent of agents) {
     const maxPosts = youtubeAgentTotalPostsLimit(agent);
     if (agent.scheduleEnabled !== true) continue;
     if (Math.max(0, Number(agent.totalPostsCount || 0) || 0) >= maxPosts) {
-      const completed = updateYoutubeCommentAgent(agent.id, normalizeSavedYoutubeAgent({
+      const completed = await updateYoutubeCommentAgent(agent.id, normalizeSavedYoutubeAgent({
         ...agent,
         scheduleEnabled: false,
         scheduleStatus: 'completed',
@@ -432,7 +432,7 @@ async function runDueYoutubeCommentAgents(nowIso = new Date().toISOString()) {
     if (!isYoutubeAgentDue(agent, nowIso)) continue;
 
     const execRes = await executeYoutubeCommentAgent(agent, { mode: 'scheduled' });
-    const saved = updateYoutubeCommentAgent(agent.id, execRes.patch || {});
+    const saved = await updateYoutubeCommentAgent(agent.id, execRes.patch || {});
     results.push({
       agentId: agent.id,
       ok: execRes.ok,
@@ -970,7 +970,7 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/engage/youtube-comment-agents' && requestMethod === 'GET') {
-    const agents = listYoutubeCommentAgents().map((agent) => normalizeSavedYoutubeAgent(agent));
+    const agents = (await listYoutubeCommentAgents()).map((agent) => normalizeSavedYoutubeAgent(agent));
     return sendOk(res, 200, agents, { agents }, { total: agents.length }), true;
   }
 
@@ -981,11 +981,12 @@ async function handle(req, res, pathname, method) {
     if (!payload.fromDate) return sendErr(res, 400, 'fromDate is required', { code: 'VALIDATION_ERROR' }), true;
     if (!payload.toDate) return sendErr(res, 400, 'toDate is required', { code: 'VALIDATION_ERROR' }), true;
     const agentId = safeText(body?.agentId || body?.agent_id);
+    const existingAgent = agentId ? await getYoutubeCommentAgent(agentId) : null;
     let agent = null;
     const seed = normalizeSavedYoutubeAgent({
-      ...(agentId ? (getYoutubeCommentAgent(agentId) || {}) : {}),
+      ...(existingAgent || {}),
       ...payload,
-      id: agentId || safeText((getYoutubeCommentAgent(agentId) || {}).id),
+      id: agentId || safeText(existingAgent?.id),
       lastError: '',
       scheduleEnabled: payload.scheduleEnabled,
       scheduleStatus: payload.scheduleEnabled ? 'scheduled' : 'disabled',
@@ -993,11 +994,11 @@ async function handle(req, res, pathname, method) {
         ? 'Scheduling is active. Posts will run automatically when due.'
         : 'Scheduling is disabled.',
     });
-    if (agentId && getYoutubeCommentAgent(agentId)) {
-      agent = updateYoutubeCommentAgent(agentId, seed);
+    if (agentId && existingAgent) {
+      agent = await updateYoutubeCommentAgent(agentId, seed);
     } else {
-      agent = createYoutubeCommentAgent(seed);
-      agent = updateYoutubeCommentAgent(agent.id, normalizeSavedYoutubeAgent(agent));
+      agent = await createYoutubeCommentAgent(seed);
+      agent = await updateYoutubeCommentAgent(agent.id, normalizeSavedYoutubeAgent(agent));
     }
     logActivity({
       action: 'engage.youtube_comment_agent_saved',
@@ -1031,8 +1032,11 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const payload = normalizeYoutubeCommentAgentPayload(body);
     if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
+    const existingAgent = safeText(body?.agentId || body?.agent_id)
+      ? await getYoutubeCommentAgent(safeText(body?.agentId || body?.agent_id))
+      : null;
     const execRes = await executeYoutubeCommentAgent({
-      ...(safeText(body?.agentId || body?.agent_id) ? (getYoutubeCommentAgent(safeText(body?.agentId || body?.agent_id)) || {}) : {}),
+      ...(existingAgent || {}),
       ...payload,
     }, { mode: 'test' });
     if (!execRes.ok) {
@@ -1048,12 +1052,12 @@ async function handle(req, res, pathname, method) {
     let agent = null;
     const agentId = safeText(body?.agentId || body?.agent_id);
     if (agentId) {
-      agent = updateYoutubeCommentAgent(agentId, {
+      agent = await updateYoutubeCommentAgent(agentId, {
         lastTestPostedAt: new Date().toISOString(),
         lastTestCommentId: safeText(execRes.postedComment?.comment_id),
         lastTestThreadId: safeText(execRes.postedComment?.thread_id),
         lastTestCommentText: execRes.selectedComment,
-      }) || getYoutubeCommentAgent(agentId);
+      }) || await getYoutubeCommentAgent(agentId);
     }
 
     const result = {
