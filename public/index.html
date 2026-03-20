@@ -1708,6 +1708,54 @@
           </details>
         </div>
 
+        <div class="settings-card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Reply Candidate Generator</h3>
+          </div>
+          <p style="margin-top: 0;">Generate several context-aware Reddit reply options for a selected thread without posting anything yet.</p>
+          <form id="redditReplyCandidatesForm" class="stack-form labeled-form" style="max-width: 980px;">
+            <div class="form-row">
+              <label for="redditReplyTarget">Thread URL</label>
+              <input id="redditReplyTarget" name="target" placeholder="https://www.reddit.com/r/subreddit/comments/postid/..." required />
+            </div>
+            <div class="grid-form">
+              <div class="form-row">
+                <label for="redditReplySourceMode">Source Mode</label>
+                <select id="redditReplySourceMode" name="source_mode">
+                  <option value="auto" selected>Auto</option>
+                  <option value="oauth">OAuth</option>
+                  <option value="public">Public JSON</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="redditReplyCommentLimit">Comment Context Limit</label>
+                <input id="redditReplyCommentLimit" name="comment_limit" type="number" min="3" max="20" value="8" />
+              </div>
+            </div>
+            <div class="page-heading-actions" style="justify-content: flex-start;">
+              <button type="submit">Generate Reply Candidates</button>
+            </div>
+            <div id="redditReplyStatus" class="youtube-comments-schedule-summary">Reddit reply generation is idle.</div>
+          </form>
+
+          <div class="table-wrap" style="margin-top: 1rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Reply</th>
+                  <th>Tone</th>
+                  <th>Why It Fits</th>
+                </tr>
+              </thead>
+              <tbody id="redditReplyCandidatesTable"></tbody>
+            </table>
+          </div>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Reply Diagnostics</summary>
+            <pre id="redditReplyCandidatesPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
         <form id="redditHarvestForm" class="stack-form labeled-form" style="max-width: 980px;">
           <div class="form-row">
             <label for="redditHarvestTarget">Subreddit or Post URL</label>
