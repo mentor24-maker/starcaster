@@ -14,6 +14,7 @@ App.youtubeComments = (function () {
   let sourcePageId = 'acquireYoutubePage';
   let currentAgent = null;
   let allAgents = [];
+  let queueRefreshTimer = null;
 
   const filters = {
     from:    '',
@@ -80,12 +81,107 @@ App.youtubeComments = (function () {
     } catch (_) {
       allAgents = [];
     }
+    renderAgentQueue();
   }
 
   function matchingAgent(videoUrl) {
     const target = String(videoUrl || '').trim();
     if (!target) return null;
     return allAgents.find((agent) => String(agent && agent.videoUrl || '').trim() === target) || null;
+  }
+
+  function formatDateTime(value) {
+    const text = String(value || '').trim();
+    if (!text) return '-';
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? text : parsed.toLocaleString();
+  }
+
+  function summarizeCadence(agent) {
+    return formatCadenceSummary(agent && agent.frequency, agent && agent.timeframe);
+  }
+
+  function agentProgressText(agent) {
+    const sent = Number(agent && agent.totalPostsCount || 0) || 0;
+    const max = Number(agent && agent.maxPosts || 0) || 0;
+    return max ? `${sent}/${max} sent` : `${sent} sent`;
+  }
+
+  function queueStatusClass(status) {
+    const key = String(status || '').trim().toLowerCase();
+    if (!key) return '';
+    return `is-${key}`;
+  }
+
+  function renderAgentQueue() {
+    const listEl = document.getElementById('commentsAgentQueueList');
+    const summaryEl = document.getElementById('commentsAgentQueueSummary');
+    if (!listEl || !summaryEl) return;
+
+    const selectedVideoUrl = String(document.getElementById('commentsVideoUrlSelect')?.value || currentRun?.video_url || '').trim();
+    const sorted = Array.isArray(allAgents) ? allAgents.slice().sort((a, b) => {
+      const aNext = String(a && a.nextRunAt || '').trim();
+      const bNext = String(b && b.nextRunAt || '').trim();
+      if (aNext && bNext) return aNext.localeCompare(bNext);
+      if (aNext) return -1;
+      if (bNext) return 1;
+      return String(b && b.updatedAt || '').localeCompare(String(a && a.updatedAt || ''));
+    }) : [];
+
+    const scheduledCount = sorted.filter((agent) => String(agent && agent.scheduleStatus || '').trim().toLowerCase() === 'scheduled').length;
+    const dueCount = sorted.filter((agent) => String(agent && agent.scheduleStatus || '').trim().toLowerCase() === 'due').length;
+    const completedCount = sorted.filter((agent) => String(agent && agent.scheduleStatus || '').trim().toLowerCase() === 'completed').length;
+    summaryEl.textContent = sorted.length
+      ? `${sorted.length} saved agent${sorted.length === 1 ? '' : 's'} | ${scheduledCount} scheduled | ${dueCount} due | ${completedCount} completed`
+      : 'No scheduled YouTube comment agents yet.';
+
+    listEl.innerHTML = '';
+    if (!sorted.length) {
+      const empty = document.createElement('div');
+      empty.className = 'youtube-comments-agent-queue-empty';
+      empty.textContent = 'Save a schedule to see queued YouTube comment agents here.';
+      listEl.appendChild(empty);
+      return;
+    }
+
+    sorted.forEach((agent) => {
+      const card = document.createElement('div');
+      const status = String(agent && agent.scheduleStatus || '').trim().toLowerCase();
+      const isCurrent = selectedVideoUrl && String(agent && agent.videoUrl || '').trim() === selectedVideoUrl;
+      card.className = `youtube-comments-agent-card ${queueStatusClass(status)}${isCurrent ? ' is-current' : ''}`.trim();
+
+      const head = document.createElement('div');
+      head.className = 'youtube-comments-agent-card-head';
+
+      const title = document.createElement('div');
+      title.className = 'youtube-comments-agent-card-title';
+      title.textContent = String(agent && agent.videoUrl || '').trim() || 'Untitled agent';
+
+      const badge = document.createElement('span');
+      badge.className = `youtube-comments-agent-badge ${queueStatusClass(status)}`.trim();
+      badge.textContent = status || 'saved';
+
+      head.appendChild(title);
+      head.appendChild(badge);
+
+      const meta = document.createElement('div');
+      meta.className = 'youtube-comments-agent-card-meta';
+      meta.innerHTML = [
+        `<div><strong>Cadence:</strong> ${summarizeCadence(agent)}</div>`,
+        `<div><strong>Window:</strong> ${String(agent && agent.fromDate || '').trim() || '-'} to ${String(agent && agent.toDate || '').trim() || '-'}</div>`,
+        `<div><strong>Next Run:</strong> ${formatDateTime(agent && agent.nextRunAt)}</div>`,
+        `<div><strong>Progress:</strong> ${agentProgressText(agent)}</div>`,
+      ].join('');
+
+      const note = document.createElement('div');
+      note.className = `youtube-comments-agent-card-note${status === 'error' ? ' is-error' : ''}`;
+      note.textContent = String(agent && (agent.lastError || agent.scheduleNote) || '').trim() || 'No additional notes.';
+
+      card.appendChild(head);
+      card.appendChild(meta);
+      card.appendChild(note);
+      listEl.appendChild(card);
+    });
   }
 
   function renderVideoUrlOptions(selectedUrl) {
@@ -222,6 +318,7 @@ App.youtubeComments = (function () {
     });
     currentAgent = res.agent || null;
     await refreshAgents();
+    currentAgent = matchingAgent(payload.videoUrl) || currentAgent;
     setPreview(document.getElementById('commentsActionPreview'), res);
     updateScheduleStatusFromAgent();
     notify('YouTube promotion agent saved and scheduling enabled');
@@ -251,6 +348,8 @@ App.youtubeComments = (function () {
       body: JSON.stringify(payload),
     });
     currentAgent = res.agent || currentAgent;
+    await refreshAgents();
+    currentAgent = matchingAgent(payload.videoUrl) || currentAgent;
     setPreview(document.getElementById('commentsActionPreview'), res);
     setPostingStatus('Posted YouTube comment on demand successfully.', false);
     notify('Posted YouTube comment on demand');
@@ -266,6 +365,22 @@ App.youtubeComments = (function () {
     setPreview(document.getElementById('commentsActionPreview'), res);
     updateScheduleStatusFromAgent();
     notify(`Processed ${Number(res.totalProcessed || 0)} due YouTube comment agent${Number(res.totalProcessed || 0) === 1 ? '' : 's'}`);
+  }
+
+  async function refreshQueue() {
+    await refreshAgents();
+    const currentVideoUrl = String(document.getElementById('commentsVideoUrlSelect')?.value || currentRun?.video_url || '').trim();
+    currentAgent = matchingAgent(currentVideoUrl) || currentAgent;
+    updateScheduleStatusFromAgent();
+  }
+
+  function startQueuePolling() {
+    if (queueRefreshTimer) return;
+    queueRefreshTimer = window.setInterval(() => {
+      const page = document.getElementById('youtubeCommentsPage');
+      if (!page || page.classList.contains('hidden')) return;
+      refreshQueue().catch(() => null);
+    }, 15000);
   }
 
   function resetHeader() {
@@ -305,6 +420,7 @@ App.youtubeComments = (function () {
     currentAgent = matchingAgent(currentRun && currentRun.video_url) || currentAgent;
     updateScheduleStatusFromAgent();
     updateScheduleUi();
+    startQueuePolling();
     if (!currentRunId) {
       resetHeader();
       renderEmptyState('Open a YouTube comment run to review comments here.');
@@ -564,6 +680,7 @@ App.youtubeComments = (function () {
           syncHeaderFromCurrentRun();
         }
         updateScheduleStatusFromAgent();
+        renderAgentQueue();
         if (!currentAgent) setPostingStatus('Posting setup has not been checked yet.', false);
       });
     }
@@ -609,21 +726,37 @@ App.youtubeComments = (function () {
         });
       });
     }
+    const refreshQueueBtn = document.getElementById('commentsRefreshQueueBtn');
+    if (refreshQueueBtn) {
+      refreshQueueBtn.addEventListener('click', () => {
+        refreshQueue()
+          .then(() => notify('Refreshed scheduled YouTube queue'))
+          .catch((err) => notify(err.message, true));
+      });
+    }
 
     resetHeader();
     updateBackButton();
     renderVideoUrlOptions('');
+    renderAgentQueue();
     updateScheduleUi();
     setPostingStatus('Posting setup has not been checked yet.', false);
     setPreview(document.getElementById('commentsActionPreview'), {});
     renderEmptyState('Open a YouTube comment run to review comments here.');
+    startQueuePolling();
   }
 
   return {
     manifest: { id: 'youtubeComments', label: 'YouTube Comments', pageId: 'youtubeCommentsPage' },
     init,
-    refresh: refreshRepositoryVideos,
-    onPageActivated: refreshRepositoryVideos,
+    refresh: async function refresh() {
+      await refreshRepositoryVideos();
+      await refreshQueue();
+    },
+    onPageActivated: async function onPageActivated() {
+      await refreshRepositoryVideos();
+      await refreshQueue();
+    },
     openPage,
     openForRun,
   };
