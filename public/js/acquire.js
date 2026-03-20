@@ -807,6 +807,33 @@ App.acquire = (function () {
     return res;
   }
 
+  async function runBlueskyDiscovery() {
+    const form = document.getElementById('blueskyDiscoveryForm');
+    if (!form) return null;
+    const formData = new FormData(form);
+    const payload = {
+      target: String(formData.get('target') || '').trim(),
+      source_mode: String(formData.get('source_mode') || 'auto').trim().toLowerCase(),
+      sort: String(formData.get('sort') || 'new').trim().toLowerCase(),
+      max_posts: Number(formData.get('max_posts') || 20) || 20,
+      keyword: String(formData.get('keyword') || '').trim(),
+      min_likes: Number(formData.get('min_likes') || 0) || 0,
+      min_replies: Number(formData.get('min_replies') || 0) || 0,
+      start_time: String(formData.get('start_time') || '').trim(),
+      end_time: String(formData.get('end_time') || '').trim(),
+    };
+    if (!payload.target) throw new Error('Handle, feed, or BlueSky post URL is required.');
+    setBlueskyDiscoveryStatus('Discovering BlueSky posts...');
+    const res = await api('/api/engage/bluesky/discovery', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    renderBlueskyDiscoveryTable(res);
+    const count = Array.isArray(res.candidates) ? res.candidates.length : 0;
+    setBlueskyDiscoveryStatus(`Loaded ${count} BlueSky post candidate${count === 1 ? '' : 's'}.`);
+    return res;
+  }
+
   async function loadDirectHarvestRun(runId) {
     const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}`);
     state.directAcquireCurrentRun = res.run || null;
@@ -1177,32 +1204,17 @@ App.acquire = (function () {
     if (blueskyDiscoveryForm) {
       blueskyDiscoveryForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const formData = new FormData(blueskyDiscoveryForm);
-        const target = String(formData.get('target') || '').trim();
-        if (!target) {
-          setBlueskyDiscoveryStatus('Handle, feed, or post URL is required.', true);
-          notify('Handle, feed, or post URL is required.', true);
-          return;
+        const submitBtn = blueskyDiscoveryForm.querySelector('button[type="submit"]');
+        try {
+          if (submitBtn) submitBtn.disabled = true;
+          await runBlueskyDiscovery();
+          notify('BlueSky discovery complete');
+        } catch (err) {
+          setBlueskyDiscoveryStatus(err.message || 'BlueSky discovery failed', true);
+          notify(err.message, true);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
         }
-        const placeholder = {
-          candidates: [],
-          assumptions: ['BlueSky discovery UI is wired. Backend retrieval is the next implementation step.'],
-          errors: [],
-          requested_target: target,
-          requested_filters: {
-            source_mode: String(formData.get('source_mode') || 'auto'),
-            sort: String(formData.get('sort') || 'new'),
-            max_posts: Number(formData.get('max_posts') || 20) || 20,
-            keyword: String(formData.get('keyword') || ''),
-            min_likes: Number(formData.get('min_likes') || 0) || 0,
-            min_replies: Number(formData.get('min_replies') || 0) || 0,
-            start_time: String(formData.get('start_time') || ''),
-            end_time: String(formData.get('end_time') || ''),
-          },
-        };
-        renderBlueskyDiscoveryTable(placeholder);
-        setBlueskyDiscoveryStatus('BlueSky discovery UI is ready. Backend discovery workflow is next.', false);
-        notify('BlueSky discovery UI scaffold is ready');
       });
     }
     const blueskyDiscoveryUseTargetBtn = document.getElementById('blueskyDiscoveryUseTargetBtn');
