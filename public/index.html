@@ -1267,24 +1267,32 @@
                   </label>
                 </div>
               </th>
-              <th></th>
-              <th colspan="2">
-                <input id="commentSearchFilter" placeholder="Search author or text..." />
-              </th>
-              <th>
-                <select id="commentTypeFilter">
-                  <option value="all">All comments</option>
-                  <option value="top">Top-level only</option>
-                  <option value="reply">Replies only</option>
-                </select>
-              </th>
-              <th>
-                <input type="number" id="commentMinLikesFilter" placeholder="Min likes" min="0" />
-              </th>
-              <th>
-                <span style="color:#888; font-size:0.9em; white-space:nowrap;">
-                  Showing: <span id="commentsFilteredCount">0</span>
-                </span>
+              <th colspan="6">
+                <div class="youtube-comments-scheduler-row">
+                  <label class="youtube-comments-scheduler-field youtube-comments-scheduler-field-wide">
+                    <span>URL</span>
+                    <select id="commentsVideoUrlSelect">
+                      <option value="">Select Repository Video</option>
+                    </select>
+                  </label>
+                  <label class="youtube-comments-scheduler-field">
+                    <span>Frequency</span>
+                    <input id="commentsFrequencyInput" type="number" min="1" max="60" step="1" value="1" />
+                  </label>
+                  <label class="youtube-comments-scheduler-field">
+                    <span>Timeframe</span>
+                    <select id="commentsTimeframeSelect">
+                      <option value="minute">Minute</option>
+                      <option value="hour">Hour</option>
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month" selected>Month</option>
+                      <option value="year">Year</option>
+                    </select>
+                  </label>
+                </div>
+                <div id="commentsScheduleSummary" class="youtube-comments-schedule-summary">Scheduled 1 time per month.</div>
+                <div id="commentsScheduleWarning" class="youtube-comments-schedule-warning hidden">Warning: this cadence is faster than once per hour.</div>
               </th>
             </tr>
             <tr>

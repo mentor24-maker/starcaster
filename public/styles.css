@@ -4884,6 +4884,51 @@ th {
   text-align: center;
 }
 
+.youtube-comments-scheduler-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(100px, 0.6fr) minmax(140px, 0.8fr);
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.youtube-comments-scheduler-field {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.youtube-comments-scheduler-field span {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1f3f5a;
+}
+
+.youtube-comments-scheduler-field-wide {
+  min-width: 0;
+}
+
+.youtube-comments-schedule-summary {
+  margin-top: 8px;
+  color: #3d556f;
+  font-size: 0.92rem;
+}
+
+.youtube-comments-schedule-warning {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #b91c1c;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 700;
+}
+
+@media (max-width: 960px) {
+  .youtube-comments-scheduler-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 960px) {
   .youtube-edit-run-layout {
     grid-template-columns: minmax(0, 1fr);
