@@ -1595,13 +1595,14 @@ App.youtube = (function () {
   }
 
   function renderVideoMedia(video, runMeta) {
-    var playerEl = document.getElementById('youtubeVideoPlayer');
-    var emptyEl = document.getElementById('youtubeVideoMediaEmpty');
-    if (!playerEl || !emptyEl) return;
-
     var videoUrl = safeText(video && video.url) || safeText(runMeta && runMeta.video_url);
     var videoId = safeText(video && video.id) || extractYoutubeVideoId(videoUrl);
     var embedUrl = videoId ? ('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId)) : '';
+    renderYoutubePlayerFrame(document.getElementById('youtubeVideoPlayer'), document.getElementById('youtubeVideoMediaEmpty'), embedUrl, videoUrl);
+  }
+
+  function renderYoutubePlayerFrame(playerEl, emptyEl, embedUrl, videoUrl) {
+    if (!playerEl || !emptyEl) return;
 
     playerEl.classList.add('hidden');
     emptyEl.classList.remove('hidden');
@@ -3507,6 +3508,8 @@ App.youtube = (function () {
     var captureWrap = document.getElementById('youtubeRunEditCaptureWrap');
     var captureInput = document.getElementById('youtubeRunEditCaptureContact');
     var transcriptBtn = document.getElementById('youtubeRunEditTranscriptBtn');
+    var editPlayer = document.getElementById('youtubeRunEditPlayer');
+    var editPlayerEmpty = document.getElementById('youtubeRunEditPlayerEmpty');
 
     if (form) form.reset();
     if (idInput) idInput.value = id;
@@ -3522,6 +3525,14 @@ App.youtube = (function () {
 
     var transcriptMissing = safeText(run.transcript_status).toLowerCase() !== 'found';
     if (transcriptBtn) transcriptBtn.classList.toggle('hidden', !transcriptMissing);
+    renderYoutubePlayerFrame(
+      editPlayer,
+      editPlayerEmpty,
+      extractYoutubeVideoId(run && run.video_url)
+        ? ('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(extractYoutubeVideoId(run && run.video_url)))
+        : '',
+      safeText(run && run.video_url)
+    );
 
     App.setActivePage('editYoutubeRunPage');
   }

@@ -4839,6 +4839,22 @@ th {
   gap: 12px;
 }
 
+.youtube-edit-run-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.youtube-edit-run-media-panel {
+  position: sticky;
+  top: 12px;
+}
+
+.youtube-edit-run-layout #youtubeRunEditForm {
+  margin: 0;
+}
+
 .youtube-video-media-frame {
   position: relative;
   border: 1px solid var(--c-border);
@@ -4866,6 +4882,16 @@ th {
   padding: 18px;
   color: #cbd5e1;
   text-align: center;
+}
+
+@media (max-width: 960px) {
+  .youtube-edit-run-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .youtube-edit-run-media-panel {
+    position: static;
+  }
 }
 
 .youtube-miner-collapsible {
