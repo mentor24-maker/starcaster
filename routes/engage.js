@@ -13,6 +13,7 @@ const metaClients = require('../lib/metaClients');
 const redditClient = require('../lib/redditClient');
 const { discoverRedditThreads } = require('../lib/redditThreadDiscovery');
 const { generateRedditReplyCandidates } = require('../lib/redditReplyCandidates');
+const { discoverBlueskyThreads } = require('../lib/blueskyThreadDiscovery');
 const { relayOpenClaw } = require('../lib/openclawGateway');
 const {
   listAgents: listYoutubeCommentAgents,
@@ -696,6 +697,29 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, result.status || 500, result.error || 'Could not generate Reddit reply candidates', { code: 'REDDIT_REPLY_CANDIDATES_FAILED' }), true;
     }
     return sendOk(res, 200, result.data, result.data, { total: Array.isArray(result.data?.replies) ? result.data.replies.length : 0 }), true;
+  }
+
+  if (pathname === '/api/engage/bluesky/discovery' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const target = safeText(body?.target);
+    if (!target) {
+      return sendErr(res, 400, 'target is required (handle, feed, or BlueSky post URL)', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const result = await discoverBlueskyThreads({
+      target,
+      source_mode: body?.source_mode || body?.sourceMode,
+      sort: body?.sort,
+      max_posts: body?.max_posts || body?.maxPosts,
+      keyword: body?.keyword,
+      min_likes: body?.min_likes || body?.minLikes,
+      min_replies: body?.min_replies || body?.minReplies,
+      start_time: body?.start_time || body?.startTime,
+      end_time: body?.end_time || body?.endTime,
+    });
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'BlueSky thread discovery failed', { code: 'BLUESKY_DISCOVERY_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, result.data, { total: Array.isArray(result.data?.candidates) ? result.data.candidates.length : 0 }), true;
   }
 
   if (pathname === '/api/engage/reddit/comment' && requestMethod === 'POST') {
