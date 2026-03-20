@@ -960,9 +960,16 @@ App.acquire = (function () {
         try {
           setRedditDiscoveryStatus('Checking Reddit connection...');
           const res = await api('/api/engage/reddit/status');
+          const configured = Boolean(res?.configured);
           const ok = Boolean(res?.authOk);
-          setRedditDiscoveryStatus(ok ? 'Reddit configured and authenticated.' : 'Reddit is not fully authenticated yet.', !ok);
-          notify(ok ? 'Reddit connection looks good' : 'Reddit connection needs attention', !ok);
+          const authError = String(res?.auth?.error || '').trim();
+          const message = !configured
+            ? 'Reddit API is not configured in Settings > APIs.'
+            : (ok
+              ? 'Reddit configured and authenticated.'
+              : (authError || 'Reddit is configured, but authentication failed.'));
+          setRedditDiscoveryStatus(message, !ok);
+          notify(message, !ok);
         } catch (err) {
           setRedditDiscoveryStatus(err.message || 'Reddit status check failed', true);
           notify(err.message, true);
