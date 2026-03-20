@@ -18,7 +18,10 @@ const {
   getAgent: getYoutubeCommentAgent,
 } = require('../lib/youtubeCommentAgentStore');
 const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
-const { generateYoutubeCommentSuggestions } = require('../lib/harvest/YoutubeCommentSuggestions');
+const {
+  buildYoutubeCommentSuggestionInput,
+  generateYoutubeCommentSuggestions
+} = require('../lib/harvest/YoutubeCommentSuggestions');
 const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
 const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram'];
 
@@ -622,13 +625,14 @@ async function handle(req, res, pathname, method) {
     if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
 
     const harvest = await runYoutubeHarvest({ video_url: payload.videoUrl });
-    const suggestionRes = await generateYoutubeCommentSuggestions({
+    const suggestionInput = buildYoutubeCommentSuggestionInput({
       video_url: payload.videoUrl,
       title: safeText(harvest?.video?.title),
       channel_name: safeText(harvest?.channel_owner?.name),
       description: safeText(harvest?.video?.description),
       transcript: safeText(harvest?.video?.transcript),
     });
+    const suggestionRes = await generateYoutubeCommentSuggestions(suggestionInput);
     if (!suggestionRes.ok) {
       return sendErr(res, suggestionRes.status || 500, suggestionRes.error || 'Could not generate YouTube comment'), true;
     }
@@ -659,6 +663,7 @@ async function handle(req, res, pathname, method) {
       agent,
       scheduling: payload,
       harvest,
+      suggestionInput,
       suggestions,
       selectedComment,
       postedComment: postRes.data,
