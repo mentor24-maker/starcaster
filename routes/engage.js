@@ -18,6 +18,12 @@ const {
   updateAgent: updateYoutubeCommentAgent,
   getAgent: getYoutubeCommentAgent,
 } = require('../lib/youtubeCommentAgentStore');
+const {
+  computeNextRunAt,
+  scheduleStatus: youtubeAgentScheduleStatus,
+  isDue: isYoutubeAgentDue,
+  totalPostsLimit: youtubeAgentTotalPostsLimit,
+} = require('../lib/youtubeCommentAgentScheduler');
 const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
 const {
   buildYoutubeCommentSuggestionInput,
@@ -92,9 +98,11 @@ function normalizeYoutubeCommentAgentPayload(body) {
     maxPosts: clampInteger(body?.maxPosts || body?.max_posts, 1, 20, 1),
     videoCommentRatio: safeText(body?.videoCommentRatio || body?.video_comment_ratio) || '100/0',
     jitterHours: 10,
-    scheduleEnabled: false,
-    scheduleStatus: 'disabled',
-    scheduleNote: 'Scheduling is configured but disabled. Use Post On Demand for testing.',
+    scheduleEnabled: body?.scheduleEnabled === false ? false : true,
+    scheduleStatus: body?.scheduleEnabled === false ? 'disabled' : 'scheduled',
+    scheduleNote: body?.scheduleEnabled === false
+      ? 'Scheduling is disabled.'
+      : 'Scheduling is active. Posts will run automatically when due.',
   };
 }
 
@@ -287,6 +295,165 @@ async function buildYoutubeCommentAgentPreflight(payload) {
   result.ready = issues.length === 0;
   result.issues = issues;
   return result;
+}
+
+function normalizeSavedYoutubeAgent(agent, nowIso = new Date().toISOString()) {
+  const current = agent || {};
+  const nextRunAt = safeText(current.nextRunAt) || computeNextRunAt(current);
+  const totalPostsCount = Math.max(0, Number(current.totalPostsCount || 0) || 0);
+  const maxPosts = youtubeAgentTotalPostsLimit(current);
+  const scheduleStatus = youtubeAgentScheduleStatus({ ...current, nextRunAt }, nowIso);
+  const scheduleEnabled = current.scheduleEnabled === true && scheduleStatus !== 'completed';
+  const scheduleNote = scheduleEnabled
+    ? (nextRunAt ? `Next scheduled post: ${nextRunAt}` : 'Scheduling is active.')
+    : (scheduleStatus === 'completed'
+      ? `Completed after ${totalPostsCount} of ${maxPosts} allowed posts.`
+      : safeText(current.scheduleNote) || 'Scheduling is disabled.');
+  return {
+    ...current,
+    nextRunAt,
+    totalPostsCount,
+    scheduleEnabled,
+    scheduleStatus,
+    scheduleNote,
+  };
+}
+
+async function executeYoutubeCommentAgent(agentInput, { mode = 'scheduled' } = {}) {
+  const agent = normalizeSavedYoutubeAgent(agentInput);
+  const payload = normalizeYoutubeCommentAgentPayload(agent);
+  const nowIso = new Date().toISOString();
+  const preflight = await buildYoutubeCommentAgentPreflight(payload);
+  if (!preflight.ready) {
+    const issues = Array.isArray(preflight.issues) ? preflight.issues : [];
+    return {
+      ok: false,
+      status: 412,
+      error: issues[0] || 'YouTube comment posting preflight failed',
+      preflight,
+      patch: {
+        lastRunAttemptedAt: nowIso,
+        lastError: issues.join(' | '),
+        scheduleStatus: 'error',
+        scheduleNote: issues[0] || 'YouTube comment posting preflight failed',
+      },
+    };
+  }
+
+  const suggestions = Array.isArray(preflight.suggestions) ? preflight.suggestions : [];
+  const selectedComment = safeText(suggestions[0]);
+  if (!selectedComment) {
+    return {
+      ok: false,
+      status: 500,
+      error: 'No usable YouTube comment suggestion was generated',
+      preflight,
+      patch: {
+        lastRunAttemptedAt: nowIso,
+        lastError: 'No usable YouTube comment suggestion was generated',
+        scheduleStatus: 'error',
+        scheduleNote: 'No usable YouTube comment suggestion was generated',
+      },
+    };
+  }
+
+  const postRes = await postYoutubeComment({
+    video_url: payload.videoUrl,
+    comment_text: selectedComment,
+  });
+  if (!postRes.ok) {
+    return {
+      ok: false,
+      status: postRes.status || 500,
+      error: safeText(postRes.error) || 'Could not post YouTube comment',
+      preflight,
+      patch: {
+        lastRunAttemptedAt: nowIso,
+        lastError: safeText(postRes.error) || 'Could not post YouTube comment',
+        scheduleStatus: 'error',
+        scheduleNote: safeText(postRes.error) || 'Could not post YouTube comment',
+      },
+    };
+  }
+
+  const totalPostsCount = Math.max(0, Number(agent.totalPostsCount || 0) || 0) + (mode === 'scheduled' ? 1 : 0);
+  const basePatch = {
+    lastRunAttemptedAt: nowIso,
+    lastPostedAt: nowIso,
+    lastPostedCommentId: safeText(postRes.data?.comment_id),
+    lastPostedThreadId: safeText(postRes.data?.thread_id),
+    lastError: '',
+    scheduleStatus: 'scheduled',
+    scheduleNote: 'Scheduling is active. Posts will run automatically when due.',
+  };
+
+  if (mode === 'scheduled') {
+    basePatch.totalPostsCount = totalPostsCount;
+    const nextCandidate = normalizeSavedYoutubeAgent({
+      ...agent,
+      ...basePatch,
+      totalPostsCount,
+    }, nowIso);
+    basePatch.nextRunAt = nextCandidate.nextRunAt;
+    basePatch.scheduleStatus = nextCandidate.scheduleStatus;
+    basePatch.scheduleEnabled = nextCandidate.scheduleEnabled;
+    basePatch.scheduleNote = nextCandidate.scheduleNote;
+  }
+
+  return {
+    ok: true,
+    status: 201,
+    preflight,
+    suggestions,
+    selectedComment,
+    postedComment: postRes.data,
+    patch: basePatch,
+  };
+}
+
+async function runDueYoutubeCommentAgents(nowIso = new Date().toISOString()) {
+  const agents = listYoutubeCommentAgents().map((agent) => normalizeSavedYoutubeAgent(agent, nowIso));
+  const results = [];
+
+  for (const agent of agents) {
+    const maxPosts = youtubeAgentTotalPostsLimit(agent);
+    if (agent.scheduleEnabled !== true) continue;
+    if (Math.max(0, Number(agent.totalPostsCount || 0) || 0) >= maxPosts) {
+      const completed = updateYoutubeCommentAgent(agent.id, normalizeSavedYoutubeAgent({
+        ...agent,
+        scheduleEnabled: false,
+        scheduleStatus: 'completed',
+        scheduleNote: `Completed after ${maxPosts} of ${maxPosts} allowed posts.`,
+        nextRunAt: '',
+      }, nowIso));
+      results.push({ agentId: agent.id, ok: true, skipped: true, reason: 'completed', agent: completed });
+      continue;
+    }
+    if (!isYoutubeAgentDue(agent, nowIso)) continue;
+
+    const execRes = await executeYoutubeCommentAgent(agent, { mode: 'scheduled' });
+    const saved = updateYoutubeCommentAgent(agent.id, execRes.patch || {});
+    results.push({
+      agentId: agent.id,
+      ok: execRes.ok,
+      status: execRes.status || 0,
+      error: execRes.ok ? '' : safeText(execRes.error),
+      selectedComment: safeText(execRes.selectedComment),
+      postedComment: execRes.postedComment || null,
+      agent: saved,
+    });
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    data: {
+      now: nowIso,
+      processed: results,
+      totalProcessed: results.length,
+      failures: results.filter((item) => item.ok === false).length,
+    },
+  };
 }
 
 function isPublicMediaUrl(value, requireHttps = false) {
@@ -803,7 +970,7 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/engage/youtube-comment-agents' && requestMethod === 'GET') {
-    const agents = listYoutubeCommentAgents();
+    const agents = listYoutubeCommentAgents().map((agent) => normalizeSavedYoutubeAgent(agent));
     return sendOk(res, 200, agents, { agents }, { total: agents.length }), true;
   }
 
@@ -813,13 +980,30 @@ async function handle(req, res, pathname, method) {
     if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
     if (!payload.fromDate) return sendErr(res, 400, 'fromDate is required', { code: 'VALIDATION_ERROR' }), true;
     if (!payload.toDate) return sendErr(res, 400, 'toDate is required', { code: 'VALIDATION_ERROR' }), true;
-
-    const agent = createYoutubeCommentAgent(payload);
+    const agentId = safeText(body?.agentId || body?.agent_id);
+    let agent = null;
+    const seed = normalizeSavedYoutubeAgent({
+      ...(agentId ? (getYoutubeCommentAgent(agentId) || {}) : {}),
+      ...payload,
+      id: agentId || safeText((getYoutubeCommentAgent(agentId) || {}).id),
+      lastError: '',
+      scheduleEnabled: payload.scheduleEnabled,
+      scheduleStatus: payload.scheduleEnabled ? 'scheduled' : 'disabled',
+      scheduleNote: payload.scheduleEnabled
+        ? 'Scheduling is active. Posts will run automatically when due.'
+        : 'Scheduling is disabled.',
+    });
+    if (agentId && getYoutubeCommentAgent(agentId)) {
+      agent = updateYoutubeCommentAgent(agentId, seed);
+    } else {
+      agent = createYoutubeCommentAgent(seed);
+      agent = updateYoutubeCommentAgent(agent.id, normalizeSavedYoutubeAgent(agent));
+    }
     logActivity({
       action: 'engage.youtube_comment_agent_saved',
       entityType: 'engage_youtube_comment_agent',
       entityId: agent.id,
-      summary: 'Saved disabled YouTube comment promotion agent',
+      summary: 'Saved scheduled YouTube comment promotion agent',
       meta: {
         video_url: agent.videoUrl,
         frequency: agent.frequency,
@@ -829,6 +1013,11 @@ async function handle(req, res, pathname, method) {
       },
     });
     return sendOk(res, 201, { agent }, { agent }), true;
+  }
+
+  if (pathname === '/api/engage/youtube-comment-agents/run-due' && (requestMethod === 'POST' || requestMethod === 'GET')) {
+    const result = await runDueYoutubeCommentAgents();
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   if (pathname === '/api/engage/youtube-comment-agents/preflight' && requestMethod === 'POST') {
@@ -842,50 +1031,42 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const payload = normalizeYoutubeCommentAgentPayload(body);
     if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
-
-    const preflight = await buildYoutubeCommentAgentPreflight(payload);
-    if (!preflight.ready) {
+    const execRes = await executeYoutubeCommentAgent({
+      ...(safeText(body?.agentId || body?.agent_id) ? (getYoutubeCommentAgent(safeText(body?.agentId || body?.agent_id)) || {}) : {}),
+      ...payload,
+    }, { mode: 'test' });
+    if (!execRes.ok) {
+      const issues = Array.isArray(execRes.preflight?.issues) ? execRes.preflight.issues : [];
       return sendErr(
         res,
-        412,
-        preflight.issues[0] || 'YouTube comment posting preflight failed',
-        { code: 'YOUTUBE_POST_PREFLIGHT_FAILED', details: preflight.issues }
+        execRes.status || 500,
+        execRes.error || 'Could not post YouTube comment',
+        { code: 'YOUTUBE_POST_FAILED', details: issues }
       ), true;
     }
-    const suggestions = Array.isArray(preflight.suggestions) ? preflight.suggestions : [];
-    const selectedComment = safeText(suggestions[0]);
-    if (!selectedComment) {
-      return sendErr(res, 500, 'No usable YouTube comment suggestion was generated'), true;
-    }
-
-    const postRes = await postYoutubeComment({
-      video_url: payload.videoUrl,
-      comment_text: selectedComment,
-    });
-    if (!postRes.ok) return sendErr(res, postRes.status || 500, postRes.error || 'Could not post YouTube comment'), true;
 
     let agent = null;
     const agentId = safeText(body?.agentId || body?.agent_id);
     if (agentId) {
       agent = updateYoutubeCommentAgent(agentId, {
         lastTestPostedAt: new Date().toISOString(),
-        lastTestCommentId: safeText(postRes.data?.comment_id),
-        lastTestThreadId: safeText(postRes.data?.thread_id),
-        lastTestCommentText: selectedComment,
+        lastTestCommentId: safeText(execRes.postedComment?.comment_id),
+        lastTestThreadId: safeText(execRes.postedComment?.thread_id),
+        lastTestCommentText: execRes.selectedComment,
       }) || getYoutubeCommentAgent(agentId);
     }
 
     const result = {
       agent,
       scheduling: payload,
-      preflight,
-      harvest: preflight.harvest,
-      suggestionInput: preflight.suggestionInput,
-      suggestions,
-      selectedComment,
-      postedComment: postRes.data,
-      schedulingEnabled: false,
-      schedulingNote: 'Recurring scheduling remains disabled. This was an on-demand test post.',
+      preflight: execRes.preflight,
+      harvest: execRes.preflight.harvest,
+      suggestionInput: execRes.preflight.suggestionInput,
+      suggestions: execRes.suggestions,
+      selectedComment: execRes.selectedComment,
+      postedComment: execRes.postedComment,
+      schedulingEnabled: true,
+      schedulingNote: 'Scheduling remains active. This was an on-demand test post.',
     };
 
     logActivity({
@@ -895,8 +1076,8 @@ async function handle(req, res, pathname, method) {
       summary: `Posted on-demand YouTube comment to ${payload.videoUrl}`,
       meta: {
         video_url: payload.videoUrl,
-        comment_id: safeText(postRes.data?.comment_id),
-        thread_id: safeText(postRes.data?.thread_id),
+        comment_id: safeText(execRes.postedComment?.comment_id),
+        thread_id: safeText(execRes.postedComment?.thread_id),
       },
     });
 

@@ -79,6 +79,17 @@ function providerDebug(provider, envVar) {
   };
 }
 
+function isAuthorizedCronRequest(req, pathname) {
+  const cronPath = pathname === '/api/engage/youtube-comment-agents/run-due';
+  if (!cronPath) return false;
+  const vercelCron = String(req?.headers?.['x-vercel-cron'] || '').trim();
+  if (vercelCron) return true;
+  const authHeader = String(req?.headers?.authorization || '').trim();
+  const cronSecret = String(process.env.CRON_SECRET || '').trim();
+  if (!cronSecret || !authHeader.startsWith('Bearer ')) return false;
+  return authHeader.slice('Bearer '.length).trim() === cronSecret;
+}
+
 // ---------------------------------------------------------------------------
 // Route registry
 // ---------------------------------------------------------------------------
@@ -117,12 +128,13 @@ async function handleRequest(req, res) {
   const method   = req.method;
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
+  const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);
   req.authUser = authUser || null;
   req.projectContext = null;
 
-  if (!isAuthRoute && !isDebugRoute && !authUser) {
+  if (!isAuthRoute && !isDebugRoute && !isCronAuthorized && !authUser) {
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
 

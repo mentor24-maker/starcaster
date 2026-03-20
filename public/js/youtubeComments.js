@@ -13,6 +13,7 @@ App.youtubeComments = (function () {
   let currentRun   = null;  // Store run info (title, video_url) for table display
   let sourcePageId = 'acquireYoutubePage';
   let currentAgent = null;
+  let allAgents = [];
 
   const filters = {
     from:    '',
@@ -70,6 +71,21 @@ App.youtubeComments = (function () {
       state.acquireYoutubeVideos = Array.isArray(state.acquireYoutubeVideos) ? state.acquireYoutubeVideos : [];
     }
     renderVideoUrlOptions(currentRun && currentRun.video_url);
+  }
+
+  async function refreshAgents() {
+    try {
+      const res = await api('/api/engage/youtube-comment-agents');
+      allAgents = Array.isArray(res.agents) ? res.agents : (Array.isArray(res.data) ? res.data : []);
+    } catch (_) {
+      allAgents = [];
+    }
+  }
+
+  function matchingAgent(videoUrl) {
+    const target = String(videoUrl || '').trim();
+    if (!target) return null;
+    return allAgents.find((agent) => String(agent && agent.videoUrl || '').trim() === target) || null;
   }
 
   function renderVideoUrlOptions(selectedUrl) {
@@ -155,6 +171,18 @@ App.youtubeComments = (function () {
     el.style.fontWeight = isError ? '700' : '';
   }
 
+  function updateScheduleStatusFromAgent() {
+    if (!currentAgent || !currentAgent.id) return;
+    const note = String(currentAgent.scheduleNote || '').trim();
+    const nextRunAt = String(currentAgent.nextRunAt || '').trim();
+    const totalPosts = Number(currentAgent.totalPostsCount || 0) || 0;
+    const maxPosts = Number(currentAgent.maxPosts || 0) || 0;
+    if (note) {
+      const extra = nextRunAt ? ` Next run: ${new Date(nextRunAt).toLocaleString()}.` : '';
+      setPostingStatus(`${note}${extra}${maxPosts ? ` Posts sent: ${totalPosts}/${maxPosts}.` : ''}`, false);
+    }
+  }
+
   function describePreflight(preflight) {
     const checks = preflight && preflight.checks || {};
     if (!preflight || typeof preflight !== 'object') {
@@ -193,8 +221,10 @@ App.youtubeComments = (function () {
       body: JSON.stringify(payload),
     });
     currentAgent = res.agent || null;
+    await refreshAgents();
     setPreview(document.getElementById('commentsActionPreview'), res);
-    notify('YouTube promotion agent saved with scheduling disabled');
+    updateScheduleStatusFromAgent();
+    notify('YouTube promotion agent saved and scheduling enabled');
   }
 
   async function checkPostingSetup() {
@@ -224,6 +254,18 @@ App.youtubeComments = (function () {
     setPreview(document.getElementById('commentsActionPreview'), res);
     setPostingStatus('Posted YouTube comment on demand successfully.', false);
     notify('Posted YouTube comment on demand');
+  }
+
+  async function runDueAgentsNow() {
+    const res = await api('/api/engage/youtube-comment-agents/run-due', {
+      method: 'POST',
+    });
+    await refreshAgents();
+    const currentVideoUrl = String(document.getElementById('commentsVideoUrlSelect')?.value || currentRun?.video_url || '').trim();
+    currentAgent = matchingAgent(currentVideoUrl) || currentAgent;
+    setPreview(document.getElementById('commentsActionPreview'), res);
+    updateScheduleStatusFromAgent();
+    notify(`Processed ${Number(res.totalProcessed || 0)} due YouTube comment agent${Number(res.totalProcessed || 0) === 1 ? '' : 's'}`);
   }
 
   function resetHeader() {
@@ -259,6 +301,9 @@ App.youtubeComments = (function () {
     sourcePageId = String(options?.sourcePage || sourcePageId || 'acquireYoutubePage');
     updateBackButton();
     await refreshRepositoryVideos();
+    await refreshAgents();
+    currentAgent = matchingAgent(currentRun && currentRun.video_url) || currentAgent;
+    updateScheduleStatusFromAgent();
     updateScheduleUi();
     if (!currentRunId) {
       resetHeader();
@@ -507,6 +552,7 @@ App.youtubeComments = (function () {
       videoSelectEl.addEventListener('change', () => {
         const nextUrl = String(videoSelectEl.value || '').trim();
         const match = getRepositoryVideos().find((video) => String(video && video.video_url || '').trim() === nextUrl) || null;
+        currentAgent = matchingAgent(nextUrl);
         if (match) {
           currentRun = {
             ...(currentRun || {}),
@@ -517,7 +563,8 @@ App.youtubeComments = (function () {
           };
           syncHeaderFromCurrentRun();
         }
-        setPostingStatus('Posting setup has not been checked yet.', false);
+        updateScheduleStatusFromAgent();
+        if (!currentAgent) setPostingStatus('Posting setup has not been checked yet.', false);
       });
     }
     const freqEl = document.getElementById('commentsFrequencyInput');
@@ -549,6 +596,15 @@ App.youtubeComments = (function () {
       postNowBtn.addEventListener('click', () => {
         postOnDemand().catch((err) => {
           setPostingStatus(err.message || 'Could not post YouTube comment.', true);
+          notify(err.message, true);
+        });
+      });
+    }
+    const runDueBtn = document.getElementById('commentsRunDueBtn');
+    if (runDueBtn) {
+      runDueBtn.addEventListener('click', () => {
+        runDueAgentsNow().catch((err) => {
+          setPostingStatus(err.message || 'Could not run due YouTube agents.', true);
           notify(err.message, true);
         });
       });
