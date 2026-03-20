@@ -8,6 +8,7 @@ App.acquire = (function () {
   const { state, els, api, notify, setPreview, prettyJson } = App;
   let redditHarvestProgressTimer = null;
   let lastRedditDiscoveryResult = null;
+  let lastBlueskyDiscoveryResult = null;
 
   // -------------------------------------------------------------------------
   // Stage helpers
@@ -383,6 +384,121 @@ App.acquire = (function () {
     el.textContent = String(message || '').trim() || 'Reddit reply generation is idle.';
     el.style.color = isError ? '#b42318' : '';
     el.style.fontWeight = isError ? '700' : '';
+  }
+
+  function setBlueskyDiscoveryStatus(message, isError = false) {
+    const el = document.getElementById('blueskyDiscoveryStatus');
+    if (!el) return;
+    el.textContent = String(message || '').trim() || 'BlueSky discovery is idle.';
+    el.style.color = isError ? '#b42318' : '';
+    el.style.fontWeight = isError ? '700' : '';
+  }
+
+  function setBlueskyReplyStatus(message, isError = false) {
+    const el = document.getElementById('blueskyReplyStatus');
+    if (!el) return;
+    el.textContent = String(message || '').trim() || 'BlueSky reply generation is idle.';
+    el.style.color = isError ? '#b42318' : '';
+    el.style.fontWeight = isError ? '700' : '';
+  }
+
+  function setBlueskyPostingStatus(message, isError = false) {
+    const el = document.getElementById('blueskyPostingStatus');
+    if (!el) return;
+    el.textContent = String(message || '').trim() || 'BlueSky posting operator is idle.';
+    el.style.color = isError ? '#b42318' : '';
+    el.style.fontWeight = isError ? '700' : '';
+  }
+
+  function renderBlueskyDiscoveryTable(result) {
+    const tbody = document.getElementById('blueskyDiscoveryTable');
+    const preview = document.getElementById('blueskyDiscoveryPreview');
+    if (preview) preview.textContent = prettyJson(result || {});
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    lastBlueskyDiscoveryResult = result || null;
+    const rows = Array.isArray(result?.candidates) ? result.candidates : [];
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 9;
+      td.textContent = 'No BlueSky post candidates loaded yet.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    rows.forEach((item) => {
+      const tr = document.createElement('tr');
+      const cols = [
+        String(item.discovery_score != null ? item.discovery_score : item.reply_opportunity || '-'),
+        String(item.author_handle || item.author_display_name || '-'),
+        String(item.text || item.post_url || '-'),
+        String(item.like_count != null ? item.like_count : '-'),
+        String(item.reply_count != null ? item.reply_count : '-'),
+        String(item.repost_count != null ? item.repost_count : '-'),
+        String(item.created_at ? new Date(item.created_at).toLocaleString() : '-'),
+        String(item.why_relevant || '-'),
+      ];
+      cols.forEach((value, idx) => {
+        const td = document.createElement('td');
+        if (idx === 2 && item.post_url) {
+          const a = document.createElement('a');
+          a.href = item.post_url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.textContent = value || '-';
+          td.appendChild(a);
+        } else {
+          td.textContent = value || '-';
+        }
+        tr.appendChild(td);
+      });
+
+      const actionsTd = document.createElement('td');
+      const useBtn = App.makeIconButton('copy', 'Use In Reply', () => {
+        const replyTarget = document.getElementById('blueskyReplyTarget');
+        const postingTarget = document.getElementById('blueskyPostingTarget');
+        const nextValue = String(item.post_url || '').trim();
+        if (replyTarget) replyTarget.value = nextValue;
+        if (postingTarget) postingTarget.value = nextValue;
+        notify('Copied BlueSky target into reply and posting forms');
+      }, { primary: true });
+      actionsTd.appendChild(useBtn);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderBlueskyReplyCandidates(result) {
+    const tbody = document.getElementById('blueskyReplyCandidatesTable');
+    const preview = document.getElementById('blueskyReplyCandidatesPreview');
+    if (preview) preview.textContent = prettyJson(result || {});
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const rows = Array.isArray(result?.replies) ? result.replies : [];
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 3;
+      td.textContent = 'No BlueSky reply candidates generated yet.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    rows.forEach((item) => {
+      const tr = document.createElement('tr');
+      [
+        String(item && item.text || '-'),
+        String(item && item.tone || '-'),
+        String(item && item.why || '-'),
+      ].forEach((value) => {
+        const td = document.createElement('td');
+        td.textContent = value || '-';
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
   }
 
   function renderRedditDiscoveryTable(result) {
@@ -1026,6 +1142,154 @@ App.acquire = (function () {
         }
       });
     }
+    const blueskyRefreshBtn = document.getElementById('blueskyRefreshBtn');
+    if (blueskyRefreshBtn) {
+      blueskyRefreshBtn.addEventListener('click', () => {
+        renderBlueskyDiscoveryTable(lastBlueskyDiscoveryResult);
+        renderBlueskyReplyCandidates(null);
+        setBlueskyDiscoveryStatus('BlueSky UI refreshed.', false);
+        setBlueskyReplyStatus('BlueSky reply generation is idle.', false);
+        setBlueskyPostingStatus('BlueSky posting operator is idle.', false);
+        notify('BlueSky page refreshed');
+      });
+    }
+    const blueskyDiscoveryStatusBtn = document.getElementById('blueskyDiscoveryStatusBtn');
+    if (blueskyDiscoveryStatusBtn) {
+      blueskyDiscoveryStatusBtn.addEventListener('click', async () => {
+        try {
+          setBlueskyDiscoveryStatus('Checking BlueSky connection...');
+          const res = await api('/api/engage/social/bluesky/auth-test');
+          const configured = Boolean(res?.configured);
+          const ok = Boolean(res?.authOk);
+          const message = !configured
+            ? 'BlueSky API is not configured in Settings > APIs.'
+            : (ok ? 'BlueSky configured and authenticated.' : String(res?.error || 'BlueSky authentication failed.'));
+          setBlueskyDiscoveryStatus(message, !ok);
+          setBlueskyPostingStatus(message, !ok);
+          notify(message, !ok);
+        } catch (err) {
+          setBlueskyDiscoveryStatus(err.message || 'BlueSky status check failed', true);
+          notify(err.message, true);
+        }
+      });
+    }
+    const blueskyDiscoveryForm = document.getElementById('blueskyDiscoveryForm');
+    if (blueskyDiscoveryForm) {
+      blueskyDiscoveryForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(blueskyDiscoveryForm);
+        const target = String(formData.get('target') || '').trim();
+        if (!target) {
+          setBlueskyDiscoveryStatus('Handle, feed, or post URL is required.', true);
+          notify('Handle, feed, or post URL is required.', true);
+          return;
+        }
+        const placeholder = {
+          candidates: [],
+          assumptions: ['BlueSky discovery UI is wired. Backend retrieval is the next implementation step.'],
+          errors: [],
+          requested_target: target,
+          requested_filters: {
+            source_mode: String(formData.get('source_mode') || 'auto'),
+            sort: String(formData.get('sort') || 'new'),
+            max_posts: Number(formData.get('max_posts') || 20) || 20,
+            keyword: String(formData.get('keyword') || ''),
+            min_likes: Number(formData.get('min_likes') || 0) || 0,
+            min_replies: Number(formData.get('min_replies') || 0) || 0,
+            start_time: String(formData.get('start_time') || ''),
+            end_time: String(formData.get('end_time') || ''),
+          },
+        };
+        renderBlueskyDiscoveryTable(placeholder);
+        setBlueskyDiscoveryStatus('BlueSky discovery UI is ready. Backend discovery workflow is next.', false);
+        notify('BlueSky discovery UI scaffold is ready');
+      });
+    }
+    const blueskyDiscoveryUseTargetBtn = document.getElementById('blueskyDiscoveryUseTargetBtn');
+    if (blueskyDiscoveryUseTargetBtn) {
+      blueskyDiscoveryUseTargetBtn.addEventListener('click', () => {
+        const discoveryTarget = document.getElementById('blueskyDiscoveryTarget');
+        const replyTarget = document.getElementById('blueskyReplyTarget');
+        const postingTarget = document.getElementById('blueskyPostingTarget');
+        const value = String(discoveryTarget && discoveryTarget.value || '').trim();
+        if (!value) {
+          notify('Add a BlueSky discovery target first', true);
+          return;
+        }
+        if (replyTarget) replyTarget.value = value;
+        if (postingTarget) postingTarget.value = value;
+        notify('Copied discovery target into BlueSky reply and posting forms');
+      });
+    }
+    const blueskyReplyCandidatesForm = document.getElementById('blueskyReplyCandidatesForm');
+    if (blueskyReplyCandidatesForm) {
+      blueskyReplyCandidatesForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(blueskyReplyCandidatesForm);
+        const target = String(formData.get('target') || '').trim();
+        if (!target) {
+          setBlueskyReplyStatus('BlueSky post URL is required.', true);
+          notify('BlueSky post URL is required.', true);
+          return;
+        }
+        const placeholder = {
+          replies: [],
+          assumptions: ['BlueSky reply generator UI is wired. Backend generation workflow is the next implementation step.'],
+          errors: [],
+          requested_target: target,
+          requested_filters: {
+            source_mode: String(formData.get('source_mode') || 'auto'),
+            context_limit: Number(formData.get('context_limit') || 8) || 8,
+          },
+        };
+        renderBlueskyReplyCandidates(placeholder);
+        setBlueskyReplyStatus('BlueSky reply generator UI is ready. Backend generation workflow is next.', false);
+        notify('BlueSky reply candidate UI scaffold is ready');
+      });
+    }
+    const blueskyPostingStatusBtn = document.getElementById('blueskyPostingStatusBtn');
+    if (blueskyPostingStatusBtn) {
+      blueskyPostingStatusBtn.addEventListener('click', async () => {
+        try {
+          setBlueskyPostingStatus('Checking BlueSky posting setup...');
+          const res = await api('/api/engage/social/bluesky/auth-test');
+          const configured = Boolean(res?.configured);
+          const ok = Boolean(res?.authOk);
+          const message = !configured
+            ? 'BlueSky API is not configured in Settings > APIs.'
+            : (ok ? 'BlueSky posting auth is ready.' : String(res?.error || 'BlueSky posting setup failed.'));
+          const preview = document.getElementById('blueskyPostingPreview');
+          if (preview) preview.textContent = prettyJson(res || {});
+          setBlueskyPostingStatus(message, !ok);
+          notify(message, !ok);
+        } catch (err) {
+          setBlueskyPostingStatus(err.message || 'BlueSky posting check failed', true);
+          notify(err.message, true);
+        }
+      });
+    }
+    const blueskyPostingForm = document.getElementById('blueskyPostingForm');
+    if (blueskyPostingForm) {
+      blueskyPostingForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(blueskyPostingForm);
+        const payload = {
+          target: String(formData.get('target') || '').trim(),
+          reply_text: String(formData.get('reply_text') || '').trim(),
+          mode: 'dry_run',
+        };
+        const preview = document.getElementById('blueskyPostingPreview');
+        if (preview) preview.textContent = prettyJson({
+          ok: true,
+          mode: 'dry_run',
+          target: payload.target,
+          reply_text: payload.reply_text,
+          assumptions: ['BlueSky posting operator UI is wired. Backend dry-run execution is the next implementation step.'],
+        });
+        setBlueskyPostingStatus('BlueSky posting operator UI is ready. Backend dry-run execution is next.', false);
+        notify('BlueSky posting operator UI scaffold is ready');
+      });
+    }
     if (els.redditHarvestForm) {
       els.redditHarvestForm.addEventListener('submit', async (e) => {
         const submitBtn = els.redditHarvestForm.querySelector('button[type="submit"]');
@@ -1096,6 +1360,11 @@ App.acquire = (function () {
     setRedditDiscoveryStatus('Reddit discovery is idle.', false);
     renderRedditReplyCandidates(null);
     setRedditReplyStatus('Reddit reply generation is idle.', false);
+    renderBlueskyDiscoveryTable(null);
+    setBlueskyDiscoveryStatus('BlueSky discovery is idle.', false);
+    renderBlueskyReplyCandidates(null);
+    setBlueskyReplyStatus('BlueSky reply generation is idle.', false);
+    setBlueskyPostingStatus('BlueSky posting operator is idle.', false);
   }
 
   return {
