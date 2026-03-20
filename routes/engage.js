@@ -2,6 +2,7 @@
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { logActivity } = require('../lib/activityLog');
+const { getProviderValues } = require('../lib/apiSettings');
 const { listCampaigns, rowToCampaign } = require('../lib/store');
 const { getAssetById, rowToAsset } = require('../lib/assetsStore');
 const socialStore = require('../lib/engageSocialStore');
@@ -28,6 +29,25 @@ const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads',
 
 function safeText(value) {
   return String(value || '').trim();
+}
+
+function maskSecret(value) {
+  const text = safeText(value);
+  if (!text) return '';
+  if (text.length <= 8) return '********';
+  return `${text.slice(0, 4)}...${text.slice(-4)}`;
+}
+
+function providerRuntimeDebug(provider, envVar) {
+  const fromEnv = safeText(process.env[envVar]);
+  const fromStore = safeText(getProviderValues(provider)?.api_key);
+  const selected = fromEnv || fromStore;
+  return {
+    provider,
+    configured: Boolean(selected),
+    source: fromEnv ? 'env' : (fromStore ? 'settings' : 'none'),
+    keyHint: maskSecret(selected),
+  };
 }
 
 function parseJsonObject(raw) {
@@ -160,6 +180,10 @@ async function buildYoutubeCommentAgentPreflight(payload) {
   const issues = [];
   const result = {
     ready: false,
+    providers: {
+      openai: providerRuntimeDebug('openai', 'OPENAI_API_KEY'),
+      anthropic: providerRuntimeDebug('anthropic', 'ANTHROPIC_API_KEY'),
+    },
     checks: {
       videoSelection: {
         ok: Boolean(videoUrl),
