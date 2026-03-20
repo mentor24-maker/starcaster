@@ -23,6 +23,7 @@ const {
   generateYoutubeCommentSuggestions
 } = require('../lib/harvest/YoutubeCommentSuggestions');
 const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
+const { getAccessToken } = require('../lib/googleDrive');
 const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram'];
 
 function safeText(value) {
@@ -75,6 +76,187 @@ function normalizeYoutubeCommentAgentPayload(body) {
     scheduleStatus: 'disabled',
     scheduleNote: 'Scheduling is configured but disabled. Use Post On Demand for testing.',
   };
+}
+
+function hasYoutubePostingScope(scopes) {
+  return (Array.isArray(scopes) ? scopes : []).some((scope) => {
+    const text = safeText(scope);
+    return text === 'https://www.googleapis.com/auth/youtube.force-ssl'
+      || text === 'https://www.googleapis.com/auth/youtube'
+      || text === 'https://www.googleapis.com/auth/youtube.upload';
+  });
+}
+
+async function fetchGoogleTokenInfo(accessToken) {
+  const token = safeText(accessToken);
+  if (!token) return { ok: false, status: 400, error: 'access token is required' };
+  let res;
+  try {
+    res = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    return { ok: false, status: 502, error: `Could not reach Google token info: ${err.message}` };
+  }
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status || 500,
+      error: safeText(payload?.error_description || payload?.error || 'Google token info lookup failed'),
+    };
+  }
+  const scopes = safeText(payload?.scope).split(/\s+/).map(safeText).filter(Boolean);
+  return {
+    ok: true,
+    status: 200,
+    data: {
+      scope: scopes,
+      expiresIn: Number(payload?.expires_in || 0) || 0,
+      audience: safeText(payload?.aud),
+    },
+  };
+}
+
+async function fetchYoutubePostingIdentity(accessToken) {
+  const token = safeText(accessToken);
+  if (!token) return { ok: false, status: 400, error: 'access token is required' };
+  let res;
+  try {
+    res = await fetch('https://www.googleapis.com/youtube/v3/channels?part=id,snippet&mine=true&maxResults=1', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        accept: 'application/json',
+        'user-agent': 'APH-YoutubeCommentPreflight/1.0',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    return { ok: false, status: 502, error: `Could not reach YouTube API: ${err.message}` };
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status || 500,
+      error: safeText(body?.error?.message || body?.error?.errors?.[0]?.message || 'YouTube identity lookup failed'),
+    };
+  }
+  const item = Array.isArray(body?.items) ? body.items[0] : null;
+  return {
+    ok: true,
+    status: 200,
+    data: {
+      channelId: safeText(item?.id),
+      channelTitle: safeText(item?.snippet?.title),
+    },
+  };
+}
+
+async function buildYoutubeCommentAgentPreflight(payload) {
+  const videoUrl = safeText(payload?.videoUrl);
+  const issues = [];
+  const result = {
+    ready: false,
+    checks: {
+      videoSelection: {
+        ok: Boolean(videoUrl),
+        videoUrl,
+      },
+      harvest: { ok: false },
+      commentGeneration: { ok: false },
+      googleOAuth: { ok: false },
+      youtubePosting: { ok: false },
+    },
+    harvest: null,
+    suggestionInput: null,
+    suggestions: [],
+  };
+
+  if (!videoUrl) {
+    issues.push('Select a repository video before posting.');
+    result.issues = issues;
+    return result;
+  }
+
+  const harvest = await runYoutubeHarvest({ video_url: videoUrl });
+  result.harvest = harvest;
+  result.checks.harvest = {
+    ok: Boolean(harvest?.video?.id || harvest?.video?.title || harvest?.video?.description),
+    videoId: safeText(harvest?.video?.id),
+    title: safeText(harvest?.video?.title),
+    channelName: safeText(harvest?.channel_owner?.name),
+    transcriptStatus: safeText(harvest?.video?.transcript_status),
+  };
+  if (!result.checks.harvest.ok) {
+    issues.push('Could not harvest enough video context to generate a comment.');
+  }
+
+  const suggestionInput = buildYoutubeCommentSuggestionInput({
+    video_url: videoUrl,
+    title: safeText(harvest?.video?.title),
+    channel_name: safeText(harvest?.channel_owner?.name),
+    description: safeText(harvest?.video?.description),
+    transcript: safeText(harvest?.video?.transcript),
+  });
+  result.suggestionInput = suggestionInput;
+
+  const suggestionRes = await generateYoutubeCommentSuggestions(suggestionInput);
+  result.suggestions = Array.isArray(suggestionRes?.data) ? suggestionRes.data : [];
+  result.checks.commentGeneration = {
+    ok: Boolean(suggestionRes?.ok),
+    provider: safeText(suggestionRes?.provider),
+    count: result.suggestions.length,
+    error: safeText(suggestionRes?.error),
+  };
+  if (!suggestionRes?.ok) {
+    issues.push(safeText(suggestionRes?.error) || 'Could not generate a YouTube comment suggestion.');
+  }
+
+  const tokenRes = await getAccessToken();
+  if (!tokenRes.ok) {
+    result.checks.googleOAuth = {
+      ok: false,
+      error: safeText(tokenRes.error),
+    };
+    issues.push(safeText(tokenRes.error) || 'Google OAuth is not configured.');
+    result.issues = issues;
+    return result;
+  }
+
+  const accessToken = safeText(tokenRes?.data?.accessToken);
+  const tokenInfoRes = await fetchGoogleTokenInfo(accessToken);
+  const scopes = Array.isArray(tokenInfoRes?.data?.scope) ? tokenInfoRes.data.scope : [];
+  const scopeReady = hasYoutubePostingScope(scopes);
+  result.checks.googleOAuth = {
+    ok: Boolean(tokenRes.ok && tokenInfoRes.ok),
+    scopeLookupOk: Boolean(tokenInfoRes.ok),
+    scopes,
+    hasYoutubePostingScope: scopeReady,
+    expiresIn: Number(tokenInfoRes?.data?.expiresIn || 0) || 0,
+    audience: safeText(tokenInfoRes?.data?.audience),
+    error: safeText(tokenInfoRes?.error),
+  };
+  if (!scopeReady) {
+    issues.push('Google OAuth token is missing YouTube posting scope (youtube.force-ssl recommended).');
+  }
+
+  const youtubeIdentityRes = await fetchYoutubePostingIdentity(accessToken);
+  result.checks.youtubePosting = {
+    ok: Boolean(youtubeIdentityRes.ok && scopeReady),
+    channelId: safeText(youtubeIdentityRes?.data?.channelId),
+    channelTitle: safeText(youtubeIdentityRes?.data?.channelTitle),
+    error: safeText(youtubeIdentityRes?.error),
+  };
+  if (!youtubeIdentityRes.ok) {
+    issues.push(safeText(youtubeIdentityRes.error) || 'Could not verify YouTube posting account.');
+  }
+
+  result.ready = issues.length === 0;
+  result.issues = issues;
+  return result;
 }
 
 function isPublicMediaUrl(value, requireHttps = false) {
@@ -619,24 +801,28 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, { agent }, { agent }), true;
   }
 
+  if (pathname === '/api/engage/youtube-comment-agents/preflight' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const payload = normalizeYoutubeCommentAgentPayload(body);
+    const preflight = await buildYoutubeCommentAgentPreflight(payload);
+    return sendOk(res, 200, preflight, preflight), true;
+  }
+
   if (pathname === '/api/engage/youtube-comment-agents/test-post' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const payload = normalizeYoutubeCommentAgentPayload(body);
     if (!payload.videoUrl) return sendErr(res, 400, 'videoUrl is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const harvest = await runYoutubeHarvest({ video_url: payload.videoUrl });
-    const suggestionInput = buildYoutubeCommentSuggestionInput({
-      video_url: payload.videoUrl,
-      title: safeText(harvest?.video?.title),
-      channel_name: safeText(harvest?.channel_owner?.name),
-      description: safeText(harvest?.video?.description),
-      transcript: safeText(harvest?.video?.transcript),
-    });
-    const suggestionRes = await generateYoutubeCommentSuggestions(suggestionInput);
-    if (!suggestionRes.ok) {
-      return sendErr(res, suggestionRes.status || 500, suggestionRes.error || 'Could not generate YouTube comment'), true;
+    const preflight = await buildYoutubeCommentAgentPreflight(payload);
+    if (!preflight.ready) {
+      return sendErr(
+        res,
+        412,
+        preflight.issues[0] || 'YouTube comment posting preflight failed',
+        { code: 'YOUTUBE_POST_PREFLIGHT_FAILED', details: preflight.issues }
+      ), true;
     }
-    const suggestions = Array.isArray(suggestionRes.data) ? suggestionRes.data : [];
+    const suggestions = Array.isArray(preflight.suggestions) ? preflight.suggestions : [];
     const selectedComment = safeText(suggestions[0]);
     if (!selectedComment) {
       return sendErr(res, 500, 'No usable YouTube comment suggestion was generated'), true;
@@ -662,8 +848,9 @@ async function handle(req, res, pathname, method) {
     const result = {
       agent,
       scheduling: payload,
-      harvest,
-      suggestionInput,
+      preflight,
+      harvest: preflight.harvest,
+      suggestionInput: preflight.suggestionInput,
       suggestions,
       selectedComment,
       postedComment: postRes.data,

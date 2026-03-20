@@ -147,6 +147,34 @@ App.youtubeComments = (function () {
     };
   }
 
+  function setPostingStatus(message, isError) {
+    const el = document.getElementById('commentsPostingStatus');
+    if (!el) return;
+    el.textContent = String(message || '').trim() || 'Posting setup has not been checked yet.';
+    el.style.color = isError ? '#b42318' : '';
+    el.style.fontWeight = isError ? '700' : '';
+  }
+
+  function describePreflight(preflight) {
+    const checks = preflight && preflight.checks || {};
+    if (!preflight || typeof preflight !== 'object') {
+      return { message: 'Posting setup has not been checked yet.', isError: false };
+    }
+    if (preflight.ready) {
+      const provider = String(checks.commentGeneration && checks.commentGeneration.provider || 'llm').trim() || 'llm';
+      const channelTitle = String(checks.youtubePosting && checks.youtubePosting.channelTitle || '').trim();
+      return {
+        message: `Ready to post. Comment generation is working via ${provider}, and YouTube posting is authorized${channelTitle ? ` for ${channelTitle}` : ''}.`,
+        isError: false,
+      };
+    }
+    const issues = Array.isArray(preflight.issues) ? preflight.issues.filter(Boolean) : [];
+    return {
+      message: issues[0] || 'Posting setup is not ready yet.',
+      isError: true,
+    };
+  }
+
   function syncHeaderFromCurrentRun() {
     const titleEl = document.getElementById('commentsPageVideoTitle');
     const channelEl = document.getElementById('commentsPageChannel');
@@ -169,15 +197,32 @@ App.youtubeComments = (function () {
     notify('YouTube promotion agent saved with scheduling disabled');
   }
 
+  async function checkPostingSetup() {
+    const payload = collectSchedulerPayload();
+    if (!payload.videoUrl) return notify('Select a repository video first', true);
+    const res = await api('/api/engage/youtube-comment-agents/preflight', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    setPreview(document.getElementById('commentsActionPreview'), res);
+    const summary = describePreflight(res);
+    setPostingStatus(summary.message, summary.isError);
+    notify(summary.message, summary.isError);
+    return res;
+  }
+
   async function postOnDemand() {
     const payload = collectSchedulerPayload();
     if (!payload.videoUrl) return notify('Select a repository video first', true);
+    const preflight = await checkPostingSetup();
+    if (!preflight || preflight.ready !== true) return;
     const res = await api('/api/engage/youtube-comment-agents/test-post', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
     currentAgent = res.agent || currentAgent;
     setPreview(document.getElementById('commentsActionPreview'), res);
+    setPostingStatus('Posted YouTube comment on demand successfully.', false);
     notify('Posted YouTube comment on demand');
   }
 
@@ -472,6 +517,7 @@ App.youtubeComments = (function () {
           };
           syncHeaderFromCurrentRun();
         }
+        setPostingStatus('Posting setup has not been checked yet.', false);
       });
     }
     const freqEl = document.getElementById('commentsFrequencyInput');
@@ -489,10 +535,22 @@ App.youtubeComments = (function () {
         savePromotionAgent().catch((err) => notify(err.message, true));
       });
     }
+    const checkSetupBtn = document.getElementById('commentsCheckSetupBtn');
+    if (checkSetupBtn) {
+      checkSetupBtn.addEventListener('click', () => {
+        checkPostingSetup().catch((err) => {
+          setPostingStatus(err.message || 'Could not check posting setup.', true);
+          notify(err.message, true);
+        });
+      });
+    }
     const postNowBtn = document.getElementById('commentsPostNowBtn');
     if (postNowBtn) {
       postNowBtn.addEventListener('click', () => {
-        postOnDemand().catch((err) => notify(err.message, true));
+        postOnDemand().catch((err) => {
+          setPostingStatus(err.message || 'Could not post YouTube comment.', true);
+          notify(err.message, true);
+        });
       });
     }
 
@@ -500,6 +558,7 @@ App.youtubeComments = (function () {
     updateBackButton();
     renderVideoUrlOptions('');
     updateScheduleUi();
+    setPostingStatus('Posting setup has not been checked yet.', false);
     setPreview(document.getElementById('commentsActionPreview'), {});
     renderEmptyState('Open a YouTube comment run to review comments here.');
   }
