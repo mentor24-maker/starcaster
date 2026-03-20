@@ -1170,35 +1170,43 @@
           <h2>Edit YouTube Run</h2>
           <button id="backFromEditYoutubeRunBtn" type="button">Back To YouTube</button>
         </div>
-        <form id="youtubeRunEditForm" class="stack-form labeled-form">
-          <input id="youtubeRunEditId" name="run_id" type="hidden" />
-          <div class="form-row">
-            <label for="youtubeRunEditVideoUrl">Video URL</label>
-            <input id="youtubeRunEditVideoUrl" name="video_url" readonly />
-          </div>
-          <div class="form-row">
-            <label for="youtubeRunEditTitle">Video Title</label>
-            <input id="youtubeRunEditTitle" name="title" readonly />
-          </div>
-          <div class="form-row">
-            <label for="youtubeRunEditCategory">Category</label>
-            <select id="youtubeRunEditCategory" name="category">
-              <option value="">Select Category</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="youtubeRunEditTags">Hashtags</label>
-            <input id="youtubeRunEditTags" name="tags" placeholder="Comma-separated hashtags" />
-          </div>
-          <label id="youtubeRunEditCaptureWrap" class="checkbox-row hidden">
-            <input id="youtubeRunEditCaptureContact" name="capture_contact" type="checkbox" />
-            Capture Contact Details
-          </label>
-          <div class="page-heading-actions">
-            <button type="submit">Save Changes</button>
-            <button id="youtubeRunEditTranscriptBtn" type="button" class="hidden">Acquire Transcript</button>
-          </div>
-        </form>
+        <div class="youtube-edit-run-layout">
+          <form id="youtubeRunEditForm" class="stack-form labeled-form">
+            <input id="youtubeRunEditId" name="run_id" type="hidden" />
+            <div class="form-row">
+              <label for="youtubeRunEditVideoUrl">Video URL</label>
+              <input id="youtubeRunEditVideoUrl" name="video_url" readonly />
+            </div>
+            <div class="form-row">
+              <label for="youtubeRunEditTitle">Video Title</label>
+              <input id="youtubeRunEditTitle" name="title" readonly />
+            </div>
+            <div class="form-row">
+              <label for="youtubeRunEditCategory">Category</label>
+              <select id="youtubeRunEditCategory" name="category">
+                <option value="">Select Category</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="youtubeRunEditTags">Hashtags</label>
+              <input id="youtubeRunEditTags" name="tags" placeholder="Comma-separated hashtags" />
+            </div>
+            <label id="youtubeRunEditCaptureWrap" class="checkbox-row hidden">
+              <input id="youtubeRunEditCaptureContact" name="capture_contact" type="checkbox" />
+              Capture Contact Details
+            </label>
+            <div class="page-heading-actions">
+              <button type="submit">Save Changes</button>
+              <button id="youtubeRunEditTranscriptBtn" type="button" class="hidden">Acquire Transcript</button>
+            </div>
+          </form>
+          <aside class="youtube-content-media-panel youtube-edit-run-media-panel">
+            <div class="youtube-video-media-frame">
+              <iframe id="youtubeRunEditPlayer" class="youtube-video-player hidden" title="YouTube edit page video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+              <div id="youtubeRunEditPlayerEmpty" class="youtube-video-media-empty">No video loaded yet.</div>
+            </div>
+          </aside>
+        </div>
       </section>
 
       <section id="bulkEditYoutubeRunsPage" class="app-page hidden">
