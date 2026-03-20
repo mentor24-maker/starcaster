@@ -12,6 +12,7 @@ const blueskyClient = require('../lib/blueskyClient');
 const metaClients = require('../lib/metaClients');
 const redditClient = require('../lib/redditClient');
 const { discoverRedditThreads } = require('../lib/redditThreadDiscovery');
+const { generateRedditReplyCandidates } = require('../lib/redditReplyCandidates');
 const { relayOpenClaw } = require('../lib/openclawGateway');
 const {
   listAgents: listYoutubeCommentAgents,
@@ -678,6 +679,23 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, result.status || 500, result.error || 'Reddit thread discovery failed', { code: 'REDDIT_DISCOVERY_FAILED' }), true;
     }
     return sendOk(res, 200, result.data, result.data, { total: Array.isArray(result.data?.candidates) ? result.data.candidates.length : 0 }), true;
+  }
+
+  if (pathname === '/api/engage/reddit/reply-candidates' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const target = safeText(body?.target);
+    if (!target) {
+      return sendErr(res, 400, 'target is required (Reddit thread URL)', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const result = await generateRedditReplyCandidates({
+      target,
+      source_mode: body?.source_mode || body?.sourceMode,
+      comment_limit: body?.comment_limit || body?.commentLimit,
+    });
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Could not generate Reddit reply candidates', { code: 'REDDIT_REPLY_CANDIDATES_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, result.data, { total: Array.isArray(result.data?.replies) ? result.data.replies.length : 0 }), true;
   }
 
   if (pathname === '/api/engage/reddit/comment' && requestMethod === 'POST') {
