@@ -368,6 +368,74 @@ App.acquire = (function () {
     }
   }
 
+  function setRedditDiscoveryStatus(message, isError = false) {
+    const el = document.getElementById('redditDiscoveryStatus');
+    if (!el) return;
+    el.textContent = String(message || '').trim() || 'Reddit discovery is idle.';
+    el.style.color = isError ? '#b42318' : '';
+    el.style.fontWeight = isError ? '700' : '';
+  }
+
+  function renderRedditDiscoveryTable(result) {
+    const tbody = document.getElementById('redditDiscoveryTable');
+    const preview = document.getElementById('redditDiscoveryPreview');
+    if (preview) preview.textContent = prettyJson(result || {});
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const rows = Array.isArray(result?.candidates) ? result.candidates : [];
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 9;
+      td.textContent = 'No Reddit thread candidates found for the current filters.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    rows.forEach((item) => {
+      const tr = document.createElement('tr');
+      const cols = [
+        String(item.discovery_score != null ? item.discovery_score : '-'),
+        String(item.subreddit || '-'),
+        String(item.title || item.discussion_url || '-'),
+        String(item.author || '-'),
+        String(item.score != null ? item.score : '-'),
+        String(item.num_comments != null ? item.num_comments : '-'),
+        String(item.created_at ? new Date(item.created_at).toLocaleString() : '-'),
+        Array.isArray(item.reasons) ? item.reasons.join(', ') : '-',
+      ];
+      cols.forEach((value, idx) => {
+        const td = document.createElement('td');
+        if (idx === 2 && item.discussion_url) {
+          const a = document.createElement('a');
+          a.href = item.discussion_url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.textContent = value || '-';
+          td.appendChild(a);
+        } else {
+          td.textContent = value || '-';
+        }
+        tr.appendChild(td);
+      });
+
+      const actionsTd = document.createElement('td');
+      const harvestBtn = App.makeIconButton('copy', 'Use In Harvest', () => {
+        const harvestTarget = document.getElementById('redditHarvestTarget');
+        const discoveryTarget = document.getElementById('redditDiscoveryTarget');
+        const nextValue = String(item.discussion_url || '').trim() || String(item.subreddit ? `https://www.reddit.com/r/${item.subreddit}` : '').trim();
+        if (harvestTarget) harvestTarget.value = nextValue;
+        if (discoveryTarget && !discoveryTarget.value) discoveryTarget.value = nextValue;
+        notify('Copied Reddit thread target into harvest form');
+      }, { primary: true });
+      actionsTd.appendChild(harvestBtn);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+  }
+
   function renderXHarvestRunsTable() {
     if (!els.xHarvestRunsTable) return;
     els.xHarvestRunsTable.innerHTML = '';
@@ -518,6 +586,33 @@ App.acquire = (function () {
     const res = await api('/api/acquire/reddit-runs?limit=50');
     state.redditHarvestRuns = Array.isArray(res.runs) ? res.runs : [];
     renderRedditHarvestRunsTable();
+  }
+
+  async function runRedditDiscovery() {
+    const form = document.getElementById('redditDiscoveryForm');
+    if (!form) return;
+    const formData = new FormData(form);
+    const payload = {
+      target: String(formData.get('target') || '').trim(),
+      source_mode: String(formData.get('source_mode') || 'auto').trim().toLowerCase(),
+      sort: String(formData.get('sort') || 'new').trim().toLowerCase(),
+      max_posts: Number(formData.get('max_posts') || 20) || 20,
+      keyword: String(formData.get('keyword') || '').trim(),
+      min_score: Number(formData.get('min_score') || 0) || 0,
+      min_comments: Number(formData.get('min_comments') || 0) || 0,
+      start_time: String(formData.get('start_time') || '').trim(),
+      end_time: String(formData.get('end_time') || '').trim(),
+    };
+    if (!payload.target) throw new Error('Subreddit or post URL is required.');
+    setRedditDiscoveryStatus('Discovering Reddit threads...');
+    const res = await api('/api/engage/reddit/discovery', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    renderRedditDiscoveryTable(res);
+    const count = Array.isArray(res.candidates) ? res.candidates.length : 0;
+    setRedditDiscoveryStatus(`Loaded ${count} Reddit thread candidate${count === 1 ? '' : 's'}.`);
+    return res;
   }
 
   async function loadDirectHarvestRun(runId) {
@@ -783,6 +878,52 @@ App.acquire = (function () {
         }
       });
     }
+    const redditDiscoveryStatusBtn = document.getElementById('redditDiscoveryStatusBtn');
+    if (redditDiscoveryStatusBtn) {
+      redditDiscoveryStatusBtn.addEventListener('click', async () => {
+        try {
+          setRedditDiscoveryStatus('Checking Reddit connection...');
+          const res = await api('/api/engage/reddit/status');
+          const ok = Boolean(res?.authOk);
+          setRedditDiscoveryStatus(ok ? 'Reddit configured and authenticated.' : 'Reddit is not fully authenticated yet.', !ok);
+          notify(ok ? 'Reddit connection looks good' : 'Reddit connection needs attention', !ok);
+        } catch (err) {
+          setRedditDiscoveryStatus(err.message || 'Reddit status check failed', true);
+          notify(err.message, true);
+        }
+      });
+    }
+    const redditDiscoveryForm = document.getElementById('redditDiscoveryForm');
+    if (redditDiscoveryForm) {
+      redditDiscoveryForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = redditDiscoveryForm.querySelector('button[type="submit"]');
+        try {
+          if (submitBtn) submitBtn.disabled = true;
+          await runRedditDiscovery();
+          notify('Reddit thread discovery complete');
+        } catch (err) {
+          setRedditDiscoveryStatus(err.message || 'Reddit thread discovery failed', true);
+          notify(err.message, true);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
+      });
+    }
+    const redditDiscoveryUseTargetBtn = document.getElementById('redditDiscoveryUseTargetBtn');
+    if (redditDiscoveryUseTargetBtn) {
+      redditDiscoveryUseTargetBtn.addEventListener('click', () => {
+        const discoveryTarget = document.getElementById('redditDiscoveryTarget');
+        const harvestTarget = document.getElementById('redditHarvestTarget');
+        const value = String(discoveryTarget && discoveryTarget.value || '').trim();
+        if (!value) {
+          notify('Add a Reddit discovery target first', true);
+          return;
+        }
+        if (harvestTarget) harvestTarget.value = value;
+        notify('Copied discovery target into harvest form');
+      });
+    }
     if (els.redditHarvestForm) {
       els.redditHarvestForm.addEventListener('submit', async (e) => {
         const submitBtn = els.redditHarvestForm.querySelector('button[type="submit"]');
@@ -849,6 +990,8 @@ App.acquire = (function () {
       refreshRedditHarvestRuns().catch((err) => notify(err.message, true));
       renderRedditHarvestItemsTable();
     }
+    renderRedditDiscoveryTable(null);
+    setRedditDiscoveryStatus('Reddit discovery is idle.', false);
   }
 
   return {

@@ -11,6 +11,7 @@ const telegramClient = require('../lib/telegramClient');
 const blueskyClient = require('../lib/blueskyClient');
 const metaClients = require('../lib/metaClients');
 const redditClient = require('../lib/redditClient');
+const { discoverRedditThreads } = require('../lib/redditThreadDiscovery');
 const { relayOpenClaw } = require('../lib/openclawGateway');
 const {
   listAgents: listYoutubeCommentAgents,
@@ -654,6 +655,29 @@ async function handle(req, res, pathname, method) {
         },
       }
     ), true;
+  }
+
+  if (pathname === '/api/engage/reddit/discovery' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const target = safeText(body?.target);
+    if (!target) {
+      return sendErr(res, 400, 'target is required (subreddit or Reddit post URL)', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const result = await discoverRedditThreads({
+      target,
+      source_mode: body?.source_mode || body?.sourceMode,
+      sort: body?.sort,
+      max_posts: body?.max_posts || body?.maxPosts,
+      keyword: body?.keyword,
+      min_score: body?.min_score || body?.minScore,
+      min_comments: body?.min_comments || body?.minComments,
+      start_time: body?.start_time || body?.startTime,
+      end_time: body?.end_time || body?.endTime,
+    });
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Reddit thread discovery failed', { code: 'REDDIT_DISCOVERY_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, result.data, { total: Array.isArray(result.data?.candidates) ? result.data.candidates.length : 0 }), true;
   }
 
   if (pathname === '/api/engage/reddit/comment' && requestMethod === 'POST') {
