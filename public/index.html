@@ -1403,6 +1403,14 @@
                   <button type="button" id="commentsRunDueBtn">Run Due Agents Now</button>
                   <button type="button" id="commentsPostNowBtn">Post On Demand</button>
                 </div>
+                <div class="youtube-comments-agent-queue">
+                  <div class="youtube-comments-agent-queue-header">
+                    <strong>Scheduled Queue</strong>
+                    <button type="button" id="commentsRefreshQueueBtn" class="tiny-btn">Refresh Queue</button>
+                  </div>
+                  <div id="commentsAgentQueueSummary" class="youtube-comments-schedule-summary">No scheduled YouTube comment agents yet.</div>
+                  <div id="commentsAgentQueueList" class="youtube-comments-agent-queue-list"></div>
+                </div>
                 <details id="commentsDiagnosticsPanel" style="margin-top: 10px;">
                   <summary style="cursor: pointer;">Show Diagnostics</summary>
                   <pre id="commentsActionPreview" class="code-box" style="margin-top: 10px;">{}</pre>

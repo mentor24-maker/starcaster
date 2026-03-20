@@ -4923,6 +4923,123 @@ th {
   font-weight: 700;
 }
 
+.youtube-comments-agent-queue {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #b8d7f0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.youtube-comments-agent-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.youtube-comments-agent-queue-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.youtube-comments-agent-queue-empty {
+  padding: 10px 12px;
+  border: 1px dashed #b8d7f0;
+  border-radius: 8px;
+  color: #3d556f;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.youtube-comments-agent-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #b8d7f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.youtube-comments-agent-card.is-current {
+  border-color: #0b82d4;
+  box-shadow: 0 0 0 2px rgba(11, 130, 212, 0.12);
+}
+
+.youtube-comments-agent-card.is-due {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.12);
+}
+
+.youtube-comments-agent-card.is-error {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.12);
+}
+
+.youtube-comments-agent-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.youtube-comments-agent-card-title {
+  font-weight: 700;
+  color: #12263a;
+}
+
+.youtube-comments-agent-card-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px 12px;
+  font-size: 0.92rem;
+  color: #30475d;
+}
+
+.youtube-comments-agent-card-note {
+  font-size: 0.92rem;
+  color: #3d556f;
+}
+
+.youtube-comments-agent-card-note.is-error {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.youtube-comments-agent-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.youtube-comments-agent-badge.is-due {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.youtube-comments-agent-badge.is-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.youtube-comments-agent-badge.is-disabled {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.youtube-comments-agent-badge.is-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 @media (max-width: 960px) {
   .youtube-comments-scheduler-row {
     grid-template-columns: minmax(0, 1fr);
