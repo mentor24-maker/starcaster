@@ -154,12 +154,14 @@
             <a href="#" class="menu-link submenu-link" data-page="activityLogPage">Activity Log</a>
           </div>
         </li>
-        <li class="menu-item menu-item-right has-submenu">
-          <a href="#" class="menu-link" data-page="trainingPage">Training</a>
+        <li class="menu-item menu-item-right-start has-submenu">
+          <a href="#" class="menu-link" data-page="trainingContextPage">Training</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="trainingPage" onclick="App.openTrainingSection('youtubeMinerResponseContextBody'); return false;">Context</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingPage" onclick="App.openTrainingSection('youtubeMinerCategoriesBody'); return false;">Training</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingPage" onclick="App.openTrainingSection('youtubeMinerGuidelinesBody'); return false;">Rules / Guidelines</a>
+            <a href="#" class="menu-link submenu-link" data-page="trainingContextPage">Context</a>
+            <a href="#" class="menu-link submenu-link" data-page="trainingCategoriesPage">Categories</a>
+            <a href="#" class="menu-link submenu-link" data-page="trainingAttributesPage">Attributes</a>
+            <a href="#" class="menu-link submenu-link" data-page="trainingApproachesPage">Approaches</a>
+            <a href="#" class="menu-link submenu-link" data-page="trainingRulesGuidesPage">Rules/Guides</a>
           </div>
         </li>
         <li class="menu-item menu-item-right has-submenu">
@@ -173,10 +175,11 @@
             <a href="#" class="menu-link submenu-link" data-page="envConfigPage">Env Config</a>
           </div>
         </li>
-        <li class="menu-item has-submenu docs-menu-anchor">
-          <a href="#" class="menu-link" data-page="docsPage">Docs</a>
+        <li class="menu-item menu-item-right has-submenu docs-menu-anchor">
+          <a href="#" class="menu-link" data-page="docsPage">Help</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="docsPage">Overview</a>
+            <a href="#" class="menu-link submenu-link" data-page="askIzzyPage">Ask Izzy</a>
+            <a href="#" class="menu-link submenu-link" data-page="docsPage">Docs</a>
             <a href="#" class="menu-link submenu-link" data-page="docsAcquirePage">Acquire</a>
             <a href="#" class="menu-link submenu-link" data-page="docsContactsPage">Contacts</a>
             <a href="#" class="menu-link submenu-link" data-page="docsMessagingPage">Messaging</a>
@@ -1038,150 +1041,171 @@
         </details>
       </section>
 
-      <section id="trainingPage" class="app-page hidden">
+      <section id="trainingContextPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Training</h2>
+          <h2>Training: Context</h2>
         </div>
-        <p>Set the shared context, response training, and operating rules that should guide reply generation across channels.</p>
+        <p>Set the shared project narrative, positioning, and reference context that should guide reply generation across channels.</p>
         <section class="youtube-miner-panel">
-          <section class="youtube-miner-collapsible is-open">
-            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerResponseContextBody" aria-expanded="true">
-              <span>Context</span>
-              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-            </button>
-            <div id="youtubeMinerResponseContextBody" class="youtube-miner-collapsible-body">
-              <div class="form-row">
-                <label for="youtubeMinerResponseContext">
-                  Context used for draft replies (project themes, positioning, references)
-                </label>
-                <textarea
-                  id="youtubeMinerResponseContext"
-                  name="response_context"
-                  form="youtubeCommentMinerForm"
-                  rows="6"
-                  placeholder="Example: ISITAS focuses on practical self-alignment. Keep references moderate and relevant. Prefer encouraging, non-pushy replies that ask one clarifying question before CTA."
-                ></textarea>
-                <p class="muted">Tip: Keep this concise and evergreen. The miner will use this as guidance when creating reply drafts.</p>
+          <div class="form-row">
+            <label for="youtubeMinerResponseContext">
+              Context used for draft replies (project themes, positioning, references)
+            </label>
+            <textarea
+              id="youtubeMinerResponseContext"
+              name="response_context"
+              form="youtubeCommentMinerForm"
+              rows="10"
+              placeholder="Example: ISITAS focuses on practical self-alignment. Keep references moderate and relevant. Prefer encouraging, non-pushy replies that ask one clarifying question before CTA."
+            ></textarea>
+            <p class="muted">Tip: Keep this concise and evergreen. The miner will use this as guidance when creating reply drafts.</p>
+          </div>
+        </section>
+      </section>
+
+      <section id="trainingCategoriesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Training: Categories</h2>
+        </div>
+        <p>Define the core content and audience categories that shape how replies are classified and prioritized.</p>
+        <section class="youtube-miner-panel">
+          <div class="form-row youtube-miner-category-config">
+            <div class="youtube-miner-category-header-row">
+              <div>
+                <label>Training Configuration: Categories</label>
+                <p class="muted">Define category meaning and scoring priority. Value rank (1-5) increases how strongly a matched category is preferred.</p>
+              </div>
+              <div class="youtube-miner-category-toolbar-right">
+                <button type="button" id="youtubeMinerAddCategoryBtn">Add Category</button>
+                <button type="button" id="youtubeMinerEditCheckedBtn">Edit Categories</button>
+                <button type="button" id="youtubeMinerDeleteCheckedBtn">Delete Categories</button>
               </div>
             </div>
-          </section>
+            <div class="table-wrap">
+              <table class="youtube-miner-category-table">
+                <thead>
+                  <tr>
+                    <th><input id="youtubeMinerCategorySelectAll" type="checkbox" aria-label="Select all category rows" /></th>
+                    <th>Category</th>
+                    <th>Rationale</th>
+                    <th>Value (1-5)</th>
+                    <th>Match Hashtags</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="youtubeMinerCategoryConfigTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
 
-          <section class="youtube-miner-collapsible is-open">
-            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerCategoriesBody" aria-expanded="true">
-              <span>Training</span>
-              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-            </button>
-            <div id="youtubeMinerCategoriesBody" class="youtube-miner-collapsible-body">
-              <div class="form-row youtube-miner-category-config">
-                <div class="youtube-miner-category-header-row">
-                  <div>
-                    <label>Training Configuration: Categories</label>
-                    <p class="muted">Define category meaning and scoring priority. Value rank (1-5) increases how strongly a matched category is preferred.</p>
-                  </div>
-                  <div class="youtube-miner-category-toolbar-right">
-                    <button type="button" id="youtubeMinerAddCategoryBtn">Add Category</button>
-                    <button type="button" id="youtubeMinerEditCheckedBtn">Edit Categories</button>
-                    <button type="button" id="youtubeMinerDeleteCheckedBtn">Delete Categories</button>
-                  </div>
-                </div>
-                <div class="table-wrap">
-                  <table class="youtube-miner-category-table">
-                    <thead>
-                      <tr>
-                        <th><input id="youtubeMinerCategorySelectAll" type="checkbox" aria-label="Select all category rows" /></th>
-                        <th>Category</th>
-                        <th>Rationale</th>
-                        <th>Value (1-5)</th>
-                        <th>Match Hashtags</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody id="youtubeMinerCategoryConfigTable"></tbody>
-                  </table>
-                </div>
+      <section id="trainingAttributesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Training: Attributes</h2>
+        </div>
+        <p>Define the audience and personality attributes used to classify commenters and personalize follow-up.</p>
+        <section class="youtube-miner-panel">
+          <div class="form-row youtube-miner-category-config">
+            <div class="youtube-miner-category-header-row">
+              <div>
+                <label>Training Configuration: Attributes</label>
+                <p class="muted">Define audience/personality attributes to classify commenters. Value rank (1-5) increases weighting when matched.</p>
               </div>
-
-              <div class="form-row youtube-miner-category-config">
-                <div class="youtube-miner-category-header-row">
-                  <div>
-                    <label>Training Configuration: Attributes</label>
-                    <p class="muted">Define audience/personality attributes to classify commenters. Value rank (1-5) increases weighting when matched.</p>
-                  </div>
-                  <div class="youtube-miner-category-toolbar-right">
-                    <button type="button" id="youtubeMinerAddAttributeBtn">Add Attribute</button>
-                    <button type="button" id="youtubeMinerEditAttributesCheckedBtn">Edit Attributes</button>
-                    <button type="button" id="youtubeMinerDeleteAttributesCheckedBtn">Delete Attributes</button>
-                  </div>
-                </div>
-                <div class="table-wrap">
-                  <table class="youtube-miner-category-table">
-                    <thead>
-                      <tr>
-                        <th><input id="youtubeMinerAttributeSelectAll" type="checkbox" aria-label="Select all attribute rows" /></th>
-                        <th>Attribute</th>
-                        <th>Rationale</th>
-                        <th>Value (1-5)</th>
-                        <th>Match Hashtags</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody id="youtubeMinerAttributeConfigTable"></tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div class="form-row youtube-miner-category-config">
-                <div class="youtube-miner-category-header-row">
-                  <div>
-                    <label>Training Configuration: Approaches</label>
-                    <p class="muted">Define the engagement approach to use for matched comment patterns.</p>
-                  </div>
-                  <div class="youtube-miner-category-toolbar-right">
-                    <button type="button" id="youtubeMinerAddApproachBtn">Add Approach</button>
-                    <button type="button" id="youtubeMinerEditApproachesCheckedBtn">Edit Approaches</button>
-                    <button type="button" id="youtubeMinerDeleteApproachesCheckedBtn">Delete Approaches</button>
-                  </div>
-                </div>
-                <div class="table-wrap">
-                  <table class="youtube-miner-category-table">
-                    <thead>
-                      <tr>
-                        <th><input id="youtubeMinerApproachSelectAll" type="checkbox" aria-label="Select all approach rows" /></th>
-                        <th>Approach</th>
-                        <th>Rationale</th>
-                        <th>Value (1-5)</th>
-                        <th>Match Hashtags</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody id="youtubeMinerApproachConfigTable"></tbody>
-                  </table>
-                </div>
+              <div class="youtube-miner-category-toolbar-right">
+                <button type="button" id="youtubeMinerAddAttributeBtn">Add Attribute</button>
+                <button type="button" id="youtubeMinerEditAttributesCheckedBtn">Edit Attributes</button>
+                <button type="button" id="youtubeMinerDeleteAttributesCheckedBtn">Delete Attributes</button>
               </div>
             </div>
-          </section>
+            <div class="table-wrap">
+              <table class="youtube-miner-category-table">
+                <thead>
+                  <tr>
+                    <th><input id="youtubeMinerAttributeSelectAll" type="checkbox" aria-label="Select all attribute rows" /></th>
+                    <th>Attribute</th>
+                    <th>Rationale</th>
+                    <th>Value (1-5)</th>
+                    <th>Match Hashtags</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="youtubeMinerAttributeConfigTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
 
-          <section class="youtube-miner-collapsible is-open">
-            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerGuidelinesBody" aria-expanded="true">
-              <span>Rules / Guidelines</span>
-              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
-            </button>
-            <div id="youtubeMinerGuidelinesBody" class="youtube-miner-collapsible-body">
-              <div class="form-row">
-                <label for="youtubeMinerGuidelines">
-                  Operational rules for reply drafting (style, constraints, do/don't)
-                </label>
-                <textarea
-                  id="youtubeMinerGuidelines"
-                  name="response_guidelines"
-                  form="youtubeCommentMinerForm"
-                  rows="6"
-                  placeholder="- Never reuse the exact same reply text across comments&#10;- Always anchor response to the specific comment text&#10;- Ask one useful follow-up question max&#10;- Avoid generic coaching templates"
-                ></textarea>
-                <p class="muted">Use this for tactical rules. Keep project narrative and references in Context.</p>
+      <section id="trainingApproachesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Training: Approaches</h2>
+        </div>
+        <p>Define the engagement approaches that should be selected when specific response patterns are detected.</p>
+        <section class="youtube-miner-panel">
+          <div class="form-row youtube-miner-category-config">
+            <div class="youtube-miner-category-header-row">
+              <div>
+                <label>Training Configuration: Approaches</label>
+                <p class="muted">Define the engagement approach to use for matched comment patterns.</p>
+              </div>
+              <div class="youtube-miner-category-toolbar-right">
+                <button type="button" id="youtubeMinerAddApproachBtn">Add Approach</button>
+                <button type="button" id="youtubeMinerEditApproachesCheckedBtn">Edit Approaches</button>
+                <button type="button" id="youtubeMinerDeleteApproachesCheckedBtn">Delete Approaches</button>
               </div>
             </div>
-          </section>
+            <div class="table-wrap">
+              <table class="youtube-miner-category-table">
+                <thead>
+                  <tr>
+                    <th><input id="youtubeMinerApproachSelectAll" type="checkbox" aria-label="Select all approach rows" /></th>
+                    <th>Approach</th>
+                    <th>Rationale</th>
+                    <th>Value (1-5)</th>
+                    <th>Match Hashtags</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="youtubeMinerApproachConfigTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="trainingRulesGuidesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Training: Rules/Guides</h2>
+        </div>
+        <p>Set the tactical rules and stylistic guides that generated replies should follow across channels.</p>
+        <section class="youtube-miner-panel">
+          <div class="form-row">
+            <label for="youtubeMinerGuidelines">
+              Operational rules for reply drafting (style, constraints, do/don't)
+            </label>
+            <textarea
+              id="youtubeMinerGuidelines"
+              name="response_guidelines"
+              form="youtubeCommentMinerForm"
+              rows="10"
+              placeholder="- Never reuse the exact same reply text across comments&#10;- Always anchor response to the specific comment text&#10;- Ask one useful follow-up question max&#10;- Avoid generic coaching templates"
+            ></textarea>
+            <p class="muted">Use this for tactical rules. Keep project narrative and references in Context.</p>
+          </div>
+        </section>
+      </section>
+
+      <section id="askIzzyPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Ask Izzy</h2>
+        </div>
+        <p>Ask Izzy is the guided help and support area for navigating the platform, workflows, and setup decisions.</p>
+        <section class="youtube-miner-panel">
+          <p>Use this area as the launching point for assisted help experiences. For now, the platform documentation remains available under <strong>Help &gt; Docs</strong>.</p>
+          <div class="page-heading-actions" style="justify-content: flex-start;">
+            <button type="button" onclick="App.setActivePage('docsPage')">Open Docs</button>
+          </div>
         </section>
       </section>
 

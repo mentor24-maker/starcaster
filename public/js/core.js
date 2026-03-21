@@ -442,17 +442,15 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
 };
 
 App.openTrainingSection = function openTrainingSection(sectionId) {
-  App.setActivePage('trainingPage');
   const targetId = String(sectionId || '').trim();
-  if (!targetId) return;
-  window.requestAnimationFrame(() => {
-    const section = document.getElementById(targetId);
-    if (!section) return;
-    if (typeof window.setYoutubeMinerCollapsibleOpen === 'function') {
-      window.setYoutubeMinerCollapsibleOpen(targetId, true);
-    }
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
+  const pageBySection = {
+    youtubeMinerResponseContextBody: 'trainingContextPage',
+    youtubeMinerCategoriesBody: 'trainingCategoriesPage',
+    youtubeMinerAttributeConfigTable: 'trainingAttributesPage',
+    youtubeMinerApproachConfigTable: 'trainingApproachesPage',
+    youtubeMinerGuidelinesBody: 'trainingRulesGuidesPage'
+  };
+  App.setActivePage(pageBySection[targetId] || 'trainingContextPage');
 };
 
 // ---------------------------------------------------------------------------
