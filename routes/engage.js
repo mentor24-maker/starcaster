@@ -733,6 +733,8 @@ async function handle(req, res, pathname, method) {
       target,
       source_mode: body?.source_mode || body?.sourceMode,
       context_limit: body?.context_limit || body?.contextLimit,
+      user_id: req.authUser?.id || req.authUser?.email || '',
+      userEmail: req.authUser?.email || '',
     });
     if (!result.ok) {
       return sendErr(res, result.status || 500, result.error || 'Could not generate BlueSky reply candidates', { code: 'BLUESKY_REPLY_CANDIDATES_FAILED' }), true;
