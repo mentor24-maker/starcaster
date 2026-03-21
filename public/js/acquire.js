@@ -557,6 +557,8 @@ App.acquire = (function () {
       ];
       cols.forEach((value, idx) => {
         const td = document.createElement('td');
+        if (idx === 0) td.className = 'bluesky-discovery-metric-cell bluesky-discovery-score-cell';
+        if (idx === 3 || idx === 4 || idx === 5) td.className = 'bluesky-discovery-metric-cell';
         if (idx === 2 && item.post_url) {
           td.className = 'bluesky-discovery-post-cell';
           const a = document.createElement('a');

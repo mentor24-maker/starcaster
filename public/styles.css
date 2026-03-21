@@ -655,6 +655,20 @@ th {
   max-width: 24%;
 }
 
+#blueskyDiscoveryResultsTable .bluesky-discovery-score-col,
+#blueskyDiscoveryResultsTable .bluesky-discovery-score-cell {
+  width: 58px;
+  min-width: 58px;
+  text-align: center;
+}
+
+#blueskyDiscoveryResultsTable .bluesky-discovery-metric-col,
+#blueskyDiscoveryResultsTable .bluesky-discovery-metric-cell {
+  width: 64px;
+  min-width: 64px;
+  text-align: center;
+}
+
 #blueskyDiscoveryResultsTable .bluesky-discovery-actions-col,
 #blueskyDiscoveryResultsTable .bluesky-discovery-actions-cell {
   min-width: 168px;
