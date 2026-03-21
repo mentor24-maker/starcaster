@@ -149,6 +149,44 @@ App.develop = (function () {
       ],
     },
   ];
+  const EMAIL_TEMPLATES = [
+    {
+      id: 'newsletter-basic',
+      name: 'Newsletter Basic',
+      summary: 'Clean editorial email for updates, essays, and recurring community sends.',
+      subject: 'A thoughtful update for your audience',
+      heading: 'A clear update with one primary idea.',
+      body: 'Use this when you want a simple, readable email that carries one main message and one clear action.',
+      cta: 'Read More',
+    },
+    {
+      id: 'announcement-launch',
+      name: 'Announcement / Launch',
+      summary: 'Structured launch email for announcing a new offer, page, event, or release.',
+      subject: 'Something new is ready',
+      heading: 'Announce a launch with momentum and clarity.',
+      body: 'Use this when you want urgency, positioning, and a stronger call to action around a new release.',
+      cta: 'See What\'s New',
+    },
+    {
+      id: 'event-invite',
+      name: 'Event Invite',
+      summary: 'Invitation template for webinars, live streams, calls, and other scheduled events.',
+      subject: 'You\'re invited',
+      heading: 'Invite people to a time-bound experience.',
+      body: 'Use this when the email should focus on attendance, timing, and the value of showing up live.',
+      cta: 'Reserve Your Spot',
+    },
+    {
+      id: 'lead-magnet-delivery',
+      name: 'Lead Magnet Delivery',
+      summary: 'Short fulfillment email for sending a PDF, guide, checklist, or resource after signup.',
+      subject: 'Here\'s your resource',
+      heading: 'Deliver the promised asset fast.',
+      body: 'Use this when the main job is fulfillment: quick context, direct value, and a lightweight next step.',
+      cta: 'Download Now',
+    },
+  ];
   const CONTACT_TYPE_OPTIONS = [
     { value: 'lead', label: 'Lead' },
     { value: 'prospect', label: 'Prospect' },
@@ -159,6 +197,7 @@ App.develop = (function () {
   ];
   let selectedTemplateId = LANDING_TEMPLATES[0].id;
   let selectedFormTemplateId = FORM_TEMPLATES[0].id;
+  let selectedEmailTemplateId = EMAIL_TEMPLATES[0].id;
   let formBuilderState = null;
   const DEFAULT_FORM_ACCENT = '#0b82d4';
   const MATCH_LANDING_GREY = '#6b7280';
@@ -3112,7 +3151,8 @@ App.develop = (function () {
   }
 
   function openCreateFormEditor() {
-    formBuilderState = buildDefaultFormState(FORM_TEMPLATES[0].id);
+    var initialTemplateId = arguments.length ? arguments[0] : FORM_TEMPLATES[0].id;
+    formBuilderState = buildDefaultFormState(initialTemplateId);
     const editorTitle = byId('developFormsEditorTitle');
     if (editorTitle) editorTitle.textContent = 'Create Form';
     byId('developFormEditorPanel')?.classList.remove('hidden');
@@ -3147,6 +3187,95 @@ App.develop = (function () {
     host.innerHTML = buildFormTemplatePreviewMarkup(template);
   }
 
+  function buildEmailTemplatePreviewMarkup(template) {
+    return `
+      <div class="develop-form-preview">
+        <div class="develop-template-eyebrow">Email Template</div>
+        <h3>${safeText(template?.heading) || 'Email Template'}</h3>
+        <p><strong>Subject:</strong> ${safeText(template?.subject) || '-'}</p>
+        <p>${safeText(template?.body) || ''}</p>
+        <button type="button">${safeText(template?.cta) || 'Open'}</button>
+      </div>
+    `;
+  }
+
+  function renderEmailTemplatePreview(templateId) {
+    const host = byId('developEmailTemplatesPreviewHost');
+    if (!host) return;
+    const template = EMAIL_TEMPLATES.find((item) => safeText(item.id) === safeText(templateId)) || EMAIL_TEMPLATES[0];
+    selectedEmailTemplateId = template.id;
+    host.innerHTML = buildEmailTemplatePreviewMarkup(template);
+  }
+
+  function openCampaignBuilderWithEmailTemplate(templateId) {
+    const nextTemplateId = safeText(templateId) || EMAIL_TEMPLATES[0].id;
+    App.setActivePage('campaignsPage');
+    setTimeout(() => {
+      const toggleBtn = byId('campaignToggleFormBtn');
+      const form = byId('campaignForm');
+      if (form && form.classList.contains('hidden') && toggleBtn) {
+        toggleBtn.click();
+      }
+      setTimeout(() => {
+        const select = byId('campaignEmailTemplateSelect');
+        if (select) select.value = nextTemplateId;
+      }, 120);
+    }, 50);
+  }
+
+  function renderEmailTemplateLibrary() {
+    const host = byId('developEmailTemplatesLibrary');
+    if (!host) return;
+    host.innerHTML = '';
+    EMAIL_TEMPLATES.forEach((template) => {
+      const card = document.createElement('article');
+      card.className = `develop-template-library-card${template.id === selectedEmailTemplateId ? ' is-selected' : ''}`;
+      const copyWrap = document.createElement('div');
+      copyWrap.className = 'develop-template-library-copy';
+      const mediaWrap = document.createElement('div');
+      mediaWrap.className = 'develop-template-library-media';
+      mediaWrap.innerHTML = `
+        <div class="develop-template-preview-frame" aria-hidden="true">
+          <div class="develop-template-preview-scale">
+            ${buildEmailTemplatePreviewMarkup(template)}
+          </div>
+        </div>
+      `;
+      const title = document.createElement('h3');
+      title.textContent = template.name;
+      const summary = document.createElement('p');
+      summary.textContent = template.summary;
+      const actionRow = document.createElement('div');
+      actionRow.className = 'page-heading-actions';
+      actionRow.style.justifyContent = 'flex-start';
+      const previewBtn = document.createElement('button');
+      previewBtn.type = 'button';
+      previewBtn.textContent = template.id === selectedEmailTemplateId ? 'Selected' : 'Preview';
+      previewBtn.addEventListener('click', () => {
+        selectedEmailTemplateId = template.id;
+        renderEmailTemplateLibrary();
+        renderEmailTemplatePreview(template.id);
+      });
+      const launchBtn = document.createElement('button');
+      launchBtn.type = 'button';
+      launchBtn.textContent = 'Use In Campaign';
+      launchBtn.addEventListener('click', () => {
+        selectedEmailTemplateId = template.id;
+        renderEmailTemplateLibrary();
+        renderEmailTemplatePreview(template.id);
+        openCampaignBuilderWithEmailTemplate(template.id);
+      });
+      actionRow.appendChild(previewBtn);
+      actionRow.appendChild(launchBtn);
+      copyWrap.appendChild(title);
+      copyWrap.appendChild(summary);
+      copyWrap.appendChild(actionRow);
+      card.appendChild(copyWrap);
+      card.appendChild(mediaWrap);
+      host.appendChild(card);
+    });
+  }
+
   function renderFormTemplateLibrary() {
     const host = byId('developFormTemplatesLibrary');
     if (!host) return;
@@ -3177,9 +3306,20 @@ App.develop = (function () {
         renderFormTemplateLibrary();
         renderFormTemplatePreview(template.id);
       });
+      const launchBtn = document.createElement('button');
+      launchBtn.type = 'button';
+      launchBtn.textContent = 'Open In Form Builder';
+      launchBtn.addEventListener('click', () => {
+        selectedFormTemplateId = template.id;
+        renderFormTemplateLibrary();
+        renderFormTemplatePreview(template.id);
+        App.setActivePage('developFormsPage');
+        openCreateFormEditor(template.id);
+      });
       copyWrap.appendChild(title);
       copyWrap.appendChild(summary);
       copyWrap.appendChild(button);
+      copyWrap.appendChild(launchBtn);
       card.appendChild(copyWrap);
       card.appendChild(mediaWrap);
       host.appendChild(card);
@@ -3285,10 +3425,33 @@ App.develop = (function () {
         const landingTemplateSelect = byId('developLandingTemplateSelect');
         if (landingTemplateSelect) landingTemplateSelect.value = template.id;
       });
+      const launchBtn = document.createElement('button');
+      launchBtn.type = 'button';
+      launchBtn.textContent = 'Open In Page Builder';
+      launchBtn.addEventListener('click', () => {
+        selectedTemplateId = template.id;
+        renderTemplateLibrary();
+        renderTemplatePreview(template.id);
+        const landingTemplateSelect = byId('developLandingTemplateSelect');
+        if (landingTemplateSelect) landingTemplateSelect.value = template.id;
+        openCreateLandingPage();
+        setTimeout(() => {
+          const select = byId('developLandingTemplateSelect');
+          if (select) select.value = template.id;
+        }, 120);
+      });
+      const manageBtn = document.createElement('button');
+      manageBtn.type = 'button';
+      manageBtn.textContent = 'Open Pages Gateway';
+      manageBtn.addEventListener('click', () => {
+        App.setActivePage('developManageLandingPagesPage');
+      });
 
       copyWrap.appendChild(title);
       copyWrap.appendChild(summary);
       copyWrap.appendChild(button);
+      copyWrap.appendChild(launchBtn);
+      copyWrap.appendChild(manageBtn);
       card.appendChild(copyWrap);
       card.appendChild(mediaWrap);
       host.appendChild(card);
@@ -3386,6 +3549,8 @@ App.develop = (function () {
     renderThumbnailSourceAssetOptions();
     renderFormTemplateLibrary();
     renderFormTemplatePreview(selectedFormTemplateId);
+    renderEmailTemplateLibrary();
+    renderEmailTemplatePreview(selectedEmailTemplateId);
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
   }
