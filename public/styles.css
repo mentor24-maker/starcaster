@@ -749,6 +749,22 @@ th {
   min-height: 150px;
 }
 
+.bluesky-prompt-summary {
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #b9dfff;
+  border-radius: 10px;
+  background: #f6fbff;
+  color: #17324d;
+  line-height: 1.45;
+}
+
+.bluesky-prompt-summary.is-missing {
+  border-color: #f0b6a3;
+  background: #fff4ef;
+  color: #8a2d17;
+}
+
 .youtube-date-filter-wrap {
   display: flex;
   flex-direction: column;
