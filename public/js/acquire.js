@@ -558,11 +558,13 @@ App.acquire = (function () {
       cols.forEach((value, idx) => {
         const td = document.createElement('td');
         if (idx === 2 && item.post_url) {
+          td.className = 'bluesky-discovery-post-cell';
           const a = document.createElement('a');
           a.href = item.post_url;
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
           a.textContent = value || '-';
+          a.className = 'bluesky-discovery-post-link';
           td.appendChild(a);
         } else {
           td.textContent = value || '-';
@@ -587,6 +589,7 @@ App.acquire = (function () {
       tr.appendChild(whyTd);
 
       const actionsTd = document.createElement('td');
+      actionsTd.className = 'bluesky-discovery-actions-cell';
       const copyBtn = App.makeIconButton('copy', 'Copy Post URL Into Forms', () => {
         const nextValue = populateBlueskyTargets(item.post_url);
         notify(nextValue ? 'Copied BlueSky post URL into reply and posting forms' : 'No BlueSky post URL available', !nextValue);
