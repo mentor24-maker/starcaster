@@ -936,12 +936,27 @@ App.acquire = (function () {
   function renderBlueskyReplyCandidates(result) {
     const tbody = document.getElementById('blueskyReplyCandidatesTable');
     const preview = document.getElementById('blueskyReplyCandidatesPreview');
+    const promptSummary = document.getElementById('blueskyReplyPromptSummary');
     if (preview) preview.textContent = prettyJson(result || {});
     if (!tbody) return;
     tbody.innerHTML = '';
     const rows = Array.isArray(result?.replies) ? result.replies : [];
     const sourcePost = result?.post || null;
     const sourceText = String(sourcePost && sourcePost.text || '').trim();
+    const trainingContext = String(result?.training_context || '').trim();
+    const trainingGuidelines = String(result?.training_guidelines || '').trim();
+    if (promptSummary) {
+      const contextLoaded = Boolean(trainingContext);
+      const guidelinesLoaded = Boolean(trainingGuidelines);
+      const contextExcerpt = contextLoaded ? trainingContext.slice(0, 260) : 'No shared training context loaded.';
+      const guidelinesExcerpt = guidelinesLoaded ? trainingGuidelines.slice(0, 220) : 'No shared guidelines loaded.';
+      promptSummary.innerHTML =
+        `<strong>Training Context:</strong> ${contextLoaded ? 'Loaded' : 'Missing'}<br>` +
+        `<span>${contextExcerpt}</span><br><br>` +
+        `<strong>Guidelines:</strong> ${guidelinesLoaded ? 'Loaded' : 'Missing'}<br>` +
+        `<span>${guidelinesExcerpt}</span>`;
+      promptSummary.classList.toggle('is-missing', !contextLoaded && !guidelinesLoaded);
+    }
     const categoryNames = getTrainingConfigNames('youtubeMinerCategoryConfigTable');
     const attributeNames = getTrainingConfigNames('youtubeMinerAttributeConfigTable');
     const approachNames = getTrainingConfigNames('youtubeMinerApproachConfigTable');
@@ -952,6 +967,10 @@ App.acquire = (function () {
       td.textContent = 'No BlueSky reply candidates generated yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
+      if (promptSummary && !result) {
+        promptSummary.textContent = 'BlueSky reply prompt diagnostics will appear here after generation.';
+        promptSummary.classList.remove('is-missing');
+      }
       return;
     }
     if (sourceText) {
