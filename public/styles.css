@@ -5644,7 +5644,7 @@ th {
   position: fixed;
   left: 16px;
   top: 16px;
-  z-index: 30;
+  z-index: 10020;
   width: min(960px, 88vw);
   max-height: calc(100vh - 24px);
   overflow-x: hidden;

@@ -285,6 +285,18 @@ App.acquire = (function () {
     applyHide();
   }
 
+  function openBlueskyDiscoveryFeedbackPop(feedbackPop) {
+    if (!feedbackPop) return;
+    document.querySelectorAll('.bluesky-discovery-feedback-pop').forEach((node) => {
+      if (node !== feedbackPop) node.classList.add('hidden');
+    });
+    if (!document.body.contains(feedbackPop)) {
+      document.body.appendChild(feedbackPop);
+    }
+    feedbackPop.classList.remove('hidden');
+    feedbackPop.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+  }
+
   async function getSharedTrainingPromptPayload() {
     const trainingContextInput = document.getElementById('youtubeMinerResponseContext');
     const trainingGuidelinesInput = document.getElementById('youtubeMinerGuidelines');
@@ -812,18 +824,10 @@ App.acquire = (function () {
           a.textContent = value || '-';
           a.className = 'bluesky-discovery-post-link';
           a.addEventListener('mouseenter', () => showBlueskyDiscoveryPostOverlay(value || '-', a, () => {
-            document.querySelectorAll('.bluesky-discovery-feedback-pop').forEach((node) => {
-              if (node !== feedbackPop) node.classList.add('hidden');
-            });
-            feedbackPop.classList.remove('hidden');
-            feedbackPop.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            openBlueskyDiscoveryFeedbackPop(feedbackPop);
           }, blueskyDiscoveryHasReview(feedback)));
           a.addEventListener('focus', () => showBlueskyDiscoveryPostOverlay(value || '-', a, () => {
-            document.querySelectorAll('.bluesky-discovery-feedback-pop').forEach((node) => {
-              if (node !== feedbackPop) node.classList.add('hidden');
-            });
-            feedbackPop.classList.remove('hidden');
-            feedbackPop.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            openBlueskyDiscoveryFeedbackPop(feedbackPop);
           }, blueskyDiscoveryHasReview(feedback)));
           a.addEventListener('mouseleave', () => hideBlueskyDiscoveryPostOverlay(true));
           a.addEventListener('blur', () => hideBlueskyDiscoveryPostOverlay(true));
@@ -881,10 +885,8 @@ App.acquire = (function () {
       feedbackWrap.style.display = 'inline-flex';
       feedbackWrap.style.marginLeft = '0.35rem';
       const feedbackBtn = App.makeIconButton('edit', 'Review Training Feedback', () => {
-        document.querySelectorAll('.bluesky-discovery-feedback-pop').forEach((node) => {
-          if (node !== feedbackPop) node.classList.add('hidden');
-        });
-        feedbackPop.classList.toggle('hidden');
+        if (feedbackPop.classList.contains('hidden')) openBlueskyDiscoveryFeedbackPop(feedbackPop);
+        else feedbackPop.classList.add('hidden');
       }, { primary: true });
       feedbackBtn.classList.add('youtube-miner-feedback-icon');
       if (blueskyDiscoveryHasReview(feedback)) feedbackBtn.classList.add('has-feedback');
@@ -1036,12 +1038,14 @@ App.acquire = (function () {
       actionRow.appendChild(saveBtn);
       feedbackPop.appendChild(actionRow);
       feedbackWrap.appendChild(feedbackBtn);
-      feedbackWrap.appendChild(feedbackPop);
       actionsTd.appendChild(copyBtn);
       actionsTd.appendChild(generateBtn);
       actionsTd.appendChild(feedbackWrap);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
+      if (!document.body.contains(feedbackPop)) {
+        document.body.appendChild(feedbackPop);
+      }
     });
 
     if (repliesTbody) {
