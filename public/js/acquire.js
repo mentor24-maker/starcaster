@@ -439,6 +439,15 @@ App.acquire = (function () {
       return;
     }
 
+    const populateBlueskyTargets = (postUrl) => {
+      const nextValue = String(postUrl || '').trim();
+      const replyTarget = document.getElementById('blueskyReplyTarget');
+      const postingTarget = document.getElementById('blueskyPostingTarget');
+      if (replyTarget) replyTarget.value = nextValue;
+      if (postingTarget) postingTarget.value = nextValue;
+      return nextValue;
+    };
+
     rows.forEach((item) => {
       const tr = document.createElement('tr');
       const cols = [
@@ -467,15 +476,31 @@ App.acquire = (function () {
       });
 
       const actionsTd = document.createElement('td');
-      const useBtn = App.makeIconButton('copy', 'Use In Reply', () => {
-        const replyTarget = document.getElementById('blueskyReplyTarget');
-        const postingTarget = document.getElementById('blueskyPostingTarget');
-        const nextValue = String(item.post_url || '').trim();
-        if (replyTarget) replyTarget.value = nextValue;
-        if (postingTarget) postingTarget.value = nextValue;
-        notify('Copied BlueSky target into reply and posting forms');
+      const copyBtn = App.makeIconButton('copy', 'Copy Post URL Into Forms', () => {
+        const nextValue = populateBlueskyTargets(item.post_url);
+        notify(nextValue ? 'Copied BlueSky post URL into reply and posting forms' : 'No BlueSky post URL available', !nextValue);
       }, { primary: true });
-      actionsTd.appendChild(useBtn);
+      const generateBtn = App.makeIconButton('run', 'Generate Reply Candidates', async () => {
+        const nextValue = populateBlueskyTargets(item.post_url);
+        if (!nextValue) {
+          notify('No BlueSky post URL available', true);
+          return;
+        }
+        try {
+          generateBtn.disabled = true;
+          await runBlueskyReplyCandidates(nextValue);
+          const replySection = document.getElementById('blueskyReplyCandidatesTable');
+          if (replySection) replySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          notify('Generated BlueSky reply candidates from selected post');
+        } catch (err) {
+          setBlueskyReplyStatus(err.message || 'Could not generate BlueSky reply candidates', true);
+          notify(err.message, true);
+        } finally {
+          generateBtn.disabled = false;
+        }
+      }, { primary: true, marginLeft: '0.35rem' });
+      actionsTd.appendChild(copyBtn);
+      actionsTd.appendChild(generateBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
