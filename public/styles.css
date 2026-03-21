@@ -334,8 +334,12 @@ header {
   border-right: none;
 }
 
-.menu-item-right {
+.menu-item-right-start {
   margin-left: auto;
+  border-left: 1px solid #ffffff;
+}
+
+.menu-item-right {
   border-left: 1px solid #ffffff;
 }
 
