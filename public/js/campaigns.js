@@ -2,6 +2,12 @@ window.App = window.App || {};
 
 App.campaigns = (function () {
   const { state, els, api, notify } = App;
+  const EMAIL_TEMPLATES = [
+    { value: 'newsletter-basic', label: 'Newsletter Basic' },
+    { value: 'announcement-launch', label: 'Announcement / Launch' },
+    { value: 'event-invite', label: 'Event Invite' },
+    { value: 'lead-magnet-delivery', label: 'Lead Magnet Delivery' },
+  ];
 
   let builderTweets = [];
   let builderHashtags = [];
@@ -102,6 +108,12 @@ App.campaigns = (function () {
         label: safeText(segment.name) || `Segment ${segment.id}`,
       })),
       'Segment (optional)'
+    );
+
+    setSelectOptions(
+      byId('campaignEmailTemplateSelect'),
+      EMAIL_TEMPLATES,
+      'Template (optional)'
     );
 
     setSelectOptions(
@@ -310,6 +322,7 @@ App.campaigns = (function () {
         e.preventDefault();
         const channelSelect = byId('campaignChannelSelect');
         const segmentSelect = byId('campaignSegmentSelect');
+        const emailTemplateSelect = byId('campaignEmailTemplateSelect');
         const landingSelect = byId('campaignLandingPageSelect');
         const formObjectSelect = byId('campaignFormObjectSelect');
         const headlineSelect = byId('campaignHeadlineSelect');
@@ -331,6 +344,8 @@ App.campaigns = (function () {
             channelLabel: selectedOptionText(channelSelect),
             segmentId: safeText(segmentSelect?.value),
             segmentLabel: selectedOptionText(segmentSelect),
+            emailTemplateId: safeText(emailTemplateSelect?.value),
+            emailTemplateLabel: selectedOptionText(emailTemplateSelect),
             landingPageId: safeText(landingSelect?.value),
             landingPageLabel: selectedOptionText(landingSelect),
             formObjectId: safeText(formObjectSelect?.value),
