@@ -698,17 +698,38 @@ th {
 .bluesky-discovery-post-overlay {
   position: fixed;
   z-index: 9999;
-  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
   border-radius: 14px;
   border: 1px solid #8bc4f4;
   background: #f4fbff;
   box-shadow: 0 24px 60px rgba(9, 28, 48, 0.28);
+  color: #16324c;
+  font-size: 1rem;
+}
+
+.bluesky-discovery-post-overlay.hidden {
+  display: none;
+}
+
+.bluesky-discovery-post-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem 0.7rem;
+  border-bottom: 1px solid #c7e3fb;
+  background: linear-gradient(180deg, #e8f5ff 0%, #f4fbff 100%);
+}
+
+.bluesky-discovery-post-overlay-body {
+  flex: 1 1 auto;
+  padding: 1rem 1.15rem 1.1rem;
   white-space: pre-wrap;
   overflow-y: auto;
   overflow-x: hidden;
-  line-height: 1.6;
-  color: #16324c;
-  font-size: 1rem;
+  line-height: 1.65;
 }
 
 #blueskyDiscoveryResultsTable .bluesky-discovery-actions-cell > * {
