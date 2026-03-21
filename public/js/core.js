@@ -441,6 +441,20 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
   if (shouldPersist) persistActivePage(target);
 };
 
+App.openTrainingSection = function openTrainingSection(sectionId) {
+  App.setActivePage('trainingPage');
+  const targetId = String(sectionId || '').trim();
+  if (!targetId) return;
+  window.requestAnimationFrame(() => {
+    const section = document.getElementById(targetId);
+    if (!section) return;
+    if (typeof window.setYoutubeMinerCollapsibleOpen === 'function') {
+      window.setYoutubeMinerCollapsibleOpen(targetId, true);
+    }
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+};
+
 // ---------------------------------------------------------------------------
 // API client — envelope-aware
 // ---------------------------------------------------------------------------
