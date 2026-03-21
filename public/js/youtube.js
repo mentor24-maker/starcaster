@@ -1064,6 +1064,111 @@ App.youtube = (function () {
     });
   }
 
+  function defaultTrainingReplyMixSettings() {
+    return {
+      explicit_isitas_percent: 50,
+      subtle_shared_framing_percent: 40,
+      generic_context_percent: 10,
+    };
+  }
+
+  function normalizeTrainingReplyMixSettings(input) {
+    var fallback = defaultTrainingReplyMixSettings();
+    var source = input && typeof input === 'object' ? input : {};
+    var explicitPercent = Math.max(0, Math.min(Number(source.explicit_isitas_percent), 100));
+    var subtlePercent = Math.max(0, Math.min(Number(source.subtle_shared_framing_percent), 100));
+    var genericPercent = Math.max(0, Math.min(Number(source.generic_context_percent), 100));
+    if (!Number.isFinite(explicitPercent)) explicitPercent = fallback.explicit_isitas_percent;
+    if (!Number.isFinite(subtlePercent)) subtlePercent = fallback.subtle_shared_framing_percent;
+    if (!Number.isFinite(genericPercent)) genericPercent = fallback.generic_context_percent;
+    var total = explicitPercent + subtlePercent + genericPercent;
+    if (total !== 100) {
+      var nonGenericTarget = Math.max(0, 100 - genericPercent);
+      var explicitShare = (explicitPercent + subtlePercent) > 0
+        ? explicitPercent / (explicitPercent + subtlePercent)
+        : (fallback.explicit_isitas_percent / (fallback.explicit_isitas_percent + fallback.subtle_shared_framing_percent));
+      explicitPercent = Math.round(nonGenericTarget * explicitShare);
+      subtlePercent = Math.max(0, nonGenericTarget - explicitPercent);
+      genericPercent = Math.max(0, 100 - explicitPercent - subtlePercent);
+    }
+    return {
+      explicit_isitas_percent: explicitPercent,
+      subtle_shared_framing_percent: subtlePercent,
+      generic_context_percent: genericPercent,
+    };
+  }
+
+  async function loadPersistedTrainingReplyMixSettings() {
+    try {
+      var res = await api('/api/settings/training/settings', { method: 'GET' });
+      return normalizeTrainingReplyMixSettings(res?.data || res);
+    } catch (_) {
+      return defaultTrainingReplyMixSettings();
+    }
+  }
+
+  async function savePersistedTrainingReplyMixSettings(settings) {
+    return api('/api/settings/training/settings', {
+      method: 'POST',
+      body: JSON.stringify(normalizeTrainingReplyMixSettings(settings)),
+    });
+  }
+
+  function renderTrainingReplyMixTotal(settings) {
+    var totalEl = document.getElementById('trainingReplyMixTotal');
+    if (!totalEl) return;
+    var normalized = normalizeTrainingReplyMixSettings(settings);
+    var total = Number(normalized.explicit_isitas_percent || 0)
+      + Number(normalized.subtle_shared_framing_percent || 0)
+      + Number(normalized.generic_context_percent || 0);
+    totalEl.textContent = String(total) + '%';
+  }
+
+  function collectTrainingReplyMixSettingsFromUi() {
+    return normalizeTrainingReplyMixSettings({
+      explicit_isitas_percent: document.getElementById('trainingExplicitIsitasPercent')?.value,
+      subtle_shared_framing_percent: document.getElementById('trainingSubtleFramingPercent')?.value,
+      generic_context_percent: document.getElementById('trainingGenericContextPercent')?.value,
+    });
+  }
+
+  function applyTrainingReplyMixSettingsToUi(settings) {
+    var normalized = normalizeTrainingReplyMixSettings(settings);
+    var explicitEl = document.getElementById('trainingExplicitIsitasPercent');
+    var subtleEl = document.getElementById('trainingSubtleFramingPercent');
+    var genericEl = document.getElementById('trainingGenericContextPercent');
+    if (explicitEl) explicitEl.value = String(normalized.explicit_isitas_percent);
+    if (subtleEl) subtleEl.value = String(normalized.subtle_shared_framing_percent);
+    if (genericEl) genericEl.value = String(normalized.generic_context_percent);
+    renderTrainingReplyMixTotal(normalized);
+  }
+
+  function bindTrainingReplyMixSettings() {
+    var ids = [
+      'trainingExplicitIsitasPercent',
+      'trainingSubtleFramingPercent',
+      'trainingGenericContextPercent',
+    ];
+    var timer = null;
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', function() {
+        renderTrainingReplyMixTotal(collectTrainingReplyMixSettingsFromUi());
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(async function() {
+          try {
+            var normalized = collectTrainingReplyMixSettingsFromUi();
+            applyTrainingReplyMixSettingsToUi(normalized);
+            await savePersistedTrainingReplyMixSettings(normalized);
+          } catch (err) {
+            notify(err.message || 'Could not save training reply mix settings', true);
+          }
+        }, 500);
+      });
+    });
+  }
+
   function schedulePersistYoutubeMinerResponseContext(contextValue, guidelinesValue) {
     if (youtubeMinerContextSaveTimer) clearTimeout(youtubeMinerContextSaveTimer);
     var nextContextValue = safeText(contextValue || '');
@@ -4491,6 +4596,11 @@ App.youtube = (function () {
         renderYoutubeMinerRuleGuides();
       }
       schedulePersistYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+    });
+    applyTrainingReplyMixSettingsToUi(defaultTrainingReplyMixSettings());
+    bindTrainingReplyMixSettings();
+    loadPersistedTrainingReplyMixSettings().then(function(settings) {
+      applyTrainingReplyMixSettingsToUi(settings);
     });
     activeVideoSnapshot = loadActiveVideoSnapshot();
     if (activeVideoSnapshot && !currentDetailsRun) {
