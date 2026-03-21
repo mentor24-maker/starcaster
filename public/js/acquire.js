@@ -216,6 +216,7 @@ App.acquire = (function () {
     const title = document.createElement('strong');
     title.textContent = 'Full Post';
     const editBtn = App.makeIconButton('edit', 'Review Training Feedback', () => {
+      hideBlueskyDiscoveryPostOverlay(false);
       if (typeof blueskyDiscoveryPostOverlayEditAction === 'function') blueskyDiscoveryPostOverlayEditAction();
     }, { primary: true });
     editBtn.classList.add('youtube-miner-feedback-icon');
