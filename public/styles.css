@@ -677,7 +677,7 @@ th {
 }
 
 #blueskyDiscoveryResultsTable .bluesky-discovery-post-cell {
-  overflow: hidden;
+  overflow: visible;
 }
 
 #blueskyDiscoveryResultsTable .bluesky-discovery-post-preview-wrap {
@@ -691,28 +691,24 @@ th {
   white-space: nowrap;
 }
 
-#blueskyDiscoveryResultsTable .bluesky-discovery-post-preview {
-  display: none;
-  position: absolute;
-  left: 0;
-  top: calc(100% + 8px);
-  z-index: 20;
-  width: min(520px, 42vw);
-  max-height: 260px;
-  overflow: auto;
-  padding: 0.85rem 1rem;
-  border-radius: 10px;
-  border: 1px solid #b9dfff;
-  background: #f6fbff;
-  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.18);
-  white-space: pre-wrap;
-  line-height: 1.45;
-  color: #17324d;
+#blueskyDiscoveryResultsTable .bluesky-discovery-post-link {
+  cursor: pointer;
 }
 
-#blueskyDiscoveryResultsTable .bluesky-discovery-post-preview-wrap:hover .bluesky-discovery-post-preview,
-#blueskyDiscoveryResultsTable .bluesky-discovery-post-preview-wrap:focus-within .bluesky-discovery-post-preview {
-  display: block;
+.bluesky-discovery-post-overlay {
+  position: fixed;
+  z-index: 9999;
+  padding: 1rem 1.15rem;
+  border-radius: 14px;
+  border: 1px solid #8bc4f4;
+  background: #f4fbff;
+  box-shadow: 0 24px 60px rgba(9, 28, 48, 0.28);
+  white-space: pre-wrap;
+  overflow-y: auto;
+  overflow-x: hidden;
+  line-height: 1.6;
+  color: #16324c;
+  font-size: 1rem;
 }
 
 #blueskyDiscoveryResultsTable .bluesky-discovery-actions-cell > * {
