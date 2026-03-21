@@ -199,6 +199,52 @@ App.acquire = (function () {
     }
   }
 
+  let blueskyDiscoveryPostOverlayEl = null;
+
+  function ensureBlueskyDiscoveryPostOverlay() {
+    if (blueskyDiscoveryPostOverlayEl && document.body.contains(blueskyDiscoveryPostOverlayEl)) {
+      return blueskyDiscoveryPostOverlayEl;
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'bluesky-discovery-post-overlay hidden';
+    document.body.appendChild(overlay);
+    blueskyDiscoveryPostOverlayEl = overlay;
+    return overlay;
+  }
+
+  function positionBlueskyDiscoveryPostOverlay(anchorEl, overlayEl) {
+    if (!anchorEl || !overlayEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    const margin = 16;
+    const overlayWidth = Math.min(760, Math.max(420, Math.floor(window.innerWidth * 0.52)));
+    overlayEl.style.width = `${overlayWidth}px`;
+    overlayEl.style.maxHeight = `${Math.floor(window.innerHeight * 0.62)}px`;
+    const overlayRect = overlayEl.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.bottom + 10;
+    if (left + overlayRect.width > window.innerWidth - margin) {
+      left = window.innerWidth - overlayRect.width - margin;
+    }
+    if (left < margin) left = margin;
+    if (top + overlayRect.height > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - overlayRect.height - 10);
+    }
+    overlayEl.style.left = `${left}px`;
+    overlayEl.style.top = `${top}px`;
+  }
+
+  function showBlueskyDiscoveryPostOverlay(text, anchorEl) {
+    const overlay = ensureBlueskyDiscoveryPostOverlay();
+    overlay.textContent = String(text || '').trim() || '-';
+    overlay.classList.remove('hidden');
+    positionBlueskyDiscoveryPostOverlay(anchorEl, overlay);
+  }
+
+  function hideBlueskyDiscoveryPostOverlay() {
+    const overlay = ensureBlueskyDiscoveryPostOverlay();
+    overlay.classList.add('hidden');
+  }
+
   async function getSharedTrainingPromptPayload() {
     const trainingContextInput = document.getElementById('youtubeMinerResponseContext');
     const trainingGuidelinesInput = document.getElementById('youtubeMinerGuidelines');
@@ -725,11 +771,11 @@ App.acquire = (function () {
           a.rel = 'noopener noreferrer';
           a.textContent = value || '-';
           a.className = 'bluesky-discovery-post-link';
-          const previewPop = document.createElement('div');
-          previewPop.className = 'bluesky-discovery-post-preview';
-          previewPop.textContent = value || '-';
+          a.addEventListener('mouseenter', () => showBlueskyDiscoveryPostOverlay(value || '-', a));
+          a.addEventListener('focus', () => showBlueskyDiscoveryPostOverlay(value || '-', a));
+          a.addEventListener('mouseleave', hideBlueskyDiscoveryPostOverlay);
+          a.addEventListener('blur', hideBlueskyDiscoveryPostOverlay);
           previewWrap.appendChild(a);
-          previewWrap.appendChild(previewPop);
           td.appendChild(previewWrap);
         } else {
           td.textContent = value || '-';
