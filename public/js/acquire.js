@@ -412,12 +412,15 @@ App.acquire = (function () {
 
   function renderBlueskyDiscoveryTable(result) {
     const tbody = document.getElementById('blueskyDiscoveryTable');
+    const repliesTbody = document.getElementById('blueskyDiscoveryRepliesTable');
     const preview = document.getElementById('blueskyDiscoveryPreview');
     if (preview) preview.textContent = prettyJson(result || {});
     if (!tbody) return;
     tbody.innerHTML = '';
+    if (repliesTbody) repliesTbody.innerHTML = '';
     lastBlueskyDiscoveryResult = result || null;
     const rows = Array.isArray(result?.candidates) ? result.candidates : [];
+    const threadReplies = Array.isArray(result?.thread_replies) ? result.thread_replies : [];
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
@@ -425,6 +428,14 @@ App.acquire = (function () {
       td.textContent = 'No BlueSky post candidates loaded yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
+      if (repliesTbody) {
+        const replyTr = document.createElement('tr');
+        const replyTd = document.createElement('td');
+        replyTd.colSpan = 5;
+        replyTd.textContent = 'No BlueSky thread replies loaded yet.';
+        replyTr.appendChild(replyTd);
+        repliesTbody.appendChild(replyTr);
+      }
       return;
     }
 
@@ -468,6 +479,33 @@ App.acquire = (function () {
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
+
+    if (repliesTbody) {
+      if (!threadReplies.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 5;
+        td.textContent = 'No thread replies loaded for the current target.';
+        tr.appendChild(td);
+        repliesTbody.appendChild(tr);
+      } else {
+        threadReplies.forEach((item) => {
+          const tr = document.createElement('tr');
+          [
+            String(item.author_handle || item.author_display_name || '-'),
+            String(item.text || '-'),
+            String(item.like_count != null ? item.like_count : '-'),
+            String(item.reply_count != null ? item.reply_count : '-'),
+            String(item.created_at ? new Date(item.created_at).toLocaleString() : '-'),
+          ].forEach((value) => {
+            const td = document.createElement('td');
+            td.textContent = value || '-';
+            tr.appendChild(td);
+          });
+          repliesTbody.appendChild(tr);
+        });
+      }
+    }
   }
 
   function renderBlueskyReplyCandidates(result) {
@@ -831,6 +869,27 @@ App.acquire = (function () {
     renderBlueskyDiscoveryTable(res);
     const count = Array.isArray(res.candidates) ? res.candidates.length : 0;
     setBlueskyDiscoveryStatus(`Loaded ${count} BlueSky post candidate${count === 1 ? '' : 's'}.`);
+    return res;
+  }
+
+  async function runBlueskyReplyCandidates(explicitTarget) {
+    const form = document.getElementById('blueskyReplyCandidatesForm');
+    if (!form) return null;
+    const formData = new FormData(form);
+    const payload = {
+      target: String(explicitTarget || formData.get('target') || '').trim(),
+      source_mode: String(formData.get('source_mode') || 'auto').trim().toLowerCase(),
+      context_limit: Number(formData.get('context_limit') || 8) || 8,
+    };
+    if (!payload.target) throw new Error('BlueSky post URL is required.');
+    setBlueskyReplyStatus('Generating BlueSky reply candidates...');
+    const res = await api('/api/engage/bluesky/reply-candidates', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    renderBlueskyReplyCandidates(res);
+    const count = Array.isArray(res.replies) ? res.replies.length : 0;
+    setBlueskyReplyStatus(`Generated ${count} BlueSky reply candidate${count === 1 ? '' : 's'}.`);
     return res;
   }
 
@@ -1237,26 +1296,17 @@ App.acquire = (function () {
     if (blueskyReplyCandidatesForm) {
       blueskyReplyCandidatesForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const formData = new FormData(blueskyReplyCandidatesForm);
-        const target = String(formData.get('target') || '').trim();
-        if (!target) {
-          setBlueskyReplyStatus('BlueSky post URL is required.', true);
-          notify('BlueSky post URL is required.', true);
-          return;
+        const submitBtn = blueskyReplyCandidatesForm.querySelector('button[type="submit"]');
+        try {
+          if (submitBtn) submitBtn.disabled = true;
+          await runBlueskyReplyCandidates();
+          notify('BlueSky reply candidates generated');
+        } catch (err) {
+          setBlueskyReplyStatus(err.message || 'Could not generate BlueSky reply candidates', true);
+          notify(err.message, true);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
         }
-        const placeholder = {
-          replies: [],
-          assumptions: ['BlueSky reply generator UI is wired. Backend generation workflow is the next implementation step.'],
-          errors: [],
-          requested_target: target,
-          requested_filters: {
-            source_mode: String(formData.get('source_mode') || 'auto'),
-            context_limit: Number(formData.get('context_limit') || 8) || 8,
-          },
-        };
-        renderBlueskyReplyCandidates(placeholder);
-        setBlueskyReplyStatus('BlueSky reply generator UI is ready. Backend generation workflow is next.', false);
-        notify('BlueSky reply candidate UI scaffold is ready');
       });
     }
     const blueskyPostingStatusBtn = document.getElementById('blueskyPostingStatusBtn');

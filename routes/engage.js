@@ -14,6 +14,7 @@ const redditClient = require('../lib/redditClient');
 const { discoverRedditThreads } = require('../lib/redditThreadDiscovery');
 const { generateRedditReplyCandidates } = require('../lib/redditReplyCandidates');
 const { discoverBlueskyThreads } = require('../lib/blueskyThreadDiscovery');
+const { generateBlueskyReplyCandidates } = require('../lib/blueskyReplyCandidates');
 const { relayOpenClaw } = require('../lib/openclawGateway');
 const {
   listAgents: listYoutubeCommentAgents,
@@ -720,6 +721,23 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, result.status || 500, result.error || 'BlueSky thread discovery failed', { code: 'BLUESKY_DISCOVERY_FAILED' }), true;
     }
     return sendOk(res, 200, result.data, result.data, { total: Array.isArray(result.data?.candidates) ? result.data.candidates.length : 0 }), true;
+  }
+
+  if (pathname === '/api/engage/bluesky/reply-candidates' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const target = safeText(body?.target);
+    if (!target) {
+      return sendErr(res, 400, 'target is required (BlueSky post URL)', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const result = await generateBlueskyReplyCandidates({
+      target,
+      source_mode: body?.source_mode || body?.sourceMode,
+      context_limit: body?.context_limit || body?.contextLimit,
+    });
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Could not generate BlueSky reply candidates', { code: 'BLUESKY_REPLY_CANDIDATES_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, result.data, { total: Array.isArray(result.data?.replies) ? result.data.replies.length : 0 }), true;
   }
 
   if (pathname === '/api/engage/reddit/comment' && requestMethod === 'POST') {
