@@ -12,6 +12,8 @@ App.acquire = (function () {
   let blueskyDiscoverySelectedPostUrls = new Set();
   const BLUESKY_DISCOVERY_FEEDBACK_KEY_PREFIX = 'alphire:bluesky:discovery-feedback:';
   const BLUESKY_REPLY_FEEDBACK_KEY_PREFIX = 'alphire:bluesky:reply-feedback:';
+  const YT_MINER_RESPONSE_CONTEXT_KEY = 'yt_miner_response_context_v1';
+  const YT_MINER_RESPONSE_GUIDELINES_KEY = 'yt_miner_response_guidelines_v1';
 
   function blueskyDiscoveryFeedbackKey(itemOrUrl) {
     const postUrl = typeof itemOrUrl === 'string'
@@ -195,6 +197,46 @@ App.acquire = (function () {
       selectAll.checked = !!visibleUrls.length && visibleUrls.every((url) => blueskyDiscoverySelectedPostUrls.has(url));
       selectAll.indeterminate = !selectAll.checked && visibleUrls.some((url) => blueskyDiscoverySelectedPostUrls.has(url));
     }
+  }
+
+  async function getSharedTrainingPromptPayload() {
+    const trainingContextInput = document.getElementById('youtubeMinerResponseContext');
+    const trainingGuidelinesInput = document.getElementById('youtubeMinerGuidelines');
+
+    let trainingContext = String(trainingContextInput && trainingContextInput.value || '').trim();
+    let trainingGuidelines = String(trainingGuidelinesInput && trainingGuidelinesInput.value || '').trim();
+
+    if (!trainingContext) {
+      try { trainingContext = String(window.localStorage.getItem(YT_MINER_RESPONSE_CONTEXT_KEY) || '').trim(); } catch (_) { /* ignore */ }
+    }
+    if (!trainingGuidelines) {
+      try { trainingGuidelines = String(window.localStorage.getItem(YT_MINER_RESPONSE_GUIDELINES_KEY) || '').trim(); } catch (_) { /* ignore */ }
+    }
+
+    if (!trainingContext || !trainingGuidelines) {
+      try {
+        const res = await api('/api/settings/youtube-miner-context', { method: 'GET' });
+        const loadedContext = String(res?.youtube_response_context || res?.data?.youtube_response_context || '').trim();
+        const loadedGuidelines = String(res?.youtube_response_guidelines || res?.data?.youtube_response_guidelines || '').trim();
+        if (!trainingContext && loadedContext) trainingContext = loadedContext;
+        if (!trainingGuidelines && loadedGuidelines) trainingGuidelines = loadedGuidelines;
+        if (trainingContextInput && !String(trainingContextInput.value || '').trim() && loadedContext) trainingContextInput.value = loadedContext;
+        if (trainingGuidelinesInput && !String(trainingGuidelinesInput.value || '').trim() && loadedGuidelines) trainingGuidelinesInput.value = loadedGuidelines;
+        if (loadedContext) {
+          try { window.localStorage.setItem(YT_MINER_RESPONSE_CONTEXT_KEY, loadedContext); } catch (_) { /* ignore */ }
+        }
+        if (loadedGuidelines) {
+          try { window.localStorage.setItem(YT_MINER_RESPONSE_GUIDELINES_KEY, loadedGuidelines); } catch (_) { /* ignore */ }
+        }
+      } catch (_) {
+        // Keep best-effort local values; diagnostics will show if still missing.
+      }
+    }
+
+    return {
+      training_context: trainingContext,
+      training_guidelines: trainingGuidelines,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -1524,14 +1566,13 @@ App.acquire = (function () {
     const form = document.getElementById('blueskyReplyCandidatesForm');
     if (!form) return null;
     const formData = new FormData(form);
-    const trainingContextInput = document.getElementById('youtubeMinerResponseContext');
-    const trainingGuidelinesInput = document.getElementById('youtubeMinerGuidelines');
+    const trainingPayload = await getSharedTrainingPromptPayload();
     const payload = {
       target: String(explicitTarget || formData.get('target') || '').trim(),
       source_mode: String(formData.get('source_mode') || 'auto').trim().toLowerCase(),
       context_limit: Number(formData.get('context_limit') || 8) || 8,
-      training_context: String(trainingContextInput && trainingContextInput.value || '').trim(),
-      training_guidelines: String(trainingGuidelinesInput && trainingGuidelinesInput.value || '').trim(),
+      training_context: String(trainingPayload.training_context || '').trim(),
+      training_guidelines: String(trainingPayload.training_guidelines || '').trim(),
     };
     if (!payload.target) throw new Error('BlueSky post URL is required.');
     setBlueskyReplyStatus('Generating BlueSky reply candidates...');
