@@ -717,6 +717,10 @@ th {
   white-space: pre-wrap;
 }
 
+.bluesky-reply-feedback-pop textarea {
+  min-height: 150px;
+}
+
 .youtube-date-filter-wrap {
   display: flex;
   flex-direction: column;
