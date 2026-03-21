@@ -1901,6 +1901,7 @@
         <div class="page-heading-row">
           <h2>Acquire: BlueSky</h2>
           <div class="page-heading-actions">
+            <button id="blueskyDiscoveryStatusBtn" type="button">Check BlueSky Connection</button>
             <button id="blueskyRefreshBtn" type="button">Refresh</button>
           </div>
         </div>
@@ -1910,12 +1911,9 @@
           <div class="settings-card acquire-workbench-pane">
             <div class="page-heading-row" style="margin-bottom: 0.75rem;">
               <h3 style="margin: 0;">Thread Discovery</h3>
-              <div class="page-heading-actions">
-                <button id="blueskyDiscoveryStatusBtn" type="button">Check BlueSky Connection</button>
-              </div>
             </div>
             <p style="margin-top: 0;">Find and rank candidate BlueSky posts before moving into reply drafting or posting work.</p>
-            <form id="blueskyDiscoveryForm" class="stack-form labeled-form">
+            <form id="blueskyDiscoveryForm" class="stack-form labeled-form acquire-workbench-form">
               <div class="form-row">
                 <label for="blueskyDiscoveryTarget">Handle, Feed, or Post URL</label>
                 <input id="blueskyDiscoveryTarget" name="target" placeholder="e.g. alice.bsky.social, a feed URL, or a specific post URL" required />
@@ -1979,12 +1977,12 @@
               <h3 style="margin: 0;">Reply Candidate Generator</h3>
             </div>
             <p style="margin-top: 0;">Generate several context-aware BlueSky reply options for a selected post without posting anything yet.</p>
-            <form id="blueskyReplyCandidatesForm" class="stack-form labeled-form">
+            <form id="blueskyReplyCandidatesForm" class="stack-form labeled-form acquire-workbench-form">
               <div class="form-row">
                 <label for="blueskyReplyTarget">Post URL</label>
                 <input id="blueskyReplyTarget" name="target" placeholder="https://bsky.app/profile/.../post/..." required />
               </div>
-              <div class="grid-form">
+              <div class="grid-form acquire-workbench-compact-grid">
                 <div class="form-row">
                   <label for="blueskyReplySourceMode">Source Mode</label>
                   <select id="blueskyReplySourceMode" name="source_mode">
@@ -1993,6 +1991,8 @@
                     <option value="browser">OpenClaw Browser</option>
                   </select>
                 </div>
+              </div>
+              <div class="grid-form acquire-workbench-compact-grid">
                 <div class="form-row">
                   <label for="blueskyReplyContextLimit">Thread Context Limit</label>
                   <input id="blueskyReplyContextLimit" name="context_limit" type="number" min="3" max="20" value="8" />
