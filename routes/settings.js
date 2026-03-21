@@ -46,6 +46,8 @@ const {
   saveTrainingPromptConfig,
   listTrainingItems,
   saveTrainingItems,
+  listTrainingRulesGuides,
+  saveTrainingRulesGuides,
 } = require('../lib/trainingStore');
 const config = require('../lib/config');
 
@@ -367,6 +369,19 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const kind = trainingItemsMatch[1];
     const result = await saveTrainingItems(kind, Array.isArray(body?.items) ? body.items : [], req.authUser?.id || req.authUser?.email || '');
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, { items: result.data || [] }, { items: result.data || [] }), true;
+  }
+
+  if (pathname === '/api/settings/training/rules-guides' && method === 'GET') {
+    const result = await listTrainingRulesGuides(req.authUser?.id || req.authUser?.email || '');
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, { items: result.data || [] }, { items: result.data || [] }), true;
+  }
+
+  if (pathname === '/api/settings/training/rules-guides' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await saveTrainingRulesGuides(Array.isArray(body?.items) ? body.items : [], req.authUser?.id || req.authUser?.email || '');
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, { items: result.data || [] }, { items: result.data || [] }), true;
   }

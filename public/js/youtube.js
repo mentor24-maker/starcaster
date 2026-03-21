@@ -33,6 +33,9 @@ App.youtube = (function () {
   var youtubeMinerCategoryEditingIds = new Set();
   var youtubeMinerAttributeEditingIds = new Set();
   var youtubeMinerApproachEditingIds = new Set();
+  var youtubeMinerRuleGuideRows = [];
+  var youtubeMinerRuleGuideSelectedIds = new Set();
+  var youtubeMinerRuleGuideEditingIds = new Set();
   var youtubeMinerLastResult = null;
   var YT_MINER_CATEGORY_CONFIG_KEY = 'yt_miner_category_config_v1';
   var YT_MINER_ATTRIBUTE_CONFIG_KEY = 'yt_miner_attribute_config_v1';
@@ -44,11 +47,13 @@ App.youtube = (function () {
   var YT_RESEARCH_LAST_RESULT_KEY = 'yt_research_last_result_v1';
   var YT_ACTIVE_VIDEO_KEY = 'yt_active_video_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
+  var YT_MINER_RULE_GUIDES_KEY = 'yt_miner_rules_guides_v1';
   var youtubeMinerContextSaveTimer = null;
   var youtubeMinerConfigSaveTimers = {
     category: null,
     attribute: null,
     approach: null,
+    ruleGuide: null,
   };
   var youtubeMinerContextSaving = false;
   var youtubeResearchLastResult = null;
@@ -653,6 +658,63 @@ App.youtube = (function () {
     } catch (_) { /* ignore */ }
   }
 
+  function normalizeYoutubeMinerRuleGuides(rowsInput) {
+    var rows = Array.isArray(rowsInput) ? rowsInput : [];
+    return rows.map(function(item, index) {
+      return {
+        id: safeText(item && (item.id || item.item_id)) || makeYoutubeMinerConfigId('ruleguide'),
+        type: safeText(item && item.type).toLowerCase() === 'guide' ? 'guide' : 'rule',
+        text: safeText(item && (item.text || item.name)),
+        enabled: item && item.enabled !== false,
+        sort_order: Number.isFinite(Number(item && item.sort_order)) ? Number(item.sort_order) : index,
+      };
+    }).filter(function(item) { return Boolean(item.text); });
+  }
+
+  function parseYoutubeMinerRuleGuidesFromText(value) {
+    return safeText(value)
+      .split(/\r?\n/g)
+      .map(function(line) { return safeText(line.replace(/^[-*]\s*/, '')); })
+      .filter(Boolean)
+      .map(function(text, index) {
+        return {
+          id: makeYoutubeMinerConfigId('ruleguide'),
+          type: 'rule',
+          text: text,
+          enabled: true,
+          sort_order: index,
+        };
+      });
+  }
+
+  function composeYoutubeMinerRuleGuidesText(rowsInput) {
+    return normalizeYoutubeMinerRuleGuides(rowsInput)
+      .filter(function(item) { return item.enabled; })
+      .map(function(item) {
+        return (item.type === 'guide' ? 'Guide: ' : 'Rule: ') + item.text;
+      })
+      .join('\n');
+  }
+
+  function loadYoutubeMinerRuleGuides() {
+    try {
+      var raw = window.localStorage.getItem(YT_MINER_RULE_GUIDES_KEY);
+      if (!raw) return [];
+      return normalizeYoutubeMinerRuleGuides(JSON.parse(raw));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveYoutubeMinerRuleGuides(rowsInput) {
+    var rows = normalizeYoutubeMinerRuleGuides(rowsInput);
+    try {
+      window.localStorage.setItem(YT_MINER_RULE_GUIDES_KEY, JSON.stringify(rows));
+    } catch (_) { /* ignore */ }
+    youtubeMinerRuleGuideRows = rows.slice();
+    saveYoutubeMinerResponseGuidelines(composeYoutubeMinerRuleGuidesText(rows));
+  }
+
   function saveYoutubeMinerLastResult(result) {
     try {
       window.localStorage.setItem(YT_MINER_LAST_RESULT_KEY, JSON.stringify(result || {}));
@@ -983,6 +1045,25 @@ App.youtube = (function () {
     });
   }
 
+  async function loadPersistedYoutubeMinerRuleGuides() {
+    try {
+      var res = await api('/api/settings/training/rules-guides', { method: 'GET' });
+      var items = Array.isArray(res?.items) ? res.items : (Array.isArray(res?.data?.items) ? res.data.items : []);
+      return normalizeYoutubeMinerRuleGuides(items);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async function savePersistedYoutubeMinerRuleGuides(rows) {
+    return api('/api/settings/training/rules-guides', {
+      method: 'POST',
+      body: JSON.stringify({
+        items: normalizeYoutubeMinerRuleGuides(rows),
+      }),
+    });
+  }
+
   function schedulePersistYoutubeMinerResponseContext(contextValue, guidelinesValue) {
     if (youtubeMinerContextSaveTimer) clearTimeout(youtubeMinerContextSaveTimer);
     var nextContextValue = safeText(contextValue || '');
@@ -1008,6 +1089,18 @@ App.youtube = (function () {
         await savePersistedYoutubeMinerConfig(kind, nextRows);
       } catch (err) {
         notify(err.message || ('Could not save shared ' + kind + ' training config'), true);
+      }
+    }, 500);
+  }
+
+  function schedulePersistYoutubeMinerRuleGuides(rows) {
+    if (youtubeMinerConfigSaveTimers.ruleGuide) clearTimeout(youtubeMinerConfigSaveTimers.ruleGuide);
+    var nextRows = normalizeYoutubeMinerRuleGuides(rows);
+    youtubeMinerConfigSaveTimers.ruleGuide = setTimeout(async function() {
+      try {
+        await savePersistedYoutubeMinerRuleGuides(nextRows);
+      } catch (err) {
+        notify(err.message || 'Could not save shared rules/guides', true);
       }
     }, 500);
   }
@@ -1332,6 +1425,234 @@ App.youtube = (function () {
 
   function renderYoutubeMinerCategoryConfig() {
     renderYoutubeMinerConfig('category');
+  }
+
+  function syncYoutubeMinerRuleGuideToolbarState() {
+    var selectAll = document.getElementById('youtubeMinerRuleGuideSelectAll');
+    var editBtn = document.getElementById('youtubeMinerEditRuleGuidesCheckedBtn');
+    var deleteBtn = document.getElementById('youtubeMinerDeleteRuleGuidesCheckedBtn');
+    var visibleIds = youtubeMinerRuleGuideRows.map(function(row) { return safeText(row && row.id); }).filter(Boolean);
+    var selectedVisible = visibleIds.filter(function(id) { return youtubeMinerRuleGuideSelectedIds.has(id); });
+    if (selectAll) {
+      selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+      selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
+    }
+    if (editBtn) editBtn.disabled = selectedVisible.length === 0;
+    if (deleteBtn) deleteBtn.disabled = selectedVisible.length === 0;
+  }
+
+  function collectYoutubeMinerRuleGuidesFromUi() {
+    var tbody = document.getElementById('youtubeMinerRuleGuideTable');
+    if (!tbody) return normalizeYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+    var nextRows = youtubeMinerRuleGuideRows.slice();
+    Array.prototype.slice.call(tbody.querySelectorAll('tr[data-row-id]')).forEach(function(tr) {
+      var rowId = safeText(tr.getAttribute('data-row-id'));
+      if (!rowId) return;
+      var idx = nextRows.findIndex(function(item) { return safeText(item && item.id) === rowId; });
+      if (idx < 0) return;
+      var editing = tr.getAttribute('data-editing') === 'true';
+      if (!editing) return;
+      var typeEl = tr.querySelector('.yt-miner-ruleguide-type');
+      var enabledEl = tr.querySelector('.yt-miner-ruleguide-enabled');
+      var textEl = tr.querySelector('.yt-miner-ruleguide-text');
+      nextRows[idx] = {
+        id: rowId,
+        type: safeText(typeEl && typeEl.value).toLowerCase() === 'guide' ? 'guide' : 'rule',
+        enabled: Boolean(enabledEl && enabledEl.checked),
+        text: safeText(textEl && textEl.value),
+        sort_order: idx,
+      };
+    });
+    return normalizeYoutubeMinerRuleGuides(nextRows);
+  }
+
+  function renderYoutubeMinerRuleGuides() {
+    var tbody = document.getElementById('youtubeMinerRuleGuideTable');
+    var legacyTextarea = document.getElementById('youtubeMinerGuidelines');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    var rows = normalizeYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+    youtubeMinerRuleGuideRows = rows.slice();
+    if (legacyTextarea) legacyTextarea.value = composeYoutubeMinerRuleGuidesText(rows);
+
+    rows.forEach(function(row) {
+      var rowId = safeText(row && row.id) || makeYoutubeMinerConfigId('ruleguide');
+      var editing = youtubeMinerRuleGuideEditingIds.has(rowId);
+      row.id = rowId;
+
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-row-id', rowId);
+      tr.setAttribute('data-editing', editing ? 'true' : 'false');
+
+      var selectTd = document.createElement('td');
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = youtubeMinerRuleGuideSelectedIds.has(rowId);
+      checkbox.addEventListener('change', function() {
+        if (checkbox.checked) youtubeMinerRuleGuideSelectedIds.add(rowId);
+        else youtubeMinerRuleGuideSelectedIds.delete(rowId);
+        syncYoutubeMinerRuleGuideToolbarState();
+      });
+      selectTd.appendChild(checkbox);
+
+      var enabledTd = document.createElement('td');
+      var typeTd = document.createElement('td');
+      var textTd = document.createElement('td');
+      var actionTd = document.createElement('td');
+
+      if (editing) {
+        var enabledInput = document.createElement('input');
+        enabledInput.type = 'checkbox';
+        enabledInput.className = 'yt-miner-ruleguide-enabled';
+        enabledInput.checked = row.enabled !== false;
+        enabledTd.appendChild(enabledInput);
+
+        var typeSelect = document.createElement('select');
+        typeSelect.className = 'yt-miner-ruleguide-type';
+        ['rule', 'guide'].forEach(function(value) {
+          var option = document.createElement('option');
+          option.value = value;
+          option.textContent = value.charAt(0).toUpperCase() + value.slice(1);
+          option.selected = row.type === value;
+          typeSelect.appendChild(option);
+        });
+        typeTd.appendChild(typeSelect);
+
+        var textInput = document.createElement('textarea');
+        textInput.className = 'yt-miner-ruleguide-text';
+        textInput.rows = 3;
+        textInput.value = safeText(row && row.text);
+        textInput.placeholder = 'Enter one rule or guide';
+        textTd.appendChild(textInput);
+      } else {
+        enabledTd.textContent = row.enabled !== false ? 'On' : 'Off';
+        typeTd.textContent = row.type === 'guide' ? 'Guide' : 'Rule';
+        textTd.textContent = safeText(row && row.text) || '-';
+      }
+
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = editing ? 'Save' : 'Edit';
+      editBtn.addEventListener('click', function() {
+        if (!editing) {
+          youtubeMinerRuleGuideEditingIds.add(rowId);
+          renderYoutubeMinerRuleGuides();
+          return;
+        }
+        youtubeMinerRuleGuideRows = collectYoutubeMinerRuleGuidesFromUi();
+        youtubeMinerRuleGuideEditingIds.delete(rowId);
+        saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        schedulePersistYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        renderYoutubeMinerRuleGuides();
+      });
+      actionTd.appendChild(editBtn);
+
+      if (editing) {
+        var cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', function() {
+          youtubeMinerRuleGuideEditingIds.delete(rowId);
+          renderYoutubeMinerRuleGuides();
+        });
+        actionTd.appendChild(cancelBtn);
+      }
+
+      var deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', function() {
+        if (!window.confirm('Delete this rules/guides row?')) return;
+        youtubeMinerRuleGuideRows = youtubeMinerRuleGuideRows.filter(function(item) {
+          return safeText(item && item.id) !== rowId;
+        });
+        youtubeMinerRuleGuideSelectedIds.delete(rowId);
+        youtubeMinerRuleGuideEditingIds.delete(rowId);
+        saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        schedulePersistYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        renderYoutubeMinerRuleGuides();
+      });
+      actionTd.appendChild(deleteBtn);
+
+      tr.appendChild(selectTd);
+      tr.appendChild(enabledTd);
+      tr.appendChild(typeTd);
+      tr.appendChild(textTd);
+      tr.appendChild(actionTd);
+      tbody.appendChild(tr);
+    });
+
+    syncYoutubeMinerRuleGuideToolbarState();
+  }
+
+  function bindYoutubeMinerRuleGuideEvents() {
+    var addBtn = document.getElementById('youtubeMinerAddRuleGuideBtn');
+    var editBtn = document.getElementById('youtubeMinerEditRuleGuidesCheckedBtn');
+    var deleteBtn = document.getElementById('youtubeMinerDeleteRuleGuidesCheckedBtn');
+    var selectAll = document.getElementById('youtubeMinerRuleGuideSelectAll');
+
+    if (addBtn) {
+      addBtn.addEventListener('click', function() {
+        youtubeMinerRuleGuideRows = collectYoutubeMinerRuleGuidesFromUi();
+        var id = makeYoutubeMinerConfigId('ruleguide');
+        youtubeMinerRuleGuideRows.push({
+          id: id,
+          type: 'rule',
+          text: 'New rule',
+          enabled: true,
+          sort_order: youtubeMinerRuleGuideRows.length,
+        });
+        youtubeMinerRuleGuideEditingIds.add(id);
+        youtubeMinerRuleGuideSelectedIds.add(id);
+        renderYoutubeMinerRuleGuides();
+      });
+    }
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function() {
+        if (selectAll.checked) {
+          youtubeMinerRuleGuideRows.forEach(function(row) {
+            var id = safeText(row && row.id);
+            if (id) youtubeMinerRuleGuideSelectedIds.add(id);
+          });
+        } else {
+          youtubeMinerRuleGuideSelectedIds.clear();
+        }
+        renderYoutubeMinerRuleGuides();
+      });
+    }
+
+    if (editBtn) {
+      editBtn.addEventListener('click', function() {
+        if (!youtubeMinerRuleGuideSelectedIds.size) {
+          notify('Select at least one rules/guides row to edit.', true);
+          return;
+        }
+        Array.from(youtubeMinerRuleGuideSelectedIds).forEach(function(id) {
+          youtubeMinerRuleGuideEditingIds.add(id);
+        });
+        renderYoutubeMinerRuleGuides();
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function() {
+        if (!youtubeMinerRuleGuideSelectedIds.size) {
+          notify('Select at least one rules/guides row to delete.', true);
+          return;
+        }
+        if (!window.confirm('Delete ' + youtubeMinerRuleGuideSelectedIds.size + ' selected rules/guides row(s)?')) return;
+        var selected = new Set(Array.from(youtubeMinerRuleGuideSelectedIds));
+        youtubeMinerRuleGuideRows = youtubeMinerRuleGuideRows.filter(function(row) {
+          return !selected.has(safeText(row && row.id));
+        });
+        youtubeMinerRuleGuideEditingIds = new Set(Array.from(youtubeMinerRuleGuideEditingIds).filter(function(id) { return !selected.has(id); }));
+        youtubeMinerRuleGuideSelectedIds.clear();
+        saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        schedulePersistYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        renderYoutubeMinerRuleGuides();
+      });
+    }
   }
 
   function getYoutubeCategories() {
@@ -4086,9 +4407,11 @@ App.youtube = (function () {
     youtubeMinerCategoryConfig = applyRecommendedRows('category', loadYoutubeMinerCategoryConfig());
     youtubeMinerAttributeConfig = applyRecommendedRows('attribute', loadYoutubeMinerConfig('attribute'));
     youtubeMinerApproachConfig = applyRecommendedRows('approach', loadYoutubeMinerConfig('approach'));
+    youtubeMinerRuleGuideRows = normalizeYoutubeMinerRuleGuides(loadYoutubeMinerRuleGuides());
     saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
     saveYoutubeMinerConfig('attribute', youtubeMinerAttributeConfig);
     saveYoutubeMinerConfig('approach', youtubeMinerApproachConfig);
+    saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
     if (youtubeMinerResponseContext || youtubeMinerGuidelines) {
       if (youtubeMinerResponseContext) youtubeMinerResponseContext.value = loadYoutubeMinerResponseContext();
       if (youtubeMinerGuidelines) youtubeMinerGuidelines.value = loadYoutubeMinerResponseGuidelines();
@@ -4128,9 +4451,11 @@ App.youtube = (function () {
     renderYoutubeMinerCategoryConfig();
     renderYoutubeMinerConfig('attribute');
     renderYoutubeMinerConfig('approach');
+    renderYoutubeMinerRuleGuides();
     bindYoutubeMinerConfigEvents('category');
     bindYoutubeMinerConfigEvents('attribute');
     bindYoutubeMinerConfigEvents('approach');
+    bindYoutubeMinerRuleGuideEvents();
     ['category', 'attribute', 'approach'].forEach(function(kind) {
       loadPersistedYoutubeMinerConfig(kind).then(function(serverRows) {
         if (Array.isArray(serverRows) && serverRows.length) {
@@ -4143,6 +4468,21 @@ App.youtube = (function () {
         }
         schedulePersistYoutubeMinerConfig(kind, getYoutubeMinerConfigBundle(kind).getRows());
       });
+    });
+    loadPersistedYoutubeMinerRuleGuides().then(function(serverRows) {
+      if (Array.isArray(serverRows) && serverRows.length) {
+        youtubeMinerRuleGuideRows = normalizeYoutubeMinerRuleGuides(serverRows);
+        saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        renderYoutubeMinerRuleGuides();
+        return;
+      }
+      var textareaValue = youtubeMinerGuidelines ? safeText(youtubeMinerGuidelines.value) : '';
+      if (!youtubeMinerRuleGuideRows.length && textareaValue) {
+        youtubeMinerRuleGuideRows = parseYoutubeMinerRuleGuidesFromText(textareaValue);
+        saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+        renderYoutubeMinerRuleGuides();
+      }
+      schedulePersistYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
     });
     activeVideoSnapshot = loadActiveVideoSnapshot();
     if (activeVideoSnapshot && !currentDetailsRun) {
