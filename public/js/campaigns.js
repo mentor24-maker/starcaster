@@ -11,6 +11,7 @@ App.campaigns = (function () {
 
   let builderTweets = [];
   let builderHashtags = [];
+  let builderEmails = [];
 
   function byId(id) {
     return document.getElementById(id);
@@ -117,6 +118,16 @@ App.campaigns = (function () {
     );
 
     setSelectOptions(
+      byId('campaignEmailSelect'),
+      builderEmails.map((email) => {
+        const body = safeText(email.email);
+        const label = body.length > 100 ? `${body.slice(0, 97)}...` : body;
+        return { value: email.id, label: label || `Email ${email.id}` };
+      }),
+      builderEmails.length ? 'Email Body' : 'Email Body (create in Messaging > Emails)'
+    );
+
+    setSelectOptions(
       byId('campaignHeadlineSelect'),
       [],
       'Headline (placeholder until Messaging > Headlines exists)'
@@ -207,12 +218,13 @@ App.campaigns = (function () {
   }
 
   async function loadBuilderSources() {
-    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes] = await Promise.allSettled([
+    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes] = await Promise.allSettled([
       api('/api/channels'),
       api('/api/assets'),
       api('/api/segments'),
       api('/api/messaging/tweets?limit=200'),
       api('/api/messaging/hashtags?limit=5000'),
+      api('/api/messaging/emails?limit=5000'),
     ]);
 
     if (channelsRes.status === 'fulfilled' && Array.isArray(channelsRes.value.channels)) {
@@ -230,6 +242,9 @@ App.campaigns = (function () {
       : [];
     builderHashtags = hashtagsRes.status === 'fulfilled' && Array.isArray(hashtagsRes.value.hashtags)
       ? hashtagsRes.value.hashtags
+      : [];
+    builderEmails = emailsRes.status === 'fulfilled' && Array.isArray(emailsRes.value.emails)
+      ? emailsRes.value.emails
       : [];
 
     renderBuilderSelects();
@@ -323,6 +338,7 @@ App.campaigns = (function () {
         const channelSelect = byId('campaignChannelSelect');
         const segmentSelect = byId('campaignSegmentSelect');
         const emailTemplateSelect = byId('campaignEmailTemplateSelect');
+        const emailSelect = byId('campaignEmailSelect');
         const landingSelect = byId('campaignLandingPageSelect');
         const formObjectSelect = byId('campaignFormObjectSelect');
         const headlineSelect = byId('campaignHeadlineSelect');
@@ -346,6 +362,8 @@ App.campaigns = (function () {
             segmentLabel: selectedOptionText(segmentSelect),
             emailTemplateId: safeText(emailTemplateSelect?.value),
             emailTemplateLabel: selectedOptionText(emailTemplateSelect),
+            emailId: safeText(emailSelect?.value),
+            emailLabel: selectedOptionText(emailSelect),
             landingPageId: safeText(landingSelect?.value),
             landingPageLabel: selectedOptionText(landingSelect),
             formObjectId: safeText(formObjectSelect?.value),

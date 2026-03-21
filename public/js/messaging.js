@@ -96,6 +96,22 @@ App.messaging = (function () {
   };
   const simpleContentConfigs = [
     {
+      key: 'emails',
+      pageId: 'messagingEmailsPage',
+      bulkPageId: 'messagingEmailsLibraryBulkEditPage',
+      endpoint: '/api/messaging/emails',
+      responseKey: 'emails',
+      field: 'email',
+      singularLabel: 'Email',
+      pluralLabel: 'Emails',
+      singularLower: 'email',
+      pluralLower: 'emails',
+      inputPlaceholder: 'Email body',
+      rows: 12,
+      itemStem: 'Email',
+      pageStem: 'messagingEmails',
+    },
+    {
       key: 'tweets',
       pageId: 'messagingTweetsPage',
       bulkPageId: 'messagingTweetsLibraryBulkEditPage',
@@ -4388,7 +4404,7 @@ App.messaging = (function () {
   }
 
   return {
-    manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingArticlesPage' },
+    manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingArticlesPage', pagePrefixes: ['messaging'] },
     init,
     openCategoriesLanding,
     openContentLanding,
