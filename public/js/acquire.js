@@ -724,6 +724,8 @@ App.acquire = (function () {
     if (!tbody) return;
     tbody.innerHTML = '';
     const rows = Array.isArray(result?.replies) ? result.replies : [];
+    const sourcePost = result?.post || null;
+    const sourceText = String(sourcePost && sourcePost.text || '').trim();
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
@@ -732,6 +734,25 @@ App.acquire = (function () {
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
+    }
+    if (sourceText) {
+      const sourceTr = document.createElement('tr');
+      sourceTr.className = 'bluesky-reply-source-row';
+      const sourceTd = document.createElement('td');
+      sourceTd.colSpan = 3;
+      const sourceWrap = document.createElement('div');
+      sourceWrap.className = 'bluesky-reply-source-card';
+      const sourceLabel = document.createElement('div');
+      sourceLabel.className = 'bluesky-reply-source-label';
+      sourceLabel.textContent = 'Replying To';
+      const sourceBody = document.createElement('div');
+      sourceBody.className = 'bluesky-reply-source-text';
+      sourceBody.textContent = sourceText;
+      sourceWrap.appendChild(sourceLabel);
+      sourceWrap.appendChild(sourceBody);
+      sourceTd.appendChild(sourceWrap);
+      sourceTr.appendChild(sourceTd);
+      tbody.appendChild(sourceTr);
     }
     rows.forEach((item) => {
       const tr = document.createElement('tr');

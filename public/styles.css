@@ -677,6 +677,32 @@ th {
   vertical-align: middle;
 }
 
+.bluesky-reply-source-row td {
+  padding: 0.55rem 0.65rem;
+}
+
+.bluesky-reply-source-card {
+  background: linear-gradient(180deg, #edf7ff 0%, #dff1ff 100%);
+  border: 1px solid #b9dfff;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.bluesky-reply-source-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1d4f91;
+  margin-bottom: 0.35rem;
+}
+
+.bluesky-reply-source-text {
+  font-weight: 700;
+  color: #123456;
+  white-space: pre-wrap;
+}
+
 .youtube-date-filter-wrap {
   display: flex;
   flex-direction: column;
