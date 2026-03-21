@@ -1176,15 +1176,37 @@
         </div>
         <p>Define the tactical rules and stylistic guides that replies should follow across channels.</p>
         <section class="youtube-miner-panel">
-          <div class="form-row">
-            <label for="youtubeMinerGuidelines">
-              Operational rules for reply drafting (style, constraints, do/don't)
-            </label>
+          <div class="form-row youtube-miner-category-config">
+            <div class="youtube-miner-category-header-row">
+              <div>
+                <label>Training Configuration: Rules/Guides</label>
+              </div>
+              <div class="youtube-miner-category-toolbar-right">
+                <button type="button" id="youtubeMinerAddRuleGuideBtn">Add Row</button>
+                <button type="button" id="youtubeMinerEditRuleGuidesCheckedBtn">Edit Selected</button>
+                <button type="button" id="youtubeMinerDeleteRuleGuidesCheckedBtn">Delete Selected</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="youtube-miner-category-table">
+                <thead>
+                  <tr>
+                    <th><input id="youtubeMinerRuleGuideSelectAll" type="checkbox" aria-label="Select all rule/guide rows" /></th>
+                    <th>Enabled</th>
+                    <th>Type</th>
+                    <th>Text</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="youtubeMinerRuleGuideTable"></tbody>
+              </table>
+            </div>
             <textarea
               id="youtubeMinerGuidelines"
               name="response_guidelines"
               form="youtubeCommentMinerForm"
               rows="10"
+              class="hidden"
               placeholder="- Never reuse the exact same reply text across comments&#10;- Always anchor response to the specific comment text&#10;- Ask one useful follow-up question max&#10;- Avoid generic coaching templates"
             ></textarea>
           </div>
