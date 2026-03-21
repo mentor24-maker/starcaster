@@ -45,6 +45,11 @@ App.youtube = (function () {
   var YT_ACTIVE_VIDEO_KEY = 'yt_active_video_v1';
   var YT_MINER_FEEDBACK_KEY_PREFIX = 'yt_miner_feedback:';
   var youtubeMinerContextSaveTimer = null;
+  var youtubeMinerConfigSaveTimers = {
+    category: null,
+    attribute: null,
+    approach: null,
+  };
   var youtubeMinerContextSaving = false;
   var youtubeResearchLastResult = null;
   var youtubeResearchMessagingCache = null;
@@ -933,10 +938,10 @@ App.youtube = (function () {
 
   async function loadPersistedYoutubeMinerResponseContext() {
     try {
-      var res = await api('/api/settings/youtube-miner-context', { method: 'GET' });
+      var res = await api('/api/settings/training/context', { method: 'GET' });
       return {
-        context: safeText(res?.youtube_response_context || res?.data?.youtube_response_context || ''),
-        guidelines: safeText(res?.youtube_response_guidelines || res?.data?.youtube_response_guidelines || ''),
+        context: safeText(res?.training_context || res?.data?.training_context || res?.youtube_response_context || res?.data?.youtube_response_context || ''),
+        guidelines: safeText(res?.training_guidelines || res?.data?.training_guidelines || res?.youtube_response_guidelines || res?.data?.youtube_response_guidelines || ''),
       };
     } catch (_) {
       return { context: '', guidelines: '' };
@@ -944,11 +949,36 @@ App.youtube = (function () {
   }
 
   async function savePersistedYoutubeMinerResponseContext(contextValue, guidelinesValue) {
-    return api('/api/settings/youtube-miner-context', {
+    return api('/api/settings/training/context', {
       method: 'POST',
       body: JSON.stringify({
-        youtube_response_context: safeText(contextValue || ''),
-        youtube_response_guidelines: safeText(guidelinesValue || ''),
+        training_context: safeText(contextValue || ''),
+        training_guidelines: safeText(guidelinesValue || ''),
+      }),
+    });
+  }
+
+  function persistedYoutubeMinerConfigPath(kind) {
+    if (kind === 'attribute') return '/api/settings/training/attributes';
+    if (kind === 'approach') return '/api/settings/training/approaches';
+    return '/api/settings/training/categories';
+  }
+
+  async function loadPersistedYoutubeMinerConfig(kind) {
+    try {
+      var res = await api(persistedYoutubeMinerConfigPath(kind), { method: 'GET' });
+      var items = Array.isArray(res?.items) ? res.items : (Array.isArray(res?.data?.items) ? res.data.items : []);
+      return normalizeYoutubeMinerRows(kind, items);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async function savePersistedYoutubeMinerConfig(kind, rows) {
+    return api(persistedYoutubeMinerConfigPath(kind), {
+      method: 'POST',
+      body: JSON.stringify({
+        items: normalizeYoutubeMinerRows(kind, rows),
       }),
     });
   }
@@ -968,6 +998,18 @@ App.youtube = (function () {
         youtubeMinerContextSaving = false;
       }
     }, 700);
+  }
+
+  function schedulePersistYoutubeMinerConfig(kind, rows) {
+    if (youtubeMinerConfigSaveTimers[kind]) clearTimeout(youtubeMinerConfigSaveTimers[kind]);
+    var nextRows = normalizeYoutubeMinerRows(kind, rows);
+    youtubeMinerConfigSaveTimers[kind] = setTimeout(async function() {
+      try {
+        await savePersistedYoutubeMinerConfig(kind, nextRows);
+      } catch (err) {
+        notify(err.message || ('Could not save shared ' + kind + ' training config'), true);
+      }
+    }, 500);
   }
 
   function makeYoutubeRteToolbar(editorEl) {
@@ -1149,6 +1191,7 @@ App.youtube = (function () {
         syncYoutubeMinerRowsFromEditingDom(kind);
         editingIds.delete(rowId);
         saveYoutubeMinerConfig(kind, bundle.getRows());
+        schedulePersistYoutubeMinerConfig(kind, bundle.getRows());
         renderYoutubeMinerConfig(kind);
       });
       actionTd.appendChild(editBtn);
@@ -1176,6 +1219,7 @@ App.youtube = (function () {
         selectedIds.delete(rowId);
         editingIds.delete(rowId);
         saveYoutubeMinerConfig(kind, nextRows);
+        schedulePersistYoutubeMinerConfig(kind, nextRows);
         renderYoutubeMinerConfig(kind);
       });
       actionTd.appendChild(deleteBtn);
@@ -1216,6 +1260,7 @@ App.youtube = (function () {
         editing.add(id);
         selected.add(id);
         saveYoutubeMinerConfig(kind, rows);
+        schedulePersistYoutubeMinerConfig(kind, rows);
         renderYoutubeMinerConfig(kind);
       });
     }
@@ -1267,6 +1312,7 @@ App.youtube = (function () {
         var editing = bundle.getEditing();
         bundle.setEditing(new Set(Array.from(editing).filter(function(id) { return !selectedSet.has(id); })));
         saveYoutubeMinerConfig(kind, rows);
+        schedulePersistYoutubeMinerConfig(kind, rows);
         renderYoutubeMinerConfig(kind);
       });
     }
@@ -4057,6 +4103,13 @@ App.youtube = (function () {
           youtubeMinerGuidelines.value = guidelinesValue;
           saveYoutubeMinerResponseGuidelines(guidelinesValue);
         }
+        if ((!contextValue && youtubeMinerResponseContext && safeText(youtubeMinerResponseContext.value))
+          || (!guidelinesValue && youtubeMinerGuidelines && safeText(youtubeMinerGuidelines.value))) {
+          schedulePersistYoutubeMinerResponseContext(
+            youtubeMinerResponseContext ? youtubeMinerResponseContext.value : '',
+            youtubeMinerGuidelines ? youtubeMinerGuidelines.value : ''
+          );
+        }
       });
       var persistContextGuidelines = function() {
         var contextValue = youtubeMinerResponseContext ? youtubeMinerResponseContext.value : '';
@@ -4078,6 +4131,19 @@ App.youtube = (function () {
     bindYoutubeMinerConfigEvents('category');
     bindYoutubeMinerConfigEvents('attribute');
     bindYoutubeMinerConfigEvents('approach');
+    ['category', 'attribute', 'approach'].forEach(function(kind) {
+      loadPersistedYoutubeMinerConfig(kind).then(function(serverRows) {
+        if (Array.isArray(serverRows) && serverRows.length) {
+          var appliedRows = applyRecommendedRows(kind, serverRows);
+          if (kind === 'category') saveYoutubeMinerCategoryConfig(appliedRows);
+          else saveYoutubeMinerConfig(kind, appliedRows);
+          getYoutubeMinerConfigBundle(kind).setRows(appliedRows);
+          renderYoutubeMinerConfig(kind);
+          return;
+        }
+        schedulePersistYoutubeMinerConfig(kind, getYoutubeMinerConfigBundle(kind).getRows());
+      });
+    });
     activeVideoSnapshot = loadActiveVideoSnapshot();
     if (activeVideoSnapshot && !currentDetailsRun) {
       currentDetailsRun = Object.assign({}, activeVideoSnapshot);

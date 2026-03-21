@@ -215,9 +215,9 @@ App.acquire = (function () {
 
     if (!trainingContext || !trainingGuidelines) {
       try {
-        const res = await api('/api/settings/youtube-miner-context', { method: 'GET' });
-        const loadedContext = String(res?.youtube_response_context || res?.data?.youtube_response_context || '').trim();
-        const loadedGuidelines = String(res?.youtube_response_guidelines || res?.data?.youtube_response_guidelines || '').trim();
+        const res = await api('/api/settings/training/context', { method: 'GET' });
+        const loadedContext = String(res?.training_context || res?.data?.training_context || res?.youtube_response_context || res?.data?.youtube_response_context || '').trim();
+        const loadedGuidelines = String(res?.training_guidelines || res?.data?.training_guidelines || res?.youtube_response_guidelines || res?.data?.youtube_response_guidelines || '').trim();
         if (!trainingContext && loadedContext) trainingContext = loadedContext;
         if (!trainingGuidelines && loadedGuidelines) trainingGuidelines = loadedGuidelines;
         if (trainingContextInput && !String(trainingContextInput.value || '').trim() && loadedContext) trainingContextInput.value = loadedContext;

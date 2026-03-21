@@ -41,6 +41,12 @@ const {
   getYoutubeMinerPromptConfig,
   saveYoutubeMinerPromptConfig,
 } = require('../lib/profileStore');
+const {
+  getTrainingPromptConfig,
+  saveTrainingPromptConfig,
+  listTrainingItems,
+  saveTrainingItems,
+} = require('../lib/trainingStore');
 const config = require('../lib/config');
 
 function safeText(value) {
@@ -300,7 +306,7 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/settings/youtube-miner-context' && method === 'GET') {
-    const promptCfg = await getYoutubeMinerPromptConfig(req.authUser?.id || req.authUser?.email || '');
+    const promptCfg = await getTrainingPromptConfig(req.authUser?.id || req.authUser?.email || '');
     return sendOk(
       res,
       200,
@@ -311,13 +317,58 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/settings/youtube-miner-context' && method === 'POST') {
     const body = await parseJsonBody(req);
-    const result = await saveYoutubeMinerPromptConfig(
+    const result = await saveTrainingPromptConfig(
       safeText(body?.youtube_response_context || body?.response_context),
       safeText(body?.youtube_response_guidelines || body?.response_guidelines),
       req.authUser?.id || req.authUser?.email || ''
     );
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/settings/training/context' && method === 'GET') {
+    const promptCfg = await getTrainingPromptConfig(req.authUser?.id || req.authUser?.email || '');
+    const payload = {
+      training_context: promptCfg.context,
+      training_guidelines: promptCfg.guidelines,
+      youtube_response_context: promptCfg.context,
+      youtube_response_guidelines: promptCfg.guidelines,
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/settings/training/context' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await saveTrainingPromptConfig(
+      safeText(body?.training_context || body?.youtube_response_context || body?.response_context),
+      safeText(body?.training_guidelines || body?.youtube_response_guidelines || body?.response_guidelines),
+      req.authUser?.id || req.authUser?.email || ''
+    );
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const payload = {
+      training_context: result.data?.youtubeResponseContext || '',
+      training_guidelines: result.data?.youtubeResponseGuidelines || '',
+      youtube_response_context: result.data?.youtubeResponseContext || '',
+      youtube_response_guidelines: result.data?.youtubeResponseGuidelines || '',
+      updatedAt: result.data?.updatedAt || '',
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  const trainingItemsMatch = pathname.match(/^\/api\/settings\/training\/(categories|attributes|approaches)$/);
+  if (trainingItemsMatch && method === 'GET') {
+    const kind = trainingItemsMatch[1];
+    const result = await listTrainingItems(kind, req.authUser?.id || req.authUser?.email || '');
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, { items: result.data || [] }, { items: result.data || [] }), true;
+  }
+
+  if (trainingItemsMatch && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const kind = trainingItemsMatch[1];
+    const result = await saveTrainingItems(kind, Array.isArray(body?.items) ? body.items : [], req.authUser?.id || req.authUser?.email || '');
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, { items: result.data || [] }, { items: result.data || [] }), true;
   }
 
   if (pathname === '/api/settings/email-senders' && method === 'GET') {
