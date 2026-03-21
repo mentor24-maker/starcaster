@@ -452,6 +452,19 @@ h2 {
   height: 100%;
 }
 
+.acquire-workbench-form {
+  padding: 0.35rem 0.2rem 0.2rem;
+}
+
+.acquire-workbench-form .form-row,
+.acquire-workbench-form .grid-form {
+  margin-bottom: 0.9rem;
+}
+
+.acquire-workbench-compact-grid {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 1100px) {
   .acquire-workbench-layout {
     grid-template-columns: 1fr;
