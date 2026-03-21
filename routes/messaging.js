@@ -56,6 +56,12 @@ const {
   deleteMessagingTweet
 } = require('../lib/messagingTweetsStore');
 const {
+  listMessagingEmails,
+  createMessagingEmail,
+  updateMessagingEmail,
+  deleteMessagingEmail,
+} = require('../lib/messagingEmailsStore');
+const {
   listMessagingHashtags,
   createMessagingHashtag,
   createMessagingHashtags,
@@ -584,6 +590,17 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { ebook: result.data }), true;
   }
+
+  if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
+    path: '/api/messaging/emails',
+    field: 'email',
+    singularKey: 'email',
+    pluralKey: 'emails',
+    listFn: listMessagingEmails,
+    createFn: createMessagingEmail,
+    updateFn: updateMessagingEmail,
+    deleteFn: deleteMessagingEmail,
+  })) return true;
 
   if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
     path: '/api/messaging/tweets',
