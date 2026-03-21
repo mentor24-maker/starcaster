@@ -1901,11 +1901,38 @@
         <div class="page-heading-row">
           <h2>Acquire: BlueSky</h2>
           <div class="page-heading-actions">
+            <button id="blueskyPostingToggleBtn" type="button">Posting Operator</button>
             <button id="blueskyDiscoveryStatusBtn" type="button">Check BlueSky Connection</button>
             <button id="blueskyRefreshBtn" type="button">Refresh</button>
           </div>
         </div>
         <p>Discover BlueSky posts, draft reply candidates, and stage posting workflows from a page that mirrors the Reddit acquisition flow.</p>
+
+        <div id="blueskyPostingPanel" class="settings-card hidden" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Posting Operator</h3>
+          </div>
+          <p style="margin-top: 0;">Check auth readiness now, then use this section for dry-run and live-post testing as the BlueSky posting workflow comes online.</p>
+          <form id="blueskyPostingForm" class="stack-form labeled-form" style="max-width: 980px;">
+            <div class="form-row">
+              <label for="blueskyPostingTarget">Post URL</label>
+              <input id="blueskyPostingTarget" name="target" placeholder="https://bsky.app/profile/.../post/..." />
+            </div>
+            <div class="form-row">
+              <label for="blueskyPostingReplyText">Approved Reply</label>
+              <textarea id="blueskyPostingReplyText" name="reply_text" rows="4" placeholder="Paste an approved BlueSky reply here"></textarea>
+            </div>
+            <div class="page-heading-actions" style="justify-content: flex-start;">
+              <button type="button" id="blueskyPostingStatusBtn">Check Posting Setup</button>
+              <button type="submit">Dry Run Posting Operator</button>
+            </div>
+            <div id="blueskyPostingStatus" class="youtube-comments-schedule-summary">BlueSky posting operator is idle.</div>
+          </form>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Posting Diagnostics</summary>
+            <pre id="blueskyPostingPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
 
         <div class="acquire-workbench-layout" style="margin-bottom: 1rem;">
           <div class="settings-card acquire-workbench-pane form-container-spacious">
@@ -2071,31 +2098,6 @@
           </details>
         </div>
 
-        <div class="settings-card">
-          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
-            <h3 style="margin: 0;">Posting Operator</h3>
-          </div>
-          <p style="margin-top: 0;">Check auth readiness now, then use this section for dry-run and live-post testing as the BlueSky posting workflow comes online.</p>
-          <form id="blueskyPostingForm" class="stack-form labeled-form" style="max-width: 980px;">
-            <div class="form-row">
-              <label for="blueskyPostingTarget">Post URL</label>
-              <input id="blueskyPostingTarget" name="target" placeholder="https://bsky.app/profile/.../post/..." />
-            </div>
-            <div class="form-row">
-              <label for="blueskyPostingReplyText">Approved Reply</label>
-              <textarea id="blueskyPostingReplyText" name="reply_text" rows="4" placeholder="Paste an approved BlueSky reply here"></textarea>
-            </div>
-            <div class="page-heading-actions" style="justify-content: flex-start;">
-              <button type="button" id="blueskyPostingStatusBtn">Check Posting Setup</button>
-              <button type="submit">Dry Run Posting Operator</button>
-            </div>
-            <div id="blueskyPostingStatus" class="youtube-comments-schedule-summary">BlueSky posting operator is idle.</div>
-          </form>
-          <details style="margin-top: 0.75rem;">
-            <summary style="cursor: pointer;">Show Posting Diagnostics</summary>
-            <pre id="blueskyPostingPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
-          </details>
-        </div>
       </section>
 
       <section id="acquireQuoraPage" class="app-page hidden">

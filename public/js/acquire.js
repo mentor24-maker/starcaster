@@ -1310,6 +1310,22 @@ App.acquire = (function () {
       });
     }
     const blueskyPostingStatusBtn = document.getElementById('blueskyPostingStatusBtn');
+    const blueskyPostingToggleBtn = document.getElementById('blueskyPostingToggleBtn');
+    const blueskyPostingPanel = document.getElementById('blueskyPostingPanel');
+    const syncBlueskyPostingPanel = () => {
+      const isHidden = Boolean(blueskyPostingPanel && blueskyPostingPanel.classList.contains('hidden'));
+      if (blueskyPostingToggleBtn) blueskyPostingToggleBtn.textContent = isHidden ? 'Posting Operator' : 'Hide Posting Operator';
+    };
+    if (blueskyPostingToggleBtn && blueskyPostingPanel) {
+      syncBlueskyPostingPanel();
+      blueskyPostingToggleBtn.addEventListener('click', () => {
+        blueskyPostingPanel.classList.toggle('hidden');
+        syncBlueskyPostingPanel();
+        if (!blueskyPostingPanel.classList.contains('hidden')) {
+          blueskyPostingPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
     if (blueskyPostingStatusBtn) {
       blueskyPostingStatusBtn.addEventListener('click', async () => {
         try {
