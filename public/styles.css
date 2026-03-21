@@ -626,6 +626,24 @@ th {
   margin: 0;
 }
 
+.bluesky-discovery-quality-select {
+  min-width: 88px;
+}
+
+#blueskyDiscoveryBulkActions {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+#blueskyDiscoveryBulkActions label {
+  margin: 0;
+}
+
+.bluesky-discovery-feedback-pop textarea {
+  min-height: 140px;
+}
+
 .youtube-date-filter-wrap {
   display: flex;
   flex-direction: column;
