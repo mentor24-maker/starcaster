@@ -2037,10 +2037,23 @@
           <div class="page-heading-row" style="margin-bottom: 0.75rem;">
             <h3 style="margin: 0;">Discovery Results</h3>
           </div>
+          <div id="blueskyDiscoveryBulkActions" class="assets-bulk-action-row" style="margin-bottom: 0.75rem;">
+            <label for="blueskyDiscoveryBulkQuality" style="font-weight: 700;">Bulk Quality</label>
+            <select id="blueskyDiscoveryBulkQuality" aria-label="Bulk quality for selected BlueSky rows">
+              <option value="">Set quality...</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+            <button type="button" id="blueskyDiscoveryApplyBulkQualityBtn" class="tiny-btn">Apply To Selected</button>
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
+                  <th><input id="blueskyDiscoverySelectAllVisible" type="checkbox" aria-label="Select all visible BlueSky discovery rows" /></th>
                   <th>Score</th>
                   <th>Author</th>
                   <th>Post</th>
@@ -2048,6 +2061,7 @@
                   <th>Replies</th>
                   <th>Reposts</th>
                   <th>Created</th>
+                  <th>Quality</th>
                   <th>Why</th>
                   <th>Actions</th>
                 </tr>

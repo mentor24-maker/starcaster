@@ -9,6 +9,82 @@ App.acquire = (function () {
   let redditHarvestProgressTimer = null;
   let lastRedditDiscoveryResult = null;
   let lastBlueskyDiscoveryResult = null;
+  let blueskyDiscoverySelectedPostUrls = new Set();
+  const BLUESKY_DISCOVERY_FEEDBACK_KEY_PREFIX = 'alphire:bluesky:discovery-feedback:';
+
+  function blueskyDiscoveryFeedbackKey(itemOrUrl) {
+    const postUrl = typeof itemOrUrl === 'string'
+      ? itemOrUrl
+      : String(itemOrUrl && itemOrUrl.post_url || '').trim();
+    return postUrl ? `${BLUESKY_DISCOVERY_FEEDBACK_KEY_PREFIX}${postUrl}` : '';
+  }
+
+  function readBlueskyDiscoveryFeedback(itemOrUrl) {
+    const key = blueskyDiscoveryFeedbackKey(itemOrUrl);
+    if (!key) return {};
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) || {} : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveBlueskyDiscoveryFeedback(itemOrUrl, patch) {
+    const key = blueskyDiscoveryFeedbackKey(itemOrUrl);
+    if (!key) return {};
+    const current = readBlueskyDiscoveryFeedback(itemOrUrl);
+    const merged = { ...current, ...(patch || {}) };
+    if (!String(merged.quality || '').trim()) delete merged.quality;
+    if (!String(merged.note || '').trim()) delete merged.note;
+    if (!String(merged.updated_at || '').trim()) merged.updated_at = new Date().toISOString();
+    if (!Object.keys(merged).length || (Object.keys(merged).length === 1 && merged.updated_at)) {
+      localStorage.removeItem(key);
+      return {};
+    }
+    localStorage.setItem(key, JSON.stringify(merged));
+    return merged;
+  }
+
+  function blueskyDiscoveryHasReview(feedback) {
+    const quality = Number(feedback && feedback.quality || 0);
+    const note = String(feedback && feedback.note || '').trim();
+    return quality >= 1 || !!note;
+  }
+
+  function makeQualityOptions(selectedValue) {
+    const values = ['', '1', '2', '3', '4', '5'];
+    return values.map((value) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value || 'Unrated';
+      option.selected = String(selectedValue || '') === value;
+      return option;
+    });
+  }
+
+  function renderBlueskyDiscoveryBulkActions() {
+    const rows = Array.isArray(lastBlueskyDiscoveryResult?.candidates) ? lastBlueskyDiscoveryResult.candidates : [];
+    const selectedCount = rows.reduce((count, item) => {
+      const postUrl = String(item && item.post_url || '').trim();
+      return count + (postUrl && blueskyDiscoverySelectedPostUrls.has(postUrl) ? 1 : 0);
+    }, 0);
+    const wrap = document.getElementById('blueskyDiscoveryBulkActions');
+    const applyBtn = document.getElementById('blueskyDiscoveryApplyBulkQualityBtn');
+    const bulkSelect = document.getElementById('blueskyDiscoveryBulkQuality');
+    const selectAll = document.getElementById('blueskyDiscoverySelectAllVisible');
+    if (wrap) wrap.classList.toggle('hidden', !rows.length);
+    if (applyBtn) {
+      applyBtn.disabled = !selectedCount;
+      applyBtn.textContent = selectedCount ? `Apply To Selected (${selectedCount})` : 'Apply To Selected';
+    }
+    if (bulkSelect) bulkSelect.disabled = !selectedCount;
+    if (selectAll) {
+      const visibleUrls = rows.map((item) => String(item && item.post_url || '').trim()).filter(Boolean);
+      selectAll.checked = !!visibleUrls.length && visibleUrls.every((url) => blueskyDiscoverySelectedPostUrls.has(url));
+      selectAll.indeterminate = !selectAll.checked && visibleUrls.some((url) => blueskyDiscoverySelectedPostUrls.has(url));
+    }
+  }
 
   // -------------------------------------------------------------------------
   // Stage helpers
@@ -424,7 +500,7 @@ App.acquire = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 9;
+      td.colSpan = 11;
       td.textContent = 'No BlueSky post candidates loaded yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -436,6 +512,7 @@ App.acquire = (function () {
         replyTr.appendChild(replyTd);
         repliesTbody.appendChild(replyTr);
       }
+      renderBlueskyDiscoveryBulkActions();
       return;
     }
 
@@ -449,7 +526,26 @@ App.acquire = (function () {
     };
 
     rows.forEach((item) => {
+      const postUrl = String(item && item.post_url || '').trim();
+      const feedback = readBlueskyDiscoveryFeedback(item);
       const tr = document.createElement('tr');
+      if (blueskyDiscoveryHasReview(feedback)) tr.classList.add('youtube-miner-row-reviewed');
+
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = postUrl ? blueskyDiscoverySelectedPostUrls.has(postUrl) : false;
+      checkbox.disabled = !postUrl;
+      checkbox.setAttribute('aria-label', 'Select BlueSky post ' + (postUrl || ''));
+      checkbox.addEventListener('change', () => {
+        if (!postUrl) return;
+        if (checkbox.checked) blueskyDiscoverySelectedPostUrls.add(postUrl);
+        else blueskyDiscoverySelectedPostUrls.delete(postUrl);
+        renderBlueskyDiscoveryBulkActions();
+      });
+      selectTd.appendChild(checkbox);
+      tr.appendChild(selectTd);
+
       const cols = [
         String(item.discovery_score != null ? item.discovery_score : item.reply_opportunity || '-'),
         String(item.author_handle || item.author_display_name || '-'),
@@ -458,7 +554,6 @@ App.acquire = (function () {
         String(item.reply_count != null ? item.reply_count : '-'),
         String(item.repost_count != null ? item.repost_count : '-'),
         String(item.created_at ? new Date(item.created_at).toLocaleString() : '-'),
-        String(item.why_relevant || '-'),
       ];
       cols.forEach((value, idx) => {
         const td = document.createElement('td');
@@ -474,6 +569,22 @@ App.acquire = (function () {
         }
         tr.appendChild(td);
       });
+
+      const qualityTd = document.createElement('td');
+      const qualitySelect = document.createElement('select');
+      qualitySelect.className = 'bluesky-discovery-quality-select';
+      makeQualityOptions(feedback.quality).forEach((option) => qualitySelect.appendChild(option));
+      qualitySelect.addEventListener('change', () => {
+        const updated = saveBlueskyDiscoveryFeedback(item, { quality: String(qualitySelect.value || '').trim(), updated_at: new Date().toISOString() });
+        tr.classList.toggle('youtube-miner-row-reviewed', blueskyDiscoveryHasReview(updated));
+        feedbackBtn.classList.toggle('has-feedback', blueskyDiscoveryHasReview(updated));
+      });
+      qualityTd.appendChild(qualitySelect);
+      tr.appendChild(qualityTd);
+
+      const whyTd = document.createElement('td');
+      whyTd.textContent = String(item.why_relevant || '-');
+      tr.appendChild(whyTd);
 
       const actionsTd = document.createElement('td');
       const copyBtn = App.makeIconButton('copy', 'Copy Post URL Into Forms', () => {
@@ -499,8 +610,77 @@ App.acquire = (function () {
           generateBtn.disabled = false;
         }
       }, { primary: true, marginLeft: '0.35rem' });
+      const feedbackWrap = document.createElement('div');
+      feedbackWrap.className = 'youtube-miner-feedback-wrap';
+      feedbackWrap.style.display = 'inline-flex';
+      feedbackWrap.style.marginLeft = '0.35rem';
+      const feedbackBtn = App.makeIconButton('edit', 'Review Training Feedback', () => {
+        document.querySelectorAll('.bluesky-discovery-feedback-pop').forEach((node) => {
+          if (node !== feedbackPop) node.classList.add('hidden');
+        });
+        feedbackPop.classList.toggle('hidden');
+      }, { primary: true });
+      feedbackBtn.classList.add('youtube-miner-feedback-icon');
+      if (blueskyDiscoveryHasReview(feedback)) feedbackBtn.classList.add('has-feedback');
+      const feedbackPop = document.createElement('div');
+      feedbackPop.className = 'youtube-miner-feedback-pop bluesky-discovery-feedback-pop hidden';
+      const title = document.createElement('h4');
+      title.textContent = 'BlueSky Training Review';
+      feedbackPop.appendChild(title);
+      const excerpt = document.createElement('p');
+      excerpt.className = 'muted';
+      excerpt.style.margin = '0 0 0.75rem 0';
+      excerpt.textContent = String(item.text || item.post_url || '').slice(0, 280);
+      feedbackPop.appendChild(excerpt);
+      const popQualityRow = document.createElement('div');
+      popQualityRow.className = 'form-row';
+      const popQualityLabel = document.createElement('label');
+      popQualityLabel.textContent = 'Quality (1-5)';
+      const popQualitySelect = document.createElement('select');
+      makeQualityOptions(feedback.quality).forEach((option) => popQualitySelect.appendChild(option));
+      popQualityRow.appendChild(popQualityLabel);
+      popQualityRow.appendChild(popQualitySelect);
+      feedbackPop.appendChild(popQualityRow);
+      const noteRow = document.createElement('div');
+      noteRow.className = 'form-row';
+      const noteLabel = document.createElement('label');
+      noteLabel.textContent = 'Training Notes';
+      const noteInput = document.createElement('textarea');
+      noteInput.rows = 6;
+      noteInput.placeholder = 'What makes this post high or low quality for future BlueSky engagement?';
+      noteInput.value = String(feedback.note || '');
+      noteRow.appendChild(noteLabel);
+      noteRow.appendChild(noteInput);
+      feedbackPop.appendChild(noteRow);
+      const actionRow = document.createElement('div');
+      actionRow.className = 'youtube-miner-feedback-actions';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = 'Close';
+      cancelBtn.addEventListener('click', () => feedbackPop.classList.add('hidden'));
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.textContent = 'Save Review';
+      saveBtn.addEventListener('click', () => {
+        const updated = saveBlueskyDiscoveryFeedback(item, {
+          quality: String(popQualitySelect.value || '').trim(),
+          note: String(noteInput.value || '').trim(),
+          updated_at: new Date().toISOString(),
+        });
+        qualitySelect.value = String(updated.quality || '');
+        tr.classList.toggle('youtube-miner-row-reviewed', blueskyDiscoveryHasReview(updated));
+        feedbackBtn.classList.toggle('has-feedback', blueskyDiscoveryHasReview(updated));
+        feedbackPop.classList.add('hidden');
+        notify('Saved BlueSky training review');
+      });
+      actionRow.appendChild(cancelBtn);
+      actionRow.appendChild(saveBtn);
+      feedbackPop.appendChild(actionRow);
+      feedbackWrap.appendChild(feedbackBtn);
+      feedbackWrap.appendChild(feedbackPop);
       actionsTd.appendChild(copyBtn);
       actionsTd.appendChild(generateBtn);
+      actionsTd.appendChild(feedbackWrap);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -531,6 +711,7 @@ App.acquire = (function () {
         });
       }
     }
+    renderBlueskyDiscoveryBulkActions();
   }
 
   function renderBlueskyReplyCandidates(result) {
@@ -1315,6 +1496,40 @@ App.acquire = (function () {
         if (replyTarget) replyTarget.value = value;
         if (postingTarget) postingTarget.value = value;
         notify('Copied discovery target into BlueSky reply and posting forms');
+      });
+    }
+    const blueskyDiscoverySelectAllVisible = document.getElementById('blueskyDiscoverySelectAllVisible');
+    if (blueskyDiscoverySelectAllVisible) {
+      blueskyDiscoverySelectAllVisible.addEventListener('change', () => {
+        const rows = Array.isArray(lastBlueskyDiscoveryResult?.candidates) ? lastBlueskyDiscoveryResult.candidates : [];
+        rows.forEach((item) => {
+          const postUrl = String(item && item.post_url || '').trim();
+          if (!postUrl) return;
+          if (blueskyDiscoverySelectAllVisible.checked) blueskyDiscoverySelectedPostUrls.add(postUrl);
+          else blueskyDiscoverySelectedPostUrls.delete(postUrl);
+        });
+        renderBlueskyDiscoveryTable(lastBlueskyDiscoveryResult);
+      });
+    }
+    const blueskyDiscoveryApplyBulkQualityBtn = document.getElementById('blueskyDiscoveryApplyBulkQualityBtn');
+    if (blueskyDiscoveryApplyBulkQualityBtn) {
+      blueskyDiscoveryApplyBulkQualityBtn.addEventListener('click', () => {
+        const bulkSelect = document.getElementById('blueskyDiscoveryBulkQuality');
+        const quality = String(bulkSelect && bulkSelect.value || '').trim();
+        if (!quality) {
+          notify('Choose a bulk quality first', true);
+          return;
+        }
+        const rows = Array.isArray(lastBlueskyDiscoveryResult?.candidates) ? lastBlueskyDiscoveryResult.candidates : [];
+        let updatedCount = 0;
+        rows.forEach((item) => {
+          const postUrl = String(item && item.post_url || '').trim();
+          if (!postUrl || !blueskyDiscoverySelectedPostUrls.has(postUrl)) return;
+          saveBlueskyDiscoveryFeedback(item, { quality, updated_at: new Date().toISOString() });
+          updatedCount += 1;
+        });
+        renderBlueskyDiscoveryTable(lastBlueskyDiscoveryResult);
+        notify(updatedCount ? `Updated quality for ${updatedCount} BlueSky post${updatedCount === 1 ? '' : 's'}` : 'No BlueSky posts selected', !updatedCount);
       });
     }
     const blueskyReplyCandidatesForm = document.getElementById('blueskyReplyCandidatesForm');
