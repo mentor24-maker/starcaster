@@ -753,10 +753,9 @@ App.acquire = (function () {
       const title = document.createElement('h4');
       title.textContent = 'Training Feedback';
       feedbackPop.appendChild(title);
-      const excerpt = document.createElement('p');
-      excerpt.className = 'muted';
-      excerpt.style.margin = '0 0 0.75rem 0';
-      excerpt.textContent = String(item.text || item.post_url || '').slice(0, 280);
+      const excerpt = document.createElement('div');
+      excerpt.className = 'bluesky-training-feedback-comment';
+      excerpt.textContent = String(item.text || item.post_url || '');
       feedbackPop.appendChild(excerpt);
 
       const popQualityRow = document.createElement('div');
