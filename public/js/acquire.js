@@ -22,35 +22,61 @@ App.acquire = (function () {
 
   function readBlueskyDiscoveryFeedback(itemOrUrl) {
     const key = blueskyDiscoveryFeedbackKey(itemOrUrl);
-    if (!key) return {};
+    const empty = {
+      quality: 0,
+      categories: [],
+      category_explain: '',
+      attributes: [],
+      attributes_explain: '',
+      approaches: [],
+      approaches_explain: '',
+      note: '',
+      suggested_response: '',
+      updated_at: '',
+    };
+    if (!key) return empty;
     try {
       const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) || {} : {};
+      if (!raw) return empty;
+      const parsed = JSON.parse(raw) || {};
+      return {
+        quality: Number(parsed.quality || 0),
+        categories: toList(parsed.categories).map((v) => String(v || '').trim()).filter(Boolean),
+        category_explain: String(parsed.category_explain || '').trim(),
+        attributes: toList(parsed.attributes).map((v) => String(v || '').trim()).filter(Boolean),
+        attributes_explain: String(parsed.attributes_explain || '').trim(),
+        approaches: toList(parsed.approaches).map((v) => String(v || '').trim()).filter(Boolean),
+        approaches_explain: String(parsed.approaches_explain || '').trim(),
+        note: String(parsed.note || ''),
+        suggested_response: String(parsed.suggested_response || ''),
+        updated_at: String(parsed.updated_at || ''),
+      };
     } catch (_) {
-      return {};
+      return empty;
     }
   }
 
   function saveBlueskyDiscoveryFeedback(itemOrUrl, patch) {
     const key = blueskyDiscoveryFeedbackKey(itemOrUrl);
-    if (!key) return {};
+    if (!key) return readBlueskyDiscoveryFeedback(itemOrUrl);
     const current = readBlueskyDiscoveryFeedback(itemOrUrl);
-    const merged = { ...current, ...(patch || {}) };
-    if (!String(merged.quality || '').trim()) delete merged.quality;
-    if (!String(merged.note || '').trim()) delete merged.note;
-    if (!String(merged.updated_at || '').trim()) merged.updated_at = new Date().toISOString();
-    if (!Object.keys(merged).length || (Object.keys(merged).length === 1 && merged.updated_at)) {
-      localStorage.removeItem(key);
-      return {};
-    }
+    const merged = { ...current, ...(patch || {}), updated_at: new Date().toISOString() };
     localStorage.setItem(key, JSON.stringify(merged));
     return merged;
   }
 
   function blueskyDiscoveryHasReview(feedback) {
-    const quality = Number(feedback && feedback.quality || 0);
-    const note = String(feedback && feedback.note || '').trim();
-    return quality >= 1 || !!note;
+    return Boolean(
+      Number(feedback && feedback.quality || 0) > 0
+      || toList(feedback && feedback.categories).length
+      || String(feedback && feedback.category_explain || '').trim()
+      || toList(feedback && feedback.attributes).length
+      || String(feedback && feedback.attributes_explain || '').trim()
+      || toList(feedback && feedback.approaches).length
+      || String(feedback && feedback.approaches_explain || '').trim()
+      || String(feedback && feedback.note || '').trim()
+      || String(feedback && feedback.suggested_response || '').trim()
+    );
   }
 
   function makeQualityOptions(selectedValue) {
@@ -582,6 +608,9 @@ App.acquire = (function () {
     lastBlueskyDiscoveryResult = result || null;
     const rows = Array.isArray(result?.candidates) ? result.candidates : [];
     const threadReplies = Array.isArray(result?.thread_replies) ? result.thread_replies : [];
+    const categoryNames = getTrainingConfigNames('youtubeMinerCategoryConfigTable');
+    const attributeNames = getTrainingConfigNames('youtubeMinerAttributeConfigTable');
+    const approachNames = getTrainingConfigNames('youtubeMinerApproachConfigTable');
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
@@ -646,13 +675,20 @@ App.acquire = (function () {
         if (idx === 3 || idx === 4 || idx === 5) td.className = 'bluesky-discovery-metric-cell';
         if (idx === 2 && item.post_url) {
           td.className = 'bluesky-discovery-post-cell';
+          const previewWrap = document.createElement('div');
+          previewWrap.className = 'bluesky-discovery-post-preview-wrap';
           const a = document.createElement('a');
           a.href = item.post_url;
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
           a.textContent = value || '-';
           a.className = 'bluesky-discovery-post-link';
-          td.appendChild(a);
+          const previewPop = document.createElement('div');
+          previewPop.className = 'bluesky-discovery-post-preview';
+          previewPop.textContent = value || '-';
+          previewWrap.appendChild(a);
+          previewWrap.appendChild(previewPop);
+          td.appendChild(previewWrap);
         } else {
           td.textContent = value || '-';
         }
@@ -715,33 +751,118 @@ App.acquire = (function () {
       const feedbackPop = document.createElement('div');
       feedbackPop.className = 'youtube-miner-feedback-pop bluesky-discovery-feedback-pop hidden';
       const title = document.createElement('h4');
-      title.textContent = 'BlueSky Training Review';
+      title.textContent = 'Training Feedback';
       feedbackPop.appendChild(title);
       const excerpt = document.createElement('p');
       excerpt.className = 'muted';
       excerpt.style.margin = '0 0 0.75rem 0';
       excerpt.textContent = String(item.text || item.post_url || '').slice(0, 280);
       feedbackPop.appendChild(excerpt);
+
       const popQualityRow = document.createElement('div');
       popQualityRow.className = 'form-row';
       const popQualityLabel = document.createElement('label');
       popQualityLabel.textContent = 'Quality (1-5)';
       const popQualitySelect = document.createElement('select');
-      makeQualityOptions(feedback.quality).forEach((option) => popQualitySelect.appendChild(option));
+      popQualitySelect.innerHTML = '<option value="0">0 (unset)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>';
+      popQualitySelect.value = String(Number(feedback.quality || 0));
       popQualityRow.appendChild(popQualityLabel);
       popQualityRow.appendChild(popQualitySelect);
       feedbackPop.appendChild(popQualityRow);
+
+      const catRow = document.createElement('div');
+      catRow.className = 'form-row youtube-miner-feedback-factor-row';
+      const catLabel = document.createElement('label');
+      catLabel.textContent = 'Category (multi-select)';
+      const catInput = document.createElement('select');
+      catInput.multiple = true;
+      catInput.size = 5;
+      categoryNames.forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = feedback.categories.indexOf(name) !== -1;
+        catInput.appendChild(option);
+      });
+      const catExplain = document.createElement('input');
+      catExplain.type = 'text';
+      catExplain.placeholder = 'Explain';
+      catExplain.value = String(feedback.category_explain || '');
+      catRow.appendChild(catLabel);
+      catRow.appendChild(catInput);
+      catRow.appendChild(catExplain);
+      feedbackPop.appendChild(catRow);
+
+      const attrRow = document.createElement('div');
+      attrRow.className = 'form-row youtube-miner-feedback-factor-row';
+      const attrLabel = document.createElement('label');
+      attrLabel.textContent = 'Attributes (multi-select)';
+      const attrInput = document.createElement('select');
+      attrInput.multiple = true;
+      attrInput.size = 5;
+      attributeNames.forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = feedback.attributes.indexOf(name) !== -1;
+        attrInput.appendChild(option);
+      });
+      const attrExplain = document.createElement('input');
+      attrExplain.type = 'text';
+      attrExplain.placeholder = 'Explain';
+      attrExplain.value = String(feedback.attributes_explain || '');
+      attrRow.appendChild(attrLabel);
+      attrRow.appendChild(attrInput);
+      attrRow.appendChild(attrExplain);
+      feedbackPop.appendChild(attrRow);
+
+      const approachRow = document.createElement('div');
+      approachRow.className = 'form-row youtube-miner-feedback-factor-row';
+      const approachLabel = document.createElement('label');
+      approachLabel.textContent = 'Approach (multi-select)';
+      const approachInput = document.createElement('select');
+      approachInput.multiple = true;
+      approachInput.size = 5;
+      approachNames.forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = feedback.approaches.indexOf(name) !== -1;
+        approachInput.appendChild(option);
+      });
+      const approachExplain = document.createElement('input');
+      approachExplain.type = 'text';
+      approachExplain.placeholder = 'Explain';
+      approachExplain.value = String(feedback.approaches_explain || '');
+      approachRow.appendChild(approachLabel);
+      approachRow.appendChild(approachInput);
+      approachRow.appendChild(approachExplain);
+      feedbackPop.appendChild(approachRow);
+
       const noteRow = document.createElement('div');
       noteRow.className = 'form-row';
       const noteLabel = document.createElement('label');
-      noteLabel.textContent = 'Training Notes';
+      noteLabel.textContent = 'What do you like about this comment?';
       const noteInput = document.createElement('textarea');
-      noteInput.rows = 6;
-      noteInput.placeholder = 'What makes this post high or low quality for future BlueSky engagement?';
+      noteInput.rows = 8;
+      noteInput.placeholder = 'Explain what makes this comment valuable, what signals matter, and what reply style would fit.';
       noteInput.value = String(feedback.note || '');
       noteRow.appendChild(noteLabel);
       noteRow.appendChild(noteInput);
       feedbackPop.appendChild(noteRow);
+
+      const suggestedRow = document.createElement('div');
+      suggestedRow.className = 'form-row';
+      const suggestedLabel = document.createElement('label');
+      suggestedLabel.textContent = 'Suggested Response';
+      const suggestedInput = document.createElement('textarea');
+      suggestedInput.rows = 4;
+      suggestedInput.placeholder = 'Optional: write the exact style or sample response you would want here.';
+      suggestedInput.value = String(feedback.suggested_response || '');
+      suggestedRow.appendChild(suggestedLabel);
+      suggestedRow.appendChild(suggestedInput);
+      feedbackPop.appendChild(suggestedRow);
+
       const actionRow = document.createElement('div');
       actionRow.className = 'youtube-miner-feedback-actions';
       const cancelBtn = document.createElement('button');
@@ -750,18 +871,27 @@ App.acquire = (function () {
       cancelBtn.addEventListener('click', () => feedbackPop.classList.add('hidden'));
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
-      saveBtn.textContent = 'Save Review';
+      saveBtn.textContent = 'Save Feedback';
       saveBtn.addEventListener('click', () => {
+        const selectedCategories = Array.from(catInput.options || []).filter((option) => option.selected).map((option) => String(option.value || '').trim()).filter(Boolean);
+        const selectedAttributes = Array.from(attrInput.options || []).filter((option) => option.selected).map((option) => String(option.value || '').trim()).filter(Boolean);
+        const selectedApproaches = Array.from(approachInput.options || []).filter((option) => option.selected).map((option) => String(option.value || '').trim()).filter(Boolean);
         const updated = saveBlueskyDiscoveryFeedback(item, {
-          quality: String(popQualitySelect.value || '').trim(),
-          note: String(noteInput.value || '').trim(),
-          updated_at: new Date().toISOString(),
+          quality: Number(popQualitySelect.value || 0),
+          categories: selectedCategories,
+          category_explain: String(catExplain.value || ''),
+          attributes: selectedAttributes,
+          attributes_explain: String(attrExplain.value || ''),
+          approaches: selectedApproaches,
+          approaches_explain: String(approachExplain.value || ''),
+          note: String(noteInput.value || ''),
+          suggested_response: String(suggestedInput.value || ''),
         });
         qualitySelect.value = String(updated.quality || '');
         tr.classList.toggle('youtube-miner-row-reviewed', blueskyDiscoveryHasReview(updated));
         feedbackBtn.classList.toggle('has-feedback', blueskyDiscoveryHasReview(updated));
         feedbackPop.classList.add('hidden');
-        notify('Saved BlueSky training review');
+        notify('Saved BlueSky training feedback');
       });
       actionRow.appendChild(cancelBtn);
       actionRow.appendChild(saveBtn);
