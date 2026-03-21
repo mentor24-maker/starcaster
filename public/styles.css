@@ -644,6 +644,39 @@ th {
   min-height: 140px;
 }
 
+#blueskyDiscoveryResultsTable {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#blueskyDiscoveryResultsTable .bluesky-discovery-post-col,
+#blueskyDiscoveryResultsTable .bluesky-discovery-post-cell {
+  width: 24%;
+  max-width: 24%;
+}
+
+#blueskyDiscoveryResultsTable .bluesky-discovery-actions-col,
+#blueskyDiscoveryResultsTable .bluesky-discovery-actions-cell {
+  min-width: 168px;
+  width: 168px;
+  white-space: nowrap;
+}
+
+#blueskyDiscoveryResultsTable .bluesky-discovery-post-cell {
+  overflow: hidden;
+}
+
+#blueskyDiscoveryResultsTable .bluesky-discovery-post-link {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#blueskyDiscoveryResultsTable .bluesky-discovery-actions-cell > * {
+  vertical-align: middle;
+}
+
 .youtube-date-filter-wrap {
   display: flex;
   flex-direction: column;
