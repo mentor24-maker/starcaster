@@ -5828,3 +5828,19 @@ th {
     grid-template-columns: 1fr;
   }
 }
+.readonly-metric {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--line, #c9d7ea);
+  border-radius: 8px;
+  background: #f4f8fd;
+  font-weight: 700;
+}
+
+.field-help {
+  margin: 10px 0 0;
+  color: #50627a;
+  font-size: 0.95rem;
+}

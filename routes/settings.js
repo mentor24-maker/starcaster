@@ -44,6 +44,8 @@ const {
 const {
   getTrainingPromptConfig,
   saveTrainingPromptConfig,
+  getTrainingSettings,
+  saveTrainingSettings,
   listTrainingItems,
   saveTrainingItems,
   listTrainingRulesGuides,
@@ -355,6 +357,19 @@ async function handle(req, res, pathname, method) {
       updatedAt: result.data?.updatedAt || '',
     };
     return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/settings/training/settings' && method === 'GET') {
+    const result = await getTrainingSettings(req.authUser?.id || req.authUser?.email || '');
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/settings/training/settings' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await saveTrainingSettings(body || {}, req.authUser?.id || req.authUser?.email || '');
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   const trainingItemsMatch = pathname.match(/^\/api\/settings\/training\/(categories|attributes|approaches)$/);

@@ -1179,6 +1179,32 @@
           <div class="form-row youtube-miner-category-config">
             <div class="youtube-miner-category-header-row">
               <div>
+                <label>Reply Mix Targets</label>
+              </div>
+            </div>
+            <div class="form-grid two-col">
+              <div class="form-row">
+                <label for="trainingExplicitIsitasPercent">Explicit ISITAS References %</label>
+                <input id="trainingExplicitIsitasPercent" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="form-row">
+                <label for="trainingSubtleFramingPercent">Subtle Shared Framing %</label>
+                <input id="trainingSubtleFramingPercent" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="form-row">
+                <label for="trainingGenericContextPercent">Generic/Context-First %</label>
+                <input id="trainingGenericContextPercent" type="number" min="0" max="100" step="1" />
+              </div>
+              <div class="form-row">
+                <label>Total</label>
+                <div id="trainingReplyMixTotal" class="readonly-metric">100%</div>
+              </div>
+            </div>
+            <p class="field-help">These targets shape how often reply generators use explicit ISITAS references versus subtle shared framing versus generic context-first replies.</p>
+          </div>
+          <div class="form-row youtube-miner-category-config">
+            <div class="youtube-miner-category-header-row">
+              <div>
                 <label>Training Configuration: Rules/Guides</label>
               </div>
               <div class="youtube-miner-category-toolbar-right">
