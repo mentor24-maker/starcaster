@@ -456,6 +456,10 @@ h2 {
   padding: 50px;
 }
 
+.bluesky-posting-panel {
+  background: linear-gradient(180deg, #edf7ff 0%, #dff1ff 100%);
+}
+
 .acquire-workbench-form {
   padding: 0;
 }
