@@ -1524,10 +1524,14 @@ App.acquire = (function () {
     const form = document.getElementById('blueskyReplyCandidatesForm');
     if (!form) return null;
     const formData = new FormData(form);
+    const trainingContextInput = document.getElementById('youtubeMinerResponseContext');
+    const trainingGuidelinesInput = document.getElementById('youtubeMinerGuidelines');
     const payload = {
       target: String(explicitTarget || formData.get('target') || '').trim(),
       source_mode: String(formData.get('source_mode') || 'auto').trim().toLowerCase(),
       context_limit: Number(formData.get('context_limit') || 8) || 8,
+      training_context: String(trainingContextInput && trainingContextInput.value || '').trim(),
+      training_guidelines: String(trainingGuidelinesInput && trainingGuidelinesInput.value || '').trim(),
     };
     if (!payload.target) throw new Error('BlueSky post URL is required.');
     setBlueskyReplyStatus('Generating BlueSky reply candidates...');
