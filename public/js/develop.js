@@ -4434,8 +4434,9 @@ App.develop = (function () {
   }
 
   return {
-    manifest: { id: 'develop', label: 'Develop', pageId: 'developPage' },
+    manifest: { id: 'develop', label: 'Develop', pageId: 'developPage', pagePrefixes: ['develop'] },
     init,
-    refresh
+    refresh,
+    onPageActivated: refresh
   };
 })();
