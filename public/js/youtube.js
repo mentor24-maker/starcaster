@@ -4411,10 +4411,13 @@ App.youtube = (function () {
     saveYoutubeMinerCategoryConfig(youtubeMinerCategoryConfig);
     saveYoutubeMinerConfig('attribute', youtubeMinerAttributeConfig);
     saveYoutubeMinerConfig('approach', youtubeMinerApproachConfig);
-    saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
     if (youtubeMinerResponseContext || youtubeMinerGuidelines) {
       if (youtubeMinerResponseContext) youtubeMinerResponseContext.value = loadYoutubeMinerResponseContext();
       if (youtubeMinerGuidelines) youtubeMinerGuidelines.value = loadYoutubeMinerResponseGuidelines();
+      if (!youtubeMinerRuleGuideRows.length && youtubeMinerGuidelines) {
+        youtubeMinerRuleGuideRows = parseYoutubeMinerRuleGuidesFromText(youtubeMinerGuidelines.value);
+      }
+      saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
       loadPersistedYoutubeMinerResponseContext().then(function(serverValue) {
         var contextValue = safeText(serverValue && serverValue.context);
         var guidelinesValue = safeText(serverValue && serverValue.guidelines);
@@ -4425,6 +4428,11 @@ App.youtube = (function () {
         if (youtubeMinerGuidelines && guidelinesValue) {
           youtubeMinerGuidelines.value = guidelinesValue;
           saveYoutubeMinerResponseGuidelines(guidelinesValue);
+        }
+        if (!youtubeMinerRuleGuideRows.length && guidelinesValue) {
+          youtubeMinerRuleGuideRows = parseYoutubeMinerRuleGuidesFromText(guidelinesValue);
+          saveYoutubeMinerRuleGuides(youtubeMinerRuleGuideRows);
+          renderYoutubeMinerRuleGuides();
         }
         if ((!contextValue && youtubeMinerResponseContext && safeText(youtubeMinerResponseContext.value))
           || (!guidelinesValue && youtubeMinerGuidelines && safeText(youtubeMinerGuidelines.value))) {
