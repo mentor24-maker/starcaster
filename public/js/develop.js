@@ -3430,7 +3430,10 @@ App.develop = (function () {
     emailTemplateBlocksDraft = normalizeEmailTemplateBlocks(template);
     renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
-    if (submitBtn) submitBtn.textContent = template?.id ? 'Update Email Template' : 'Save Email Template';
+    const submitBtnTop = byId('developEmailTemplateSubmitBtnTop');
+    const label = template?.id ? 'Update Template' : 'Save Template';
+    if (submitBtn) submitBtn.textContent = label;
+    if (submitBtnTop) submitBtnTop.textContent = label;
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -3445,7 +3448,9 @@ App.develop = (function () {
     ];
     renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
-    if (submitBtn) submitBtn.textContent = 'Save Email Template';
+    const submitBtnTop = byId('developEmailTemplateSubmitBtnTop');
+    if (submitBtn) submitBtn.textContent = 'Save Template';
+    if (submitBtnTop) submitBtnTop.textContent = 'Save Template';
   }
 
   function setEmailTemplateEditorVisible(visible) {
@@ -3602,18 +3607,6 @@ App.develop = (function () {
         });
         uploadWrap.appendChild(fileInput);
         uploadWrap.appendChild(uploadBtn);
-        const saveTemplateBtn = document.createElement('button');
-        saveTemplateBtn.type = 'button';
-        saveTemplateBtn.textContent = 'Save Template';
-        saveTemplateBtn.addEventListener('click', () => {
-          const templateForm = byId('developEmailTemplateForm');
-          if (!templateForm) {
-            notify('Template form is not available', true);
-            return;
-          }
-          templateForm.requestSubmit();
-        });
-        uploadWrap.appendChild(saveTemplateBtn);
 
         const previewUrl = resolveEmailTemplateImageSource(block);
         const preview = document.createElement('div');
@@ -4111,12 +4104,14 @@ App.develop = (function () {
       });
     }
 
-    const resetEmailTemplateBtn = byId('developEmailTemplateResetBtn');
-    if (resetEmailTemplateBtn) {
-      resetEmailTemplateBtn.addEventListener('click', () => {
+    const bindResetEmailTemplate = (button) => {
+      if (!button) return;
+      button.addEventListener('click', () => {
         resetEmailTemplateForm();
       });
-    }
+    };
+    bindResetEmailTemplate(byId('developEmailTemplateResetBtn'));
+    bindResetEmailTemplate(byId('developEmailTemplateResetBtnTop'));
     const formErrorMessageInput = byId('developFormErrorMessageInput');
     const formAccentInput = byId('developFormAccentColorInput');
     const formMatchLandingInput = byId('developFormMatchLandingColorInput');

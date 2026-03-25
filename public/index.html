@@ -4619,6 +4619,10 @@
         <p>Choose an email template type to pair with a theme and campaign delivery.</p>
         <form id="developEmailTemplateForm" class="stack-form" style="margin-bottom: 1.5rem;">
           <input id="developEmailTemplateIdInput" name="template_id" type="hidden" />
+          <div class="page-heading-actions" style="justify-content:flex-start;">
+            <button id="developEmailTemplateSubmitBtnTop" type="submit">Save Template</button>
+            <button id="developEmailTemplateResetBtnTop" type="button">Reset</button>
+          </div>
           <div class="grid-form">
             <input id="developEmailTemplateNameInput" name="name" placeholder="Template name" />
             <input id="developEmailTemplateSlugInput" name="slug" placeholder="Slug (optional)" />
@@ -4629,7 +4633,7 @@
           <input id="developEmailTemplateHeadingInput" name="heading" placeholder="Template heading" />
           <textarea id="developEmailTemplateBodyInput" name="body" rows="4" placeholder="Describe the body structure, tone, and purpose."></textarea>
           <div class="page-heading-actions">
-            <button id="developEmailTemplateSubmitBtn" type="submit">Save Email Template</button>
+            <button id="developEmailTemplateSubmitBtn" type="submit">Save Template</button>
             <button id="developEmailTemplateResetBtn" type="button">Reset</button>
           </div>
         </form>
