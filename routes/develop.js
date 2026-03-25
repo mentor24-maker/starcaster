@@ -9,6 +9,12 @@ const {
   updateLandingPage,
   deleteLandingPage,
 } = require('../lib/developLandingPagesStore');
+const {
+  listEmailTemplates,
+  createEmailTemplate,
+  updateEmailTemplate,
+  deleteEmailTemplate,
+} = require('../lib/developEmailTemplatesStore');
 const { createIcon } = require('../lib/developIconStore');
 const { createAsset, rowToAsset } = require('../lib/assetsStore');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
@@ -189,6 +195,30 @@ async function handle(req, res, pathname, method) {
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create landing page'), true;
     return sendOk(res, 201, result.data, { landingPage: result.data }), true;
+  }
+
+  if (pathname === '/api/develop/email-templates' && requestMethod === 'GET') {
+    const result = await listEmailTemplates();
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load email templates'), true;
+    const emailTemplates = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, emailTemplates, { emailTemplates }, { total: emailTemplates.length }), true;
+  }
+
+  if (pathname === '/api/develop/email-templates' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createEmailTemplate({
+      slug: body.slug,
+      name,
+      summary: body.summary,
+      subject: body.subject,
+      heading: body.heading,
+      body: body.body,
+      cta: body.cta,
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create email template'), true;
+    return sendOk(res, 201, result.data, { emailTemplate: result.data }), true;
   }
 
   if (pathname === '/api/develop/icon-builder' && requestMethod === 'POST') {
@@ -414,6 +444,7 @@ async function handle(req, res, pathname, method) {
   }
 
   const formIdMatch = String(pathname || '').match(/^\/api\/develop\/forms\/([^/]+)\/?$/);
+  const emailTemplateIdMatch = String(pathname || '').match(/^\/api\/develop\/email-templates\/([^/]+)\/?$/);
   const extensionIdMatch = String(pathname || '').match(/^\/api\/develop\/extensions\/([^/]+)\/?$/);
   const extensionUseMatch = String(pathname || '').match(/^\/api\/develop\/extensions\/([^/]+)\/use\/?$/);
   if (formIdMatch && requestMethod === 'PATCH') {
@@ -469,6 +500,33 @@ async function handle(req, res, pathname, method) {
     const removed = deleteForm(formId);
     if (!removed) return sendErr(res, 404, 'Form not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, removed, { form: removed }), true;
+  }
+
+  if (emailTemplateIdMatch && requestMethod === 'PATCH') {
+    const templateId = decodeURIComponent(emailTemplateIdMatch[1] || '').trim();
+    if (!templateId) return sendErr(res, 400, 'email template id is required', { code: 'VALIDATION_ERROR' }), true;
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await updateEmailTemplate(templateId, {
+      slug: body.slug,
+      name,
+      summary: body.summary,
+      subject: body.subject,
+      heading: body.heading,
+      body: body.body,
+      cta: body.cta,
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update email template'), true;
+    return sendOk(res, 200, result.data, { emailTemplate: result.data }), true;
+  }
+
+  if (emailTemplateIdMatch && requestMethod === 'DELETE') {
+    const templateId = decodeURIComponent(emailTemplateIdMatch[1] || '').trim();
+    if (!templateId) return sendErr(res, 400, 'email template id is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await deleteEmailTemplate(templateId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete email template'), true;
+    return sendOk(res, 200, result.data, { emailTemplate: result.data }), true;
   }
 
   if (extensionUseMatch && requestMethod === 'POST') {
