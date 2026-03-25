@@ -3421,6 +3421,8 @@ App.develop = (function () {
     if (!form) return;
     byId('developEmailTemplateIdInput').value = safeText(template?.id);
     byId('developEmailTemplateNameInput').value = safeText(template?.name);
+    const builderNameInput = byId('developTemplateEditorNameInput');
+    if (builderNameInput) builderNameInput.value = safeText(template?.name);
     byId('developEmailTemplateSlugInput').value = safeText(template?.slug);
     byId('developEmailTemplateSummaryInput').value = safeText(template?.summary);
     byId('developEmailTemplateSubjectInput').value = safeText(template?.subject);
@@ -3445,6 +3447,8 @@ App.develop = (function () {
     const form = byId('developEmailTemplateForm');
     if (form) form.reset();
     byId('developEmailTemplateIdInput').value = '';
+    const builderNameInput = byId('developTemplateEditorNameInput');
+    if (builderNameInput) builderNameInput.value = '';
     emailTemplateBlocksDraft = [
       createEmailTemplateBlock('heading'),
       createEmailTemplateBlock('paragraph'),
@@ -4053,6 +4057,8 @@ App.develop = (function () {
     const formIdInput = byId('developFormIdInput');
     const formNameInput = byId('developFormNameInput');
     const emailTemplateForm = byId('developEmailTemplateForm');
+    const emailTemplateNameInput = byId('developEmailTemplateNameInput');
+    const templateEditorNameInput = byId('developTemplateEditorNameInput');
     const landingPreviewAction = byId('developLandingPagePreviewAction');
     const openCreateFormBtn = byId('developOpenCreateFormBtn');
     const cancelFormEditBtn = byId('developCancelFormEditBtn');
@@ -4094,6 +4100,19 @@ App.develop = (function () {
     };
     submitEmailTemplateFromBuilder(byId('developTemplateEditorSaveBtnTop'));
     submitEmailTemplateFromBuilder(byId('developTemplateEditorSaveBtnBottom'));
+
+    if (emailTemplateNameInput && templateEditorNameInput) {
+      emailTemplateNameInput.addEventListener('input', () => {
+        if (templateEditorNameInput.value !== emailTemplateNameInput.value) {
+          templateEditorNameInput.value = emailTemplateNameInput.value;
+        }
+      });
+      templateEditorNameInput.addEventListener('input', () => {
+        if (emailTemplateNameInput.value !== templateEditorNameInput.value) {
+          emailTemplateNameInput.value = templateEditorNameInput.value;
+        }
+      });
+    }
 
     const templateEditorToolbar = byId('developTemplateEditorToolbar');
     if (templateEditorToolbar) {
