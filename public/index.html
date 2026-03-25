@@ -4228,6 +4228,7 @@
         <div class="page-heading-row">
           <h2 id="developLandingPagesFormTitle">Create Page</h2>
           <div class="page-heading-actions">
+            <span id="developLandingPagePreviewAction"></span>
             <button id="developLandingSaveSelectorDefaultsBtn" type="button">Save Selector Defaults</button>
             <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
             <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
@@ -4607,6 +4608,22 @@
         <hr style="margin: 2rem 0;" />
         <h3 style="margin-top: 2rem;">Email</h3>
         <p>Choose an email template type to pair with a theme and campaign delivery.</p>
+        <form id="developEmailTemplateForm" class="stack-form" style="margin-bottom: 1.5rem;">
+          <input id="developEmailTemplateIdInput" name="template_id" type="hidden" />
+          <div class="grid-form">
+            <input id="developEmailTemplateNameInput" name="name" placeholder="Template name" />
+            <input id="developEmailTemplateSlugInput" name="slug" placeholder="Slug (optional)" />
+            <input id="developEmailTemplateCtaInput" name="cta" placeholder="CTA label" />
+          </div>
+          <input id="developEmailTemplateSummaryInput" name="summary" placeholder="Summary: when to use this template." />
+          <input id="developEmailTemplateSubjectInput" name="subject" placeholder="Default subject line" />
+          <input id="developEmailTemplateHeadingInput" name="heading" placeholder="Template heading" />
+          <textarea id="developEmailTemplateBodyInput" name="body" rows="4" placeholder="Describe the body structure, tone, and purpose."></textarea>
+          <div class="page-heading-actions">
+            <button id="developEmailTemplateSubmitBtn" type="submit">Save Email Template</button>
+            <button id="developEmailTemplateResetBtn" type="button">Reset</button>
+          </div>
+        </form>
         <div id="developEmailTemplatesLibrary" class="develop-template-library"></div>
         <div id="developEmailTemplatesPreviewHost"></div>
         <hr style="margin: 2rem 0;" />
