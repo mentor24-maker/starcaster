@@ -2486,6 +2486,23 @@ th {
   gap: 0.5rem;
 }
 
+.develop-template-module-fields textarea,
+.develop-template-module-fields input,
+.develop-template-module-fields select {
+  width: 100%;
+}
+
+.develop-template-module-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.develop-template-module-fields .develop-template-module-span {
+  grid-column: 1 / -1;
+}
+
 .develop-template-module-fields textarea {
   min-height: 68px;
 }

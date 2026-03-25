@@ -175,6 +175,7 @@ App.develop = (function () {
   let savedLandingPages = [];
   let savedExtensions = [];
   let savedEmailTemplates = [];
+  let emailTemplateBlocksDraft = [];
   let landingPageHeadlines = [];
   let landingPageSubheadings = [];
   let landingPagePitches = [];
@@ -3187,15 +3188,61 @@ App.develop = (function () {
   }
 
   function buildEmailTemplatePreviewMarkup(template) {
+    const blocks = normalizeEmailTemplateBlocks(template);
+    const blockMarkup = blocks.map((block) => {
+      if (block.type === 'eyebrow') {
+        return `<div class="develop-template-eyebrow">${safeText(block.text) || 'Email Template'}</div>`;
+      }
+      if (block.type === 'heading') {
+        return `<h3>${safeText(block.text) || 'Heading'}</h3>`;
+      }
+      if (block.type === 'paragraph') {
+        return `<p>${safeText(block.text) || ''}</p>`;
+      }
+      if (block.type === 'button') {
+        return `<button type="button">${safeText(block.text) || 'Open'}</button>`;
+      }
+      if (block.type === 'divider') {
+        return '<hr style="margin:0.8rem 0;border:none;border-top:1px solid rgba(15,79,143,0.2);" />';
+      }
+      if (block.type === 'spacer') {
+        return '<div style="height:1rem;"></div>';
+      }
+      return '';
+    }).join('');
     return `
       <div class="develop-form-preview">
-        <div class="develop-template-eyebrow">Email Template</div>
-        <h3>${safeText(template?.heading) || 'Email Template'}</h3>
         <p><strong>Subject:</strong> ${safeText(template?.subject) || '-'}</p>
-        <p>${safeText(template?.body) || ''}</p>
-        <button type="button">${safeText(template?.cta) || 'Open'}</button>
+        ${blockMarkup}
       </div>
     `;
+  }
+
+  function normalizeEmailTemplateBlocks(template) {
+    const raw = Array.isArray(template?.blocks) ? template.blocks : [];
+    const normalized = raw
+      .map((block, index) => ({
+        id: safeText(block?.id) || `block_${index + 1}`,
+        type: safeText(block?.type).toLowerCase() || 'paragraph',
+        text: safeText(block?.text),
+        url: safeText(block?.url),
+      }))
+      .filter((block) => block.type);
+    if (normalized.length) return normalized;
+    const fallback = [];
+    if (safeText(template?.heading)) fallback.push({ id: 'heading_1', type: 'heading', text: safeText(template.heading), url: '' });
+    if (safeText(template?.body)) fallback.push({ id: 'paragraph_1', type: 'paragraph', text: safeText(template.body), url: '' });
+    if (safeText(template?.cta)) fallback.push({ id: 'button_1', type: 'button', text: safeText(template.cta), url: '' });
+    return fallback.length ? fallback : [{ id: 'paragraph_1', type: 'paragraph', text: '', url: '' }];
+  }
+
+  function createEmailTemplateBlock(type = 'paragraph') {
+    return {
+      id: `block_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type,
+      text: '',
+      url: '',
+    };
   }
 
   function renderEmailTemplatePreview(templateId) {
@@ -3315,6 +3362,8 @@ App.develop = (function () {
     byId('developEmailTemplateHeadingInput').value = safeText(template?.heading);
     byId('developEmailTemplateBodyInput').value = safeText(template?.body);
     byId('developEmailTemplateCtaInput').value = safeText(template?.cta);
+    emailTemplateBlocksDraft = normalizeEmailTemplateBlocks(template);
+    renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
     if (submitBtn) submitBtn.textContent = template?.id ? 'Update Email Template' : 'Save Email Template';
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3324,8 +3373,143 @@ App.develop = (function () {
     const form = byId('developEmailTemplateForm');
     if (form) form.reset();
     byId('developEmailTemplateIdInput').value = '';
+    emailTemplateBlocksDraft = [
+      createEmailTemplateBlock('heading'),
+      createEmailTemplateBlock('paragraph'),
+      createEmailTemplateBlock('button'),
+    ];
+    renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
     if (submitBtn) submitBtn.textContent = 'Save Email Template';
+  }
+
+  function setEmailTemplateEditorVisible(visible) {
+    const panel = byId('developTemplateEditorPanel');
+    if (!panel) return;
+    panel.classList.toggle('hidden', !visible);
+  }
+
+  function renderEmailTemplateBlockEditor() {
+    const title = byId('developTemplateEditorTitle');
+    const meta = byId('developTemplateEditorMeta');
+    const host = byId('developTemplateEditorModules');
+    if (!host) return;
+    setEmailTemplateEditorVisible(true);
+    if (title) title.textContent = 'Email Block Builder';
+    if (meta) meta.textContent = 'Build the email as ordered blocks. Use move buttons to rearrange sections.';
+    host.innerHTML = '';
+
+    emailTemplateBlocksDraft.forEach((block, index) => {
+      const item = document.createElement('div');
+      item.className = 'develop-template-module-item';
+
+      const grip = document.createElement('div');
+      grip.className = 'develop-template-module-grip';
+      grip.textContent = '::';
+
+      const fields = document.createElement('div');
+      fields.className = 'develop-template-module-fields';
+
+      const typeSelect = document.createElement('select');
+      [
+        ['eyebrow', 'Eyebrow'],
+        ['heading', 'Heading'],
+        ['paragraph', 'Paragraph'],
+        ['button', 'Button'],
+        ['divider', 'Divider'],
+        ['spacer', 'Spacer'],
+      ].forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        typeSelect.appendChild(option);
+      });
+      typeSelect.value = block.type;
+      typeSelect.addEventListener('change', () => {
+        block.type = safeText(typeSelect.value) || 'paragraph';
+        renderEmailTemplateBlockEditor();
+      });
+
+      const textInput = document.createElement(block.type === 'paragraph' ? 'textarea' : 'input');
+      textInput.className = 'develop-template-module-span';
+      if (block.type === 'paragraph') textInput.rows = 3;
+      textInput.placeholder = block.type === 'button' ? 'Button label' : 'Block text';
+      textInput.value = safeText(block.text);
+      textInput.addEventListener('input', () => {
+        block.text = safeText(textInput.value);
+      });
+
+      fields.appendChild(typeSelect);
+
+      if (block.type === 'button') {
+        const urlInput = document.createElement('input');
+        urlInput.placeholder = 'Button URL (optional)';
+        urlInput.value = safeText(block.url);
+        urlInput.addEventListener('input', () => {
+          block.url = safeText(urlInput.value);
+        });
+        fields.appendChild(urlInput);
+      } else {
+        const filler = document.createElement('div');
+        fields.appendChild(filler);
+      }
+
+      if (!['divider', 'spacer'].includes(block.type)) {
+        fields.appendChild(textInput);
+      } else {
+        const note = document.createElement('div');
+        note.className = 'develop-template-module-span meta';
+        note.textContent = block.type === 'divider'
+          ? 'Divider adds a visual separator line.'
+          : 'Spacer adds breathing room between blocks.';
+        fields.appendChild(note);
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'develop-template-module-actions develop-template-module-span';
+
+      const upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.textContent = 'Move Up';
+      upBtn.disabled = index === 0;
+      upBtn.addEventListener('click', () => {
+        const prior = emailTemplateBlocksDraft[index - 1];
+        emailTemplateBlocksDraft[index - 1] = block;
+        emailTemplateBlocksDraft[index] = prior;
+        renderEmailTemplateBlockEditor();
+      });
+
+      const downBtn = document.createElement('button');
+      downBtn.type = 'button';
+      downBtn.textContent = 'Move Down';
+      downBtn.disabled = index === emailTemplateBlocksDraft.length - 1;
+      downBtn.addEventListener('click', () => {
+        const next = emailTemplateBlocksDraft[index + 1];
+        emailTemplateBlocksDraft[index + 1] = block;
+        emailTemplateBlocksDraft[index] = next;
+        renderEmailTemplateBlockEditor();
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        emailTemplateBlocksDraft.splice(index, 1);
+        if (!emailTemplateBlocksDraft.length) {
+          emailTemplateBlocksDraft.push(createEmailTemplateBlock('paragraph'));
+        }
+        renderEmailTemplateBlockEditor();
+      });
+
+      actions.appendChild(upBtn);
+      actions.appendChild(downBtn);
+      actions.appendChild(removeBtn);
+      fields.appendChild(actions);
+
+      item.appendChild(grip);
+      item.appendChild(fields);
+      host.appendChild(item);
+    });
   }
 
   function renderFormTemplateLibrary() {
@@ -3692,18 +3876,45 @@ App.develop = (function () {
       );
     }
 
+    const templateEditorCloseBtn = byId('developTemplateEditorCloseBtn');
+    if (templateEditorCloseBtn) {
+      templateEditorCloseBtn.addEventListener('click', () => {
+        setEmailTemplateEditorVisible(false);
+      });
+    }
+
+    const templateEditorToolbar = byId('developTemplateEditorToolbar');
+    if (templateEditorToolbar) {
+      templateEditorToolbar.querySelectorAll('button[data-block-type]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const type = safeText(button.getAttribute('data-block-type')) || 'paragraph';
+          emailTemplateBlocksDraft.push(createEmailTemplateBlock(type));
+          renderEmailTemplateBlockEditor();
+        });
+      });
+    }
+
     if (emailTemplateForm) {
       emailTemplateForm.addEventListener('submit', async (event) => {
         event.preventDefault();
+        const derivedHeading = emailTemplateBlocksDraft.find((block) => block.type === 'heading')?.text || '';
+        const derivedBody = emailTemplateBlocksDraft.find((block) => block.type === 'paragraph')?.text || '';
+        const derivedCta = emailTemplateBlocksDraft.find((block) => block.type === 'button')?.text || '';
         const id = safeText(byId('developEmailTemplateIdInput')?.value);
         const payload = {
           name: safeText(byId('developEmailTemplateNameInput')?.value),
           slug: safeText(byId('developEmailTemplateSlugInput')?.value) || slugify(byId('developEmailTemplateNameInput')?.value),
           summary: safeText(byId('developEmailTemplateSummaryInput')?.value),
           subject: safeText(byId('developEmailTemplateSubjectInput')?.value),
-          heading: safeText(byId('developEmailTemplateHeadingInput')?.value),
-          body: safeText(byId('developEmailTemplateBodyInput')?.value),
-          cta: safeText(byId('developEmailTemplateCtaInput')?.value),
+          heading: safeText(byId('developEmailTemplateHeadingInput')?.value) || derivedHeading,
+          body: safeText(byId('developEmailTemplateBodyInput')?.value) || derivedBody,
+          cta: safeText(byId('developEmailTemplateCtaInput')?.value) || derivedCta,
+          blocks: emailTemplateBlocksDraft.map((block) => ({
+            id: safeText(block.id),
+            type: safeText(block.type),
+            text: safeText(block.text),
+            url: safeText(block.url),
+          })),
         };
         if (!payload.name) {
           notify('Template name is required', true);

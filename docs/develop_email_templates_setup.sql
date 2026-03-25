@@ -7,6 +7,7 @@ create table if not exists public.develop_email_templates (
   heading text not null default '',
   body text not null default '',
   cta text not null default '',
+  blocks jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
