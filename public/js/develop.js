@@ -3602,6 +3602,18 @@ App.develop = (function () {
         });
         uploadWrap.appendChild(fileInput);
         uploadWrap.appendChild(uploadBtn);
+        const saveTemplateBtn = document.createElement('button');
+        saveTemplateBtn.type = 'button';
+        saveTemplateBtn.textContent = 'Save Template';
+        saveTemplateBtn.addEventListener('click', () => {
+          const templateForm = byId('developEmailTemplateForm');
+          if (!templateForm) {
+            notify('Template form is not available', true);
+            return;
+          }
+          templateForm.requestSubmit();
+        });
+        uploadWrap.appendChild(saveTemplateBtn);
 
         const previewUrl = resolveEmailTemplateImageSource(block);
         const preview = document.createElement('div');
