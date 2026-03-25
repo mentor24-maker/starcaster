@@ -3202,6 +3202,12 @@ App.develop = (function () {
       if (block.type === 'button') {
         return `<button type="button">${safeText(block.text) || 'Open'}</button>`;
       }
+      if (block.type === 'image') {
+        const src = resolveEmailTemplateImageSource(block);
+        if (!src) return '';
+        const alt = safeText(block.alt) || 'Email image';
+        return `<div style="margin:0.8rem 0;"><img src="${src}" alt="${alt}" style="display:block;max-width:100%;height:auto;border-radius:10px;" /></div>`;
+      }
       if (block.type === 'divider') {
         return '<hr style="margin:0.8rem 0;border:none;border-top:1px solid rgba(15,79,143,0.2);" />';
       }
@@ -3226,6 +3232,9 @@ App.develop = (function () {
         type: safeText(block?.type).toLowerCase() || 'paragraph',
         text: safeText(block?.text),
         url: safeText(block?.url),
+        sourceMode: safeText(block?.sourceMode).toLowerCase() || (safeText(block?.assetId) ? 'gallery' : (safeText(block?.url) ? 'url' : 'gallery')),
+        assetId: safeText(block?.assetId),
+        alt: safeText(block?.alt),
       }))
       .filter((block) => block.type);
     if (normalized.length) return normalized;
@@ -3242,7 +3251,63 @@ App.develop = (function () {
       type,
       text: '',
       url: '',
+      sourceMode: 'gallery',
+      assetId: '',
+      alt: '',
     };
+  }
+
+  function getImageAssets() {
+    return (Array.isArray(state.assets) ? state.assets : []).filter((asset) => safeText(asset?.assetType) === 'Image');
+  }
+
+  function resolveEmailTemplateImageSource(block) {
+    if (!block || block.type !== 'image') return '';
+    if (safeText(block.sourceMode) === 'url') {
+      return safeText(block.url);
+    }
+    const assetId = safeText(block.assetId);
+    if (!assetId) return '';
+    const asset = getImageAssets().find((item) => safeText(item.id) === assetId);
+    if (!asset) return '';
+    return toDirectAssetUrl(asset.location);
+  }
+
+  async function uploadEmailTemplateBlockImage(file, block) {
+    if (!file || !block) return;
+    if (!String(file.type || '').startsWith('image/')) {
+      throw new Error('Please choose an image file');
+    }
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    const payload = {
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      fileBase64: btoa(binary),
+      fileSize: Number(file.size || 0),
+      assetType: 'Image',
+      assetName: file.name,
+      category: 'Email Template',
+      tags: ['email-template', 'builder'],
+    };
+    const result = await api('/api/assets/upload-google-drive', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const asset = result?.asset || result?.data?.asset || null;
+    if (!asset?.id) throw new Error('Image upload did not return an asset');
+    block.sourceMode = 'gallery';
+    block.assetId = safeText(asset.id);
+    block.url = '';
+    if (!safeText(block.alt)) {
+      block.alt = file.name.replace(/\.[^.]+$/, '');
+    }
+    await loadLandingPageBuilderOptions().catch(() => {});
   }
 
   function renderEmailTemplatePreview(templateId) {
@@ -3415,6 +3480,7 @@ App.develop = (function () {
         ['eyebrow', 'Eyebrow'],
         ['heading', 'Heading'],
         ['paragraph', 'Paragraph'],
+        ['image', 'Image'],
         ['button', 'Button'],
         ['divider', 'Divider'],
         ['spacer', 'Spacer'],
@@ -3449,12 +3515,111 @@ App.develop = (function () {
           block.url = safeText(urlInput.value);
         });
         fields.appendChild(urlInput);
+      } else if (block.type === 'image') {
+        const sourceModeSelect = document.createElement('select');
+        [
+          ['gallery', 'Choose From Gallery'],
+          ['url', 'Use URL'],
+        ].forEach(([value, label]) => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          sourceModeSelect.appendChild(option);
+        });
+        sourceModeSelect.value = safeText(block.sourceMode) || 'gallery';
+        sourceModeSelect.addEventListener('change', () => {
+          block.sourceMode = safeText(sourceModeSelect.value) || 'gallery';
+          renderEmailTemplateBlockEditor();
+        });
+        fields.appendChild(sourceModeSelect);
       } else {
         const filler = document.createElement('div');
         fields.appendChild(filler);
       }
 
-      if (!['divider', 'spacer'].includes(block.type)) {
+      if (block.type === 'image') {
+        const imageControls = document.createElement('div');
+        imageControls.className = 'develop-template-module-span';
+
+        const assetSelect = document.createElement('select');
+        assetSelect.style.display = block.sourceMode === 'gallery' ? '' : 'none';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = getImageAssets().length ? 'Select Image Asset' : 'No image assets available yet';
+        assetSelect.appendChild(placeholder);
+        getImageAssets().forEach((asset) => {
+          const option = document.createElement('option');
+          option.value = safeText(asset.id);
+          option.textContent = safeText(asset.assetName) || `Image ${asset.id}`;
+          assetSelect.appendChild(option);
+        });
+        assetSelect.value = safeText(block.assetId);
+        assetSelect.addEventListener('change', () => {
+          block.assetId = safeText(assetSelect.value);
+        });
+
+        const urlInput = document.createElement('input');
+        urlInput.placeholder = 'https://...';
+        urlInput.style.display = block.sourceMode === 'url' ? '' : 'none';
+        urlInput.value = safeText(block.url);
+        urlInput.addEventListener('input', () => {
+          block.url = safeText(urlInput.value);
+        });
+
+        const altInput = document.createElement('input');
+        altInput.placeholder = 'Alt text';
+        altInput.value = safeText(block.alt);
+        altInput.addEventListener('input', () => {
+          block.alt = safeText(altInput.value);
+        });
+
+        const uploadWrap = document.createElement('div');
+        uploadWrap.className = 'page-heading-actions';
+        uploadWrap.style.justifyContent = 'flex-start';
+        uploadWrap.style.marginTop = '0.45rem';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        const uploadBtn = document.createElement('button');
+        uploadBtn.type = 'button';
+        uploadBtn.textContent = 'Upload Image';
+        uploadBtn.addEventListener('click', async () => {
+          const file = fileInput.files && fileInput.files[0];
+          if (!file) {
+            notify('Choose an image file first', true);
+            return;
+          }
+          try {
+            uploadBtn.disabled = true;
+            await uploadEmailTemplateBlockImage(file, block);
+            renderEmailTemplateBlockEditor();
+            notify('Image uploaded');
+          } catch (err) {
+            notify(err.message || 'Could not upload image', true);
+          } finally {
+            uploadBtn.disabled = false;
+          }
+        });
+        uploadWrap.appendChild(fileInput);
+        uploadWrap.appendChild(uploadBtn);
+
+        const previewUrl = resolveEmailTemplateImageSource(block);
+        const preview = document.createElement('div');
+        preview.className = 'develop-template-module-span';
+        preview.style.marginTop = '0.4rem';
+        if (previewUrl) {
+          preview.innerHTML = `<img src="${previewUrl}" alt="${safeText(block.alt) || 'Email image'}" style="display:block;max-width:240px;max-height:160px;height:auto;width:auto;border-radius:10px;border:1px solid rgba(15,79,143,0.16);" />`;
+        } else {
+          preview.innerHTML = '<div class="meta">No image selected yet.</div>';
+        }
+
+        imageControls.appendChild(assetSelect);
+        imageControls.appendChild(urlInput);
+        imageControls.appendChild(altInput);
+        imageControls.appendChild(uploadWrap);
+        imageControls.appendChild(preview);
+        fields.appendChild(imageControls);
+      } else if (!['divider', 'spacer'].includes(block.type)) {
         fields.appendChild(textInput);
       } else {
         const note = document.createElement('div');
