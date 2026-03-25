@@ -4593,57 +4593,120 @@
           <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
         </div>
         <p>Manage the reusable structural templates that power forms and pages.</p>
-        <section id="developTemplateEditorPanel" class="develop-template-editor hidden">
-          <div class="page-heading-row">
-            <h3 id="developTemplateEditorTitle" style="margin:0;">Template Editor</h3>
+        <section id="developTemplateEditorPanel" class="develop-template-section develop-template-editor hidden">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developTemplateEditorToggle"
+              class="develop-template-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developTemplateEditorBody"
+            >
+              <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
+              <span id="developTemplateEditorTitle">Template Editor</span>
+            </button>
             <button id="developTemplateEditorCloseBtn" type="button">Close Editor</button>
           </div>
-          <p id="developTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
-          <div id="developTemplateEditorToolbar" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-            <button type="button" data-block-type="eyebrow">Add Eyebrow</button>
-            <button type="button" data-block-type="heading">Add Heading</button>
-            <button type="button" data-block-type="paragraph">Add Paragraph</button>
-            <button type="button" data-block-type="image">Add Image</button>
-            <button type="button" data-block-type="button">Add Button</button>
-            <button type="button" data-block-type="divider">Add Divider</button>
-            <button type="button" data-block-type="spacer">Add Spacer</button>
+          <div id="developTemplateEditorBody" class="develop-template-section-body">
+            <p id="developTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button id="developTemplateEditorSaveBtnTop" type="button">Save Template</button>
+            </div>
+            <div id="developTemplateEditorToolbar" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button type="button" data-block-type="eyebrow">Add Eyebrow</button>
+              <button type="button" data-block-type="heading">Add Heading</button>
+              <button type="button" data-block-type="paragraph">Add Paragraph</button>
+              <button type="button" data-block-type="image">Add Image</button>
+              <button type="button" data-block-type="button">Add Button</button>
+              <button type="button" data-block-type="divider">Add Divider</button>
+              <button type="button" data-block-type="spacer">Add Spacer</button>
+            </div>
+            <div id="developTemplateEditorModules" class="develop-template-module-list"></div>
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
+              <button id="developTemplateEditorSaveBtnBottom" type="button">Save Template</button>
+            </div>
           </div>
-          <div id="developTemplateEditorModules" class="develop-template-module-list"></div>
         </section>
-        <h3>Forms</h3>
-        <p>These are the reusable form templates used as the foundation for saved forms.</p>
-        <div id="developFormTemplatesLibrary" class="develop-template-library"></div>
-        <div id="developFormTemplatesPreviewHost"></div>
-        <hr style="margin: 2rem 0;" />
-        <h3 style="margin-top: 2rem;">Email</h3>
-        <p>Choose an email template type to pair with a theme and campaign delivery.</p>
-        <form id="developEmailTemplateForm" class="stack-form" style="margin-bottom: 1.5rem;">
-          <input id="developEmailTemplateIdInput" name="template_id" type="hidden" />
-          <div class="page-heading-actions" style="justify-content:flex-start;">
-            <button id="developEmailTemplateSubmitBtnTop" type="submit">Save Template</button>
-            <button id="developEmailTemplateResetBtnTop" type="button">Reset</button>
+
+        <section class="develop-template-section">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developFormsSectionToggle"
+              class="develop-template-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developFormsSectionBody"
+            >
+              <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
+              <span>Forms</span>
+            </button>
           </div>
-          <div class="grid-form">
-            <input id="developEmailTemplateNameInput" name="name" placeholder="Template name" />
-            <input id="developEmailTemplateSlugInput" name="slug" placeholder="Slug (optional)" />
-            <input id="developEmailTemplateCtaInput" name="cta" placeholder="CTA label" />
+          <div id="developFormsSectionBody" class="develop-template-section-body">
+            <p>These are the reusable form templates used as the foundation for saved forms.</p>
+            <div id="developFormTemplatesLibrary" class="develop-template-library"></div>
+            <div id="developFormTemplatesPreviewHost"></div>
           </div>
-          <input id="developEmailTemplateSummaryInput" name="summary" placeholder="Summary: when to use this template." />
-          <input id="developEmailTemplateSubjectInput" name="subject" placeholder="Default subject line" />
-          <input id="developEmailTemplateHeadingInput" name="heading" placeholder="Template heading" />
-          <textarea id="developEmailTemplateBodyInput" name="body" rows="4" placeholder="Describe the body structure, tone, and purpose."></textarea>
-          <div class="page-heading-actions">
-            <button id="developEmailTemplateSubmitBtn" type="submit">Save Template</button>
-            <button id="developEmailTemplateResetBtn" type="button">Reset</button>
+        </section>
+
+        <section class="develop-template-section">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developEmailSectionToggle"
+              class="develop-template-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developEmailSectionBody"
+            >
+              <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
+              <span>Email</span>
+            </button>
           </div>
-        </form>
-        <div id="developEmailTemplatesLibrary" class="develop-template-library"></div>
-        <div id="developEmailTemplatesPreviewHost"></div>
-        <hr style="margin: 2rem 0;" />
-        <h3 style="margin-top: 2rem;">Pages</h3>
-        <p>Select a reusable page template. The Page Builder uses this same template library.</p>
-        <div id="developTemplatesLibrary" class="develop-template-library"></div>
-        <div id="developTemplatesPreviewHost"></div>
+          <div id="developEmailSectionBody" class="develop-template-section-body">
+            <p>Choose an email template type to pair with a theme and campaign delivery.</p>
+            <form id="developEmailTemplateForm" class="stack-form" style="margin-bottom: 1.5rem;">
+              <input id="developEmailTemplateIdInput" name="template_id" type="hidden" />
+              <div class="page-heading-actions" style="justify-content:flex-start;">
+                <button id="developEmailTemplateSubmitBtnTop" type="submit">Save Template</button>
+                <button id="developEmailTemplateResetBtnTop" type="button">Reset</button>
+              </div>
+              <div class="grid-form">
+                <input id="developEmailTemplateNameInput" name="name" placeholder="Template name" />
+                <input id="developEmailTemplateSlugInput" name="slug" placeholder="Slug (optional)" />
+                <input id="developEmailTemplateCtaInput" name="cta" placeholder="CTA label" />
+              </div>
+              <input id="developEmailTemplateSummaryInput" name="summary" placeholder="Summary: when to use this template." />
+              <input id="developEmailTemplateSubjectInput" name="subject" placeholder="Default subject line" />
+              <input id="developEmailTemplateHeadingInput" name="heading" placeholder="Template heading" />
+              <textarea id="developEmailTemplateBodyInput" name="body" rows="4" placeholder="Describe the body structure, tone, and purpose."></textarea>
+              <div class="page-heading-actions">
+                <button id="developEmailTemplateSubmitBtn" type="submit">Save Template</button>
+                <button id="developEmailTemplateResetBtn" type="button">Reset</button>
+              </div>
+            </form>
+            <div id="developEmailTemplatesLibrary" class="develop-template-library"></div>
+            <div id="developEmailTemplatesPreviewHost"></div>
+          </div>
+        </section>
+
+        <section class="develop-template-section">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developPagesSectionToggle"
+              class="develop-template-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developPagesSectionBody"
+            >
+              <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
+              <span>Pages</span>
+            </button>
+          </div>
+          <div id="developPagesSectionBody" class="develop-template-section-body">
+            <p>Select a reusable page template. The Page Builder uses this same template library.</p>
+            <div id="developTemplatesLibrary" class="develop-template-library"></div>
+            <div id="developTemplatesPreviewHost"></div>
+          </div>
+        </section>
       </section>
 
       <section id="developToolsPage" class="app-page hidden">

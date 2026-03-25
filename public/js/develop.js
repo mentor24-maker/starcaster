@@ -3431,9 +3431,13 @@ App.develop = (function () {
     renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
     const submitBtnTop = byId('developEmailTemplateSubmitBtnTop');
+    const builderSubmitBtnTop = byId('developTemplateEditorSaveBtnTop');
+    const builderSubmitBtnBottom = byId('developTemplateEditorSaveBtnBottom');
     const label = template?.id ? 'Update Template' : 'Save Template';
     if (submitBtn) submitBtn.textContent = label;
     if (submitBtnTop) submitBtnTop.textContent = label;
+    if (builderSubmitBtnTop) builderSubmitBtnTop.textContent = label;
+    if (builderSubmitBtnBottom) builderSubmitBtnBottom.textContent = label;
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -3449,14 +3453,37 @@ App.develop = (function () {
     renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
     const submitBtnTop = byId('developEmailTemplateSubmitBtnTop');
+    const builderSubmitBtnTop = byId('developTemplateEditorSaveBtnTop');
+    const builderSubmitBtnBottom = byId('developTemplateEditorSaveBtnBottom');
     if (submitBtn) submitBtn.textContent = 'Save Template';
     if (submitBtnTop) submitBtnTop.textContent = 'Save Template';
+    if (builderSubmitBtnTop) builderSubmitBtnTop.textContent = 'Save Template';
+    if (builderSubmitBtnBottom) builderSubmitBtnBottom.textContent = 'Save Template';
   }
 
   function setEmailTemplateEditorVisible(visible) {
     const panel = byId('developTemplateEditorPanel');
+    const toggle = byId('developTemplateEditorToggle');
+    const body = byId('developTemplateEditorBody');
     if (!panel) return;
     panel.classList.toggle('hidden', !visible);
+    if (body) body.classList.toggle('hidden', !visible);
+    if (toggle) toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+  }
+
+  function bindCollapsibleSection(toggleId, bodyId, { defaultExpanded = true } = {}) {
+    const toggle = byId(toggleId);
+    const body = byId(bodyId);
+    if (!toggle || !body) return;
+    const apply = (expanded) => {
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      body.classList.toggle('hidden', !expanded);
+    };
+    apply(defaultExpanded);
+    toggle.addEventListener('click', () => {
+      const expanded = toggle.getAttribute('aria-expanded') !== 'false';
+      apply(!expanded);
+    });
   }
 
   function renderEmailTemplateBlockEditor() {
@@ -4052,6 +4079,21 @@ App.develop = (function () {
         setEmailTemplateEditorVisible(false);
       });
     }
+
+    bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: true });
+    bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: true });
+    bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: true });
+    bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: true });
+
+    const submitEmailTemplateFromBuilder = (button) => {
+      if (!button) return;
+      button.addEventListener('click', () => {
+        const form = byId('developEmailTemplateForm');
+        if (form) form.requestSubmit();
+      });
+    };
+    submitEmailTemplateFromBuilder(byId('developTemplateEditorSaveBtnTop'));
+    submitEmailTemplateFromBuilder(byId('developTemplateEditorSaveBtnBottom'));
 
     const templateEditorToolbar = byId('developTemplateEditorToolbar');
     if (templateEditorToolbar) {
