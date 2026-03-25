@@ -149,44 +149,6 @@ App.develop = (function () {
       ],
     },
   ];
-  const EMAIL_TEMPLATES = [
-    {
-      id: 'newsletter-basic',
-      name: 'Newsletter Basic',
-      summary: 'Clean editorial email for updates, essays, and recurring community sends.',
-      subject: 'A thoughtful update for your audience',
-      heading: 'A clear update with one primary idea.',
-      body: 'Use this when you want a simple, readable email that carries one main message and one clear action.',
-      cta: 'Read More',
-    },
-    {
-      id: 'announcement-launch',
-      name: 'Announcement / Launch',
-      summary: 'Structured launch email for announcing a new offer, page, event, or release.',
-      subject: 'Something new is ready',
-      heading: 'Announce a launch with momentum and clarity.',
-      body: 'Use this when you want urgency, positioning, and a stronger call to action around a new release.',
-      cta: 'See What\'s New',
-    },
-    {
-      id: 'event-invite',
-      name: 'Event Invite',
-      summary: 'Invitation template for webinars, live streams, calls, and other scheduled events.',
-      subject: 'You\'re invited',
-      heading: 'Invite people to a time-bound experience.',
-      body: 'Use this when the email should focus on attendance, timing, and the value of showing up live.',
-      cta: 'Reserve Your Spot',
-    },
-    {
-      id: 'lead-magnet-delivery',
-      name: 'Lead Magnet Delivery',
-      summary: 'Short fulfillment email for sending a PDF, guide, checklist, or resource after signup.',
-      subject: 'Here\'s your resource',
-      heading: 'Deliver the promised asset fast.',
-      body: 'Use this when the main job is fulfillment: quick context, direct value, and a lightweight next step.',
-      cta: 'Download Now',
-    },
-  ];
   const CONTACT_TYPE_OPTIONS = [
     { value: 'lead', label: 'Lead' },
     { value: 'prospect', label: 'Prospect' },
@@ -197,7 +159,7 @@ App.develop = (function () {
   ];
   let selectedTemplateId = LANDING_TEMPLATES[0].id;
   let selectedFormTemplateId = FORM_TEMPLATES[0].id;
-  let selectedEmailTemplateId = EMAIL_TEMPLATES[0].id;
+  let selectedEmailTemplateId = '';
   let formBuilderState = null;
   const DEFAULT_FORM_ACCENT = '#0b82d4';
   const MATCH_LANDING_GREY = '#6b7280';
@@ -212,6 +174,7 @@ App.develop = (function () {
   let savedForms = [];
   let savedLandingPages = [];
   let savedExtensions = [];
+  let savedEmailTemplates = [];
   let landingPageHeadlines = [];
   let landingPageSubheadings = [];
   let landingPagePitches = [];
@@ -278,6 +241,14 @@ App.develop = (function () {
 
   function byId(id) {
     return document.getElementById(id);
+  }
+
+  function slugify(value) {
+    return safeText(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 120);
   }
 
   function setSelectOptions(select, options, placeholder, currentValue) {
@@ -817,6 +788,17 @@ App.develop = (function () {
   async function loadSavedForms() {
     const result = await api('/api/develop/forms');
     savedForms = Array.isArray(result.forms) ? result.forms : [];
+  }
+
+  async function loadSavedEmailTemplates() {
+    const result = await api('/api/develop/email-templates');
+    savedEmailTemplates = Array.isArray(result.emailTemplates) ? result.emailTemplates : [];
+    if (!selectedEmailTemplateId && savedEmailTemplates[0]?.id) {
+      selectedEmailTemplateId = String(savedEmailTemplates[0].id);
+    }
+    if (selectedEmailTemplateId && !savedEmailTemplates.some((item) => String(item.id) === String(selectedEmailTemplateId))) {
+      selectedEmailTemplateId = String(savedEmailTemplates[0]?.id || '');
+    }
   }
 
   async function loadSavedLandingPages() {
@@ -2702,6 +2684,23 @@ App.develop = (function () {
     App.setActivePage('developLandingPagesPage');
   }
 
+  function previewCurrentLandingPageForm() {
+    const form = els.developLandingPagesForm;
+    if (!form) return;
+    const formData = new FormData(form);
+    const payload = getLandingPageFormPayload(formData);
+    if (!payload.templateId) {
+      notify('Choose a template before previewing', true);
+      return;
+    }
+    renderLandingPagePreview({
+      id: safeText(formData.get('landing_page_id')),
+      name: payload.name || 'Unsaved Page Preview',
+      ...payload,
+    });
+    App.setActivePage('developLandingPagePreviewPage');
+  }
+
   function renderLandingPagePreview(record) {
     const host = byId('developLandingPagePreviewHost');
     const title = byId('developLandingPagePreviewTitle');
@@ -3202,13 +3201,13 @@ App.develop = (function () {
   function renderEmailTemplatePreview(templateId) {
     const host = byId('developEmailTemplatesPreviewHost');
     if (!host) return;
-    const template = EMAIL_TEMPLATES.find((item) => safeText(item.id) === safeText(templateId)) || EMAIL_TEMPLATES[0];
-    selectedEmailTemplateId = template.id;
-    host.innerHTML = buildEmailTemplatePreviewMarkup(template);
+    const template = savedEmailTemplates.find((item) => safeText(item.id) === safeText(templateId)) || savedEmailTemplates[0];
+    selectedEmailTemplateId = safeText(template?.id);
+    host.innerHTML = template ? buildEmailTemplatePreviewMarkup(template) : '';
   }
 
   function openCampaignBuilderWithEmailTemplate(templateId) {
-    const nextTemplateId = safeText(templateId) || EMAIL_TEMPLATES[0].id;
+    const nextTemplateId = safeText(templateId) || safeText(savedEmailTemplates[0]?.id);
     App.setActivePage('campaignsPage');
     setTimeout(() => {
       const toggleBtn = byId('campaignToggleFormBtn');
@@ -3227,9 +3226,13 @@ App.develop = (function () {
     const host = byId('developEmailTemplatesLibrary');
     if (!host) return;
     host.innerHTML = '';
-    EMAIL_TEMPLATES.forEach((template) => {
+    if (!savedEmailTemplates.length) {
+      host.innerHTML = '<p class="meta">No email templates yet. Create one above to start building your library.</p>';
+      return;
+    }
+    savedEmailTemplates.forEach((template) => {
       const card = document.createElement('article');
-      card.className = `develop-template-library-card${template.id === selectedEmailTemplateId ? ' is-selected' : ''}`;
+      card.className = `develop-template-library-card${String(template.id) === String(selectedEmailTemplateId) ? ' is-selected' : ''}`;
       const copyWrap = document.createElement('div');
       copyWrap.className = 'develop-template-library-copy';
       const mediaWrap = document.createElement('div');
@@ -3250,9 +3253,9 @@ App.develop = (function () {
       actionRow.style.justifyContent = 'flex-start';
       const previewBtn = document.createElement('button');
       previewBtn.type = 'button';
-      previewBtn.textContent = template.id === selectedEmailTemplateId ? 'Selected' : 'Preview';
+      previewBtn.textContent = String(template.id) === String(selectedEmailTemplateId) ? 'Selected' : 'Preview';
       previewBtn.addEventListener('click', () => {
-        selectedEmailTemplateId = template.id;
+        selectedEmailTemplateId = String(template.id);
         renderEmailTemplateLibrary();
         renderEmailTemplatePreview(template.id);
       });
@@ -3260,13 +3263,38 @@ App.develop = (function () {
       launchBtn.type = 'button';
       launchBtn.textContent = 'Use In Campaign';
       launchBtn.addEventListener('click', () => {
-        selectedEmailTemplateId = template.id;
+        selectedEmailTemplateId = String(template.id);
         renderEmailTemplateLibrary();
         renderEmailTemplatePreview(template.id);
         openCampaignBuilderWithEmailTemplate(template.id);
       });
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => {
+        populateEmailTemplateForm(template);
+      });
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', async () => {
+        const confirmed = window.confirm(`Delete email template "${safeText(template.name) || 'Untitled'}"?`);
+        if (!confirmed) return;
+        try {
+          await api(`/api/develop/email-templates/${encodeURIComponent(template.id)}`, { method: 'DELETE' });
+          if (String(selectedEmailTemplateId) === String(template.id)) {
+            selectedEmailTemplateId = '';
+          }
+          await refresh();
+          notify('Email template deleted');
+        } catch (err) {
+          notify(err.message || 'Could not delete email template', true);
+        }
+      });
       actionRow.appendChild(previewBtn);
       actionRow.appendChild(launchBtn);
+      actionRow.appendChild(editBtn);
+      actionRow.appendChild(deleteBtn);
       copyWrap.appendChild(title);
       copyWrap.appendChild(summary);
       copyWrap.appendChild(actionRow);
@@ -3274,6 +3302,30 @@ App.develop = (function () {
       card.appendChild(mediaWrap);
       host.appendChild(card);
     });
+  }
+
+  function populateEmailTemplateForm(template) {
+    const form = byId('developEmailTemplateForm');
+    if (!form) return;
+    byId('developEmailTemplateIdInput').value = safeText(template?.id);
+    byId('developEmailTemplateNameInput').value = safeText(template?.name);
+    byId('developEmailTemplateSlugInput').value = safeText(template?.slug);
+    byId('developEmailTemplateSummaryInput').value = safeText(template?.summary);
+    byId('developEmailTemplateSubjectInput').value = safeText(template?.subject);
+    byId('developEmailTemplateHeadingInput').value = safeText(template?.heading);
+    byId('developEmailTemplateBodyInput').value = safeText(template?.body);
+    byId('developEmailTemplateCtaInput').value = safeText(template?.cta);
+    const submitBtn = byId('developEmailTemplateSubmitBtn');
+    if (submitBtn) submitBtn.textContent = template?.id ? 'Update Email Template' : 'Save Email Template';
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function resetEmailTemplateForm() {
+    const form = byId('developEmailTemplateForm');
+    if (form) form.reset();
+    byId('developEmailTemplateIdInput').value = '';
+    const submitBtn = byId('developEmailTemplateSubmitBtn');
+    if (submitBtn) submitBtn.textContent = 'Save Email Template';
   }
 
   function renderFormTemplateLibrary() {
@@ -3527,6 +3579,7 @@ App.develop = (function () {
   async function refresh() {
     await Promise.all([
       loadSavedForms(),
+      loadSavedEmailTemplates(),
       loadSavedLandingPages(),
       loadSavedExtensions(),
       loadExtensionManagerConfig(),
@@ -3551,6 +3604,7 @@ App.develop = (function () {
     renderFormTemplatePreview(selectedFormTemplateId);
     renderEmailTemplateLibrary();
     renderEmailTemplatePreview(selectedEmailTemplateId);
+    resetEmailTemplateForm();
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
   }
@@ -3617,6 +3671,8 @@ App.develop = (function () {
   function init() {
     const formIdInput = byId('developFormIdInput');
     const formNameInput = byId('developFormNameInput');
+    const emailTemplateForm = byId('developEmailTemplateForm');
+    const landingPreviewAction = byId('developLandingPagePreviewAction');
     const openCreateFormBtn = byId('developOpenCreateFormBtn');
     const cancelFormEditBtn = byId('developCancelFormEditBtn');
     const formTypeSelect = byId('developFormTypeSelect');
@@ -3626,6 +3682,53 @@ App.develop = (function () {
     const formCtaSelect = byId('developFormCtaSelect');
     const formHeadingInput = byId('developFormHeadingInput');
     const formSuccessMessageInput = byId('developFormSuccessMessageInput');
+
+    if (landingPreviewAction && typeof App.makeIconButton === 'function') {
+      landingPreviewAction.innerHTML = '';
+      landingPreviewAction.appendChild(
+        App.makeIconButton('preview', 'Preview Page', () => {
+          previewCurrentLandingPageForm();
+        }, { primary: true })
+      );
+    }
+
+    if (emailTemplateForm) {
+      emailTemplateForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const id = safeText(byId('developEmailTemplateIdInput')?.value);
+        const payload = {
+          name: safeText(byId('developEmailTemplateNameInput')?.value),
+          slug: safeText(byId('developEmailTemplateSlugInput')?.value) || slugify(byId('developEmailTemplateNameInput')?.value),
+          summary: safeText(byId('developEmailTemplateSummaryInput')?.value),
+          subject: safeText(byId('developEmailTemplateSubjectInput')?.value),
+          heading: safeText(byId('developEmailTemplateHeadingInput')?.value),
+          body: safeText(byId('developEmailTemplateBodyInput')?.value),
+          cta: safeText(byId('developEmailTemplateCtaInput')?.value),
+        };
+        if (!payload.name) {
+          notify('Template name is required', true);
+          return;
+        }
+        try {
+          const endpoint = id
+            ? `/api/develop/email-templates/${encodeURIComponent(id)}`
+            : '/api/develop/email-templates';
+          const method = id ? 'PATCH' : 'POST';
+          await api(endpoint, { method, body: JSON.stringify(payload) });
+          notify(id ? 'Email template updated' : 'Email template created');
+          await refresh();
+        } catch (err) {
+          notify(err.message || 'Could not save email template', true);
+        }
+      });
+    }
+
+    const resetEmailTemplateBtn = byId('developEmailTemplateResetBtn');
+    if (resetEmailTemplateBtn) {
+      resetEmailTemplateBtn.addEventListener('click', () => {
+        resetEmailTemplateForm();
+      });
+    }
     const formErrorMessageInput = byId('developFormErrorMessageInput');
     const formAccentInput = byId('developFormAccentColorInput');
     const formMatchLandingInput = byId('developFormMatchLandingColorInput');
