@@ -2,16 +2,11 @@ window.App = window.App || {};
 
 App.campaigns = (function () {
   const { state, els, api, notify } = App;
-  const EMAIL_TEMPLATES = [
-    { value: 'newsletter-basic', label: 'Newsletter Basic' },
-    { value: 'announcement-launch', label: 'Announcement / Launch' },
-    { value: 'event-invite', label: 'Event Invite' },
-    { value: 'lead-magnet-delivery', label: 'Lead Magnet Delivery' },
-  ];
 
   let builderTweets = [];
   let builderHashtags = [];
   let builderEmails = [];
+  let builderEmailTemplates = [];
 
   function byId(id) {
     return document.getElementById(id);
@@ -113,8 +108,11 @@ App.campaigns = (function () {
 
     setSelectOptions(
       byId('campaignEmailTemplateSelect'),
-      EMAIL_TEMPLATES,
-      'Template (optional)'
+      builderEmailTemplates.map((template) => ({
+        value: template.id,
+        label: safeText(template.name) || `Template ${template.id}`,
+      })),
+      builderEmailTemplates.length ? 'Template (optional)' : 'Template (create in Builder > Templates)'
     );
 
     setSelectOptions(
@@ -218,13 +216,14 @@ App.campaigns = (function () {
   }
 
   async function loadBuilderSources() {
-    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes] = await Promise.allSettled([
+    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes] = await Promise.allSettled([
       api('/api/channels'),
       api('/api/assets'),
       api('/api/segments'),
       api('/api/messaging/tweets?limit=200'),
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/emails?limit=5000'),
+      api('/api/develop/email-templates'),
     ]);
 
     if (channelsRes.status === 'fulfilled' && Array.isArray(channelsRes.value.channels)) {
@@ -245,6 +244,9 @@ App.campaigns = (function () {
       : [];
     builderEmails = emailsRes.status === 'fulfilled' && Array.isArray(emailsRes.value.emails)
       ? emailsRes.value.emails
+      : [];
+    builderEmailTemplates = emailTemplatesRes.status === 'fulfilled' && Array.isArray(emailTemplatesRes.value.emailTemplates)
+      ? emailTemplatesRes.value.emailTemplates
       : [];
 
     renderBuilderSelects();
