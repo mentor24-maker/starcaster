@@ -3334,6 +3334,223 @@ App.develop = (function () {
     }, 50);
   }
 
+  function renderTemplateRecordsTable(hostId, title, headers, rows) {
+    const host = byId(hostId);
+    if (!host) return;
+    host.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'develop-template-records-card';
+    const heading = document.createElement('h4');
+    heading.textContent = title;
+    card.appendChild(heading);
+    if (!rows.length) {
+      const empty = document.createElement('div');
+      empty.className = 'develop-template-records-empty';
+      empty.textContent = 'No records yet.';
+      card.appendChild(empty);
+      host.appendChild(card);
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'develop-template-records-table';
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    headers.forEach((header) => {
+      const th = document.createElement('th');
+      th.textContent = header;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach((cells) => {
+      const tr = document.createElement('tr');
+      cells.forEach((cell) => {
+        const td = document.createElement('td');
+        if (cell && typeof cell === 'object' && cell.nodeType) {
+          td.appendChild(cell);
+        } else {
+          td.textContent = safeText(cell) || '-';
+        }
+        if (td.childNodes.length && td.firstChild && td.firstChild.nodeType === 1 && td.firstChild.classList?.contains('page-heading-actions')) {
+          td.classList.add('actions-cell');
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    card.appendChild(table);
+    host.appendChild(card);
+  }
+
+  function buildEmailTemplateActions(template) {
+    const wrap = document.createElement('div');
+    wrap.className = 'page-heading-actions';
+    wrap.style.justifyContent = 'flex-start';
+    const previewBtn = App.makeIconButton('preview', 'Preview Template', () => {
+      selectedEmailTemplateId = String(template.id);
+      renderEmailTemplateLibrary();
+      renderEmailTemplatePreview(template.id);
+    });
+    const editBtn = App.makeIconButton('edit', 'Edit Template', () => {
+      populateEmailTemplateForm(template);
+    }, { marginLeft: '8px' });
+    const deleteBtn = App.makeIconButton('delete', 'Delete Template', async () => {
+      const confirmed = window.confirm(`Delete email template "${safeText(template.name) || 'Untitled'}"?`);
+      if (!confirmed) return;
+      try {
+        await api(`/api/develop/email-templates/${encodeURIComponent(template.id)}`, { method: 'DELETE' });
+        if (String(selectedEmailTemplateId) === String(template.id)) {
+          selectedEmailTemplateId = '';
+        }
+        await refresh();
+        notify('Email template deleted');
+      } catch (err) {
+        notify(err.message || 'Could not delete email template', true);
+      }
+    }, { danger: true, marginLeft: '8px' });
+    wrap.appendChild(previewBtn);
+    wrap.appendChild(editBtn);
+    wrap.appendChild(deleteBtn);
+    return wrap;
+  }
+
+  function renderEmailTemplateTables() {
+    const rows = savedEmailTemplates.map((template) => ([
+      safeText(template.name) || '-',
+      safeText(template.subject) || '-',
+      safeText(template.updatedAt ? new Date(template.updatedAt).toLocaleString() : '-') || '-',
+      buildEmailTemplateActions(template),
+    ]));
+    renderTemplateRecordsTable(
+      'developTemplateEditorTableHost',
+      'Saved Email Templates',
+      ['Name', 'Subject', 'Updated', 'Actions'],
+      rows
+    );
+    renderTemplateRecordsTable(
+      'developEmailTemplatesTableHost',
+      'Saved Email Templates',
+      ['Name', 'Subject', 'Updated', 'Actions'],
+      rows
+    );
+  }
+
+  function renderFormTemplateRecordsTable() {
+    const rows = savedForms.map((form) => {
+      const actions = document.createElement('div');
+      actions.className = 'page-heading-actions';
+      actions.style.justifyContent = 'flex-start';
+      const editBtn = App.makeIconButton('edit', 'Edit Form', () => {
+        App.setActivePage('developFormsPage');
+        setTimeout(() => applySavedFormToBuilder(form), 60);
+      });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Form', async () => {
+        try {
+          const payload = {
+            name: safeText(form.name),
+            formType: safeText(form.formType),
+            contactType: safeText(form.contactType),
+            leadMagnetType: safeText(form.leadMagnetType),
+            leadMagnetId: safeText(form.leadMagnetId),
+            ctaId: safeText(form.ctaId),
+            heading: safeText(form.heading),
+            submitLabel: safeText(form.submitLabel),
+            successMessage: safeText(form.successMessage),
+            errorMessage: safeText(form.errorMessage),
+            accentColor: safeText(form.accentColor),
+            matchLandingColor: Boolean(form.matchLandingColor),
+            landingColorMode: safeText(form.landingColorMode),
+            useLandingBackground: Boolean(form.useLandingBackground),
+            fields: Array.isArray(form.fields)
+              ? form.fields.map((field) => ({
+                  key: safeText(field?.key),
+                  label: safeText(field?.label),
+                  type: safeText(field?.type),
+                  required: Boolean(field?.required),
+                }))
+              : [],
+          };
+          await api('/api/develop/forms', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          await refresh();
+          notify('Form cloned');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Form', async () => {
+        if (!window.confirm(`Delete form "${safeText(form.name) || form.id}"?`)) return;
+        try {
+          await api(`/api/develop/forms/${encodeURIComponent(form.id)}`, { method: 'DELETE' });
+          await refresh();
+          notify('Form deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actions.appendChild(editBtn);
+      actions.appendChild(cloneBtn);
+      actions.appendChild(deleteBtn);
+      return [
+        safeText(form.name) || '-',
+        getFormTemplateById(form.formType).name,
+        form.updatedAt ? new Date(form.updatedAt).toLocaleString() : '-',
+        actions,
+      ];
+    });
+    renderTemplateRecordsTable(
+      'developFormTemplatesTableHost',
+      'Saved Forms',
+      ['Name', 'Type', 'Updated', 'Actions'],
+      rows
+    );
+  }
+
+  function renderPageTemplateRecordsTable() {
+    const rows = savedLandingPages.map((page) => {
+      const actions = document.createElement('div');
+      actions.className = 'page-heading-actions';
+      actions.style.justifyContent = 'flex-start';
+      const viewBtn = App.makeIconButton('view', 'View Page', () => {
+        openLandingPagePreview(page);
+      });
+      const editBtn = App.makeIconButton('edit', 'Edit Page', () => {
+        openLandingPageVisualEditor(page);
+      }, { marginLeft: '8px' });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Page', async () => {
+        const id = safeText(page.id);
+        if (!window.confirm(`Delete page "${safeText(page.name) || id}"?`)) return;
+        try {
+          await api(`/api/develop/landing-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          selectedLandingPageIds.delete(id);
+          await refresh();
+          notify('Landing page deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actions.appendChild(viewBtn);
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+      return [
+        safeText(page.name) || '-',
+        getLandingPageTemplateName(page.templateId) || '-',
+        page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '-',
+        actions,
+      ];
+    });
+    renderTemplateRecordsTable(
+      'developPageTemplatesTableHost',
+      'Saved Pages',
+      ['Name', 'Template', 'Updated', 'Actions'],
+      rows
+    );
+  }
+
   function renderEmailTemplateLibrary() {
     const host = byId('developEmailTemplatesLibrary');
     if (!host) return;
@@ -3983,6 +4200,9 @@ App.develop = (function () {
     populateExtensionParentSelect(byId('developExtensionIdInput')?.value);
     renderExtensionsTable();
     renderLandingPagesTable();
+    renderFormTemplateRecordsTable();
+    renderEmailTemplateTables();
+    renderPageTemplateRecordsTable();
     renderLandingPageThankYouPage();
     renderThumbnailSourceAssetOptions();
     renderFormTemplateLibrary();
