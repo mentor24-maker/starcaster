@@ -2434,10 +2434,75 @@ th {
 .develop-template-editor {
   border: 1px solid rgba(11, 130, 212, 0.28);
   border-radius: 12px;
-  padding: 0.9rem;
+  padding: 0;
   background: linear-gradient(135deg, #fcfeff 0%, #eef7ff 100%);
   margin-top: 0.7rem;
   margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.develop-template-section {
+  border: 1px solid rgba(11, 130, 212, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fcfeff 0%, #eef7ff 100%);
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.develop-template-section-header-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: #000;
+}
+
+.develop-template-section-header-row > button:not(.develop-template-section-toggle) {
+  flex: 0 0 auto;
+  margin: 0.45rem;
+  min-width: 140px;
+}
+
+.develop-template-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.95rem 1.1rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  justify-content: flex-start;
+  box-shadow: none;
+}
+
+.develop-template-section-toggle:hover,
+.develop-template-section-toggle:focus {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.develop-template-section-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  transition: transform 0.18s ease;
+}
+
+.develop-template-section-toggle[aria-expanded="false"] .develop-template-section-arrow {
+  transform: rotate(-90deg);
+}
+
+.develop-template-section-body {
+  padding: 1rem 0.95rem 1rem;
+}
+
+.develop-template-section-body.hidden {
+  display: none;
 }
 
 .develop-template-module-list {
