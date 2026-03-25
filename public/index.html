@@ -4593,13 +4593,14 @@
           <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
         </div>
         <p>Manage the reusable structural templates that power forms and pages.</p>
+        <div id="developEmailTemplatesPrimaryTableHost" class="develop-template-records-host"></div>
         <section id="developTemplateEditorPanel" class="develop-template-section develop-template-editor hidden">
           <div class="develop-template-section-header-row">
             <button
               id="developTemplateEditorToggle"
               class="develop-template-section-toggle"
               type="button"
-              aria-expanded="true"
+              aria-expanded="false"
               aria-controls="developTemplateEditorBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
@@ -4609,7 +4610,6 @@
           </div>
           <div id="developTemplateEditorBody" class="develop-template-section-body">
             <p id="developTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
-            <div id="developTemplateEditorTableHost" class="develop-template-records-host"></div>
             <div class="grid-form" style="margin-bottom:0.75rem;">
               <input id="developTemplateEditorNameInput" type="text" placeholder="Template name" />
             </div>
@@ -4638,7 +4638,7 @@
               id="developFormsSectionToggle"
               class="develop-template-section-toggle"
               type="button"
-              aria-expanded="true"
+              aria-expanded="false"
               aria-controls="developFormsSectionBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
@@ -4659,7 +4659,7 @@
               id="developEmailSectionToggle"
               class="develop-template-section-toggle"
               type="button"
-              aria-expanded="true"
+              aria-expanded="false"
               aria-controls="developEmailSectionBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
@@ -4668,7 +4668,6 @@
           </div>
           <div id="developEmailSectionBody" class="develop-template-section-body">
             <p>Choose an email template type to pair with a theme and campaign delivery.</p>
-            <div id="developEmailTemplatesTableHost" class="develop-template-records-host"></div>
             <form id="developEmailTemplateForm" class="stack-form" style="margin-bottom: 1.5rem;">
               <input id="developEmailTemplateIdInput" name="template_id" type="hidden" />
               <div class="page-heading-actions" style="justify-content:flex-start;">
@@ -4700,7 +4699,7 @@
               id="developPagesSectionToggle"
               class="develop-template-section-toggle"
               type="button"
-              aria-expanded="true"
+              aria-expanded="false"
               aria-controls="developPagesSectionBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>

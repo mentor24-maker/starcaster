@@ -3424,13 +3424,7 @@ App.develop = (function () {
       buildEmailTemplateActions(template),
     ]));
     renderTemplateRecordsTable(
-      'developTemplateEditorTableHost',
-      'Saved Email Templates',
-      ['Name', 'Subject', 'Updated', 'Actions'],
-      rows
-    );
-    renderTemplateRecordsTable(
-      'developEmailTemplatesTableHost',
+      'developEmailTemplatesPrimaryTableHost',
       'Saved Email Templates',
       ['Name', 'Subject', 'Updated', 'Actions'],
       rows
@@ -3636,6 +3630,8 @@ App.develop = (function () {
   function populateEmailTemplateForm(template) {
     const form = byId('developEmailTemplateForm');
     if (!form) return;
+    setEmailTemplateEditorVisible(true);
+    setCollapsibleSectionExpanded('developEmailSectionToggle', 'developEmailSectionBody', true);
     byId('developEmailTemplateIdInput').value = safeText(template?.id);
     byId('developEmailTemplateNameInput').value = safeText(template?.name);
     const builderNameInput = byId('developTemplateEditorNameInput');
@@ -3684,26 +3680,30 @@ App.develop = (function () {
 
   function setEmailTemplateEditorVisible(visible) {
     const panel = byId('developTemplateEditorPanel');
-    const toggle = byId('developTemplateEditorToggle');
-    const body = byId('developTemplateEditorBody');
     if (!panel) return;
     panel.classList.toggle('hidden', !visible);
-    if (body) body.classList.toggle('hidden', !visible);
-    if (toggle) toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+    if (visible) {
+      setCollapsibleSectionExpanded('developTemplateEditorToggle', 'developTemplateEditorBody', true);
+    }
+  }
+
+  function setCollapsibleSectionExpanded(toggleId, bodyId, expanded) {
+    const toggle = byId(toggleId);
+    const body = byId(bodyId);
+    if (!toggle || !body) return false;
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    body.classList.toggle('hidden', !expanded);
+    return true;
   }
 
   function bindCollapsibleSection(toggleId, bodyId, { defaultExpanded = true } = {}) {
     const toggle = byId(toggleId);
     const body = byId(bodyId);
     if (!toggle || !body) return;
-    const apply = (expanded) => {
-      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-      body.classList.toggle('hidden', !expanded);
-    };
-    apply(defaultExpanded);
+    setCollapsibleSectionExpanded(toggleId, bodyId, defaultExpanded);
     toggle.addEventListener('click', () => {
       const expanded = toggle.getAttribute('aria-expanded') !== 'false';
-      apply(!expanded);
+      setCollapsibleSectionExpanded(toggleId, bodyId, !expanded);
     });
   }
 
@@ -4306,10 +4306,10 @@ App.develop = (function () {
       });
     }
 
-    bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: true });
-    bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: true });
-    bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: true });
-    bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: true });
+    bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: false });
+    bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
+    bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
+    bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: false });
 
     const submitEmailTemplateFromBuilder = (button) => {
       if (!button) return;
