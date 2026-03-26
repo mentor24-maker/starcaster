@@ -309,6 +309,13 @@ App.contactPersonas = (function () {
       openCreateFromLandingBtn.addEventListener('click', () => openCreatePage());
     }
 
+    Promise.resolve()
+      .then(() => refresh())
+      .catch((err) => notify(err.message || 'Unable to load personas', true));
+
+    window.setTimeout(() => {
+      refresh().catch((err) => notify(err.message || 'Unable to load personas', true));
+    }, 400);
   }
 
   return {
