@@ -439,6 +439,24 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
     link.classList.toggle('active', link.dataset.page === target);
   });
 
+  const manifests = Array.isArray(App.manifests) ? App.manifests : [];
+  manifests.forEach((mod) => {
+    if (!mod || typeof mod.onPageActivated !== 'function') return;
+    const manifest = mod.manifest || {};
+    const pageIdMatch = manifest.pageId === target;
+    const pagePrefixes = Array.isArray(manifest.pagePrefixes) ? manifest.pagePrefixes : [];
+    const prefixMatch = pagePrefixes.some((prefix) => String(target || '').startsWith(String(prefix || '')));
+    if (!pageIdMatch && !prefixMatch) return;
+    Promise.resolve()
+      .then(() => mod.onPageActivated(target))
+      .catch((err) => {
+        if (typeof App.notify === 'function') {
+          const label = manifest.label || manifest.id || 'Page';
+          App.notify(`${label} load failed: ${err.message}`, true);
+        }
+      });
+  });
+
   if (shouldPersist) persistActivePage(target);
 };
 
