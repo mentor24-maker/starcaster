@@ -20,6 +20,33 @@ App.assetCategories = (function () {
     return String(value || '').trim();
   }
 
+  function setCreatePanelVisible(visible) {
+    const panel = byId('assetCategoryCreatePanel');
+    if (!panel) return;
+    panel.classList.toggle('hidden', !visible);
+  }
+
+  function openCategoriesPage() {
+    setCreatePanelVisible(false);
+    App.setActivePage('assetCategoriesPage');
+    refresh().catch((err) => notify(err.message || 'Unable to load categories', true));
+    window.setTimeout(() => {
+      refresh().catch(() => {});
+    }, 250);
+    return false;
+  }
+
+  function openCategoriesCreate() {
+    if (els.assetCategoryForm) els.assetCategoryForm.reset();
+    setCreatePanelVisible(true);
+    App.setActivePage('assetCategoriesPage');
+    const panel = byId('assetCategoryCreatePanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return false;
+  }
+
   function getFilteredSortedCategories() {
     const typeFilter = safeText(tableState.filters.assetType);
     const items = Array.isArray(state.assetCategories) ? [...state.assetCategories] : [];
@@ -114,6 +141,7 @@ App.assetCategories = (function () {
       categoryTd.textContent = item.category || '-';
 
       const actionsTd = document.createElement('td');
+      actionsTd.className = 'asset-categories-actions-cell';
       const viewBtn = App.makeIconButton('view', 'View Category', () => viewCategory(item));
       const editBtn = App.makeIconButton('edit', 'Edit Category', () => openEditPage(item), { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Category', () => deleteCategory(item), { danger: true, marginLeft: '8px' });
@@ -139,43 +167,16 @@ App.assetCategories = (function () {
   }
 
   function renderCategoriesMap() {
-    const container = byId('assetCategoriesMap');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const rows = Array.isArray(state.assetCategories) ? state.assetCategories : [];
-    if (!rows.length) {
-      const empty = document.createElement('div');
-      empty.className = 'messaging-content-node asset-category-node';
-      empty.innerHTML = '<span class="messaging-content-node-kicker">Assets</span><span class="messaging-content-node-title">No Categories Yet</span>';
-      container.appendChild(empty);
-      return;
-    }
-
-    rows
-      .filter((item) => safeText(item?.category))
-      .sort((a, b) => {
-        const aType = safeText(a?.assetType).toLowerCase();
-        const bType = safeText(b?.assetType).toLowerCase();
-        if (aType !== bType) return aType < bType ? -1 : 1;
-        const aCategory = safeText(a?.category).toLowerCase();
-        const bCategory = safeText(b?.category).toLowerCase();
-        if (aCategory === bCategory) return 0;
-        return aCategory < bCategory ? -1 : 1;
-      })
-      .forEach((item) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'messaging-content-node asset-category-node';
-        button.innerHTML = `<span class="messaging-content-node-kicker">${safeText(item.assetType) || 'Asset'}</span><span class="messaging-content-node-title">${safeText(item.category)}</span>`;
-        button.addEventListener('click', () => viewCategory(item));
-        container.appendChild(button);
-      });
+    // Asset Categories now use the editor table as the primary management surface.
   }
 
   async function refresh() {
     const result = await api('/api/asset-categories');
-    state.assetCategories = result.categories || [];
+    state.assetCategories = Array.isArray(result?.categories)
+      ? result.categories
+      : Array.isArray(result?.data)
+        ? result.data
+        : [];
     renderCategoriesMap();
     renderCategories();
   }
@@ -218,79 +219,97 @@ App.assetCategories = (function () {
 
     if (els.openCreateAssetCategoryPageBtn) {
       els.openCreateAssetCategoryPageBtn.addEventListener('click', () => {
-        if (els.assetCategoryForm) els.assetCategoryForm.reset();
-        App.setActivePage('createAssetCategoryPage');
+        openCategoriesCreate();
       });
     }
 
     if (els.backToAssetCategoriesBtn) {
       els.backToAssetCategoriesBtn.addEventListener('click', () => {
-        App.setActivePage('manageAssetCategoriesPage');
+        openCategoriesPage();
       });
     }
 
     if (els.backFromEditAssetCategoryBtn) {
       els.backFromEditAssetCategoryBtn.addEventListener('click', () => {
-        App.setActivePage('manageAssetCategoriesPage');
+        openCategoriesPage();
       });
     }
 
     if (els.assetCategoryForm) {
       els.assetCategoryForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(els.assetCategoryForm);
-        const payload = {
-          assetType: String(formData.get('asset_type') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
-        };
-
-        try {
-          await api('/api/asset-categories', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
-          notify('Category created');
-          els.assetCategoryForm.reset();
-          await refresh();
-          App.setActivePage('manageAssetCategoriesPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
+        return submitCategoryCreate(e);
       });
     }
 
     if (els.assetCategoryEditForm) {
       els.assetCategoryEditForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(els.assetCategoryEditForm);
-        const categoryId = Number(formData.get('id') || 0) || 0;
-        if (!categoryId) return notify('Category id is required', true);
-
-        const payload = {
-          assetType: String(formData.get('asset_type') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
-        };
-
-        try {
-          await api(`/api/asset-categories/${categoryId}`, {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-          notify('Category updated');
-          els.assetCategoryEditForm.reset();
-          await refresh();
-          App.setActivePage('manageAssetCategoriesPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
+        return submitCategoryEdit(e);
       });
     }
+  }
+
+  async function submitCategoryCreate(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = els.assetCategoryForm;
+    if (!form) return false;
+    const formData = new FormData(form);
+    const payload = {
+      assetType: String(formData.get('asset_type') || '').trim(),
+      category: String(formData.get('category') || '').trim(),
+    };
+
+    try {
+      await api('/api/asset-categories', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('Category created');
+      form.reset();
+      await refresh();
+      setCreatePanelVisible(true);
+      App.setActivePage('assetCategoriesPage');
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function submitCategoryEdit(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = els.assetCategoryEditForm;
+    if (!form) return false;
+    const formData = new FormData(form);
+    const categoryId = Number(formData.get('id') || 0) || 0;
+    if (!categoryId) return notify('Category id is required', true);
+
+    const payload = {
+      assetType: String(formData.get('asset_type') || '').trim(),
+      category: String(formData.get('category') || '').trim(),
+    };
+
+    try {
+      await api(`/api/asset-categories/${categoryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      notify('Category updated');
+      form.reset();
+      await refresh();
+      openCategoriesPage();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
   }
 
   return {
     manifest: { id: 'assetCategories', label: 'Asset Categories', pageId: 'assetCategoriesPage' },
     init,
+    openCategoriesPage,
+    openCategoriesCreate,
     refresh,
+    submitCategoryCreate,
+    submitCategoryEdit,
     onPageActivated: refresh,
   };
 })();
