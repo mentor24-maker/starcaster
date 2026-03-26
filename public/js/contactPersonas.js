@@ -199,12 +199,25 @@ App.contactPersonas = (function () {
   }
 
   async function refresh() {
-    const result = await api('/api/contact-personas');
-    state.contactPersonas = result.personas || [];
-    populateParentSelect('contactPersonaParent');
-    populateParentSelect('contactPersonaEditParent');
-    renderMap();
-    renderTable();
+    try {
+      const result = await api('/api/contact-personas');
+      const personas = Array.isArray(result?.personas)
+        ? result.personas
+        : Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result)
+            ? result
+            : [];
+      state.contactPersonas = personas;
+      populateParentSelect('contactPersonaParent');
+      populateParentSelect('contactPersonaEditParent');
+      renderMap();
+      renderTable();
+    } catch (err) {
+      state.contactPersonas = [];
+      renderTable();
+      notify(err.message || 'Unable to load personas', true);
+    }
   }
 
   async function submitCreateForm(event) {
