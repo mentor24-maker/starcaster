@@ -71,14 +71,26 @@ App.contactPersonas = (function () {
     });
   }
 
+  function setCreatePanelVisible(visible) {
+    const panel = byId('contactPersonaCreatePanel');
+    if (!panel) return;
+    panel.classList.toggle('hidden', !visible);
+  }
+
   function openCreatePage(selectedParentId = '') {
     const form = byId('contactPersonaForm');
     if (form) form.reset();
     populateParentSelect('contactPersonaParent', selectedParentId);
-    App.setActivePage('createContactPersonaPage');
+    setCreatePanelVisible(true);
+    App.setActivePage('contactsPersonasPage');
+    const panel = byId('contactPersonaCreatePanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   function goBackToPersonas() {
+    setCreatePanelVisible(false);
     App.setActivePage('contactsPersonasPage');
     return false;
   }
@@ -136,28 +148,7 @@ App.contactPersonas = (function () {
   }
 
   function renderMap() {
-    const container = byId('contactPersonasMap');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const items = sortedPersonas();
-    if (!items.length) {
-      const empty = document.createElement('div');
-      empty.className = 'messaging-content-node asset-category-node';
-      empty.innerHTML = '<span class="messaging-content-node-kicker">Contacts</span><span class="messaging-content-node-title">No Personas Yet</span>';
-      container.appendChild(empty);
-      return;
-    }
-
-    items.forEach((item) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'messaging-content-node asset-category-node';
-      button.innerHTML = `<span class="messaging-content-node-kicker">Persona</span><span class="messaging-content-node-title">${safeText(item.persona)}</span>`;
-      if (safeText(item.description)) button.title = safeText(item.description);
-      button.addEventListener('click', () => openEditPage(item));
-      container.appendChild(button);
-    });
+    // Personas now use the editor table as the primary management surface.
   }
 
   function renderTable() {
@@ -238,8 +229,9 @@ App.contactPersonas = (function () {
       notify('Persona created');
       createForm.reset();
       await refresh();
-      populateParentSelect('contactPersonaParent', createdId);
-      App.setActivePage('createContactPersonaPage');
+      populateParentSelect('contactPersonaParent');
+      setCreatePanelVisible(true);
+      App.setActivePage('contactsPersonasPage');
     } catch (err) {
       notify(err.message, true);
     }

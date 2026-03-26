@@ -286,7 +286,33 @@
           </div>
         </div>
         <p>Define reusable personas for your audience model, then maintain them through a shared CRUD workflow.</p>
-        <div id="contactPersonasMap" class="messaging-content-map asset-category-map"></div>
+        <section id="contactPersonaCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Contact Persona</h3>
+            <button id="backToContactPersonasInlineBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+          </div>
+          <form id="contactPersonaForm" class="stack-form labeled-form" onsubmit="return App.contactPersonas.submitCreateForm(event);">
+            <div class="form-row">
+              <label for="contactPersonaName">Persona</label>
+              <input id="contactPersonaName" name="persona" placeholder="Persona name" required />
+            </div>
+            <div class="form-row">
+              <label for="contactPersonaParent">Parent Persona</label>
+              <select id="contactPersonaParent" name="parent_persona_id">
+                <option value="">No Parent</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="contactPersonaTags">Tags</label>
+              <input id="contactPersonaTags" name="tags" placeholder="comma, separated, tags" />
+            </div>
+            <div class="form-row">
+              <label for="contactPersonaDescription">Description</label>
+              <textarea id="contactPersonaDescription" name="description" rows="5" placeholder="Describe this persona and how it should be used."></textarea>
+            </div>
+            <button type="submit">Save Persona</button>
+          </form>
+        </section>
         <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
@@ -308,7 +334,7 @@
           <h2>Manage Contact Personas</h2>
           <div class="page-heading-actions">
             <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
-            <button type="button" onclick="App.setActivePage('contactsPersonasPage')">Back To Personas</button>
+            <button type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
           </div>
         </div>
         <p>The Personas editor now lives on the main Personas page.</p>
@@ -319,27 +345,7 @@
           <h2>Create Contact Persona</h2>
           <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
         </div>
-        <form id="contactPersonaForm" class="stack-form labeled-form" onsubmit="return App.contactPersonas.submitCreateForm(event);">
-          <div class="form-row">
-            <label for="contactPersonaName">Persona</label>
-            <input id="contactPersonaName" name="persona" placeholder="Persona name" required />
-          </div>
-          <div class="form-row">
-            <label for="contactPersonaParent">Parent Persona</label>
-            <select id="contactPersonaParent" name="parent_persona_id">
-              <option value="">No Parent</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="contactPersonaTags">Tags</label>
-            <input id="contactPersonaTags" name="tags" placeholder="comma, separated, tags" />
-          </div>
-          <div class="form-row">
-            <label for="contactPersonaDescription">Description</label>
-            <textarea id="contactPersonaDescription" name="description" rows="5" placeholder="Describe this persona and how it should be used."></textarea>
-          </div>
-          <button type="submit">Save Persona</button>
-        </form>
+        <p>The create form now opens inline on the main Personas page.</p>
       </section>
 
       <section id="editContactPersonaPage" class="app-page hidden">
