@@ -223,10 +223,12 @@ App.contactPersonas = (function () {
     const formData = new FormData(createForm);
     const payload = {
       persona: safeText(formData.get('persona')),
-      parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
-      tags: safeText(formData.get('tags')),
       description: safeText(formData.get('description')),
     };
+    const tags = safeText(formData.get('tags'));
+    const parentPersonaId = Number(formData.get('parent_persona_id') || 0) || null;
+    if (tags) payload.tags = tags;
+    if (parentPersonaId) payload.parentPersonaId = parentPersonaId;
     try {
       const result = await api('/api/contact-personas', {
         method: 'POST',
@@ -256,10 +258,12 @@ App.contactPersonas = (function () {
     }
     const payload = {
       persona: safeText(formData.get('persona')),
-      parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
-      tags: safeText(formData.get('tags')),
       description: safeText(formData.get('description')),
     };
+    const tags = safeText(formData.get('tags'));
+    const parentPersonaId = Number(formData.get('parent_persona_id') || 0) || null;
+    if (tags) payload.tags = tags;
+    if (parentPersonaId) payload.parentPersonaId = parentPersonaId;
     try {
       await api(`/api/contact-personas/${id}`, {
         method: 'PATCH',
