@@ -3,8 +3,39 @@ window.App = window.App || {};
 App.channels = (function () {
   const { state, els, api, notify } = App;
 
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  function setCreatePanelVisible(visible) {
+    const panel = byId('channelCreatePanel');
+    if (!panel) return;
+    panel.classList.toggle('hidden', !visible);
+  }
+
+  function openChannelsPage() {
+    setCreatePanelVisible(false);
+    App.setActivePage('channelsPage');
+    refresh().catch((err) => notify(err.message || 'Unable to load channels', true));
+    window.setTimeout(() => {
+      refresh().catch(() => {});
+    }, 250);
+    return false;
+  }
+
+  function openChannelsCreate() {
+    if (els.channelForm) els.channelForm.reset();
+    setCreatePanelVisible(true);
+    App.setActivePage('channelsPage');
+    const panel = byId('channelCreatePanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return false;
   }
 
   function isUrl(value) {
@@ -114,6 +145,7 @@ App.channels = (function () {
       passwordTd.textContent = item.passwordMasked || '-';
 
       const actionsTd = document.createElement('td');
+      actionsTd.className = 'channels-actions-cell';
       const id = Number(item.id || 0) || 0;
       if (id > 0) {
         const editBtn = App.makeIconButton('edit', 'Edit Channel', () => openEditPage(item));
@@ -146,83 +178,99 @@ App.channels = (function () {
 
     if (els.openAddChannelPageBtn) {
       els.openAddChannelPageBtn.addEventListener('click', () => {
-        if (els.channelForm) els.channelForm.reset();
-        App.setActivePage('addChannelPage');
+        openChannelsCreate();
       });
     }
 
     if (els.backToChannelsBtn) {
       els.backToChannelsBtn.addEventListener('click', () => {
-        App.setActivePage('channelsPage');
+        openChannelsPage();
       });
     }
 
     if (els.backFromEditChannelBtn) {
       els.backFromEditChannelBtn.addEventListener('click', () => {
-        App.setActivePage('channelsPage');
+        openChannelsPage();
       });
     }
 
     if (els.channelForm) {
       els.channelForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(els.channelForm);
-        const payload = {
-          channel: String(formData.get('channel') || '').trim(),
-          userName: String(formData.get('user_name') || '').trim(),
-          email: String(formData.get('email') || '').trim(),
-          password: String(formData.get('password') || '').trim(),
-        };
-
-        try {
-          await api('/api/channels', { method: 'POST', body: JSON.stringify(payload) });
-          notify('Channel created');
-          els.channelForm.reset();
-          await refresh();
-          App.setActivePage('channelsPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
+        return submitChannelCreate(e);
       });
     }
 
     if (els.channelEditForm) {
       els.channelEditForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(els.channelEditForm);
-        const channelId = Number(formData.get('id') || 0) || 0;
-        if (!channelId) return notify('Channel id is required', true);
-
-        const payload = {
-          channel: String(formData.get('channel') || '').trim(),
-          userName: String(formData.get('user_name') || '').trim(),
-          email: String(formData.get('email') || '').trim(),
-        };
-        const password = String(formData.get('password') || '');
-        if (password.trim()) {
-          payload.password = password.trim();
-        }
-
-        try {
-          await api(`/api/channels/${channelId}`, {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-          notify('Channel updated');
-          els.channelEditForm.reset();
-          await refresh();
-          App.setActivePage('channelsPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
+        return submitChannelEdit(e);
       });
     }
+  }
+
+  async function submitChannelCreate(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = els.channelForm;
+    if (!form) return false;
+    const formData = new FormData(form);
+    const payload = {
+      channel: String(formData.get('channel') || '').trim(),
+      userName: String(formData.get('user_name') || '').trim(),
+      email: String(formData.get('email') || '').trim(),
+      password: String(formData.get('password') || '').trim(),
+    };
+
+    try {
+      await api('/api/channels', { method: 'POST', body: JSON.stringify(payload) });
+      notify('Channel created');
+      form.reset();
+      await refresh();
+      setCreatePanelVisible(true);
+      App.setActivePage('channelsPage');
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function submitChannelEdit(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = els.channelEditForm;
+    if (!form) return false;
+    const formData = new FormData(form);
+    const channelId = Number(formData.get('id') || 0) || 0;
+    if (!channelId) return notify('Channel id is required', true);
+
+    const payload = {
+      channel: String(formData.get('channel') || '').trim(),
+      userName: String(formData.get('user_name') || '').trim(),
+      email: String(formData.get('email') || '').trim(),
+    };
+    const password = String(formData.get('password') || '');
+    if (password.trim()) payload.password = password.trim();
+
+    try {
+      await api(`/api/channels/${channelId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      notify('Channel updated');
+      form.reset();
+      await refresh();
+      openChannelsPage();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
   }
 
   return {
     manifest: { id: 'channels', label: 'Channels', pageId: 'channelsPage' },
     init,
+    openChannelsPage,
+    openChannelsCreate,
     refresh,
+    submitChannelCreate,
+    submitChannelEdit,
     onPageActivated: refresh,
   };
 })();

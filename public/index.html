@@ -3119,7 +3119,6 @@
           <h2>Messaging Topics</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
-            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
             <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
           </div>
         </div>
@@ -3878,23 +3877,36 @@
         <div class="page-heading-row">
           <h2>Asset Categories</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')">Manage Categories</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
             <button type="button" onclick="App.assets.openAssetsLanding()">Back To Assets</button>
           </div>
         </div>
-        <p>Choose a category to open the asset library filtered to that category.</p>
-        <div id="assetCategoriesMap" class="messaging-content-map asset-category-map"></div>
-      </section>
-
-      <section id="manageAssetCategoriesPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Manage Asset Categories</h2>
-          <div class="page-heading-actions">
-            <button id="openCreateAssetCategoryPageBtn" type="button">Create Category</button>
-            <button type="button" onclick="App.setActivePage('assetCategoriesPage')">Back To Categories</button>
+        <section id="assetCategoryCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Category</h3>
+            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
           </div>
-        </div>
-        <div class="table-wrap">
+          <form id="assetCategoryForm" class="stack-form labeled-form" onsubmit="App.assetCategories.submitCategoryCreate(event); return false;">
+            <div class="form-row">
+              <label for="assetCategoryType">Asset Type</label>
+              <select id="assetCategoryType" name="asset_type" required>
+                <option value="">Select Asset Type</option>
+                <option value="Image">Image</option>
+                <option value="Video">Video</option>
+                <option value="Audio">Audio</option>
+                <option value="Lead Magnet">PDF</option>
+                <option value="Screenshot">Screenshot</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="assetCategoryName">Category</label>
+              <input id="assetCategoryName" name="category" placeholder="Category name" required />
+            </div>
+            <button type="submit">Save Category</button>
+          </form>
+        </section>
+        <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
               <tr class="table-filter-row">
@@ -3914,7 +3926,7 @@
               <tr>
                 <th><button id="assetCategoriesSortType" type="button" class="tiny-btn">Asset Type</button></th>
                 <th><button id="assetCategoriesSortCategory" type="button" class="tiny-btn">Category</button></th>
-                <th>Actions</th>
+                <th class="asset-categories-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody id="assetCategoriesTable"></tbody>
@@ -3922,37 +3934,35 @@
         </div>
       </section>
 
+      <section id="manageAssetCategoriesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Asset Categories</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
+          </div>
+        </div>
+        <p>The Categories editor now lives on the main Categories page.</p>
+      </section>
+
       <section id="createAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Category</h2>
-          <button id="backToAssetCategoriesBtn" type="button">Back To Manage Categories</button>
+          <button id="backToAssetCategoriesBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
         </div>
-        <form id="assetCategoryForm" class="stack-form labeled-form">
-          <div class="form-row">
-            <label for="assetCategoryType">Asset Type</label>
-            <select id="assetCategoryType" name="asset_type" required>
-              <option value="">Select Asset Type</option>
-              <option value="Image">Image</option>
-              <option value="Video">Video</option>
-              <option value="Audio">Audio</option>
-              <option value="Lead Magnet">PDF</option>
-              <option value="Screenshot">Screenshot</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="assetCategoryName">Category</label>
-            <input id="assetCategoryName" name="category" placeholder="Category name" required />
-          </div>
-          <button type="submit">Save Category</button>
-        </form>
+        <p>The create form now opens inline on the main Categories page.</p>
       </section>
 
       <section id="editAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Edit Category</h2>
-          <button id="backFromEditAssetCategoryBtn" type="button">Back To Manage Categories</button>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
+            <button id="backFromEditAssetCategoryBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
+            <button type="button" onclick="App.assets.openAssetsLanding()">Back To Assets</button>
+          </div>
         </div>
-        <form id="assetCategoryEditForm" class="stack-form labeled-form">
+        <form id="assetCategoryEditForm" class="stack-form labeled-form" onsubmit="App.assetCategories.submitCategoryEdit(event); return false;">
           <input id="assetCategoryEditId" name="id" type="hidden" />
           <div class="form-row">
             <label for="assetCategoryEditType">Asset Type</label>
@@ -3992,10 +4002,35 @@
         <div class="page-heading-row">
           <h2>Channels</h2>
           <div class="page-heading-actions">
-            <button id="openAddChannelPageBtn" type="button">Create Channel</button>
+            <button id="openAddChannelPageBtn" type="button" onclick="App.channels.openChannelsCreate(); return false;">Create Channel</button>
+            <button type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
           </div>
         </div>
-        <p>Define the publishing and outreach destinations where campaigns and engagement will run.</p>
+        <section id="channelCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Channel</h3>
+            <button type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+          </div>
+          <form id="channelForm" class="stack-form labeled-form" onsubmit="App.channels.submitChannelCreate(event); return false;">
+            <div class="form-row">
+              <label for="channelNameInput">Channel</label>
+              <input id="channelNameInput" name="channel" placeholder="Facebook" required />
+            </div>
+            <div class="form-row">
+              <label for="channelUserNameInput">User Name</label>
+              <input id="channelUserNameInput" name="user_name" placeholder="User Name" required />
+            </div>
+            <div class="form-row">
+              <label for="channelEmailInput">Email</label>
+              <input id="channelEmailInput" name="email" type="email" placeholder="name@example.com" required />
+            </div>
+            <div class="form-row">
+              <label for="channelPasswordInput">Password</label>
+              <input id="channelPasswordInput" name="password" type="password" placeholder="Password" required />
+            </div>
+            <button type="submit">Save Channel</button>
+          </form>
+        </section>
         <div class="table-wrap">
           <table>
             <thead>
@@ -4004,7 +4039,7 @@
                 <th>User Name</th>
                 <th>Email</th>
                 <th>Password</th>
-                <th>Actions</th>
+                <th class="channels-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody id="channelsTable"></tbody>
@@ -4015,35 +4050,20 @@
       <section id="addChannelPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Add Channel</h2>
-          <button id="backToChannelsBtn" type="button">Back To Channels</button>
+          <button id="backToChannelsBtn" type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
         </div>
-        <form id="channelForm" class="stack-form labeled-form">
-          <div class="form-row">
-            <label for="channelNameInput">Channel</label>
-            <input id="channelNameInput" name="channel" placeholder="Facebook" required />
-          </div>
-          <div class="form-row">
-            <label for="channelUserNameInput">User Name</label>
-            <input id="channelUserNameInput" name="user_name" placeholder="User Name" required />
-          </div>
-          <div class="form-row">
-            <label for="channelEmailInput">Email</label>
-            <input id="channelEmailInput" name="email" type="email" placeholder="name@example.com" required />
-          </div>
-          <div class="form-row">
-            <label for="channelPasswordInput">Password</label>
-            <input id="channelPasswordInput" name="password" type="password" placeholder="Password" required />
-          </div>
-          <button type="submit">Save Channel</button>
-        </form>
+        <p>The create form now opens inline on the main Channels page.</p>
       </section>
 
       <section id="editChannelPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Edit Channel</h2>
-          <button id="backFromEditChannelBtn" type="button">Back To Channels</button>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.channels.openChannelsCreate(); return false;">Create Channel</button>
+            <button id="backFromEditChannelBtn" type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+          </div>
         </div>
-        <form id="channelEditForm" class="stack-form labeled-form">
+        <form id="channelEditForm" class="stack-form labeled-form" onsubmit="App.channels.submitChannelEdit(event); return false;">
           <input id="channelEditId" name="id" type="hidden" />
           <div class="form-row">
             <label for="channelEditNameInput">Channel</label>

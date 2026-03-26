@@ -3685,6 +3685,42 @@ th {
   margin-left: 8px;
 }
 
+.asset-categories-actions-heading {
+  text-align: center;
+  white-space: nowrap;
+  width: 120px;
+  min-width: 120px;
+}
+
+.asset-categories-actions-cell {
+  text-align: center;
+  white-space: nowrap;
+  width: 120px;
+  min-width: 120px;
+}
+
+.asset-categories-actions-cell .icon-btn + .icon-btn {
+  margin-left: 8px;
+}
+
+.channels-actions-heading {
+  text-align: center;
+  white-space: nowrap;
+  width: 120px;
+  min-width: 120px;
+}
+
+.channels-actions-cell {
+  text-align: center;
+  white-space: nowrap;
+  width: 120px;
+  min-width: 120px;
+}
+
+.channels-actions-cell .icon-btn + .icon-btn {
+  margin-left: 8px;
+}
+
 .tiny-btn-blue {
   background: #1a73e8;
   border-color: #1a73e8;
