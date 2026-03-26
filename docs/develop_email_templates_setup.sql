@@ -1,5 +1,6 @@
 create table if not exists public.develop_email_templates (
   id bigserial primary key,
+  template_kind text not null default 'text',
   slug text not null unique,
   name text not null,
   summary text not null default '',
@@ -14,6 +15,9 @@ create table if not exists public.develop_email_templates (
 
 create index if not exists develop_email_templates_updated_at_idx
   on public.develop_email_templates (updated_at desc);
+
+create index if not exists develop_email_templates_kind_idx
+  on public.develop_email_templates (template_kind, updated_at desc);
 
 create or replace function public.set_develop_email_templates_updated_at()
 returns trigger

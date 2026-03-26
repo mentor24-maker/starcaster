@@ -209,6 +209,7 @@ async function handle(req, res, pathname, method) {
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
     const result = await createEmailTemplate({
+      templateKind: body.templateKind || body.template_kind,
       slug: body.slug,
       name,
       summary: body.summary,
@@ -216,6 +217,7 @@ async function handle(req, res, pathname, method) {
       heading: body.heading,
       body: body.body,
       cta: body.cta,
+      blocks: Array.isArray(body.blocks) ? body.blocks : [],
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create email template'), true;
     return sendOk(res, 201, result.data, { emailTemplate: result.data }), true;
@@ -509,6 +511,7 @@ async function handle(req, res, pathname, method) {
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
     const result = await updateEmailTemplate(templateId, {
+      templateKind: body.templateKind || body.template_kind,
       slug: body.slug,
       name,
       summary: body.summary,
@@ -516,6 +519,7 @@ async function handle(req, res, pathname, method) {
       heading: body.heading,
       body: body.body,
       cta: body.cta,
+      blocks: Array.isArray(body.blocks) ? body.blocks : [],
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update email template'), true;
     return sendOk(res, 200, result.data, { emailTemplate: result.data }), true;
