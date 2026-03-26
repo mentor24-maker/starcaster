@@ -3195,26 +3195,44 @@ App.develop = (function () {
     host.innerHTML = buildFormTemplatePreviewMarkup(template);
   }
 
-  function buildEmailTemplatePreviewMarkup(template) {
+  function buildEmailTemplatePreviewMarkup(template, options = {}) {
+    const sampleContent = options && options.sampleContent === true;
+    const loremParagraph = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.';
+    const loremHeading = 'Lorem Ipsum Headline';
+    const loremEyebrow = 'Sample Email';
+    const loremButton = 'Call To Action';
+    const subject = safeText(template?.subject) || 'Sample subject line';
     const blocks = normalizeEmailTemplateBlocks(template);
     const blockMarkup = blocks.map((block) => {
+      const blockText = safeText(block.text);
+      const displayText = sampleContent ? (blockText || (block.type === 'heading'
+        ? loremHeading
+        : block.type === 'eyebrow'
+          ? loremEyebrow
+          : block.type === 'button'
+            ? loremButton
+            : loremParagraph)) : blockText;
       if (block.type === 'eyebrow') {
-        return `<div class="develop-template-eyebrow">${safeText(block.text) || 'Email Template'}</div>`;
+        return `<div class="develop-template-eyebrow">${displayText || 'Email Template'}</div>`;
       }
       if (block.type === 'heading') {
-        return `<h3>${safeText(block.text) || 'Heading'}</h3>`;
+        return `<h3>${displayText || 'Heading'}</h3>`;
       }
       if (block.type === 'paragraph') {
-        return `<p>${safeText(block.text) || ''}</p>`;
+        return `<p>${displayText || ''}</p>`;
       }
       if (block.type === 'button') {
-        return `<button type="button">${safeText(block.text) || 'Open'}</button>`;
+        return `<button type="button">${displayText || 'Open'}</button>`;
       }
       if (block.type === 'image') {
         const src = resolveEmailTemplateImageSource(block);
-        if (!src) return '';
+        if (!src) {
+          return sampleContent
+            ? '<div class="develop-email-template-image-placeholder">Image Placeholder</div>'
+            : '';
+        }
         const alt = safeText(block.alt) || 'Email image';
-        return `<div style="margin:0.8rem 0;"><img src="${src}" alt="${alt}" style="display:block;max-width:100%;height:auto;border-radius:10px;" /></div>`;
+        return `<div class="develop-email-template-image-wrap"><img src="${src}" alt="${alt}" class="develop-email-template-image" /></div>`;
       }
       if (block.type === 'divider') {
         return '<hr style="margin:0.8rem 0;border:none;border-top:1px solid rgba(15,79,143,0.2);" />';
@@ -3225,11 +3243,30 @@ App.develop = (function () {
       return '';
     }).join('');
     return `
-      <div class="develop-form-preview">
-        <p><strong>Subject:</strong> ${safeText(template?.subject) || '-'}</p>
+      <div class="develop-email-template-preview">
+        <div class="develop-email-template-preview-meta"><strong>Subject:</strong> ${subject}</div>
         ${blockMarkup}
       </div>
     `;
+  }
+
+  function openEmailTemplatePreviewModal(template) {
+    if (!template || !App.components || typeof App.components.Modal !== 'function') return;
+    const body = document.createElement('div');
+    body.innerHTML = buildEmailTemplatePreviewMarkup(template, { sampleContent: true });
+    const modal = App.components.Modal({
+      title: `${safeText(template.name) || 'Email Template'} Preview`,
+      body,
+      actions: [
+        {
+          label: 'Close',
+          onClick: () => modal.close(),
+        },
+      ],
+      dialogClass: 'develop-email-template-modal',
+      bodyClass: 'develop-email-template-modal-body',
+    });
+    modal.open();
   }
 
   function normalizeEmailTemplateBlocks(template) {
@@ -3416,9 +3453,7 @@ App.develop = (function () {
     wrap.className = 'page-heading-actions';
     wrap.style.justifyContent = 'flex-start';
     const previewBtn = App.makeIconButton('preview', 'Preview Template', () => {
-      selectedEmailTemplateId = String(template.id);
-      renderEmailTemplateLibrary();
-      renderEmailTemplatePreview(template.id);
+      openEmailTemplatePreviewModal(template);
     });
     const editBtn = App.makeIconButton('edit', 'Edit Template', () => {
       if ((safeText(template.templateKind).toLowerCase() || 'text') === 'modular') {
