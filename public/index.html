@@ -317,9 +317,9 @@
       <section id="createContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Contact Persona</h2>
-          <button id="backToContactPersonasBtn" type="button">Back To Personas</button>
+          <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
         </div>
-        <form id="contactPersonaForm" class="stack-form labeled-form">
+        <form id="contactPersonaForm" class="stack-form labeled-form" onsubmit="return App.contactPersonas.submitCreateForm(event);">
           <div class="form-row">
             <label for="contactPersonaName">Persona</label>
             <input id="contactPersonaName" name="persona" placeholder="Persona name" required />
@@ -345,9 +345,9 @@
       <section id="editContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Edit Contact Persona</h2>
-          <button id="backFromEditContactPersonaBtn" type="button">Back To Personas</button>
+          <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
         </div>
-        <form id="contactPersonaEditForm" class="stack-form labeled-form">
+        <form id="contactPersonaEditForm" class="stack-form labeled-form" onsubmit="return App.contactPersonas.submitEditForm(event);">
           <input id="contactPersonaEditId" name="id" type="hidden" />
           <div class="form-row">
             <label for="contactPersonaEditName">Persona</label>

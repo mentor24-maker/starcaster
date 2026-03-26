@@ -78,6 +78,11 @@ App.contactPersonas = (function () {
     App.setActivePage('createContactPersonaPage');
   }
 
+  function goBackToPersonas() {
+    App.setActivePage('contactsPersonasPage');
+    return false;
+  }
+
   function openEditPage(item) {
     if (!item || !item.id) return notify('Persona id is missing', true);
     const form = byId('contactPersonaEditForm');
@@ -103,6 +108,28 @@ App.contactPersonas = (function () {
       await api(`/api/contact-personas/${item.id}`, { method: 'DELETE' });
       notify('Persona deleted');
       await refresh();
+    } catch (err) {
+      notify(err.message, true);
+    }
+  }
+
+  async function clonePersona(item) {
+    if (!item) return notify('Persona is missing', true);
+    const baseName = safeText(item.persona);
+    const payload = {
+      persona: baseName ? `${baseName} (Copy)` : 'Persona Copy',
+      parentPersonaId: Number(item.parentPersonaId || 0) || null,
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      description: safeText(item.description),
+    };
+    try {
+      await api('/api/contact-personas', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('Persona cloned');
+      await refresh();
+      App.setActivePage('contactsPersonasPage');
     } catch (err) {
       notify(err.message, true);
     }
@@ -156,8 +183,10 @@ App.contactPersonas = (function () {
 
       const actionsTd = document.createElement('td');
       const editBtn = App.makeIconButton('edit', 'Edit Persona', () => openEditPage(item));
+      const cloneBtn = App.makeIconButton('clone', 'Clone Persona', () => clonePersona(item), { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Persona', () => deletePersona(item), { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
 
       tr.appendChild(personaTd);
@@ -187,6 +216,65 @@ App.contactPersonas = (function () {
     renderTable();
   }
 
+  async function submitCreateForm(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const createForm = byId('contactPersonaForm');
+    if (!createForm) return false;
+    const formData = new FormData(createForm);
+    const payload = {
+      persona: safeText(formData.get('persona')),
+      parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
+      tags: safeText(formData.get('tags')),
+      description: safeText(formData.get('description')),
+    };
+    try {
+      const result = await api('/api/contact-personas', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const createdId = Number(result?.persona?.id || 0) || null;
+      notify('Persona created');
+      createForm.reset();
+      await refresh();
+      populateParentSelect('contactPersonaParent', createdId);
+      App.setActivePage('createContactPersonaPage');
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function submitEditForm(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const editForm = byId('contactPersonaEditForm');
+    if (!editForm) return false;
+    const formData = new FormData(editForm);
+    const id = Number(formData.get('id') || 0) || 0;
+    if (!id) {
+      notify('Persona id is required', true);
+      return false;
+    }
+    const payload = {
+      persona: safeText(formData.get('persona')),
+      parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
+      tags: safeText(formData.get('tags')),
+      description: safeText(formData.get('description')),
+    };
+    try {
+      await api(`/api/contact-personas/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      notify('Persona updated');
+      editForm.reset();
+      await refresh();
+      App.setActivePage('contactsPersonasPage');
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
   function init() {
     const sortBtn = byId('contactPersonasSortPersona');
     if (sortBtn) {
@@ -211,78 +299,19 @@ App.contactPersonas = (function () {
       openCreateFromLandingBtn.addEventListener('click', () => openCreatePage());
     }
 
-    const backToManageBtn = byId('backToContactPersonasBtn');
-    if (backToManageBtn) {
-      backToManageBtn.addEventListener('click', () => App.setActivePage('contactsPersonasPage'));
-    }
-
-    const backFromEditBtn = byId('backFromEditContactPersonaBtn');
-    if (backFromEditBtn) {
-      backFromEditBtn.addEventListener('click', () => App.setActivePage('contactsPersonasPage'));
-    }
-
-    const createForm = byId('contactPersonaForm');
-    if (createForm) {
-      createForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const formData = new FormData(createForm);
-        const payload = {
-          persona: safeText(formData.get('persona')),
-          parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
-          tags: safeText(formData.get('tags')),
-          description: safeText(formData.get('description')),
-        };
-        try {
-          const result = await api('/api/contact-personas', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
-          const createdId = Number(result?.persona?.id || 0) || null;
-          notify('Persona created');
-          createForm.reset();
-          await refresh();
-          populateParentSelect('contactPersonaParent', createdId);
-          App.setActivePage('createContactPersonaPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
-
-    const editForm = byId('contactPersonaEditForm');
-    if (editForm) {
-      editForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const formData = new FormData(editForm);
-        const id = Number(formData.get('id') || 0) || 0;
-        if (!id) return notify('Persona id is required', true);
-        const payload = {
-          persona: safeText(formData.get('persona')),
-          parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
-          tags: safeText(formData.get('tags')),
-          description: safeText(formData.get('description')),
-        };
-        try {
-          await api(`/api/contact-personas/${id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-          notify('Persona updated');
-          editForm.reset();
-          await refresh();
-          App.setActivePage('contactsPersonasPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
   }
 
   return {
     manifest: { id: 'contactPersonas', label: 'Contact Personas', pageId: 'contactsPersonasPage' },
+    clonePersona,
+    deletePersona,
+    goBackToPersonas,
     openCreatePage,
+    openEditPage,
     init,
     refresh,
+    submitCreateForm,
+    submitEditForm,
     onPageActivated: refresh,
   };
 })();
