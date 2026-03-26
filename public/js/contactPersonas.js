@@ -77,6 +77,16 @@ App.contactPersonas = (function () {
     panel.classList.toggle('hidden', !visible);
   }
 
+  function openPersonasPage() {
+    setCreatePanelVisible(false);
+    App.setActivePage('contactsPersonasPage');
+    refresh().catch((err) => notify(err.message || 'Unable to load personas', true));
+    window.setTimeout(() => {
+      refresh().catch(() => {});
+    }, 250);
+    return false;
+  }
+
   function openCreatePage(selectedParentId = '') {
     const form = byId('contactPersonaForm');
     if (form) form.reset();
@@ -90,9 +100,7 @@ App.contactPersonas = (function () {
   }
 
   function goBackToPersonas() {
-    setCreatePanelVisible(false);
-    App.setActivePage('contactsPersonasPage');
-    return false;
+    return openPersonasPage();
   }
 
   function openEditPage(item) {
@@ -323,6 +331,7 @@ App.contactPersonas = (function () {
     clonePersona,
     deletePersona,
     goBackToPersonas,
+    openPersonasPage,
     openCreatePage,
     openEditPage,
     init,

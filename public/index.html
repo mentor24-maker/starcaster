@@ -88,7 +88,7 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link active" data-page="contactsPage">Contacts</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="contactsPersonasPage">Personas</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.contactPersonas.openPersonasPage(); return false;" data-page="contactsPersonasPage">Personas</a>
             <a href="#" class="menu-link submenu-link" data-page="contactsExplorePage">Explore</a>
             <a href="#" class="menu-link submenu-link" data-page="segmentsPage">Segments</a>
           </div>
@@ -282,14 +282,14 @@
           <h2>Contact Personas</h2>
           <div class="page-heading-actions">
             <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
-            <button type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
             <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
           </div>
         </div>
         <section id="contactPersonaCreatePanel" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
             <h3>Create Contact Persona</h3>
-            <button id="backToContactPersonasInlineBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+            <button id="backToContactPersonasInlineBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
           </div>
           <form id="contactPersonaForm" class="stack-form labeled-form" onsubmit="App.contactPersonas.submitCreateForm(event); return false;">
             <div class="form-row">
@@ -334,7 +334,7 @@
           <h2>Manage Contact Personas</h2>
           <div class="page-heading-actions">
             <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
-            <button type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
           </div>
         </div>
         <p>The Personas editor now lives on the main Personas page.</p>
@@ -343,7 +343,7 @@
       <section id="createContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Contact Persona</h2>
-          <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+          <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
         </div>
         <p>The create form now opens inline on the main Personas page.</p>
       </section>
@@ -353,7 +353,7 @@
           <h2>Edit Contact Persona</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
-            <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+            <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
             <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
           </div>
         </div>
