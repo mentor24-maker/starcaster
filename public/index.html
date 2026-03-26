@@ -88,6 +88,7 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link active" data-page="contactsPage">Contacts</a>
           <div class="submenu">
+            <a href="#" class="menu-link submenu-link" data-page="contactsPersonasPage">Personas</a>
             <a href="#" class="menu-link submenu-link" data-page="contactsExplorePage">Explore</a>
             <a href="#" class="menu-link submenu-link" data-page="segmentsPage">Segments</a>
           </div>
@@ -96,7 +97,7 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link" data-page="messagingPage">Messaging</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openCategoriesLanding(); return false;">Categories</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openCategoriesLanding(); return false;">Topics</a>
             <a href="#" class="menu-link submenu-link" onclick="App.messaging.openContentLanding(); return false;">Content</a>
           </div>
         </li>
@@ -274,6 +275,77 @@
           </div>
         </form>
 
+      </section>
+
+      <section id="contactsPersonasPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contact Personas</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('manageContactPersonasPage')">Manage Personas</button>
+            <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
+          </div>
+        </div>
+        <p>Define reusable personas for your audience model, then maintain them through a shared CRUD workflow.</p>
+        <div id="contactPersonasMap" class="messaging-content-map asset-category-map"></div>
+      </section>
+
+      <section id="manageContactPersonasPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Contact Personas</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateContactPersonaPageBtn" type="button">Create Persona</button>
+            <button type="button" onclick="App.setActivePage('contactsPersonasPage')">Back To Personas</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="contactPersonasSortPersona" type="button" class="tiny-btn">Persona</button></th>
+                <th>Description</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="contactPersonasTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="createContactPersonaPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Contact Persona</h2>
+          <button id="backToContactPersonasBtn" type="button">Back To Personas</button>
+        </div>
+        <form id="contactPersonaForm" class="stack-form labeled-form">
+          <div class="form-row">
+            <label for="contactPersonaName">Persona</label>
+            <input id="contactPersonaName" name="persona" placeholder="Persona name" required />
+          </div>
+          <div class="form-row">
+            <label for="contactPersonaDescription">Description</label>
+            <textarea id="contactPersonaDescription" name="description" rows="5" placeholder="Describe this persona and how it should be used."></textarea>
+          </div>
+          <button type="submit">Save Persona</button>
+        </form>
+      </section>
+
+      <section id="editContactPersonaPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Contact Persona</h2>
+          <button id="backFromEditContactPersonaBtn" type="button">Back To Personas</button>
+        </div>
+        <form id="contactPersonaEditForm" class="stack-form labeled-form">
+          <input id="contactPersonaEditId" name="id" type="hidden" />
+          <div class="form-row">
+            <label for="contactPersonaEditName">Persona</label>
+            <input id="contactPersonaEditName" name="persona" placeholder="Persona name" required />
+          </div>
+          <div class="form-row">
+            <label for="contactPersonaEditDescription">Description</label>
+            <textarea id="contactPersonaEditDescription" name="description" rows="5" placeholder="Describe this persona and how it should be used."></textarea>
+          </div>
+          <button type="submit">Update Persona</button>
+        </form>
       </section>
 
       <section id="addContactPage" class="app-page hidden">
@@ -2456,11 +2528,11 @@
 
       <section id="messagingPage" class="app-page hidden">
         <h2>Messaging</h2>
-        <p>Messaging organizes reusable copy into shared categories and a structured content library for campaigns, pages, and engagement.</p>
+        <p>Messaging organizes reusable copy into shared topics and a structured content library for campaigns, pages, and engagement.</p>
         <div class="cards">
           <article class="card">
-            <h3>Categories</h3>
-            <button type="button" onclick="App.messaging.openCategoriesLanding()">Open Categories</button>
+            <h3>Topics</h3>
+            <button type="button" onclick="App.messaging.openCategoriesLanding()">Open Topics</button>
           </article>
           <article class="card">
             <h3>Content</h3>
@@ -3011,22 +3083,22 @@
 
       <section id="messagingCategoriesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging Categories</h2>
+          <h2>Messaging Topics</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('messagingManageCategoriesPage')">Manage Categories</button>
+            <button type="button" onclick="App.setActivePage('messagingManageCategoriesPage')">Manage Topics</button>
             <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
           </div>
         </div>
-        <p>Choose a category to open the content library in that category context, or use Manage Categories to edit the category list.</p>
+        <p>Choose a topic to open the content library in that topic context, or use Manage Topics to edit the topic list.</p>
         <div id="messagingCategoriesMap" class="messaging-content-map messaging-category-map"></div>
       </section>
 
       <section id="messagingManageCategoriesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Manage Messaging Categories</h2>
+          <h2>Manage Messaging Topics</h2>
           <div class="page-heading-actions">
-            <button id="openCreateMessagingCategoryPageBtn" type="button">Create Category</button>
-            <button type="button" onclick="App.setActivePage('messagingCategoriesPage')">Back To Categories</button>
+            <button id="openCreateMessagingCategoryPageBtn" type="button">Create Topic</button>
+            <button type="button" onclick="App.setActivePage('messagingCategoriesPage')">Back To Topics</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -3044,30 +3116,30 @@
 
       <section id="createMessagingCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Create Messaging Category</h2>
-          <button id="backToMessagingCategoriesBtn" type="button">Back To Categories</button>
+          <h2>Create Messaging Topic</h2>
+          <button id="backToMessagingCategoriesBtn" type="button">Back To Topics</button>
         </div>
         <form id="messagingCategoryForm" class="stack-form labeled-form">
           <div class="form-row">
-            <label for="messagingCategoryName">Category</label>
-            <input id="messagingCategoryName" name="category" placeholder="Category name" required />
+            <label for="messagingCategoryName">Topic</label>
+            <input id="messagingCategoryName" name="category" placeholder="Topic name" required />
           </div>
-          <button type="submit">Save Category</button>
+          <button type="submit">Save Topic</button>
         </form>
       </section>
 
       <section id="editMessagingCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Edit Messaging Category</h2>
-          <button id="backFromEditMessagingCategoryBtn" type="button">Back To Categories</button>
+          <h2>Edit Messaging Topic</h2>
+          <button id="backFromEditMessagingCategoryBtn" type="button">Back To Topics</button>
         </div>
         <form id="messagingCategoryEditForm" class="stack-form labeled-form">
           <input id="messagingCategoryEditId" name="id" type="hidden" />
           <div class="form-row">
-            <label for="messagingCategoryEditName">Category</label>
-            <input id="messagingCategoryEditName" name="category" placeholder="Category name" required />
+            <label for="messagingCategoryEditName">Topic</label>
+            <input id="messagingCategoryEditName" name="category" placeholder="Topic name" required />
           </div>
-          <button type="submit">Update Category</button>
+          <button type="submit">Update Topic</button>
         </form>
       </section>
 
@@ -6070,6 +6142,7 @@
     <script src="/js/auth.js"></script>
     <script src="/js/components.js"></script>
     <script src="/js/contacts.js"></script>
+    <script src="/js/contactPersonas.js"></script>
     <script src="/js/segments.js"></script>
     <script src="/js/campaigns.js"></script>
     <script src="/js/promoLeads.js"></script>

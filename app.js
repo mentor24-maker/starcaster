@@ -19,6 +19,7 @@
 
 App.manifests = [
   App.contacts,
+  App.contactPersonas,
   App.segments,
   App.campaigns,
   App.promoLeads,
