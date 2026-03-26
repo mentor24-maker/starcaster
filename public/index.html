@@ -281,24 +281,13 @@
         <div class="page-heading-row">
           <h2>Contact Personas</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('createContactPersonaPage')">Create Persona</button>
-            <button type="button" onclick="App.setActivePage('manageContactPersonasPage')">Manage Personas</button>
+            <button id="openCreateContactPersonaFromLandingBtn" type="button">Create Persona</button>
             <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
           </div>
         </div>
         <p>Define reusable personas for your audience model, then maintain them through a shared CRUD workflow.</p>
         <div id="contactPersonasMap" class="messaging-content-map asset-category-map"></div>
-      </section>
-
-      <section id="manageContactPersonasPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Manage Contact Personas</h2>
-          <div class="page-heading-actions">
-            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.setActivePage('createContactPersonaPage')">Create Persona</button>
-            <button type="button" onclick="App.setActivePage('contactsPersonasPage')">Back To Personas</button>
-          </div>
-        </div>
-        <div class="table-wrap">
+        <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
               <tr>
@@ -312,6 +301,17 @@
             <tbody id="contactPersonasTable"></tbody>
           </table>
         </div>
+      </section>
+
+      <section id="manageContactPersonasPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Contact Personas</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.setActivePage('createContactPersonaPage')">Create Persona</button>
+            <button type="button" onclick="App.setActivePage('contactsPersonasPage')">Back To Personas</button>
+          </div>
+        </div>
+        <p>The Personas editor now lives on the main Personas page.</p>
       </section>
 
       <section id="createContactPersonaPage" class="app-page hidden">

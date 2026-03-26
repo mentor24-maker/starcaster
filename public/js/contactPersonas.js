@@ -71,6 +71,13 @@ App.contactPersonas = (function () {
     });
   }
 
+  function openCreatePage(selectedParentId = '') {
+    const form = byId('contactPersonaForm');
+    if (form) form.reset();
+    populateParentSelect('contactPersonaParent', selectedParentId);
+    App.setActivePage('createContactPersonaPage');
+  }
+
   function openEditPage(item) {
     if (!item || !item.id) return notify('Persona id is missing', true);
     const form = byId('contactPersonaEditForm');
@@ -195,23 +202,23 @@ App.contactPersonas = (function () {
     }
 
     const openCreateBtn = byId('openCreateContactPersonaPageBtn');
+    const openCreateFromLandingBtn = byId('openCreateContactPersonaFromLandingBtn');
     if (openCreateBtn) {
-      openCreateBtn.addEventListener('click', () => {
-        const form = byId('contactPersonaForm');
-        if (form) form.reset();
-        populateParentSelect('contactPersonaParent');
-        App.setActivePage('createContactPersonaPage');
-      });
+      openCreateBtn.addEventListener('click', () => openCreatePage());
+    }
+
+    if (openCreateFromLandingBtn) {
+      openCreateFromLandingBtn.addEventListener('click', () => openCreatePage());
     }
 
     const backToManageBtn = byId('backToContactPersonasBtn');
     if (backToManageBtn) {
-      backToManageBtn.addEventListener('click', () => App.setActivePage('manageContactPersonasPage'));
+      backToManageBtn.addEventListener('click', () => App.setActivePage('contactsPersonasPage'));
     }
 
     const backFromEditBtn = byId('backFromEditContactPersonaBtn');
     if (backFromEditBtn) {
-      backFromEditBtn.addEventListener('click', () => App.setActivePage('manageContactPersonasPage'));
+      backFromEditBtn.addEventListener('click', () => App.setActivePage('contactsPersonasPage'));
     }
 
     const createForm = byId('contactPersonaForm');
@@ -226,14 +233,16 @@ App.contactPersonas = (function () {
           description: safeText(formData.get('description')),
         };
         try {
-          await api('/api/contact-personas', {
+          const result = await api('/api/contact-personas', {
             method: 'POST',
             body: JSON.stringify(payload),
           });
+          const createdId = Number(result?.persona?.id || 0) || null;
           notify('Persona created');
           createForm.reset();
           await refresh();
-          App.setActivePage('manageContactPersonasPage');
+          populateParentSelect('contactPersonaParent', createdId);
+          App.setActivePage('createContactPersonaPage');
         } catch (err) {
           notify(err.message, true);
         }
@@ -261,7 +270,7 @@ App.contactPersonas = (function () {
           notify('Persona updated');
           editForm.reset();
           await refresh();
-          App.setActivePage('manageContactPersonasPage');
+          App.setActivePage('contactsPersonasPage');
         } catch (err) {
           notify(err.message, true);
         }
