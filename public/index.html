@@ -3118,28 +3118,30 @@
         <div class="page-heading-row">
           <h2>Messaging Topics</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('messagingManageCategoriesPage')">Manage Topics</button>
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
             <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
           </div>
         </div>
-        <p>Choose a topic to open the content library in that topic context, or use Manage Topics to edit the topic list.</p>
-        <div id="messagingCategoriesMap" class="messaging-content-map messaging-category-map"></div>
-      </section>
-
-      <section id="messagingManageCategoriesPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Manage Messaging Topics</h2>
-          <div class="page-heading-actions">
-            <button id="openCreateMessagingCategoryPageBtn" type="button">Create Topic</button>
-            <button type="button" onclick="App.setActivePage('messagingCategoriesPage')">Back To Topics</button>
+        <section id="messagingTopicCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Messaging Topic</h3>
+            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
           </div>
-        </div>
-        <div class="table-wrap">
+          <form id="messagingCategoryForm" class="stack-form labeled-form" onsubmit="App.messaging.submitTopicCreate(event); return false;">
+            <div class="form-row">
+              <label for="messagingCategoryName">Topic</label>
+              <input id="messagingCategoryName" name="category" placeholder="Topic name" required />
+            </div>
+            <button type="submit">Save Topic</button>
+          </form>
+        </section>
+        <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
               <tr>
-                <th><button id="messagingCategoriesSortBtn" type="button" class="tiny-btn">Category</button></th>
-                <th>Actions</th>
+                <th><button id="messagingCategoriesSortBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th class="messaging-topics-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingCategoriesTable"></tbody>
@@ -3147,26 +3149,35 @@
         </div>
       </section>
 
+      <section id="messagingManageCategoriesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Messaging Topics</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateMessagingCategoryPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+          </div>
+        </div>
+        <p>The Topics editor now lives on the main Topics page.</p>
+      </section>
+
       <section id="createMessagingCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Messaging Topic</h2>
-          <button id="backToMessagingCategoriesBtn" type="button">Back To Topics</button>
+          <button id="backToMessagingCategoriesBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
         </div>
-        <form id="messagingCategoryForm" class="stack-form labeled-form">
-          <div class="form-row">
-            <label for="messagingCategoryName">Topic</label>
-            <input id="messagingCategoryName" name="category" placeholder="Topic name" required />
-          </div>
-          <button type="submit">Save Topic</button>
-        </form>
+        <p>The create form now opens inline on the main Topics page.</p>
       </section>
 
       <section id="editMessagingCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Edit Messaging Topic</h2>
-          <button id="backFromEditMessagingCategoryBtn" type="button">Back To Topics</button>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
+            <button id="backFromEditMessagingCategoryBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          </div>
         </div>
-        <form id="messagingCategoryEditForm" class="stack-form labeled-form">
+        <form id="messagingCategoryEditForm" class="stack-form labeled-form" onsubmit="App.messaging.submitTopicEdit(event); return false;">
           <input id="messagingCategoryEditId" name="id" type="hidden" />
           <div class="form-row">
             <label for="messagingCategoryEditName">Topic</label>

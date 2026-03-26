@@ -2310,9 +2310,38 @@ App.messaging = (function () {
     App.setActivePage('messagingContentPage');
   }
 
-  function openCategoriesLanding() {
-    refreshMessagingCategories().catch(function () {});
+  function setTopicsCreateVisible(visible) {
+    const panel = document.getElementById('messagingTopicCreatePanel');
+    if (!panel) return;
+    panel.classList.toggle('hidden', !visible);
+  }
+
+  function openTopicsPage() {
+    setTopicsCreateVisible(false);
     App.setActivePage('messagingCategoriesPage');
+    refreshMessagingCategories().catch(function (err) {
+      notify(`Could not load messaging topics: ${err.message}`, true);
+    });
+    window.setTimeout(function () {
+      refreshMessagingCategories().catch(function () {});
+    }, 250);
+    return false;
+  }
+
+  function openTopicsCreate() {
+    const form = document.getElementById('messagingCategoryForm');
+    if (form) form.reset();
+    setTopicsCreateVisible(true);
+    App.setActivePage('messagingCategoriesPage');
+    const panel = document.getElementById('messagingTopicCreatePanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return false;
+  }
+
+  function openCategoriesLanding() {
+    return openTopicsPage();
   }
 
   function openManageContentLanding() {
@@ -2343,7 +2372,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const empty = document.createElement('div');
       empty.className = 'messaging-content-node messaging-category-node';
-      empty.innerHTML = '<span class="messaging-content-node-kicker">Messaging</span><span class="messaging-content-node-title">No Categories Yet</span>';
+      empty.innerHTML = '<span class="messaging-content-node-kicker">Messaging</span><span class="messaging-content-node-title">No Topics Yet</span>';
       container.appendChild(empty);
       return;
     }
@@ -2392,7 +2421,7 @@ App.messaging = (function () {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'messaging-content-node messaging-category-node';
-      button.innerHTML = `<span class="messaging-content-node-kicker">Category</span><span class="messaging-content-node-title">${category}</span>`;
+      button.innerHTML = `<span class="messaging-content-node-kicker">Topic</span><span class="messaging-content-node-title">${category}</span>`;
       button.addEventListener('click', function () {
         if (App.messaging && typeof App.messaging.openManageContentCategory === 'function') {
           App.messaging.openManageContentCategory(category);
@@ -2854,7 +2883,7 @@ App.messaging = (function () {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (sortBtn) {
-      sortBtn.textContent = `Category${messagingCategoryTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
+      sortBtn.textContent = `Topic${messagingCategoryTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
     }
 
     const rows = getSortedMessagingCategories();
@@ -2862,7 +2891,7 @@ App.messaging = (function () {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 2;
-      td.textContent = 'No messaging categories yet.';
+      td.textContent = 'No messaging topics yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
@@ -2875,14 +2904,15 @@ App.messaging = (function () {
       tr.appendChild(categoryTd);
 
       const actionsTd = document.createElement('td');
-      const editBtn = App.makeIconButton('edit', 'Edit Category', function () {
+      actionsTd.className = 'messaging-topics-actions-cell';
+      const editBtn = App.makeIconButton('edit', 'Edit Topic', function () {
         openMessagingCategoryEditForm(item);
       });
-      const deleteBtn = App.makeIconButton('delete', 'Delete Category', async function () {
-        if (!confirm(`Delete messaging category "${item.category}"?`)) return;
+      const deleteBtn = App.makeIconButton('delete', 'Delete Topic', async function () {
+        if (!confirm(`Delete messaging topic "${item.category}"?`)) return;
         try {
           await api(`/api/messaging/categories/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
-          notify('Messaging category deleted');
+          notify('Messaging topic deleted');
           await refreshMessagingCategories();
         } catch (err) {
           notify(err.message, true);
@@ -2899,10 +2929,73 @@ App.messaging = (function () {
   async function refreshMessagingCategories() {
     try {
       const res = await api('/api/messaging/categories?limit=5000');
-      renderMessagingCategoriesTable(Array.isArray(res.categories) ? res.categories : []);
+      const categories = Array.isArray(res?.categories)
+        ? res.categories
+        : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+            ? res
+            : [];
+      renderMessagingCategoriesTable(categories);
     } catch (err) {
-      notify(`Could not load messaging categories: ${err.message}`, true);
+      notify(`Could not load messaging topics: ${err.message}`, true);
     }
+  }
+
+  async function submitTopicCreate(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = document.getElementById('messagingCategoryForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const category = String(formData.get('category') || '').trim();
+    if (!category) {
+      notify('Topic is required', true);
+      return false;
+    }
+    try {
+      await api('/api/messaging/categories', {
+        method: 'POST',
+        body: JSON.stringify({ category }),
+      });
+      notify('Messaging topic saved');
+      form.reset();
+      await refreshMessagingCategories();
+      setTopicsCreateVisible(true);
+      App.setActivePage('messagingCategoriesPage');
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function submitTopicEdit(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = document.getElementById('messagingCategoryEditForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const id = Number(formData.get('id') || 0) || 0;
+    const category = String(formData.get('category') || '').trim();
+    if (!id) {
+      notify('Topic id is required', true);
+      return false;
+    }
+    if (!category) {
+      notify('Topic is required', true);
+      return false;
+    }
+    try {
+      await api(`/api/messaging/categories/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ category }),
+      });
+      notify('Messaging topic updated');
+      form.reset();
+      await refreshMessagingCategories();
+      openTopicsPage();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
   }
 
   async function saveArticleFromForm(form) {
@@ -4044,30 +4137,26 @@ App.messaging = (function () {
     });
 
     if (openMessagingCategoriesBtn) {
-      openMessagingCategoriesBtn.addEventListener('click', async function () {
-        try {
-          await refreshMessagingCategories();
-        } catch (_) {}
-        App.setActivePage('messagingManageCategoriesPage');
+      openMessagingCategoriesBtn.addEventListener('click', function () {
+        openTopicsPage();
       });
     }
 
     if (openCreateMessagingCategoryBtn) {
       openCreateMessagingCategoryBtn.addEventListener('click', function () {
-        if (messagingCategoryForm) messagingCategoryForm.reset();
-        App.setActivePage('createMessagingCategoryPage');
+        openTopicsCreate();
       });
     }
 
     if (backToMessagingCategoriesBtn) {
       backToMessagingCategoriesBtn.addEventListener('click', function () {
-        App.setActivePage('messagingManageCategoriesPage');
+        openTopicsPage();
       });
     }
 
     if (backFromMessagingCategoryEditBtn) {
       backFromMessagingCategoryEditBtn.addEventListener('click', function () {
-        App.setActivePage('messagingManageCategoriesPage');
+        openTopicsPage();
       });
     }
 
@@ -4086,54 +4175,13 @@ App.messaging = (function () {
 
     if (messagingCategoryForm) {
       messagingCategoryForm.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const formData = new FormData(messagingCategoryForm);
-        const category = String(formData.get('category') || '').trim();
-        if (!category) {
-          notify('Category is required', true);
-          return;
-        }
-        try {
-          await api('/api/messaging/categories', {
-            method: 'POST',
-            body: JSON.stringify({ category }),
-          });
-          notify('Messaging category saved');
-          messagingCategoryForm.reset();
-          await refreshMessagingCategories();
-          App.setActivePage('messagingManageCategoriesPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
+        return submitTopicCreate(e);
       });
     }
 
     if (messagingCategoryEditForm) {
       messagingCategoryEditForm.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const formData = new FormData(messagingCategoryEditForm);
-        const id = Number(formData.get('id') || 0) || 0;
-        const category = String(formData.get('category') || '').trim();
-        if (!id) {
-          notify('Category id is required', true);
-          return;
-        }
-        if (!category) {
-          notify('Category is required', true);
-          return;
-        }
-        try {
-          await api(`/api/messaging/categories/${encodeURIComponent(id)}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ category }),
-          });
-          notify('Messaging category updated');
-          messagingCategoryEditForm.reset();
-          await refreshMessagingCategories();
-          App.setActivePage('messagingManageCategoriesPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
+        return submitTopicEdit(e);
       });
     }
 
@@ -4407,10 +4455,14 @@ App.messaging = (function () {
     manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingArticlesPage', pagePrefixes: ['messaging'] },
     init,
     openCategoriesLanding,
+    openTopicsPage,
+    openTopicsCreate,
     openContentLanding,
     openManageContentLanding,
     openManageContentCategory,
     openContentTarget,
+    submitTopicCreate,
+    submitTopicEdit,
     refresh: function () {
       return loadThumbnailOptions().then(function () {
         return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]);
