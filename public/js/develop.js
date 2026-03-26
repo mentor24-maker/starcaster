@@ -3777,6 +3777,7 @@ App.develop = (function () {
     const meta = byId('developTemplateEditorMeta');
     const host = byId('developTemplateEditorModules');
     if (!host) return;
+    let draggedIndex = null;
     setEmailTemplateEditorVisible(true);
     if (title) title.textContent = 'Email Block Builder';
     if (meta) meta.textContent = 'Build the email as ordered blocks. Use move buttons to rearrange sections.';
@@ -3789,6 +3790,41 @@ App.develop = (function () {
       const grip = document.createElement('div');
       grip.className = 'develop-template-module-grip';
       grip.textContent = '::';
+      grip.draggable = true;
+      grip.title = 'Drag to reorder';
+      grip.addEventListener('dragstart', (event) => {
+        draggedIndex = index;
+        item.classList.add('is-dragging');
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', String(index));
+        }
+      });
+      grip.addEventListener('dragend', () => {
+        draggedIndex = null;
+        host.querySelectorAll('.develop-template-module-item').forEach((node) => {
+          node.classList.remove('is-drag-over', 'is-dragging');
+        });
+      });
+
+      item.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        if (draggedIndex === null || draggedIndex === index) return;
+        item.classList.add('is-drag-over');
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      });
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('is-drag-over');
+      });
+      item.addEventListener('drop', (event) => {
+        event.preventDefault();
+        item.classList.remove('is-drag-over');
+        if (draggedIndex === null || draggedIndex === index) return;
+        const [moved] = emailTemplateBlocksDraft.splice(draggedIndex, 1);
+        const insertIndex = draggedIndex < index ? index - 1 : index;
+        emailTemplateBlocksDraft.splice(insertIndex, 0, moved);
+        renderEmailTemplateBlockEditor();
+      });
 
       const fields = document.createElement('div');
       fields.className = 'develop-template-module-fields';
