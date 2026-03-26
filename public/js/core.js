@@ -56,6 +56,7 @@ App.state = {
   activePage: 'contactsPage',
   assets: [],
   assetCategories: [],
+  contactPersonas: [],
   channels: [],
   contacts: [],
   segments: [],

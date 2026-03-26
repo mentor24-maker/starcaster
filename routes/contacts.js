@@ -23,6 +23,14 @@ const {
   listCampaignEvents, insertCampaignEvents,
   rowToCampaign,
 } = require('../lib/store');
+const {
+  listContactPersonas,
+  createContactPersona,
+  getContactPersonaById,
+  updateContactPersona,
+  deleteContactPersona,
+  rowToContactPersona,
+} = require('../lib/contactPersonasStore');
 const { logActivity } = require('../lib/activityLog');
 const { validate }    = require('../lib/validate');
 
@@ -320,6 +328,56 @@ function cleanSegmentRules(rules) {
 async function handleContacts(req, res, pathname, method) {
   const urlObj = getUrlObj(req);
 
+  if (pathname === '/api/contact-personas' && method === 'GET') {
+    const result = await listContactPersonas(requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const personas = (Array.isArray(result.data) ? result.data : []).map(rowToContactPersona);
+    return sendOk(res, 200, personas, { personas }, { total: personas.length }), true;
+  }
+
+  if (pathname === '/api/contact-personas' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const persona = String(body.persona || '').trim();
+    const description = String(body.description || '').trim();
+    if (!persona) return sendErr(res, 400, 'Persona name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createContactPersona({ persona, description }, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const created = Array.isArray(result.data) ? result.data[0] : result.data;
+    return sendOk(res, 201, rowToContactPersona(created), { persona: rowToContactPersona(created) }), true;
+  }
+
+  const personaMatch = pathname.match(/^\/api\/contact-personas\/(\d+)\/?$/);
+  if (personaMatch && method === 'GET') {
+    const result = await getContactPersonaById(Number(personaMatch[1]), requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const row = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!row) return sendErr(res, 404, 'Persona not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToContactPersona(row), { persona: rowToContactPersona(row) }), true;
+  }
+
+  if (personaMatch && method === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const payload = {};
+    if ('persona' in body) payload.persona = String(body.persona || '').trim();
+    if ('description' in body) payload.description = String(body.description || '').trim();
+    if ('persona' in payload && !payload.persona) {
+      return sendErr(res, 400, 'Persona name is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const result = await updateContactPersona(Number(personaMatch[1]), payload, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const updated = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!updated) return sendErr(res, 404, 'Persona not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToContactPersona(updated), { persona: rowToContactPersona(updated) }), true;
+  }
+
+  if (personaMatch && method === 'DELETE') {
+    const result = await deleteContactPersona(Number(personaMatch[1]), requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!deleted) return sendErr(res, 404, 'Persona not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToContactPersona(deleted), { persona: rowToContactPersona(deleted) }), true;
+  }
+
   // GET /api/contacts — list, optionally filtered by type
   if (pathname === '/api/contacts' && method === 'GET') {
     const contactType = urlObj.searchParams.get('type') || undefined;
@@ -561,7 +619,7 @@ async function handle(req, res, pathname, method) {
 const manifest = {
   id:       'contacts',
   label:    'Contacts, Segments & Campaigns',
-  prefixes: ['/api/contacts', '/api/segments', '/api/campaigns'],
+  prefixes: ['/api/contacts', '/api/contact-personas', '/api/segments', '/api/campaigns'],
 };
 
 module.exports = { handle, manifest };
