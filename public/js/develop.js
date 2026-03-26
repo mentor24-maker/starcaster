@@ -3384,8 +3384,16 @@ App.develop = (function () {
     if (!template) return;
     const builderIdInput = byId('developTemplateEditorIdInput');
     const builderNameInput = byId('developTemplateEditorNameInput');
+    const builderSlugInput = byId('developTemplateEditorSlugInput');
+    const builderSummaryInput = byId('developTemplateEditorSummaryInput');
+    const builderSubjectInput = byId('developTemplateEditorSubjectInput');
+    const builderCtaInput = byId('developTemplateEditorCtaInput');
     if (builderIdInput) builderIdInput.value = safeText(template.id);
     if (builderNameInput) builderNameInput.value = safeText(template.name);
+    if (builderSlugInput) builderSlugInput.value = safeText(template.slug);
+    if (builderSummaryInput) builderSummaryInput.value = safeText(template.summary);
+    if (builderSubjectInput) builderSubjectInput.value = safeText(template.subject);
+    if (builderCtaInput) builderCtaInput.value = safeText(template.cta);
     emailTemplateBlocksDraft = normalizeEmailTemplateBlocks(template);
     renderEmailTemplateBlockEditor();
     const builderSubmitBtnTop = byId('developTemplateEditorSaveBtnTop');
@@ -3701,8 +3709,16 @@ App.develop = (function () {
     setCollapsibleSectionExpanded('developEmailSectionToggle', 'developEmailSectionBody', true);
     const builderIdInput = byId('developTemplateEditorIdInput');
     const builderNameInput = byId('developTemplateEditorNameInput');
+    const builderSlugInput = byId('developTemplateEditorSlugInput');
+    const builderSummaryInput = byId('developTemplateEditorSummaryInput');
+    const builderSubjectInput = byId('developTemplateEditorSubjectInput');
+    const builderCtaInput = byId('developTemplateEditorCtaInput');
     if (builderIdInput) builderIdInput.value = '';
     if (builderNameInput) builderNameInput.value = '';
+    if (builderSlugInput) builderSlugInput.value = '';
+    if (builderSummaryInput) builderSummaryInput.value = '';
+    if (builderSubjectInput) builderSubjectInput.value = '';
+    if (builderCtaInput) builderCtaInput.value = '';
     byId('developEmailTemplateIdInput').value = safeText(template?.id);
     byId('developEmailTemplateNameInput').value = safeText(template?.name);
     byId('developEmailTemplateSlugInput').value = safeText(template?.slug);
@@ -3727,6 +3743,14 @@ App.develop = (function () {
     if (builderIdInput) builderIdInput.value = '';
     const builderNameInput = byId('developTemplateEditorNameInput');
     if (builderNameInput) builderNameInput.value = '';
+    const builderSlugInput = byId('developTemplateEditorSlugInput');
+    const builderSummaryInput = byId('developTemplateEditorSummaryInput');
+    const builderSubjectInput = byId('developTemplateEditorSubjectInput');
+    const builderCtaInput = byId('developTemplateEditorCtaInput');
+    if (builderSlugInput) builderSlugInput.value = '';
+    if (builderSummaryInput) builderSummaryInput.value = '';
+    if (builderSubjectInput) builderSubjectInput.value = '';
+    if (builderCtaInput) builderCtaInput.value = '';
     emailTemplateBlocksDraft = [
       createEmailTemplateBlock('heading'),
       createEmailTemplateBlock('paragraph'),
@@ -3779,7 +3803,7 @@ App.develop = (function () {
     if (!host) return;
     let draggedIndex = null;
     setEmailTemplateEditorVisible(true);
-    if (title) title.textContent = 'Email Block Builder';
+    if (title) title.textContent = 'Email: Modular';
     if (meta) meta.textContent = 'Build the email as ordered blocks. Use move buttons to rearrange sections.';
     host.innerHTML = '';
 
@@ -4381,6 +4405,10 @@ App.develop = (function () {
     const templateEditorIdInput = byId('developTemplateEditorIdInput');
     const emailTemplateNameInput = byId('developEmailTemplateNameInput');
     const templateEditorNameInput = byId('developTemplateEditorNameInput');
+    const templateEditorSlugInput = byId('developTemplateEditorSlugInput');
+    const templateEditorSummaryInput = byId('developTemplateEditorSummaryInput');
+    const templateEditorSubjectInput = byId('developTemplateEditorSubjectInput');
+    const templateEditorCtaInput = byId('developTemplateEditorCtaInput');
     const landingPreviewAction = byId('developLandingPagePreviewAction');
     const openCreateFormBtn = byId('developOpenCreateFormBtn');
     const cancelFormEditBtn = byId('developCancelFormEditBtn');
@@ -4465,15 +4493,20 @@ App.develop = (function () {
       const derivedBody = emailTemplateBlocksDraft.find((block) => block.type === 'paragraph')?.text || '';
       const derivedCta = emailTemplateBlocksDraft.find((block) => block.type === 'button')?.text || '';
       const id = safeText(templateEditorIdInput?.value);
+      const name = safeText(templateEditorNameInput?.value);
+      const slug = safeText(templateEditorSlugInput?.value) || slugify(templateEditorNameInput?.value);
+      const summary = safeText(templateEditorSummaryInput?.value);
+      const subject = safeText(templateEditorSubjectInput?.value);
+      const cta = safeText(templateEditorCtaInput?.value) || derivedCta;
       const payload = {
         templateKind: 'modular',
-        name: safeText(templateEditorNameInput?.value),
-        slug: slugify(templateEditorNameInput?.value),
-        summary: '',
-        subject: '',
+        name,
+        slug,
+        summary,
+        subject,
         heading: derivedHeading,
         body: derivedBody,
-        cta: derivedCta,
+        cta,
         blocks: emailTemplateBlocksDraft.map((block) => ({
           id: safeText(block.id),
           type: safeText(block.type),

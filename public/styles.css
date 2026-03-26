@@ -2485,8 +2485,18 @@ th {
   box-shadow: none;
 }
 
-.develop-template-section-toggle span:last-child {
+.develop-template-section-title {
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
+}
+
+.develop-template-editor .develop-template-section-header-row > button:not(.develop-template-section-toggle) {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: max-content;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .develop-template-section-toggle:hover,
