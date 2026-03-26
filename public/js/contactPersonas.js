@@ -40,15 +40,51 @@ App.contactPersonas = (function () {
     btn.textContent = `Persona${marker}`;
   }
 
+  function formatTags(tags) {
+    return Array.isArray(tags) ? tags.map((item) => safeText(item)).filter(Boolean).join(', ') : '';
+  }
+
+  function parentPersonaName(parentId, excludeId = null) {
+    const id = Number(parentId || 0) || 0;
+    if (!id) return '';
+    const match = (Array.isArray(state.contactPersonas) ? state.contactPersonas : []).find((item) => {
+      const itemId = Number(item?.id || 0) || 0;
+      if (excludeId && itemId === Number(excludeId || 0)) return false;
+      return itemId === id;
+    });
+    return safeText(match?.persona);
+  }
+
+  function populateParentSelect(selectId, selectedId = '', excludeId = null) {
+    const select = byId(selectId);
+    if (!select) return;
+    const current = String(selectedId || '');
+    select.innerHTML = '<option value="">No Parent</option>';
+    sortedPersonas().forEach((item) => {
+      const itemId = Number(item?.id || 0) || 0;
+      if (excludeId && itemId === Number(excludeId || 0)) return;
+      const option = document.createElement('option');
+      option.value = String(itemId);
+      option.textContent = safeText(item.persona) || `Persona ${itemId}`;
+      if (String(itemId) === current) option.selected = true;
+      select.appendChild(option);
+    });
+  }
+
   function openEditPage(item) {
     if (!item || !item.id) return notify('Persona id is missing', true);
     const form = byId('contactPersonaEditForm');
     if (form) form.reset();
     const idInput = byId('contactPersonaEditId');
     const personaInput = byId('contactPersonaEditName');
+    const tagsInput = byId('contactPersonaEditTags');
+    const parentSelect = byId('contactPersonaEditParent');
     const descriptionInput = byId('contactPersonaEditDescription');
     if (idInput) idInput.value = String(item.id);
     if (personaInput) personaInput.value = safeText(item.persona);
+    if (tagsInput) tagsInput.value = formatTags(item.tags);
+    populateParentSelect('contactPersonaEditParent', item.parentPersonaId, item.id);
+    if (parentSelect) parentSelect.value = item.parentPersonaId ? String(item.parentPersonaId) : '';
     if (descriptionInput) descriptionInput.value = safeText(item.description);
     App.setActivePage('editContactPersonaPage');
   }
@@ -102,6 +138,12 @@ App.contactPersonas = (function () {
       const personaTd = document.createElement('td');
       personaTd.textContent = safeText(item.persona) || '-';
 
+      const parentTd = document.createElement('td');
+      parentTd.textContent = parentPersonaName(item.parentPersonaId, item.id) || '-';
+
+      const tagsTd = document.createElement('td');
+      tagsTd.textContent = formatTags(item.tags) || '-';
+
       const descriptionTd = document.createElement('td');
       descriptionTd.textContent = safeText(item.description) || '-';
 
@@ -112,6 +154,8 @@ App.contactPersonas = (function () {
       actionsTd.appendChild(deleteBtn);
 
       tr.appendChild(personaTd);
+      tr.appendChild(parentTd);
+      tr.appendChild(tagsTd);
       tr.appendChild(descriptionTd);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -120,7 +164,7 @@ App.contactPersonas = (function () {
     if (!tbody.children.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 3;
+      td.colSpan = 5;
       td.textContent = 'No personas yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -130,6 +174,8 @@ App.contactPersonas = (function () {
   async function refresh() {
     const result = await api('/api/contact-personas');
     state.contactPersonas = result.personas || [];
+    populateParentSelect('contactPersonaParent');
+    populateParentSelect('contactPersonaEditParent');
     renderMap();
     renderTable();
   }
@@ -153,6 +199,7 @@ App.contactPersonas = (function () {
       openCreateBtn.addEventListener('click', () => {
         const form = byId('contactPersonaForm');
         if (form) form.reset();
+        populateParentSelect('contactPersonaParent');
         App.setActivePage('createContactPersonaPage');
       });
     }
@@ -174,6 +221,8 @@ App.contactPersonas = (function () {
         const formData = new FormData(createForm);
         const payload = {
           persona: safeText(formData.get('persona')),
+          parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
+          tags: safeText(formData.get('tags')),
           description: safeText(formData.get('description')),
         };
         try {
@@ -200,6 +249,8 @@ App.contactPersonas = (function () {
         if (!id) return notify('Persona id is required', true);
         const payload = {
           persona: safeText(formData.get('persona')),
+          parentPersonaId: Number(formData.get('parent_persona_id') || 0) || null,
+          tags: safeText(formData.get('tags')),
           description: safeText(formData.get('description')),
         };
         try {

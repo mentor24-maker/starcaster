@@ -281,6 +281,7 @@
         <div class="page-heading-row">
           <h2>Contact Personas</h2>
           <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('createContactPersonaPage')">Create Persona</button>
             <button type="button" onclick="App.setActivePage('manageContactPersonasPage')">Manage Personas</button>
             <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
           </div>
@@ -293,7 +294,7 @@
         <div class="page-heading-row">
           <h2>Manage Contact Personas</h2>
           <div class="page-heading-actions">
-            <button id="openCreateContactPersonaPageBtn" type="button">Create Persona</button>
+            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.setActivePage('createContactPersonaPage')">Create Persona</button>
             <button type="button" onclick="App.setActivePage('contactsPersonasPage')">Back To Personas</button>
           </div>
         </div>
@@ -302,6 +303,8 @@
             <thead>
               <tr>
                 <th><button id="contactPersonasSortPersona" type="button" class="tiny-btn">Persona</button></th>
+                <th>Parent</th>
+                <th>Tags</th>
                 <th>Description</th>
                 <th>Actions</th>
               </tr>
@@ -322,6 +325,16 @@
             <input id="contactPersonaName" name="persona" placeholder="Persona name" required />
           </div>
           <div class="form-row">
+            <label for="contactPersonaParent">Parent Persona</label>
+            <select id="contactPersonaParent" name="parent_persona_id">
+              <option value="">No Parent</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="contactPersonaTags">Tags</label>
+            <input id="contactPersonaTags" name="tags" placeholder="comma, separated, tags" />
+          </div>
+          <div class="form-row">
             <label for="contactPersonaDescription">Description</label>
             <textarea id="contactPersonaDescription" name="description" rows="5" placeholder="Describe this persona and how it should be used."></textarea>
           </div>
@@ -339,6 +352,16 @@
           <div class="form-row">
             <label for="contactPersonaEditName">Persona</label>
             <input id="contactPersonaEditName" name="persona" placeholder="Persona name" required />
+          </div>
+          <div class="form-row">
+            <label for="contactPersonaEditParent">Parent Persona</label>
+            <select id="contactPersonaEditParent" name="parent_persona_id">
+              <option value="">No Parent</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="contactPersonaEditTags">Tags</label>
+            <input id="contactPersonaEditTags" name="tags" placeholder="comma, separated, tags" />
           </div>
           <div class="form-row">
             <label for="contactPersonaEditDescription">Description</label>

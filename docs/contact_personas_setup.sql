@@ -4,6 +4,8 @@ create table if not exists public.contact_personas (
   owner_user_id text null,
   persona text not null,
   description text not null default '',
+  tags jsonb not null default '[]'::jsonb,
+  parent_persona_id bigint null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -13,6 +15,9 @@ create index if not exists contact_personas_persona_idx
 
 create index if not exists contact_personas_project_owner_idx
   on public.contact_personas (project_id, owner_user_id);
+
+create index if not exists contact_personas_parent_idx
+  on public.contact_personas (parent_persona_id);
 
 create or replace function public.set_contact_personas_updated_at()
 returns trigger

@@ -339,8 +339,10 @@ async function handleContacts(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const persona = String(body.persona || '').trim();
     const description = String(body.description || '').trim();
+    const tags = Array.isArray(body.tags) ? body.tags : String(body.tags || '');
+    const parentPersonaId = Number(body.parentPersonaId || body.parent_persona_id || 0) || null;
     if (!persona) return sendErr(res, 400, 'Persona name is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createContactPersona({ persona, description }, requestScope(req));
+    const result = await createContactPersona({ persona, description, tags, parentPersonaId }, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToContactPersona(created), { persona: rowToContactPersona(created) }), true;
@@ -360,6 +362,10 @@ async function handleContacts(req, res, pathname, method) {
     const payload = {};
     if ('persona' in body) payload.persona = String(body.persona || '').trim();
     if ('description' in body) payload.description = String(body.description || '').trim();
+    if ('tags' in body) payload.tags = Array.isArray(body.tags) ? body.tags : String(body.tags || '');
+    if ('parentPersonaId' in body || 'parent_persona_id' in body) {
+      payload.parentPersonaId = Number(body.parentPersonaId || body.parent_persona_id || 0) || null;
+    }
     if ('persona' in payload && !payload.persona) {
       return sendErr(res, 400, 'Persona name is required', { code: 'VALIDATION_ERROR' }), true;
     }
