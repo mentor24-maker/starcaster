@@ -196,6 +196,14 @@ App.develop = (function () {
       dir: 'desc',
     },
   };
+
+  function getEmailTemplatesByKind(kind) {
+    const normalized = safeText(kind).toLowerCase();
+    return savedEmailTemplates.filter((template) => {
+      const templateKind = safeText(template?.templateKind).toLowerCase() || 'text';
+      return normalized ? templateKind === normalized : true;
+    });
+  }
   const landingPageTableState = {
     filters: {
       name: '',
@@ -3313,7 +3321,8 @@ App.develop = (function () {
   function renderEmailTemplatePreview(templateId) {
     const host = byId('developEmailTemplatesPreviewHost');
     if (!host) return;
-    const template = savedEmailTemplates.find((item) => safeText(item.id) === safeText(templateId)) || savedEmailTemplates[0];
+    const textTemplates = getEmailTemplatesByKind('text');
+    const template = textTemplates.find((item) => safeText(item.id) === safeText(templateId)) || textTemplates[0];
     selectedEmailTemplateId = safeText(template?.id);
     host.innerHTML = template ? buildEmailTemplatePreviewMarkup(template) : '';
   }
@@ -3332,6 +3341,24 @@ App.develop = (function () {
         if (select) select.value = nextTemplateId;
       }, 120);
     }, 50);
+  }
+
+  function openModularEmailTemplateEditor(template) {
+    if (!template) return;
+    const builderIdInput = byId('developTemplateEditorIdInput');
+    const builderNameInput = byId('developTemplateEditorNameInput');
+    if (builderIdInput) builderIdInput.value = safeText(template.id);
+    if (builderNameInput) builderNameInput.value = safeText(template.name);
+    emailTemplateBlocksDraft = normalizeEmailTemplateBlocks(template);
+    renderEmailTemplateBlockEditor();
+    const builderSubmitBtnTop = byId('developTemplateEditorSaveBtnTop');
+    const builderSubmitBtnBottom = byId('developTemplateEditorSaveBtnBottom');
+    const label = template?.id ? 'Update Template' : 'Save Template';
+    if (builderSubmitBtnTop) builderSubmitBtnTop.textContent = label;
+    if (builderSubmitBtnBottom) builderSubmitBtnBottom.textContent = label;
+    setEmailTemplateEditorVisible(true);
+    const panel = byId('developTemplateEditorPanel');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function renderTemplateRecordsTable(hostId, title, headers, rows) {
@@ -3394,7 +3421,11 @@ App.develop = (function () {
       renderEmailTemplatePreview(template.id);
     });
     const editBtn = App.makeIconButton('edit', 'Edit Template', () => {
-      populateEmailTemplateForm(template);
+      if ((safeText(template.templateKind).toLowerCase() || 'text') === 'modular') {
+        openModularEmailTemplateEditor(template);
+      } else {
+        populateEmailTemplateForm(template);
+      }
     }, { marginLeft: '8px' });
     const deleteBtn = App.makeIconButton('delete', 'Delete Template', async () => {
       const confirmed = window.confirm(`Delete email template "${safeText(template.name) || 'Untitled'}"?`);
@@ -3419,6 +3450,7 @@ App.develop = (function () {
   function renderEmailTemplateTables() {
     const rows = savedEmailTemplates.map((template) => ([
       safeText(template.name) || '-',
+      safeText(template.templateKind).toLowerCase() === 'modular' ? 'Email: Modular' : 'Email: Text',
       safeText(template.subject) || '-',
       safeText(template.updatedAt ? new Date(template.updatedAt).toLocaleString() : '-') || '-',
       buildEmailTemplateActions(template),
@@ -3426,7 +3458,7 @@ App.develop = (function () {
     renderTemplateRecordsTable(
       'developEmailTemplatesPrimaryTableHost',
       'Saved Email Templates',
-      ['Name', 'Subject', 'Updated', 'Actions'],
+      ['Name', 'Kind', 'Subject', 'Updated', 'Actions'],
       rows
     );
   }
@@ -3549,11 +3581,12 @@ App.develop = (function () {
     const host = byId('developEmailTemplatesLibrary');
     if (!host) return;
     host.innerHTML = '';
-    if (!savedEmailTemplates.length) {
+    const textTemplates = getEmailTemplatesByKind('text');
+    if (!textTemplates.length) {
       host.innerHTML = '<p class="meta">No email templates yet. Create one above to start building your library.</p>';
       return;
     }
-    savedEmailTemplates.forEach((template) => {
+    textTemplates.forEach((template) => {
       const card = document.createElement('article');
       card.className = `develop-template-library-card${String(template.id) === String(selectedEmailTemplateId) ? ' is-selected' : ''}`;
       const copyWrap = document.createElement('div');
@@ -3630,29 +3663,24 @@ App.develop = (function () {
   function populateEmailTemplateForm(template) {
     const form = byId('developEmailTemplateForm');
     if (!form) return;
-    setEmailTemplateEditorVisible(true);
     setCollapsibleSectionExpanded('developEmailSectionToggle', 'developEmailSectionBody', true);
+    const builderIdInput = byId('developTemplateEditorIdInput');
+    const builderNameInput = byId('developTemplateEditorNameInput');
+    if (builderIdInput) builderIdInput.value = '';
+    if (builderNameInput) builderNameInput.value = '';
     byId('developEmailTemplateIdInput').value = safeText(template?.id);
     byId('developEmailTemplateNameInput').value = safeText(template?.name);
-    const builderNameInput = byId('developTemplateEditorNameInput');
-    if (builderNameInput) builderNameInput.value = safeText(template?.name);
     byId('developEmailTemplateSlugInput').value = safeText(template?.slug);
     byId('developEmailTemplateSummaryInput').value = safeText(template?.summary);
     byId('developEmailTemplateSubjectInput').value = safeText(template?.subject);
     byId('developEmailTemplateHeadingInput').value = safeText(template?.heading);
     byId('developEmailTemplateBodyInput').value = safeText(template?.body);
     byId('developEmailTemplateCtaInput').value = safeText(template?.cta);
-    emailTemplateBlocksDraft = normalizeEmailTemplateBlocks(template);
-    renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
     const submitBtnTop = byId('developEmailTemplateSubmitBtnTop');
-    const builderSubmitBtnTop = byId('developTemplateEditorSaveBtnTop');
-    const builderSubmitBtnBottom = byId('developTemplateEditorSaveBtnBottom');
     const label = template?.id ? 'Update Template' : 'Save Template';
     if (submitBtn) submitBtn.textContent = label;
     if (submitBtnTop) submitBtnTop.textContent = label;
-    if (builderSubmitBtnTop) builderSubmitBtnTop.textContent = label;
-    if (builderSubmitBtnBottom) builderSubmitBtnBottom.textContent = label;
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -3660,6 +3688,8 @@ App.develop = (function () {
     const form = byId('developEmailTemplateForm');
     if (form) form.reset();
     byId('developEmailTemplateIdInput').value = '';
+    const builderIdInput = byId('developTemplateEditorIdInput');
+    if (builderIdInput) builderIdInput.value = '';
     const builderNameInput = byId('developTemplateEditorNameInput');
     if (builderNameInput) builderNameInput.value = '';
     emailTemplateBlocksDraft = [
@@ -4277,6 +4307,7 @@ App.develop = (function () {
     const formIdInput = byId('developFormIdInput');
     const formNameInput = byId('developFormNameInput');
     const emailTemplateForm = byId('developEmailTemplateForm');
+    const templateEditorIdInput = byId('developTemplateEditorIdInput');
     const emailTemplateNameInput = byId('developEmailTemplateNameInput');
     const templateEditorNameInput = byId('developTemplateEditorNameInput');
     const landingPreviewAction = byId('developLandingPagePreviewAction');
@@ -4311,29 +4342,6 @@ App.develop = (function () {
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: false });
 
-    const submitEmailTemplateFromBuilder = (button) => {
-      if (!button) return;
-      button.addEventListener('click', () => {
-        const form = byId('developEmailTemplateForm');
-        if (form) form.requestSubmit();
-      });
-    };
-    submitEmailTemplateFromBuilder(byId('developTemplateEditorSaveBtnTop'));
-    submitEmailTemplateFromBuilder(byId('developTemplateEditorSaveBtnBottom'));
-
-    if (emailTemplateNameInput && templateEditorNameInput) {
-      emailTemplateNameInput.addEventListener('input', () => {
-        if (templateEditorNameInput.value !== emailTemplateNameInput.value) {
-          templateEditorNameInput.value = emailTemplateNameInput.value;
-        }
-      });
-      templateEditorNameInput.addEventListener('input', () => {
-        if (emailTemplateNameInput.value !== templateEditorNameInput.value) {
-          emailTemplateNameInput.value = templateEditorNameInput.value;
-        }
-      });
-    }
-
     const templateEditorToolbar = byId('developTemplateEditorToolbar');
     if (templateEditorToolbar) {
       templateEditorToolbar.querySelectorAll('button[data-block-type]').forEach((button) => {
@@ -4353,6 +4361,7 @@ App.develop = (function () {
         const derivedCta = emailTemplateBlocksDraft.find((block) => block.type === 'button')?.text || '';
         const id = safeText(byId('developEmailTemplateIdInput')?.value);
         const payload = {
+          templateKind: 'text',
           name: safeText(byId('developEmailTemplateNameInput')?.value),
           slug: safeText(byId('developEmailTemplateSlugInput')?.value) || slugify(byId('developEmailTemplateNameInput')?.value),
           summary: safeText(byId('developEmailTemplateSummaryInput')?.value),
@@ -4360,12 +4369,7 @@ App.develop = (function () {
           heading: safeText(byId('developEmailTemplateHeadingInput')?.value) || derivedHeading,
           body: safeText(byId('developEmailTemplateBodyInput')?.value) || derivedBody,
           cta: safeText(byId('developEmailTemplateCtaInput')?.value) || derivedCta,
-          blocks: emailTemplateBlocksDraft.map((block) => ({
-            id: safeText(block.id),
-            type: safeText(block.type),
-            text: safeText(block.text),
-            url: safeText(block.url),
-          })),
+          blocks: [],
         };
         if (!payload.name) {
           notify('Template name is required', true);
@@ -4384,6 +4388,54 @@ App.develop = (function () {
         }
       });
     }
+
+    const saveModularTemplate = async () => {
+      const derivedHeading = emailTemplateBlocksDraft.find((block) => block.type === 'heading')?.text || '';
+      const derivedBody = emailTemplateBlocksDraft.find((block) => block.type === 'paragraph')?.text || '';
+      const derivedCta = emailTemplateBlocksDraft.find((block) => block.type === 'button')?.text || '';
+      const id = safeText(templateEditorIdInput?.value);
+      const payload = {
+        templateKind: 'modular',
+        name: safeText(templateEditorNameInput?.value),
+        slug: slugify(templateEditorNameInput?.value),
+        summary: '',
+        subject: '',
+        heading: derivedHeading,
+        body: derivedBody,
+        cta: derivedCta,
+        blocks: emailTemplateBlocksDraft.map((block) => ({
+          id: safeText(block.id),
+          type: safeText(block.type),
+          text: safeText(block.text),
+          url: safeText(block.url),
+          sourceMode: safeText(block.sourceMode),
+          assetId: safeText(block.assetId),
+          alt: safeText(block.alt),
+        })),
+      };
+      if (!payload.name) {
+        notify('Template name is required', true);
+        return;
+      }
+      try {
+        const endpoint = id
+          ? `/api/develop/email-templates/${encodeURIComponent(id)}`
+          : '/api/develop/email-templates';
+        const method = id ? 'PATCH' : 'POST';
+        await api(endpoint, { method, body: JSON.stringify(payload) });
+        notify(id ? 'Modular email template updated' : 'Modular email template created');
+        await refresh();
+      } catch (err) {
+        notify(err.message || 'Could not save modular email template', true);
+      }
+    };
+
+    const bindModularSaveButton = (button) => {
+      if (!button) return;
+      button.addEventListener('click', saveModularTemplate);
+    };
+    bindModularSaveButton(byId('developTemplateEditorSaveBtnTop'));
+    bindModularSaveButton(byId('developTemplateEditorSaveBtnBottom'));
 
     const bindResetEmailTemplate = (button) => {
       if (!button) return;
