@@ -282,6 +282,7 @@
           <h2>Contact Personas</h2>
           <div class="page-heading-actions">
             <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
+            <button type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
             <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
           </div>
         </div>
@@ -320,7 +321,7 @@
                 <th>Parent</th>
                 <th>Tags</th>
                 <th>Description</th>
-                <th>Actions</th>
+                <th class="contact-personas-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody id="contactPersonasTable"></tbody>
@@ -350,7 +351,11 @@
       <section id="editContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Edit Contact Persona</h2>
-          <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
+            <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
+            <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
+          </div>
         </div>
         <form id="contactPersonaEditForm" class="stack-form labeled-form" onsubmit="return App.contactPersonas.submitEditForm(event);">
           <input id="contactPersonaEditId" name="id" type="hidden" />

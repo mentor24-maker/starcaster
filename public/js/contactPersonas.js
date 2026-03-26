@@ -173,6 +173,7 @@ App.contactPersonas = (function () {
       descriptionTd.textContent = safeText(item.description) || '-';
 
       const actionsTd = document.createElement('td');
+      actionsTd.className = 'contact-personas-actions-cell';
       const editBtn = App.makeIconButton('edit', 'Edit Persona', () => openEditPage(item));
       const cloneBtn = App.makeIconButton('clone', 'Clone Persona', () => clonePersona(item), { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Persona', () => deletePersona(item), { danger: true, marginLeft: '8px' });

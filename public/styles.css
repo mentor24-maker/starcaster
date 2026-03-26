@@ -439,6 +439,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  flex-wrap: nowrap;
 }
 
 .acquire-workbench-layout {
@@ -3646,6 +3647,24 @@ th {
 
 .develop-pages-actions-cell .icon-btn + .icon-btn {
   margin-left: 10px;
+}
+
+.contact-personas-actions-heading {
+  text-align: center;
+  white-space: nowrap;
+  width: 150px;
+  min-width: 150px;
+}
+
+.contact-personas-actions-cell {
+  text-align: center;
+  white-space: nowrap;
+  width: 150px;
+  min-width: 150px;
+}
+
+.contact-personas-actions-cell .icon-btn + .icon-btn {
+  margin-left: 8px;
 }
 
 .tiny-btn-blue {
