@@ -291,7 +291,7 @@
             <h3>Create Contact Persona</h3>
             <button id="backToContactPersonasInlineBtn" type="button" onclick="App.contactPersonas.goBackToPersonas(); return false;">Back To Personas</button>
           </div>
-          <form id="contactPersonaForm" class="stack-form labeled-form" onsubmit="return App.contactPersonas.submitCreateForm(event);">
+          <form id="contactPersonaForm" class="stack-form labeled-form" onsubmit="App.contactPersonas.submitCreateForm(event); return false;">
             <div class="form-row">
               <label for="contactPersonaName">Persona</label>
               <input id="contactPersonaName" name="persona" placeholder="Persona name" required />
@@ -357,7 +357,7 @@
             <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
           </div>
         </div>
-        <form id="contactPersonaEditForm" class="stack-form labeled-form" onsubmit="return App.contactPersonas.submitEditForm(event);">
+        <form id="contactPersonaEditForm" class="stack-form labeled-form" onsubmit="App.contactPersonas.submitEditForm(event); return false;">
           <input id="contactPersonaEditId" name="id" type="hidden" />
           <div class="form-row">
             <label for="contactPersonaEditName">Persona</label>
