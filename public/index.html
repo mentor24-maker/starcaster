@@ -4604,7 +4604,7 @@
               aria-controls="developTemplateEditorBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
-              <span id="developTemplateEditorTitle">Email: Modular</span>
+              <span id="developTemplateEditorTitle" class="develop-template-section-title">Email: Modular</span>
             </button>
             <button id="developTemplateEditorCloseBtn" type="button">Close Editor</button>
           </div>
@@ -4613,7 +4613,11 @@
             <input id="developTemplateEditorIdInput" type="hidden" />
             <div class="grid-form" style="margin-bottom:0.75rem;">
               <input id="developTemplateEditorNameInput" type="text" placeholder="Template name" />
+              <input id="developTemplateEditorSlugInput" type="text" placeholder="Slug (optional)" />
+              <input id="developTemplateEditorCtaInput" type="text" placeholder="CTA label" />
             </div>
+            <input id="developTemplateEditorSummaryInput" type="text" placeholder="Summary: when to use this template." style="margin-bottom:0.75rem;" />
+            <input id="developTemplateEditorSubjectInput" type="text" placeholder="Default subject line" style="margin-bottom:0.75rem;" />
             <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
               <button id="developTemplateEditorSaveBtnTop" type="button">Save Template</button>
             </div>
@@ -4643,7 +4647,7 @@
               aria-controls="developFormsSectionBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
-              <span>Forms</span>
+              <span class="develop-template-section-title">Forms</span>
             </button>
           </div>
           <div id="developFormsSectionBody" class="develop-template-section-body">
@@ -4664,7 +4668,7 @@
               aria-controls="developEmailSectionBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
-              <span>Email: Text</span>
+              <span class="develop-template-section-title">Email: Text</span>
             </button>
           </div>
           <div id="developEmailSectionBody" class="develop-template-section-body">
@@ -4704,7 +4708,7 @@
               aria-controls="developPagesSectionBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
-              <span>Pages</span>
+              <span class="develop-template-section-title">Pages</span>
             </button>
           </div>
           <div id="developPagesSectionBody" class="develop-template-section-body">
