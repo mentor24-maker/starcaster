@@ -281,7 +281,7 @@
         <div class="page-heading-row">
           <h2>Contact Personas</h2>
           <div class="page-heading-actions">
-            <button id="openCreateContactPersonaFromLandingBtn" type="button">Create Persona</button>
+            <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
             <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
           </div>
         </div>
@@ -307,7 +307,7 @@
         <div class="page-heading-row">
           <h2>Manage Contact Personas</h2>
           <div class="page-heading-actions">
-            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.setActivePage('createContactPersonaPage')">Create Persona</button>
+            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
             <button type="button" onclick="App.setActivePage('contactsPersonasPage')">Back To Personas</button>
           </div>
         </div>

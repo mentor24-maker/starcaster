@@ -280,6 +280,7 @@ App.contactPersonas = (function () {
 
   return {
     manifest: { id: 'contactPersonas', label: 'Contact Personas', pageId: 'contactsPersonasPage' },
+    openCreatePage,
     init,
     refresh,
     onPageActivated: refresh,
