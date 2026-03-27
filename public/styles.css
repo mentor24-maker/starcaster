@@ -2113,6 +2113,25 @@ th {
   align-self: auto;
 }
 
+#campaignForm.labeled-form {
+  --label-col-width: 150px;
+  --label-col-gap: 0.75rem;
+}
+
+#campaignForm.labeled-form .form-row > label {
+  margin: 0;
+  justify-self: end;
+  text-align: right;
+  white-space: nowrap;
+}
+
+#campaignForm.labeled-form .form-row > input,
+#campaignForm.labeled-form .form-row > select,
+#campaignForm.labeled-form .form-row > textarea {
+  width: 100%;
+  min-width: 0;
+}
+
 .asset-edit-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
