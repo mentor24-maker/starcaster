@@ -3728,7 +3728,7 @@
         <p>CTA writing workspace placeholder.</p>
       </section>
 
-      <section id="assetsPage" class="app-page hidden">
+      <section id="assetsLauncherPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Assets</h2>
           <div class="page-heading-actions">
@@ -3768,12 +3768,12 @@
         </section>
       </section>
 
-      <section id="manageAssetsPage" class="app-page hidden">
+      <section id="assetsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Manage Assets</h2>
+          <h2>Assets</h2>
           <div class="page-heading-actions">
             <button id="uploadAssetsBtn" type="button">Add Assets</button>
-            <button type="button" onclick="App.assets.openAssetsLanding()">Back To Assets</button>
+            <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')">Manage Categories</button>
           </div>
         </div>
         <p>Manage the reusable media and PDFs that support campaigns, pages, and publishing.</p>
@@ -3879,7 +3879,7 @@
       <section id="addAssetPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2 id="assetFormTitle">Add Asset</h2>
-          <button id="backToAssetsBtn" type="button">Back To Manage Assets</button>
+          <button id="backToAssetsBtn" type="button">Back To Assets</button>
         </div>
         <div class="asset-edit-layout">
           <form id="assetForm" class="stack-form labeled-form">

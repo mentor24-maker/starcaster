@@ -771,8 +771,12 @@ App.assets = (function () {
   }
 
   async function openAssetsLanding() {
-    renderAssetsLanding();
     App.setActivePage('assetsPage');
+    try {
+      await refresh();
+    } catch (err) {
+      notify(err.message, true);
+    }
   }
 
   async function openAssetsManager(assetType = '', category = '') {
@@ -798,7 +802,7 @@ App.assets = (function () {
     if (els.assetsFilterTags) {
       els.assetsFilterTags.value = '';
     }
-    App.setActivePage('manageAssetsPage');
+    App.setActivePage('assetsPage');
     try {
       await refresh();
     } catch (err) {
@@ -893,7 +897,7 @@ App.assets = (function () {
 
     if (els.backToAssetsBtn) {
       els.backToAssetsBtn.addEventListener('click', () => {
-        App.setActivePage('manageAssetsPage');
+        App.setActivePage('assetsPage');
       });
     }
 
@@ -996,7 +1000,7 @@ App.assets = (function () {
           }
           resetAssetForm();
           await refresh();
-          App.setActivePage('manageAssetsPage');
+          App.setActivePage('assetsPage');
         } catch (err) {
           notify(err.message, true);
         }
@@ -1120,7 +1124,7 @@ App.assets = (function () {
   }
 
   return {
-    manifest: { id: 'assets', label: 'Assets', pageId: 'manageAssetsPage' },
+    manifest: { id: 'assets', label: 'Assets', pageId: 'assetsPage' },
     init,
     refresh,
     onPageActivated: refresh,
