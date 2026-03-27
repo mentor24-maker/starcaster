@@ -2,6 +2,37 @@ window.App = window.App || {};
 
 App.campaigns = (function () {
   const { state, els, api, notify } = App;
+  const CHANNEL_RULES_STORAGE_KEY = 'campaignChannelRules.v1';
+  const MECHANIC_RULE_FIELDS = [
+    { id: 'campaignEmailTemplateSelect', label: 'Template' },
+    { id: 'campaignThemeSelect', label: 'Theme' },
+    { id: 'campaignLandingPageSelect', label: 'Page' },
+    { id: 'campaignSegmentSelect', label: 'Segment' },
+  ];
+  const CONTENT_RULE_FIELDS = [
+    { id: 'campaignTopicSelect', label: 'Topics' },
+    { id: 'campaignHeadlineSelect', label: 'Headline' },
+    { id: 'campaignEmailSelect', label: 'Email Body' },
+    { id: 'campaignSubjectLineSelect', label: 'Subject Line' },
+    { id: 'campaignBlurbSelect', label: 'Blurb' },
+    { id: 'campaignPitchSelect', label: 'Pitch' },
+    { id: 'campaignSubheadingSelect', label: 'Sub-heading' },
+    { id: 'campaignTaglineSelect', label: 'Tagline' },
+    { id: 'campaignArticleSelect', label: 'Article' },
+    { id: 'campaignReportSelect', label: 'Report' },
+    { id: 'campaignWhitePaperSelect', label: 'White Paper' },
+    { id: 'campaignEbookSelect', label: 'eBook' },
+    { id: 'campaignPostSelect', label: 'Post' },
+    { id: 'campaignDescriptionSelect', label: 'Description' },
+    { id: 'campaignTranscriptSelect', label: 'Transcript' },
+    { id: 'campaignCommentSelect', label: 'Comment' },
+    { id: 'campaignTweetSelect', label: 'Tweet' },
+    { id: 'campaignCtaSelect', label: 'CTA' },
+    { id: 'campaignPrimaryImageSelect', label: 'Primary Image' },
+    { id: 'campaignPrimaryVideoSelect', label: 'Primary Video' },
+    { id: 'campaignHashtagGroupSelect', label: 'Hashtags' },
+    { id: 'campaignLeadMagnetSelect', label: 'PDF' },
+  ];
 
   let builderTweets = [];
   let builderHashtags = [];
@@ -24,6 +55,7 @@ App.campaigns = (function () {
   let builderLandingPages = [];
   let builderForms = [];
   let editingCampaignId = '';
+  let channelRulesState = loadChannelRulesState();
 
   function byId(id) {
     return document.getElementById(id);
@@ -31,6 +63,72 @@ App.campaigns = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  function uniqueIds(values) {
+    const seen = new Set();
+    return (Array.isArray(values) ? values : []).map((value) => safeText(value)).filter((value) => {
+      if (!value || seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+  }
+
+  function loadChannelRulesState() {
+    try {
+      const raw = window.localStorage.getItem(CHANNEL_RULES_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function persistChannelRulesState() {
+    try {
+      window.localStorage.setItem(CHANNEL_RULES_STORAGE_KEY, JSON.stringify(channelRulesState || {}));
+    } catch {}
+  }
+
+  function mechanicsFieldIds() {
+    return MECHANIC_RULE_FIELDS.map((item) => item.id);
+  }
+
+  function contentFieldIds() {
+    return CONTENT_RULE_FIELDS.map((item) => item.id);
+  }
+
+  function visibleMechanicsForProfile(profile) {
+    return uniqueIds(profile?.visibleMechanics || []);
+  }
+
+  function requiredMechanicsForProfile(profile) {
+    return uniqueIds(profile?.requiredMechanics || []);
+  }
+
+  function visibleContentForProfile(profile) {
+    return uniqueIds(profile?.visibleContent || []);
+  }
+
+  function mergeChannelProfile(channel) {
+    const defaults = channelProfile(channel);
+    const key = safeText(channel?.id);
+    const override = key ? channelRulesState[key] || {} : {};
+    const mechanicsVisible = uniqueIds(
+      Array.isArray(override.visibleMechanics) ? override.visibleMechanics : defaults.visibleMechanics
+    );
+    const mechanicsRequired = uniqueIds(
+      Array.isArray(override.requiredMechanics) ? override.requiredMechanics : defaults.requiredMechanics || []
+    ).filter((id) => mechanicsVisible.includes(id));
+    const contentVisible = uniqueIds(
+      Array.isArray(override.visibleContent) ? override.visibleContent : defaults.visibleContent
+    );
+    return {
+      hint: safeText(override.hint || defaults.hint),
+      visibleMechanics: mechanicsVisible,
+      requiredMechanics: mechanicsRequired,
+      visibleContent: contentVisible,
+    };
   }
 
   function extractDriveId(url) {
@@ -153,6 +251,7 @@ App.campaigns = (function () {
       return {
         hint: 'Select a channel to load content fields.',
         visibleMechanics: [],
+        requiredMechanics: [],
         visibleContent: [],
       };
     }
@@ -160,6 +259,7 @@ App.campaigns = (function () {
       return {
         hint: '',
         visibleMechanics: ['campaignEmailTemplateSelect', 'campaignLandingPageSelect', 'campaignSegmentSelect'],
+        requiredMechanics: [],
         visibleContent: ['campaignHeadlineSelect', 'campaignEmailSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignLeadMagnetSelect'],
       };
     }
@@ -167,6 +267,7 @@ App.campaigns = (function () {
       return {
         hint: 'X campaigns focus on short social copy, hashtags, and optional media.',
         visibleMechanics: ['campaignSegmentSelect'],
+        requiredMechanics: [],
         visibleContent: ['campaignTweetSelect', 'campaignTaglineSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect', 'campaignHashtagGroupSelect'],
       };
     }
@@ -174,6 +275,7 @@ App.campaigns = (function () {
       return {
         hint: 'YouTube campaigns can assemble titles, descriptions, transcripts, CTAs, and media.',
         visibleMechanics: ['campaignLandingPageSelect', 'campaignSegmentSelect'],
+        requiredMechanics: [],
         visibleContent: ['campaignHeadlineSelect', 'campaignDescriptionSelect', 'campaignTranscriptSelect', 'campaignCommentSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect'],
       };
     }
@@ -181,12 +283,14 @@ App.campaigns = (function () {
       return {
         hint: 'Publishing channels can use long-form content plus supporting summary copy and calls to action.',
         visibleMechanics: ['campaignLandingPageSelect', 'campaignSegmentSelect'],
+        requiredMechanics: [],
         visibleContent: ['campaignHeadlineSelect', 'campaignArticleSelect', 'campaignReportSelect', 'campaignWhitePaperSelect', 'campaignEbookSelect', 'campaignDescriptionSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignLeadMagnetSelect'],
       };
     }
     return {
       hint: 'Social campaigns can combine posts, supporting copy, hashtags, and media.',
       visibleMechanics: ['campaignSegmentSelect'],
+      requiredMechanics: [],
       visibleContent: ['campaignHeadlineSelect', 'campaignPostSelect', 'campaignDescriptionSelect', 'campaignTaglineSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect', 'campaignHashtagGroupSelect'],
     };
   }
@@ -200,6 +304,7 @@ App.campaigns = (function () {
     const profile = channelProfile(channel);
     const mechanicIds = ['campaignEmailTemplateSelect', 'campaignThemeSelect', 'campaignLandingPageSelect', 'campaignSegmentSelect'];
     const contentIds = [
+      'campaignTopicSelect',
       'campaignHeadlineSelect',
       'campaignEmailSelect',
       'campaignSubjectLineSelect',
@@ -226,8 +331,124 @@ App.campaigns = (function () {
     if (mechanicsWrap) mechanicsWrap.style.display = hasChannel ? '' : 'none';
     if (contentWrap) contentWrap.style.display = hasChannel ? '' : 'none';
     if (hint) hint.textContent = profile.hint;
-    mechanicIds.forEach((id) => setFieldVisible(id, profile.visibleMechanics.includes(id)));
+    mechanicIds.forEach((id) => {
+      const field = byId(id);
+      setFieldVisible(id, profile.visibleMechanics.includes(id));
+      if (field) field.required = profile.requiredMechanics.includes(id);
+    });
     contentIds.forEach((id) => setFieldVisible(id, profile.visibleContent.includes(id)));
+  }
+
+  function currentRulesChannel() {
+    const select = byId('campaignRulesChannelSelect');
+    if (!select) return null;
+    const channels = Array.isArray(state.channels) ? state.channels : [];
+    return channels.find((item) => String(item.id) === String(select.value || '')) || null;
+  }
+
+  function buildRulesChecklist(items, activeIds, name) {
+    const wrap = document.createElement('div');
+    wrap.className = 'stack-form';
+    wrap.style.margin = '0';
+    items.forEach((item) => {
+      const row = document.createElement('label');
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.gap = '0.5rem';
+      row.style.marginBottom = '0.25rem';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = name;
+      input.value = item.id;
+      input.checked = activeIds.includes(item.id);
+      row.appendChild(input);
+      row.appendChild(document.createTextNode(item.label));
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  function renderChannelRulesEditor() {
+    const channel = currentRulesChannel();
+    const mechanicsWrap = byId('campaignRulesVisibleMechanicsList');
+    const requiredWrap = byId('campaignRulesRequiredMechanicsList');
+    const contentWrap = byId('campaignRulesVisibleContentList');
+    if (!mechanicsWrap || !requiredWrap || !contentWrap) return;
+    mechanicsWrap.innerHTML = '';
+    requiredWrap.innerHTML = '';
+    contentWrap.innerHTML = '';
+    if (!channel) return;
+    const profile = mergeChannelProfile(channel);
+    mechanicsWrap.appendChild(buildRulesChecklist(MECHANIC_RULE_FIELDS, visibleMechanicsForProfile(profile), 'visibleMechanics'));
+    requiredWrap.appendChild(buildRulesChecklist(MECHANIC_RULE_FIELDS, requiredMechanicsForProfile(profile), 'requiredMechanics'));
+    contentWrap.appendChild(buildRulesChecklist(CONTENT_RULE_FIELDS, visibleContentForProfile(profile), 'visibleContent'));
+  }
+
+  function selectedRuleValues(containerId, name) {
+    const wrap = byId(containerId);
+    if (!wrap) return [];
+    return Array.from(wrap.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => safeText(input.value));
+  }
+
+  function renderChannelRulesSelect(currentValue) {
+    const select = byId('campaignRulesChannelSelect');
+    const channels = Array.isArray(state.channels) ? state.channels : [];
+    setSelectOptions(
+      select,
+      channels.map((channel) => ({ value: channel.id, label: channelLabel(channel) || `Channel ${channel.id}` })),
+      channels.length ? 'Channel' : 'No channels available yet',
+      currentValue
+    );
+    renderChannelRulesEditor();
+  }
+
+  function toggleRulesPanel(forceOpen) {
+    const panel = byId('campaignChannelRulesPanel');
+    const btn = byId('campaignToggleRulesBtn');
+    if (!panel || !btn) return;
+    const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !shouldOpen);
+    btn.textContent = shouldOpen ? 'Hide Channel Rules' : 'Channel Rules';
+    if (shouldOpen) {
+      renderChannelRulesSelect(safeText(byId('campaignChannelSelect')?.value));
+    }
+  }
+
+  function saveChannelRules() {
+    const channel = currentRulesChannel();
+    if (!channel) {
+      notify('Select a channel', true);
+      return;
+    }
+    const visibleMechanics = selectedRuleValues('campaignRulesVisibleMechanicsList', 'visibleMechanics');
+    const requiredMechanics = selectedRuleValues('campaignRulesRequiredMechanicsList', 'requiredMechanics')
+      .filter((id) => visibleMechanics.includes(id));
+    const visibleContent = selectedRuleValues('campaignRulesVisibleContentList', 'visibleContent');
+    channelRulesState[String(channel.id)] = {
+      visibleMechanics,
+      requiredMechanics,
+      visibleContent,
+    };
+    persistChannelRulesState();
+    if (safeText(byId('campaignChannelSelect')?.value) === String(channel.id)) {
+      applyCampaignChannelProfile(String(channel.id));
+    }
+    notify('Channel rules saved');
+  }
+
+  function resetChannelRules() {
+    const channel = currentRulesChannel();
+    if (!channel) {
+      notify('Select a channel', true);
+      return;
+    }
+    delete channelRulesState[String(channel.id)];
+    persistChannelRulesState();
+    renderChannelRulesEditor();
+    if (safeText(byId('campaignChannelSelect')?.value) === String(channel.id)) {
+      applyCampaignChannelProfile(String(channel.id));
+    }
+    notify('Channel rules reset');
   }
 
   function renderBuilderSelects() {
@@ -761,7 +982,27 @@ App.campaigns = (function () {
 
   function init() {
     const toggleBtn = byId('campaignToggleFormBtn');
+    const rulesToggleBtn = byId('campaignToggleRulesBtn');
     const form = byId('campaignForm');
+    const rulesChannelSelect = byId('campaignRulesChannelSelect');
+    const rulesSaveBtn = byId('campaignRulesSaveBtn');
+    const rulesResetBtn = byId('campaignRulesResetBtn');
+
+    if (rulesToggleBtn) {
+      rulesToggleBtn.addEventListener('click', async () => {
+        await loadBuilderSources();
+        toggleRulesPanel();
+      });
+    }
+    if (rulesChannelSelect) {
+      rulesChannelSelect.addEventListener('change', renderChannelRulesEditor);
+    }
+    if (rulesSaveBtn) {
+      rulesSaveBtn.addEventListener('click', saveChannelRules);
+    }
+    if (rulesResetBtn) {
+      rulesResetBtn.addEventListener('click', resetChannelRules);
+    }
 
     if (toggleBtn && form) {
       toggleBtn.addEventListener('click', async () => {
@@ -926,5 +1167,6 @@ App.campaigns = (function () {
     refresh: loadBuilderSources,
     renderCampaigns,
     onPageActivated: loadBuilderSources,
+    toggleRulesPanel,
   };
 })();
