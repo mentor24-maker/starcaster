@@ -122,6 +122,35 @@ const CAMPAIGN_CREATE_SCHEMA = {
 
 function segmentFieldValue(contact, key) {
   const field = String(key || '').trim();
+  if (field === 'social') {
+    return [
+      contact?.youtube,
+      contact?.instagram,
+      contact?.tiktok,
+      contact?.facebook,
+      contact?.x,
+      contact?.bluesky,
+      contact?.patreon,
+      contact?.linkedin,
+      contact?.customFields?.substack || contact?.custom_fields?.substack,
+      contact?.customFields?.medium || contact?.custom_fields?.medium,
+    ]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+      .join(' | ');
+  }
+  if (field === 'forms') {
+    const customForms = contact?.customFields?.forms ?? contact?.custom_fields?.forms;
+    return customForms == null ? '' : String(customForms);
+  }
+  if (field === 'content') {
+    const customContent = contact?.customFields?.content ?? contact?.custom_fields?.content;
+    return customContent == null ? '' : String(customContent);
+  }
+  if (field === 'meetings') {
+    const customMeetings = contact?.customFields?.meetings ?? contact?.custom_fields?.meetings;
+    return customMeetings == null ? '' : String(customMeetings);
+  }
   const camel = field.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
   const custom = (contact && typeof contact.customFields === 'object' && contact.customFields) || {};
   const raw = (
