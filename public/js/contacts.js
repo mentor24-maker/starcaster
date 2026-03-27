@@ -39,18 +39,19 @@ App.contacts = (function () {
   ];
 
   const ENGAGEMENT_FILTER_FIELDS = [
-    { key: 'website', label: 'Website' },
-    { key: 'content', label: 'Content' },
-    { key: 'email', label: 'Email' },
-    { key: 'social', label: 'Social' },
-    { key: 'phone', label: 'Mobile' },
-    { key: 'forms', label: 'Forms' },
-    { key: 'meetings', label: 'Meetings' },
+    { key: 'engagement_website', label: 'Website', options: ['Visits', 'Conversions'] },
+    { key: 'engagement_content', label: 'Content', options: ['Views', 'Conversions'] },
+    { key: 'engagement_email', label: 'Email', options: ['Receipts', 'Opens', 'Clicks', 'Conversions', 'Unsubscribes'] },
+    { key: 'engagement_social', label: 'Social', options: ['Likes', 'Follows', 'Subscribes', 'Comments', 'Opt-outs'] },
+    { key: 'engagement_mobile', label: 'Mobile', options: ['Opens', 'Clicks', 'Replies', 'Opt-outs'] },
+    { key: 'engagement_forms', label: 'Forms', options: [] },
+    { key: 'engagement_meetings', label: 'Meetings', options: ['Placeholder Meeting'] },
   ];
 
   const EXPLORE_CONTACT_FIELDS = [
     ...CONTACT_DETAIL_FILTER_FIELDS,
     ...SOCIAL_FILTER_FIELDS,
+    ...ENGAGEMENT_FILTER_FIELDS,
   ];
 
   const SOCIAL_FIELD_KEYS = new Set(SOCIAL_FILTER_FIELDS.map((field) => field.key));
@@ -69,6 +70,20 @@ App.contacts = (function () {
     { value: 'is_empty', label: 'Is Empty' },
     { value: 'is_known', label: 'Is Known' },
   ];
+  const ENGAGEMENT_BUCKET_OPTIONS = ['0', '1', '2-5', '6-10', '10+'];
+  let exploreFormTemplateOptions = [];
+
+  function isEngagementField(key) {
+    return String(key || '').startsWith('engagement_');
+  }
+
+  function slugifyEngagementToken(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
 
   // ---------------------------------------------------------------------------
   // Filter helpers
@@ -81,11 +96,11 @@ App.contacts = (function () {
     EXPLORE_CONTACT_FIELDS.forEach(({ key }) => {
       const current = state.segmentContactsFilters[key];
       if (!current || typeof current !== 'object') {
-        state.segmentContactsFilters[key] = { mode: 'contains', value: '' };
+        state.segmentContactsFilters[key] = { mode: isEngagementField(key) ? '' : 'contains', value: '' };
         return;
       }
       state.segmentContactsFilters[key] = {
-        mode: String(current.mode || 'contains'),
+        mode: String(current.mode || (isEngagementField(key) ? '' : 'contains')),
         value: String(current.value || ''),
       };
     });
@@ -99,9 +114,13 @@ App.contacts = (function () {
       .map(({ key }) => {
         const config = filters && typeof filters[key] === 'object'
           ? filters[key]
-          : { mode: 'contains', value: String(filters?.[key] || '') };
-        const mode = String(config.mode || 'contains').toLowerCase();
+          : { mode: isEngagementField(key) ? '' : 'contains', value: String(filters?.[key] || '') };
+        const mode = String(config.mode || (isEngagementField(key) ? '' : 'contains')).toLowerCase();
         const value = String(config.value || '').trim();
+        if (isEngagementField(key)) {
+          if (!mode || !value) return null;
+          return { key, mode, value };
+        }
         if (mode === 'is_empty' || mode === 'is_known') return { key, mode, value: '' };
         if (!value) return null;
         return { key, mode, value };
@@ -268,6 +287,10 @@ App.contacts = (function () {
   }
 
   function clauseMatchesContact(contact, clause) {
+    if (isEngagementField(clause.key)) {
+      const count = engagementMetricCount(contact, clause.key, clause.mode);
+      return countMatchesBucket(count, clause.value);
+    }
     const rawValue = String(contactValue(contact, clause.key) || '').trim();
     const haystack = SOCIAL_FIELD_KEYS.has(clause.key)
       ? socialUsername(rawValue)
@@ -310,6 +333,50 @@ App.contacts = (function () {
       return last.replace(/^@+/, '').toLowerCase();
     } catch {
       return text.replace(/^@+/, '').toLowerCase();
+    }
+  }
+
+  function engagementMetricCount(contact, fieldKey, metricToken) {
+    const custom = (
+      (contact.customFields && typeof contact.customFields === 'object' && contact.customFields) ||
+      (contact.custom_fields && typeof contact.custom_fields === 'object' && contact.custom_fields) ||
+      {}
+    );
+    const base = String(fieldKey || '').replace(/^engagement_/, '');
+    const metric = slugifyEngagementToken(metricToken);
+    const directKeys = [
+      `${base}_${metric}`,
+      `engagement_${base}_${metric}`,
+    ];
+    for (const key of directKeys) {
+      const raw = custom[key];
+      if (raw != null && raw !== '') {
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+    }
+    const nestedDirect = custom?.[base]?.[metric];
+    if (nestedDirect != null && nestedDirect !== '') {
+      const parsed = Number(nestedDirect);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const nestedEngagement = custom?.engagement?.[base]?.[metric];
+    if (nestedEngagement != null && nestedEngagement !== '') {
+      const parsed = Number(nestedEngagement);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  }
+
+  function countMatchesBucket(count, bucket) {
+    const n = Number(count) || 0;
+    switch (String(bucket || '')) {
+      case '0': return n === 0;
+      case '1': return n === 1;
+      case '2-5': return n >= 2 && n <= 5;
+      case '6-10': return n >= 6 && n <= 10;
+      case '10+': return n > 10;
+      default: return false;
     }
   }
 
@@ -814,19 +881,63 @@ App.contacts = (function () {
       controls.className = 'grid-form';
       controls.style.gridTemplateColumns = 'minmax(180px, 220px) minmax(0, 1fr)';
 
-      const select = document.createElement('select');
-      EXPLORE_FILTER_MODES.forEach((mode) => {
-        const option = document.createElement('option');
-        option.value = mode.value;
-        option.textContent = mode.label;
-        select.appendChild(option);
-      });
-      select.value = state.segmentContactsFilters[key].mode;
-      controls.appendChild(select);
+      if (isEngagementField(key)) {
+        const fieldConfig = ENGAGEMENT_FILTER_FIELDS.find((field) => field.key === key) || { options: [] };
+        const metricSelect = document.createElement('select');
+        const metricPlaceholder = document.createElement('option');
+        metricPlaceholder.value = '';
+        metricPlaceholder.textContent = key === 'engagement_forms' ? 'Select Form' : (key === 'engagement_meetings' ? 'Select Meeting' : 'Select Metric');
+        metricSelect.appendChild(metricPlaceholder);
+        const metricOptions = key === 'engagement_forms'
+          ? (exploreFormTemplateOptions.length ? exploreFormTemplateOptions : ['No Saved Forms'])
+          : fieldConfig.options;
+        metricOptions.forEach((metric) => {
+          const option = document.createElement('option');
+          option.value = String(metric || '').trim();
+          option.textContent = String(metric || '').trim();
+          metricSelect.appendChild(option);
+        });
+        metricSelect.value = state.segmentContactsFilters[key].mode;
+        controls.appendChild(metricSelect);
 
-      const personaField = key === 'persona';
-      const input = personaField ? document.createElement('select') : document.createElement('input');
-      if (personaField) {
+        const bucketSelect = document.createElement('select');
+        const bucketPlaceholder = document.createElement('option');
+        bucketPlaceholder.value = '';
+        bucketPlaceholder.textContent = 'Select Bucket';
+        bucketSelect.appendChild(bucketPlaceholder);
+        ENGAGEMENT_BUCKET_OPTIONS.forEach((bucket) => {
+          const option = document.createElement('option');
+          option.value = bucket;
+          option.textContent = bucket;
+          bucketSelect.appendChild(option);
+        });
+        bucketSelect.value = state.segmentContactsFilters[key].value;
+        controls.appendChild(bucketSelect);
+
+        metricSelect.addEventListener('change', () => {
+          state.segmentContactsFilters[key].mode = String(metricSelect.value || '');
+          exploreContactsApplied = false;
+          renderContacts();
+        });
+        bucketSelect.addEventListener('change', () => {
+          state.segmentContactsFilters[key].value = String(bucketSelect.value || '');
+          exploreContactsApplied = false;
+          renderContacts();
+        });
+      } else {
+        const select = document.createElement('select');
+        EXPLORE_FILTER_MODES.forEach((mode) => {
+          const option = document.createElement('option');
+          option.value = mode.value;
+          option.textContent = mode.label;
+          select.appendChild(option);
+        });
+        select.value = state.segmentContactsFilters[key].mode;
+        controls.appendChild(select);
+
+        const personaField = key === 'persona';
+        const input = personaField ? document.createElement('select') : document.createElement('input');
+        if (personaField) {
         const emptyOption = document.createElement('option');
         emptyOption.value = '';
         emptyOption.textContent = 'Select Persona';
@@ -841,34 +952,35 @@ App.contacts = (function () {
             option.textContent = String(persona.persona || '').trim();
             input.appendChild(option);
           });
-      } else {
-        input.type = 'text';
-        input.placeholder = SOCIAL_FIELD_KEYS.has(key) ? `${label} user name` : `${label} filter`;
-      }
-      input.value = state.segmentContactsFilters[key].value;
-      const modeNeedsText = !['is_empty', 'is_known'].includes(select.value);
-      input.disabled = !modeNeedsText;
-      input.classList.toggle('hidden', !modeNeedsText);
-      controls.appendChild(input);
-
-      select.addEventListener('change', () => {
-        state.segmentContactsFilters[key].mode = String(select.value || 'contains');
-        const needsText = !['is_empty', 'is_known'].includes(select.value);
-        input.disabled = !needsText;
-        input.classList.toggle('hidden', !needsText);
-        if (!needsText) {
-          state.segmentContactsFilters[key].value = '';
-          input.value = '';
+        } else {
+          input.type = 'text';
+          input.placeholder = SOCIAL_FIELD_KEYS.has(key) ? `${label} user name` : `${label} filter`;
         }
-        exploreContactsApplied = false;
-        renderContacts();
-      });
+        input.value = state.segmentContactsFilters[key].value;
+        const modeNeedsText = !['is_empty', 'is_known'].includes(select.value);
+        input.disabled = !modeNeedsText;
+        input.classList.toggle('hidden', !modeNeedsText);
+        controls.appendChild(input);
 
-      input.addEventListener('input', () => {
-        state.segmentContactsFilters[key].value = String(input.value || '');
-        exploreContactsApplied = false;
-        renderContacts();
-      });
+        select.addEventListener('change', () => {
+          state.segmentContactsFilters[key].mode = String(select.value || 'contains');
+          const needsText = !['is_empty', 'is_known'].includes(select.value);
+          input.disabled = !needsText;
+          input.classList.toggle('hidden', !needsText);
+          if (!needsText) {
+            state.segmentContactsFilters[key].value = '';
+            input.value = '';
+          }
+          exploreContactsApplied = false;
+          renderContacts();
+        });
+
+        input.addEventListener('input', () => {
+          state.segmentContactsFilters[key].value = String(input.value || '');
+          exploreContactsApplied = false;
+          renderContacts();
+        });
+      }
 
       row.appendChild(controls);
       column.appendChild(row);
@@ -1206,6 +1318,19 @@ App.contacts = (function () {
     renderExploreContactsResults();
   }
 
+  async function loadExploreReferenceOptions() {
+    try {
+      const result = await api('/api/develop/forms');
+      const rows = Array.isArray(result.forms) ? result.forms : (Array.isArray(result.data) ? result.data : []);
+      exploreFormTemplateOptions = rows
+        .map((row) => String(row?.name || '').trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+    } catch (_) {
+      exploreFormTemplateOptions = [];
+    }
+  }
+
   function applyExploreFilters() {
     exploreContactsApplied = true;
     renderContacts();
@@ -1352,6 +1477,7 @@ App.contacts = (function () {
 
   function init() {
     ensureExploreFilterState();
+    loadExploreReferenceOptions().then(() => renderContacts()).catch(() => {});
 
     // Contact form
     els.contactForm.addEventListener('submit', async (e) => {
