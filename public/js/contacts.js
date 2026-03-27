@@ -22,6 +22,7 @@ App.contacts = (function () {
     { key: 'state', label: 'State' },
     { key: 'country', label: 'Country' },
     { key: 'tags', label: 'Tags' },
+    { key: 'persona', label: 'Persona' },
   ];
 
   const SOCIAL_FILTER_FIELDS = [
@@ -35,6 +36,16 @@ App.contacts = (function () {
     { key: 'linkedin', label: 'LinkedIn' },
     { key: 'substack', label: 'Substack' },
     { key: 'medium', label: 'Medium' },
+  ];
+
+  const ENGAGEMENT_FILTER_FIELDS = [
+    { key: 'website', label: 'Website' },
+    { key: 'content', label: 'Content' },
+    { key: 'email', label: 'Email' },
+    { key: 'social', label: 'Social' },
+    { key: 'phone', label: 'Mobile' },
+    { key: 'forms', label: 'Forms' },
+    { key: 'meetings', label: 'Meetings' },
   ];
 
   const EXPLORE_CONTACT_FIELDS = [
@@ -358,6 +369,42 @@ App.contacts = (function () {
   }
 
   function contactValue(contact, key) {
+    if (key === 'social') {
+      return [
+        'youtube', 'instagram', 'tiktok', 'facebook', 'x',
+        'bluesky', 'patreon', 'linkedin', 'substack', 'medium',
+      ]
+        .map((field) => {
+          const raw = contactValue(contact, field);
+          return raw ? `${field}:${raw}` : '';
+        })
+        .filter(Boolean)
+        .join(' | ');
+    }
+    if (key === 'forms') {
+      const custom = (
+        (contact.customFields && typeof contact.customFields === 'object' && contact.customFields) ||
+        (contact.custom_fields && typeof contact.custom_fields === 'object' && contact.custom_fields) ||
+        {}
+      );
+      return custom.forms == null ? '' : String(custom.forms);
+    }
+    if (key === 'content') {
+      const custom = (
+        (contact.customFields && typeof contact.customFields === 'object' && contact.customFields) ||
+        (contact.custom_fields && typeof contact.custom_fields === 'object' && contact.custom_fields) ||
+        {}
+      );
+      return custom.content == null ? '' : String(custom.content);
+    }
+    if (key === 'meetings') {
+      const custom = (
+        (contact.customFields && typeof contact.customFields === 'object' && contact.customFields) ||
+        (contact.custom_fields && typeof contact.custom_fields === 'object' && contact.custom_fields) ||
+        {}
+      );
+      return custom.meetings == null ? '' : String(custom.meetings);
+    }
     const custom = (
       (contact.customFields && typeof contact.customFields === 'object' && contact.customFields) ||
       (contact.custom_fields && typeof contact.custom_fields === 'object' && contact.custom_fields) ||
@@ -735,6 +782,7 @@ App.contacts = (function () {
     const groups = [
       { heading: 'Contact Details', fields: CONTACT_DETAIL_FILTER_FIELDS },
       { heading: 'Social Accounts', fields: SOCIAL_FILTER_FIELDS },
+      { heading: 'Engagement', fields: ENGAGEMENT_FILTER_FIELDS },
     ];
 
     const grid = document.createElement('div');
@@ -776,9 +824,27 @@ App.contacts = (function () {
       select.value = state.segmentContactsFilters[key].mode;
       controls.appendChild(select);
 
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = SOCIAL_FIELD_KEYS.has(key) ? `${label} user name` : `${label} filter`;
+      const personaField = key === 'persona';
+      const input = personaField ? document.createElement('select') : document.createElement('input');
+      if (personaField) {
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'Select Persona';
+        input.appendChild(emptyOption);
+        const personas = Array.isArray(state.contactPersonas) ? state.contactPersonas : [];
+        personas
+          .slice()
+          .sort((a, b) => String(a.persona || '').localeCompare(String(b.persona || '')))
+          .forEach((persona) => {
+            const option = document.createElement('option');
+            option.value = String(persona.persona || '').trim();
+            option.textContent = String(persona.persona || '').trim();
+            input.appendChild(option);
+          });
+      } else {
+        input.type = 'text';
+        input.placeholder = SOCIAL_FIELD_KEYS.has(key) ? `${label} user name` : `${label} filter`;
+      }
       input.value = state.segmentContactsFilters[key].value;
       const modeNeedsText = !['is_empty', 'is_known'].includes(select.value);
       input.disabled = !modeNeedsText;

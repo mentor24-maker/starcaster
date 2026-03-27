@@ -119,9 +119,14 @@ App.state = {
     state: { mode: 'contains', value: '' },
     country: { mode: 'contains', value: '' },
     tags: { mode: 'contains', value: '' },
+    persona: { mode: 'contains', value: '' },
     website: { mode: 'contains', value: '' },
+    content: { mode: 'contains', value: '' },
     youtube: { mode: 'contains', value: '' },
-    instagram: { mode: 'contains', value: '' }
+    instagram: { mode: 'contains', value: '' },
+    social: { mode: 'contains', value: '' },
+    forms: { mode: 'contains', value: '' },
+    meetings: { mode: 'contains', value: '' }
   }
 };
 
