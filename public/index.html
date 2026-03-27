@@ -2711,36 +2711,29 @@
             <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
-        <p>Use the content library to move between short-form, social, email, and long-form messaging editors.</p>
         <div class="table-wrap">
           <table>
             <thead>
               <tr class="contacts-filter-row">
+                <th><input id="messagingContentTextFilter" placeholder="Filter content" /></th>
                 <th>
                   <select id="messagingContentFormatFilter">
                     <option value="">All Formats</option>
                   </select>
                 </th>
                 <th>
-                  <select id="messagingContentFamilyFilter">
-                    <option value="">All Families</option>
-                    <option value="Short Form">Short Form</option>
-                    <option value="Email">Email</option>
-                    <option value="Social">Social</option>
-                    <option value="Long Form">Long Form</option>
-                    <option value="Support Copy">Support Copy</option>
-                    <option value="Configuration">Configuration</option>
+                  <select id="messagingContentTopicFilter">
+                    <option value="">All Topics</option>
                   </select>
                 </th>
-                <th></th>
                 <th class="contacts-go-cell">
                   <button id="messagingContentFiltersGoBtn" type="button">Go</button>
                 </th>
               </tr>
               <tr>
+                <th>Content</th>
                 <th>Format</th>
-                <th>Family</th>
-                <th>Destination</th>
+                <th>Topic</th>
                 <th class="messaging-content-actions-heading">Actions</th>
               </tr>
             </thead>

@@ -252,6 +252,25 @@ App.messaging = (function () {
     { type: 'Calls to Action', family: 'Support Copy', destination: 'Calls to Action Editor', pageId: 'messagingCtasPage' },
   ];
 
+  const messagingContentRegistry = [
+    { format: 'Headlines', pageId: 'messagingHeadlinesPage', field: 'headline', source: () => currentHeadlines },
+    { format: 'Sub-headings', pageId: 'messagingSubheadingsPage', field: 'subheading', source: () => currentSubheadings },
+    { format: 'Taglines', pageId: 'messagingTaglinesPage', field: 'tagline', source: () => currentTaglines },
+    { format: 'Pitches', pageId: 'messagingPitchesPage', field: 'pitch', source: () => currentPitches },
+    { format: 'Articles', pageId: 'messagingArticlesPage', field: 'title', source: () => currentArticles },
+    { format: 'Reports', pageId: 'messagingReportsPage', field: 'title', source: () => currentReports },
+    { format: 'White Papers', pageId: 'messagingWhitePapersPage', field: 'title', source: () => currentWhitePapers },
+    { format: 'eBooks', pageId: 'messagingEbooksPage', field: 'title', source: () => currentEbooks },
+    { format: 'Emails', pageId: 'messagingEmailsPage', field: 'email', source: () => simpleContentState.emails.items },
+    { format: 'Tweets', pageId: 'messagingTweetsPage', field: 'content', source: () => simpleContentState.tweets.items },
+    { format: 'Posts', pageId: 'messagingPostsPage', field: 'post', source: () => simpleContentState.posts.items },
+    { format: 'Descriptions', pageId: 'messagingDescriptionsPage', field: 'description', source: () => simpleContentState.descriptions.items },
+    { format: 'Transcripts', pageId: 'messagingTranscriptsPage', field: 'transcript', source: () => simpleContentState.transcripts.items },
+    { format: 'Comments', pageId: 'messagingCommentsPage', field: 'comment', source: () => simpleContentState.comments.items },
+    { format: 'Hashtags', pageId: 'messagingHashtagsPage', field: 'hashtag', source: () => simpleContentState.hashtags.items },
+    { format: 'Calls to Action', pageId: 'messagingCtasPage', field: 'cta', source: () => simpleContentState.ctas.items },
+  ];
+
   function thumbnailOptionLabel(asset) {
     const name = String(asset.assetName || '').trim() || '(unnamed)';
     const category = String(asset.category || '').trim() || '-';
@@ -2398,8 +2417,8 @@ App.messaging = (function () {
     const select = document.getElementById('messagingContentFormatFilter');
     if (!select) return;
     const currentValue = String(select.value || '').trim();
-    const formats = messagingContentLibraryEntries
-      .map((entry) => String(entry.type || '').trim())
+    const formats = messagingContentRegistry
+      .map((entry) => String(entry.format || '').trim())
       .filter(Boolean)
       .filter((value, index, arr) => arr.indexOf(value) === index)
       .sort((a, b) => a.localeCompare(b));
@@ -2419,20 +2438,61 @@ App.messaging = (function () {
     }
   }
 
+  function renderMessagingContentTopicFilter() {
+    const select = document.getElementById('messagingContentTopicFilter');
+    if (!select) return;
+    const currentValue = String(select.value || '').trim();
+    const topics = currentMessagingCategories
+      .map((item) => String(item?.category || '').trim())
+      .filter(Boolean)
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+      .sort((a, b) => a.localeCompare(b));
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'All Topics';
+    select.appendChild(placeholder);
+    topics.forEach((topic) => {
+      const option = document.createElement('option');
+      option.value = topic;
+      option.textContent = topic;
+      select.appendChild(option);
+    });
+    if (currentValue && topics.includes(currentValue)) {
+      select.value = currentValue;
+    }
+  }
+
+  function getMessagingContentLibraryRows() {
+    return messagingContentRegistry.flatMap((entry) => {
+      const items = Array.isArray(entry.source()) ? entry.source() : [];
+      return items.map((item) => ({
+        id: item.id,
+        content: String(item?.[entry.field] || '').trim(),
+        topic: String(item?.category || '').trim(),
+        format: entry.format,
+        pageId: entry.pageId,
+      }));
+    });
+  }
+
   function getFilteredMessagingContentLibraryRows() {
+    const textInput = document.getElementById('messagingContentTextFilter');
     const formatSelect = document.getElementById('messagingContentFormatFilter');
-    const familySelect = document.getElementById('messagingContentFamilyFilter');
+    const topicSelect = document.getElementById('messagingContentTopicFilter');
+    const text = String(textInput && textInput.value ? textInput.value : '').trim().toLowerCase();
     const format = String(formatSelect && formatSelect.value ? formatSelect.value : '').trim();
-    const family = String(familySelect && familySelect.value ? familySelect.value : '').trim();
-    return messagingContentLibraryEntries
+    const topic = String(topicSelect && topicSelect.value ? topicSelect.value : '').trim();
+    return getMessagingContentLibraryRows()
       .filter((entry) => {
-        if (family && String(entry.family || '') !== family) return false;
-        if (format && String(entry.type || '') !== format) return false;
+        if (text && !String(entry.content || '').toLowerCase().includes(text)) return false;
+        if (format && String(entry.format || '') !== format) return false;
+        if (topic && String(entry.topic || '') !== topic) return false;
         return true;
       })
       .sort((a, b) => {
-        const left = String(a.type || '').toLowerCase();
-        const right = String(b.type || '').toLowerCase();
+        const left = String(a.content || '').toLowerCase();
+        const right = String(b.content || '').toLowerCase();
         return left.localeCompare(right);
       });
   }
@@ -2441,13 +2501,14 @@ App.messaging = (function () {
     const tbody = document.getElementById('messagingContentLibraryTable');
     if (!tbody) return;
     renderMessagingContentFormatFilter();
+    renderMessagingContentTopicFilter();
     const rows = getFilteredMessagingContentLibraryRows();
     tbody.innerHTML = '';
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 4;
-      td.textContent = 'No content formats match current filters.';
+      td.textContent = 'No content matches current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
@@ -2455,14 +2516,18 @@ App.messaging = (function () {
 
     rows.forEach((entry) => {
       const tr = document.createElement('tr');
-      [entry.type, entry.family, entry.destination].forEach((value) => {
+      [
+        entry.content || '-',
+        entry.format || '-',
+        entry.topic || '-',
+      ].forEach((value) => {
         const td = document.createElement('td');
         td.textContent = value;
         tr.appendChild(td);
       });
       const actionsTd = document.createElement('td');
       actionsTd.className = 'messaging-content-actions-cell';
-      const openBtn = App.makeIconButton('edit', `Open ${entry.type}`, function () {
+      const openBtn = App.makeIconButton('edit', `Open ${entry.format}`, function () {
         openContentTarget(entry.pageId);
       });
       actionsTd.appendChild(openBtn);
@@ -3341,8 +3406,9 @@ App.messaging = (function () {
 
   function init() {
     ensureSimpleContentPages();
+    const messagingContentTextFilter = document.getElementById('messagingContentTextFilter');
     const messagingContentFormatFilter = document.getElementById('messagingContentFormatFilter');
-    const messagingContentFamilyFilter = document.getElementById('messagingContentFamilyFilter');
+    const messagingContentTopicFilter = document.getElementById('messagingContentTopicFilter');
     const messagingContentFiltersGoBtn = document.getElementById('messagingContentFiltersGoBtn');
     const headlinesCreateWrap = document.getElementById('messagingHeadlinesCreateWrap');
     const headlinesToggleBtn = document.getElementById('messagingHeadlinesToggleFormBtn');
@@ -3431,13 +3497,18 @@ App.messaging = (function () {
     const messagingCategoryEditForm = document.getElementById('messagingCategoryEditForm');
     const messagingCategorySortBtn = document.getElementById('messagingCategoriesSortBtn');
 
+    if (messagingContentTextFilter) {
+      messagingContentTextFilter.addEventListener('input', function () {
+        renderMessagingContentLibraryTable();
+      });
+    }
     if (messagingContentFormatFilter) {
       messagingContentFormatFilter.addEventListener('change', function () {
         renderMessagingContentLibraryTable();
       });
     }
-    if (messagingContentFamilyFilter) {
-      messagingContentFamilyFilter.addEventListener('change', function () {
+    if (messagingContentTopicFilter) {
+      messagingContentTopicFilter.addEventListener('change', function () {
         renderMessagingContentLibraryTable();
       });
     }
@@ -4646,14 +4717,16 @@ App.messaging = (function () {
     submitTopicEdit,
     refresh: function () {
       return loadThumbnailOptions().then(function () {
-        renderMessagingContentLibraryTable();
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]);
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]).then(function () {
+          renderMessagingContentLibraryTable();
+        });
       });
     },
     onPageActivated: function () {
       return loadThumbnailOptions().then(function () {
-        renderMessagingContentLibraryTable();
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]);
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]).then(function () {
+          renderMessagingContentLibraryTable();
+        });
       });
     }
   };
