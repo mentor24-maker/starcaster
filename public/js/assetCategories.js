@@ -20,6 +20,12 @@ App.assetCategories = (function () {
     return String(value || '').trim();
   }
 
+  function displayAssetType(value) {
+    const type = safeText(value);
+    if (type === 'Lead Magnet') return 'PDF';
+    return type || '-';
+  }
+
   function setCreatePanelVisible(visible) {
     const panel = byId('assetCategoryCreatePanel');
     if (!panel) return;
@@ -135,7 +141,7 @@ App.assetCategories = (function () {
     getFilteredSortedCategories().forEach((item) => {
       const tr = document.createElement('tr');
       const typeTd = document.createElement('td');
-      typeTd.textContent = item.assetType || '-';
+      typeTd.textContent = displayAssetType(item.assetType);
 
       const categoryTd = document.createElement('td');
       categoryTd.textContent = item.category || '-';
