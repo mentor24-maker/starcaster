@@ -4601,13 +4601,40 @@
         <div class="page-heading-row">
           <h2>Builder: Agents</h2>
           <div class="page-heading-actions">
+            <button type="button" onclick="App.develop.openAgentsCreate(); return false;">Create Agent</button>
             <button type="button" onclick="App.develop.openAgentsPage(); return false;">Back To Agents</button>
             <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
+        <div class="table-wrap" style="margin-bottom: 1rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Action</th>
+                <th>Workspace</th>
+                <th>Type</th>
+                <th>Updated</th>
+                <th class="develop-agents-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="developAgentsTableBody"></tbody>
+          </table>
+        </div>
+        <div id="developAgentsBuilderPanel" class="card hidden" style="margin-bottom: 1rem;">
         <form id="developAgentsForm" class="stack-form">
+          <input type="hidden" name="agent_preset_id" id="developAgentPresetIdInput" />
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Agent Builder</h3>
+            <div class="page-heading-actions">
+              <button id="developAgentsSavePresetBtn" type="button">Save Agent</button>
+              <button id="developAgentsClonePresetBtn" type="button">Clone Agent</button>
+              <button type="button" onclick="App.develop.openAgentsPage(); return false;">Back To Agents</button>
+            </div>
+          </div>
           <div class="grid-form">
+            <input name="agent_name" id="developAgentNameInput" placeholder="Agent name" />
             <select name="action" id="agentsActionSelect">
               <option value="agent_api_setup_orchestrator">agent_api_setup_orchestrator</option>
               <option value="create_job">create_job</option>
@@ -4616,6 +4643,8 @@
               <option value="execute_job">execute_job</option>
               <option value="job_status">job_status</option>
             </select>
+          </div>
+          <div class="grid-form">
             <input name="job_id" placeholder="Job ID (required for preview/approve/execute/status)" />
           </div>
           <div class="grid-form">
@@ -4645,6 +4674,7 @@
           </label>
           <button type="submit">Send Agent Request</button>
         </form>
+        </div>
         <h3>Request Preview</h3>
         <pre id="agentsRequestPreview" class="code-box">{}</pre>
         <h3>Response</h3>
