@@ -700,87 +700,22 @@
       <section id="acquireWebPage" class="app-page hidden">
         <h2>Acquire: Web</h2>
         <p>Capture source material and structured data from websites before organizing it into contacts, messaging, and assets.</p>
-        <form id="acquireForm" class="stack-form">
-          <div class="grid-form">
-            <select name="action">
-              <option value="create_job">create_job</option>
-              <option value="preview_job">preview_job</option>
-              <option value="approve_job">approve_job</option>
-              <option value="execute_job">execute_job</option>
-              <option value="job_status">job_status</option>
-            </select>
-            <input
-              id="acquireJobIdInput"
-              name="job_id"
-              placeholder="Job ID (required for preview/approve/execute/status)"
-            />
-          </div>
-          <div class="grid-form">
-            <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
-            <input name="type" placeholder="Job Type" value="acquire.web" />
-          </div>
-          <div class="grid-form">
-            <input name="requested_by_user_id" placeholder="Requested By User ID" value="alphire-ui" />
-            <input name="requested_by_email" placeholder="Requested By Email" value="ops@alphire.ai" />
-          </div>
-          <textarea
-            name="source_urls"
-            rows="4"
-            placeholder="Source URLs (one URL per line)"
-          >https://example.com</textarea>
-          <div class="grid-form">
-            <input name="max_pages" type="number" min="1" max="100" value="5" />
-            <input name="body_snippet_chars" type="number" min="100" max="5000" value="500" />
-          </div>
-          <div class="grid-form">
-            <select name="approval_decision">
-              <option value="APPROVE">APPROVE</option>
-              <option value="REJECT">REJECT</option>
-            </select>
-            <input
-              id="acquireApprovalTokenInput"
-              name="approval_token"
-              placeholder="Approval token (required for execute_job)"
-            />
-          </div>
-          <label class="checkbox-row">
-            <input id="acquireManualConfirmedInput" name="manual_confirmed" type="checkbox" />
-            I manually confirm this API action.
-          </label>
-          <button type="submit">Send Acquire Request</button>
-        </form>
         <div class="section-toolbar">
-          <h3>Existing Jobs</h3>
-          <button id="acquireRefreshJobsBtn" type="button" class="tiny-btn">Refresh Jobs</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Job ID</th>
-                <th>Stage</th>
-                <th>URL</th>
-                <th>Updated</th>
-                <th class="youtube-actions-heading">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="acquireJobsTable"></tbody>
-          </table>
-        </div>
-        <div class="section-toolbar">
-          <h3>Direct Ingest (No Workflow)</h3>
+          <h3>Direct Ingest</h3>
           <button id="directAcquireRefreshBtn" type="button" class="tiny-btn">Refresh Runs</button>
         </div>
-        <p>Use this to directly fetch and parse website pages now. It bypasses create/approve/execute workflow.</p>
+        <p>Fetch and parse website pages immediately.</p>
         <form id="directAcquireForm" class="stack-form">
           <div class="grid-form">
             <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Source URL" />
-            <input id="directAcquireMaxPagesInput" name="max_pages" type="number" min="1" max="50" value="5" />
+            <input id="directAcquireMaxPagesInput" name="max_pages" type="number" min="1" max="50" value="5" placeholder="Pages to Fetch" />
           </div>
-          <div class="grid-form">
-            <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
-            <label class="checkbox-row"><input id="directAcquireConfirmInput" name="manual_confirmed" type="checkbox" /> I manually confirm this direct ingest run.</label>
-          </div>
+          <details>
+            <summary>Advanced</summary>
+            <div class="grid-form" style="margin-top: 0.75rem;">
+              <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
+            </div>
+          </details>
           <button type="submit">Run Direct Ingest</button>
         </form>
 
@@ -817,7 +752,77 @@
         </div>
         <pre id="directAcquireErrorsPreview" class="code-box hidden">{}</pre>
         <details id="acquireAdvancedPanel">
-          <summary>Advanced: Request/Response JSON</summary>
+          <summary>Advanced Workflow</summary>
+          <p>Manual OpenClaw job controls for preview, approval, execution, and status checks.</p>
+          <form id="acquireForm" class="stack-form">
+            <div class="grid-form">
+              <select name="action">
+                <option value="create_job">create_job</option>
+                <option value="preview_job">preview_job</option>
+                <option value="approve_job">approve_job</option>
+                <option value="execute_job">execute_job</option>
+                <option value="job_status">job_status</option>
+              </select>
+              <input
+                id="acquireJobIdInput"
+                name="job_id"
+                placeholder="Job ID (required for preview/approve/execute/status)"
+              />
+            </div>
+            <div class="grid-form">
+              <textarea
+                name="source_urls"
+                rows="3"
+                placeholder="Source URLs (one URL per line)"
+              >https://example.com</textarea>
+              <input name="max_pages" type="number" min="1" max="100" value="5" placeholder="Pages to Fetch" />
+            </div>
+            <details>
+              <summary>More Advanced Options</summary>
+              <div class="grid-form" style="margin-top: 0.75rem;">
+                <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
+                <input name="type" placeholder="Job Type" value="acquire.web" />
+              </div>
+              <div class="grid-form">
+                <input name="requested_by_user_id" placeholder="Requested By User ID" value="alphire-ui" />
+                <input name="requested_by_email" placeholder="Requested By Email" value="ops@alphire.ai" />
+              </div>
+              <div class="grid-form">
+                <input name="body_snippet_chars" type="number" min="100" max="5000" value="500" />
+                <select name="approval_decision">
+                  <option value="APPROVE">APPROVE</option>
+                  <option value="REJECT">REJECT</option>
+                </select>
+              </div>
+              <div class="grid-form">
+                <input
+                  id="acquireApprovalTokenInput"
+                  name="approval_token"
+                  placeholder="Approval token (required for execute_job)"
+                />
+                <label class="checkbox-row"><input id="acquireManualConfirmedInput" name="manual_confirmed" type="checkbox" /> I manually confirm this API action.</label>
+              </div>
+            </details>
+            <button type="submit">Send Acquire Request</button>
+          </form>
+          <div class="section-toolbar">
+            <h3>Existing Jobs</h3>
+            <button id="acquireRefreshJobsBtn" type="button" class="tiny-btn">Refresh Jobs</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Stage</th>
+                  <th>URL</th>
+                  <th>Updated</th>
+                  <th class="youtube-actions-heading">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="acquireJobsTable"></tbody>
+            </table>
+          </div>
           <h3>Request Preview</h3>
           <pre id="acquireRequestPreview" class="code-box">{}</pre>
           <h3>Response</h3>
