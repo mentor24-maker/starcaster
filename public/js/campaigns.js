@@ -7,6 +7,21 @@ App.campaigns = (function () {
   let builderHashtags = [];
   let builderEmails = [];
   let builderEmailTemplates = [];
+  let builderHeadlines = [];
+  let builderSubheadings = [];
+  let builderTaglines = [];
+  let builderPitches = [];
+  let builderArticles = [];
+  let builderReports = [];
+  let builderWhitePapers = [];
+  let builderEbooks = [];
+  let builderPosts = [];
+  let builderDescriptions = [];
+  let builderTranscripts = [];
+  let builderComments = [];
+  let builderCtas = [];
+  let builderLandingPages = [];
+  let builderForms = [];
   let editingCampaignId = '';
 
   function byId(id) {
@@ -85,7 +100,130 @@ App.campaigns = (function () {
     );
   }
 
+  function optionLabelFromText(value, fallback) {
+    const text = safeText(value);
+    if (!text) return fallback || '-';
+    return text.length > 100 ? `${text.slice(0, 97)}...` : text;
+  }
+
+  function setFieldVisible(id, visible) {
+    const el = byId(id);
+    if (!el) return;
+    el.style.display = visible ? '' : 'none';
+  }
+
+  function channelProfile(channel) {
+    const name = safeText(channel?.channel || channel?.name).toLowerCase();
+    if (!name) {
+      return {
+        hint: 'Select a channel to load content fields.',
+        visibleMechanics: [],
+        visibleContent: [],
+      };
+    }
+    if (name.includes('email')) {
+      return {
+        hint: 'Email campaigns can use templates, email bodies, landing pages, and conversion assets.',
+        visibleMechanics: ['campaignEmailTemplateSelect', 'campaignLandingPageSelect', 'campaignSegmentSelect'],
+        visibleContent: ['campaignHeadlineSelect', 'campaignEmailSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignLeadMagnetSelect'],
+      };
+    }
+    if (name === 'x' || name.includes('twitter')) {
+      return {
+        hint: 'X campaigns focus on short social copy, hashtags, and optional media.',
+        visibleMechanics: ['campaignSegmentSelect'],
+        visibleContent: ['campaignTweetSelect', 'campaignTaglineSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect', 'campaignHashtagGroupSelect'],
+      };
+    }
+    if (name.includes('youtube')) {
+      return {
+        hint: 'YouTube campaigns can assemble titles, descriptions, transcripts, CTAs, and media.',
+        visibleMechanics: ['campaignLandingPageSelect', 'campaignSegmentSelect'],
+        visibleContent: ['campaignHeadlineSelect', 'campaignDescriptionSelect', 'campaignTranscriptSelect', 'campaignCommentSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect'],
+      };
+    }
+    if (name.includes('substack') || name.includes('medium') || name.includes('patreon') || name.includes('blog')) {
+      return {
+        hint: 'Publishing channels can use long-form content plus supporting summary copy and calls to action.',
+        visibleMechanics: ['campaignLandingPageSelect', 'campaignSegmentSelect'],
+        visibleContent: ['campaignHeadlineSelect', 'campaignArticleSelect', 'campaignReportSelect', 'campaignWhitePaperSelect', 'campaignEbookSelect', 'campaignDescriptionSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignLeadMagnetSelect'],
+      };
+    }
+    return {
+      hint: 'Social campaigns can combine posts, supporting copy, hashtags, and media.',
+      visibleMechanics: ['campaignSegmentSelect'],
+      visibleContent: ['campaignHeadlineSelect', 'campaignPostSelect', 'campaignDescriptionSelect', 'campaignTaglineSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect', 'campaignHashtagGroupSelect'],
+    };
+  }
+
+  function applyCampaignChannelProfile(channelId) {
+    const mechanicsWrap = byId('campaignMechanicsConditional');
+    const contentWrap = byId('campaignContentConditional');
+    const hint = byId('campaignContentChannelHint');
+    const channels = Array.isArray(state.channels) ? state.channels : [];
+    const channel = channels.find((item) => String(item.id) === String(channelId || '')) || null;
+    const profile = channelProfile(channel);
+    const mechanicIds = ['campaignEmailTemplateSelect', 'campaignThemeSelect', 'campaignLandingPageSelect', 'campaignSegmentSelect'];
+    const contentIds = [
+      'campaignHeadlineSelect',
+      'campaignEmailSelect',
+      'campaignSubjectLineSelect',
+      'campaignBlurbSelect',
+      'campaignPitchSelect',
+      'campaignSubheadingSelect',
+      'campaignTaglineSelect',
+      'campaignArticleSelect',
+      'campaignReportSelect',
+      'campaignWhitePaperSelect',
+      'campaignEbookSelect',
+      'campaignPostSelect',
+      'campaignDescriptionSelect',
+      'campaignTranscriptSelect',
+      'campaignCommentSelect',
+      'campaignTweetSelect',
+      'campaignCtaSelect',
+      'campaignPrimaryImageSelect',
+      'campaignPrimaryVideoSelect',
+      'campaignHashtagGroupSelect',
+      'campaignLeadMagnetSelect',
+    ];
+    const hasChannel = Boolean(channel);
+    if (mechanicsWrap) mechanicsWrap.style.display = hasChannel ? '' : 'none';
+    if (contentWrap) contentWrap.style.display = hasChannel ? '' : 'none';
+    if (hint) hint.textContent = profile.hint;
+    mechanicIds.forEach((id) => setFieldVisible(id, profile.visibleMechanics.includes(id)));
+    contentIds.forEach((id) => setFieldVisible(id, profile.visibleContent.includes(id)));
+  }
+
   function renderBuilderSelects() {
+    const currentValues = {
+      channelId: safeText(byId('campaignChannelSelect')?.value),
+      segmentId: safeText(byId('campaignSegmentSelect')?.value),
+      emailTemplateId: safeText(byId('campaignEmailTemplateSelect')?.value),
+      emailId: safeText(byId('campaignEmailSelect')?.value),
+      headlineId: safeText(byId('campaignHeadlineSelect')?.value),
+      subjectLineId: safeText(byId('campaignSubjectLineSelect')?.value),
+      blurbId: safeText(byId('campaignBlurbSelect')?.value),
+      pitchId: safeText(byId('campaignPitchSelect')?.value),
+      subheadingId: safeText(byId('campaignSubheadingSelect')?.value),
+      taglineId: safeText(byId('campaignTaglineSelect')?.value),
+      articleId: safeText(byId('campaignArticleSelect')?.value),
+      reportId: safeText(byId('campaignReportSelect')?.value),
+      whitePaperId: safeText(byId('campaignWhitePaperSelect')?.value),
+      ebookId: safeText(byId('campaignEbookSelect')?.value),
+      postId: safeText(byId('campaignPostSelect')?.value),
+      descriptionId: safeText(byId('campaignDescriptionSelect')?.value),
+      transcriptId: safeText(byId('campaignTranscriptSelect')?.value),
+      commentId: safeText(byId('campaignCommentSelect')?.value),
+      tweetId: safeText(byId('campaignTweetSelect')?.value),
+      ctaId: safeText(byId('campaignCtaSelect')?.value),
+      primaryImageId: safeText(byId('campaignPrimaryImageSelect')?.value),
+      primaryVideoId: safeText(byId('campaignPrimaryVideoSelect')?.value),
+      landingPageId: safeText(byId('campaignLandingPageSelect')?.value),
+      formObjectId: safeText(byId('campaignFormObjectSelect')?.value),
+      leadMagnetId: safeText(byId('campaignLeadMagnetSelect')?.value),
+      hashtagGroupId: safeText(byId('campaignHashtagGroupSelect')?.value),
+    };
     const channels = Array.isArray(state.channels) ? state.channels : [];
     const assets = Array.isArray(state.assets) ? state.assets : [];
     const images = assets.filter((asset) => safeText(asset.assetType) === 'Image');
@@ -95,7 +233,8 @@ App.campaigns = (function () {
     setSelectOptions(
       byId('campaignChannelSelect'),
       channels.map((channel) => ({ value: channel.id, label: channelLabel(channel) || `Channel ${channel.id}` })),
-      channels.length ? 'Channel' : 'No channels available yet'
+      channels.length ? 'Channel' : 'No channels available yet',
+      currentValues.channelId
     );
 
     setSelectOptions(
@@ -104,7 +243,8 @@ App.campaigns = (function () {
         value: segment.id,
         label: safeText(segment.name) || `Segment ${segment.id}`,
       })),
-      'Segment (optional)'
+      'Segment (optional)',
+      currentValues.segmentId
     );
 
     setSelectOptions(
@@ -113,7 +253,8 @@ App.campaigns = (function () {
         value: template.id,
         label: safeText(template.name) || `Template ${template.id}`,
       })),
-      builderEmailTemplates.length ? 'Template (optional)' : 'Template (create in Builder > Templates)'
+      builderEmailTemplates.length ? 'Template (optional)' : 'Template (create in Builder > Templates)',
+      currentValues.emailTemplateId
     );
 
     setSelectOptions(
@@ -123,25 +264,50 @@ App.campaigns = (function () {
         const label = body.length > 100 ? `${body.slice(0, 97)}...` : body;
         return { value: email.id, label: label || `Email ${email.id}` };
       }),
-      builderEmails.length ? 'Email Body' : 'Email Body (create in Messaging > Emails)'
+      builderEmails.length ? 'Email Body' : 'Email Body (create in Messaging > Emails)',
+      currentValues.emailId
     );
 
     setSelectOptions(
       byId('campaignHeadlineSelect'),
-      [],
-      'Headline (placeholder until Messaging > Headlines exists)'
+      builderHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Headline ${item.id}`) })),
+      builderHeadlines.length ? 'Headline' : 'Headline (create in Messaging > Headlines)',
+      currentValues.headlineId
+    );
+
+    setSelectOptions(
+      byId('campaignSubjectLineSelect'),
+      builderHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Subject ${item.id}`) })),
+      builderHeadlines.length ? 'Subject Line' : 'Subject Line (use Headlines for now)',
+      currentValues.subjectLineId
     );
 
     setSelectOptions(
       byId('campaignBlurbSelect'),
-      [],
-      'Blurb (placeholder until Messaging > Blurbs exists)'
+      builderDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Blurb ${item.id}`) })),
+      builderDescriptions.length ? 'Blurb' : 'Blurb (use Descriptions)',
+      currentValues.blurbId
     );
 
     setSelectOptions(
       byId('campaignPitchSelect'),
-      [],
-      'Pitch (placeholder until Messaging > Pitch exists)'
+      builderPitches.map((item) => ({ value: item.id, label: optionLabelFromText(item.pitch, `Pitch ${item.id}`) })),
+      builderPitches.length ? 'Pitch' : 'Pitch (create in Messaging > Pitches)',
+      currentValues.pitchId
+    );
+
+    setSelectOptions(
+      byId('campaignSubheadingSelect'),
+      builderSubheadings.map((item) => ({ value: item.id, label: optionLabelFromText(item.subheading, `Sub-heading ${item.id}`) })),
+      builderSubheadings.length ? 'Sub-heading' : 'Sub-heading (create in Messaging > Sub-headings)',
+      currentValues.subheadingId
+    );
+
+    setSelectOptions(
+      byId('campaignTaglineSelect'),
+      builderTaglines.map((item) => ({ value: item.id, label: optionLabelFromText(item.tagline, `Tagline ${item.id}`) })),
+      builderTaglines.length ? 'Tagline' : 'Tagline (create in Messaging > Taglines)',
+      currentValues.taglineId
     );
 
     const hashtagGroups = [];
@@ -162,13 +328,15 @@ App.campaigns = (function () {
     setSelectOptions(
       byId('campaignHashtagGroupSelect'),
       hashtagGroups,
-      hashtagGroups.length ? 'Select Hashtag Group' : 'Hashtag Group (create hashtags first)'
+      hashtagGroups.length ? 'Hashtag Group' : 'Hashtag Group (create hashtags first)',
+      currentValues.hashtagGroupId
     );
 
     setSelectOptions(
       byId('campaignCtaSelect'),
-      [],
-      'CTA (placeholder until Messaging > CTAs exists)'
+      builderCtas.map((item) => ({ value: item.id, label: optionLabelFromText(item.cta, `CTA ${item.id}`) })),
+      builderCtas.length ? 'CTA' : 'CTA (create in Messaging > CTAs)',
+      currentValues.ctaId
     );
 
     setSelectOptions(
@@ -178,46 +346,109 @@ App.campaigns = (function () {
         const label = content.length > 80 ? `${content.slice(0, 77)}...` : content;
         return { value: tweet.id, label: label || `Tweet ${tweet.id}` };
       }),
-      'Tweet (optional)'
+      builderTweets.length ? 'Tweet' : 'Tweet (create in Messaging > Tweets)',
+      currentValues.tweetId
+    );
+
+    setSelectOptions(
+      byId('campaignPostSelect'),
+      builderPosts.map((item) => ({ value: item.id, label: optionLabelFromText(item.post, `Post ${item.id}`) })),
+      builderPosts.length ? 'Post' : 'Post (create in Messaging > Posts)',
+      currentValues.postId
+    );
+
+    setSelectOptions(
+      byId('campaignDescriptionSelect'),
+      builderDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Description ${item.id}`) })),
+      builderDescriptions.length ? 'Description' : 'Description (create in Messaging > Descriptions)',
+      currentValues.descriptionId
+    );
+
+    setSelectOptions(
+      byId('campaignTranscriptSelect'),
+      builderTranscripts.map((item) => ({ value: item.id, label: optionLabelFromText(item.transcript, `Transcript ${item.id}`) })),
+      builderTranscripts.length ? 'Transcript' : 'Transcript (create in Messaging > Transcripts)',
+      currentValues.transcriptId
+    );
+
+    setSelectOptions(
+      byId('campaignCommentSelect'),
+      builderComments.map((item) => ({ value: item.id, label: optionLabelFromText(item.comment, `Comment ${item.id}`) })),
+      builderComments.length ? 'Comment' : 'Comment (create in Messaging > Comments)',
+      currentValues.commentId
     );
 
     setSelectOptions(
       byId('campaignPrimaryImageSelect'),
       images.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Image ${asset.id}` })),
-      images.length ? 'Primary Image' : 'Primary Image (no image assets yet)'
+      images.length ? 'Primary Image' : 'Primary Image (no image assets yet)',
+      currentValues.primaryImageId
     );
 
     setSelectOptions(
       byId('campaignPrimaryVideoSelect'),
       videos.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Video ${asset.id}` })),
-      'Primary Video (optional)'
+      'Primary Video (optional)',
+      currentValues.primaryVideoId
     );
 
     setSelectOptions(
       byId('campaignLandingPageSelect'),
-      [],
-      'Landing Page (placeholder)'
+      builderLandingPages.map((page) => ({ value: page.id, label: safeText(page.name) || `Page ${page.id}` })),
+      builderLandingPages.length ? 'Page' : 'Page (create in Builder > Pages)',
+      currentValues.landingPageId
     );
 
     setSelectOptions(
       byId('campaignFormObjectSelect'),
-      [],
-      'Form (placeholder)'
+      builderForms.map((item) => ({ value: item.id, label: safeText(item.name) || `Form ${item.id}` })),
+      builderForms.length ? 'Form' : 'Form (create in Builder > Forms)',
+      currentValues.formObjectId
+    );
+
+    setSelectOptions(
+      byId('campaignArticleSelect'),
+      builderArticles.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Article ${item.id}`) })),
+      builderArticles.length ? 'Article' : 'Article (create in Messaging > Articles)',
+      currentValues.articleId
+    );
+
+    setSelectOptions(
+      byId('campaignReportSelect'),
+      builderReports.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Report ${item.id}`) })),
+      builderReports.length ? 'Report' : 'Report (create in Messaging > Reports)',
+      currentValues.reportId
+    );
+
+    setSelectOptions(
+      byId('campaignWhitePaperSelect'),
+      builderWhitePapers.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `White Paper ${item.id}`) })),
+      builderWhitePapers.length ? 'White Paper' : 'White Paper (create in Messaging > White Papers)',
+      currentValues.whitePaperId
+    );
+
+    setSelectOptions(
+      byId('campaignEbookSelect'),
+      builderEbooks.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `eBook ${item.id}`) })),
+      builderEbooks.length ? 'eBook' : 'eBook (create in Messaging > eBooks)',
+      currentValues.ebookId
     );
 
     setSelectOptions(
       byId('campaignLeadMagnetSelect'),
       leadMagnets.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Asset ${asset.id}` })),
-      leadMagnets.length ? 'PDF (optional)' : 'PDF (placeholder)'
+      leadMagnets.length ? 'PDF (optional)' : 'PDF (placeholder)',
+      currentValues.leadMagnetId
     );
 
     const campaignForm = byId('campaignForm');
     const submitBtn = campaignForm?.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.disabled = channels.length === 0;
+    applyCampaignChannelProfile(currentValues.channelId || safeText(byId('campaignChannelSelect')?.value));
   }
 
   async function loadBuilderSources() {
-    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes] = await Promise.allSettled([
+    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes, headlinesRes, subheadingsRes, taglinesRes, pitchesRes, articlesRes, reportsRes, whitePapersRes, ebooksRes, postsRes, descriptionsRes, transcriptsRes, commentsRes, ctasRes, landingPagesRes, formsRes] = await Promise.allSettled([
       api('/api/channels'),
       api('/api/assets'),
       api('/api/segments'),
@@ -225,6 +456,21 @@ App.campaigns = (function () {
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/emails?limit=5000'),
       api('/api/develop/email-templates'),
+      api('/api/messaging/headlines?limit=5000'),
+      api('/api/messaging/subheadings?limit=5000'),
+      api('/api/messaging/taglines?limit=5000'),
+      api('/api/messaging/pitches?limit=5000'),
+      api('/api/messaging/articles?limit=200'),
+      api('/api/messaging/reports?limit=200'),
+      api('/api/messaging/white-papers?limit=200'),
+      api('/api/messaging/ebooks?limit=200'),
+      api('/api/messaging/posts?limit=5000'),
+      api('/api/messaging/descriptions?limit=5000'),
+      api('/api/messaging/transcripts?limit=5000'),
+      api('/api/messaging/comments?limit=5000'),
+      api('/api/messaging/ctas?limit=5000'),
+      api('/api/develop/landing-pages'),
+      api('/api/develop/forms'),
     ]);
 
     if (channelsRes.status === 'fulfilled' && Array.isArray(channelsRes.value.channels)) {
@@ -249,6 +495,21 @@ App.campaigns = (function () {
     builderEmailTemplates = emailTemplatesRes.status === 'fulfilled' && Array.isArray(emailTemplatesRes.value.emailTemplates)
       ? emailTemplatesRes.value.emailTemplates
       : [];
+    builderHeadlines = headlinesRes.status === 'fulfilled' && Array.isArray(headlinesRes.value.headlines) ? headlinesRes.value.headlines : [];
+    builderSubheadings = subheadingsRes.status === 'fulfilled' && Array.isArray(subheadingsRes.value.subheadings) ? subheadingsRes.value.subheadings : [];
+    builderTaglines = taglinesRes.status === 'fulfilled' && Array.isArray(taglinesRes.value.taglines) ? taglinesRes.value.taglines : [];
+    builderPitches = pitchesRes.status === 'fulfilled' && Array.isArray(pitchesRes.value.pitches) ? pitchesRes.value.pitches : [];
+    builderArticles = articlesRes.status === 'fulfilled' && Array.isArray(articlesRes.value.articles) ? articlesRes.value.articles : [];
+    builderReports = reportsRes.status === 'fulfilled' && Array.isArray(reportsRes.value.reports) ? reportsRes.value.reports : [];
+    builderWhitePapers = whitePapersRes.status === 'fulfilled' && Array.isArray(whitePapersRes.value.whitePapers) ? whitePapersRes.value.whitePapers : [];
+    builderEbooks = ebooksRes.status === 'fulfilled' && Array.isArray(ebooksRes.value.ebooks) ? ebooksRes.value.ebooks : [];
+    builderPosts = postsRes.status === 'fulfilled' && Array.isArray(postsRes.value.posts) ? postsRes.value.posts : [];
+    builderDescriptions = descriptionsRes.status === 'fulfilled' && Array.isArray(descriptionsRes.value.descriptions) ? descriptionsRes.value.descriptions : [];
+    builderTranscripts = transcriptsRes.status === 'fulfilled' && Array.isArray(transcriptsRes.value.transcripts) ? transcriptsRes.value.transcripts : [];
+    builderComments = commentsRes.status === 'fulfilled' && Array.isArray(commentsRes.value.comments) ? commentsRes.value.comments : [];
+    builderCtas = ctasRes.status === 'fulfilled' && Array.isArray(ctasRes.value.ctas) ? ctasRes.value.ctas : [];
+    builderLandingPages = landingPagesRes.status === 'fulfilled' && Array.isArray(landingPagesRes.value.landingPages) ? landingPagesRes.value.landingPages : [];
+    builderForms = formsRes.status === 'fulfilled' && Array.isArray(formsRes.value.forms) ? formsRes.value.forms : [];
 
     renderBuilderSelects();
     renderCampaigns();
@@ -263,7 +524,7 @@ App.campaigns = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 5;
+      td.colSpan = 8;
       td.textContent = 'No campaigns yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -272,6 +533,9 @@ App.campaigns = (function () {
 
     const channelsById = new Map((Array.isArray(state.channels) ? state.channels : []).map((channel) => [String(channel.id), channel]));
     const assetsById = new Map((Array.isArray(state.assets) ? state.assets : []).map((asset) => [String(asset.id), asset]));
+    const segmentsById = new Map((Array.isArray(state.segments) ? state.segments : []).map((segment) => [String(segment.id), segment]));
+    const emailTemplatesById = new Map(builderEmailTemplates.map((template) => [String(template.id), template]));
+    const landingPagesById = new Map(builderLandingPages.map((page) => [String(page.id), page]));
 
     rows.forEach((campaign) => {
       const config = parseCampaignConfig(campaign);
@@ -281,34 +545,35 @@ App.campaigns = (function () {
       nameTd.textContent = safeText(campaign.name) || '-';
       tr.appendChild(nameTd);
 
+      const statusTd = document.createElement('td');
+      statusTd.textContent = safeText(campaign.status) || '-';
+      tr.appendChild(statusTd);
+
+      const segmentTd = document.createElement('td');
+      const segment = (config?.segmentId || campaign.segmentId)
+        ? segmentsById.get(String(config?.segmentId || campaign.segmentId))
+        : null;
+      segmentTd.textContent = safeText(segment?.name || config?.segmentLabel) || '-';
+      tr.appendChild(segmentTd);
+
       const channelTd = document.createElement('td');
       const channel = config?.channelId ? channelsById.get(String(config.channelId)) : null;
       channelTd.textContent = channelLabel(channel) || '-';
       tr.appendChild(channelTd);
 
-      const headlineTd = document.createElement('td');
-      headlineTd.textContent = safeText(config?.headlineLabel || campaign.subject) || '-';
-      tr.appendChild(headlineTd);
+      const templateTd = document.createElement('td');
+      const template = config?.emailTemplateId ? emailTemplatesById.get(String(config.emailTemplateId)) : null;
+      templateTd.textContent = safeText(template?.name || config?.emailTemplateLabel) || '-';
+      tr.appendChild(templateTd);
 
-      const imageTd = document.createElement('td');
-      const primaryImage = config?.primaryImageId ? assetsById.get(String(config.primaryImageId)) : null;
-      const imageUrl = assetPreviewUrl(primaryImage);
-      if (imageUrl) {
-        const img = document.createElement('img');
-        img.src = imageUrl;
-        img.alt = safeText(primaryImage?.assetName) || 'Primary image';
-        img.style.height = '50px';
-        img.style.width = 'auto';
-        img.style.display = 'block';
-        imageTd.appendChild(img);
-      } else {
-        imageTd.textContent = '-';
-      }
-      tr.appendChild(imageTd);
+      const pageTd = document.createElement('td');
+      const page = config?.landingPageId ? landingPagesById.get(String(config.landingPageId)) : null;
+      pageTd.textContent = safeText(page?.name || config?.landingPageLabel) || '-';
+      tr.appendChild(pageTd);
 
-      const ctaTd = document.createElement('td');
-      ctaTd.textContent = safeText(config?.ctaLabel) || '-';
-      tr.appendChild(ctaTd);
+      const subjectTd = document.createElement('td');
+      subjectTd.textContent = safeText(config?.subjectLineLabel || campaign.subject || config?.headlineLabel) || '-';
+      tr.appendChild(subjectTd);
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'campaign-actions-cell';
@@ -381,6 +646,7 @@ App.campaigns = (function () {
     applySelectValue(byId('campaignLandingPageSelect'), config.landingPageId);
     applySelectValue(byId('campaignFormObjectSelect'), config.formObjectId);
     applySelectValue(byId('campaignHeadlineSelect'), config.headlineId);
+    applySelectValue(byId('campaignSubjectLineSelect'), config.subjectLineId);
     applySelectValue(byId('campaignBlurbSelect'), config.blurbId);
     applySelectValue(byId('campaignPitchSelect'), config.pitchId);
     applySelectValue(byId('campaignSubheadingSelect'), config.subheadingId);
@@ -399,6 +665,7 @@ App.campaigns = (function () {
     applySelectValue(byId('campaignPrimaryVideoSelect'), config.primaryVideoId);
     const hashtagsField = byId('campaignHashtagGroupSelect');
     if (hashtagsField) hashtagsField.value = safeText(config.hashtagGroupLabel || '');
+    applyCampaignChannelProfile(config.channelId);
     setCampaignFormMode(!cloneMode);
     ensureCampaignFormVisible();
   }
@@ -433,6 +700,7 @@ App.campaigns = (function () {
           const idInput = byId('campaignIdInput');
           if (idInput) idInput.value = '';
           setCampaignFormMode(false);
+          applyCampaignChannelProfile('');
         }
         if (isHidden) {
           await loadBuilderSources();
@@ -441,6 +709,12 @@ App.campaigns = (function () {
     }
 
     if (form) {
+      const channelSelect = byId('campaignChannelSelect');
+      if (channelSelect) {
+        channelSelect.addEventListener('change', function () {
+          applyCampaignChannelProfile(channelSelect.value);
+        });
+      }
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const channelSelect = byId('campaignChannelSelect');
@@ -450,8 +724,19 @@ App.campaigns = (function () {
         const landingSelect = byId('campaignLandingPageSelect');
         const formObjectSelect = byId('campaignFormObjectSelect');
         const headlineSelect = byId('campaignHeadlineSelect');
+        const subjectLineSelect = byId('campaignSubjectLineSelect');
         const blurbSelect = byId('campaignBlurbSelect');
         const pitchSelect = byId('campaignPitchSelect');
+        const subheadingSelect = byId('campaignSubheadingSelect');
+        const taglineSelect = byId('campaignTaglineSelect');
+        const articleSelect = byId('campaignArticleSelect');
+        const reportSelect = byId('campaignReportSelect');
+        const whitePaperSelect = byId('campaignWhitePaperSelect');
+        const ebookSelect = byId('campaignEbookSelect');
+        const postSelect = byId('campaignPostSelect');
+        const descriptionSelect = byId('campaignDescriptionSelect');
+        const transcriptSelect = byId('campaignTranscriptSelect');
+        const commentSelect = byId('campaignCommentSelect');
         const tweetSelect = byId('campaignTweetSelect');
         const hashtagSelect = byId('campaignHashtagGroupSelect');
         const ctaSelect = byId('campaignCtaSelect');
@@ -461,7 +746,7 @@ App.campaigns = (function () {
 
         const payload = {
           name: safeText(form.elements.name?.value),
-          subject: selectedOptionText(headlineSelect) || safeText(form.elements.name?.value),
+          subject: selectedOptionText(subjectLineSelect) || selectedOptionText(headlineSelect) || safeText(form.elements.name?.value),
           content: JSON.stringify({
             builder: 'campaign-v1',
             channelId: safeText(channelSelect?.value),
@@ -478,10 +763,32 @@ App.campaigns = (function () {
             formObjectLabel: selectedOptionText(formObjectSelect),
             headlineId: safeText(headlineSelect?.value),
             headlineLabel: selectedOptionText(headlineSelect),
+            subjectLineId: safeText(subjectLineSelect?.value),
+            subjectLineLabel: selectedOptionText(subjectLineSelect),
             blurbId: safeText(blurbSelect?.value),
             blurbLabel: selectedOptionText(blurbSelect),
             pitchId: safeText(pitchSelect?.value),
             pitchLabel: selectedOptionText(pitchSelect),
+            subheadingId: safeText(subheadingSelect?.value),
+            subheadingLabel: selectedOptionText(subheadingSelect),
+            taglineId: safeText(taglineSelect?.value),
+            taglineLabel: selectedOptionText(taglineSelect),
+            articleId: safeText(articleSelect?.value),
+            articleLabel: selectedOptionText(articleSelect),
+            reportId: safeText(reportSelect?.value),
+            reportLabel: selectedOptionText(reportSelect),
+            whitePaperId: safeText(whitePaperSelect?.value),
+            whitePaperLabel: selectedOptionText(whitePaperSelect),
+            ebookId: safeText(ebookSelect?.value),
+            ebookLabel: selectedOptionText(ebookSelect),
+            postId: safeText(postSelect?.value),
+            postLabel: selectedOptionText(postSelect),
+            descriptionId: safeText(descriptionSelect?.value),
+            descriptionLabel: selectedOptionText(descriptionSelect),
+            transcriptId: safeText(transcriptSelect?.value),
+            transcriptLabel: selectedOptionText(transcriptSelect),
+            commentId: safeText(commentSelect?.value),
+            commentLabel: selectedOptionText(commentSelect),
             tweetId: safeText(tweetSelect?.value),
             tweetLabel: selectedOptionText(tweetSelect),
             ctaId: safeText(ctaSelect?.value),
