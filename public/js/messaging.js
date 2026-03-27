@@ -2431,8 +2431,10 @@ App.messaging = (function () {
     App.setActivePage(target);
   }
 
-  function openCreateContent() {
+  async function openCreateContent() {
     App.setActivePage('messagingCreateContentPage');
+    await refreshMessagingCategories();
+    await loadThumbnailOptions();
     renderCreateContentFormatOptions();
     renderCreateContentTopicOptions();
     renderCreateContentAssetOptions();
