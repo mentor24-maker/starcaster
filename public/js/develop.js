@@ -3960,7 +3960,7 @@ App.develop = (function () {
     ]));
     renderTemplateRecordsTable(
       'developEmailTemplatesPrimaryTableHost',
-      'Saved Email Templates',
+      'Saved Templates',
       ['Name', 'Kind', 'Subject', 'Updated', 'Actions'],
       rows
     );
