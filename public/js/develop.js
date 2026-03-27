@@ -3508,12 +3508,13 @@ App.develop = (function () {
       append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-');
 
       const actionsTd = document.createElement('td');
+      actionsTd.className = 'develop-pages-actions-cell';
       const viewBtn = App.makeIconButton('view', 'View Page', () => {
         openLandingPagePreview(item);
       });
       const editBtn = App.makeIconButton('edit', 'Edit Page', () => {
         openLandingPageVisualEditor(item);
-      });
+      }, { marginLeft: '10px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Page', async () => {
         if (!window.confirm(`Delete page "${safeText(item.name) || id}"?`)) return;
         try {
@@ -3524,7 +3525,7 @@ App.develop = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
+      }, { danger: true, marginLeft: '10px' });
       actionsTd.appendChild(viewBtn);
       actionsTd.appendChild(editBtn);
       actionsTd.appendChild(deleteBtn);
