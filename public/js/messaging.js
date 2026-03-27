@@ -2413,6 +2413,17 @@ App.messaging = (function () {
     App.setActivePage(target);
   }
 
+  function openCreateContent() {
+    const activeFormat = String(document.getElementById('messagingContentFormatFilter')?.value || '').trim();
+    const targetEntry = messagingContentRegistry.find((entry) => String(entry.format || '').trim() === activeFormat);
+    if (targetEntry?.pageId) {
+      openContentTarget(targetEntry.pageId);
+      return false;
+    }
+    openManageContentLanding();
+    return false;
+  }
+
   function renderMessagingContentFormatFilter() {
     const select = document.getElementById('messagingContentFormatFilter');
     if (!select) return;
@@ -4710,6 +4721,7 @@ App.messaging = (function () {
     openTopicsPage,
     openTopicsCreate,
     openContentLanding,
+    openCreateContent,
     openManageContentLanding,
     openManageContentCategory,
     openContentTarget,
