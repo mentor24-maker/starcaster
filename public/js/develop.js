@@ -160,6 +160,8 @@ App.develop = (function () {
   let selectedTemplateId = LANDING_TEMPLATES[0].id;
   let selectedFormTemplateId = FORM_TEMPLATES[0].id;
   let selectedEmailTemplateId = '';
+  let savedThemes = [];
+  let selectedThemeId = '';
   let formBuilderState = null;
   const DEFAULT_FORM_ACCENT = '#0b82d4';
   const MATCH_LANDING_GREY = '#6b7280';
@@ -204,6 +206,11 @@ App.develop = (function () {
       const templateKind = safeText(template?.templateKind).toLowerCase() || 'text';
       return normalized ? templateKind === normalized : true;
     });
+  }
+
+  function getThemeById(themeId) {
+    const id = safeText(themeId);
+    return savedThemes.find((item) => String(item.id) === id) || null;
   }
   const landingPageTableState = {
     filters: {
@@ -549,6 +556,237 @@ App.develop = (function () {
 
   function getAssetTypeDisplayLabel(assetType) {
     return safeText(assetType) === 'Lead Magnet' ? 'PDF' : safeText(assetType);
+  }
+
+  function setThemeStatus(message, isError = false) {
+    const node = byId('developThemesStatusMsg');
+    if (!node) return;
+    const text = safeText(message, 500);
+    node.textContent = text;
+    node.classList.toggle('hidden', !text);
+    node.classList.toggle('error', Boolean(text && isError));
+  }
+
+  function getThemeImageAssets() {
+    return getAssetsByType('Image');
+  }
+
+  function renderThemeAssetSelect(selectId, currentValue, placeholderLabel) {
+    const select = byId(selectId);
+    if (!select) return;
+    setSelectOptions(
+      select,
+      getThemeImageAssets().map((asset) => ({
+        value: String(asset.id),
+        label: assetLabel(asset, `Asset ${asset.id}`),
+      })),
+      placeholderLabel || 'None',
+      currentValue
+    );
+  }
+
+  function buildThemePayload() {
+    return {
+      name: safeText(byId('developThemesNameInput')?.value),
+      primaryColor: safeText(byId('developThemesPrimaryColorInput')?.value) || DEFAULT_LANDING_PRIMARY,
+      backgroundColor: safeText(byId('developThemesBackgroundColorInput')?.value) || DEFAULT_LANDING_BACKGROUND,
+      accentColor: safeText(byId('developThemesAccentColorInput')?.value) || DEFAULT_LANDING_ACCENT,
+      borderThickness: Number(byId('developThemesBorderThicknessInput')?.value || 1) || 1,
+      borderRadius: Number(byId('developThemesBorderRadiusInput')?.value || 12) || 12,
+      containerBlur: Number(byId('developThemesContainerBlurInput')?.value || 0) || 0,
+      contrastLevel: Number(byId('developThemesContrastLevelInput')?.value || 0) || 0,
+      logoWideId: safeText(byId('developThemesLogoWideSelect')?.value),
+      logoSquareId: safeText(byId('developThemesLogoSquareSelect')?.value),
+      featureImageId: safeText(byId('developThemesFeatureImageSelect')?.value),
+      backgroundImageId: safeText(byId('developThemesBackgroundImageSelect')?.value),
+    };
+  }
+
+  function syncThemeRangeLabels() {
+    const pairs = [
+      ['developThemesBorderThicknessInput', 'developThemesBorderThicknessValue'],
+      ['developThemesBorderRadiusInput', 'developThemesBorderRadiusValue'],
+      ['developThemesContainerBlurInput', 'developThemesContainerBlurValue'],
+      ['developThemesContrastLevelInput', 'developThemesContrastLevelValue'],
+    ];
+    pairs.forEach(([inputId, outputId]) => {
+      const input = byId(inputId);
+      const output = byId(outputId);
+      if (!input || !output) return;
+      output.textContent = String(input.value || '0');
+    });
+  }
+
+  function resetThemeBuilder() {
+    selectedThemeId = '';
+    if (byId('developThemesThemeSelect')) byId('developThemesThemeSelect').value = '';
+    if (byId('developThemesNameInput')) byId('developThemesNameInput').value = '';
+    if (byId('developThemesPrimaryColorInput')) byId('developThemesPrimaryColorInput').value = DEFAULT_LANDING_PRIMARY;
+    if (byId('developThemesBackgroundColorInput')) byId('developThemesBackgroundColorInput').value = DEFAULT_LANDING_BACKGROUND;
+    if (byId('developThemesAccentColorInput')) byId('developThemesAccentColorInput').value = DEFAULT_LANDING_ACCENT;
+    if (byId('developThemesBorderThicknessInput')) byId('developThemesBorderThicknessInput').value = '1';
+    if (byId('developThemesBorderRadiusInput')) byId('developThemesBorderRadiusInput').value = '12';
+    if (byId('developThemesContainerBlurInput')) byId('developThemesContainerBlurInput').value = '0';
+    if (byId('developThemesContrastLevelInput')) byId('developThemesContrastLevelInput').value = '0';
+    renderThemeAssetSelect('developThemesLogoWideSelect', '', 'None');
+    renderThemeAssetSelect('developThemesLogoSquareSelect', '', 'None');
+    renderThemeAssetSelect('developThemesFeatureImageSelect', '', 'None');
+    renderThemeAssetSelect('developThemesBackgroundImageSelect', '', 'None');
+    syncThemeRangeLabels();
+    setThemeStatus('');
+    renderThemesPreview();
+  }
+
+  function applyThemeToBuilder(theme) {
+    if (!theme) {
+      resetThemeBuilder();
+      return;
+    }
+    selectedThemeId = String(theme.id || '');
+    if (byId('developThemesThemeSelect')) byId('developThemesThemeSelect').value = selectedThemeId;
+    if (byId('developThemesNameInput')) byId('developThemesNameInput').value = safeText(theme.name);
+    if (byId('developThemesPrimaryColorInput')) byId('developThemesPrimaryColorInput').value = safeText(theme.primaryColor) || DEFAULT_LANDING_PRIMARY;
+    if (byId('developThemesBackgroundColorInput')) byId('developThemesBackgroundColorInput').value = safeText(theme.backgroundColor) || DEFAULT_LANDING_BACKGROUND;
+    if (byId('developThemesAccentColorInput')) byId('developThemesAccentColorInput').value = safeText(theme.accentColor) || DEFAULT_LANDING_ACCENT;
+    if (byId('developThemesBorderThicknessInput')) byId('developThemesBorderThicknessInput').value = String(theme.borderThickness ?? 1);
+    if (byId('developThemesBorderRadiusInput')) byId('developThemesBorderRadiusInput').value = String(theme.borderRadius ?? 12);
+    if (byId('developThemesContainerBlurInput')) byId('developThemesContainerBlurInput').value = String(theme.containerBlur ?? 0);
+    if (byId('developThemesContrastLevelInput')) byId('developThemesContrastLevelInput').value = String(theme.contrastLevel ?? 0);
+    renderThemeAssetSelect('developThemesLogoWideSelect', safeText(theme.logoWideId), 'None');
+    renderThemeAssetSelect('developThemesLogoSquareSelect', safeText(theme.logoSquareId), 'None');
+    renderThemeAssetSelect('developThemesFeatureImageSelect', safeText(theme.featureImageId), 'None');
+    renderThemeAssetSelect('developThemesBackgroundImageSelect', safeText(theme.backgroundImageId), 'None');
+    syncThemeRangeLabels();
+    setThemeStatus('');
+    renderThemesPreview();
+  }
+
+  function syncThemesBuilder() {
+    setSelectOptions(
+      byId('developThemesThemeSelect'),
+      savedThemes.map((theme) => ({ value: String(theme.id), label: safeText(theme.name) || `Theme ${theme.id}` })),
+      'Select Theme',
+      selectedThemeId
+    );
+    const current = getThemeById(selectedThemeId);
+    if (current) applyThemeToBuilder(current);
+    else resetThemeBuilder();
+    renderThemesInventory();
+  }
+
+  function getThemeAssetLabel(id, fallback = '-') {
+    const cleanId = safeText(id);
+    if (!cleanId) return fallback;
+    const asset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === cleanId);
+    return assetLabel(asset, fallback);
+  }
+
+  function renderThemesPreview() {
+    const host = byId('developThemesPreviewHost');
+    if (!host) return;
+    const payload = buildThemePayload();
+    const featureAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.featureImageId));
+    const featureUrl = featureAsset ? toDirectAssetUrl(featureAsset.location) : '';
+    host.innerHTML = `
+      <div class="develop-themes-preview-card" style="background:${payload.backgroundColor}; border:${payload.borderThickness}px solid ${payload.accentColor}; border-radius:${payload.borderRadius}px; backdrop-filter:blur(${payload.containerBlur}px);">
+        <div class="develop-themes-preview-eyebrow" style="color:${payload.accentColor};">Theme Preview</div>
+        <h4 style="color:${payload.primaryColor};">${safeText(payload.name) || 'Untitled Theme'}</h4>
+        <p>Primary, background, accent, and structural settings appear here as a quick visual preview.</p>
+        ${featureUrl ? `<div class="develop-template-image-slot" style="margin:0 0 1rem 0;"><img src="${featureUrl}" alt="Feature" style="display:block;width:100%;max-height:180px;object-fit:cover;border-radius:${payload.borderRadius}px;" /></div>` : ''}
+        <div class="develop-themes-preview-actions">
+          <button type="button" style="background:${payload.primaryColor}; border-color:${payload.primaryColor};">Primary CTA</button>
+          <button type="button" style="border:${payload.borderThickness}px solid ${payload.accentColor}; color:${payload.accentColor}; background:transparent;">Secondary CTA</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderThemesInventory() {
+    const tbody = byId('developThemesInventoryBody');
+    const list = byId('developThemesConsolidationList');
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr><td>Palette</td><td>Primary / Background / Accent</td><td>Supabase Theme Record</td><td>Shared theme builder</td></tr>
+        <tr><td>Container Styles</td><td>Border, Radius, Blur, Contrast</td><td>Supabase Theme Record</td><td>Shared theme builder</td></tr>
+        <tr><td>Image Assets</td><td>Logo Wide, Logo Square, Feature, Background</td><td>Supabase Theme Record</td><td>Shared theme builder</td></tr>
+      `;
+    }
+    if (list) {
+      list.innerHTML = `
+        <li>Use Builder: Themes as the shared visual source of truth for campaigns and pages.</li>
+        <li>Keep asset-driven visual references attached to each theme record.</li>
+      `;
+    }
+  }
+
+  function buildThemeActions(theme) {
+    const wrap = document.createElement('div');
+    wrap.className = 'page-heading-actions';
+    wrap.style.justifyContent = 'flex-start';
+    wrap.appendChild(App.makeIconButton('edit', 'Edit Theme', () => {
+      setThemesBuilderVisible(true);
+      applyThemeToBuilder(theme);
+      const panel = byId('developThemesBuilderPanel');
+      if (panel && typeof panel.scrollIntoView === 'function') panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+    wrap.appendChild(App.makeIconButton('delete', 'Delete Theme', async () => {
+      if (!window.confirm(`Delete theme "${safeText(theme.name) || theme.id}"?`)) return;
+      try {
+        await api(`/api/develop/themes/${encodeURIComponent(theme.id)}`, { method: 'DELETE' });
+        if (String(selectedThemeId) === String(theme.id)) selectedThemeId = '';
+        await refresh();
+        notify('Theme deleted');
+      } catch (err) {
+        notify(err.message || 'Could not delete theme', true);
+      }
+    }, { danger: true, marginLeft: '8px' }));
+    return wrap;
+  }
+
+  function renderThemesTable() {
+    const tbody = byId('developThemesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!savedThemes.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.textContent = 'No saved themes yet.';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
+    savedThemes.forEach((theme) => {
+      const tr = document.createElement('tr');
+      const featureTd = document.createElement('td');
+      featureTd.className = 'develop-theme-table-thumb';
+      const featureAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(theme.featureImageId));
+      const featureUrl = featureAsset ? toDirectAssetUrl(featureAsset.location) : '';
+      featureTd.innerHTML = featureUrl ? `<img src="${featureUrl}" alt="Feature image" style="width:56px;height:56px;object-fit:cover;border-radius:10px;" />` : '-';
+      const logoTd = document.createElement('td');
+      logoTd.className = 'develop-theme-table-thumb';
+      const logoAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(theme.logoSquareId));
+      const logoUrl = logoAsset ? toDirectAssetUrl(logoAsset.location) : '';
+      logoTd.innerHTML = logoUrl ? `<img src="${logoUrl}" alt="Square logo" style="width:56px;height:56px;object-fit:cover;border-radius:10px;" />` : '-';
+      const nameTd = document.createElement('td');
+      nameTd.textContent = safeText(theme.name) || '-';
+      const paletteTd = document.createElement('td');
+      paletteTd.textContent = [safeText(theme.primaryColor), safeText(theme.backgroundColor), safeText(theme.accentColor)].filter(Boolean).join(' / ') || '-';
+      const stylesTd = document.createElement('td');
+      stylesTd.textContent = `B:${theme.borderThickness ?? 1} R:${theme.borderRadius ?? 12} Blur:${theme.containerBlur ?? 0} C:${theme.contrastLevel ?? 0}`;
+      const updatedTd = document.createElement('td');
+      updatedTd.textContent = theme.updatedAt ? new Date(theme.updatedAt).toLocaleString() : '-';
+      const actionsTd = document.createElement('td');
+      actionsTd.appendChild(buildThemeActions(theme));
+      tr.appendChild(featureTd);
+      tr.appendChild(logoTd);
+      tr.appendChild(nameTd);
+      tr.appendChild(paletteTd);
+      tr.appendChild(stylesTd);
+      tr.appendChild(updatedTd);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
   }
 
   function getAssetsByCategory(category) {
@@ -1008,6 +1246,17 @@ App.develop = (function () {
   async function loadSavedForms() {
     const result = await api('/api/develop/forms');
     savedForms = Array.isArray(result.forms) ? result.forms : [];
+  }
+
+  async function loadSavedThemes() {
+    const result = await api('/api/develop/themes');
+    savedThemes = Array.isArray(result.themes) ? result.themes : [];
+    if (!selectedThemeId && savedThemes[0]?.id) {
+      selectedThemeId = String(savedThemes[0].id);
+    }
+    if (selectedThemeId && !savedThemes.some((item) => String(item.id) === String(selectedThemeId))) {
+      selectedThemeId = String(savedThemes[0]?.id || '');
+    }
   }
 
   async function loadSavedEmailTemplates() {
@@ -4518,6 +4767,7 @@ App.develop = (function () {
     loadSavedAgents();
     await Promise.all([
       loadSavedForms(),
+      loadSavedThemes(),
       loadSavedEmailTemplates(),
       loadSavedLandingPages(),
       loadSavedExtensions(),
@@ -4533,6 +4783,9 @@ App.develop = (function () {
     renderFormBuilderFieldConfig();
     renderFormBuilderPreview();
     renderSavedForms();
+    renderThemesTable();
+    syncThemesBuilder();
+    renderThemesPreview();
     renderExtensionsLanding();
     populateExtensionParentSelect(byId('developExtensionIdInput')?.value);
     renderExtensionsTable();
@@ -4634,6 +4887,10 @@ App.develop = (function () {
     const formSuccessMessageInput = byId('developFormSuccessMessageInput');
     const themesBuilderToggleBtn = byId('developThemesBuilderToggleBtn');
     const themesCreateBtn = byId('developThemesCreateBtn');
+    const themesThemeSelect = byId('developThemesThemeSelect');
+    const themesNewBtn = byId('developThemesNewBtn');
+    const themesSaveBtn = byId('developThemesSaveBtn');
+    const themesDeleteBtn = byId('developThemesDeleteBtn');
     const agentsSavePresetBtn = byId('developAgentsSavePresetBtn');
     const agentsClonePresetBtn = byId('developAgentsClonePresetBtn');
 
@@ -4647,6 +4904,68 @@ App.develop = (function () {
     if (themesCreateBtn) {
       themesCreateBtn.addEventListener('click', () => {
         openThemesBuilder();
+      });
+    }
+
+    if (themesThemeSelect) {
+      themesThemeSelect.addEventListener('change', () => {
+        selectedThemeId = safeText(themesThemeSelect.value);
+        const selected = getThemeById(selectedThemeId);
+        if (selected) applyThemeToBuilder(selected);
+        else resetThemeBuilder();
+        renderThemesPreview();
+      });
+    }
+
+    if (themesNewBtn) {
+      themesNewBtn.addEventListener('click', () => {
+        resetThemeBuilder();
+        setThemesBuilderVisible(true);
+      });
+    }
+
+    if (themesSaveBtn) {
+      themesSaveBtn.addEventListener('click', async () => {
+        const payload = buildThemePayload();
+        if (!payload.name) {
+          notify('Theme name is required', true);
+          return;
+        }
+        try {
+          const current = getThemeById(selectedThemeId);
+          const endpoint = current?.id
+            ? `/api/develop/themes/${encodeURIComponent(current.id)}`
+            : '/api/develop/themes';
+          const method = current?.id ? 'PATCH' : 'POST';
+          const result = await api(endpoint, { method, body: JSON.stringify(payload) });
+          const saved = result.theme || result.data?.theme || result.data || null;
+          selectedThemeId = safeText(saved?.id) || selectedThemeId;
+          await refresh();
+          notify(current?.id ? 'Theme updated' : 'Theme created');
+          setThemesBuilderVisible(true);
+        } catch (err) {
+          notify(err.message || 'Could not save theme', true);
+        }
+      });
+    }
+
+    if (themesDeleteBtn) {
+      themesDeleteBtn.addEventListener('click', async () => {
+        const current = getThemeById(selectedThemeId);
+        if (!current?.id) {
+          resetThemeBuilder();
+          return;
+        }
+        if (!window.confirm(`Delete theme "${safeText(current.name) || current.id}"?`)) return;
+        try {
+          await api(`/api/develop/themes/${encodeURIComponent(current.id)}`, { method: 'DELETE' });
+          selectedThemeId = '';
+          await refresh();
+          resetThemeBuilder();
+          notify('Theme deleted');
+        } catch (err) {
+          notify(err.message || 'Could not delete theme', true);
+        }
       });
     }
 
