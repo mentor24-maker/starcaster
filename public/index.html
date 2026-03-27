@@ -2836,11 +2836,27 @@
             <label for="messagingCreateContentFormat"><strong>Format:</strong></label>
             <select id="messagingCreateContentFormat" name="format" required>
               <option value="">Select Format</option>
+              <option value="Headlines">Headlines</option>
+              <option value="Sub-headings">Sub-headings</option>
+              <option value="Taglines">Taglines</option>
+              <option value="Pitches">Pitches</option>
+              <option value="Emails">Emails</option>
+              <option value="Tweets">Tweets</option>
+              <option value="Posts">Posts</option>
+              <option value="Descriptions">Descriptions</option>
+              <option value="Transcripts">Transcripts</option>
+              <option value="Comments">Comments</option>
+              <option value="Hashtags">Hashtags</option>
+              <option value="Calls to Action">Calls to Action</option>
+              <option value="Articles">Articles</option>
+              <option value="Reports">Reports</option>
+              <option value="White Papers">White Papers</option>
+              <option value="eBooks">eBooks</option>
             </select>
           </div>
           <div class="form-row">
             <label for="messagingCreateContentTopic"><strong>Topic:</strong></label>
-            <select id="messagingCreateContentTopic" name="topic">
+            <select id="messagingCreateContentTopic" name="topic" data-messaging-category-select="true">
               <option value="">No Topic</option>
             </select>
           </div>
@@ -2862,10 +2878,6 @@
             <div class="form-row hidden" id="messagingCreateContentAuthorRow">
               <label for="messagingCreateContentAuthor"><strong>Author:</strong></label>
               <input id="messagingCreateContentAuthor" name="author" placeholder="Author" />
-            </div>
-            <div class="form-row hidden" id="messagingCreateContentPublishDateRow">
-              <label for="messagingCreateContentPublishDate"><strong>Publish Date:</strong></label>
-              <input id="messagingCreateContentPublishDate" name="publish_date" type="date" />
             </div>
             <div class="form-row hidden" id="messagingCreateContentTitleRow">
               <label for="messagingCreateContentTitle"><strong>Title:</strong></label>

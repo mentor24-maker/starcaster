@@ -2540,7 +2540,6 @@ App.messaging = (function () {
     [
       'messagingCreateContentPlatform',
       'messagingCreateContentAuthor',
-      'messagingCreateContentPublishDate',
       'messagingCreateContentTitle',
       'messagingCreateContentSubtitle',
       'messagingCreateContentUrl',
@@ -2563,7 +2562,6 @@ App.messaging = (function () {
     setCreateContentFieldVisible('messagingCreateContentPrimaryRow', isSimple || isTweet);
     setCreateContentFieldVisible('messagingCreateContentPlatformRow', false);
     setCreateContentFieldVisible('messagingCreateContentAuthorRow', false);
-    setCreateContentFieldVisible('messagingCreateContentPublishDateRow', false);
     setCreateContentFieldVisible('messagingCreateContentTitleRow', isLongform);
     setCreateContentFieldVisible('messagingCreateContentSubtitleRow', isLongform);
     setCreateContentFieldVisible('messagingCreateContentUrlRow', isTweet || isLongform);
@@ -2652,6 +2650,7 @@ App.messaging = (function () {
       form.reset();
       renderCreateContentFormatOptions();
       await renderCreateContentTopicOptions();
+      syncHeadlineCategorySelects();
       renderCreateContentAssetOptions();
       const formatSelect = document.getElementById('messagingCreateContentFormat');
       const topicSelect = document.getElementById('messagingCreateContentTopic');
