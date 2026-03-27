@@ -518,6 +518,103 @@ App.acquire = (function () {
       els.directAcquireErrorsPreview.textContent = errors.length ? prettyJson({ errors }) : '{}';
       els.directAcquireErrorsPreview.classList.toggle('hidden', !errors.length);
     }
+    renderDirectAcquireContactTable();
+  }
+
+  function renderDirectAcquireContactTable() {
+    const tableBody = document.getElementById('directAcquireContactTable');
+    const emptyEl = document.getElementById('directAcquireContactEmpty');
+    const saveBtn = document.getElementById('directAcquireSaveContactBtn');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const run = state.directAcquireCurrentRun;
+    const labels = Array.isArray(run?.contact_labels) ? run.contact_labels : [];
+    if (!labels.length) {
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      if (saveBtn) saveBtn.disabled = true;
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (saveBtn) saveBtn.disabled = false;
+    labels.forEach(([label, value]) => {
+      const tr = document.createElement('tr');
+      const labelTd = document.createElement('td');
+      labelTd.textContent = String(label || '');
+      const valueTd = document.createElement('td');
+      valueTd.textContent = String(value || '');
+      tr.appendChild(labelTd);
+      tr.appendChild(valueTd);
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function buildContactPayloadFromDirectRun(run) {
+    const summary = run?.contact_summary || {};
+    const domain = (() => {
+      try { return new URL(String(summary.website || run?.source_url || '')).hostname.replace(/^www\./, ''); }
+      catch { return ''; }
+    })();
+    const tags = ['web-acquire'];
+    if (run?.capture_contact_data) tags.push('contact-capture');
+    const extraNotes = [];
+    const appendList = (label, key) => {
+      const values = Array.isArray(summary?.[key]) ? summary[key].filter(Boolean) : [];
+      if (values.length > 1) extraNotes.push(`${label}: ${values.join(', ')}`);
+      return values;
+    };
+    const emails = appendList('Emails', 'emails');
+    const phones = appendList('Phones', 'phones');
+    const youtube = appendList('YouTube', 'youtube');
+    const instagram = appendList('Instagram', 'instagram');
+    const tiktok = appendList('TikTok', 'tiktok');
+    const facebook = appendList('Facebook', 'facebook');
+    const x = appendList('X', 'x');
+    const bluesky = appendList('Bluesky', 'bluesky');
+    const linkedin = appendList('LinkedIn', 'linkedin');
+    const patreon = appendList('Patreon', 'patreon');
+    const substack = appendList('Substack', 'substack');
+    const medium = appendList('Medium', 'medium');
+    const telegram = appendList('Telegram', 'telegram');
+    const discord = appendList('Discord', 'discord');
+    const whatsapp = appendList('WhatsApp', 'whatsapp');
+    if (telegram.length) extraNotes.push(`Telegram: ${telegram.join(', ')}`);
+    if (discord.length) extraNotes.push(`Discord: ${discord.join(', ')}`);
+    if (whatsapp.length) extraNotes.push(`WhatsApp: ${whatsapp.join(', ')}`);
+    return {
+      contactType: 'lead',
+      company: domain,
+      email: emails[0] || '',
+      phone: phones[0] || '',
+      website: String(summary.website || run?.source_url || '').trim(),
+      youtube: youtube[0] || '',
+      instagram: instagram[0] || '',
+      tiktok: tiktok[0] || '',
+      facebook: facebook[0] || '',
+      x: x[0] || '',
+      bluesky: bluesky[0] || '',
+      patreon: patreon[0] || '',
+      linkedin: linkedin[0] || '',
+      source: 'acquire.web',
+      status: 'captured',
+      tags,
+      notes: extraNotes.join('\n'),
+      customFields: {
+        substack: substack[0] || '',
+        medium: medium[0] || '',
+        telegram: telegram[0] || '',
+        discord: discord[0] || '',
+        whatsapp: whatsapp[0] || '',
+      },
+    };
+  }
+
+  async function saveDirectAcquireContact() {
+    const run = state.directAcquireCurrentRun;
+    const labels = Array.isArray(run?.contact_labels) ? run.contact_labels : [];
+    if (!labels.length) throw new Error('No captured contact data to save.');
+    const payload = buildContactPayloadFromDirectRun(run);
+    await api('/api/contacts', { method: 'POST', body: JSON.stringify(payload) });
+    notify('Captured contact saved');
   }
 
   function buildUserIndex(users) {
@@ -1841,6 +1938,7 @@ App.acquire = (function () {
   // -------------------------------------------------------------------------
 
   function init() {
+    renderDirectAcquireContactTable();
     clearRedditHarvestProgress();
     const redditProgressWrap = document.getElementById('redditHarvestProgressWrap');
     const redditProgressBar = document.getElementById('redditHarvestProgressBar');
@@ -1885,10 +1983,10 @@ App.acquire = (function () {
         try {
           const formData = new FormData(els.directAcquireForm);
           const payload = {
-            manual_confirmed: formData.get('manual_confirmed') === 'on',
             source_url: String(formData.get('source_url') || '').trim(),
             max_pages: Number(formData.get('max_pages') || 5),
-            body_snippet_chars: Number(formData.get('body_snippet_chars') || 600)
+            body_snippet_chars: Number(formData.get('body_snippet_chars') || 600),
+            capture_contact_data: formData.get('capture_contact_data') === 'on',
           };
           const res = await api('/api/acquire/direct-run', { method: 'POST', body: JSON.stringify(payload) });
           state.directAcquireCurrentRun = res.run || null;
@@ -1896,6 +1994,16 @@ App.acquire = (function () {
           await refreshDirectHarvestRuns();
           notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)`);
         } catch (err) { notify(err.message, true); }
+      });
+    }
+    const saveDirectAcquireContactBtn = document.getElementById('directAcquireSaveContactBtn');
+    if (saveDirectAcquireContactBtn) {
+      saveDirectAcquireContactBtn.addEventListener('click', async () => {
+        try {
+          await saveDirectAcquireContact();
+        } catch (err) {
+          notify(err.message || 'Could not save captured contact', true);
+        }
       });
     }
     if (els.xHarvestRefreshBtn) {
