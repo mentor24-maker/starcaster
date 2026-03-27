@@ -539,9 +539,20 @@ App.acquire = (function () {
     labels.forEach(([label, value]) => {
       const tr = document.createElement('tr');
       const labelTd = document.createElement('td');
+      labelTd.className = 'direct-acquire-contact-label';
       labelTd.textContent = String(label || '');
       const valueTd = document.createElement('td');
-      valueTd.textContent = String(value || '');
+      const text = String(value || '').trim();
+      if (/^https?:\/\//i.test(text)) {
+        const link = document.createElement('a');
+        link.href = text;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = text;
+        valueTd.appendChild(link);
+      } else {
+        valueTd.textContent = text;
+      }
       tr.appendChild(labelTd);
       tr.appendChild(valueTd);
       tableBody.appendChild(tr);
@@ -598,13 +609,6 @@ App.acquire = (function () {
       status: 'captured',
       tags,
       notes: extraNotes.join('\n'),
-      customFields: {
-        substack: substack[0] || '',
-        medium: medium[0] || '',
-        telegram: telegram[0] || '',
-        discord: discord[0] || '',
-        whatsapp: whatsapp[0] || '',
-      },
     };
   }
 
