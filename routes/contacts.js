@@ -182,6 +182,57 @@ function socialUsername(value) {
   }
 }
 
+function isEngagementField(field) {
+  return String(field || '').startsWith('engagement_');
+}
+
+function slugifyEngagementToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function engagementMetricCount(contact, field, metricToken) {
+  const custom = (contact && typeof contact.customFields === 'object' && contact.customFields)
+    || (contact && typeof contact.custom_fields === 'object' && contact.custom_fields)
+    || {};
+  const base = String(field || '').replace(/^engagement_/, '');
+  const metric = slugifyEngagementToken(metricToken);
+  const directKeys = [`${base}_${metric}`, `engagement_${base}_${metric}`];
+  for (const key of directKeys) {
+    const raw = custom[key];
+    if (raw != null && raw !== '') {
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+  }
+  const nestedDirect = custom?.[base]?.[metric];
+  if (nestedDirect != null && nestedDirect !== '') {
+    const parsed = Number(nestedDirect);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const nestedEngagement = custom?.engagement?.[base]?.[metric];
+  if (nestedEngagement != null && nestedEngagement !== '') {
+    const parsed = Number(nestedEngagement);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function countMatchesBucket(count, bucket) {
+  const n = Number(count) || 0;
+  switch (String(bucket || '')) {
+    case '0': return n === 0;
+    case '1': return n === 1;
+    case '2-5': return n >= 2 && n <= 5;
+    case '6-10': return n >= 6 && n <= 10;
+    case '10+': return n > 10;
+    default: return false;
+  }
+}
+
 function contactMatchesDefinitionFilters(contact, definition) {
   const filters = definition && typeof definition.filters === 'object' ? definition.filters : null;
   if (!filters) return null;
@@ -210,6 +261,10 @@ function contactMatchesDefinitionFilters(contact, definition) {
 
   const clauseResults = {};
   clauses.forEach(({ id, field, mode, value }) => {
+    if (isEngagementField(field)) {
+      clauseResults[id] = countMatchesBucket(engagementMetricCount(contact, field, mode), value);
+      return;
+    }
     const rawValue = String(segmentFieldValue(contact, field) || '').trim();
     const haystack = ['youtube', 'instagram', 'tiktok', 'facebook', 'x', 'bluesky', 'patreon', 'linkedin', 'substack', 'medium']
       .includes(String(field || '').trim().toLowerCase())
