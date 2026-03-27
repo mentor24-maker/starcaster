@@ -2368,12 +2368,14 @@ App.messaging = (function () {
     activeMessagingContentCategory = '';
     updateMessagingContentFilterBar();
     App.setActivePage('messagingManageContentPage');
+    renderMessagingFormatsTable();
   }
 
   function openManageContentCategory(category) {
     activeMessagingContentCategory = String(category || '').trim();
     updateMessagingContentFilterBar();
     App.setActivePage('messagingManageContentPage');
+    renderMessagingFormatsTable();
   }
 
   function openContentTarget(targetPageId) {
@@ -2412,6 +2414,43 @@ App.messaging = (function () {
       const td = document.createElement('td');
       td.colSpan = 4;
       td.textContent = 'No content types match current filters.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    rows.forEach((entry) => {
+      const tr = document.createElement('tr');
+      [entry.type, entry.family, entry.destination].forEach((value) => {
+        const td = document.createElement('td');
+        td.textContent = value;
+        tr.appendChild(td);
+      });
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'messaging-content-actions-cell';
+      const openBtn = App.makeIconButton('edit', `Open ${entry.type}`, function () {
+        openContentTarget(entry.pageId);
+      });
+      actionsTd.appendChild(openBtn);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderMessagingFormatsTable() {
+    const tbody = document.getElementById('messagingFormatsLibraryTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const rows = messagingContentLibraryEntries.slice().sort((a, b) => {
+      const left = String(a.type || '').toLowerCase();
+      const right = String(b.type || '').toLowerCase();
+      return left.localeCompare(right);
+    });
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = 'No content formats available.';
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
