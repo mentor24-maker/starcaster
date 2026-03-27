@@ -555,7 +555,6 @@
             <button id="campaignToggleFormBtn" type="button">Add Campaign</button>
           </div>
         </div>
-        <p>Assemble channels, audiences, messaging, assets, and build components into deployable campaigns.</p>
         <section id="campaignChannelRulesPanel" class="stack-form hidden" style="border: 1px solid #b7cde6; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
           <h3 style="margin: 0;">Channel Field Rules</h3>
           <p class="meta" style="margin-top: 0.35rem;">Choose a channel, then define which fields are shown and which mechanics fields are required.</p>
@@ -587,93 +586,174 @@
           <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
             <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Mechanics</h3>
-              <input name="name" placeholder="Campaign Name" required />
+              <div class="form-row">
+                <label for="campaignNameInput"><strong>Campaign Name:</strong></label>
+                <input id="campaignNameInput" name="name" placeholder="Campaign Name" required />
+              </div>
               <input name="status" id="campaignStatusInput" type="hidden" value="pending" />
-              <select name="channelId" id="campaignChannelSelect" required>
-                <option value="">Channel</option>
-              </select>
+              <div class="form-row">
+                <label for="campaignChannelSelect"><strong>Channel:</strong></label>
+                <select name="channelId" id="campaignChannelSelect" required>
+                  <option value="">Channel</option>
+                </select>
+              </div>
               <div id="campaignMechanicsConditional" class="stack-form" style="margin: 0; display: none;">
-                <select name="emailTemplateId" id="campaignEmailTemplateSelect">
-                  <option value="">Template (optional)</option>
-                </select>
-                <select name="themeId" id="campaignThemeSelect">
-                  <option value="">Theme (optional)</option>
-                </select>
-                <select name="landingPageId" id="campaignLandingPageSelect">
-                  <option value="">Page</option>
-                </select>
-                <select name="segmentId" id="campaignSegmentSelect">
-                  <option value="">Segment (optional)</option>
-                </select>
+                <div class="form-row">
+                  <label for="campaignEmailTemplateSelect"><strong>Template:</strong></label>
+                  <select name="emailTemplateId" id="campaignEmailTemplateSelect">
+                    <option value="">Template (optional)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignThemeSelect"><strong>Theme:</strong></label>
+                  <select name="themeId" id="campaignThemeSelect">
+                    <option value="">Theme (optional)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignLandingPageSelect"><strong>Page:</strong></label>
+                  <select name="landingPageId" id="campaignLandingPageSelect">
+                    <option value="">Page</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignSegmentSelect"><strong>Segment:</strong></label>
+                  <select name="segmentId" id="campaignSegmentSelect">
+                    <option value="">Segment (optional)</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Content</h3>
               <p id="campaignContentChannelHint" class="meta">Select a channel to load content fields.</p>
               <div id="campaignContentConditional" class="stack-form" style="margin: 0; display: none;">
-                <select name="topicId" id="campaignTopicSelect">
-                  <option value="">Topics</option>
-                </select>
-                <select name="headlineId" id="campaignHeadlineSelect">
-                  <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
-                </select>
-                <select name="emailId" id="campaignEmailSelect">
-                  <option value="">Email Body</option>
-                </select>
-                <select name="subjectLineId" id="campaignSubjectLineSelect">
-                  <option value="">Subject Line</option>
-                </select>
-                <select name="blurbId" id="campaignBlurbSelect">
-                  <option value="">Blurb (reserved)</option>
-                </select>
-                <select name="pitchId" id="campaignPitchSelect">
-                  <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
-                </select>
-                <select name="subheadingId" id="campaignSubheadingSelect">
-                  <option value="">Sub-heading</option>
-                </select>
-                <select name="taglineId" id="campaignTaglineSelect">
-                  <option value="">Tagline</option>
-                </select>
-                <select name="articleId" id="campaignArticleSelect">
-                  <option value="">Article</option>
-                </select>
-                <select name="reportId" id="campaignReportSelect">
-                  <option value="">Report</option>
-                </select>
-                <select name="whitePaperId" id="campaignWhitePaperSelect">
-                  <option value="">White Paper</option>
-                </select>
-                <select name="ebookId" id="campaignEbookSelect">
-                  <option value="">eBook</option>
-                </select>
-                <select name="postId" id="campaignPostSelect">
-                  <option value="">Post</option>
-                </select>
-                <select name="descriptionId" id="campaignDescriptionSelect">
-                  <option value="">Description</option>
-                </select>
-                <select name="transcriptId" id="campaignTranscriptSelect">
-                  <option value="">Transcript</option>
-                </select>
-                <select name="commentId" id="campaignCommentSelect">
-                  <option value="">Comment</option>
-                </select>
-                <select name="tweetId" id="campaignTweetSelect">
-                  <option value="">Tweet (optional)</option>
-                </select>
-                <select name="ctaId" id="campaignCtaSelect">
-                  <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
-                </select>
-                <select name="primaryImageId" id="campaignPrimaryImageSelect">
-                  <option value="">Primary Image</option>
-                </select>
-                <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
-                  <option value="">Primary Video (optional)</option>
-                </select>
-                <select name="hashtagsText" id="campaignHashtagGroupSelect">
-                  <option value="">Hashtags</option>
-                </select>
+                <div class="form-row">
+                  <label for="campaignTopicSelect"><strong>Topics:</strong></label>
+                  <select name="topicId" id="campaignTopicSelect">
+                    <option value="">Topics</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignHeadlineSelect"><strong>Headline:</strong></label>
+                  <select name="headlineId" id="campaignHeadlineSelect">
+                    <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignEmailSelect"><strong>Email Body:</strong></label>
+                  <select name="emailId" id="campaignEmailSelect">
+                    <option value="">Email Body</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignSubjectLineSelect"><strong>Subject Line:</strong></label>
+                  <select name="subjectLineId" id="campaignSubjectLineSelect">
+                    <option value="">Subject Line</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignBlurbSelect"><strong>Blurb:</strong></label>
+                  <select name="blurbId" id="campaignBlurbSelect">
+                    <option value="">Blurb (reserved)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignPitchSelect"><strong>Pitch:</strong></label>
+                  <select name="pitchId" id="campaignPitchSelect">
+                    <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignSubheadingSelect"><strong>Sub-heading:</strong></label>
+                  <select name="subheadingId" id="campaignSubheadingSelect">
+                    <option value="">Sub-heading</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignTaglineSelect"><strong>Tagline:</strong></label>
+                  <select name="taglineId" id="campaignTaglineSelect">
+                    <option value="">Tagline</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignArticleSelect"><strong>Article:</strong></label>
+                  <select name="articleId" id="campaignArticleSelect">
+                    <option value="">Article</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignReportSelect"><strong>Report:</strong></label>
+                  <select name="reportId" id="campaignReportSelect">
+                    <option value="">Report</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignWhitePaperSelect"><strong>White Paper:</strong></label>
+                  <select name="whitePaperId" id="campaignWhitePaperSelect">
+                    <option value="">White Paper</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignEbookSelect"><strong>eBook:</strong></label>
+                  <select name="ebookId" id="campaignEbookSelect">
+                    <option value="">eBook</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignPostSelect"><strong>Post:</strong></label>
+                  <select name="postId" id="campaignPostSelect">
+                    <option value="">Post</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignDescriptionSelect"><strong>Description:</strong></label>
+                  <select name="descriptionId" id="campaignDescriptionSelect">
+                    <option value="">Description</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignTranscriptSelect"><strong>Transcript:</strong></label>
+                  <select name="transcriptId" id="campaignTranscriptSelect">
+                    <option value="">Transcript</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignCommentSelect"><strong>Comment:</strong></label>
+                  <select name="commentId" id="campaignCommentSelect">
+                    <option value="">Comment</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignTweetSelect"><strong>Tweet:</strong></label>
+                  <select name="tweetId" id="campaignTweetSelect">
+                    <option value="">Tweet (optional)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignCtaSelect"><strong>CTA:</strong></label>
+                  <select name="ctaId" id="campaignCtaSelect">
+                    <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignPrimaryImageSelect"><strong>Primary Image:</strong></label>
+                  <select name="primaryImageId" id="campaignPrimaryImageSelect">
+                    <option value="">Primary Image</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignPrimaryVideoSelect"><strong>Primary Video:</strong></label>
+                  <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
+                    <option value="">Primary Video (optional)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="campaignHashtagGroupSelect"><strong>Hashtags:</strong></label>
+                  <select name="hashtagsText" id="campaignHashtagGroupSelect">
+                    <option value="">Hashtags</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
