@@ -271,22 +271,22 @@ App.messaging = (function () {
     { format: 'Calls to Action', pageId: 'messagingCtasPage', field: 'cta', source: () => simpleContentState.ctas.items },
   ];
   const createContentFormatSchemas = {
-    Headlines: { kind: 'simple', endpoint: '/api/messaging/headlines', primaryKey: 'headline', primaryLabel: 'Body', primaryRows: 3 },
-    'Sub-headings': { kind: 'simple', endpoint: '/api/messaging/subheadings', primaryKey: 'subheading', primaryLabel: 'Body', primaryRows: 3 },
-    Taglines: { kind: 'simple', endpoint: '/api/messaging/taglines', primaryKey: 'tagline', primaryLabel: 'Body', primaryRows: 3 },
-    Pitches: { kind: 'simple', endpoint: '/api/messaging/pitches', primaryKey: 'pitch', primaryLabel: 'Body', primaryRows: 5 },
-    Emails: { kind: 'simple', endpoint: '/api/messaging/emails', primaryKey: 'email', primaryLabel: 'Body', primaryRows: 12 },
-    Tweets: { kind: 'tweet', endpoint: '/api/messaging/tweets', primaryKey: 'content', primaryLabel: 'Body', primaryRows: 6 },
-    Posts: { kind: 'simple', endpoint: '/api/messaging/posts', primaryKey: 'post', primaryLabel: 'Body', primaryRows: 6 },
-    Descriptions: { kind: 'simple', endpoint: '/api/messaging/descriptions', primaryKey: 'description', primaryLabel: 'Body', primaryRows: 6 },
-    Transcripts: { kind: 'simple', endpoint: '/api/messaging/transcripts', primaryKey: 'transcript', primaryLabel: 'Body', primaryRows: 10 },
-    Comments: { kind: 'simple', endpoint: '/api/messaging/comments', primaryKey: 'comment', primaryLabel: 'Body', primaryRows: 6 },
-    Hashtags: { kind: 'simple', endpoint: '/api/messaging/hashtags', primaryKey: 'hashtag', primaryLabel: 'Body', primaryRows: 4 },
-    'Calls to Action': { kind: 'simple', endpoint: '/api/messaging/ctas', primaryKey: 'cta', primaryLabel: 'Body', primaryRows: 4 },
-    Articles: { kind: 'longform', endpoint: '/api/messaging/articles', bodyLabel: 'Body' },
-    Reports: { kind: 'pdfLongform', endpoint: '/api/messaging/reports', bodyLabel: 'Body' },
-    'White Papers': { kind: 'pdfLongform', endpoint: '/api/messaging/white-papers', bodyLabel: 'Body' },
-    eBooks: { kind: 'pdfLongform', endpoint: '/api/messaging/ebooks', bodyLabel: 'Body' },
+    Headlines: { kind: 'simple', endpoint: '/api/messaging/headlines', primaryKey: 'headline', primaryLabel: 'Headline', primaryRows: 3, fields: ['author', 'primary'] },
+    'Sub-headings': { kind: 'simple', endpoint: '/api/messaging/subheadings', primaryKey: 'subheading', primaryLabel: 'Sub-heading', primaryRows: 3, fields: ['author', 'primary'] },
+    Taglines: { kind: 'simple', endpoint: '/api/messaging/taglines', primaryKey: 'tagline', primaryLabel: 'Tagline', primaryRows: 3, fields: ['author', 'primary'] },
+    Pitches: { kind: 'simple', endpoint: '/api/messaging/pitches', primaryKey: 'pitch', primaryLabel: 'Pitch', primaryRows: 5, fields: ['author', 'primary'] },
+    Emails: { kind: 'simple', endpoint: '/api/messaging/emails', primaryKey: 'email', primaryLabel: 'Email Body', primaryRows: 12, fields: ['author', 'subject', 'primary'] },
+    Tweets: { kind: 'tweet', endpoint: '/api/messaging/tweets', primaryKey: 'content', primaryLabel: 'Tweet', primaryRows: 6, fields: ['author', 'primary', 'url', 'hashtags', 'image'] },
+    Posts: { kind: 'simple', endpoint: '/api/messaging/posts', primaryKey: 'post', primaryLabel: 'Post', primaryRows: 6, fields: ['author', 'primary', 'url', 'image'] },
+    Descriptions: { kind: 'simple', endpoint: '/api/messaging/descriptions', primaryKey: 'description', primaryLabel: 'Description', primaryRows: 6, fields: ['author', 'primary'] },
+    Transcripts: { kind: 'simple', endpoint: '/api/messaging/transcripts', primaryKey: 'transcript', primaryLabel: 'Transcript', primaryRows: 10, fields: ['author', 'primary', 'url'] },
+    Comments: { kind: 'simple', endpoint: '/api/messaging/comments', primaryKey: 'comment', primaryLabel: 'Comment', primaryRows: 6, fields: ['author', 'primary', 'url'] },
+    Hashtags: { kind: 'simple', endpoint: '/api/messaging/hashtags', primaryKey: 'hashtag', primaryLabel: 'Hashtags', primaryRows: 4, fields: ['author', 'primary'] },
+    'Calls to Action': { kind: 'simple', endpoint: '/api/messaging/ctas', primaryKey: 'cta', primaryLabel: 'CTA', primaryRows: 4, fields: ['author', 'primary', 'url'] },
+    Articles: { kind: 'longform', endpoint: '/api/messaging/articles', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body'] },
+    Reports: { kind: 'pdfLongform', endpoint: '/api/messaging/reports', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body', 'pdf'] },
+    'White Papers': { kind: 'pdfLongform', endpoint: '/api/messaging/white-papers', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body', 'pdf'] },
+    eBooks: { kind: 'pdfLongform', endpoint: '/api/messaging/ebooks', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body', 'pdf'] },
   };
 
   function thumbnailOptionLabel(asset) {
@@ -2531,15 +2531,14 @@ App.messaging = (function () {
     const bodyLabel = document.getElementById('messagingCreateContentBodyLabel');
     const bodyInput = document.getElementById('messagingCreateContentBody');
     const thumbnailLabel = document.getElementById('messagingCreateContentThumbnailLabel');
-    const isSimple = schema?.kind === 'simple';
-    const isTweet = schema?.kind === 'tweet';
+    const visibleFields = Array.isArray(schema?.fields) ? schema.fields : [];
+    const hasField = (name) => visibleFields.includes(name);
     const isLongform = schema?.kind === 'longform' || schema?.kind === 'pdfLongform';
-    const isPdfLongform = schema?.kind === 'pdfLongform';
 
     // Reset irrelevant values when switching formats so the visible form stays truthful.
     [
-      'messagingCreateContentPlatform',
       'messagingCreateContentAuthor',
+      'messagingCreateContentSubject',
       'messagingCreateContentTitle',
       'messagingCreateContentSubtitle',
       'messagingCreateContentUrl',
@@ -2559,21 +2558,21 @@ App.messaging = (function () {
       }
     });
 
-    setCreateContentFieldVisible('messagingCreateContentPrimaryRow', isSimple || isTweet);
-    setCreateContentFieldVisible('messagingCreateContentPlatformRow', false);
-    setCreateContentFieldVisible('messagingCreateContentAuthorRow', false);
-    setCreateContentFieldVisible('messagingCreateContentTitleRow', isLongform);
-    setCreateContentFieldVisible('messagingCreateContentSubtitleRow', isLongform);
-    setCreateContentFieldVisible('messagingCreateContentUrlRow', isTweet || isLongform);
-    setCreateContentFieldVisible('messagingCreateContentHashtagsRow', isTweet);
-    setCreateContentFieldVisible('messagingCreateContentImageRow', isTweet);
-    setCreateContentFieldVisible('messagingCreateContentThumbnailRow', isLongform);
-    setCreateContentFieldVisible('messagingCreateContentBodyRow', isLongform);
-    setCreateContentFieldVisible('messagingCreateContentPdfRow', isPdfLongform);
+    setCreateContentFieldVisible('messagingCreateContentPrimaryRow', hasField('primary'));
+    setCreateContentFieldVisible('messagingCreateContentAuthorRow', hasField('author'));
+    setCreateContentFieldVisible('messagingCreateContentSubjectRow', hasField('subject'));
+    setCreateContentFieldVisible('messagingCreateContentTitleRow', hasField('title'));
+    setCreateContentFieldVisible('messagingCreateContentSubtitleRow', hasField('subtitle'));
+    setCreateContentFieldVisible('messagingCreateContentUrlRow', hasField('url'));
+    setCreateContentFieldVisible('messagingCreateContentHashtagsRow', hasField('hashtags'));
+    setCreateContentFieldVisible('messagingCreateContentImageRow', hasField('image'));
+    setCreateContentFieldVisible('messagingCreateContentThumbnailRow', hasField('thumbnail'));
+    setCreateContentFieldVisible('messagingCreateContentBodyRow', hasField('body'));
+    setCreateContentFieldVisible('messagingCreateContentPdfRow', hasField('pdf'));
 
-    if (primaryLabel) primaryLabel.textContent = `${schema?.primaryLabel || 'Body'}:`;
+    if (primaryLabel) primaryLabel.textContent = `${schema?.primaryLabel || 'Content'}:`;
     if (primaryInput) {
-      primaryInput.placeholder = schema?.primaryLabel ? `Enter ${schema.primaryLabel.toLowerCase()}` : 'Enter body';
+      primaryInput.placeholder = schema?.primaryLabel ? `Enter ${schema.primaryLabel.toLowerCase()}` : 'Enter content';
       primaryInput.rows = Number(schema?.primaryRows || 5);
     }
     if (bodyLabel) bodyLabel.textContent = isLongform ? `${schema?.bodyLabel || 'Body'}:` : 'Body:';
@@ -2581,7 +2580,7 @@ App.messaging = (function () {
       bodyInput.placeholder = isLongform ? String(schema?.bodyLabel || 'Body') : 'Body';
       bodyInput.rows = isLongform ? 10 : 6;
     }
-    if (thumbnailLabel) thumbnailLabel.textContent = isLongform ? 'Image:' : 'Image:';
+    if (thumbnailLabel) thumbnailLabel.textContent = 'Image:';
   }
 
   async function submitCreateContentForm(event) {
@@ -2606,6 +2605,18 @@ App.messaging = (function () {
       }
       payload[schema.primaryKey] = value;
       payload.category = topic;
+      if (schema.fields.includes('author')) {
+        payload.author = String(formData.get('author') || '').trim();
+      }
+      if (schema.fields.includes('subject')) {
+        payload.subject = String(formData.get('subject') || '').trim();
+      }
+      if (schema.fields.includes('url')) {
+        payload.url = String(formData.get('url') || '').trim();
+      }
+      if (schema.fields.includes('image')) {
+        payload.image_asset_id = String(formData.get('image_asset_id') || '').trim();
+      }
     } else if (schema.kind === 'tweet') {
       const content = String(formData.get('primary') || '').trim();
       if (!content) {
@@ -2613,11 +2624,13 @@ App.messaging = (function () {
         return false;
       }
       payload.content = content;
+      payload.author = String(formData.get('author') || '').trim();
       payload.url = String(formData.get('url') || '').trim();
       payload.hashtags = String(formData.get('hashtags') || '').trim();
       payload.image_asset_id = String(formData.get('image_asset_id') || '').trim();
       payload.category = topic;
     } else if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
+      payload.author = String(formData.get('author') || '').trim();
       payload.title = String(formData.get('title') || '').trim();
       payload.subtitle = String(formData.get('subtitle') || '').trim();
       payload.url = String(formData.get('url') || '').trim();
