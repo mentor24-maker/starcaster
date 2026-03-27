@@ -304,7 +304,7 @@ App.messaging = (function () {
       select.innerHTML = '';
       const placeholder = document.createElement('option');
       placeholder.value = '';
-      placeholder.textContent = isFilter ? 'All Categories' : 'No Category';
+      placeholder.textContent = isFilter ? 'All Formats' : 'No Format';
       select.appendChild(placeholder);
       uniqueNames.forEach((name) => {
         const option = document.createElement('option');
@@ -352,7 +352,7 @@ App.messaging = (function () {
         <div class="page-heading-row">
           <h2>Messaging: ${config.pluralLabel}</h2>
           <div class="page-heading-actions">
-            <button id="${ids.categoryBtnId}" type="button">Categories</button>
+            <button id="${ids.categoryBtnId}" type="button">Formats</button>
             <button id="${ids.toggleBtnId}" type="button">Create ${config.pluralLabel}</button>
             <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
@@ -364,7 +364,7 @@ App.messaging = (function () {
             <form id="${ids.formId}" class="stack-form">
               <h3>Single Create</h3>
               <select id="${ids.formCategorySelectId}" name="category" data-messaging-category-select="true">
-                <option value="">No Category</option>
+                <option value="">No Format</option>
               </select>
               <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
               <button type="submit">Save ${config.singularLabel}</button>
@@ -373,7 +373,7 @@ App.messaging = (function () {
             <form id="${ids.bulkCreateFormId}" class="stack-form">
               <h3>Multiple Create</h3>
               <select id="${ids.bulkCreateCategorySelectId}" name="category" data-messaging-category-select="true">
-                <option value="">No Category</option>
+                <option value="">No Format</option>
               </select>
               <textarea name="${config.field}_text" rows="8" placeholder="Paste multiple ${config.pluralLower}, one per line"></textarea>
               <button type="submit">Create Multiple ${config.pluralLabel}</button>
@@ -388,7 +388,7 @@ App.messaging = (function () {
             <button id="${ids.cancelEditBtnId}" type="button">Cancel Edit</button>
           </div>
           <select id="${ids.editCategorySelectId}" name="category" data-messaging-category-select="true">
-            <option value="">No Category</option>
+            <option value="">No Format</option>
           </select>
           <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
           <button type="submit">Update ${config.singularLabel}</button>
@@ -403,7 +403,7 @@ App.messaging = (function () {
                 <th><input id="${ids.textFilterId}" placeholder="Filter ${config.singularLower}" /></th>
                 <th>
                   <select id="${ids.categoryFilterId}" data-messaging-category-select="true" data-messaging-category-role="filter">
-                    <option value="">All Categories</option>
+                    <option value="">All Formats</option>
                   </select>
                 </th>
                 <th></th>
@@ -413,7 +413,7 @@ App.messaging = (function () {
               <tr>
                 <th></th>
                 <th><button id="${ids.sortTextBtnId}" type="button" class="tiny-btn">${config.singularLabel}</button></th>
-                <th><button id="${ids.sortCategoryBtnId}" type="button" class="tiny-btn">Category</button></th>
+                <th><button id="${ids.sortCategoryBtnId}" type="button" class="tiny-btn">Format</button></th>
                 <th><button id="${ids.sortCreatedBtnId}" type="button" class="tiny-btn">Created</button></th>
                 <th><button id="${ids.sortUpdatedBtnId}" type="button" class="tiny-btn">Updated</button></th>
                 <th>Actions</th>
@@ -435,9 +435,9 @@ App.messaging = (function () {
         <p id="${ids.bulkSummaryId}">No ${config.pluralLower} selected.</p>
         <form id="${ids.bulkEditFormId}" class="stack-form labeled-form">
           <div class="stack-form">
-            <label for="${ids.bulkEditCategorySelectId}">Category</label>
+            <label for="${ids.bulkEditCategorySelectId}">Format</label>
             <select id="${ids.bulkEditCategorySelectId}" name="category" data-messaging-category-select="true">
-              <option value="">No Category</option>
+              <option value="">No Format</option>
             </select>
           </div>
           <button type="submit">Apply To Selected ${config.pluralLabel}</button>
@@ -2385,17 +2385,41 @@ App.messaging = (function () {
     App.setActivePage(target);
   }
 
+  function renderMessagingContentFormatFilter() {
+    const select = document.getElementById('messagingContentFormatFilter');
+    if (!select) return;
+    const currentValue = String(select.value || '').trim();
+    const formats = messagingContentLibraryEntries
+      .map((entry) => String(entry.type || '').trim())
+      .filter(Boolean)
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+      .sort((a, b) => a.localeCompare(b));
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'All Formats';
+    select.appendChild(placeholder);
+    formats.forEach((format) => {
+      const option = document.createElement('option');
+      option.value = format;
+      option.textContent = format;
+      select.appendChild(option);
+    });
+    if (currentValue && formats.includes(currentValue)) {
+      select.value = currentValue;
+    }
+  }
+
   function getFilteredMessagingContentLibraryRows() {
-    const searchInput = document.getElementById('messagingContentTypeSearch');
+    const formatSelect = document.getElementById('messagingContentFormatFilter');
     const familySelect = document.getElementById('messagingContentFamilyFilter');
-    const search = String(searchInput && searchInput.value ? searchInput.value : '').trim().toLowerCase();
+    const format = String(formatSelect && formatSelect.value ? formatSelect.value : '').trim();
     const family = String(familySelect && familySelect.value ? familySelect.value : '').trim();
     return messagingContentLibraryEntries
       .filter((entry) => {
         if (family && String(entry.family || '') !== family) return false;
-        if (!search) return true;
-        const haystack = `${entry.type} ${entry.family} ${entry.destination}`.toLowerCase();
-        return haystack.includes(search);
+        if (format && String(entry.type || '') !== format) return false;
+        return true;
       })
       .sort((a, b) => {
         const left = String(a.type || '').toLowerCase();
@@ -2407,13 +2431,14 @@ App.messaging = (function () {
   function renderMessagingContentLibraryTable() {
     const tbody = document.getElementById('messagingContentLibraryTable');
     if (!tbody) return;
+    renderMessagingContentFormatFilter();
     const rows = getFilteredMessagingContentLibraryRows();
     tbody.innerHTML = '';
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 4;
-      td.textContent = 'No content types match current filters.';
+      td.textContent = 'No content formats match current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
@@ -3297,7 +3322,7 @@ App.messaging = (function () {
 
   function init() {
     ensureSimpleContentPages();
-    const messagingContentTypeSearch = document.getElementById('messagingContentTypeSearch');
+    const messagingContentFormatFilter = document.getElementById('messagingContentFormatFilter');
     const messagingContentFamilyFilter = document.getElementById('messagingContentFamilyFilter');
     const messagingContentFiltersGoBtn = document.getElementById('messagingContentFiltersGoBtn');
     const headlinesCreateWrap = document.getElementById('messagingHeadlinesCreateWrap');
@@ -3386,8 +3411,8 @@ App.messaging = (function () {
     const messagingCategoryEditForm = document.getElementById('messagingCategoryEditForm');
     const messagingCategorySortBtn = document.getElementById('messagingCategoriesSortBtn');
 
-    if (messagingContentTypeSearch) {
-      messagingContentTypeSearch.addEventListener('input', function () {
+    if (messagingContentFormatFilter) {
+      messagingContentFormatFilter.addEventListener('change', function () {
         renderMessagingContentLibraryTable();
       });
     }

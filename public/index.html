@@ -2716,7 +2716,11 @@
           <table>
             <thead>
               <tr class="contacts-filter-row">
-                <th><input id="messagingContentTypeSearch" placeholder="Content Type" /></th>
+                <th>
+                  <select id="messagingContentFormatFilter">
+                    <option value="">All Formats</option>
+                  </select>
+                </th>
                 <th>
                   <select id="messagingContentFamilyFilter">
                     <option value="">All Families</option>
@@ -2734,7 +2738,7 @@
                 </th>
               </tr>
               <tr>
-                <th>Type</th>
+                <th>Format</th>
                 <th>Family</th>
                 <th>Destination</th>
                 <th class="messaging-content-actions-heading">Actions</th>
