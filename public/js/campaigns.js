@@ -7,6 +7,7 @@ App.campaigns = (function () {
   let builderHashtags = [];
   let builderEmails = [];
   let builderEmailTemplates = [];
+  let editingCampaignId = '';
 
   function byId(id) {
     return document.getElementById(id);
@@ -309,8 +310,107 @@ App.campaigns = (function () {
       ctaTd.textContent = safeText(config?.ctaLabel) || '-';
       tr.appendChild(ctaTd);
 
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'campaign-actions-cell';
+      const editBtn = App.makeIconButton('edit', 'Edit Campaign', () => {
+        openCampaignEditor(campaign);
+      });
+      const cloneBtn = App.makeIconButton('copy', 'Clone Campaign', () => {
+        cloneCampaign(campaign);
+      }, { marginLeft: '8px' });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Campaign', async () => {
+        if (!confirm(`Delete campaign "${safeText(campaign.name) || campaign.id}"?`)) return;
+        try {
+          await api(`/api/campaigns/${encodeURIComponent(campaign.id)}`, { method: 'DELETE' });
+          notify('Campaign deleted');
+          await loadBuilderSources();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
+      actionsTd.appendChild(deleteBtn);
+      tr.appendChild(actionsTd);
+
       tbody.appendChild(tr);
     });
+  }
+
+  function setCampaignFormMode(isEditing) {
+    const toggleBtn = byId('campaignToggleFormBtn');
+    const submitBtn = byId('campaignSubmitBtn');
+    if (submitBtn) submitBtn.textContent = isEditing ? 'Update Campaign' : 'Create Campaign';
+    if (toggleBtn) toggleBtn.textContent = isEditing ? 'Hide Form' : 'Add Campaign';
+  }
+
+  function applySelectValue(select, value) {
+    if (!select) return;
+    const desired = safeText(value);
+    if (!desired) {
+      select.value = '';
+      return;
+    }
+    if (Array.from(select.options).some((option) => String(option.value) === desired)) {
+      select.value = desired;
+    }
+  }
+
+  function ensureCampaignFormVisible() {
+    const form = byId('campaignForm');
+    if (!form) return;
+    form.classList.remove('hidden');
+    if (typeof form.scrollIntoView === 'function') {
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function populateCampaignForm(campaign, cloneMode = false) {
+    const form = byId('campaignForm');
+    if (!form || !campaign) return;
+    const config = parseCampaignConfig(campaign) || {};
+    editingCampaignId = cloneMode ? '' : safeText(campaign.id);
+    const idInput = byId('campaignIdInput');
+    if (idInput) idInput.value = editingCampaignId;
+    form.elements.name.value = cloneMode ? `${safeText(campaign.name)} Copy`.trim() : safeText(campaign.name);
+    form.elements.status.value = safeText(campaign.status) || 'pending';
+    applySelectValue(byId('campaignChannelSelect'), config.channelId);
+    applySelectValue(byId('campaignSegmentSelect'), config.segmentId || campaign.segmentId);
+    applySelectValue(byId('campaignEmailTemplateSelect'), config.emailTemplateId);
+    applySelectValue(byId('campaignEmailSelect'), config.emailId);
+    applySelectValue(byId('campaignLandingPageSelect'), config.landingPageId);
+    applySelectValue(byId('campaignFormObjectSelect'), config.formObjectId);
+    applySelectValue(byId('campaignHeadlineSelect'), config.headlineId);
+    applySelectValue(byId('campaignBlurbSelect'), config.blurbId);
+    applySelectValue(byId('campaignPitchSelect'), config.pitchId);
+    applySelectValue(byId('campaignSubheadingSelect'), config.subheadingId);
+    applySelectValue(byId('campaignTaglineSelect'), config.taglineId);
+    applySelectValue(byId('campaignArticleSelect'), config.articleId);
+    applySelectValue(byId('campaignReportSelect'), config.reportId);
+    applySelectValue(byId('campaignWhitePaperSelect'), config.whitePaperId);
+    applySelectValue(byId('campaignEbookSelect'), config.ebookId);
+    applySelectValue(byId('campaignPostSelect'), config.postId);
+    applySelectValue(byId('campaignDescriptionSelect'), config.descriptionId);
+    applySelectValue(byId('campaignTranscriptSelect'), config.transcriptId);
+    applySelectValue(byId('campaignCommentSelect'), config.commentId);
+    applySelectValue(byId('campaignTweetSelect'), config.tweetId);
+    applySelectValue(byId('campaignCtaSelect'), config.ctaId);
+    applySelectValue(byId('campaignPrimaryImageSelect'), config.primaryImageId);
+    applySelectValue(byId('campaignPrimaryVideoSelect'), config.primaryVideoId);
+    const hashtagsField = byId('campaignHashtagGroupSelect');
+    if (hashtagsField) hashtagsField.value = safeText(config.hashtagGroupLabel || '');
+    setCampaignFormMode(!cloneMode);
+    ensureCampaignFormVisible();
+  }
+
+  async function openCampaignEditor(campaign) {
+    await loadBuilderSources();
+    populateCampaignForm(campaign, false);
+  }
+
+  async function cloneCampaign(campaign) {
+    await loadBuilderSources();
+    populateCampaignForm(campaign, true);
   }
 
   function selectedOptionText(select) {
@@ -328,6 +428,12 @@ App.campaigns = (function () {
         const isHidden = form.classList.contains('hidden');
         form.classList.toggle('hidden', !isHidden);
         toggleBtn.textContent = isHidden ? 'Hide Form' : 'Add Campaign';
+        if (!isHidden) {
+          editingCampaignId = '';
+          const idInput = byId('campaignIdInput');
+          if (idInput) idInput.value = '';
+          setCampaignFormMode(false);
+        }
         if (isHidden) {
           await loadBuilderSources();
         }
@@ -402,13 +508,22 @@ App.campaigns = (function () {
         }
 
         try {
-          await api('/api/campaigns', { method: 'POST', body: JSON.stringify(payload) });
+          const isEditing = Boolean(editingCampaignId);
+          if (editingCampaignId) {
+            await api(`/api/campaigns/${encodeURIComponent(editingCampaignId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+          } else {
+            await api('/api/campaigns', { method: 'POST', body: JSON.stringify(payload) });
+          }
           form.reset();
+          editingCampaignId = '';
+          const idInput = byId('campaignIdInput');
+          if (idInput) idInput.value = '';
+          setCampaignFormMode(false);
           renderBuilderSelects();
           form.classList.add('hidden');
           if (toggleBtn) toggleBtn.textContent = 'Add Campaign';
-          notify('Campaign created');
-          await App.refresh();
+          notify(isEditing ? 'Campaign updated' : 'Campaign created');
+          await loadBuilderSources();
         } catch (err) {
           notify(err.message, true);
         }

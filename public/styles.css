@@ -1115,6 +1115,11 @@ th {
   white-space: nowrap;
 }
 
+.campaign-actions-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
 .hidden {
   display: none;
 }

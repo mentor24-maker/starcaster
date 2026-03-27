@@ -19,7 +19,7 @@ const {
 } = require('../lib/ContactsStore');
 const {
   listSegments, createSegment, updateSegment, deleteSegment,
-  listCampaigns, createCampaign, updateCampaign,
+  listCampaigns, createCampaign, updateCampaign, deleteCampaign,
   listCampaignEvents, insertCampaignEvents,
   rowToCampaign,
 } = require('../lib/store');
@@ -114,6 +114,14 @@ const CAMPAIGN_CREATE_SCHEMA = {
   subject:   { type: 'string', required: true, minLength: 1, maxLength: 500 },
   content:   { type: 'string', required: true, minLength: 1 },
   segmentId: { type: 'string', required: false, default: '' },
+};
+
+const CAMPAIGN_UPDATE_SCHEMA = {
+  name:      { type: 'string', required: false, minLength: 1, maxLength: 200 },
+  subject:   { type: 'string', required: false, minLength: 1, maxLength: 500 },
+  content:   { type: 'string', required: false, minLength: 1 },
+  segmentId: { type: 'string', required: false },
+  status:    { type: 'string', required: false, maxLength: 100 },
 };
 
 // ---------------------------------------------------------------------------
@@ -675,6 +683,34 @@ async function handleCampaigns(req, res, pathname, method) {
     const campaign = rowToCampaign(created);
     logActivity({ action: 'campaign.created', entityType: 'campaign', entityId: created.id, summary: `Campaign created: "${v.data.name}"` });
     return sendOk(res, 201, campaign, { campaign }), true;
+  }
+
+  const campaignMatch = pathname.match(/^\/api\/campaigns\/([^/]+)$/);
+  if (campaignMatch && method === 'PATCH') {
+    const campaignId = campaignMatch[1];
+    const body = await parseJsonBody(req);
+    const v = validate(CAMPAIGN_UPDATE_SCHEMA, body);
+    if (!v.ok) return sendErr(res, 400, v.errors[0], { code: 'VALIDATION_ERROR', details: v.errors }), true;
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(v.data, 'name')) patch.name = v.data.name;
+    if (Object.prototype.hasOwnProperty.call(v.data, 'subject')) patch.subject = v.data.subject;
+    if (Object.prototype.hasOwnProperty.call(v.data, 'content')) patch.content = v.data.content;
+    if (Object.prototype.hasOwnProperty.call(v.data, 'segmentId')) patch.segment_id = v.data.segmentId || null;
+    if (Object.prototype.hasOwnProperty.call(v.data, 'status')) patch.status = v.data.status;
+    const result = await updateCampaign(campaignId, patch, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const updated = Array.isArray(result.data) ? result.data[0] : result.data;
+    const campaign = rowToCampaign(updated);
+    logActivity({ action: 'campaign.updated', entityType: 'campaign', entityId: campaignId, summary: `Campaign updated: "${campaign.name}"` });
+    return sendOk(res, 200, campaign, { campaign }), true;
+  }
+
+  if (campaignMatch && method === 'DELETE') {
+    const campaignId = campaignMatch[1];
+    const result = await deleteCampaign(campaignId, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    logActivity({ action: 'campaign.deleted', entityType: 'campaign', entityId: campaignId, summary: `Campaign deleted: ${campaignId}` });
+    return sendOk(res, 200, { ok: true }, { ok: true }), true;
   }
 
   const sendMatch = pathname.match(/^\/api\/campaigns\/([^/]+)\/send$/);
