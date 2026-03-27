@@ -233,6 +233,24 @@ App.messaging = (function () {
       sort: { key: 'created_at', dir: 'desc' },
     }
   ]));
+  const messagingContentLibraryEntries = [
+    { type: 'Headlines', family: 'Short Form', destination: 'Headlines Editor', pageId: 'messagingHeadlinesPage' },
+    { type: 'Sub-headings', family: 'Short Form', destination: 'Sub-headings Editor', pageId: 'messagingSubheadingsPage' },
+    { type: 'Taglines', family: 'Short Form', destination: 'Taglines Editor', pageId: 'messagingTaglinesPage' },
+    { type: 'Pitches', family: 'Short Form', destination: 'Pitches Editor', pageId: 'messagingPitchesPage' },
+    { type: 'Emails', family: 'Email', destination: 'Emails Editor', pageId: 'messagingEmailsPage' },
+    { type: 'Tweets', family: 'Social', destination: 'Tweets Editor', pageId: 'messagingTweetsPage' },
+    { type: 'Posts', family: 'Social', destination: 'Posts Editor', pageId: 'messagingPostsPage' },
+    { type: 'Articles', family: 'Long Form', destination: 'Articles Editor', pageId: 'messagingArticlesPage' },
+    { type: 'Reports', family: 'Long Form', destination: 'Reports Editor', pageId: 'messagingReportsPage' },
+    { type: 'White Papers', family: 'Long Form', destination: 'White Papers Editor', pageId: 'messagingWhitePapersPage' },
+    { type: 'eBooks', family: 'Long Form', destination: 'eBooks Editor', pageId: 'messagingEbooksPage' },
+    { type: 'Descriptions', family: 'Support Copy', destination: 'Descriptions Editor', pageId: 'messagingDescriptionsPage' },
+    { type: 'Transcripts', family: 'Support Copy', destination: 'Transcripts Editor', pageId: 'messagingTranscriptsPage' },
+    { type: 'Comments', family: 'Support Copy', destination: 'Comments Editor', pageId: 'messagingCommentsPage' },
+    { type: 'Hashtags', family: 'Support Copy', destination: 'Hashtags Editor', pageId: 'messagingHashtagsPage' },
+    { type: 'Calls to Action', family: 'Support Copy', destination: 'Calls to Action Editor', pageId: 'messagingCtasPage' },
+  ];
 
   function thumbnailOptionLabel(asset) {
     const name = String(asset.assetName || '').trim() || '(unnamed)';
@@ -336,7 +354,7 @@ App.messaging = (function () {
           <div class="page-heading-actions">
             <button id="${ids.categoryBtnId}" type="button">Categories</button>
             <button id="${ids.toggleBtnId}" type="button">Create ${config.pluralLabel}</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable ${config.pluralLower} that can later be assigned to campaigns and other messaging workflows.</p>
@@ -2308,6 +2326,8 @@ App.messaging = (function () {
     activeMessagingContentCategory = '';
     updateMessagingContentFilterBar();
     App.setActivePage('messagingContentPage');
+    renderMessagingContentLibraryTable();
+    return false;
   }
 
   function setTopicsCreateVisible(visible) {
@@ -2361,6 +2381,58 @@ App.messaging = (function () {
     if (!target) return;
     applyMessagingCategoryFilterToTarget(target, activeMessagingContentCategory);
     App.setActivePage(target);
+  }
+
+  function getFilteredMessagingContentLibraryRows() {
+    const searchInput = document.getElementById('messagingContentTypeSearch');
+    const familySelect = document.getElementById('messagingContentFamilyFilter');
+    const search = String(searchInput && searchInput.value ? searchInput.value : '').trim().toLowerCase();
+    const family = String(familySelect && familySelect.value ? familySelect.value : '').trim();
+    return messagingContentLibraryEntries
+      .filter((entry) => {
+        if (family && String(entry.family || '') !== family) return false;
+        if (!search) return true;
+        const haystack = `${entry.type} ${entry.family} ${entry.destination}`.toLowerCase();
+        return haystack.includes(search);
+      })
+      .sort((a, b) => {
+        const left = String(a.type || '').toLowerCase();
+        const right = String(b.type || '').toLowerCase();
+        return left.localeCompare(right);
+      });
+  }
+
+  function renderMessagingContentLibraryTable() {
+    const tbody = document.getElementById('messagingContentLibraryTable');
+    if (!tbody) return;
+    const rows = getFilteredMessagingContentLibraryRows();
+    tbody.innerHTML = '';
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = 'No content types match current filters.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    rows.forEach((entry) => {
+      const tr = document.createElement('tr');
+      [entry.type, entry.family, entry.destination].forEach((value) => {
+        const td = document.createElement('td');
+        td.textContent = value;
+        tr.appendChild(td);
+      });
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'messaging-content-actions-cell';
+      const openBtn = App.makeIconButton('edit', `Open ${entry.type}`, function () {
+        openContentTarget(entry.pageId);
+      });
+      actionsTd.appendChild(openBtn);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
   }
 
   function renderMessagingCategoriesMap(categories) {
@@ -3186,6 +3258,9 @@ App.messaging = (function () {
 
   function init() {
     ensureSimpleContentPages();
+    const messagingContentTypeSearch = document.getElementById('messagingContentTypeSearch');
+    const messagingContentFamilyFilter = document.getElementById('messagingContentFamilyFilter');
+    const messagingContentFiltersGoBtn = document.getElementById('messagingContentFiltersGoBtn');
     const headlinesCreateWrap = document.getElementById('messagingHeadlinesCreateWrap');
     const headlinesToggleBtn = document.getElementById('messagingHeadlinesToggleFormBtn');
     const headlineForm = document.getElementById('messagingHeadlineForm');
@@ -3271,6 +3346,22 @@ App.messaging = (function () {
     const messagingCategoryForm = document.getElementById('messagingCategoryForm');
     const messagingCategoryEditForm = document.getElementById('messagingCategoryEditForm');
     const messagingCategorySortBtn = document.getElementById('messagingCategoriesSortBtn');
+
+    if (messagingContentTypeSearch) {
+      messagingContentTypeSearch.addEventListener('input', function () {
+        renderMessagingContentLibraryTable();
+      });
+    }
+    if (messagingContentFamilyFilter) {
+      messagingContentFamilyFilter.addEventListener('change', function () {
+        renderMessagingContentLibraryTable();
+      });
+    }
+    if (messagingContentFiltersGoBtn) {
+      messagingContentFiltersGoBtn.addEventListener('click', function () {
+        renderMessagingContentLibraryTable();
+      });
+    }
 
     bindSortableTableButtons([
       { id: 'messagingArticlesSortPublishBtn', key: 'publish_date', defaultDir: 'desc' },
@@ -4452,7 +4543,7 @@ App.messaging = (function () {
   }
 
   return {
-    manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingArticlesPage', pagePrefixes: ['messaging'] },
+    manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingContentPage', pagePrefixes: ['messaging'] },
     init,
     openCategoriesLanding,
     openTopicsPage,
@@ -4465,11 +4556,13 @@ App.messaging = (function () {
     submitTopicEdit,
     refresh: function () {
       return loadThumbnailOptions().then(function () {
+        renderMessagingContentLibraryTable();
         return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]);
       });
     },
     onPageActivated: function () {
       return loadThumbnailOptions().then(function () {
+        renderMessagingContentLibraryTable();
         return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]);
       });
     }
