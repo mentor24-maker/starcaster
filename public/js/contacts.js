@@ -374,6 +374,21 @@ App.contacts = (function () {
   }
 
   function appendContactCell(td, key, value) {
+    if (key === 'website') {
+      const text = String(value || '').trim();
+      const href = text
+        ? (/^https?:\/\//i.test(text) ? text : `https://${text.replace(/^\/+/, '')}`)
+        : '';
+      if (href) {
+        const link = document.createElement('a');
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = text;
+        td.appendChild(link);
+        return;
+      }
+    }
     if (SOCIAL_FIELD_KEYS.has(key)) {
       const href = socialLinkHref(key, value);
       if (href) {
@@ -1100,6 +1115,7 @@ App.contacts = (function () {
         .filter((contact) => contactPassesContactFilters(contact, state.contactsFilters))
         .forEach((contact) => {
           const tr = document.createElement('tr');
+          tr.appendChild(document.createElement('td'));
           ['first_name', 'last_name', 'company', 'email', 'website', 'youtube', 'instagram'].forEach((key) => {
             const td = document.createElement('td');
             appendContactCell(td, key, contactValue(contact, key));
