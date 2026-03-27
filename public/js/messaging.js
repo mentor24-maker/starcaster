@@ -270,6 +270,24 @@ App.messaging = (function () {
     { format: 'Hashtags', pageId: 'messagingHashtagsPage', field: 'hashtag', source: () => simpleContentState.hashtags.items },
     { format: 'Calls to Action', pageId: 'messagingCtasPage', field: 'cta', source: () => simpleContentState.ctas.items },
   ];
+  const createContentFormatSchemas = {
+    Headlines: { kind: 'simple', endpoint: '/api/messaging/headlines', primaryKey: 'headline', primaryLabel: 'Headline', primaryRows: 3 },
+    'Sub-headings': { kind: 'simple', endpoint: '/api/messaging/subheadings', primaryKey: 'subheading', primaryLabel: 'Sub-heading', primaryRows: 3 },
+    Taglines: { kind: 'simple', endpoint: '/api/messaging/taglines', primaryKey: 'tagline', primaryLabel: 'Tagline', primaryRows: 3 },
+    Pitches: { kind: 'simple', endpoint: '/api/messaging/pitches', primaryKey: 'pitch', primaryLabel: 'Pitch', primaryRows: 5 },
+    Emails: { kind: 'simple', endpoint: '/api/messaging/emails', primaryKey: 'email', primaryLabel: 'Email Body', primaryRows: 12 },
+    Tweets: { kind: 'tweet', endpoint: '/api/messaging/tweets', primaryKey: 'content', primaryLabel: 'Tweet', primaryRows: 6 },
+    Posts: { kind: 'simple', endpoint: '/api/messaging/posts', primaryKey: 'post', primaryLabel: 'Post', primaryRows: 6 },
+    Descriptions: { kind: 'simple', endpoint: '/api/messaging/descriptions', primaryKey: 'description', primaryLabel: 'Description', primaryRows: 6 },
+    Transcripts: { kind: 'simple', endpoint: '/api/messaging/transcripts', primaryKey: 'transcript', primaryLabel: 'Transcript', primaryRows: 10 },
+    Comments: { kind: 'simple', endpoint: '/api/messaging/comments', primaryKey: 'comment', primaryLabel: 'Comment', primaryRows: 6 },
+    Hashtags: { kind: 'simple', endpoint: '/api/messaging/hashtags', primaryKey: 'hashtag', primaryLabel: 'Hashtag', primaryRows: 4 },
+    'Calls to Action': { kind: 'simple', endpoint: '/api/messaging/ctas', primaryKey: 'cta', primaryLabel: 'CTA', primaryRows: 4 },
+    Articles: { kind: 'longform', endpoint: '/api/messaging/articles' },
+    Reports: { kind: 'pdfLongform', endpoint: '/api/messaging/reports' },
+    'White Papers': { kind: 'pdfLongform', endpoint: '/api/messaging/white-papers' },
+    eBooks: { kind: 'pdfLongform', endpoint: '/api/messaging/ebooks' },
+  };
 
   function thumbnailOptionLabel(asset) {
     const name = String(asset.assetName || '').trim() || '(unnamed)';
@@ -2414,13 +2432,199 @@ App.messaging = (function () {
   }
 
   function openCreateContent() {
+    App.setActivePage('messagingCreateContentPage');
+    renderCreateContentFormatOptions();
+    renderCreateContentTopicOptions();
+    renderCreateContentAssetOptions();
     const activeFormat = String(document.getElementById('messagingContentFormatFilter')?.value || '').trim();
-    const targetEntry = messagingContentRegistry.find((entry) => String(entry.format || '').trim() === activeFormat);
-    if (targetEntry?.pageId) {
-      openContentTarget(targetEntry.pageId);
+    const formatSelect = document.getElementById('messagingCreateContentFormat');
+    if (formatSelect && activeFormat && Array.from(formatSelect.options).some((option) => option.value === activeFormat)) {
+      formatSelect.value = activeFormat;
+    }
+    renderCreateContentDynamicFields();
+    return false;
+  }
+
+  function createContentSchema(format) {
+    return createContentFormatSchemas[String(format || '').trim()] || null;
+  }
+
+  function setCreateContentFieldVisible(id, visible) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('hidden', !visible);
+  }
+
+  function renderCreateContentFormatOptions() {
+    const select = document.getElementById('messagingCreateContentFormat');
+    if (!select) return;
+    const currentValue = String(select.value || '').trim();
+    const formats = messagingContentRegistry
+      .map((entry) => String(entry.format || '').trim())
+      .filter((value, index, arr) => value && arr.indexOf(value) === index)
+      .filter((value) => Boolean(createContentSchema(value)))
+      .sort((a, b) => a.localeCompare(b));
+    select.innerHTML = '<option value="">Select Format</option>';
+    formats.forEach((format) => {
+      const option = document.createElement('option');
+      option.value = format;
+      option.textContent = format;
+      select.appendChild(option);
+    });
+    if (currentValue && formats.includes(currentValue)) select.value = currentValue;
+  }
+
+  function renderCreateContentTopicOptions() {
+    const select = document.getElementById('messagingCreateContentTopic');
+    if (!select) return;
+    const currentValue = String(select.value || '').trim();
+    const topics = currentMessagingCategories
+      .map((item) => String(item?.category || '').trim())
+      .filter(Boolean)
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+      .sort((a, b) => a.localeCompare(b));
+    select.innerHTML = '<option value="">No Topic</option>';
+    topics.forEach((topic) => {
+      const option = document.createElement('option');
+      option.value = topic;
+      option.textContent = topic;
+      select.appendChild(option);
+    });
+    if (currentValue && topics.includes(currentValue)) select.value = currentValue;
+  }
+
+  function renderCreateContentAssetOptions() {
+    renderImageOptions(document.getElementById('messagingCreateContentImage'));
+    renderThumbnailOptions(document.getElementById('messagingCreateContentThumbnail'));
+  }
+
+  function renderCreateContentDynamicFields() {
+    const format = String(document.getElementById('messagingCreateContentFormat')?.value || '').trim();
+    const schema = createContentSchema(format);
+    const primaryLabel = document.getElementById('messagingCreateContentPrimaryLabel');
+    const primaryInput = document.getElementById('messagingCreateContentPrimaryInput');
+    const bodyLabel = document.getElementById('messagingCreateContentBodyLabel');
+    const bodyInput = document.getElementById('messagingCreateContentBody');
+    const isSimple = schema?.kind === 'simple';
+    const isTweet = schema?.kind === 'tweet';
+    const isLongform = schema?.kind === 'longform' || schema?.kind === 'pdfLongform';
+    const isPdfLongform = schema?.kind === 'pdfLongform';
+
+    setCreateContentFieldVisible('messagingCreateContentPrimaryRow', isSimple || isTweet);
+    setCreateContentFieldVisible('messagingCreateContentPlatformRow', isLongform);
+    setCreateContentFieldVisible('messagingCreateContentAuthorRow', isLongform);
+    setCreateContentFieldVisible('messagingCreateContentPublishDateRow', isLongform);
+    setCreateContentFieldVisible('messagingCreateContentTitleRow', isLongform);
+    setCreateContentFieldVisible('messagingCreateContentSubtitleRow', isLongform);
+    setCreateContentFieldVisible('messagingCreateContentUrlRow', isTweet || isLongform);
+    setCreateContentFieldVisible('messagingCreateContentHashtagsRow', isTweet);
+    setCreateContentFieldVisible('messagingCreateContentImageRow', isTweet);
+    setCreateContentFieldVisible('messagingCreateContentThumbnailRow', isLongform);
+    setCreateContentFieldVisible('messagingCreateContentBodyRow', isLongform);
+    setCreateContentFieldVisible('messagingCreateContentPdfRow', isPdfLongform);
+
+    if (primaryLabel) primaryLabel.textContent = `${schema?.primaryLabel || 'Content'}:`;
+    if (primaryInput) {
+      primaryInput.placeholder = schema?.primaryLabel ? `Enter ${schema.primaryLabel}` : 'Enter content';
+      primaryInput.rows = Number(schema?.primaryRows || 5);
+    }
+    if (bodyLabel) bodyLabel.textContent = isLongform ? 'Content:' : 'Body:';
+    if (bodyInput) {
+      bodyInput.placeholder = isLongform ? 'Content' : 'Body';
+      bodyInput.rows = isLongform ? 10 : 6;
+    }
+  }
+
+  async function submitCreateContentForm(event) {
+    if (event) event.preventDefault();
+    const form = document.getElementById('messagingCreateContentForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const format = String(formData.get('format') || '').trim();
+    const topic = String(formData.get('topic') || '').trim();
+    const schema = createContentSchema(format);
+    if (!schema) {
+      notify('Select a format', true);
       return false;
     }
-    openManageContentLanding();
+
+    const payload = {};
+    if (schema.kind === 'simple') {
+      const value = String(formData.get('primary') || '').trim();
+      if (!value) {
+        notify(`${schema.primaryLabel} is required`, true);
+        return false;
+      }
+      payload[schema.primaryKey] = value;
+      payload.category = topic;
+    } else if (schema.kind === 'tweet') {
+      const content = String(formData.get('primary') || '').trim();
+      if (!content) {
+        notify('Tweet is required', true);
+        return false;
+      }
+      payload.content = content;
+      payload.url = String(formData.get('url') || '').trim();
+      payload.hashtags = String(formData.get('hashtags') || '').trim();
+      payload.image_asset_id = String(formData.get('image_asset_id') || '').trim();
+      payload.category = topic;
+    } else if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
+      payload.platform = String(formData.get('platform') || '').trim();
+      payload.author = String(formData.get('author') || '').trim();
+      payload.publish_date = String(formData.get('publish_date') || '').trim();
+      payload.title = String(formData.get('title') || '').trim();
+      payload.subtitle = String(formData.get('subtitle') || '').trim();
+      payload.url = String(formData.get('url') || '').trim();
+      payload.content = String(formData.get('content') || '').trim();
+      payload.thumbnail_asset_id = String(formData.get('thumbnail_asset_id') || '').trim();
+      if (!payload.title || !payload.content) {
+        notify('Title and content are required', true);
+        return false;
+      }
+      if (schema.kind === 'pdfLongform') {
+        const pdfFields = await getWhitePaperPdfFields(document.getElementById('messagingCreateContentPdf'));
+        payload.pdf_name = pdfFields.pdf_name;
+        payload.pdf_mime_type = pdfFields.pdf_mime_type;
+        payload.pdf_data_url = pdfFields.pdf_data_url;
+        if (!payload.url && !payload.pdf_data_url) {
+          notify('Provide a URL or upload a PDF', true);
+          return false;
+        }
+      }
+    }
+
+    try {
+      await api(schema.endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify(`${format} saved`);
+      const keepFormat = format;
+      const keepTopic = topic;
+      form.reset();
+      renderCreateContentFormatOptions();
+      renderCreateContentTopicOptions();
+      renderCreateContentAssetOptions();
+      const formatSelect = document.getElementById('messagingCreateContentFormat');
+      const topicSelect = document.getElementById('messagingCreateContentTopic');
+      if (formatSelect) formatSelect.value = keepFormat;
+      if (topicSelect && keepTopic) topicSelect.value = keepTopic;
+      renderCreateContentDynamicFields();
+      await Promise.all([
+        refreshHeadlines(),
+        refreshSubheadings(),
+        refreshTaglines(),
+        refreshPitches(),
+        refreshArticles(),
+        refreshReports(),
+        refreshWhitePapers(),
+        refreshEbooks(),
+        refreshAllSimpleContentPages(),
+      ]);
+      renderMessagingContentLibraryTable();
+    } catch (err) {
+      notify(err.message, true);
+    }
     return false;
   }
 
@@ -4448,6 +4652,15 @@ App.messaging = (function () {
       });
     }
 
+    const createContentFormat = document.getElementById('messagingCreateContentFormat');
+    const createContentForm = document.getElementById('messagingCreateContentForm');
+    if (createContentFormat) {
+      createContentFormat.addEventListener('change', renderCreateContentDynamicFields);
+    }
+    if (createContentForm) {
+      createContentForm.addEventListener('submit', submitCreateContentForm);
+    }
+
     if (toggleBtn && form) {
       toggleBtn.addEventListener('click', function () {
         const isHidden = form.classList.contains('hidden');
@@ -4725,6 +4938,7 @@ App.messaging = (function () {
     openManageContentLanding,
     openManageContentCategory,
     openContentTarget,
+    submitCreateContentForm,
     submitTopicCreate,
     submitTopicEdit,
     refresh: function () {
