@@ -1611,7 +1611,7 @@ App.messaging = (function () {
   function syncHeadlineSortLabels() {
     const config = [
       ['messagingHeadlinesSortHeadlineBtn', 'headline', 'Headline'],
-      ['messagingHeadlinesSortCategoryBtn', 'category', 'Category'],
+      ['messagingHeadlinesSortCategoryBtn', 'category', 'Format'],
       ['messagingHeadlinesSortCreatedBtn', 'created_at', 'Created'],
       ['messagingHeadlinesSortUpdatedBtn', 'updated_at', 'Updated'],
     ];
@@ -1791,7 +1791,7 @@ App.messaging = (function () {
   function syncSubheadingSortLabels() {
     const config = [
       ['messagingSubheadingsSortTextBtn', 'subheading', 'Sub-heading'],
-      ['messagingSubheadingsSortCategoryBtn', 'category', 'Category'],
+      ['messagingSubheadingsSortCategoryBtn', 'category', 'Format'],
       ['messagingSubheadingsSortCreatedBtn', 'created_at', 'Created'],
       ['messagingSubheadingsSortUpdatedBtn', 'updated_at', 'Updated'],
     ];
@@ -1971,7 +1971,7 @@ App.messaging = (function () {
   function syncTaglineSortLabels() {
     const config = [
       ['messagingTaglinesSortTextBtn', 'tagline', 'Tagline'],
-      ['messagingTaglinesSortCategoryBtn', 'category', 'Category'],
+      ['messagingTaglinesSortCategoryBtn', 'category', 'Format'],
       ['messagingTaglinesSortCreatedBtn', 'created_at', 'Created'],
       ['messagingTaglinesSortUpdatedBtn', 'updated_at', 'Updated'],
     ];
@@ -2151,7 +2151,7 @@ App.messaging = (function () {
   function syncPitchSortLabels() {
     const config = [
       ['messagingPitchesSortTextBtn', 'pitch', 'Pitch'],
-      ['messagingPitchesSortCategoryBtn', 'category', 'Category'],
+      ['messagingPitchesSortCategoryBtn', 'category', 'Format'],
       ['messagingPitchesSortCreatedBtn', 'created_at', 'Created'],
       ['messagingPitchesSortUpdatedBtn', 'updated_at', 'Updated'],
     ];
@@ -2280,12 +2280,12 @@ App.messaging = (function () {
     const clearBtn = document.getElementById('messagingContentClearFilterBtn');
     if (!bar || !label) return;
     if (!activeMessagingContentCategory) {
-      label.textContent = 'Category Filter: All Categories';
+      label.textContent = 'Format Filter: All Formats';
       bar.classList.remove('hidden');
       if (clearBtn) clearBtn.disabled = true;
       return;
     }
-    label.textContent = `Category Filter: ${activeMessagingContentCategory}`;
+    label.textContent = `Format Filter: ${activeMessagingContentCategory}`;
     bar.classList.remove('hidden');
     if (clearBtn) clearBtn.disabled = false;
   }
