@@ -1586,12 +1586,14 @@ App.messaging = (function () {
   function getFilteredSortedHeadlines() {
     const headlineFilter = String(headlineTableState.filters.headline || '').trim().toLowerCase();
     const categoryFilter = String(headlineTableState.filters.category || '').trim();
+    const formatFilter = String(document.getElementById('messagingHeadlinesFormatFilter')?.value || '').trim();
 
     const filtered = currentHeadlines.filter((item) => {
       const headline = String(item.headline || '').toLowerCase();
       const category = String(item.category || '').trim();
       if (headlineFilter && !headline.includes(headlineFilter)) return false;
       if (categoryFilter && category !== categoryFilter) return false;
+      if (formatFilter && formatFilter !== 'Headlines') return false;
       return true;
     });
 
@@ -1617,7 +1619,7 @@ App.messaging = (function () {
   function syncHeadlineSortLabels() {
     const config = [
       ['messagingHeadlinesSortHeadlineBtn', 'headline', 'Headline'],
-      ['messagingHeadlinesSortCategoryBtn', 'category', 'Format'],
+      ['messagingHeadlinesSortCategoryBtn', 'category', 'Topic'],
       ['messagingHeadlinesSortCreatedBtn', 'created_at', 'Created'],
       ['messagingHeadlinesSortUpdatedBtn', 'updated_at', 'Updated'],
     ];
@@ -1661,7 +1663,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 7;
       td.textContent = 'No headlines match current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -1687,6 +1689,7 @@ App.messaging = (function () {
       [
         String(item.headline || '').trim() || '-',
         String(item.category || '').trim() || '-',
+        'Headlines',
         item.created_at ? new Date(item.created_at).toLocaleString() : '-',
         item.updated_at ? new Date(item.updated_at).toLocaleString() : '-',
       ].forEach((value) => {
@@ -3353,6 +3356,7 @@ App.messaging = (function () {
     const headlinesBackFromBulkEditBtn = document.getElementById('messagingHeadlinesBackFromBulkEditBtn');
     const headlineFilterInput = document.getElementById('messagingHeadlinesHeadlineFilter');
     const headlineCategoryFilter = document.getElementById('messagingHeadlinesCategoryFilter');
+    const headlineFormatFilter = document.getElementById('messagingHeadlinesFormatFilter');
     const headlineBulkEditSummary = document.getElementById('messagingHeadlinesBulkEditSummary');
     const subheadingsCreateWrap = document.getElementById('messagingSubheadingsCreateWrap');
     const subheadingsToggleBtn = document.getElementById('messagingSubheadingsToggleFormBtn');
@@ -4206,6 +4210,12 @@ App.messaging = (function () {
     if (headlineCategoryFilter) {
       headlineCategoryFilter.addEventListener('change', function () {
         headlineTableState.filters.category = String(headlineCategoryFilter.value || '');
+        renderHeadlinesTable(currentHeadlines);
+      });
+    }
+
+    if (headlineFormatFilter) {
+      headlineFormatFilter.addEventListener('change', function () {
         renderHeadlinesTable(currentHeadlines);
       });
     }
