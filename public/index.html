@@ -105,11 +105,11 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link" data-page="assetsPage" onclick="App.assets.openAssetsLanding(); return false;">Assets</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="assetCategoriesPage">Categories</a>
-            <a href="#" class="menu-link submenu-link" data-page="assetsImagesPage" data-asset-type="Image">Images</a>
-            <a href="#" class="menu-link submenu-link" data-page="assetsVideoPage" data-asset-type="Video">Video</a>
-            <a href="#" class="menu-link submenu-link" data-page="assetsMusicPage" data-asset-type="Audio">Audio</a>
-            <a href="#" class="menu-link submenu-link" data-page="assetsPage" data-asset-type="Lead Magnet">PDF</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.assetCategories.openCategoriesPage(); return false;">Categories</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Image'); return false;">Images</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Video'); return false;">Video</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Audio'); return false;">Audio</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Lead Magnet'); return false;">PDF</a>
           </div>
         </li>
         <li class="menu-item has-submenu">
@@ -3728,46 +3728,6 @@
         <p>CTA writing workspace placeholder.</p>
       </section>
 
-      <section id="assetsLauncherPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Assets</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.assets.openAssetsManager()">Manage Assets</button>
-          </div>
-        </div>
-        <p>Assets organizes reusable media and PDFs. Start with an asset type or jump straight into a category-specific library view.</p>
-        <section class="asset-launcher-block">
-          <h3>Asset Types</h3>
-          <div class="asset-launcher-map">
-            <button class="asset-launcher-node asset-launcher-node-image" type="button" onclick="App.assets.openAssetsManager('Image')">
-              <span class="asset-launcher-node-icon">IMG</span>
-              <span class="asset-launcher-node-title">Images</span>
-            </button>
-            <button class="asset-launcher-node asset-launcher-node-audio" type="button" onclick="App.assets.openAssetsManager('Audio')">
-              <span class="asset-launcher-node-icon">AUD</span>
-              <span class="asset-launcher-node-title">Audio</span>
-            </button>
-            <button class="asset-launcher-node asset-launcher-node-video" type="button" onclick="App.assets.openAssetsManager('Video')">
-              <span class="asset-launcher-node-icon">VID</span>
-              <span class="asset-launcher-node-title">Video</span>
-            </button>
-            <button class="asset-launcher-node asset-launcher-node-magnet" type="button" onclick="App.assets.openAssetsManager('Lead Magnet')">
-              <span class="asset-launcher-node-icon">MAG</span>
-              <span class="asset-launcher-node-title">PDFs</span>
-            </button>
-          </div>
-        </section>
-        <section class="asset-launcher-block">
-          <div class="page-heading-row">
-            <h3>Categories</h3>
-            <div class="page-heading-actions">
-              <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')">Manage Categories</button>
-            </div>
-          </div>
-          <div id="assetsCategoriesMap" class="messaging-content-map asset-category-map"></div>
-        </section>
-      </section>
-
       <section id="assetsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Assets</h2>
@@ -4836,7 +4796,6 @@
           <h2>Builder: Templates</h2>
           <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
         </div>
-        <p>Manage the reusable structural templates that power forms and pages.</p>
         <div id="developEmailTemplatesPrimaryTableHost" class="develop-template-records-host"></div>
         <section id="developTemplateEditorPanel" class="develop-template-section develop-template-editor hidden">
           <div class="develop-template-section-header-row">
@@ -4850,7 +4809,6 @@
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
               <span id="developTemplateEditorTitle" class="develop-template-section-title">Email: Modular</span>
             </button>
-            <button id="developTemplateEditorCloseBtn" type="button">Close Editor</button>
           </div>
           <div id="developTemplateEditorBody" class="develop-template-section-body">
             <p id="developTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
