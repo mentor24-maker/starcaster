@@ -26,6 +26,12 @@ App.assets = (function () {
     return els.assetTypeInput || els.assetForm?.querySelector('select[name="asset_type"]') || null;
   }
 
+  function displayAssetType(value) {
+    const type = String(value || '').trim();
+    if (type === 'Lead Magnet') return 'PDF';
+    return type || '-';
+  }
+
   function isValidUrl(value) {
     const text = String(value || '').trim();
     if (!text) return false;
@@ -125,7 +131,7 @@ App.assets = (function () {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'messaging-content-node asset-category-node';
-        button.innerHTML = `<span class="messaging-content-node-kicker">${assetType || 'Asset'}</span><span class="messaging-content-node-title">${category}</span>`;
+        button.innerHTML = `<span class="messaging-content-node-kicker">${displayAssetType(assetType) || 'Asset'}</span><span class="messaging-content-node-title">${category}</span>`;
         button.addEventListener('click', function () {
           openAssetsManager(assetType, category);
         });
@@ -176,11 +182,12 @@ App.assets = (function () {
 
   function getCategoryOptionsForType(assetType) {
     const type = String(assetType || '').trim();
-    if (!type) return [];
-
     const categories = Array.isArray(state.assetCategories) ? state.assetCategories : [];
     const names = categories
-      .filter((item) => String(item?.assetType || '').trim() === type)
+      .filter((item) => {
+        if (!type) return true;
+        return String(item?.assetType || '').trim() === type;
+      })
       .map((item) => String(item?.category || '').trim())
       .filter(Boolean);
 
@@ -676,7 +683,7 @@ App.assets = (function () {
       }
       tr.appendChild(nameTd);
 
-      appendCell(tr, asset.assetType);
+      appendCell(tr, displayAssetType(asset.assetType));
       appendCell(tr, asset.category);
       appendCell(tr, Array.isArray(asset.tags) ? asset.tags.join(', ') : '-');
       appendCell(tr, formatBytes(asset.size));
