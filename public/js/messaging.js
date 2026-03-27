@@ -304,7 +304,7 @@ App.messaging = (function () {
       select.innerHTML = '';
       const placeholder = document.createElement('option');
       placeholder.value = '';
-      placeholder.textContent = isFilter ? 'All Formats' : 'No Format';
+      placeholder.textContent = isFilter ? 'All Topics' : 'No Topic';
       select.appendChild(placeholder);
       uniqueNames.forEach((name) => {
         const option = document.createElement('option');
@@ -334,6 +334,7 @@ App.messaging = (function () {
       selectAllId: `${config.pageStem}LibrarySelectAllVisible`,
       textFilterId: `${config.pageStem}LibraryTextFilter`,
       categoryFilterId: `${config.pageStem}LibraryCategoryFilter`,
+      formatFilterId: `${config.pageStem}LibraryFormatFilter`,
       bulkEditBtnId: `${config.pageStem}LibraryBulkEditBtn`,
       sortTextBtnId: `${config.pageStem}LibrarySortTextBtn`,
       sortCategoryBtnId: `${config.pageStem}LibrarySortCategoryBtn`,
@@ -352,19 +353,18 @@ App.messaging = (function () {
         <div class="page-heading-row">
           <h2>Messaging: ${config.pluralLabel}</h2>
           <div class="page-heading-actions">
-            <button id="${ids.categoryBtnId}" type="button">Formats</button>
+            <button id="${ids.categoryBtnId}" type="button">Topics</button>
             <button id="${ids.toggleBtnId}" type="button">Create ${config.pluralLabel}</button>
             <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable ${config.pluralLower} that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="${ids.createWrapId}" class="hidden">
           <div class="grid-form" style="align-items: start;">
             <form id="${ids.formId}" class="stack-form">
               <h3>Single Create</h3>
               <select id="${ids.formCategorySelectId}" name="category" data-messaging-category-select="true">
-                <option value="">No Format</option>
+                <option value="">No Topic</option>
               </select>
               <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
               <button type="submit">Save ${config.singularLabel}</button>
@@ -373,7 +373,7 @@ App.messaging = (function () {
             <form id="${ids.bulkCreateFormId}" class="stack-form">
               <h3>Multiple Create</h3>
               <select id="${ids.bulkCreateCategorySelectId}" name="category" data-messaging-category-select="true">
-                <option value="">No Format</option>
+                <option value="">No Topic</option>
               </select>
               <textarea name="${config.field}_text" rows="8" placeholder="Paste multiple ${config.pluralLower}, one per line"></textarea>
               <button type="submit">Create Multiple ${config.pluralLabel}</button>
@@ -388,13 +388,12 @@ App.messaging = (function () {
             <button id="${ids.cancelEditBtnId}" type="button">Cancel Edit</button>
           </div>
           <select id="${ids.editCategorySelectId}" name="category" data-messaging-category-select="true">
-            <option value="">No Format</option>
+            <option value="">No Topic</option>
           </select>
           <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
           <button type="submit">Update ${config.singularLabel}</button>
         </form>
 
-        <h3>Saved ${config.pluralLabel}</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -403,7 +402,13 @@ App.messaging = (function () {
                 <th><input id="${ids.textFilterId}" placeholder="Filter ${config.singularLower}" /></th>
                 <th>
                   <select id="${ids.categoryFilterId}" data-messaging-category-select="true" data-messaging-category-role="filter">
+                    <option value="">All Topics</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="${ids.formatFilterId}">
                     <option value="">All Formats</option>
+                    <option value="${config.pluralLabel}">${config.pluralLabel}</option>
                   </select>
                 </th>
                 <th></th>
@@ -413,7 +418,8 @@ App.messaging = (function () {
               <tr>
                 <th></th>
                 <th><button id="${ids.sortTextBtnId}" type="button" class="tiny-btn">${config.singularLabel}</button></th>
-                <th><button id="${ids.sortCategoryBtnId}" type="button" class="tiny-btn">Format</button></th>
+                <th><button id="${ids.sortCategoryBtnId}" type="button" class="tiny-btn">Topic</button></th>
+                <th>Format</th>
                 <th><button id="${ids.sortCreatedBtnId}" type="button" class="tiny-btn">Created</button></th>
                 <th><button id="${ids.sortUpdatedBtnId}" type="button" class="tiny-btn">Updated</button></th>
                 <th>Actions</th>
@@ -435,9 +441,9 @@ App.messaging = (function () {
         <p id="${ids.bulkSummaryId}">No ${config.pluralLower} selected.</p>
         <form id="${ids.bulkEditFormId}" class="stack-form labeled-form">
           <div class="stack-form">
-            <label for="${ids.bulkEditCategorySelectId}">Format</label>
+            <label for="${ids.bulkEditCategorySelectId}">Topic</label>
             <select id="${ids.bulkEditCategorySelectId}" name="category" data-messaging-category-select="true">
-              <option value="">No Format</option>
+              <option value="">No Topic</option>
             </select>
           </div>
           <button type="submit">Apply To Selected ${config.pluralLabel}</button>
@@ -2602,6 +2608,7 @@ App.messaging = (function () {
     const stateForType = simpleContentState[config.key];
     const textFilter = String(stateForType.filters.text || '').trim().toLowerCase();
     const categoryFilter = String(stateForType.filters.category || '').trim();
+    const formatFilter = String(document.getElementById(getSimpleContentIds(config).formatFilterId)?.value || '').trim();
     const items = Array.isArray(stateForType.items) ? stateForType.items : [];
 
     const filtered = items.filter((item) => {
@@ -2609,6 +2616,7 @@ App.messaging = (function () {
       const category = String(item.category || '').trim();
       if (textFilter && !text.includes(textFilter)) return false;
       if (categoryFilter && category !== categoryFilter) return false;
+      if (formatFilter && formatFilter !== config.pluralLabel) return false;
       return true;
     });
 
@@ -2636,7 +2644,7 @@ App.messaging = (function () {
     const stateForType = simpleContentState[config.key];
     [
       [ids.sortTextBtnId, config.field, config.singularLabel],
-      [ids.sortCategoryBtnId, 'category', 'Category'],
+      [ids.sortCategoryBtnId, 'category', 'Topic'],
       [ids.sortCreatedBtnId, 'created_at', 'Created'],
       [ids.sortUpdatedBtnId, 'updated_at', 'Updated'],
     ].forEach(([id, key, label]) => {
@@ -2683,7 +2691,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 7;
       td.textContent = `No ${config.pluralLower} match current filters.`;
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -2708,6 +2716,7 @@ App.messaging = (function () {
       [
         String(item[config.field] || '').trim() || '-',
         String(item.category || '').trim() || '-',
+        config.pluralLabel,
         item.created_at ? new Date(item.created_at).toLocaleString() : '-',
         item.updated_at ? new Date(item.updated_at).toLocaleString() : '-',
       ].forEach((value) => {
@@ -2765,6 +2774,7 @@ App.messaging = (function () {
     const backFromBulkBtn = document.getElementById(ids.bulkBackBtnId);
     const filterInput = document.getElementById(ids.textFilterId);
     const categoryFilter = document.getElementById(ids.categoryFilterId);
+    const formatFilter = document.getElementById(ids.formatFilterId);
     const bulkSummary = document.getElementById(ids.bulkSummaryId);
     const categoriesBtn = document.getElementById(ids.categoryBtnId);
     const stateForType = simpleContentState[config.key];
@@ -2954,6 +2964,12 @@ App.messaging = (function () {
     if (categoryFilter) {
       categoryFilter.addEventListener('change', function () {
         stateForType.filters.category = String(categoryFilter.value || '');
+        renderSimpleContentTable(config, stateForType.items);
+      });
+    }
+
+    if (formatFilter) {
+      formatFilter.addEventListener('change', function () {
         renderSimpleContentTable(config, stateForType.items);
       });
     }
