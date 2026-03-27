@@ -114,12 +114,12 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link" data-page="developPage">Builder</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="developThemesPage">Themes</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.develop.openThemesPage(); return false;" data-page="developThemesPage">Themes</a>
             <a href="#" class="menu-link submenu-link" data-page="developTemplatesPage">Templates</a>
             <a href="#" class="menu-link submenu-link" data-page="developFormsPage">Forms</a>
             <a href="#" class="menu-link submenu-link" data-page="developManageLandingPagesPage">Pages</a>
             <a href="#" class="menu-link submenu-link" data-page="developToolsPage">Extensions</a>
-            <a href="#" class="menu-link submenu-link" data-page="developAgentsPage">Agents</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.develop.openAgentsPage(); return false;" data-page="developAgentsPage">Agents</a>
           </div>
         </li>
         <li class="menu-item"><a href="#" class="menu-link" data-page="campaignsPage">Campaigns</a></li>
@@ -169,7 +169,7 @@
           <a href="#" class="menu-link" data-page="settingsPage">Settings</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" data-page="settingsProfilePage">Profile</a>
-            <a href="#" class="menu-link submenu-link" data-page="settingsProjectsPage">Projects</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.settings.openProjectsPage(); return false;" data-page="settingsProjectsPage">Projects</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsAgentsPage">Agents</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsDatabasePage">Database</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsApisPage">APIs</a>
@@ -4121,11 +4121,31 @@
         <div class="page-heading-row">
           <h2>Builder: Themes</h2>
           <div class="page-heading-actions">
-            <button id="developThemesCreateBtn" type="button">Create Theme</button>
+            <button id="developThemesCreateBtn" type="button" onclick="App.develop.openThemesBuilder(); return false;">Create Theme</button>
+            <button type="button" onclick="App.develop.openThemesPage(); return false;">Back To Themes</button>
             <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <p>Create reusable named themes and persist color, style, and asset settings in Supabase.</p>
+        <section class="develop-themes-card">
+          <h3>Saved Themes</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Feature Image</th>
+                  <th>Logo Square</th>
+                  <th>Name</th>
+                  <th>Palette</th>
+                  <th>Styles</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="developThemesTableBody"></tbody>
+            </table>
+          </div>
+        </section>
         <section class="develop-themes-card">
           <div class="develop-themes-builder-header">
             <h3>Theme Builder</h3>
@@ -4231,25 +4251,6 @@
             <h3>Preview</h3>
             <div id="developThemesPreviewHost" class="develop-themes-preview-host"></div>
           </section>
-        </section>
-        <section class="develop-themes-card">
-          <h3>Theme Library</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Feature Image</th>
-                  <th>Logo Square</th>
-                  <th>Name</th>
-                  <th>Palette</th>
-                  <th>Styles</th>
-                  <th>Updated</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="developThemesTableBody"></tbody>
-            </table>
-          </div>
         </section>
         <section class="develop-themes-card">
           <h3>Consolidation Targets</h3>
@@ -4597,7 +4598,13 @@
       </section>
 
       <section id="developAgentsPage" class="app-page hidden">
-        <h2>Builder: Agents</h2>
+        <div class="page-heading-row">
+          <h2>Builder: Agents</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.develop.openAgentsPage(); return false;">Back To Agents</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
         <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
         <form id="developAgentsForm" class="stack-form">
           <div class="grid-form">
@@ -5868,8 +5875,45 @@
       </section>
 
       <section id="settingsProjectsPage" class="app-page hidden">
-        <h2>Settings: Projects</h2>
-        <p>Manage projects and choose the active project context used across contacts, assets, segments, and campaigns.</p>
+        <div class="page-heading-row">
+          <h2>Settings: Projects</h2>
+          <div class="page-heading-actions">
+            <button id="settingsOpenCreateProjectBtn" type="button" onclick="App.settings.openProjectsCreate(); return false;">Create Project</button>
+            <button type="button" onclick="App.settings.openProjectsPage(); return false;">Back To Projects</button>
+            <button type="button" onclick="App.setActivePage('settingsPage')">Back To Settings</button>
+          </div>
+        </div>
+        <div id="settingsProjectsCreatePanel" class="card hidden" style="margin-bottom: 1rem;">
+          <h3 style="margin-top: 0;">Create Project</h3>
+          <div class="form-row">
+            <label for="settingsNewProjectName">Project Name</label>
+            <input id="settingsNewProjectName" placeholder="e.g. IZZIT Growth" />
+          </div>
+          <div class="form-row">
+            <label for="settingsNewProjectDescription">Description</label>
+            <input id="settingsNewProjectDescription" placeholder="Optional description" />
+          </div>
+          <div class="page-heading-actions" style="justify-content:flex-start;">
+            <button id="settingsCreateProjectBtn" type="button">Save Project</button>
+            <button type="button" onclick="App.settings.openProjectsPage(); return false;">Back To Projects</button>
+            <button type="button" onclick="App.setActivePage('settingsPage')">Back To Settings</button>
+          </div>
+        </div>
+        <div class="table-wrap" style="margin-bottom: 1rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Slug</th>
+                <th>Role</th>
+                <th>Description</th>
+                <th>Created</th>
+                <th class="settings-projects-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="settingsProjectsTableBody"></tbody>
+          </table>
+        </div>
         <div class="settings-projects-layout">
           <div class="card settings-project-column">
             <h3 style="margin-top: 0;">Your Projects</h3>
@@ -5878,19 +5922,6 @@
               <select id="settingsProjectSelector"></select>
             </div>
             <div id="settingsProjectsList" class="settings-project-list"></div>
-            <hr />
-            <h4>Create New Project</h4>
-            <div class="form-row">
-              <label for="settingsNewProjectName">Project Name</label>
-              <input id="settingsNewProjectName" placeholder="e.g. IZZIT Growth" />
-            </div>
-            <div class="form-row">
-              <label for="settingsNewProjectDescription">Description</label>
-              <input id="settingsNewProjectDescription" placeholder="Optional description" />
-            </div>
-            <div class="stack-form-actions">
-              <button id="settingsCreateProjectBtn" type="button">Create Project</button>
-            </div>
           </div>
 
           <div class="card settings-project-column">
