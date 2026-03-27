@@ -32,6 +32,35 @@ App.settings = (function () {
   const PROJECT_LOGO_STORAGE_KEY = 'alphire.projectLogoMap';
   let activeChannelLabel = '';
 
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function setProjectsCreateVisible(visible) {
+    const panel = byId('settingsProjectsCreatePanel');
+    if (panel) panel.classList.toggle('hidden', !visible);
+  }
+
+  function openProjectsPage() {
+    setProjectsCreateVisible(false);
+    App.setActivePage('settingsProjectsPage');
+    refreshProjectContext().catch((err) => notify(err.message || 'Could not load projects', true));
+    window.setTimeout(() => {
+      refreshProjectContext().catch(() => {});
+    }, 250);
+  }
+
+  function openProjectsCreate() {
+    setProjectsCreateVisible(true);
+    App.setActivePage('settingsProjectsPage');
+    if (els.settingsNewProjectName) els.settingsNewProjectName.value = '';
+    if (els.settingsNewProjectDescription) els.settingsNewProjectDescription.value = '';
+    const panel = byId('settingsProjectsCreatePanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   async function refreshPromoLeadsIfAvailable() {
     if (App.promoLeads && typeof App.promoLeads.refresh === 'function') {
       await App.promoLeads.refresh();
@@ -188,6 +217,70 @@ App.settings = (function () {
     renderInto(els.settingsProjectsList);
   }
 
+  function renderProjectsTable() {
+    const body = byId('settingsProjectsTableBody');
+    if (!body) return;
+    const projects = Array.isArray(state.projects) ? state.projects : [];
+    if (!projects.length) {
+      body.innerHTML = '<tr><td colspan="6" class="meta">No projects found.</td></tr>';
+      return;
+    }
+    body.innerHTML = '';
+    projects.forEach((project) => {
+      const id = String(project?.id || '').trim();
+      const row = document.createElement('tr');
+      const isActive = id && id === String(state.currentProjectId || '');
+      row.innerHTML = `
+        <td>${String(project?.name || project?.slug || id || 'Untitled')}</td>
+        <td>${String(project?.slug || '-')}</td>
+        <td>${String(project?.membership?.role || 'member')}</td>
+        <td>${String(project?.description || '')}</td>
+        <td>${formatDateLabel(project?.createdAt || project?.created_at || '') || '-'}</td>
+        <td class="settings-projects-actions-cell"></td>
+      `;
+      const actionsCell = row.querySelector('.settings-projects-actions-cell');
+      if (actionsCell) {
+        const activateBtn = document.createElement('button');
+        activateBtn.type = 'button';
+        activateBtn.className = 'tiny-btn';
+        activateBtn.textContent = isActive ? 'Active' : 'Set Active';
+        activateBtn.disabled = isActive;
+        activateBtn.addEventListener('click', () => {
+          if (!id) return;
+          state.currentProjectId = id;
+          window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
+          renderProjectSelector();
+          renderProjectLists();
+          renderProjectsTable();
+          renderProjectDetails();
+          applyProjectToHeader();
+          notify('Active project updated');
+        });
+        const detailsBtn = document.createElement('button');
+        detailsBtn.type = 'button';
+        detailsBtn.className = 'tiny-btn';
+        detailsBtn.textContent = 'Details';
+        detailsBtn.addEventListener('click', () => {
+          if (!id) return;
+          state.currentProjectId = id;
+          window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
+          renderProjectSelector();
+          renderProjectLists();
+          renderProjectsTable();
+          renderProjectDetails();
+          applyProjectToHeader();
+          const panel = els.settingsProjectDetailsPanel;
+          if (panel && typeof panel.scrollIntoView === 'function') {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+        actionsCell.appendChild(activateBtn);
+        actionsCell.appendChild(detailsBtn);
+      }
+      body.appendChild(row);
+    });
+  }
+
   function renderProjectDetails() {
     const projects = Array.isArray(state.projects) ? state.projects : [];
     const active = projects.find((project) => String(project?.id || '') === String(state.currentProjectId || '')) || null;
@@ -310,6 +403,7 @@ App.settings = (function () {
       els.settingsProjectSelector.value = '';
     }
     renderProjectLists();
+    renderProjectsTable();
     renderProjectDetails();
   }
 
@@ -1240,7 +1334,7 @@ App.settings = (function () {
 
     if (els.brandProfileButton) {
       els.brandProfileButton.addEventListener('click', () => {
-        App.setActivePage('settingsProjectsPage');
+        openProjectsPage();
       });
     }
 
@@ -1330,6 +1424,7 @@ App.settings = (function () {
           if (els.settingsNewProjectName) els.settingsNewProjectName.value = '';
           if (els.settingsNewProjectDescription) els.settingsNewProjectDescription.value = '';
           await refreshProjectContext();
+          setProjectsCreateVisible(false);
           notify('Project created');
         } catch (err) {
           notify(err.message, true);
@@ -1553,6 +1648,8 @@ App.settings = (function () {
       if (channelLabel) channelLabel.textContent = '';
       refreshSettingsApisHeadingFromUi();
     },
+    openProjectsPage,
+    openProjectsCreate,
     openApiSettingsForm,
     renderApiFieldInputs,
     refreshApiSettings,

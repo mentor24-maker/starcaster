@@ -252,6 +252,36 @@ App.develop = (function () {
     return document.getElementById(id);
   }
 
+  function setThemesBuilderVisible(visible) {
+    const panel = byId('developThemesBuilderPanel');
+    const toggle = byId('developThemesBuilderToggleBtn');
+    if (panel) panel.classList.toggle('hidden', !visible);
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+      toggle.textContent = visible ? '▾' : '▸';
+    }
+  }
+
+  function openThemesPage() {
+    setThemesBuilderVisible(false);
+    App.setActivePage('developThemesPage');
+    refresh().catch((err) => notify(err.message || 'Unable to load themes', true));
+  }
+
+  function openThemesBuilder() {
+    App.setActivePage('developThemesPage');
+    setThemesBuilderVisible(true);
+    const panel = byId('developThemesBuilderPanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function openAgentsPage() {
+    App.setActivePage('developAgentsPage');
+    refresh().catch((err) => notify(err.message || 'Unable to load agents page', true));
+  }
+
   function slugify(value) {
     return safeText(value)
       .toLowerCase()
@@ -4419,6 +4449,21 @@ App.develop = (function () {
     const formCtaSelect = byId('developFormCtaSelect');
     const formHeadingInput = byId('developFormHeadingInput');
     const formSuccessMessageInput = byId('developFormSuccessMessageInput');
+    const themesBuilderToggleBtn = byId('developThemesBuilderToggleBtn');
+    const themesCreateBtn = byId('developThemesCreateBtn');
+
+    if (themesBuilderToggleBtn) {
+      themesBuilderToggleBtn.addEventListener('click', () => {
+        const nextExpanded = themesBuilderToggleBtn.getAttribute('aria-expanded') !== 'true';
+        setThemesBuilderVisible(nextExpanded);
+      });
+    }
+
+    if (themesCreateBtn) {
+      themesCreateBtn.addEventListener('click', () => {
+        openThemesBuilder();
+      });
+    }
 
     if (landingPreviewAction && typeof App.makeIconButton === 'function') {
       landingPreviewAction.innerHTML = '';
@@ -5360,6 +5405,9 @@ App.develop = (function () {
     manifest: { id: 'develop', label: 'Develop', pageId: 'developPage', pagePrefixes: ['develop'] },
     init,
     refresh,
-    onPageActivated: refresh
+    onPageActivated: refresh,
+    openThemesPage,
+    openThemesBuilder,
+    openAgentsPage
   };
 })();
