@@ -705,28 +705,54 @@
           <button id="directAcquireRefreshBtn" type="button" class="tiny-btn">Refresh Runs</button>
         </div>
         <p>Fetch and parse website pages immediately.</p>
-        <form id="directAcquireForm" class="stack-form">
-          <div class="grid-form">
-            <div class="form-row">
-              <label for="directAcquireUrlInput">Website</label>
-              <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Source URL" />
-            </div>
-            <div class="form-row">
-              <label for="directAcquireMaxPagesInput">Pages to Fetch</label>
-              <input id="directAcquireMaxPagesInput" name="max_pages" type="number" min="1" max="50" value="5" placeholder="Pages to Fetch" />
-            </div>
-          </div>
-          <details>
-            <summary>Advanced</summary>
-            <div class="grid-form" style="margin-top: 0.75rem;">
+        <div class="grid-form" style="grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr); align-items: start; gap: 24px;">
+          <form id="directAcquireForm" class="stack-form">
+            <div class="grid-form">
               <div class="form-row">
-                <label for="directAcquireSnippetInput">Snippet Length</label>
-                <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
+                <label for="directAcquireUrlInput">Website</label>
+                <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Source URL" />
+              </div>
+              <div class="form-row">
+                <label for="directAcquireMaxPagesInput">Pages to Fetch</label>
+                <input id="directAcquireMaxPagesInput" name="max_pages" type="number" min="1" max="50" value="5" placeholder="Pages to Fetch" />
               </div>
             </div>
-          </details>
-          <button type="submit">Run Direct Ingest</button>
-        </form>
+            <label class="checkbox-row">
+              <input id="directAcquireCaptureContactInput" name="capture_contact_data" type="checkbox" />
+              Acquire Contact Data
+            </label>
+            <details>
+              <summary>Advanced</summary>
+              <div class="grid-form" style="margin-top: 0.75rem;">
+                <div class="form-row">
+                  <label for="directAcquireSnippetInput">Snippet Length</label>
+                  <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
+                </div>
+              </div>
+            </details>
+            <button type="submit">Run Direct Ingest</button>
+          </form>
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Captured Contact Data</h3>
+              <div class="page-heading-actions">
+                <button id="directAcquireSaveContactBtn" type="button" class="tiny-btn" disabled>Save To Contacts</button>
+              </div>
+            </div>
+            <div id="directAcquireContactEmpty" class="meta">No contact data captured yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireContactTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
 
         <h3>Direct Ingest Runs</h3>
         <div class="table-wrap">
