@@ -175,6 +175,7 @@ App.develop = (function () {
   let savedLandingPages = [];
   let savedExtensions = [];
   let savedEmailTemplates = [];
+  let savedAgents = [];
   let emailTemplateBlocksDraft = [];
   let landingPageHeadlines = [];
   let landingPageSubheadings = [];
@@ -238,6 +239,7 @@ App.develop = (function () {
     },
   };
   const LANDING_THANK_YOU_STATE_KEY = 'develop_landing_thank_you_state_v1';
+  const SAVED_AGENTS_STORAGE_KEY = 'develop_saved_agents_v1';
   let extensionManagerConfig = {
     defaultFilters: {},
     defaultSortKey: 'updatedAt',
@@ -278,8 +280,187 @@ App.develop = (function () {
   }
 
   function openAgentsPage() {
+    setAgentsBuilderVisible(false);
     App.setActivePage('developAgentsPage');
     refresh().catch((err) => notify(err.message || 'Unable to load agents page', true));
+  }
+
+  function setAgentsBuilderVisible(visible) {
+    const panel = byId('developAgentsBuilderPanel');
+    if (panel) panel.classList.toggle('hidden', !visible);
+  }
+
+  function nextLocalId(prefix) {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function loadSavedAgents() {
+    try {
+      const raw = String(window.localStorage.getItem(SAVED_AGENTS_STORAGE_KEY) || '').trim();
+      if (!raw) {
+        savedAgents = [];
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      savedAgents = Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      savedAgents = [];
+    }
+  }
+
+  function persistSavedAgents() {
+    try {
+      window.localStorage.setItem(SAVED_AGENTS_STORAGE_KEY, JSON.stringify(savedAgents));
+    } catch (_) {}
+  }
+
+  function getAgentFormPayload() {
+    const form = els.developAgentsForm;
+    const formData = new FormData(form);
+    return {
+      id: safeText(formData.get('agent_preset_id')),
+      name: safeText(formData.get('agent_name')),
+      action: safeText(formData.get('action')) || 'create_job',
+      job_id: safeText(formData.get('job_id')),
+      workspace_id: safeText(formData.get('workspace_id')) || 'alphire-main',
+      type: safeText(formData.get('type')) || 'acquire.web',
+      requested_by_user_id: safeText(formData.get('requested_by_user_id')) || 'alphire-ui',
+      requested_by_email: safeText(formData.get('requested_by_email')) || 'ops@alphire.ai',
+      payload_json: String(formData.get('payload_json') || '').trim() || '{"source_urls":[],"max_pages":20}',
+      approval_decision: safeText(formData.get('approval_decision')) || 'APPROVE',
+      approval_token: safeText(formData.get('approval_token')),
+      approval_comment: safeText(formData.get('approval_comment')),
+      manual_confirmed: formData.get('manual_confirmed') === 'on',
+    };
+  }
+
+  function populateAgentForm(record) {
+    const form = els.developAgentsForm;
+    if (!form || !record) return;
+    const setValue = (name, value) => {
+      const field = form.elements.namedItem(name);
+      if (!field) return;
+      if (field.type === 'checkbox') {
+        field.checked = Boolean(value);
+      } else {
+        field.value = String(value || '');
+      }
+    };
+    setValue('agent_preset_id', record.id);
+    setValue('agent_name', record.name);
+    setValue('action', record.action);
+    setValue('job_id', record.job_id);
+    setValue('workspace_id', record.workspace_id);
+    setValue('type', record.type);
+    setValue('requested_by_user_id', record.requested_by_user_id);
+    setValue('requested_by_email', record.requested_by_email);
+    setValue('payload_json', record.payload_json);
+    setValue('approval_decision', record.approval_decision);
+    setValue('approval_token', record.approval_token);
+    setValue('approval_comment', record.approval_comment);
+    setValue('manual_confirmed', record.manual_confirmed);
+  }
+
+  function resetAgentsForm() {
+    if (els.developAgentsForm) els.developAgentsForm.reset();
+    const presetId = byId('developAgentPresetIdInput');
+    const nameInput = byId('developAgentNameInput');
+    if (presetId) presetId.value = '';
+    if (nameInput) nameInput.value = '';
+    const actionSelect = byId('agentsActionSelect');
+    if (actionSelect) actionSelect.value = 'agent_api_setup_orchestrator';
+    const workspaceField = els.developAgentsForm?.elements?.namedItem('workspace_id');
+    const typeField = els.developAgentsForm?.elements?.namedItem('type');
+    const requestedById = els.developAgentsForm?.elements?.namedItem('requested_by_user_id');
+    const requestedByEmail = els.developAgentsForm?.elements?.namedItem('requested_by_email');
+    const payload = els.developAgentsForm?.elements?.namedItem('payload_json');
+    if (workspaceField) workspaceField.value = 'alphire-main';
+    if (typeField) typeField.value = 'acquire.web';
+    if (requestedById) requestedById.value = 'alphire-ui';
+    if (requestedByEmail) requestedByEmail.value = 'ops@alphire.ai';
+    if (payload) payload.value = '{"source_urls":[],"max_pages":20}';
+  }
+
+  function renderSavedAgentsTable() {
+    const body = byId('developAgentsTableBody');
+    if (!body) return;
+    if (!savedAgents.length) {
+      body.innerHTML = '<tr><td colspan="6" class="meta">No saved agents yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = '';
+    savedAgents
+      .slice()
+      .sort((a, b) => String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || '')))
+      .forEach((item) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${safeText(item.name) || 'Untitled Agent'}</td>
+          <td>${safeText(item.action) || '-'}</td>
+          <td>${safeText(item.workspace_id) || '-'}</td>
+          <td>${safeText(item.type) || '-'}</td>
+          <td>${safeText(item.updatedAt) || '-'}</td>
+          <td class="develop-agents-actions-cell"></td>
+        `;
+        const actions = row.querySelector('.develop-agents-actions-cell');
+        if (actions) {
+          actions.appendChild(App.makeIconButton('edit', 'Edit Agent', () => {
+            populateAgentForm(item);
+            setAgentsBuilderVisible(true);
+            const panel = byId('developAgentsBuilderPanel');
+            if (panel && typeof panel.scrollIntoView === 'function') panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }));
+          actions.appendChild(App.makeIconButton('copy', 'Clone Agent', () => {
+            const clone = { ...item, id: '', name: `${safeText(item.name) || 'Agent'} Copy` };
+            populateAgentForm(clone);
+            const presetId = byId('developAgentPresetIdInput');
+            if (presetId) presetId.value = '';
+            setAgentsBuilderVisible(true);
+          }));
+          actions.appendChild(App.makeIconButton('delete', 'Delete Agent', () => {
+            if (!window.confirm(`Delete agent "${safeText(item.name) || 'Untitled Agent'}"?`)) return;
+            savedAgents = savedAgents.filter((entry) => safeText(entry.id) !== safeText(item.id));
+            persistSavedAgents();
+            renderSavedAgentsTable();
+            notify('Agent deleted');
+          }));
+        }
+        body.appendChild(row);
+      });
+  }
+
+  function saveAgentPresetFromForm({ clone = false } = {}) {
+    const payload = getAgentFormPayload();
+    if (!payload.name) throw new Error('Agent name is required');
+    const now = new Date().toISOString();
+    const nextIdValue = clone || !payload.id ? nextLocalId('agent') : payload.id;
+    const record = {
+      ...payload,
+      id: nextIdValue,
+      updatedAt: now,
+      createdAt: clone || !payload.id
+        ? now
+        : (savedAgents.find((entry) => safeText(entry.id) === safeText(payload.id))?.createdAt || now),
+    };
+    const existingIndex = savedAgents.findIndex((entry) => safeText(entry.id) === safeText(payload.id));
+    if (!clone && existingIndex >= 0) savedAgents.splice(existingIndex, 1, record);
+    else savedAgents.unshift(record);
+    persistSavedAgents();
+    renderSavedAgentsTable();
+    populateAgentForm(record);
+    const presetId = byId('developAgentPresetIdInput');
+    if (presetId) presetId.value = record.id;
+    notify(clone ? 'Agent cloned' : (existingIndex >= 0 ? 'Agent updated' : 'Agent saved'));
+  }
+
+  function openAgentsCreate() {
+    App.setActivePage('developAgentsPage');
+    resetAgentsForm();
+    setAgentsBuilderVisible(true);
+    const panel = byId('developAgentsBuilderPanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   function slugify(value) {
@@ -4334,6 +4515,7 @@ App.develop = (function () {
   }
 
   async function refresh() {
+    loadSavedAgents();
     await Promise.all([
       loadSavedForms(),
       loadSavedEmailTemplates(),
@@ -4367,6 +4549,7 @@ App.develop = (function () {
     resetEmailTemplateForm();
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
+    renderSavedAgentsTable();
   }
 
   // ---------------------------------------------------------------------------
@@ -4451,6 +4634,8 @@ App.develop = (function () {
     const formSuccessMessageInput = byId('developFormSuccessMessageInput');
     const themesBuilderToggleBtn = byId('developThemesBuilderToggleBtn');
     const themesCreateBtn = byId('developThemesCreateBtn');
+    const agentsSavePresetBtn = byId('developAgentsSavePresetBtn');
+    const agentsClonePresetBtn = byId('developAgentsClonePresetBtn');
 
     if (themesBuilderToggleBtn) {
       themesBuilderToggleBtn.addEventListener('click', () => {
@@ -4462,6 +4647,26 @@ App.develop = (function () {
     if (themesCreateBtn) {
       themesCreateBtn.addEventListener('click', () => {
         openThemesBuilder();
+      });
+    }
+
+    if (agentsSavePresetBtn) {
+      agentsSavePresetBtn.addEventListener('click', () => {
+        try {
+          saveAgentPresetFromForm({ clone: false });
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (agentsClonePresetBtn) {
+      agentsClonePresetBtn.addEventListener('click', () => {
+        try {
+          saveAgentPresetFromForm({ clone: true });
+        } catch (err) {
+          notify(err.message, true);
+        }
       });
     }
 
@@ -5408,6 +5613,7 @@ App.develop = (function () {
     onPageActivated: refresh,
     openThemesPage,
     openThemesBuilder,
-    openAgentsPage
+    openAgentsPage,
+    openAgentsCreate
   };
 })();

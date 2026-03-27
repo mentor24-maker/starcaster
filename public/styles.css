@@ -3739,6 +3739,24 @@ th {
   margin-left: 8px;
 }
 
+.develop-agents-actions-heading {
+  text-align: center;
+  white-space: nowrap;
+  width: 120px;
+  min-width: 120px;
+}
+
+.develop-agents-actions-cell {
+  text-align: center;
+  white-space: nowrap;
+  width: 120px;
+  min-width: 120px;
+}
+
+.develop-agents-actions-cell .icon-btn + .icon-btn {
+  margin-left: 8px;
+}
+
 .tiny-btn-blue {
   background: #1a73e8;
   border-color: #1a73e8;
