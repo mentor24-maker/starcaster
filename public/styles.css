@@ -2118,6 +2118,18 @@ th {
   --label-col-gap: 0.75rem;
 }
 
+#campaignForm > .grid-form {
+  align-items: start;
+}
+
+#campaignForm > .grid-form > .stack-form {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin: 0;
+  padding-top: 0;
+}
+
 #campaignForm.labeled-form .form-row > label {
   margin: 0;
   justify-self: end;
@@ -2132,13 +2144,14 @@ th {
   min-width: 0;
 }
 
-#campaignForm .stack-form > h3 {
-  margin: 1rem 0 0.5rem 0 !important;
+#campaignForm > .grid-form > .stack-form > h3 {
+  margin: 0 0 0.5rem 0 !important;
+  line-height: 1.2;
 }
 
 #campaignContentChannelHint {
   margin: 0 0 0.35rem 0;
-  min-height: 1.1rem;
+  min-height: 0;
 }
 
 .asset-edit-layout {
