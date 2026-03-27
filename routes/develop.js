@@ -15,6 +15,12 @@ const {
   updateEmailTemplate,
   deleteEmailTemplate,
 } = require('../lib/developEmailTemplatesStore');
+const {
+  listThemes,
+  createTheme,
+  updateTheme,
+  deleteTheme,
+} = require('../lib/developThemesStore');
 const { createIcon } = require('../lib/developIconStore');
 const { createAsset, rowToAsset } = require('../lib/assetsStore');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
@@ -204,6 +210,35 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, emailTemplates, { emailTemplates }, { total: emailTemplates.length }), true;
   }
 
+  if (pathname === '/api/develop/themes' && requestMethod === 'GET') {
+    const result = await listThemes();
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load themes'), true;
+    const themes = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, themes, { themes }, { total: themes.length }), true;
+  }
+
+  if (pathname === '/api/develop/themes' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createTheme({
+      name,
+      primaryColor: String(body.primaryColor || '').trim(),
+      backgroundColor: String(body.backgroundColor || '').trim(),
+      accentColor: String(body.accentColor || '').trim(),
+      borderThickness: body.borderThickness,
+      borderRadius: body.borderRadius,
+      containerBlur: body.containerBlur,
+      contrastLevel: body.contrastLevel,
+      logoWideId: String(body.logoWideId || '').trim(),
+      logoSquareId: String(body.logoSquareId || '').trim(),
+      featureImageId: String(body.featureImageId || '').trim(),
+      backgroundImageId: String(body.backgroundImageId || '').trim(),
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
+    return sendOk(res, 201, result.data, { theme: result.data }), true;
+  }
+
   if (pathname === '/api/develop/email-templates' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
@@ -221,6 +256,33 @@ async function handle(req, res, pathname, method) {
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create email template'), true;
     return sendOk(res, 201, result.data, { emailTemplate: result.data }), true;
+  }
+
+  const themeMatch = pathname.match(/^\/api\/develop\/themes\/(\d+)$/);
+  if (themeMatch && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const result = await updateTheme(themeMatch[1], {
+      name: String(body.name || '').trim(),
+      primaryColor: String(body.primaryColor || '').trim(),
+      backgroundColor: String(body.backgroundColor || '').trim(),
+      accentColor: String(body.accentColor || '').trim(),
+      borderThickness: body.borderThickness,
+      borderRadius: body.borderRadius,
+      containerBlur: body.containerBlur,
+      contrastLevel: body.contrastLevel,
+      logoWideId: String(body.logoWideId || '').trim(),
+      logoSquareId: String(body.logoSquareId || '').trim(),
+      featureImageId: String(body.featureImageId || '').trim(),
+      backgroundImageId: String(body.backgroundImageId || '').trim(),
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
+    return sendOk(res, 200, result.data, { theme: result.data }), true;
+  }
+
+  if (themeMatch && requestMethod === 'DELETE') {
+    const result = await deleteTheme(themeMatch[1]);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete theme'), true;
+    return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
 
   if (pathname === '/api/develop/icon-builder' && requestMethod === 'POST') {
