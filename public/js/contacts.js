@@ -43,6 +43,13 @@ App.contacts = (function () {
   ];
 
   const SOCIAL_FIELD_KEYS = new Set(SOCIAL_FILTER_FIELDS.map((field) => field.key));
+  const CONTACT_EDITABLE_FIELDS = [
+    'first_name', 'last_name', 'company', 'email', 'phone', 'city', 'country',
+    'website', 'youtube', 'instagram', 'tiktok', 'facebook', 'x', 'bluesky',
+    'patreon', 'linkedin', 'tags', 'notes',
+  ];
+  const CONTACT_PAYLOAD_FIELDS = new Set(CONTACT_EDITABLE_FIELDS);
+  let activeContactId = '';
 
   const EXPLORE_FILTER_MODES = [
     { value: 'contains', label: 'Contains' },
@@ -380,6 +387,150 @@ App.contacts = (function () {
       }
     }
     td.textContent = value || '-';
+  }
+
+  function toContactPayload(form) {
+    const keyMap = {
+      first_name: 'firstName',
+      last_name: 'lastName',
+    };
+    const payload = { contactType: 'lead' };
+    for (const [key, value] of new FormData(form).entries()) {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) continue;
+      if (!CONTACT_PAYLOAD_FIELDS.has(key)) continue;
+      if (key === 'tags') {
+        payload.tags = trimmed.split(',').map((part) => part.trim()).filter(Boolean);
+        continue;
+      }
+      payload[keyMap[key] || key] = trimmed;
+    }
+    return payload;
+  }
+
+  function findContactById(id) {
+    const wanted = String(id || '').trim();
+    if (!wanted) return null;
+    return state.contacts.find((contact) => String(contact.id || '').trim() === wanted) || null;
+  }
+
+  function fillContactForm(form, contact) {
+    if (!form || !contact) return;
+    CONTACT_EDITABLE_FIELDS.forEach((key) => {
+      const input = form.elements.namedItem(key);
+      if (!input) return;
+      input.value = key === 'tags'
+        ? (Array.isArray(contact.tags) ? contact.tags.join(', ') : contactValue(contact, key))
+        : contactValue(contact, key);
+    });
+  }
+
+  function contactDetailRows(contact) {
+    return [
+      ['First Name', contactValue(contact, 'first_name')],
+      ['Last Name', contactValue(contact, 'last_name')],
+      ['Company', contactValue(contact, 'company')],
+      ['Email', contactValue(contact, 'email')],
+      ['Phone', contactValue(contact, 'phone')],
+      ['City', contactValue(contact, 'city')],
+      ['Country', contactValue(contact, 'country')],
+      ['Website', contactValue(contact, 'website')],
+      ['Youtube', contactValue(contact, 'youtube')],
+      ['Instagram', contactValue(contact, 'instagram')],
+      ['TikTok', contactValue(contact, 'tiktok')],
+      ['Facebook', contactValue(contact, 'facebook')],
+      ['X', contactValue(contact, 'x')],
+      ['BlueSky', contactValue(contact, 'bluesky')],
+      ['Patreon', contactValue(contact, 'patreon')],
+      ['LinkedIn', contactValue(contact, 'linkedin')],
+      ['Tags', Array.isArray(contact.tags) ? contact.tags.join(', ') : contactValue(contact, 'tags')],
+      ['Notes', contactValue(contact, 'notes')],
+    ];
+  }
+
+  function renderViewContact(contact) {
+    if (!els.viewContactDetails) return;
+    els.viewContactDetails.innerHTML = '';
+    contactDetailRows(contact).forEach(([label, value]) => {
+      const row = document.createElement('div');
+      row.className = 'contact-detail-row';
+      const labelEl = document.createElement('div');
+      labelEl.className = 'contact-detail-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('div');
+      valueEl.className = 'contact-detail-value';
+      const stringValue = String(value || '').trim();
+      if (/^https?:\/\//i.test(stringValue)) {
+        const link = document.createElement('a');
+        link.href = stringValue;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = stringValue;
+        valueEl.appendChild(link);
+      } else {
+        valueEl.textContent = stringValue || '-';
+      }
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+      els.viewContactDetails.appendChild(row);
+    });
+  }
+
+  function openContactsPage() {
+    App.setActivePage('contactsPage');
+    renderContacts();
+  }
+
+  function openViewPage(contactOrId) {
+    const contact = typeof contactOrId === 'object' ? contactOrId : findContactById(contactOrId);
+    if (!contact) {
+      notify('Contact not found', true);
+      return;
+    }
+    activeContactId = String(contact.id || '');
+    renderViewContact(contact);
+    App.setActivePage('viewContactPage');
+  }
+
+  function openEditPage(contactOrId) {
+    const contact = typeof contactOrId === 'object' ? contactOrId : findContactById(contactOrId);
+    if (!contact || !els.contactEditForm) {
+      notify('Contact not found', true);
+      return;
+    }
+    activeContactId = String(contact.id || '');
+    if (els.contactEditId) els.contactEditId.value = activeContactId;
+    fillContactForm(els.contactEditForm, contact);
+    App.setActivePage('editContactPage');
+  }
+
+  function openClonePage(contactOrId) {
+    const contact = typeof contactOrId === 'object' ? contactOrId : findContactById(contactOrId);
+    if (!contact || !els.contactCloneForm) {
+      notify('Contact not found', true);
+      return;
+    }
+    activeContactId = String(contact.id || '');
+    fillContactForm(els.contactCloneForm, contact);
+    App.setActivePage('cloneContactPage');
+  }
+
+  async function deleteContactRecord(contactOrId) {
+    const contact = typeof contactOrId === 'object' ? contactOrId : findContactById(contactOrId);
+    const id = String(contact?.id || '').trim();
+    if (!id) {
+      notify('Contact not found', true);
+      return;
+    }
+    if (!window.confirm(`Delete contact ${contactValue(contact, 'email') || contactValue(contact, 'first_name') || id}?`)) return;
+    try {
+      await api(`/api/contacts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      notify('Contact deleted');
+      await App.refresh();
+      openContactsPage();
+    } catch (err) {
+      notify(err.message, true);
+    }
   }
 
   function contactPassesContactFilters(contact, filters) {
@@ -954,7 +1105,17 @@ App.contacts = (function () {
             appendContactCell(td, key, contactValue(contact, key));
             tr.appendChild(td);
           });
-          tr.appendChild(document.createElement('td'));
+          const actionsTd = document.createElement('td');
+          actionsTd.className = 'contacts-actions-cell';
+          const viewBtn = App.makeIconButton('view', 'View Contact', () => openViewPage(contact));
+          const editBtn = App.makeIconButton('edit', 'Edit Contact', () => openEditPage(contact), { marginLeft: '8px' });
+          const cloneBtn = App.makeIconButton('copy', 'Clone Contact', () => openClonePage(contact), { marginLeft: '8px' });
+          const deleteBtn = App.makeIconButton('delete', 'Delete Contact', () => deleteContactRecord(contact), { danger: true, marginLeft: '8px' });
+          actionsTd.appendChild(viewBtn);
+          actionsTd.appendChild(editBtn);
+          actionsTd.appendChild(cloneBtn);
+          actionsTd.appendChild(deleteBtn);
+          tr.appendChild(actionsTd);
           els.contactsTable.appendChild(tr);
         });
     }
@@ -1113,22 +1274,13 @@ App.contacts = (function () {
     // Contact form
     els.contactForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const keyMap = {
-        first_name: 'firstName',
-        last_name: 'lastName',
-      };
-      const payload = { contactType: 'lead' };
-      for (const [key, value] of new FormData(els.contactForm).entries()) {
-        const trimmed = String(value || '').trim();
-        if (!trimmed) continue;
-        payload[keyMap[key] || key] = trimmed;
-      }
+      const payload = toContactPayload(els.contactForm);
       try {
         await api('/api/contacts', { method: 'POST', body: JSON.stringify(payload) });
         els.contactForm.reset();
         notify('Contact created');
         await App.refresh();
-        App.setActivePage('contactsPage');
+        openContactsPage();
       } catch (err) { notify(err.message, true); }
     });
 
@@ -1139,7 +1291,61 @@ App.contacts = (function () {
     }
     if (els.backToContactsBtn) {
       els.backToContactsBtn.addEventListener('click', () => {
-        App.setActivePage('contactsPage');
+        openContactsPage();
+      });
+    }
+
+    if (els.backFromViewContactBtn) {
+      els.backFromViewContactBtn.addEventListener('click', () => openContactsPage());
+    }
+    if (els.backFromEditContactBtn) {
+      els.backFromEditContactBtn.addEventListener('click', () => openContactsPage());
+    }
+    if (els.backFromCloneContactBtn) {
+      els.backFromCloneContactBtn.addEventListener('click', () => openContactsPage());
+    }
+    if (els.editViewedContactBtn) {
+      els.editViewedContactBtn.addEventListener('click', () => openEditPage(activeContactId));
+    }
+    if (els.cloneViewedContactBtn) {
+      els.cloneViewedContactBtn.addEventListener('click', () => openClonePage(activeContactId));
+    }
+    if (els.cloneEditedContactBtn) {
+      els.cloneEditedContactBtn.addEventListener('click', () => openClonePage(activeContactId));
+    }
+    if (els.contactEditForm) {
+      els.contactEditForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = String(els.contactEditId?.value || activeContactId || '').trim();
+        if (!id) return notify('Missing contact id', true);
+        try {
+          await api(`/api/contacts/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(toContactPayload(els.contactEditForm)),
+          });
+          notify('Contact updated');
+          await App.refresh();
+          openContactsPage();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+    if (els.contactCloneForm) {
+      els.contactCloneForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await api('/api/contacts', {
+            method: 'POST',
+            body: JSON.stringify(toContactPayload(els.contactCloneForm)),
+          });
+          els.contactCloneForm.reset();
+          notify('Contact cloned');
+          await App.refresh();
+          openContactsPage();
+        } catch (err) {
+          notify(err.message, true);
+        }
       });
     }
 
@@ -1295,6 +1501,7 @@ App.contacts = (function () {
 
   return {
     manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage' },
-    init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment
+    init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment,
+    openContactsPage, openViewPage, openEditPage, openClonePage
   };
 })();
