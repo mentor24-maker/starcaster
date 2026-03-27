@@ -3721,6 +3721,54 @@ th {
   margin-left: 8px;
 }
 
+.contacts-actions-heading {
+  text-align: center;
+  white-space: nowrap;
+  width: 170px;
+  min-width: 170px;
+}
+
+.contacts-actions-cell {
+  text-align: center;
+  white-space: nowrap;
+  width: 170px;
+  min-width: 170px;
+}
+
+.contacts-actions-cell .icon-btn + .icon-btn {
+  margin-left: 8px;
+}
+
+.contact-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid #d7e2f2;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.contact-detail-row {
+  display: contents;
+}
+
+.contact-detail-label,
+.contact-detail-value {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e3ebf7;
+}
+
+.contact-detail-label {
+  font-weight: 700;
+  background: #f5f9ff;
+}
+
+.contact-detail-value {
+  background: #fff;
+  word-break: break-word;
+}
+
 .settings-projects-actions-heading {
   text-align: center;
   white-space: nowrap;
