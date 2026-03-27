@@ -143,7 +143,8 @@ App.campaigns = (function () {
   function setFieldVisible(id, visible) {
     const el = byId(id);
     if (!el) return;
-    el.style.display = visible ? '' : 'none';
+    const container = el.closest('.form-row') || el;
+    container.style.display = visible ? '' : 'none';
   }
 
   function channelProfile(channel) {
@@ -157,7 +158,7 @@ App.campaigns = (function () {
     }
     if (name.includes('email')) {
       return {
-        hint: 'Email campaigns can use templates, email bodies, landing pages, and conversion assets.',
+        hint: '',
         visibleMechanics: ['campaignEmailTemplateSelect', 'campaignLandingPageSelect', 'campaignSegmentSelect'],
         visibleContent: ['campaignHeadlineSelect', 'campaignEmailSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignLeadMagnetSelect'],
       };
