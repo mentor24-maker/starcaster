@@ -750,7 +750,7 @@ App.develop = (function () {
     if (!savedThemes.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.colSpan = 7;
+      cell.colSpan = 6;
       cell.textContent = 'No saved themes yet.';
       row.appendChild(cell);
       tbody.appendChild(row);
@@ -763,11 +763,6 @@ App.develop = (function () {
       const featureAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(theme.featureImageId));
       const featureUrl = featureAsset ? toDirectAssetUrl(featureAsset.location) : '';
       featureTd.innerHTML = featureUrl ? `<img src="${featureUrl}" alt="Feature image" style="width:56px;height:56px;object-fit:cover;border-radius:10px;" />` : '-';
-      const logoTd = document.createElement('td');
-      logoTd.className = 'develop-theme-table-thumb';
-      const logoAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(theme.logoSquareId));
-      const logoUrl = logoAsset ? toDirectAssetUrl(logoAsset.location) : '';
-      logoTd.innerHTML = logoUrl ? `<img src="${logoUrl}" alt="Square logo" style="width:56px;height:56px;object-fit:cover;border-radius:10px;" />` : '-';
       const nameTd = document.createElement('td');
       nameTd.textContent = safeText(theme.name) || '-';
       const paletteTd = document.createElement('td');
@@ -779,7 +774,6 @@ App.develop = (function () {
       const actionsTd = document.createElement('td');
       actionsTd.appendChild(buildThemeActions(theme));
       tr.appendChild(featureTd);
-      tr.appendChild(logoTd);
       tr.appendChild(nameTd);
       tr.appendChild(paletteTd);
       tr.appendChild(stylesTd);
