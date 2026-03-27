@@ -3097,19 +3097,18 @@
         <div class="page-heading-row">
           <h2>Messaging: Headlines</h2>
           <div class="page-heading-actions">
-            <button id="openMessagingCategoriesPageBtn" type="button">Categories</button>
+            <button id="openMessagingCategoriesPageBtn" type="button">Topics</button>
             <button id="messagingHeadlinesToggleFormBtn" type="button">Create Headlines</button>
             <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable headlines that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingHeadlinesCreateWrap" class="hidden">
           <div class="grid-form" style="align-items: start;">
             <form id="messagingHeadlineForm" class="stack-form">
               <h3>Single Create</h3>
               <select id="messagingHeadlineCategorySelect" name="category">
-                <option value="">No Category</option>
+                <option value="">No Topic</option>
               </select>
               <textarea name="headline" rows="4" placeholder="Headline text" required></textarea>
               <button type="submit">Save Headline</button>
@@ -3118,7 +3117,7 @@
             <form id="messagingHeadlinesBulkCreateForm" class="stack-form">
               <h3>Multiple Create</h3>
               <select id="messagingHeadlinesBulkCategorySelect" name="category">
-                <option value="">No Category</option>
+                <option value="">No Topic</option>
               </select>
               <textarea name="headlines_text" rows="8" placeholder="Paste multiple headlines, one per line"></textarea>
               <button type="submit">Create Multiple Headlines</button>
@@ -3133,13 +3132,12 @@
             <button id="messagingHeadlineCancelEditBtn" type="button">Cancel Edit</button>
           </div>
           <select id="messagingHeadlineEditCategorySelect" name="category">
-            <option value="">No Category</option>
+            <option value="">No Topic</option>
           </select>
           <textarea name="headline" rows="4" placeholder="Headline text" required></textarea>
           <button type="submit">Update Headline</button>
         </form>
 
-        <h3>Saved Headlines</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -3148,9 +3146,16 @@
                 <th><input id="messagingHeadlinesHeadlineFilter" placeholder="Filter headline" /></th>
                 <th>
                   <select id="messagingHeadlinesCategoryFilter">
-                    <option value="">All Categories</option>
+                    <option value="">All Topics</option>
                   </select>
                 </th>
+                <th>
+                  <select id="messagingHeadlinesFormatFilter">
+                    <option value="">All Formats</option>
+                    <option value="Headlines">Headlines</option>
+                  </select>
+                </th>
+                <th></th>
                 <th></th>
                 <th></th>
                 <th><button id="messagingHeadlinesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
@@ -3158,7 +3163,8 @@
               <tr>
                 <th></th>
                 <th><button id="messagingHeadlinesSortHeadlineBtn" type="button" class="tiny-btn">Headline</button></th>
-                <th><button id="messagingHeadlinesSortCategoryBtn" type="button" class="tiny-btn">Category</button></th>
+                <th><button id="messagingHeadlinesSortCategoryBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th>Format</th>
                 <th><button id="messagingHeadlinesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
                 <th><button id="messagingHeadlinesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
                 <th>Actions</th>
@@ -3177,9 +3183,9 @@
         <p id="messagingHeadlinesBulkEditSummary">No headlines selected.</p>
         <form id="messagingHeadlinesBulkEditForm" class="stack-form labeled-form">
           <div class="form-row">
-            <label for="messagingHeadlinesBulkEditCategorySelect">Category</label>
+            <label for="messagingHeadlinesBulkEditCategorySelect">Topic</label>
             <select id="messagingHeadlinesBulkEditCategorySelect" name="category">
-              <option value="">No Category</option>
+              <option value="">No Topic</option>
             </select>
           </div>
           <button type="submit">Apply To Selected Headlines</button>
