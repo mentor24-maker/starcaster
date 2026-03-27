@@ -95,10 +95,11 @@
         </li>
         <li class="menu-item"><a href="#" class="menu-link" data-page="channelsPage">Channels</a></li>
         <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="messagingPage">Messaging</a>
+          <a href="#" class="menu-link" onclick="App.messaging.openContentLanding(); return false;" data-page="messagingContentPage">Messaging</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" onclick="App.messaging.openCategoriesLanding(); return false;">Topics</a>
             <a href="#" class="menu-link submenu-link" onclick="App.messaging.openContentLanding(); return false;">Content</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openManageContentLanding(); return false;">Formats</a>
           </div>
         </li>
         <li class="menu-item has-submenu">
@@ -2701,94 +2702,51 @@
         <div class="page-heading-row">
           <h2>Messaging: Content</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openManageContentCategory('')">Manage Content</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;">Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
-        <p>Use the content library to move between short-form, social, and long-form messaging assets.</p>
-        <div class="messaging-content-map">
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.messaging.openContentTypesLanding()">
-            <span class="messaging-content-node-kicker">Configuration</span>
-            <span class="messaging-content-node-title">Content Types</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingHeadlinesPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Headlines</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingSubheadingsPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Sub-headings</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingTaglinesPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Taglines</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingPitchesPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Pitches</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingSubjectLinesPage')">
-            <span class="messaging-content-node-kicker">Short Form</span>
-            <span class="messaging-content-node-title">Subject Lines</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-short" type="button" onclick="App.setActivePage('messagingEmailsPage')">
-            <span class="messaging-content-node-kicker">Email</span>
-            <span class="messaging-content-node-title">Emails</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-social" type="button" onclick="App.setActivePage('messagingTweetsPage')">
-            <span class="messaging-content-node-kicker">Social</span>
-            <span class="messaging-content-node-title">Tweets</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-social" type="button" onclick="App.setActivePage('messagingPostsPage')">
-            <span class="messaging-content-node-kicker">Social</span>
-            <span class="messaging-content-node-title">Posts</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.setActivePage('messagingArticlesPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">Articles</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.setActivePage('messagingReportsPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">Reports</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.setActivePage('messagingWhitePapersPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">White Papers</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-long" type="button" onclick="App.setActivePage('messagingEbooksPage')">
-            <span class="messaging-content-node-kicker">Long Form</span>
-            <span class="messaging-content-node-title">eBooks</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.setActivePage('messagingDescriptionsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Descriptions</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.setActivePage('messagingTranscriptsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Transcripts</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.setActivePage('messagingCommentsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Comments</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.setActivePage('messagingHashtagsPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Hashtags</span>
-          </button>
-          <button class="messaging-content-node messaging-content-node-support" type="button" onclick="App.setActivePage('messagingCtasPage')">
-            <span class="messaging-content-node-kicker">Support Copy</span>
-            <span class="messaging-content-node-title">Calls to Action</span>
-          </button>
+        <p>Use the content library to move between short-form, social, email, and long-form messaging editors.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="contacts-filter-row">
+                <th><input id="messagingContentTypeSearch" placeholder="Content Type" /></th>
+                <th>
+                  <select id="messagingContentFamilyFilter">
+                    <option value="">All Families</option>
+                    <option value="Short Form">Short Form</option>
+                    <option value="Email">Email</option>
+                    <option value="Social">Social</option>
+                    <option value="Long Form">Long Form</option>
+                    <option value="Support Copy">Support Copy</option>
+                    <option value="Configuration">Configuration</option>
+                  </select>
+                </th>
+                <th></th>
+                <th class="contacts-go-cell">
+                  <button id="messagingContentFiltersGoBtn" type="button">Go</button>
+                </th>
+              </tr>
+              <tr>
+                <th>Type</th>
+                <th>Family</th>
+                <th>Destination</th>
+                <th class="messaging-content-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingContentLibraryTable"></tbody>
+          </table>
         </div>
       </section>
 
       <section id="messagingManageContentPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Manage Messaging Content</h2>
+          <h2>Messaging: Formats</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('messagingContentTypesPage')">Manage Content Types</button>
-            <button type="button" onclick="App.setActivePage('messagingContentPage')">Back To Content</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.setActivePage('messagingContentTypesPage')">Manage Content Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Content</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <div id="messagingContentFilterBar" class="messaging-content-filter hidden">
@@ -2830,18 +2788,18 @@
 
       <section id="messagingContentTypesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Content Types</h2>
+          <h2>Messaging: Content Formats</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('messagingManageContentPage')">Back To Manage Content</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;">Back To Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
-        <p>Create a content type by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
+        <p>Create a content format by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
 
         <form id="messagingContentTypeForm" class="stack-form">
           <input type="hidden" name="id" />
           <div class="grid-form">
-            <input name="content_type_name" placeholder="Content Type Name (example: Abstract)" required />
+            <input name="content_type_name" placeholder="Content Format Name (example: Abstract)" required />
             <select name="family" required>
               <option value="">Select Family</option>
               <option value="Short Form">Short Form</option>
@@ -2852,7 +2810,7 @@
             <label><input name="enabled" type="checkbox" checked /> Enabled</label>
           </div>
           <div class="page-heading-actions">
-            <button id="messagingContentTypeSaveBtn" type="submit">Create Content Type</button>
+            <button id="messagingContentTypeSaveBtn" type="submit">Create Content Format</button>
             <button id="messagingContentTypeCancelEditBtn" type="button" class="hidden">Cancel Edit</button>
           </div>
         </form>
@@ -2878,7 +2836,7 @@
           <h2>Messaging: Articles</h2>
           <div class="page-heading-actions">
             <button id="messagingArticlesToggleFormBtn" type="button">Add Article</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingArticlesForm" class="stack-form hidden">
@@ -2957,7 +2915,7 @@
           <h2>Messaging: Tweets</h2>
           <div class="page-heading-actions">
             <button id="messagingTweetsToggleFormBtn" type="button">Add Tweet</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingTweetsForm" class="stack-form hidden">
@@ -3006,7 +2964,7 @@
       <section id="messagingPostsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Posts</h2>
-          <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
         </div>
         <p>Post writing workspace placeholder.</p>
       </section>
@@ -3014,7 +2972,7 @@
       <section id="messagingEmailsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Emails</h2>
-          <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
         </div>
         <p>Email writing workspace placeholder.</p>
       </section>
@@ -3025,7 +2983,7 @@
           <div class="page-heading-actions">
             <button id="openMessagingCategoriesFromPitchesBtn" type="button">Categories</button>
             <button id="messagingPitchesToggleFormBtn" type="button">Create Pitches</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
@@ -3115,7 +3073,7 @@
       <section id="messagingCommentsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Comments</h2>
-          <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
         </div>
         <p>Comment writing workspace placeholder.</p>
       </section>
@@ -3125,7 +3083,7 @@
           <h2>Messaging: Hashtags</h2>
           <div class="page-heading-actions">
             <button id="messagingHashtagsToggleFormBtn" type="button">Add Hashtags</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingHashtagsForm" class="stack-form hidden">
@@ -3150,7 +3108,7 @@
           <div class="page-heading-actions">
             <button id="openMessagingCategoriesPageBtn" type="button">Categories</button>
             <button id="messagingHeadlinesToggleFormBtn" type="button">Create Headlines</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable headlines that can later be assigned to campaigns and other messaging workflows.</p>
@@ -3242,7 +3200,7 @@
           <h2>Messaging Topics</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <section id="messagingTopicCreatePanel" class="hidden" style="margin-top: 1rem;">
@@ -3296,7 +3254,7 @@
           <div class="page-heading-actions">
             <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
             <button id="backFromEditMessagingCategoryBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingCategoryEditForm" class="stack-form labeled-form" onsubmit="App.messaging.submitTopicEdit(event); return false;">
@@ -3315,7 +3273,7 @@
           <div class="page-heading-actions">
             <button id="openMessagingCategoriesFromSubheadingsBtn" type="button">Categories</button>
             <button id="messagingSubheadingsToggleFormBtn" type="button">Create Sub-headings</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
@@ -3408,7 +3366,7 @@
           <div class="page-heading-actions">
             <button id="openMessagingCategoriesFromTaglinesBtn" type="button">Categories</button>
             <button id="messagingTaglinesToggleFormBtn" type="button">Create Taglines</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
@@ -3500,7 +3458,7 @@
           <h2>Messaging: Reports</h2>
           <div class="page-heading-actions">
             <button id="messagingReportsToggleFormBtn" type="button">Add Report</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingReportsForm" class="stack-form hidden">
@@ -3587,7 +3545,7 @@
           <h2>Messaging: White Papers</h2>
           <div class="page-heading-actions">
             <button id="messagingWhitePapersToggleFormBtn" type="button">Add White Paper</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingWhitePapersForm" class="stack-form hidden">
@@ -3674,7 +3632,7 @@
           <h2>Messaging: eBooks</h2>
           <div class="page-heading-actions">
             <button id="messagingEbooksToggleFormBtn" type="button">Add eBook</button>
-            <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingEbooksForm" class="stack-form hidden">
@@ -3759,7 +3717,7 @@
       <section id="messagingDescriptionsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Descriptions</h2>
-          <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
         </div>
         <p>Description writing workspace placeholder.</p>
       </section>
@@ -3767,7 +3725,7 @@
       <section id="messagingTranscriptsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Transcripts</h2>
-          <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
         </div>
         <p>Transcript writing workspace placeholder.</p>
       </section>
@@ -3775,7 +3733,7 @@
       <section id="messagingCtasPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: CTAs</h2>
-          <button type="button" onclick="App.setActivePage('messagingPage')">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
         </div>
         <p>CTA writing workspace placeholder.</p>
       </section>

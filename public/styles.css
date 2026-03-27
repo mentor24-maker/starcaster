@@ -1109,6 +1109,12 @@ th {
   font-size: 2.25rem;
 }
 
+.messaging-content-actions-heading,
+.messaging-content-actions-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
 .hidden {
   display: none;
 }
