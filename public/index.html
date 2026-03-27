@@ -2823,6 +2823,91 @@
         </div>
       </section>
 
+      <section id="messagingCreateContentPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Create Content</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Content</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingCreateContentForm" class="stack-form labeled-form" style="max-width: 980px;">
+          <div class="form-row">
+            <label for="messagingCreateContentFormat"><strong>Format:</strong></label>
+            <select id="messagingCreateContentFormat" name="format" required>
+              <option value="">Select Format</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="messagingCreateContentTopic"><strong>Topic:</strong></label>
+            <select id="messagingCreateContentTopic" name="topic">
+              <option value="">No Topic</option>
+            </select>
+          </div>
+          <div id="messagingCreateContentDynamicFields" class="stack-form" style="margin: 0;">
+            <div class="form-row hidden" id="messagingCreateContentPrimaryRow">
+              <label for="messagingCreateContentPrimaryInput"><strong id="messagingCreateContentPrimaryLabel">Content:</strong></label>
+              <textarea id="messagingCreateContentPrimaryInput" name="primary" rows="5" placeholder="Enter content"></textarea>
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentPlatformRow">
+              <label for="messagingCreateContentPlatform"><strong>Platform:</strong></label>
+              <select id="messagingCreateContentPlatform" name="platform">
+                <option value="">Platform</option>
+                <option value="Substack">Substack</option>
+                <option value="Medium">Medium</option>
+                <option value="Patreon">Patreon</option>
+                <option value="ISITAS Blog">ISITAS Blog</option>
+              </select>
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentAuthorRow">
+              <label for="messagingCreateContentAuthor"><strong>Author:</strong></label>
+              <input id="messagingCreateContentAuthor" name="author" placeholder="Author" />
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentPublishDateRow">
+              <label for="messagingCreateContentPublishDate"><strong>Publish Date:</strong></label>
+              <input id="messagingCreateContentPublishDate" name="publish_date" type="date" />
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentTitleRow">
+              <label for="messagingCreateContentTitle"><strong>Title:</strong></label>
+              <input id="messagingCreateContentTitle" name="title" placeholder="Title" />
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentSubtitleRow">
+              <label for="messagingCreateContentSubtitle"><strong>Subtitle:</strong></label>
+              <input id="messagingCreateContentSubtitle" name="subtitle" placeholder="Subtitle" />
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentUrlRow">
+              <label for="messagingCreateContentUrl"><strong>URL:</strong></label>
+              <input id="messagingCreateContentUrl" name="url" placeholder="https://..." />
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentHashtagsRow">
+              <label for="messagingCreateContentHashtags"><strong>Hashtags:</strong></label>
+              <input id="messagingCreateContentHashtags" name="hashtags" placeholder="#tag1, #tag2" />
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentImageRow">
+              <label for="messagingCreateContentImage"><strong>Image:</strong></label>
+              <select id="messagingCreateContentImage" name="image_asset_id">
+                <option value="">Image (optional)</option>
+              </select>
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentThumbnailRow">
+              <label for="messagingCreateContentThumbnail"><strong>Thumbnail:</strong></label>
+              <select id="messagingCreateContentThumbnail" name="thumbnail_asset_id">
+                <option value="">Thumbnail (optional)</option>
+              </select>
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentBodyRow">
+              <label for="messagingCreateContentBody"><strong id="messagingCreateContentBodyLabel">Body:</strong></label>
+              <textarea id="messagingCreateContentBody" name="content" rows="10" placeholder="Content"></textarea>
+            </div>
+            <div class="form-row hidden" id="messagingCreateContentPdfRow">
+              <label for="messagingCreateContentPdf"><strong>PDF:</strong></label>
+              <input id="messagingCreateContentPdf" name="pdf_file" type="file" accept="application/pdf,.pdf" />
+            </div>
+          </div>
+          <button id="messagingCreateContentSubmitBtn" type="submit">Save Content</button>
+        </form>
+      </section>
+
       <section id="messagingManageContentPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Formats</h2>
