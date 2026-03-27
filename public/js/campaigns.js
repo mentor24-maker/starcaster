@@ -7,6 +7,7 @@ App.campaigns = (function () {
   let builderHashtags = [];
   let builderEmails = [];
   let builderEmailTemplates = [];
+  let builderTopics = [];
   let builderHeadlines = [];
   let builderSubheadings = [];
   let builderTaglines = [];
@@ -106,6 +107,39 @@ App.campaigns = (function () {
     return text.length > 100 ? `${text.slice(0, 97)}...` : text;
   }
 
+  function selectedTopicLabel(topicId) {
+    const desired = safeText(topicId);
+    if (!desired) return '';
+    const topic = builderTopics.find((item) => String(item.id) === desired);
+    return safeText(topic?.category);
+  }
+
+  function filterRowsByTopic(rows, topicLabel, categoryField) {
+    const activeTopic = safeText(topicLabel).toLowerCase();
+    const field = safeText(categoryField) || 'category';
+    if (!activeTopic) return Array.isArray(rows) ? rows : [];
+    return (Array.isArray(rows) ? rows : []).filter((item) => {
+      const value = safeText(item?.[field]).toLowerCase();
+      return value === activeTopic;
+    });
+  }
+
+  function applyTopicValue(select, topicId, topicLabel) {
+    if (!select) return;
+    const desiredId = safeText(topicId);
+    if (desiredId && Array.from(select.options).some((option) => String(option.value) === desiredId)) {
+      select.value = desiredId;
+      return;
+    }
+    const desiredLabel = safeText(topicLabel).toLowerCase();
+    if (!desiredLabel) {
+      select.value = '';
+      return;
+    }
+    const matching = Array.from(select.options).find((option) => safeText(option.textContent).toLowerCase() === desiredLabel);
+    select.value = matching ? String(matching.value) : '';
+  }
+
   function setFieldVisible(id, visible) {
     const el = byId(id);
     if (!el) return;
@@ -198,6 +232,7 @@ App.campaigns = (function () {
   function renderBuilderSelects() {
     const currentValues = {
       channelId: safeText(byId('campaignChannelSelect')?.value),
+      topicId: safeText(byId('campaignTopicSelect')?.value),
       segmentId: safeText(byId('campaignSegmentSelect')?.value),
       emailTemplateId: safeText(byId('campaignEmailTemplateSelect')?.value),
       emailId: safeText(byId('campaignEmailSelect')?.value),
@@ -229,12 +264,38 @@ App.campaigns = (function () {
     const images = assets.filter((asset) => safeText(asset.assetType) === 'Image');
     const videos = assets.filter((asset) => safeText(asset.assetType) === 'Video');
     const leadMagnets = assets.filter((asset) => safeText(asset.assetType) === 'Lead Magnet');
+    const activeTopic = selectedTopicLabel(currentValues.topicId);
+    const filteredHeadlines = filterRowsByTopic(builderHeadlines, activeTopic, 'category');
+    const filteredEmails = filterRowsByTopic(builderEmails, activeTopic, 'category');
+    const filteredPitches = filterRowsByTopic(builderPitches, activeTopic, 'category');
+    const filteredSubheadings = filterRowsByTopic(builderSubheadings, activeTopic, 'category');
+    const filteredTaglines = filterRowsByTopic(builderTaglines, activeTopic, 'category');
+    const filteredArticles = filterRowsByTopic(builderArticles, activeTopic, 'category');
+    const filteredReports = filterRowsByTopic(builderReports, activeTopic, 'category');
+    const filteredWhitePapers = filterRowsByTopic(builderWhitePapers, activeTopic, 'category');
+    const filteredEbooks = filterRowsByTopic(builderEbooks, activeTopic, 'category');
+    const filteredPosts = filterRowsByTopic(builderPosts, activeTopic, 'category');
+    const filteredDescriptions = filterRowsByTopic(builderDescriptions, activeTopic, 'category');
+    const filteredTranscripts = filterRowsByTopic(builderTranscripts, activeTopic, 'category');
+    const filteredComments = filterRowsByTopic(builderComments, activeTopic, 'category');
+    const filteredCtas = filterRowsByTopic(builderCtas, activeTopic, 'category');
+    const filteredTweets = filterRowsByTopic(builderTweets, activeTopic, 'category');
+    const filteredImages = filterRowsByTopic(images, activeTopic, 'category');
+    const filteredVideos = filterRowsByTopic(videos, activeTopic, 'category');
+    const filteredLeadMagnets = filterRowsByTopic(leadMagnets, activeTopic, 'category');
 
     setSelectOptions(
       byId('campaignChannelSelect'),
       channels.map((channel) => ({ value: channel.id, label: channelLabel(channel) || `Channel ${channel.id}` })),
       channels.length ? 'Channel' : 'No channels available yet',
       currentValues.channelId
+    );
+
+    setSelectOptions(
+      byId('campaignTopicSelect'),
+      builderTopics.map((topic) => ({ value: topic.id, label: safeText(topic.category) || `Topic ${topic.id}` })),
+      builderTopics.length ? 'Topics' : 'Topics (create in Messaging > Topics)',
+      currentValues.topicId
     );
 
     setSelectOptions(
@@ -259,54 +320,54 @@ App.campaigns = (function () {
 
     setSelectOptions(
       byId('campaignEmailSelect'),
-      builderEmails.map((email) => {
+      filteredEmails.map((email) => {
         const body = safeText(email.email);
         const label = body.length > 100 ? `${body.slice(0, 97)}...` : body;
         return { value: email.id, label: label || `Email ${email.id}` };
       }),
-      builderEmails.length ? 'Email Body' : 'Email Body (create in Messaging > Emails)',
+      filteredEmails.length ? 'Email Body' : activeTopic ? 'Email Body (no matches for topic)' : 'Email Body (create in Messaging > Emails)',
       currentValues.emailId
     );
 
     setSelectOptions(
       byId('campaignHeadlineSelect'),
-      builderHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Headline ${item.id}`) })),
-      builderHeadlines.length ? 'Headline' : 'Headline (create in Messaging > Headlines)',
+      filteredHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Headline ${item.id}`) })),
+      filteredHeadlines.length ? 'Headline' : activeTopic ? 'Headline (no matches for topic)' : 'Headline (create in Messaging > Headlines)',
       currentValues.headlineId
     );
 
     setSelectOptions(
       byId('campaignSubjectLineSelect'),
-      builderHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Subject ${item.id}`) })),
-      builderHeadlines.length ? 'Subject Line' : 'Subject Line (use Headlines for now)',
+      filteredHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Subject ${item.id}`) })),
+      filteredHeadlines.length ? 'Subject Line' : activeTopic ? 'Subject Line (no matches for topic)' : 'Subject Line (use Headlines for now)',
       currentValues.subjectLineId
     );
 
     setSelectOptions(
       byId('campaignBlurbSelect'),
-      builderDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Blurb ${item.id}`) })),
-      builderDescriptions.length ? 'Blurb' : 'Blurb (use Descriptions)',
+      filteredDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Blurb ${item.id}`) })),
+      filteredDescriptions.length ? 'Blurb' : activeTopic ? 'Blurb (no matches for topic)' : 'Blurb (use Descriptions)',
       currentValues.blurbId
     );
 
     setSelectOptions(
       byId('campaignPitchSelect'),
-      builderPitches.map((item) => ({ value: item.id, label: optionLabelFromText(item.pitch, `Pitch ${item.id}`) })),
-      builderPitches.length ? 'Pitch' : 'Pitch (create in Messaging > Pitches)',
+      filteredPitches.map((item) => ({ value: item.id, label: optionLabelFromText(item.pitch, `Pitch ${item.id}`) })),
+      filteredPitches.length ? 'Pitch' : activeTopic ? 'Pitch (no matches for topic)' : 'Pitch (create in Messaging > Pitches)',
       currentValues.pitchId
     );
 
     setSelectOptions(
       byId('campaignSubheadingSelect'),
-      builderSubheadings.map((item) => ({ value: item.id, label: optionLabelFromText(item.subheading, `Sub-heading ${item.id}`) })),
-      builderSubheadings.length ? 'Sub-heading' : 'Sub-heading (create in Messaging > Sub-headings)',
+      filteredSubheadings.map((item) => ({ value: item.id, label: optionLabelFromText(item.subheading, `Sub-heading ${item.id}`) })),
+      filteredSubheadings.length ? 'Sub-heading' : activeTopic ? 'Sub-heading (no matches for topic)' : 'Sub-heading (create in Messaging > Sub-headings)',
       currentValues.subheadingId
     );
 
     setSelectOptions(
       byId('campaignTaglineSelect'),
-      builderTaglines.map((item) => ({ value: item.id, label: optionLabelFromText(item.tagline, `Tagline ${item.id}`) })),
-      builderTaglines.length ? 'Tagline' : 'Tagline (create in Messaging > Taglines)',
+      filteredTaglines.map((item) => ({ value: item.id, label: optionLabelFromText(item.tagline, `Tagline ${item.id}`) })),
+      filteredTaglines.length ? 'Tagline' : activeTopic ? 'Tagline (no matches for topic)' : 'Tagline (create in Messaging > Taglines)',
       currentValues.taglineId
     );
 
@@ -334,61 +395,61 @@ App.campaigns = (function () {
 
     setSelectOptions(
       byId('campaignCtaSelect'),
-      builderCtas.map((item) => ({ value: item.id, label: optionLabelFromText(item.cta, `CTA ${item.id}`) })),
-      builderCtas.length ? 'CTA' : 'CTA (create in Messaging > CTAs)',
+      filteredCtas.map((item) => ({ value: item.id, label: optionLabelFromText(item.cta, `CTA ${item.id}`) })),
+      filteredCtas.length ? 'CTA' : activeTopic ? 'CTA (no matches for topic)' : 'CTA (create in Messaging > CTAs)',
       currentValues.ctaId
     );
 
     setSelectOptions(
       byId('campaignTweetSelect'),
-      builderTweets.map((tweet) => {
+      filteredTweets.map((tweet) => {
         const content = safeText(tweet.content);
         const label = content.length > 80 ? `${content.slice(0, 77)}...` : content;
         return { value: tweet.id, label: label || `Tweet ${tweet.id}` };
       }),
-      builderTweets.length ? 'Tweet' : 'Tweet (create in Messaging > Tweets)',
+      filteredTweets.length ? 'Tweet' : activeTopic ? 'Tweet (no matches for topic)' : 'Tweet (create in Messaging > Tweets)',
       currentValues.tweetId
     );
 
     setSelectOptions(
       byId('campaignPostSelect'),
-      builderPosts.map((item) => ({ value: item.id, label: optionLabelFromText(item.post, `Post ${item.id}`) })),
-      builderPosts.length ? 'Post' : 'Post (create in Messaging > Posts)',
+      filteredPosts.map((item) => ({ value: item.id, label: optionLabelFromText(item.post, `Post ${item.id}`) })),
+      filteredPosts.length ? 'Post' : activeTopic ? 'Post (no matches for topic)' : 'Post (create in Messaging > Posts)',
       currentValues.postId
     );
 
     setSelectOptions(
       byId('campaignDescriptionSelect'),
-      builderDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Description ${item.id}`) })),
-      builderDescriptions.length ? 'Description' : 'Description (create in Messaging > Descriptions)',
+      filteredDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Description ${item.id}`) })),
+      filteredDescriptions.length ? 'Description' : activeTopic ? 'Description (no matches for topic)' : 'Description (create in Messaging > Descriptions)',
       currentValues.descriptionId
     );
 
     setSelectOptions(
       byId('campaignTranscriptSelect'),
-      builderTranscripts.map((item) => ({ value: item.id, label: optionLabelFromText(item.transcript, `Transcript ${item.id}`) })),
-      builderTranscripts.length ? 'Transcript' : 'Transcript (create in Messaging > Transcripts)',
+      filteredTranscripts.map((item) => ({ value: item.id, label: optionLabelFromText(item.transcript, `Transcript ${item.id}`) })),
+      filteredTranscripts.length ? 'Transcript' : activeTopic ? 'Transcript (no matches for topic)' : 'Transcript (create in Messaging > Transcripts)',
       currentValues.transcriptId
     );
 
     setSelectOptions(
       byId('campaignCommentSelect'),
-      builderComments.map((item) => ({ value: item.id, label: optionLabelFromText(item.comment, `Comment ${item.id}`) })),
-      builderComments.length ? 'Comment' : 'Comment (create in Messaging > Comments)',
+      filteredComments.map((item) => ({ value: item.id, label: optionLabelFromText(item.comment, `Comment ${item.id}`) })),
+      filteredComments.length ? 'Comment' : activeTopic ? 'Comment (no matches for topic)' : 'Comment (create in Messaging > Comments)',
       currentValues.commentId
     );
 
     setSelectOptions(
       byId('campaignPrimaryImageSelect'),
-      images.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Image ${asset.id}` })),
-      images.length ? 'Primary Image' : 'Primary Image (no image assets yet)',
+      filteredImages.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Image ${asset.id}` })),
+      filteredImages.length ? 'Primary Image' : activeTopic ? 'Primary Image (no matches for topic)' : 'Primary Image (no image assets yet)',
       currentValues.primaryImageId
     );
 
     setSelectOptions(
       byId('campaignPrimaryVideoSelect'),
-      videos.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Video ${asset.id}` })),
-      'Primary Video (optional)',
+      filteredVideos.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Video ${asset.id}` })),
+      filteredVideos.length ? 'Primary Video (optional)' : activeTopic ? 'Primary Video (no matches for topic)' : 'Primary Video (optional)',
       currentValues.primaryVideoId
     );
 
@@ -408,36 +469,36 @@ App.campaigns = (function () {
 
     setSelectOptions(
       byId('campaignArticleSelect'),
-      builderArticles.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Article ${item.id}`) })),
-      builderArticles.length ? 'Article' : 'Article (create in Messaging > Articles)',
+      filteredArticles.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Article ${item.id}`) })),
+      filteredArticles.length ? 'Article' : activeTopic ? 'Article (no matches for topic)' : 'Article (create in Messaging > Articles)',
       currentValues.articleId
     );
 
     setSelectOptions(
       byId('campaignReportSelect'),
-      builderReports.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Report ${item.id}`) })),
-      builderReports.length ? 'Report' : 'Report (create in Messaging > Reports)',
+      filteredReports.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Report ${item.id}`) })),
+      filteredReports.length ? 'Report' : activeTopic ? 'Report (no matches for topic)' : 'Report (create in Messaging > Reports)',
       currentValues.reportId
     );
 
     setSelectOptions(
       byId('campaignWhitePaperSelect'),
-      builderWhitePapers.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `White Paper ${item.id}`) })),
-      builderWhitePapers.length ? 'White Paper' : 'White Paper (create in Messaging > White Papers)',
+      filteredWhitePapers.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `White Paper ${item.id}`) })),
+      filteredWhitePapers.length ? 'White Paper' : activeTopic ? 'White Paper (no matches for topic)' : 'White Paper (create in Messaging > White Papers)',
       currentValues.whitePaperId
     );
 
     setSelectOptions(
       byId('campaignEbookSelect'),
-      builderEbooks.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `eBook ${item.id}`) })),
-      builderEbooks.length ? 'eBook' : 'eBook (create in Messaging > eBooks)',
+      filteredEbooks.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `eBook ${item.id}`) })),
+      filteredEbooks.length ? 'eBook' : activeTopic ? 'eBook (no matches for topic)' : 'eBook (create in Messaging > eBooks)',
       currentValues.ebookId
     );
 
     setSelectOptions(
       byId('campaignLeadMagnetSelect'),
-      leadMagnets.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Asset ${asset.id}` })),
-      leadMagnets.length ? 'PDF (optional)' : 'PDF (placeholder)',
+      filteredLeadMagnets.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Asset ${asset.id}` })),
+      filteredLeadMagnets.length ? 'PDF (optional)' : activeTopic ? 'PDF (no matches for topic)' : 'PDF (placeholder)',
       currentValues.leadMagnetId
     );
 
@@ -448,7 +509,7 @@ App.campaigns = (function () {
   }
 
   async function loadBuilderSources() {
-    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes, headlinesRes, subheadingsRes, taglinesRes, pitchesRes, articlesRes, reportsRes, whitePapersRes, ebooksRes, postsRes, descriptionsRes, transcriptsRes, commentsRes, ctasRes, landingPagesRes, formsRes] = await Promise.allSettled([
+    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes, topicsRes, headlinesRes, subheadingsRes, taglinesRes, pitchesRes, articlesRes, reportsRes, whitePapersRes, ebooksRes, postsRes, descriptionsRes, transcriptsRes, commentsRes, ctasRes, landingPagesRes, formsRes] = await Promise.allSettled([
       api('/api/channels'),
       api('/api/assets'),
       api('/api/segments'),
@@ -456,6 +517,7 @@ App.campaigns = (function () {
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/emails?limit=5000'),
       api('/api/develop/email-templates'),
+      api('/api/messaging/categories?limit=5000'),
       api('/api/messaging/headlines?limit=5000'),
       api('/api/messaging/subheadings?limit=5000'),
       api('/api/messaging/taglines?limit=5000'),
@@ -494,6 +556,15 @@ App.campaigns = (function () {
       : [];
     builderEmailTemplates = emailTemplatesRes.status === 'fulfilled' && Array.isArray(emailTemplatesRes.value.emailTemplates)
       ? emailTemplatesRes.value.emailTemplates
+      : [];
+    builderTopics = topicsRes.status === 'fulfilled'
+      ? (Array.isArray(topicsRes.value.categories)
+        ? topicsRes.value.categories
+        : Array.isArray(topicsRes.value.data)
+          ? topicsRes.value.data
+          : Array.isArray(topicsRes.value)
+            ? topicsRes.value
+            : [])
       : [];
     builderHeadlines = headlinesRes.status === 'fulfilled' && Array.isArray(headlinesRes.value.headlines) ? headlinesRes.value.headlines : [];
     builderSubheadings = subheadingsRes.status === 'fulfilled' && Array.isArray(subheadingsRes.value.subheadings) ? subheadingsRes.value.subheadings : [];
@@ -640,6 +711,7 @@ App.campaigns = (function () {
     form.elements.name.value = cloneMode ? `${safeText(campaign.name)} Copy`.trim() : safeText(campaign.name);
     form.elements.status.value = safeText(campaign.status) || 'pending';
     applySelectValue(byId('campaignChannelSelect'), config.channelId);
+    applyTopicValue(byId('campaignTopicSelect'), config.topicId, config.topicLabel);
     applySelectValue(byId('campaignSegmentSelect'), config.segmentId || campaign.segmentId);
     applySelectValue(byId('campaignEmailTemplateSelect'), config.emailTemplateId);
     applySelectValue(byId('campaignEmailSelect'), config.emailId);
@@ -664,7 +736,7 @@ App.campaigns = (function () {
     applySelectValue(byId('campaignPrimaryImageSelect'), config.primaryImageId);
     applySelectValue(byId('campaignPrimaryVideoSelect'), config.primaryVideoId);
     const hashtagsField = byId('campaignHashtagGroupSelect');
-    if (hashtagsField) hashtagsField.value = safeText(config.hashtagGroupLabel || '');
+    if (hashtagsField) hashtagsField.value = safeText(config.hashtagGroupId || '');
     applyCampaignChannelProfile(config.channelId);
     setCampaignFormMode(!cloneMode);
     ensureCampaignFormVisible();
@@ -710,14 +782,21 @@ App.campaigns = (function () {
 
     if (form) {
       const channelSelect = byId('campaignChannelSelect');
+      const topicSelect = byId('campaignTopicSelect');
       if (channelSelect) {
         channelSelect.addEventListener('change', function () {
           applyCampaignChannelProfile(channelSelect.value);
         });
       }
+      if (topicSelect) {
+        topicSelect.addEventListener('change', function () {
+          renderBuilderSelects();
+        });
+      }
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const channelSelect = byId('campaignChannelSelect');
+        const topicSelect = byId('campaignTopicSelect');
         const segmentSelect = byId('campaignSegmentSelect');
         const emailTemplateSelect = byId('campaignEmailTemplateSelect');
         const emailSelect = byId('campaignEmailSelect');
@@ -751,6 +830,8 @@ App.campaigns = (function () {
             builder: 'campaign-v1',
             channelId: safeText(channelSelect?.value),
             channelLabel: selectedOptionText(channelSelect),
+            topicId: safeText(topicSelect?.value),
+            topicLabel: selectedOptionText(topicSelect),
             segmentId: safeText(segmentSelect?.value),
             segmentLabel: selectedOptionText(segmentSelect),
             emailTemplateId: safeText(emailTemplateSelect?.value),
