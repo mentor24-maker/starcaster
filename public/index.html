@@ -707,13 +707,22 @@
         <p>Fetch and parse website pages immediately.</p>
         <form id="directAcquireForm" class="stack-form">
           <div class="grid-form">
-            <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Source URL" />
-            <input id="directAcquireMaxPagesInput" name="max_pages" type="number" min="1" max="50" value="5" placeholder="Pages to Fetch" />
+            <div class="form-row">
+              <label for="directAcquireUrlInput">Website</label>
+              <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Source URL" />
+            </div>
+            <div class="form-row">
+              <label for="directAcquireMaxPagesInput">Pages to Fetch</label>
+              <input id="directAcquireMaxPagesInput" name="max_pages" type="number" min="1" max="50" value="5" placeholder="Pages to Fetch" />
+            </div>
           </div>
           <details>
             <summary>Advanced</summary>
             <div class="grid-form" style="margin-top: 0.75rem;">
-              <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
+              <div class="form-row">
+                <label for="directAcquireSnippetInput">Snippet Length</label>
+                <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
+              </div>
             </div>
           </details>
           <button type="submit">Run Direct Ingest</button>
