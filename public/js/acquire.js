@@ -15,6 +15,88 @@ App.acquire = (function () {
   const YT_MINER_RESPONSE_CONTEXT_KEY = 'yt_miner_response_context_v1';
   const YT_MINER_RESPONSE_GUIDELINES_KEY = 'yt_miner_response_guidelines_v1';
   const DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY = 'alphire:direct-acquire:keyword-exclusions:v1';
+  const DIRECT_ACQUIRE_KEYWORD_REASONS_KEY = 'alphire:direct-acquire:keyword-exclusion-reasons:v1';
+  const DIRECT_ACQUIRE_KEYWORD_REASON_OPTIONS = [
+    ['', 'No Exclusion'],
+    ['brand', 'Brand'],
+    ['generic', 'Generic'],
+    ['navigational', 'Navigational'],
+    ['boilerplate', 'Boilerplate'],
+    ['location', 'Location'],
+    ['legal', 'Legal'],
+  ];
+
+  function normalizeDirectAcquireKeyword(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/&[a-z0-9#]+;/gi, ' ')
+      .replace(/[^a-z0-9\s-]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function splitDirectAcquireKeywordExclusions(value) {
+    return String(value || '')
+      .split(/\r?\n|,|;/g)
+      .map((item) => String(item || '').trim())
+      .filter(Boolean);
+  }
+
+  function readDirectAcquireKeywordReasons() {
+    try {
+      const raw = window.localStorage.getItem(DIRECT_ACQUIRE_KEYWORD_REASONS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeDirectAcquireKeywordReasons(map) {
+    try {
+      window.localStorage.setItem(DIRECT_ACQUIRE_KEYWORD_REASONS_KEY, JSON.stringify(map || {}));
+    } catch (_) {
+      // ignore local storage failures
+    }
+  }
+
+  function syncDirectAcquireKeywordExclusionsFromTable() {
+    const textarea = document.getElementById('directAcquireKeywordExclusionsInput');
+    const tableBody = document.getElementById('directAcquireKeywordTable');
+    if (!textarea || !tableBody) return;
+    const currentRunKeywords = new Map(
+      (Array.isArray(state.directAcquireCurrentRun?.keyword_labels) ? state.directAcquireCurrentRun.keyword_labels : [])
+        .map(([keyword]) => [normalizeDirectAcquireKeyword(keyword), String(keyword || '').trim()])
+        .filter(([normalized, label]) => normalized && label)
+    );
+    const existingEntries = splitDirectAcquireKeywordExclusions(textarea.value);
+    const manualOnly = existingEntries.filter((entry) => !currentRunKeywords.has(normalizeDirectAcquireKeyword(entry)));
+    const nextReasons = readDirectAcquireKeywordReasons();
+    const selectedEntries = [];
+    tableBody.querySelectorAll('tr').forEach((row) => {
+      const checkbox = row.querySelector('input[type="checkbox"][data-keyword]');
+      const select = row.querySelector('select[data-keyword-reason]');
+      if (!checkbox) return;
+      const label = String(checkbox.dataset.keyword || '').trim();
+      const normalized = normalizeDirectAcquireKeyword(label);
+      if (!normalized || !label) return;
+      if (checkbox.checked) {
+        const reason = String(select && select.value || 'brand').trim() || 'brand';
+        nextReasons[normalized] = reason;
+        selectedEntries.push(label);
+      } else {
+        delete nextReasons[normalized];
+      }
+    });
+    const merged = Array.from(new Set([...manualOnly, ...selectedEntries]));
+    textarea.value = merged.join('\n');
+    try {
+      window.localStorage.setItem(DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY, textarea.value);
+    } catch (_) {
+      // ignore local storage failures
+    }
+    writeDirectAcquireKeywordReasons(nextReasons);
+  }
 
   function blueskyDiscoveryFeedbackKey(itemOrUrl) {
     const postUrl = typeof itemOrUrl === 'string'
@@ -564,27 +646,86 @@ App.acquire = (function () {
   function renderDirectAcquireKeywordTable() {
     const tableBody = document.getElementById('directAcquireKeywordTable');
     const emptyEl = document.getElementById('directAcquireKeywordEmpty');
+    const selectAll = document.getElementById('directAcquireKeywordSelectAll');
     if (!tableBody) return;
     tableBody.innerHTML = '';
     const run = state.directAcquireCurrentRun;
     const labels = Array.isArray(run?.keyword_labels) ? run.keyword_labels : [];
+    const exclusionSet = new Set(
+      splitDirectAcquireKeywordExclusions(document.getElementById('directAcquireKeywordExclusionsInput')?.value)
+        .map((value) => normalizeDirectAcquireKeyword(value))
+        .filter(Boolean)
+    );
+    const reasonMap = readDirectAcquireKeywordReasons();
     if (!labels.length) {
       if (emptyEl) emptyEl.classList.remove('hidden');
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
       return;
     }
     if (emptyEl) emptyEl.classList.add('hidden');
     labels.forEach(([keyword, score]) => {
       const tr = document.createElement('tr');
+      const normalized = normalizeDirectAcquireKeyword(keyword);
+      const selected = exclusionSet.has(normalized);
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selected;
+      checkbox.dataset.keyword = String(keyword || '').trim();
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          const reasonSelect = tr.querySelector('select[data-keyword-reason]');
+          if (reasonSelect && !String(reasonSelect.value || '').trim()) reasonSelect.value = 'brand';
+        }
+        syncDirectAcquireKeywordExclusionsFromTable();
+        renderDirectAcquireKeywordTable();
+      });
+      selectTd.appendChild(checkbox);
+      tr.appendChild(selectTd);
       const keywordTd = document.createElement('td');
       keywordTd.className = 'direct-acquire-contact-label';
       keywordTd.textContent = String(keyword || '');
       const scoreTd = document.createElement('td');
       const numericScore = Number(score || 0) || 0;
       scoreTd.textContent = numericScore ? numericScore.toFixed(1) : '0.0';
+      const reasonTd = document.createElement('td');
+      const reasonSelect = document.createElement('select');
+      reasonSelect.dataset.keywordReason = 'true';
+      reasonSelect.dataset.keyword = String(keyword || '').trim();
+      DIRECT_ACQUIRE_KEYWORD_REASON_OPTIONS.forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        if (String(value) === String(reasonMap[normalized] || (selected ? 'brand' : ''))) {
+          option.selected = true;
+        }
+        reasonSelect.appendChild(option);
+      });
+      reasonSelect.addEventListener('change', () => {
+        if (String(reasonSelect.value || '').trim()) {
+          checkbox.checked = true;
+        }
+        if (!String(reasonSelect.value || '').trim()) {
+          checkbox.checked = false;
+        }
+        syncDirectAcquireKeywordExclusionsFromTable();
+        renderDirectAcquireKeywordTable();
+      });
+      reasonTd.appendChild(reasonSelect);
       tr.appendChild(keywordTd);
       tr.appendChild(scoreTd);
+      tr.appendChild(reasonTd);
       tableBody.appendChild(tr);
     });
+    if (selectAll) {
+      const checkboxes = Array.from(tableBody.querySelectorAll('input[type="checkbox"][data-keyword]'));
+      const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+      selectAll.checked = !!checkboxes.length && checkedCount === checkboxes.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+    }
   }
 
   function buildContactPayloadFromDirectRun(run) {
@@ -1985,6 +2126,45 @@ App.acquire = (function () {
         } catch (_) {
           // ignore local storage failures
         }
+        renderDirectAcquireKeywordTable();
+      });
+    }
+    const directAcquireKeywordSelectAll = document.getElementById('directAcquireKeywordSelectAll');
+    if (directAcquireKeywordSelectAll) {
+      directAcquireKeywordSelectAll.addEventListener('change', function () {
+        document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]').forEach((checkbox) => {
+          checkbox.checked = directAcquireKeywordSelectAll.checked;
+          if (directAcquireKeywordSelectAll.checked) {
+            const row = checkbox.closest('tr');
+            const reasonSelect = row ? row.querySelector('select[data-keyword-reason]') : null;
+            if (reasonSelect && !String(reasonSelect.value || '').trim()) reasonSelect.value = 'brand';
+          }
+        });
+        syncDirectAcquireKeywordExclusionsFromTable();
+        renderDirectAcquireKeywordTable();
+      });
+    }
+    const directAcquireApplyKeywordReasonBtn = document.getElementById('directAcquireApplyKeywordReasonBtn');
+    const directAcquireKeywordBulkReason = document.getElementById('directAcquireKeywordBulkReason');
+    if (directAcquireApplyKeywordReasonBtn && directAcquireKeywordBulkReason) {
+      directAcquireApplyKeywordReasonBtn.addEventListener('click', function () {
+        const reason = String(directAcquireKeywordBulkReason.value || '').trim();
+        if (!reason) {
+          notify('Select an exclusion reason first', true);
+          return;
+        }
+        const selected = Array.from(document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]:checked'));
+        if (!selected.length) {
+          notify('Check at least one keyword first', true);
+          return;
+        }
+        selected.forEach((checkbox) => {
+          const row = checkbox.closest('tr');
+          const reasonSelect = row ? row.querySelector('select[data-keyword-reason]') : null;
+          if (reasonSelect) reasonSelect.value = reason;
+        });
+        syncDirectAcquireKeywordExclusionsFromTable();
+        renderDirectAcquireKeywordTable();
       });
     }
     clearRedditHarvestProgress();
