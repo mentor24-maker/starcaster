@@ -29,7 +29,7 @@ App.messaging = (function () {
   let currentTweets = [];
   let currentTweetSuggestions = [];
   let currentHashtags = [];
-  let currentMessagingCategories = [];
+  let currentMessagingTopics = [];
   let currentMessagingTags = [];
   let activeMessagingContentCategory = '';
   const headlineTableState = {
@@ -106,7 +106,7 @@ App.messaging = (function () {
       dir: 'desc',
     },
   };
-  const messagingCategoryTableState = {
+  const messagingTopicTableState = {
     dir: 'asc',
   };
   const messagingTagTableState = {
@@ -315,8 +315,8 @@ App.messaging = (function () {
   }
 
   function syncHeadlineCategorySelects() {
-    const categoryNames = currentMessagingCategories
-      .map((item) => String(item?.category || '').trim())
+    const categoryNames = currentMessagingTopics
+      .map((item) => String(item?.topic || item?.category || '').trim())
       .filter(Boolean);
     const uniqueNames = Array.from(new Set(categoryNames)).sort((a, b) => a.localeCompare(b));
 
@@ -2650,6 +2650,10 @@ App.messaging = (function () {
     return openTopicsPage();
   }
 
+  function openTopicsLanding() {
+    return openTopicsPage();
+  }
+
   function setTagsCreateVisible(visible) {
     const panel = document.getElementById('messagingTagCreatePanel');
     if (!panel) return;
@@ -2752,20 +2756,22 @@ App.messaging = (function () {
   }
 
   async function ensureMessagingTopicsLoaded() {
-    if (Array.isArray(currentMessagingCategories) && currentMessagingCategories.length) return currentMessagingCategories;
+    if (Array.isArray(currentMessagingTopics) && currentMessagingTopics.length) return currentMessagingTopics;
     try {
-      const res = await api('/api/messaging/categories?limit=5000');
-      const categories = Array.isArray(res?.categories)
-        ? res.categories
+      const res = await api('/api/messaging/topics?limit=5000');
+      const topics = Array.isArray(res?.topics)
+        ? res.topics
+        : Array.isArray(res?.categories)
+          ? res.categories
         : Array.isArray(res?.data)
           ? res.data
           : Array.isArray(res)
             ? res
             : [];
-      currentMessagingCategories = categories.slice();
-      return currentMessagingCategories;
+      currentMessagingTopics = topics.slice();
+      return currentMessagingTopics;
     } catch {
-      return Array.isArray(currentMessagingCategories) ? currentMessagingCategories : [];
+      return Array.isArray(currentMessagingTopics) ? currentMessagingTopics : [];
     }
   }
 
@@ -2775,7 +2781,7 @@ App.messaging = (function () {
     const currentValue = String(select.value || '').trim();
     const source = await ensureMessagingTopicsLoaded();
     const topics = source
-      .map((item) => String(item?.category || '').trim())
+      .map((item) => String(item?.topic || item?.category || '').trim())
       .filter(Boolean)
       .filter((value, index, arr) => arr.indexOf(value) === index)
       .sort((a, b) => a.localeCompare(b));
@@ -3225,8 +3231,8 @@ App.messaging = (function () {
     const select = document.getElementById('messagingContentTopicFilter');
     if (!select) return;
     const currentValue = String(select.value || '').trim();
-    const topics = currentMessagingCategories
-      .map((item) => String(item?.category || '').trim())
+    const topics = currentMessagingTopics
+      .map((item) => String(item?.topic || item?.category || '').trim())
       .filter(Boolean)
       .filter((value, index, arr) => arr.indexOf(value) === index)
       .sort((a, b) => a.localeCompare(b));
@@ -4025,13 +4031,13 @@ App.messaging = (function () {
   }
 
   function getSortedMessagingCategories() {
-    const rows = Array.isArray(currentMessagingCategories) ? currentMessagingCategories.slice() : [];
+    const rows = Array.isArray(currentMessagingTopics) ? currentMessagingTopics.slice() : [];
     rows.sort(function (a, b) {
       const left = String(a?.category || '').toLowerCase();
       const right = String(b?.category || '').toLowerCase();
       if (left === right) return 0;
       const result = left < right ? -1 : 1;
-      return messagingCategoryTableState.dir === 'asc' ? result : -result;
+      return messagingTopicTableState.dir === 'asc' ? result : -result;
     });
     return rows;
   }
@@ -4042,20 +4048,20 @@ App.messaging = (function () {
     if (!form || !idInput || !item) return;
     form.reset();
     idInput.value = String(item.id || '');
-    form.elements.category.value = String(item.category || '');
+    form.elements.category.value = String(item.topic || item.category || '');
     App.setActivePage('editMessagingCategoryPage');
   }
 
   function renderMessagingCategoriesTable(categories) {
     const tbody = document.getElementById('messagingCategoriesTable');
     const sortBtn = document.getElementById('messagingCategoriesSortBtn');
-    currentMessagingCategories = Array.isArray(categories) ? categories.slice() : [];
-    renderMessagingCategoriesMap(currentMessagingCategories);
+    currentMessagingTopics = Array.isArray(categories) ? categories.slice() : [];
+    renderMessagingCategoriesMap(currentMessagingTopics);
     syncHeadlineCategorySelects();
     if (!tbody) return;
     tbody.innerHTML = '';
     if (sortBtn) {
-      sortBtn.textContent = `Topic${messagingCategoryTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
+      sortBtn.textContent = `Topic${messagingTopicTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
     }
 
     const rows = getSortedMessagingCategories();
@@ -4072,7 +4078,7 @@ App.messaging = (function () {
     rows.forEach((item) => {
       const tr = document.createElement('tr');
       const categoryTd = document.createElement('td');
-      categoryTd.textContent = String(item.category || '').trim() || '-';
+      categoryTd.textContent = String(item.topic || item.category || '').trim() || '-';
       tr.appendChild(categoryTd);
 
       const actionsTd = document.createElement('td');
@@ -4081,9 +4087,9 @@ App.messaging = (function () {
         openMessagingCategoryEditForm(item);
       });
       const deleteBtn = App.makeIconButton('delete', 'Delete Topic', async function () {
-        if (!confirm(`Delete messaging topic "${item.category}"?`)) return;
+        if (!confirm(`Delete messaging topic "${String(item.topic || item.category || '').trim()}"?`)) return;
         try {
-          await api(`/api/messaging/categories/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+          await api(`/api/messaging/topics/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
           notify('Messaging topic deleted');
           await refreshMessagingCategories();
         } catch (err) {
@@ -4100,9 +4106,11 @@ App.messaging = (function () {
 
   async function refreshMessagingCategories() {
     try {
-      const res = await api('/api/messaging/categories?limit=5000');
-      const categories = Array.isArray(res?.categories)
-        ? res.categories
+      const res = await api('/api/messaging/topics?limit=5000');
+      const categories = Array.isArray(res?.topics)
+        ? res.topics
+        : Array.isArray(res?.categories)
+          ? res.categories
         : Array.isArray(res?.data)
           ? res.data
           : Array.isArray(res)
@@ -4119,15 +4127,15 @@ App.messaging = (function () {
     const form = document.getElementById('messagingCategoryForm');
     if (!form) return false;
     const formData = new FormData(form);
-    const category = String(formData.get('category') || '').trim();
-    if (!category) {
+    const topic = String(formData.get('category') || formData.get('topic') || '').trim();
+    if (!topic) {
       notify('Topic is required', true);
       return false;
     }
     try {
-      await api('/api/messaging/categories', {
+      await api('/api/messaging/topics', {
         method: 'POST',
-        body: JSON.stringify({ category }),
+        body: JSON.stringify({ topic }),
       });
       notify('Messaging topic saved');
       form.reset();
@@ -4146,7 +4154,7 @@ App.messaging = (function () {
     if (!form) return false;
     const formData = new FormData(form);
     const id = Number(formData.get('id') || 0) || 0;
-    const category = String(formData.get('category') || '').trim();
+    const category = String(formData.get('category') || formData.get('topic') || '').trim();
     if (!id) {
       notify('Topic id is required', true);
       return false;
@@ -4156,9 +4164,9 @@ App.messaging = (function () {
       return false;
     }
     try {
-      await api(`/api/messaging/categories/${encodeURIComponent(id)}`, {
+      await api(`/api/messaging/topics/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ category }),
+        body: JSON.stringify({ topic: category }),
       });
       notify('Messaging topic updated');
       form.reset();
@@ -5520,8 +5528,8 @@ App.messaging = (function () {
 
     if (messagingCategorySortBtn) {
       messagingCategorySortBtn.addEventListener('click', function () {
-        messagingCategoryTableState.dir = messagingCategoryTableState.dir === 'asc' ? 'desc' : 'asc';
-        renderMessagingCategoriesTable(currentMessagingCategories);
+        messagingTopicTableState.dir = messagingTopicTableState.dir === 'asc' ? 'desc' : 'asc';
+        renderMessagingCategoriesTable(currentMessagingTopics);
       });
     }
 
@@ -5910,6 +5918,7 @@ App.messaging = (function () {
     manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingContentPage', pagePrefixes: ['messaging'] },
     init,
     openCategoriesLanding,
+    openTopicsLanding,
     openTopicsPage,
     openTopicsCreate,
     openTagsPage,

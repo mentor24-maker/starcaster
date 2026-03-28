@@ -887,7 +887,7 @@ App.youtube = (function () {
   async function loadYoutubeResearchMessagingCache() {
     if (youtubeResearchMessagingCache) return youtubeResearchMessagingCache;
     var requests = [
-      api('/api/messaging/categories?limit=5000'),
+      api('/api/messaging/topics?limit=5000'),
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/articles?limit=5000'),
       api('/api/messaging/posts?limit=5000'),

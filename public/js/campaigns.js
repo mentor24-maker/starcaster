@@ -515,7 +515,7 @@ App.campaigns = (function () {
 
     setSelectOptions(
       byId('campaignTopicSelect'),
-      builderTopics.map((topic) => ({ value: topic.id, label: safeText(topic.category) || `Topic ${topic.id}` })),
+      builderTopics.map((topic) => ({ value: topic.id, label: safeText(topic.topic || topic.category) || `Topic ${topic.id}` })),
       builderTopics.length ? 'Topics' : 'Topics (create in Messaging > Topics)',
       currentValues.topicId
     );
@@ -739,7 +739,7 @@ App.campaigns = (function () {
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/emails?limit=5000'),
       api('/api/develop/email-templates'),
-      api('/api/messaging/categories?limit=5000'),
+      api('/api/messaging/topics?limit=5000'),
       api('/api/messaging/headlines?limit=5000'),
       api('/api/messaging/subheadings?limit=5000'),
       api('/api/messaging/taglines?limit=5000'),
@@ -780,8 +780,10 @@ App.campaigns = (function () {
       ? emailTemplatesRes.value.emailTemplates
       : [];
     builderTopics = topicsRes.status === 'fulfilled'
-      ? (Array.isArray(topicsRes.value.categories)
-        ? topicsRes.value.categories
+      ? (Array.isArray(topicsRes.value.topics)
+        ? topicsRes.value.topics
+        : Array.isArray(topicsRes.value.categories)
+          ? topicsRes.value.categories
         : Array.isArray(topicsRes.value.data)
           ? topicsRes.value.data
           : Array.isArray(topicsRes.value)
