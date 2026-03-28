@@ -3976,16 +3976,59 @@ th {
   margin: 0 auto;
 }
 
-#directAcquireKeywordBulkTopics {
-  min-width: 220px;
-  height: 42px;
-  overflow: hidden;
-}
-
 #acquireWebPage .page-heading-actions > label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.direct-acquire-dropdown {
+  position: relative;
+}
+
+.direct-acquire-dropdown summary {
+  list-style: none;
+  min-width: 220px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #8ab4f8;
+  border-radius: 8px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.direct-acquire-dropdown summary::-webkit-details-marker {
+  display: none;
+}
+
+.direct-acquire-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  max-height: 260px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #dbe7ff;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+  padding: 10px 12px;
+}
+
+.direct-acquire-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.direct-acquire-dropdown-option:last-child {
+  margin-bottom: 0;
 }
 
 .acquire-web-results-grid {
