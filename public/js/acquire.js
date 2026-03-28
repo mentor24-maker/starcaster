@@ -274,6 +274,57 @@ App.acquire = (function () {
     });
   }
 
+  function buildDirectAcquireImageCategoryDropdown(url, selectedValue, placeholder = 'No Category') {
+    const selected = String(selectedValue || '').trim();
+    const details = document.createElement('details');
+    details.className = 'direct-acquire-dropdown direct-acquire-image-category-dropdown';
+    details.dataset.imageCategoryDropdown = url;
+
+    const summary = document.createElement('summary');
+    summary.textContent = selected || placeholder;
+    details.appendChild(summary);
+
+    const menu = document.createElement('div');
+    menu.className = 'direct-acquire-dropdown-menu';
+
+    const emptyLabel = document.createElement('label');
+    emptyLabel.className = 'direct-acquire-dropdown-option';
+    const emptyRadio = document.createElement('input');
+    emptyRadio.type = 'radio';
+    emptyRadio.name = `directAcquireImageCategory:${url}`;
+    emptyRadio.value = '';
+    emptyRadio.checked = !selected;
+    emptyLabel.appendChild(emptyRadio);
+    emptyLabel.appendChild(document.createTextNode(placeholder));
+    menu.appendChild(emptyLabel);
+
+    directAcquireImageCategories.forEach((category) => {
+      const label = document.createElement('label');
+      label.className = 'direct-acquire-dropdown-option';
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = `directAcquireImageCategory:${url}`;
+      radio.value = category;
+      radio.checked = category === selected;
+      label.appendChild(radio);
+      label.appendChild(document.createTextNode(category));
+      menu.appendChild(label);
+    });
+
+    menu.addEventListener('change', (event) => {
+      const input = event.target;
+      if (!input || input.type !== 'radio') return;
+      const value = String(input.value || '').trim();
+      if (value) directAcquireImageCategoryByUrl.set(url, value);
+      else directAcquireImageCategoryByUrl.delete(url);
+      summary.textContent = value || placeholder;
+      details.removeAttribute('open');
+    });
+
+    details.appendChild(menu);
+    return details;
+  }
+
   function renderDirectAcquireImageGallery() {
     const gallery = document.getElementById('directAcquireImageGallery');
     const emptyEl = document.getElementById('directAcquireImagesEmpty');
@@ -342,15 +393,12 @@ App.acquire = (function () {
       name.className = 'direct-acquire-image-name';
       name.textContent = sanitizeImageNameFromUrl(url, index);
       meta.appendChild(name);
-      const categorySelect = document.createElement('select');
-      categorySelect.dataset.imageCategory = url;
-      fillDirectAcquireImageCategorySelect(categorySelect, directAcquireImageCategoryByUrl.get(url) || '', 'No Category');
-      categorySelect.addEventListener('change', () => {
-        const value = String(categorySelect.value || '').trim();
-        if (value) directAcquireImageCategoryByUrl.set(url, value);
-        else directAcquireImageCategoryByUrl.delete(url);
-      });
-      meta.appendChild(categorySelect);
+      const categoryDropdown = buildDirectAcquireImageCategoryDropdown(
+        url,
+        directAcquireImageCategoryByUrl.get(url) || '',
+        'No Category'
+      );
+      meta.appendChild(categoryDropdown);
       card.appendChild(meta);
 
       gallery.appendChild(card);
