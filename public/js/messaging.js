@@ -27,8 +27,10 @@ App.messaging = (function () {
   let currentWhitePapers = [];
   let currentEbooks = [];
   let currentTweets = [];
+  let currentTweetSuggestions = [];
   let currentHashtags = [];
   let currentMessagingCategories = [];
+  let currentMessagingTags = [];
   let activeMessagingContentCategory = '';
   const headlineTableState = {
     filters: {
@@ -105,6 +107,9 @@ App.messaging = (function () {
     },
   };
   const messagingCategoryTableState = {
+    dir: 'asc',
+  };
+  const messagingTagTableState = {
     dir: 'asc',
   };
   const simpleContentConfigs = [
@@ -890,16 +895,17 @@ App.messaging = (function () {
 
   function openTweetEditForm(tweet) {
     const editForm = document.getElementById('messagingTweetsEditForm');
-    const addForm = document.getElementById('messagingTweetsForm');
+    const workspace = document.getElementById('messagingTweetsWorkspace');
     const addBtn = document.getElementById('messagingTweetsToggleFormBtn');
     if (!editForm || !tweet) return;
     editForm.classList.remove('hidden');
     editForm.elements.id.value = String(tweet.id || '');
+    if (editForm.elements.category) editForm.elements.category.value = String(tweet.category || '');
     editForm.elements.content.value = String(tweet.content || '');
     editForm.elements.url.value = String(tweet.url || '');
     editForm.elements.hashtags.value = String(tweet.hashtags || '');
     editForm.elements.image_asset_id.value = tweet.image_asset_id ? String(tweet.image_asset_id) : '';
-    if (addForm) addForm.classList.add('hidden');
+    if (workspace) workspace.classList.add('hidden');
     if (addBtn) addBtn.textContent = 'Add Tweet';
     editForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -909,6 +915,129 @@ App.messaging = (function () {
     if (!editForm) return;
     editForm.reset();
     editForm.classList.add('hidden');
+  }
+
+  function clearTweetSuggestions() {
+    currentTweetSuggestions = [];
+    const empty = document.getElementById('messagingTweetsSuggestionsEmpty');
+    const shortWrap = document.getElementById('messagingTweetsShortSuggestions');
+    const tbody = document.getElementById('messagingTweetsSuggestionsTable');
+    const checkAll = document.getElementById('messagingTweetsSelectAllSuggestions');
+    if (empty) empty.classList.remove('hidden');
+    if (shortWrap) shortWrap.classList.add('hidden');
+    if (tbody) tbody.innerHTML = '';
+    if (checkAll) checkAll.checked = false;
+  }
+
+  function renderTweetSuggestions(options) {
+    const empty = document.getElementById('messagingTweetsSuggestionsEmpty');
+    const shortWrap = document.getElementById('messagingTweetsShortSuggestions');
+    const tbody = document.getElementById('messagingTweetsSuggestionsTable');
+    const checkAll = document.getElementById('messagingTweetsSelectAllSuggestions');
+    if (!tbody) return;
+    currentTweetSuggestions = Array.isArray(options)
+      ? options.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
+    tbody.innerHTML = '';
+    if (!currentTweetSuggestions.length) {
+      clearTweetSuggestions();
+      return;
+    }
+    if (checkAll) checkAll.checked = true;
+    currentTweetSuggestions.forEach((option, index) => {
+      const tr = document.createElement('tr');
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = true;
+      checkbox.dataset.index = String(index);
+      selectTd.appendChild(checkbox);
+      tr.appendChild(selectTd);
+      const valueTd = document.createElement('td');
+      valueTd.textContent = option;
+      tr.appendChild(valueTd);
+      tbody.appendChild(tr);
+    });
+    if (empty) empty.classList.add('hidden');
+    if (shortWrap) shortWrap.classList.remove('hidden');
+  }
+
+  async function generateTweetSuggestions() {
+    const form = document.getElementById('messagingTweetsForm');
+    const button = document.getElementById('messagingTweetsGenerateBtn');
+    if (!form || !button) return;
+    const formData = new FormData(form);
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Generating...';
+    try {
+      const imageSelect = document.getElementById('messagingTweetImageSelect');
+      const imageLabel = imageSelect && imageSelect.selectedIndex >= 0
+        ? String(imageSelect.options[imageSelect.selectedIndex]?.textContent || '').trim()
+        : '';
+      const result = await api('/api/messaging/content-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Tweets',
+          topic: String(formData.get('category') || '').trim(),
+          primary: String(formData.get('content') || '').trim(),
+          url: String(formData.get('url') || '').trim(),
+          hashtags: String(formData.get('hashtags') || '').trim(),
+          image_label: imageLabel,
+        }),
+      });
+      const options = Array.isArray(result?.options)
+        ? result.options
+        : Array.isArray(result?.data?.options)
+          ? result.data.options
+          : [];
+      renderTweetSuggestions(options);
+      notify(options.length ? 'Tweet options generated' : 'No tweet options returned', !options.length);
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText || 'Generate Option(s)';
+    }
+  }
+
+  async function saveSelectedTweetSuggestions() {
+    const form = document.getElementById('messagingTweetsForm');
+    const tbody = document.getElementById('messagingTweetsSuggestionsTable');
+    if (!form || !tbody) return;
+    const formData = new FormData(form);
+    const selectedIndexes = Array.from(tbody.querySelectorAll('input[type="checkbox"][data-index]:checked'))
+      .map((checkbox) => Number(checkbox.dataset.index || '-1'))
+      .filter((index) => index >= 0 && index < currentTweetSuggestions.length);
+    if (!selectedIndexes.length) {
+      notify('Select at least one tweet option', true);
+      return;
+    }
+    const basePayload = {
+      category: String(formData.get('category') || '').trim(),
+      url: String(formData.get('url') || '').trim(),
+      hashtags: String(formData.get('hashtags') || '').trim(),
+      image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
+    };
+    for (const index of selectedIndexes) {
+      await api('/api/messaging/tweets', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...basePayload,
+          content: currentTweetSuggestions[index],
+        }),
+      });
+    }
+    notify(selectedIndexes.length === 1 ? 'Tweet saved' : `${selectedIndexes.length} tweets saved`);
+    form.reset();
+    clearTweetSuggestions();
+    renderMessagingCategorySelects();
+    renderImageOptions(document.getElementById('messagingTweetImageSelect'));
+    const workspace = document.getElementById('messagingTweetsWorkspace');
+    const toggleBtn = document.getElementById('messagingTweetsToggleFormBtn');
+    if (workspace) workspace.classList.add('hidden');
+    if (toggleBtn) toggleBtn.textContent = 'Add Tweet';
+    await refreshTweets();
   }
 
   function normalizeSortText(value) {
@@ -2521,6 +2650,36 @@ App.messaging = (function () {
     return openTopicsPage();
   }
 
+  function setTagsCreateVisible(visible) {
+    const panel = document.getElementById('messagingTagCreatePanel');
+    if (!panel) return;
+    panel.classList.toggle('hidden', !visible);
+  }
+
+  function openTagsPage() {
+    setTagsCreateVisible(false);
+    App.setActivePage('messagingTagsPage');
+    refreshMessagingTags().catch(function (err) {
+      notify(`Could not load messaging tags: ${err.message}`, true);
+    });
+    window.setTimeout(function () {
+      refreshMessagingTags().catch(function () {});
+    }, 250);
+    return false;
+  }
+
+  function openTagsCreate() {
+    const form = document.getElementById('messagingTagForm');
+    if (form) form.reset();
+    setTagsCreateVisible(true);
+    App.setActivePage('messagingTagsPage');
+    const panel = document.getElementById('messagingTagCreatePanel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return false;
+  }
+
   function openManageContentLanding() {
     activeMessagingContentCategory = '';
     updateMessagingContentFilterBar();
@@ -4011,6 +4170,147 @@ App.messaging = (function () {
     return false;
   }
 
+  function getSortedMessagingTags() {
+    const rows = Array.isArray(currentMessagingTags) ? currentMessagingTags.slice() : [];
+    rows.sort(function (a, b) {
+      const left = String(a?.tag || '').toLowerCase();
+      const right = String(b?.tag || '').toLowerCase();
+      if (left === right) return 0;
+      const result = left < right ? -1 : 1;
+      return messagingTagTableState.dir === 'asc' ? result : -result;
+    });
+    return rows;
+  }
+
+  function openMessagingTagEditForm(item) {
+    const form = document.getElementById('messagingTagEditForm');
+    const idInput = document.getElementById('messagingTagEditId');
+    if (!form || !idInput || !item) return;
+    form.reset();
+    idInput.value = String(item.id || '');
+    form.elements.tag.value = String(item.tag || '');
+    App.setActivePage('editMessagingTagPage');
+  }
+
+  function renderMessagingTagsTable(tags) {
+    const tbody = document.getElementById('messagingTagsTable');
+    const sortBtn = document.getElementById('messagingTagsSortBtn');
+    currentMessagingTags = Array.isArray(tags) ? tags.slice() : [];
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (sortBtn) {
+      sortBtn.textContent = `Tag${messagingTagTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
+    }
+    const rows = getSortedMessagingTags();
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 2;
+      td.textContent = 'No messaging tags yet.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    rows.forEach((item) => {
+      const tr = document.createElement('tr');
+      const tagTd = document.createElement('td');
+      tagTd.textContent = String(item.tag || '').trim() || '-';
+      tr.appendChild(tagTd);
+
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'messaging-topics-actions-cell';
+      const editBtn = App.makeIconButton('edit', 'Edit Tag', function () {
+        openMessagingTagEditForm(item);
+      });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Tag', async function () {
+        if (!confirm(`Delete messaging tag "${item.tag}"?`)) return;
+        try {
+          await api(`/api/messaging/tags/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+          notify('Messaging tag deleted');
+          await refreshMessagingTags();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(deleteBtn);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function refreshMessagingTags() {
+    try {
+      const res = await api('/api/messaging/tags?limit=5000');
+      const tags = Array.isArray(res?.tags)
+        ? res.tags
+        : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+            ? res
+            : [];
+      renderMessagingTagsTable(tags);
+    } catch (err) {
+      notify(`Could not load messaging tags: ${err.message}`, true);
+    }
+  }
+
+  async function submitTagCreate(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = document.getElementById('messagingTagForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const tag = String(formData.get('tag') || '').trim();
+    if (!tag) {
+      notify('Tag is required', true);
+      return false;
+    }
+    try {
+      await api('/api/messaging/tags', {
+        method: 'POST',
+        body: JSON.stringify({ tag }),
+      });
+      notify('Messaging tag saved');
+      form.reset();
+      await refreshMessagingTags();
+      setTagsCreateVisible(true);
+      App.setActivePage('messagingTagsPage');
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function submitTagEdit(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = document.getElementById('messagingTagEditForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const id = Number(formData.get('id') || 0) || 0;
+    const tag = String(formData.get('tag') || '').trim();
+    if (!id) {
+      notify('Tag id is required', true);
+      return false;
+    }
+    if (!tag) {
+      notify('Tag is required', true);
+      return false;
+    }
+    try {
+      await api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tag }),
+      });
+      notify('Messaging tag updated');
+      form.reset();
+      await refreshMessagingTags();
+      openTagsPage();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
   async function saveArticleFromForm(form) {
     const formData = new FormData(form);
     const payload = {
@@ -4171,6 +4471,7 @@ App.messaging = (function () {
   async function saveTweetFromForm(form) {
     const formData = new FormData(form);
     const payload = {
+      category: String(formData.get('category') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
@@ -4186,6 +4487,7 @@ App.messaging = (function () {
     const formData = new FormData(form);
     const id = Number(formData.get('id') || 0) || 0;
     const payload = {
+      category: String(formData.get('category') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
@@ -4275,10 +4577,15 @@ App.messaging = (function () {
     const ebooksEditForm = document.getElementById('messagingEbooksEditForm');
     const ebooksCancelEditBtn = document.getElementById('messagingEbooksCancelEditBtn');
     const ebooksToggleBtn = document.getElementById('messagingEbooksToggleFormBtn');
+    const tweetsWorkspace = document.getElementById('messagingTweetsWorkspace');
     const tweetsForm = document.getElementById('messagingTweetsForm');
     const tweetEditForm = document.getElementById('messagingTweetsEditForm');
     const tweetToggleBtn = document.getElementById('messagingTweetsToggleFormBtn');
     const tweetCancelEditBtn = document.getElementById('messagingTweetsCancelEditBtn');
+    const tweetGenerateBtn = document.getElementById('messagingTweetsGenerateBtn');
+    const tweetClearSuggestionsBtn = document.getElementById('messagingTweetsClearSuggestionsBtn');
+    const tweetSaveSelectedBtn = document.getElementById('messagingTweetsSaveSelectedBtn');
+    const tweetSelectAllSuggestions = document.getElementById('messagingTweetsSelectAllSuggestions');
     const hashtagsForm = document.getElementById('messagingHashtagsForm');
     const hashtagsToggleBtn = document.getElementById('messagingHashtagsToggleFormBtn');
     const openMessagingCategoriesBtn = document.getElementById('openMessagingCategoriesPageBtn');
@@ -5230,6 +5537,29 @@ App.messaging = (function () {
       });
     }
 
+    const messagingTagSortBtn = document.getElementById('messagingTagsSortBtn');
+    const messagingTagForm = document.getElementById('messagingTagForm');
+    const messagingTagEditForm = document.getElementById('messagingTagEditForm');
+
+    if (messagingTagSortBtn) {
+      messagingTagSortBtn.addEventListener('click', function () {
+        messagingTagTableState.dir = messagingTagTableState.dir === 'asc' ? 'desc' : 'asc';
+        renderMessagingTagsTable(currentMessagingTags);
+      });
+    }
+
+    if (messagingTagForm) {
+      messagingTagForm.addEventListener('submit', async function (e) {
+        return submitTagCreate(e);
+      });
+    }
+
+    if (messagingTagEditForm) {
+      messagingTagEditForm.addEventListener('submit', async function (e) {
+        return submitTagEdit(e);
+      });
+    }
+
     const createContentFormat = document.getElementById('messagingCreateContentFormat');
     const createContentForm = document.getElementById('messagingCreateContentForm');
     const createContentGenerateBtn = document.getElementById('messagingCreateContentGenerateBtn');
@@ -5456,10 +5786,14 @@ App.messaging = (function () {
       });
     }
 
-    if (tweetToggleBtn && tweetsForm) {
+    if (tweetToggleBtn && tweetsWorkspace) {
       tweetToggleBtn.addEventListener('click', function () {
-        const isHidden = tweetsForm.classList.contains('hidden');
-        tweetsForm.classList.toggle('hidden', !isHidden);
+        const isHidden = tweetsWorkspace.classList.contains('hidden');
+        closeTweetEditForm();
+        tweetsWorkspace.classList.toggle('hidden', !isHidden);
+        if (isHidden) {
+          clearTweetSuggestions();
+        }
         tweetToggleBtn.textContent = isHidden ? 'Hide Form' : 'Add Tweet';
       });
     }
@@ -5471,8 +5805,11 @@ App.messaging = (function () {
           await saveTweetFromForm(tweetsForm);
           notify('Tweet saved');
           tweetsForm.reset();
+          clearTweetSuggestions();
+          renderMessagingCategorySelects();
+          renderImageOptions(document.getElementById('messagingTweetImageSelect'));
           if (tweetToggleBtn) tweetToggleBtn.textContent = 'Add Tweet';
-          tweetsForm.classList.add('hidden');
+          if (tweetsWorkspace) tweetsWorkspace.classList.add('hidden');
           await refreshTweets();
         } catch (err) {
           notify(err.message, true);
@@ -5483,6 +5820,32 @@ App.messaging = (function () {
     if (tweetCancelEditBtn) {
       tweetCancelEditBtn.addEventListener('click', function () {
         closeTweetEditForm();
+      });
+    }
+
+    if (tweetGenerateBtn) {
+      tweetGenerateBtn.addEventListener('click', function () {
+        generateTweetSuggestions();
+      });
+    }
+
+    if (tweetClearSuggestionsBtn) {
+      tweetClearSuggestionsBtn.addEventListener('click', function () {
+        clearTweetSuggestions();
+      });
+    }
+
+    if (tweetSaveSelectedBtn) {
+      tweetSaveSelectedBtn.addEventListener('click', function () {
+        saveSelectedTweetSuggestions();
+      });
+    }
+
+    if (tweetSelectAllSuggestions) {
+      tweetSelectAllSuggestions.addEventListener('change', function () {
+        document.querySelectorAll('#messagingTweetsSuggestionsTable input[type="checkbox"][data-index]').forEach((checkbox) => {
+          checkbox.checked = tweetSelectAllSuggestions.checked;
+        });
       });
     }
 
@@ -5549,6 +5912,8 @@ App.messaging = (function () {
     openCategoriesLanding,
     openTopicsPage,
     openTopicsCreate,
+    openTagsPage,
+    openTagsCreate,
     openContentLanding,
     openCreateContent,
     openManageContentLanding,
@@ -5558,16 +5923,18 @@ App.messaging = (function () {
     generateCreateContentSuggestions,
     submitTopicCreate,
     submitTopicEdit,
+    submitTagCreate,
+    submitTagEdit,
     refresh: function () {
       return loadThumbnailOptions().then(function () {
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]).then(function () {
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
         });
       });
     },
     onPageActivated: function () {
       return loadThumbnailOptions().then(function () {
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories()]).then(function () {
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
         });
       });

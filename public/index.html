@@ -99,6 +99,7 @@
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" onclick="App.messaging.openManageContentLanding(); return false;">Formats</a>
             <a href="#" class="menu-link submenu-link" onclick="App.messaging.openCategoriesLanding(); return false;">Topics</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openTagsPage(); return false;">Tags</a>
             <a href="#" class="menu-link submenu-link" onclick="App.messaging.openContentLanding(); return false;">Content</a>
           </div>
         </li>
@@ -3578,6 +3579,78 @@
             <input id="messagingCategoryEditName" name="category" placeholder="Topic name" required />
           </div>
           <button type="submit">Update Topic</button>
+        </form>
+      </section>
+
+      <section id="messagingTagsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging Tags</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <section id="messagingTagCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Messaging Tag</h3>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+          </div>
+          <form id="messagingTagForm" class="stack-form labeled-form" onsubmit="App.messaging.submitTagCreate(event); return false;">
+            <div class="form-row">
+              <label for="messagingTagName">Tag</label>
+              <input id="messagingTagName" name="tag" placeholder="Tag name" required />
+            </div>
+            <button type="submit">Save Tag</button>
+          </form>
+        </section>
+        <div class="table-wrap" style="margin-top: 1rem;">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingTagsSortBtn" type="button" class="tiny-btn">Tag</button></th>
+                <th class="messaging-topics-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingTagsTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="messagingManageTagsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Messaging Tags</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+          </div>
+        </div>
+        <p>The Tags editor now lives on the main Tags page.</p>
+      </section>
+
+      <section id="createMessagingTagPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Messaging Tag</h2>
+          <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+        </div>
+        <p>The create form now opens inline on the main Tags page.</p>
+      </section>
+
+      <section id="editMessagingTagPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Messaging Tag</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingTagEditForm" class="stack-form labeled-form" onsubmit="App.messaging.submitTagEdit(event); return false;">
+          <input id="messagingTagEditId" name="id" type="hidden" />
+          <div class="form-row">
+            <label for="messagingTagEditName">Tag</label>
+            <input id="messagingTagEditName" name="tag" placeholder="Tag name" required />
+          </div>
+          <button type="submit">Update Tag</button>
         </form>
       </section>
 
