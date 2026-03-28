@@ -2531,6 +2531,24 @@ App.messaging = (function () {
     const bodyLabel = document.getElementById('messagingCreateContentBodyLabel');
     const bodyInput = document.getElementById('messagingCreateContentBody');
     const thumbnailLabel = document.getElementById('messagingCreateContentThumbnailLabel');
+    const topicRow = document.getElementById('messagingCreateContentTopicRow');
+    const submitBtn = document.getElementById('messagingCreateContentSubmitBtn');
+    if (!schema) {
+      if (topicRow) topicRow.classList.add('hidden');
+      setCreateContentFieldVisible('messagingCreateContentPrimaryRow', false);
+      setCreateContentFieldVisible('messagingCreateContentAuthorRow', false);
+      setCreateContentFieldVisible('messagingCreateContentSubjectRow', false);
+      setCreateContentFieldVisible('messagingCreateContentTitleRow', false);
+      setCreateContentFieldVisible('messagingCreateContentSubtitleRow', false);
+      setCreateContentFieldVisible('messagingCreateContentUrlRow', false);
+      setCreateContentFieldVisible('messagingCreateContentHashtagsRow', false);
+      setCreateContentFieldVisible('messagingCreateContentImageRow', false);
+      setCreateContentFieldVisible('messagingCreateContentThumbnailRow', false);
+      setCreateContentFieldVisible('messagingCreateContentBodyRow', false);
+      setCreateContentFieldVisible('messagingCreateContentPdfRow', false);
+      if (submitBtn) submitBtn.classList.add('hidden');
+      return;
+    }
     const visibleFields = Array.isArray(schema?.fields) ? schema.fields : [];
     const hasField = (name) => visibleFields.includes(name);
     const isLongform = schema?.kind === 'longform' || schema?.kind === 'pdfLongform';
@@ -2558,6 +2576,7 @@ App.messaging = (function () {
       }
     });
 
+    if (topicRow) topicRow.classList.remove('hidden');
     setCreateContentFieldVisible('messagingCreateContentPrimaryRow', hasField('primary'));
     setCreateContentFieldVisible('messagingCreateContentAuthorRow', hasField('author'));
     setCreateContentFieldVisible('messagingCreateContentSubjectRow', hasField('subject'));
@@ -2581,6 +2600,7 @@ App.messaging = (function () {
       bodyInput.rows = isLongform ? 10 : 6;
     }
     if (thumbnailLabel) thumbnailLabel.textContent = 'Image:';
+    if (submitBtn) submitBtn.classList.remove('hidden');
   }
 
   async function submitCreateContentForm(event) {
