@@ -111,6 +111,7 @@ App.acquire = (function () {
     if (!select) return;
     const selectedValues = new Set(Array.from(select.selectedOptions || []).map((option) => String(option.value || '').trim()).filter(Boolean));
     select.innerHTML = '';
+    select.size = 1;
     directAcquireTopics.forEach((topic) => {
       const option = document.createElement('option');
       option.value = topic;
@@ -2531,10 +2532,24 @@ App.acquire = (function () {
     const directAcquireKeywordBulkTopics = document.getElementById('directAcquireKeywordBulkTopics');
     const directAcquireKeywordBulkReason = document.getElementById('directAcquireKeywordBulkReason');
     if (directAcquireKeywordBulkTopics) {
+      const collapseKeywordTopicsSelect = () => {
+        directAcquireKeywordBulkTopics.size = 1;
+      };
+      const expandKeywordTopicsSelect = () => {
+        directAcquireKeywordBulkTopics.size = Math.max(2, Math.min(8, directAcquireTopics.length || 4));
+      };
+      directAcquireKeywordBulkTopics.addEventListener('focus', expandKeywordTopicsSelect);
+      directAcquireKeywordBulkTopics.addEventListener('mousedown', function () {
+        if (directAcquireKeywordBulkTopics.size <= 1) {
+          window.requestAnimationFrame(expandKeywordTopicsSelect);
+        }
+      });
+      directAcquireKeywordBulkTopics.addEventListener('blur', collapseKeywordTopicsSelect);
       directAcquireKeywordBulkTopics.addEventListener('change', function () {
         const selected = Array.from(document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]:checked'));
         if (!selected.length) {
           notify('Check at least one keyword first', true);
+          collapseKeywordTopicsSelect();
           return;
         }
         const chosenTopics = Array.from(directAcquireKeywordBulkTopics.selectedOptions || [])
@@ -2548,6 +2563,9 @@ App.acquire = (function () {
         });
         writeDirectAcquireKeywordTopics(topicMap);
         renderDirectAcquireKeywordTable();
+        const noun = selected.length === 1 ? 'keyword' : 'keywords';
+        notify(`Updated topics for ${selected.length} ${noun}`);
+        collapseKeywordTopicsSelect();
       });
     }
     if (directAcquireKeywordBulkReason) {

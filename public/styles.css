@@ -3952,6 +3952,8 @@ th {
   font-size: 1.3rem;
   padding: 1.05rem 1.2rem;
   border-radius: 24px;
+  display: block;
+  margin: 0 auto;
 }
 
 .acquire-web-hero-options-row {
@@ -3976,6 +3978,8 @@ th {
 
 #directAcquireKeywordBulkTopics {
   min-width: 220px;
+  height: 42px;
+  overflow: hidden;
 }
 
 #acquireWebPage .page-heading-actions > label {
