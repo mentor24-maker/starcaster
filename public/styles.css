@@ -3938,37 +3938,37 @@ th {
 }
 
 .acquire-web-hero-form {
-  max-width: 1080px;
+  max-width: 1800px;
   margin: 0 auto 1.5rem;
   align-items: center;
 }
 
 .acquire-web-hero-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.acquire-web-hero-row label {
-  font-weight: 700;
-  font-size: 1rem;
+  width: 100%;
 }
 
 .acquire-web-hero-row input {
-  width: min(100%, 920px);
-  font-size: 1.25rem;
-  padding: 0.95rem 1rem;
-  border-radius: 12px;
+  width: min(100%, 1680px);
+  font-size: 1.3rem;
+  padding: 1.05rem 1.2rem;
+  border-radius: 24px;
 }
 
-.acquire-web-hero-actions {
-  width: min(100%, 920px);
+.acquire-web-hero-options-row {
+  width: min(100%, 1680px);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.9rem;
   flex-wrap: wrap;
+}
+
+.acquire-web-harvest-btn {
+  width: min(100%, 1680px);
+}
+
+#directAcquireProgressWrap {
+  width: min(100%, 1680px);
 }
 
 .acquire-web-results-grid {
