@@ -2955,8 +2955,17 @@
                   <input id="messagingCreateContentGeneratedSubtitle" />
                 </div>
                 <div class="form-row">
-                  <label for="messagingCreateContentGeneratedBody"><strong>Body:</strong></label>
-                  <textarea id="messagingCreateContentGeneratedBody" rows="16"></textarea>
+                  <label><strong>Body:</strong></label>
+                  <div>
+                    <div class="messaging-richtext-toolbar">
+                      <button type="button" data-richtext-command="bold"><strong>B</strong></button>
+                      <button type="button" data-richtext-command="italic"><em>I</em></button>
+                      <button type="button" data-richtext-command="formatBlock" data-richtext-value="h3">H3</button>
+                      <button type="button" data-richtext-command="insertUnorderedList">List</button>
+                      <button type="button" data-richtext-command="removeFormat">Clear</button>
+                    </div>
+                    <div id="messagingCreateContentGeneratedBodyEditor" class="messaging-richtext-editor" contenteditable="true"></div>
+                  </div>
                 </div>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
