@@ -710,6 +710,78 @@ App.messaging = (function () {
     editForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function buildDetailGrid(pairs) {
+    const grid = document.createElement('div');
+    grid.className = 'contact-detail-grid';
+    (Array.isArray(pairs) ? pairs : []).forEach(([label, value]) => {
+      const row = document.createElement('div');
+      row.className = 'contact-detail-row';
+      const labelEl = document.createElement('div');
+      labelEl.className = 'contact-detail-label';
+      labelEl.textContent = `${label}:`;
+      const valueEl = document.createElement('div');
+      valueEl.className = 'contact-detail-value';
+      valueEl.textContent = String(value || '-');
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+      grid.appendChild(row);
+    });
+    return grid;
+  }
+
+  function setGeneratedBodyEditorHtml(value) {
+    const editor = document.getElementById('messagingCreateContentGeneratedBodyEditor');
+    if (!editor) return;
+    const raw = String(value || '').trim();
+    if (!raw) {
+      editor.innerHTML = '';
+      return;
+    }
+    if (/<[a-z][\s\S]*>/i.test(raw)) {
+      editor.innerHTML = raw;
+      return;
+    }
+    editor.innerHTML = raw
+      .split(/\n{2,}/)
+      .map((chunk) => `<p>${escapeHtml(chunk).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  }
+
+  function getGeneratedBodyEditorHtml() {
+    const editor = document.getElementById('messagingCreateContentGeneratedBodyEditor');
+    return editor ? String(editor.innerHTML || '').trim() : '';
+  }
+
+  function openMessagingDetailModal(title, pairs) {
+    const modal = App.components.Modal({
+      title,
+      body: buildDetailGrid(pairs),
+      actions: [{ label: 'Close', primary: true, onClick: () => modal.close() }],
+    });
+    modal.open();
+  }
+
+  function cloneArticlePayload(article) {
+    return {
+      platform: String(article?.platform || '').trim(),
+      author: String(article?.author || '').trim(),
+      title: `${String(article?.title || '').trim() || 'Untitled'} (Clone)`,
+      subtitle: String(article?.subtitle || '').trim(),
+      url: String(article?.url || '').trim(),
+      content: String(article?.content || '').trim(),
+      publish_date: article?.publish_date || null,
+      thumbnail_asset_id: Number(article?.thumbnail_asset_id || 0) || null,
+    };
+  }
+
+  async function cloneArticle(article) {
+    const payload = cloneArticlePayload(article);
+    await api('/api/messaging/articles', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
   function closeEditForm() {
     const editForm = document.getElementById('messagingArticlesEditForm');
     if (!editForm) return;
@@ -985,10 +1057,35 @@ App.messaging = (function () {
       tr.appendChild(thumbTd);
 
       const actionsTd = document.createElement('td');
+      actionsTd.className = 'messaging-content-actions-cell';
+      const viewBtn = App.makeIconButton('view', 'View Article', function () {
+        openMessagingDetailModal('View Article', [
+          ['Publish Date', publish],
+          ['Title', title],
+          ['Platform', platform],
+          ['Author', author],
+          ['Subtitle', String(article.subtitle || '').trim() || '-'],
+          ['URL', String(article.url || '').trim() || '-'],
+          ['Content', String(article.content || '').trim() || '-'],
+        ]);
+      });
+      actionsTd.appendChild(viewBtn);
+
       const editBtn = App.makeIconButton('edit', 'Edit Article', function () {
         openEditForm(article);
-      });
+      }, { marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+
+      const cloneBtn = App.makeIconButton('clone', 'Clone Article', async function () {
+        try {
+          await cloneArticle(article);
+          notify('Article cloned');
+          await refreshArticles();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      actionsTd.appendChild(cloneBtn);
 
       const deleteBtn = App.makeIconButton('delete', 'Delete Article', async function () {
         if (!confirm(`Delete article "${title}"?`)) return;
@@ -2670,7 +2767,7 @@ App.messaging = (function () {
     const checkAll = document.getElementById('messagingCreateContentSelectAllSuggestions');
     const generatedTitle = document.getElementById('messagingCreateContentGeneratedTitle');
     const generatedSubtitle = document.getElementById('messagingCreateContentGeneratedSubtitle');
-    const generatedBody = document.getElementById('messagingCreateContentGeneratedBody');
+    const generatedBody = document.getElementById('messagingCreateContentGeneratedBodyEditor');
     if (empty) empty.classList.remove('hidden');
     if (shortWrap) shortWrap.classList.add('hidden');
     if (longWrap) longWrap.classList.add('hidden');
@@ -2678,7 +2775,7 @@ App.messaging = (function () {
     if (checkAll) checkAll.checked = false;
     if (generatedTitle) generatedTitle.value = '';
     if (generatedSubtitle) generatedSubtitle.value = '';
-    if (generatedBody) generatedBody.value = '';
+    if (generatedBody) generatedBody.innerHTML = '';
   }
 
   function renderCreateContentShortSuggestions(options) {
@@ -2707,14 +2804,14 @@ App.messaging = (function () {
   function applyCreateContentLongDraft(draft) {
     const title = document.getElementById('messagingCreateContentGeneratedTitle');
     const subtitle = document.getElementById('messagingCreateContentGeneratedSubtitle');
-    const body = document.getElementById('messagingCreateContentGeneratedBody');
+    const body = document.getElementById('messagingCreateContentGeneratedBodyEditor');
     const empty = document.getElementById('messagingCreateContentSuggestionsEmpty');
     const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
     const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
     currentCreateContentSuggestions = [];
     if (title && typeof draft?.title === 'string') title.value = draft.title;
     if (subtitle && typeof draft?.subtitle === 'string') subtitle.value = draft.subtitle;
-    if (body && typeof draft?.body === 'string') body.value = draft.body;
+    if (typeof draft?.body === 'string') setGeneratedBodyEditorHtml(draft.body);
     if (empty) empty.classList.add('hidden');
     if (shortWrap) shortWrap.classList.add('hidden');
     if (longWrap) longWrap.classList.remove('hidden');
@@ -2735,7 +2832,7 @@ App.messaging = (function () {
       payload = buildCreateContentPayload(formData, schema, {
         title: cleanText(document.getElementById('messagingCreateContentGeneratedTitle')?.value),
         subtitle: cleanText(document.getElementById('messagingCreateContentGeneratedSubtitle')?.value),
-        body: cleanText(document.getElementById('messagingCreateContentGeneratedBody')?.value),
+        body: getGeneratedBodyEditorHtml(),
       });
     } catch (err) {
       notify(err.message, true);
@@ -2999,8 +3096,130 @@ App.messaging = (function () {
         topic: String(item?.category || '').trim(),
         format: entry.format,
         pageId: entry.pageId,
+        item,
       }));
     });
+  }
+
+  function cloneMessagingLibraryEntryPayload(entry) {
+    const format = String(entry?.format || '').trim();
+    const schema = createContentSchema(format);
+    const item = entry?.item || {};
+    if (!schema) throw new Error('Unsupported content format');
+    if (schema.kind === 'simple') {
+      return {
+        [schema.primaryKey]: `${String(item?.[schema.primaryKey] || '').trim() || 'Untitled'} (Clone)`,
+        category: String(item?.category || '').trim(),
+      };
+    }
+    if (schema.kind === 'tweet') {
+      return {
+        content: `${String(item?.content || '').trim() || 'Untitled'} (Clone)`,
+        url: String(item?.url || '').trim(),
+        hashtags: String(item?.hashtags || '').trim(),
+        image_asset_id: Number(item?.image_asset_id || 0) || null,
+        category: String(item?.category || '').trim(),
+      };
+    }
+    if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
+      return {
+        platform: String(item?.platform || '').trim(),
+        author: String(item?.author || '').trim(),
+        title: `${String(item?.title || '').trim() || 'Untitled'} (Clone)`,
+        subtitle: String(item?.subtitle || '').trim(),
+        url: String(item?.url || '').trim(),
+        content: String(item?.content || '').trim(),
+        publish_date: item?.publish_date || null,
+        thumbnail_asset_id: Number(item?.thumbnail_asset_id || 0) || null,
+        pdf_name: String(item?.pdf_name || '').trim(),
+        pdf_mime_type: String(item?.pdf_mime_type || '').trim(),
+        pdf_data_url: String(item?.pdf_data_url || '').trim(),
+      };
+    }
+    throw new Error('Unsupported content format');
+  }
+
+  function openMessagingContentEntryView(entry) {
+    const format = String(entry?.format || '').trim();
+    const item = entry?.item || {};
+    const pairs = [
+      ['Format', format || '-'],
+      ['Topic', String(entry?.topic || '').trim() || '-'],
+    ];
+    if (format === 'Articles' || format === 'Reports' || format === 'White Papers' || format === 'eBooks') {
+      pairs.push(
+        ['Title', String(item?.title || '').trim() || '-'],
+        ['Subtitle', String(item?.subtitle || '').trim() || '-'],
+        ['Author', String(item?.author || '').trim() || '-'],
+        ['Platform', String(item?.platform || '').trim() || '-'],
+        ['URL', String(item?.url || '').trim() || '-'],
+        ['Content', String(item?.content || '').trim() || '-'],
+      );
+    } else if (format === 'Tweets') {
+      pairs.push(
+        ['Content', String(item?.content || '').trim() || '-'],
+        ['URL', String(item?.url || '').trim() || '-'],
+        ['Hashtags', String(item?.hashtags || '').trim() || '-'],
+      );
+    } else {
+      pairs.push(['Content', String(entry?.content || '').trim() || '-']);
+    }
+    openMessagingDetailModal(`View ${format}`, pairs);
+  }
+
+  function openMessagingContentEntryEditor(entry) {
+    const format = String(entry?.format || '').trim();
+    const item = entry?.item || {};
+    const simpleConfig = simpleContentConfigs.find((config) => config.pluralLabel === format);
+    if (simpleConfig) {
+      App.setActivePage(simpleConfig.pageId);
+      openSimpleContentEditForm(simpleConfig, item);
+      return;
+    }
+    if (format === 'Articles') {
+      App.setActivePage('messagingArticlesPage');
+      openEditForm(item);
+      return;
+    }
+    if (format === 'Reports') {
+      App.setActivePage('messagingReportsPage');
+      openReportEditForm(item);
+      return;
+    }
+    if (format === 'White Papers') {
+      App.setActivePage('messagingWhitePapersPage');
+      openWhitePaperEditForm(item);
+      return;
+    }
+    if (format === 'eBooks') {
+      App.setActivePage('messagingEbooksPage');
+      openEbookEditForm(item);
+      return;
+    }
+    if (format === 'Tweets') {
+      App.setActivePage('messagingTweetsPage');
+      openTweetEditForm(item);
+      return;
+    }
+    openContentTarget(entry.pageId);
+  }
+
+  async function cloneMessagingContentEntry(entry) {
+    const format = String(entry?.format || '').trim();
+    const schema = createContentSchema(format);
+    if (!schema) throw new Error('Unsupported content format');
+    const payload = cloneMessagingLibraryEntryPayload(entry);
+    await api(schema.endpoint, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async function deleteMessagingContentEntry(entry) {
+    const format = String(entry?.format || '').trim();
+    const schema = createContentSchema(format);
+    if (!schema) throw new Error('Unsupported content format');
+    await api(`${schema.endpoint}/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
   }
 
   function getFilteredMessagingContentLibraryRows() {
@@ -3054,10 +3273,57 @@ App.messaging = (function () {
       });
       const actionsTd = document.createElement('td');
       actionsTd.className = 'messaging-content-actions-cell';
-      const openBtn = App.makeIconButton('edit', `Open ${entry.format}`, function () {
-        openContentTarget(entry.pageId);
+      const viewBtn = App.makeIconButton('view', `View ${entry.format}`, function () {
+        openMessagingContentEntryView(entry);
       });
-      actionsTd.appendChild(openBtn);
+      const editBtn = App.makeIconButton('edit', `Edit ${entry.format}`, function () {
+        openMessagingContentEntryEditor(entry);
+      }, { marginLeft: '8px' });
+      const cloneBtn = App.makeIconButton('clone', `Clone ${entry.format}`, async function () {
+        try {
+          await cloneMessagingContentEntry(entry);
+          notify(`${entry.format} cloned`);
+          await Promise.all([
+            refreshHeadlines(),
+            refreshSubheadings(),
+            refreshTaglines(),
+            refreshPitches(),
+            refreshArticles(),
+            refreshReports(),
+            refreshWhitePapers(),
+            refreshEbooks(),
+            refreshAllSimpleContentPages(),
+          ]);
+          renderMessagingContentLibraryTable();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      const deleteBtn = App.makeIconButton('delete', `Delete ${entry.format}`, async function () {
+        if (!confirm(`Delete this ${String(entry.format || 'content').toLowerCase()} item?`)) return;
+        try {
+          await deleteMessagingContentEntry(entry);
+          notify(`${entry.format} deleted`);
+          await Promise.all([
+            refreshHeadlines(),
+            refreshSubheadings(),
+            refreshTaglines(),
+            refreshPitches(),
+            refreshArticles(),
+            refreshReports(),
+            refreshWhitePapers(),
+            refreshEbooks(),
+            refreshAllSimpleContentPages(),
+          ]);
+          renderMessagingContentLibraryTable();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
+      actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -4971,6 +5237,7 @@ App.messaging = (function () {
     const createContentSaveSelectedBtn = document.getElementById('messagingCreateContentSaveSelectedBtn');
     const createContentSaveGeneratedBtn = document.getElementById('messagingCreateContentSaveGeneratedBtn');
     const createContentSelectAllSuggestions = document.getElementById('messagingCreateContentSelectAllSuggestions');
+    const createContentRichtextToolbar = document.querySelector('.messaging-richtext-toolbar');
     if (createContentFormat) {
       createContentFormat.addEventListener('change', renderCreateContentDynamicFields);
     }
@@ -4995,6 +5262,18 @@ App.messaging = (function () {
         document.querySelectorAll('[data-create-content-suggestion-index]').forEach((input) => {
           input.checked = checked;
         });
+      });
+    }
+    if (createContentRichtextToolbar) {
+      createContentRichtextToolbar.addEventListener('click', function (event) {
+        const btn = event.target.closest('[data-richtext-command]');
+        if (!btn) return;
+        const command = String(btn.getAttribute('data-richtext-command') || '').trim();
+        const value = String(btn.getAttribute('data-richtext-value') || '').trim() || null;
+        const editor = document.getElementById('messagingCreateContentGeneratedBodyEditor');
+        if (!command || !editor) return;
+        editor.focus();
+        document.execCommand(command, false, value);
       });
     }
 
