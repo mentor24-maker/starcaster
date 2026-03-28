@@ -2148,6 +2148,12 @@ th {
   min-width: 0;
 }
 
+#messagingCreateContentSuggestionsTable th:first-child,
+#messagingCreateContentSuggestionsTable td:first-child {
+  width: 44px;
+  text-align: center;
+}
+
 #campaignForm > .grid-form > .stack-form > h3 {
   margin: 0 0 0.5rem 0 !important;
   line-height: 1.2;
