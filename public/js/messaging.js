@@ -342,7 +342,7 @@ App.messaging = (function () {
       document.getElementById('messagingPitchesBulkEditCategorySelect'),
       document.getElementById('messagingPitchesCategoryFilter'),
     ];
-    document.querySelectorAll('select[id^="messaging"][name="category"]').forEach((select) => {
+    document.querySelectorAll('select[id^="messaging"][name="topic"]').forEach((select) => {
       selectList.push(select);
     });
     document.querySelectorAll('[data-messaging-category-select="true"]').forEach((select) => {
@@ -419,7 +419,7 @@ App.messaging = (function () {
           <div class="grid-form" style="align-items: start;">
             <form id="${ids.formId}" class="stack-form">
               <h3>Single Create</h3>
-              <select id="${ids.formCategorySelectId}" name="category" data-messaging-category-select="true">
+              <select id="${ids.formCategorySelectId}" name="topic" data-messaging-category-select="true">
                 <option value="">No Topic</option>
               </select>
               <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
@@ -428,7 +428,7 @@ App.messaging = (function () {
 
             <form id="${ids.bulkCreateFormId}" class="stack-form">
               <h3>Multiple Create</h3>
-              <select id="${ids.bulkCreateCategorySelectId}" name="category" data-messaging-category-select="true">
+              <select id="${ids.bulkCreateCategorySelectId}" name="topic" data-messaging-category-select="true">
                 <option value="">No Topic</option>
               </select>
               <textarea name="${config.field}_text" rows="8" placeholder="Paste multiple ${config.pluralLower}, one per line"></textarea>
@@ -443,7 +443,7 @@ App.messaging = (function () {
             <h3>Edit ${config.singularLabel}</h3>
             <button id="${ids.cancelEditBtnId}" type="button">Cancel Edit</button>
           </div>
-          <select id="${ids.editCategorySelectId}" name="category" data-messaging-category-select="true">
+          <select id="${ids.editCategorySelectId}" name="topic" data-messaging-category-select="true">
             <option value="">No Topic</option>
           </select>
           <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
@@ -498,7 +498,7 @@ App.messaging = (function () {
         <form id="${ids.bulkEditFormId}" class="stack-form labeled-form">
           <div class="stack-form">
             <label for="${ids.bulkEditCategorySelectId}">Topic</label>
-            <select id="${ids.bulkEditCategorySelectId}" name="category" data-messaging-category-select="true">
+            <select id="${ids.bulkEditCategorySelectId}" name="topic" data-messaging-category-select="true">
               <option value="">No Topic</option>
             </select>
           </div>
@@ -900,7 +900,7 @@ App.messaging = (function () {
     if (!editForm || !tweet) return;
     editForm.classList.remove('hidden');
     editForm.elements.id.value = String(tweet.id || '');
-    if (editForm.elements.category) editForm.elements.category.value = String(tweet.category || '');
+    if (editForm.elements.topic) editForm.elements.topic.value = String(tweet.topic || tweet.category || '');
     editForm.elements.content.value = String(tweet.content || '');
     editForm.elements.url.value = String(tweet.url || '');
     editForm.elements.hashtags.value = String(tweet.hashtags || '');
@@ -979,7 +979,7 @@ App.messaging = (function () {
         method: 'POST',
         body: JSON.stringify({
           format: 'Tweets',
-          topic: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || '').trim(),
           primary: String(formData.get('content') || '').trim(),
           url: String(formData.get('url') || '').trim(),
           hashtags: String(formData.get('hashtags') || '').trim(),
@@ -1014,7 +1014,7 @@ App.messaging = (function () {
       return;
     }
     const basePayload = {
-      category: String(formData.get('category') || '').trim(),
+      topic: String(formData.get('topic') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
@@ -1837,7 +1837,7 @@ App.messaging = (function () {
     if (!form || !item) return;
     form.elements.id.value = String(item.id || '');
     form.elements.headline.value = String(item.headline || '');
-    form.elements.category.value = String(item.category || '');
+    if (form.elements.topic) form.elements.topic.value = String(item.topic || item.category || '');
   }
 
   function openHeadlineEditForm(item) {
@@ -2020,7 +2020,7 @@ App.messaging = (function () {
     if (!form || !item) return;
     form.elements.id.value = String(item.id || '');
     form.elements.subheading.value = String(item.subheading || '');
-    form.elements.category.value = String(item.category || '');
+    if (form.elements.topic) form.elements.topic.value = String(item.topic || item.category || '');
   }
 
   function openSubheadingEditForm(item) {
@@ -2200,7 +2200,7 @@ App.messaging = (function () {
     if (!form || !item) return;
     form.elements.id.value = String(item.id || '');
     form.elements.tagline.value = String(item.tagline || '');
-    form.elements.category.value = String(item.category || '');
+    if (form.elements.topic) form.elements.topic.value = String(item.topic || item.category || '');
   }
 
   function openTaglineEditForm(item) {
@@ -2380,7 +2380,7 @@ App.messaging = (function () {
     if (!form || !item) return;
     form.elements.id.value = String(item.id || '');
     form.elements.pitch.value = String(item.pitch || '');
-    form.elements.category.value = String(item.category || '');
+    if (form.elements.topic) form.elements.topic.value = String(item.topic || item.category || '');
   }
 
   function openPitchEditForm(item) {
@@ -3275,7 +3275,7 @@ App.messaging = (function () {
     if (schema.kind === 'simple') {
       return {
         [schema.primaryKey]: `${String(item?.[schema.primaryKey] || '').trim() || 'Untitled'} (Clone)`,
-        category: String(item?.category || '').trim(),
+        topic: String(item?.topic || item?.category || '').trim(),
       };
     }
     if (schema.kind === 'tweet') {
@@ -3284,7 +3284,7 @@ App.messaging = (function () {
         url: String(item?.url || '').trim(),
         hashtags: String(item?.hashtags || '').trim(),
         image_asset_id: Number(item?.image_asset_id || 0) || null,
-        category: String(item?.category || '').trim(),
+        topic: String(item?.topic || item?.category || '').trim(),
       };
     }
     if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
@@ -3606,7 +3606,9 @@ App.messaging = (function () {
     if (!config || !form || !item) return;
     form.elements.id.value = String(item.id || '');
     form.elements[config.field].value = String(item[config.field] || '');
-    form.elements.category.value = String(item.category || '');
+    if (form.elements.topic) {
+      form.elements.topic.value = String(item.topic || item.category || '');
+    }
   }
 
   function openSimpleContentEditForm(config, item) {
@@ -3831,7 +3833,7 @@ App.messaging = (function () {
         const formData = new FormData(form);
         const payload = {
           [config.field]: String(formData.get(config.field) || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || '').trim(),
         };
         if (!payload[config.field]) {
           notify(`${config.singularLabel} is required`, true);
@@ -3856,7 +3858,7 @@ App.messaging = (function () {
       bulkCreateForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(bulkCreateForm);
-        const category = String(formData.get('category') || '').trim();
+        const category = String(formData.get('topic') || '').trim();
         const values = Array.from(new Set(
           parseSimpleContentTextarea(formData.get(`${config.field}_text`))
             .map((item) => String(item || '').trim())
@@ -3869,7 +3871,7 @@ App.messaging = (function () {
         try {
           await Promise.all(values.map((value) => api(config.endpoint, {
             method: 'POST',
-            body: JSON.stringify({ [config.field]: value, category }),
+            body: JSON.stringify({ [config.field]: value, topic: category }),
           })));
           notify(`Saved ${values.length} ${config.singularLower}${values.length === 1 ? '' : 's'}`);
           bulkCreateForm.reset();
@@ -3894,7 +3896,7 @@ App.messaging = (function () {
         const id = Number(formData.get('id') || 0) || 0;
         const payload = {
           [config.field]: String(formData.get(config.field) || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || '').trim(),
         };
         if (!id) {
           notify(`${config.singularLabel} id is required`, true);
@@ -3954,7 +3956,7 @@ App.messaging = (function () {
       bulkEditForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(bulkEditForm);
-        const category = String(formData.get('category') || '').trim();
+        const category = String(formData.get('topic') || '').trim();
         const idsToUpdate = Array.from(stateForType.selected);
         if (!idsToUpdate.length) {
           notify(`Select at least one ${config.singularLower} first`, true);
@@ -3968,7 +3970,7 @@ App.messaging = (function () {
               method: 'PATCH',
               body: JSON.stringify({
                 [config.field]: String(item[config.field] || '').trim(),
-                category,
+                topic: category,
               }),
             });
           }));
@@ -4049,7 +4051,9 @@ App.messaging = (function () {
     if (!form || !idInput || !item) return;
     form.reset();
     idInput.value = String(item.id || '');
-    form.elements.category.value = String(item.topic || item.category || '');
+    if (form.elements.topic) {
+      form.elements.topic.value = String(item.topic || item.category || '');
+    }
     App.setActivePage('editMessagingCategoryPage');
   }
 
@@ -4155,19 +4159,19 @@ App.messaging = (function () {
     if (!form) return false;
     const formData = new FormData(form);
     const id = Number(formData.get('id') || 0) || 0;
-    const category = String(formData.get('topic') || formData.get('category') || '').trim();
+    const topic = String(formData.get('topic') || formData.get('category') || '').trim();
     if (!id) {
       notify('Topic id is required', true);
       return false;
     }
-    if (!category) {
+    if (!topic) {
       notify('Topic is required', true);
       return false;
     }
     try {
       await api(`/api/messaging/topics/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ topic: category }),
+        body: JSON.stringify({ topic }),
       });
       notify('Messaging topic updated');
       form.reset();
@@ -4480,7 +4484,7 @@ App.messaging = (function () {
   async function saveTweetFromForm(form) {
     const formData = new FormData(form);
     const payload = {
-      category: String(formData.get('category') || '').trim(),
+      topic: String(formData.get('topic') || formData.get('category') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
@@ -4496,7 +4500,7 @@ App.messaging = (function () {
     const formData = new FormData(form);
     const id = Number(formData.get('id') || 0) || 0;
     const payload = {
-      category: String(formData.get('category') || '').trim(),
+      topic: String(formData.get('topic') || formData.get('category') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
@@ -4753,7 +4757,7 @@ App.messaging = (function () {
         const formData = new FormData(headlineForm);
         const payload = {
           headline: String(formData.get('headline') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!payload.headline) {
           notify('Headline is required', true);
@@ -4780,7 +4784,7 @@ App.messaging = (function () {
         const formData = new FormData(subheadingForm);
         const payload = {
           subheading: String(formData.get('subheading') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!payload.subheading) {
           notify('Sub-heading is required', true);
@@ -4807,7 +4811,7 @@ App.messaging = (function () {
         const formData = new FormData(taglineForm);
         const payload = {
           tagline: String(formData.get('tagline') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!payload.tagline) {
           notify('Tagline is required', true);
@@ -4834,7 +4838,7 @@ App.messaging = (function () {
         const formData = new FormData(pitchForm);
         const payload = {
           pitch: String(formData.get('pitch') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!payload.pitch) {
           notify('Pitch is required', true);
@@ -4859,7 +4863,7 @@ App.messaging = (function () {
       headlinesBulkCreateForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(headlinesBulkCreateForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const textHeadlines = parseHeadlineTextarea(formData.get('headlines_text'));
         const headlines = Array.from(new Set(textHeadlines.map((item) => String(item || '').trim()).filter(Boolean)));
         if (!headlines.length) {
@@ -4869,7 +4873,7 @@ App.messaging = (function () {
         try {
           await Promise.all(headlines.map((headline) => api('/api/messaging/headlines', {
             method: 'POST',
-            body: JSON.stringify({ headline, category }),
+            body: JSON.stringify({ headline, topic }),
           })));
           notify(`Saved ${headlines.length} headline${headlines.length === 1 ? '' : 's'}`);
           headlinesBulkCreateForm.reset();
@@ -4885,7 +4889,7 @@ App.messaging = (function () {
       subheadingsBulkCreateForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(subheadingsBulkCreateForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const textSubheadings = parseSubheadingTextarea(formData.get('subheadings_text'));
         const subheadings = Array.from(new Set(textSubheadings.map((item) => String(item || '').trim()).filter(Boolean)));
         if (!subheadings.length) {
@@ -4895,7 +4899,7 @@ App.messaging = (function () {
         try {
           await Promise.all(subheadings.map((subheading) => api('/api/messaging/subheadings', {
             method: 'POST',
-            body: JSON.stringify({ subheading, category }),
+            body: JSON.stringify({ subheading, topic }),
           })));
           notify(`Saved ${subheadings.length} sub-heading${subheadings.length === 1 ? '' : 's'}`);
           subheadingsBulkCreateForm.reset();
@@ -4911,7 +4915,7 @@ App.messaging = (function () {
       taglinesBulkCreateForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(taglinesBulkCreateForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const textTaglines = parseTaglineTextarea(formData.get('taglines_text'));
         const taglines = Array.from(new Set(textTaglines.map((item) => String(item || '').trim()).filter(Boolean)));
         if (!taglines.length) {
@@ -4921,7 +4925,7 @@ App.messaging = (function () {
         try {
           await Promise.all(taglines.map((tagline) => api('/api/messaging/taglines', {
             method: 'POST',
-            body: JSON.stringify({ tagline, category }),
+            body: JSON.stringify({ tagline, topic }),
           })));
           notify(`Saved ${taglines.length} tagline${taglines.length === 1 ? '' : 's'}`);
           taglinesBulkCreateForm.reset();
@@ -4937,7 +4941,7 @@ App.messaging = (function () {
       pitchesBulkCreateForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(pitchesBulkCreateForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const textPitches = parsePitchTextarea(formData.get('pitches_text'));
         const pitches = Array.from(new Set(textPitches.map((item) => String(item || '').trim()).filter(Boolean)));
         if (!pitches.length) {
@@ -4947,7 +4951,7 @@ App.messaging = (function () {
         try {
           await Promise.all(pitches.map((pitch) => api('/api/messaging/pitches', {
             method: 'POST',
-            body: JSON.stringify({ pitch, category }),
+            body: JSON.stringify({ pitch, topic }),
           })));
           notify(`Saved ${pitches.length} pitch${pitches.length === 1 ? '' : 'es'}`);
           pitchesBulkCreateForm.reset();
@@ -4990,7 +4994,7 @@ App.messaging = (function () {
         const id = Number(formData.get('id') || 0) || 0;
         const payload = {
           headline: String(formData.get('headline') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!id) {
           notify('Headline id is required', true);
@@ -5021,7 +5025,7 @@ App.messaging = (function () {
         const id = Number(formData.get('id') || 0) || 0;
         const payload = {
           subheading: String(formData.get('subheading') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!id) {
           notify('Sub-heading id is required', true);
@@ -5052,7 +5056,7 @@ App.messaging = (function () {
         const id = Number(formData.get('id') || 0) || 0;
         const payload = {
           tagline: String(formData.get('tagline') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!id) {
           notify('Tagline id is required', true);
@@ -5083,7 +5087,7 @@ App.messaging = (function () {
         const id = Number(formData.get('id') || 0) || 0;
         const payload = {
           pitch: String(formData.get('pitch') || '').trim(),
-          category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || formData.get('category') || '').trim(),
         };
         if (!id) {
           notify('Pitch id is required', true);
@@ -5239,7 +5243,7 @@ App.messaging = (function () {
       headlinesBulkEditForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(headlinesBulkEditForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const ids = Array.from(selectedHeadlineIds);
         if (!ids.length) {
           notify('Select at least one headline first', true);
@@ -5253,7 +5257,7 @@ App.messaging = (function () {
               method: 'PATCH',
               body: JSON.stringify({
                 headline: String(item.headline || '').trim(),
-                category,
+                topic,
               }),
             });
           }));
@@ -5270,7 +5274,7 @@ App.messaging = (function () {
       subheadingsBulkEditForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(subheadingsBulkEditForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const ids = Array.from(selectedSubheadingIds);
         if (!ids.length) {
           notify('Select at least one sub-heading first', true);
@@ -5284,7 +5288,7 @@ App.messaging = (function () {
               method: 'PATCH',
               body: JSON.stringify({
                 subheading: String(item.subheading || '').trim(),
-                category,
+                topic,
               }),
             });
           }));
@@ -5301,7 +5305,7 @@ App.messaging = (function () {
       taglinesBulkEditForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(taglinesBulkEditForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const ids = Array.from(selectedTaglineIds);
         if (!ids.length) {
           notify('Select at least one tagline first', true);
@@ -5315,7 +5319,7 @@ App.messaging = (function () {
               method: 'PATCH',
               body: JSON.stringify({
                 tagline: String(item.tagline || '').trim(),
-                category,
+                topic,
               }),
             });
           }));
@@ -5332,7 +5336,7 @@ App.messaging = (function () {
       pitchesBulkEditForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(pitchesBulkEditForm);
-        const category = String(formData.get('category') || '').trim();
+        const topic = String(formData.get('topic') || formData.get('category') || '').trim();
         const ids = Array.from(selectedPitchIds);
         if (!ids.length) {
           notify('Select at least one pitch first', true);
@@ -5346,7 +5350,7 @@ App.messaging = (function () {
               method: 'PATCH',
               body: JSON.stringify({
                 pitch: String(item.pitch || '').trim(),
-                category,
+                topic,
               }),
             });
           }));
