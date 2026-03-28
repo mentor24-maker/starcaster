@@ -870,18 +870,11 @@
 
       <section id="acquireWebPage" class="app-page hidden">
         <h2>Acquire: Web</h2>
-        <p>Capture source material and structured data from websites before organizing it into contacts, messaging, and assets.</p>
-        <div class="section-toolbar">
-          <h3>Direct Ingest</h3>
-          <button id="directAcquireRefreshBtn" type="button" class="tiny-btn">Refresh Runs</button>
-        </div>
-        <p>Fetch and parse website pages immediately.</p>
         <form id="directAcquireForm" class="stack-form acquire-web-form acquire-web-hero-form">
-          <div class="form-row acquire-web-hero-row">
-            <label for="directAcquireUrlInput">Website</label>
-            <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Enter website URL" />
+          <div class="acquire-web-hero-row">
+            <input id="directAcquireUrlInput" name="source_url" placeholder="website URL" aria-label="Website URL" />
           </div>
-          <div class="acquire-web-hero-actions">
+          <div class="acquire-web-hero-options-row">
             <label class="checkbox-row">
               <input id="directAcquireCaptureContactInput" name="capture_contact_data" type="checkbox" />
               Acquire Contact Data
@@ -899,10 +892,15 @@
                 </div>
               </div>
             </details>
-            <button type="submit">Run Direct Ingest</button>
+          </div>
+          <button id="directAcquireSubmitBtn" type="submit" class="acquire-web-harvest-btn">Harvest Website</button>
+          <div id="directAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+            <div id="directAcquireProgressText" class="asset-upload-progress-text">Harvesting website...</div>
+            <progress id="directAcquireProgressBar" max="100" value="8"></progress>
           </div>
         </form>
 
+        <div id="directAcquireResultsWrap" class="hidden">
         <div class="acquire-web-results-grid">
           <section class="card">
             <div class="page-heading-row" style="margin-bottom: 0.75rem;">
@@ -1116,6 +1114,7 @@
           <h3>Response</h3>
           <pre id="acquireResponsePreview" class="code-box">{}</pre>
         </details>
+        </div>
       </section>
 
       <section id="acquireYoutubePage" class="app-page hidden">

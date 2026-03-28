@@ -30,6 +30,7 @@ App.acquire = (function () {
   let directAcquireImageCategoryByUrl = new Map();
   let directAcquireImagesExpanded = false;
   let directAcquireSelectedHashtags = new Set();
+  let directAcquireProgressTimer = null;
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -101,6 +102,46 @@ App.acquire = (function () {
       // ignore local storage failures
     }
     writeDirectAcquireKeywordReasons(nextReasons);
+  }
+
+  function setDirectAcquireResultsVisible(visible) {
+    const wrap = document.getElementById('directAcquireResultsWrap');
+    if (!wrap) return;
+    wrap.classList.toggle('hidden', !visible);
+  }
+
+  function startDirectAcquireProgress() {
+    const wrap = document.getElementById('directAcquireProgressWrap');
+    const bar = document.getElementById('directAcquireProgressBar');
+    const text = document.getElementById('directAcquireProgressText');
+    const submitBtn = document.getElementById('directAcquireSubmitBtn');
+    if (wrap) wrap.classList.remove('hidden');
+    if (bar) bar.value = 8;
+    if (text) text.textContent = 'Harvesting website...';
+    if (submitBtn) submitBtn.disabled = true;
+    if (directAcquireProgressTimer) clearInterval(directAcquireProgressTimer);
+    directAcquireProgressTimer = setInterval(() => {
+      if (!bar) return;
+      const current = Number(bar.value || 0) || 0;
+      bar.value = Math.min(92, current + (current < 40 ? 9 : current < 70 ? 5 : 2));
+    }, 500);
+  }
+
+  function finishDirectAcquireProgress(ok, message) {
+    const wrap = document.getElementById('directAcquireProgressWrap');
+    const bar = document.getElementById('directAcquireProgressBar');
+    const text = document.getElementById('directAcquireProgressText');
+    const submitBtn = document.getElementById('directAcquireSubmitBtn');
+    if (directAcquireProgressTimer) {
+      clearInterval(directAcquireProgressTimer);
+      directAcquireProgressTimer = null;
+    }
+    if (bar) bar.value = ok ? 100 : Math.max(8, Number(bar.value || 0) || 0);
+    if (text) text.textContent = String(message || (ok ? 'Harvest complete.' : 'Harvest failed.')).trim();
+    if (submitBtn) submitBtn.disabled = false;
+    if (wrap) {
+      setTimeout(() => wrap.classList.add('hidden'), ok ? 900 : 1800);
+    }
   }
 
   function sanitizeImageNameFromUrl(url, index) {
@@ -779,7 +820,7 @@ App.acquire = (function () {
     const pages = Array.isArray(run?.pages) ? run.pages : [];
     if (!pages.length) {
       const tr = document.createElement('tr');
-      const td = document.createElement('td'); td.colSpan = 5; td.textContent = 'No parsed pages loaded yet.';
+      const td = document.createElement('td'); td.colSpan = 5; td.textContent = 'No website pages loaded yet.';
       tr.appendChild(td); els.directAcquirePagesTable.appendChild(tr);
     } else {
       pages.forEach((page) => {
@@ -797,6 +838,7 @@ App.acquire = (function () {
       els.directAcquireErrorsPreview.textContent = errors.length ? prettyJson({ errors }) : '{}';
       els.directAcquireErrorsPreview.classList.toggle('hidden', !errors.length);
     }
+    setDirectAcquireResultsVisible(Boolean(run));
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
@@ -2389,6 +2431,7 @@ App.acquire = (function () {
   // -------------------------------------------------------------------------
 
   function init() {
+    setDirectAcquireResultsVisible(false);
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
@@ -2567,6 +2610,7 @@ App.acquire = (function () {
       els.directAcquireForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
+          startDirectAcquireProgress();
           const formData = new FormData(els.directAcquireForm);
           const payload = {
             source_url: String(formData.get('source_url') || '').trim(),
@@ -2590,8 +2634,12 @@ App.acquire = (function () {
           directAcquireSelectedHashtags = new Set();
           renderDirectHarvestPagesTable();
           await refreshDirectHarvestRuns();
+          finishDirectAcquireProgress(true, `Harvest complete (${res.run?.pages_succeeded || 0} pages processed).`);
           notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)`);
-        } catch (err) { notify(err.message, true); }
+        } catch (err) {
+          finishDirectAcquireProgress(false, err.message || 'Harvest failed.');
+          notify(err.message, true);
+        }
       });
     }
     const saveDirectAcquireContactBtn = document.getElementById('directAcquireSaveContactBtn');
