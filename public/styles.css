@@ -4020,6 +4020,20 @@ th {
   padding: 10px 12px;
 }
 
+.direct-acquire-image-category-dropdown {
+  width: 100%;
+}
+
+.direct-acquire-image-category-dropdown summary {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.direct-acquire-image-category-dropdown .direct-acquire-dropdown-menu {
+  min-width: 100%;
+  width: max-content;
+}
+
 .direct-acquire-dropdown-option {
   display: flex;
   align-items: center;
