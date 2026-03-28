@@ -927,16 +927,16 @@
             <div class="page-heading-row" style="margin-bottom: 0.5rem;">
               <h3 style="margin:0;">Keywords</h3>
               <div class="page-heading-actions" style="justify-content: flex-start;">
-                <select id="directAcquireKeywordBulkReason">
-                  <option value="">Select Exclusion Reason</option>
-                  <option value="brand">Brand</option>
-                  <option value="generic">Generic</option>
-                  <option value="navigational">Navigational</option>
-                  <option value="boilerplate">Boilerplate</option>
-                  <option value="location">Location</option>
-                  <option value="legal">Legal</option>
-                </select>
-                <button id="directAcquireApplyKeywordReasonBtn" type="button" class="tiny-btn">Apply To Checked</button>
+                <label><strong>Topics:</strong> <select id="directAcquireKeywordBulkTopics" multiple size="4" aria-label="Topics"></select></label>
+                <label><strong>Exclusions:</strong> <select id="directAcquireKeywordBulkReason" aria-label="Exclusions">
+                    <option value="">Exclusions</option>
+                    <option value="brand">Brand</option>
+                    <option value="generic">Generic</option>
+                    <option value="navigational">Navigational</option>
+                    <option value="boilerplate">Boilerplate</option>
+                    <option value="location">Location</option>
+                    <option value="legal">Legal</option>
+                  </select></label>
               </div>
             </div>
             <div id="directAcquireKeywordEmpty" class="meta">No keywords harvested yet.</div>
@@ -947,6 +947,7 @@
                     <th style="width: 44px;"><input id="directAcquireKeywordSelectAll" type="checkbox" /></th>
                     <th>Keyword</th>
                     <th>Score</th>
+                    <th>Topics</th>
                     <th>Exclude Reason</th>
                   </tr>
                 </thead>

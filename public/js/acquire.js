@@ -16,6 +16,7 @@ App.acquire = (function () {
   const YT_MINER_RESPONSE_GUIDELINES_KEY = 'yt_miner_response_guidelines_v1';
   const DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY = 'alphire:direct-acquire:keyword-exclusions:v1';
   const DIRECT_ACQUIRE_KEYWORD_REASONS_KEY = 'alphire:direct-acquire:keyword-exclusion-reasons:v1';
+  const DIRECT_ACQUIRE_KEYWORD_TOPICS_KEY = 'alphire:direct-acquire:keyword-topics:v1';
   const DIRECT_ACQUIRE_KEYWORD_REASON_OPTIONS = [
     ['', 'No Exclusion'],
     ['brand', 'Brand'],
@@ -31,6 +32,7 @@ App.acquire = (function () {
   let directAcquireImagesExpanded = false;
   let directAcquireSelectedHashtags = new Set();
   let directAcquireProgressTimer = null;
+  let directAcquireTopics = [];
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -64,6 +66,58 @@ App.acquire = (function () {
     } catch (_) {
       // ignore local storage failures
     }
+  }
+
+  function readDirectAcquireKeywordTopics() {
+    try {
+      const raw = window.localStorage.getItem(DIRECT_ACQUIRE_KEYWORD_TOPICS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeDirectAcquireKeywordTopics(map) {
+    try {
+      window.localStorage.setItem(DIRECT_ACQUIRE_KEYWORD_TOPICS_KEY, JSON.stringify(map || {}));
+    } catch (_) {
+      // ignore local storage failures
+    }
+  }
+
+  async function refreshDirectAcquireTopics() {
+    try {
+      const res = await api('/api/messaging/topics');
+      const topics = Array.isArray(res?.topics)
+        ? res.topics
+        : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+            ? res
+            : [];
+      directAcquireTopics = topics
+        .map((item) => String(item?.topic || item?.category || '').trim())
+        .filter(Boolean)
+        .filter((value, index, list) => list.indexOf(value) === index)
+        .sort((a, b) => a.localeCompare(b));
+    } catch (_) {
+      directAcquireTopics = [];
+    }
+  }
+
+  function renderDirectAcquireKeywordTopicOptions() {
+    const select = document.getElementById('directAcquireKeywordBulkTopics');
+    if (!select) return;
+    const selectedValues = new Set(Array.from(select.selectedOptions || []).map((option) => String(option.value || '').trim()).filter(Boolean));
+    select.innerHTML = '';
+    directAcquireTopics.forEach((topic) => {
+      const option = document.createElement('option');
+      option.value = topic;
+      option.textContent = topic;
+      option.selected = selectedValues.has(topic);
+      select.appendChild(option);
+    });
   }
 
   function syncDirectAcquireKeywordExclusionsFromTable() {
@@ -123,8 +177,8 @@ App.acquire = (function () {
     directAcquireProgressTimer = setInterval(() => {
       if (!bar) return;
       const current = Number(bar.value || 0) || 0;
-      bar.value = Math.min(92, current + (current < 40 ? 9 : current < 70 ? 5 : 2));
-    }, 500);
+      bar.value = Math.min(92, current + (current < 35 ? 5 : current < 65 ? 3 : 1.5));
+    }, 650);
   }
 
   function finishDirectAcquireProgress(ok, message) {
@@ -897,6 +951,7 @@ App.acquire = (function () {
         .filter(Boolean)
     );
     const reasonMap = readDirectAcquireKeywordReasons();
+    const topicMap = readDirectAcquireKeywordTopics();
     if (!labels.length) {
       if (emptyEl) emptyEl.classList.remove('hidden');
       if (selectAll) {
@@ -910,6 +965,7 @@ App.acquire = (function () {
       const tr = document.createElement('tr');
       const normalized = normalizeDirectAcquireKeyword(keyword);
       const selected = exclusionSet.has(normalized);
+      const assignedTopics = Array.isArray(topicMap[normalized]) ? topicMap[normalized].filter(Boolean) : [];
       const selectTd = document.createElement('td');
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -931,6 +987,8 @@ App.acquire = (function () {
       const scoreTd = document.createElement('td');
       const numericScore = Number(score || 0) || 0;
       scoreTd.textContent = numericScore ? numericScore.toFixed(1) : '0.0';
+      const topicsTd = document.createElement('td');
+      topicsTd.textContent = assignedTopics.length ? assignedTopics.join(', ') : 'No Topics';
       const reasonTd = document.createElement('td');
       const reasonSelect = document.createElement('select');
       reasonSelect.dataset.keywordReason = 'true';
@@ -957,6 +1015,7 @@ App.acquire = (function () {
       reasonTd.appendChild(reasonSelect);
       tr.appendChild(keywordTd);
       tr.appendChild(scoreTd);
+      tr.appendChild(topicsTd);
       tr.appendChild(reasonTd);
       tableBody.appendChild(tr);
     });
@@ -2436,6 +2495,7 @@ App.acquire = (function () {
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
     renderDirectAcquireImageGallery();
+    refreshDirectAcquireTopics().then(() => renderDirectAcquireKeywordTopicOptions()).catch(() => {});
     refreshDirectAcquireImageCategories().then(() => renderDirectAcquireImageGallery()).catch(() => {});
     const directAcquireKeywordExclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
     if (directAcquireKeywordExclusionsInput) {
@@ -2468,18 +2528,36 @@ App.acquire = (function () {
         renderDirectAcquireKeywordTable();
       });
     }
-    const directAcquireApplyKeywordReasonBtn = document.getElementById('directAcquireApplyKeywordReasonBtn');
+    const directAcquireKeywordBulkTopics = document.getElementById('directAcquireKeywordBulkTopics');
     const directAcquireKeywordBulkReason = document.getElementById('directAcquireKeywordBulkReason');
-    if (directAcquireApplyKeywordReasonBtn && directAcquireKeywordBulkReason) {
-      directAcquireApplyKeywordReasonBtn.addEventListener('click', function () {
-        const reason = String(directAcquireKeywordBulkReason.value || '').trim();
-        if (!reason) {
-          notify('Select an exclusion reason first', true);
-          return;
-        }
+    if (directAcquireKeywordBulkTopics) {
+      directAcquireKeywordBulkTopics.addEventListener('change', function () {
         const selected = Array.from(document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]:checked'));
         if (!selected.length) {
           notify('Check at least one keyword first', true);
+          return;
+        }
+        const chosenTopics = Array.from(directAcquireKeywordBulkTopics.selectedOptions || [])
+          .map((option) => String(option.value || '').trim())
+          .filter(Boolean);
+        const topicMap = readDirectAcquireKeywordTopics();
+        selected.forEach((checkbox) => {
+          const keyword = normalizeDirectAcquireKeyword(checkbox.dataset.keyword || '');
+          if (!keyword) return;
+          topicMap[keyword] = chosenTopics;
+        });
+        writeDirectAcquireKeywordTopics(topicMap);
+        renderDirectAcquireKeywordTable();
+      });
+    }
+    if (directAcquireKeywordBulkReason) {
+      directAcquireKeywordBulkReason.addEventListener('change', function () {
+        const reason = String(directAcquireKeywordBulkReason.value || '').trim();
+        if (!reason) return;
+        const selected = Array.from(document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]:checked'));
+        if (!selected.length) {
+          notify('Check at least one keyword first', true);
+          directAcquireKeywordBulkReason.value = '';
           return;
         }
         selected.forEach((checkbox) => {
@@ -2489,6 +2567,7 @@ App.acquire = (function () {
         });
         syncDirectAcquireKeywordExclusionsFromTable();
         renderDirectAcquireKeywordTable();
+        directAcquireKeywordBulkReason.value = '';
       });
     }
     const directAcquireHashtagSelectAll = document.getElementById('directAcquireHashtagSelectAll');

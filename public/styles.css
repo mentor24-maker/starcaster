@@ -3948,14 +3948,14 @@ th {
 }
 
 .acquire-web-hero-row input {
-  width: min(100%, 1680px);
+  width: min(100%, 1260px);
   font-size: 1.3rem;
   padding: 1.05rem 1.2rem;
   border-radius: 24px;
 }
 
 .acquire-web-hero-options-row {
-  width: min(100%, 1680px);
+  width: min(100%, 1260px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3964,11 +3964,24 @@ th {
 }
 
 .acquire-web-harvest-btn {
-  width: min(100%, 1680px);
+  width: min(100%, 1260px);
+  margin: 0 auto;
+  display: block;
 }
 
 #directAcquireProgressWrap {
-  width: min(100%, 1680px);
+  width: min(100%, 1260px);
+  margin: 0 auto;
+}
+
+#directAcquireKeywordBulkTopics {
+  min-width: 220px;
+}
+
+#acquireWebPage .page-heading-actions > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .acquire-web-results-grid {
