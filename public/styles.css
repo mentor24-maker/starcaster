@@ -2086,6 +2086,10 @@ th {
   align-items: center;
 }
 
+.labeled-form .form-row.hidden {
+  display: none;
+}
+
 .labeled-form .form-row > label {
   font-weight: 600;
 }
