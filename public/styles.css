@@ -3937,6 +3937,47 @@ th {
   font-weight: 700;
 }
 
+.acquire-web-hero-form {
+  max-width: 1080px;
+  margin: 0 auto 1.5rem;
+  align-items: center;
+}
+
+.acquire-web-hero-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.acquire-web-hero-row label {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.acquire-web-hero-row input {
+  width: min(100%, 920px);
+  font-size: 1.25rem;
+  padding: 0.95rem 1rem;
+  border-radius: 12px;
+}
+
+.acquire-web-hero-actions {
+  width: min(100%, 920px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.acquire-web-results-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
 .direct-acquire-contact-label {
   font-weight: 700;
 }
@@ -4009,6 +4050,10 @@ th {
 }
 
 @media (max-width: 1024px) {
+  .acquire-web-results-grid {
+    grid-template-columns: 1fr;
+  }
+
   .direct-acquire-image-gallery {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

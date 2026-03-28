@@ -29,6 +29,7 @@ App.acquire = (function () {
   let directAcquireSelectedImages = new Set();
   let directAcquireImageCategoryByUrl = new Map();
   let directAcquireImagesExpanded = false;
+  let directAcquireSelectedHashtags = new Set();
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -798,6 +799,7 @@ App.acquire = (function () {
     }
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
+    renderDirectAcquireHashtagTable();
     renderDirectAcquireImageGallery();
   }
 
@@ -922,6 +924,82 @@ App.acquire = (function () {
       selectAll.checked = !!checkboxes.length && checkedCount === checkboxes.length;
       selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
     }
+  }
+
+  function renderDirectAcquireHashtagTable() {
+    const tableBody = document.getElementById('directAcquireHashtagTable');
+    const emptyEl = document.getElementById('directAcquireHashtagEmpty');
+    const selectAll = document.getElementById('directAcquireHashtagSelectAll');
+    const saveBtn = document.getElementById('directAcquireSaveHashtagsBtn');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const hashtags = Array.isArray(state.directAcquireCurrentRun?.hashtag_summary?.hashtags)
+      ? state.directAcquireCurrentRun.hashtag_summary.hashtags
+      : [];
+    const valid = new Set(hashtags.map((item) => String(item?.hashtag || '').trim()).filter(Boolean));
+    directAcquireSelectedHashtags = new Set(Array.from(directAcquireSelectedHashtags).filter((tag) => valid.has(tag)));
+    if (!hashtags.length) {
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      if (saveBtn) saveBtn.disabled = true;
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+    hashtags.forEach((item) => {
+      const hashtag = String(item?.hashtag || '').trim();
+      if (!hashtag) return;
+      const tr = document.createElement('tr');
+
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = directAcquireSelectedHashtags.has(hashtag);
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) directAcquireSelectedHashtags.add(hashtag);
+        else directAcquireSelectedHashtags.delete(hashtag);
+        renderDirectAcquireHashtagTable();
+      });
+      selectTd.appendChild(checkbox);
+      tr.appendChild(selectTd);
+
+      const hashtagTd = document.createElement('td');
+      hashtagTd.className = 'direct-acquire-contact-label';
+      hashtagTd.textContent = hashtag;
+      tr.appendChild(hashtagTd);
+
+      const scoreTd = document.createElement('td');
+      scoreTd.textContent = (Number(item?.evidence_score || 0) || 0).toFixed(1);
+      tr.appendChild(scoreTd);
+
+      const postsTd = document.createElement('td');
+      postsTd.textContent = String(Number(item?.posts_count || 0) || 0);
+      tr.appendChild(postsTd);
+
+      const sampleTd = document.createElement('td');
+      sampleTd.textContent = String(item?.sample_usage || '').trim() || '-';
+      tr.appendChild(sampleTd);
+
+      tableBody.appendChild(tr);
+    });
+    if (saveBtn) saveBtn.disabled = directAcquireSelectedHashtags.size === 0;
+    if (selectAll) {
+      const checkedCount = hashtags.filter((item) => directAcquireSelectedHashtags.has(String(item?.hashtag || '').trim())).length;
+      selectAll.checked = !!hashtags.length && checkedCount === hashtags.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < hashtags.length;
+    }
+  }
+
+  async function saveDirectAcquireSelectedHashtags() {
+    const hashtags = Array.from(directAcquireSelectedHashtags).filter(Boolean);
+    if (!hashtags.length) throw new Error('No hashtags selected.');
+    await Promise.all(hashtags.map((hashtag) => api('/api/messaging/hashtags', {
+      method: 'POST',
+      body: JSON.stringify({ hashtag }),
+    })));
+    notify(`Saved ${hashtags.length} hashtag${hashtags.length === 1 ? '' : 's'}`);
   }
 
   function buildContactPayloadFromDirectRun(run) {
@@ -2160,6 +2238,7 @@ App.acquire = (function () {
     directAcquireSelectedImages = new Set();
     directAcquireImageCategoryByUrl = new Map();
     directAcquireImagesExpanded = false;
+    directAcquireSelectedHashtags = new Set();
     renderDirectHarvestPagesTable();
   }
 
@@ -2312,6 +2391,7 @@ App.acquire = (function () {
   function init() {
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
+    renderDirectAcquireHashtagTable();
     renderDirectAcquireImageGallery();
     refreshDirectAcquireImageCategories().then(() => renderDirectAcquireImageGallery()).catch(() => {});
     const directAcquireKeywordExclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
@@ -2366,6 +2446,31 @@ App.acquire = (function () {
         });
         syncDirectAcquireKeywordExclusionsFromTable();
         renderDirectAcquireKeywordTable();
+      });
+    }
+    const directAcquireHashtagSelectAll = document.getElementById('directAcquireHashtagSelectAll');
+    if (directAcquireHashtagSelectAll) {
+      directAcquireHashtagSelectAll.addEventListener('change', function () {
+        const hashtags = Array.isArray(state.directAcquireCurrentRun?.hashtag_summary?.hashtags)
+          ? state.directAcquireCurrentRun.hashtag_summary.hashtags
+          : [];
+        hashtags.forEach((item) => {
+          const hashtag = String(item?.hashtag || '').trim();
+          if (!hashtag) return;
+          if (directAcquireHashtagSelectAll.checked) directAcquireSelectedHashtags.add(hashtag);
+          else directAcquireSelectedHashtags.delete(hashtag);
+        });
+        renderDirectAcquireHashtagTable();
+      });
+    }
+    const directAcquireSaveHashtagsBtn = document.getElementById('directAcquireSaveHashtagsBtn');
+    if (directAcquireSaveHashtagsBtn) {
+      directAcquireSaveHashtagsBtn.addEventListener('click', async () => {
+        try {
+          await saveDirectAcquireSelectedHashtags();
+        } catch (err) {
+          notify(err.message || 'Could not save selected hashtags', true);
+        }
       });
     }
     const directAcquireImageSelectAll = document.getElementById('directAcquireImageSelectAll');
@@ -2465,7 +2570,7 @@ App.acquire = (function () {
           const formData = new FormData(els.directAcquireForm);
           const payload = {
             source_url: String(formData.get('source_url') || '').trim(),
-            max_pages: Number(formData.get('max_pages') || 5),
+            max_pages: 10,
             body_snippet_chars: Number(formData.get('body_snippet_chars') || 600),
             capture_contact_data: formData.get('capture_contact_data') === 'on',
             keyword_exclusions: String(formData.get('keyword_exclusions') || '').trim(),
@@ -2482,6 +2587,7 @@ App.acquire = (function () {
           directAcquireSelectedImages = new Set();
           directAcquireImageCategoryByUrl = new Map();
           directAcquireImagesExpanded = false;
+          directAcquireSelectedHashtags = new Set();
           renderDirectHarvestPagesTable();
           await refreshDirectHarvestRuns();
           notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)`);

@@ -876,18 +876,12 @@
           <button id="directAcquireRefreshBtn" type="button" class="tiny-btn">Refresh Runs</button>
         </div>
         <p>Fetch and parse website pages immediately.</p>
-        <div class="grid-form" style="grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr); align-items: start; gap: 24px;">
-          <form id="directAcquireForm" class="stack-form acquire-web-form">
-            <div class="grid-form">
-              <div class="form-row">
-                <label for="directAcquireUrlInput">Website</label>
-                <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Source URL" />
-              </div>
-              <div class="form-row">
-                <label for="directAcquireMaxPagesInput">Pages to Fetch</label>
-                <input id="directAcquireMaxPagesInput" name="max_pages" type="number" min="1" max="50" value="5" placeholder="Pages to Fetch" />
-              </div>
-            </div>
+        <form id="directAcquireForm" class="stack-form acquire-web-form acquire-web-hero-form">
+          <div class="form-row acquire-web-hero-row">
+            <label for="directAcquireUrlInput">Website</label>
+            <input id="directAcquireUrlInput" name="source_url" value="https://isitas.org" placeholder="Enter website URL" />
+          </div>
+          <div class="acquire-web-hero-actions">
             <label class="checkbox-row">
               <input id="directAcquireCaptureContactInput" name="capture_contact_data" type="checkbox" />
               Acquire Contact Data
@@ -906,10 +900,13 @@
               </div>
             </details>
             <button type="submit">Run Direct Ingest</button>
-          </form>
+          </div>
+        </form>
+
+        <div class="acquire-web-results-grid">
           <section class="card">
             <div class="page-heading-row" style="margin-bottom: 0.75rem;">
-              <h3 style="margin:0;">Captured Contact Data</h3>
+              <h3 style="margin:0;">Social</h3>
               <div class="page-heading-actions">
                 <button id="directAcquireSaveContactBtn" type="button" class="tiny-btn" disabled>Save To Contacts</button>
               </div>
@@ -926,62 +923,92 @@
                 <tbody id="directAcquireContactTable"></tbody>
               </table>
             </div>
-            <div style="margin-top: 1rem;">
-              <div class="page-heading-row" style="margin-bottom: 0.5rem;">
-                <h3 style="margin:0;">Top Keywords</h3>
-                <div class="page-heading-actions" style="justify-content: flex-start;">
-                  <select id="directAcquireKeywordBulkReason">
-                    <option value="">Select Exclusion Reason</option>
-                    <option value="brand">Brand</option>
-                    <option value="generic">Generic</option>
-                    <option value="navigational">Navigational</option>
-                    <option value="boilerplate">Boilerplate</option>
-                    <option value="location">Location</option>
-                    <option value="legal">Legal</option>
-                  </select>
-                  <button id="directAcquireApplyKeywordReasonBtn" type="button" class="tiny-btn">Apply To Checked</button>
-                </div>
-              </div>
-              <div id="directAcquireKeywordEmpty" class="meta">No keywords harvested yet.</div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style="width: 44px;"><input id="directAcquireKeywordSelectAll" type="checkbox" /></th>
-                      <th>Keyword</th>
-                      <th>Score</th>
-                      <th>Exclude Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody id="directAcquireKeywordTable"></tbody>
-                </table>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+              <h3 style="margin:0;">Keywords</h3>
+              <div class="page-heading-actions" style="justify-content: flex-start;">
+                <select id="directAcquireKeywordBulkReason">
+                  <option value="">Select Exclusion Reason</option>
+                  <option value="brand">Brand</option>
+                  <option value="generic">Generic</option>
+                  <option value="navigational">Navigational</option>
+                  <option value="boilerplate">Boilerplate</option>
+                  <option value="location">Location</option>
+                  <option value="legal">Legal</option>
+                </select>
+                <button id="directAcquireApplyKeywordReasonBtn" type="button" class="tiny-btn">Apply To Checked</button>
               </div>
             </div>
-            <div style="margin-top: 1rem;">
-              <div class="page-heading-row" style="margin-bottom: 0.5rem;">
-                <h3 style="margin:0;">Captured Images</h3>
-                <div class="page-heading-actions" style="justify-content: flex-start; flex-wrap: wrap;">
-                  <label class="checkbox-row" style="margin: 0;">
-                    <input id="directAcquireImageSelectAll" type="checkbox" />
-                    Check All
-                  </label>
-                  <select id="directAcquireImageBulkCategory">
-                    <option value="">Select Image Category</option>
-                  </select>
-                  <button id="directAcquireApplyImageCategoryBtn" type="button" class="tiny-btn">Apply To Checked</button>
-                  <button id="directAcquireSaveImagesBtn" type="button" class="tiny-btn" disabled>Save Selected To Assets</button>
-                </div>
+            <div id="directAcquireKeywordEmpty" class="meta">No keywords harvested yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 44px;"><input id="directAcquireKeywordSelectAll" type="checkbox" /></th>
+                    <th>Keyword</th>
+                    <th>Score</th>
+                    <th>Exclude Reason</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireKeywordTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+              <h3 style="margin:0;">Hashtags</h3>
+              <div class="page-heading-actions" style="justify-content: flex-start;">
+                <label class="checkbox-row" style="margin: 0;">
+                  <input id="directAcquireHashtagSelectAll" type="checkbox" />
+                  Check All
+                </label>
+                <button id="directAcquireSaveHashtagsBtn" type="button" class="tiny-btn" disabled>Save Selected</button>
               </div>
-              <div id="directAcquireImagesEmpty" class="meta">No images captured yet.</div>
-              <div id="directAcquireImageGallery" class="direct-acquire-image-gallery"></div>
-              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
-                <button id="directAcquireImagesSeeMoreBtn" type="button" class="tiny-btn hidden">See More</button>
-              </div>
+            </div>
+            <div id="directAcquireHashtagEmpty" class="meta">No validated hashtags yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:44px;"></th>
+                    <th>Hashtag</th>
+                    <th>Score</th>
+                    <th>Posts</th>
+                    <th>Sample Usage</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireHashtagTable"></tbody>
+              </table>
             </div>
           </section>
         </div>
 
-        <h3>Parsed Pages</h3>
+        <section class="card" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+            <h3 style="margin:0;">Captured Images</h3>
+            <div class="page-heading-actions" style="justify-content: flex-start; flex-wrap: wrap;">
+              <label class="checkbox-row" style="margin: 0;">
+                <input id="directAcquireImageSelectAll" type="checkbox" />
+                Check All
+              </label>
+              <select id="directAcquireImageBulkCategory">
+                <option value="">Select Image Category</option>
+              </select>
+              <button id="directAcquireApplyImageCategoryBtn" type="button" class="tiny-btn">Apply To Checked</button>
+              <button id="directAcquireSaveImagesBtn" type="button" class="tiny-btn" disabled>Save Selected To Assets</button>
+            </div>
+          </div>
+          <div id="directAcquireImagesEmpty" class="meta">No images captured yet.</div>
+          <div id="directAcquireImageGallery" class="direct-acquire-image-gallery"></div>
+          <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
+            <button id="directAcquireImagesSeeMoreBtn" type="button" class="tiny-btn hidden">See More</button>
+          </div>
+        </section>
+
+        <h3>Website Pages</h3>
         <div class="table-wrap">
           <table>
             <thead>
