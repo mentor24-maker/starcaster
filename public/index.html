@@ -927,7 +927,12 @@
             <div class="page-heading-row" style="margin-bottom: 0.5rem;">
               <h3 style="margin:0;">Keywords</h3>
               <div class="page-heading-actions" style="justify-content: flex-start;">
-                <label><strong>Topics:</strong> <select id="directAcquireKeywordBulkTopics" multiple size="4" aria-label="Topics"></select></label>
+                <label><strong>Topics:</strong>
+                  <details id="directAcquireKeywordTopicsDropdown" class="direct-acquire-dropdown">
+                    <summary id="directAcquireKeywordTopicsSummary">Topics</summary>
+                    <div id="directAcquireKeywordTopicsMenu" class="direct-acquire-dropdown-menu"></div>
+                  </details>
+                </label>
                 <label><strong>Exclusions:</strong> <select id="directAcquireKeywordBulkReason" aria-label="Exclusions">
                     <option value="">Exclusions</option>
                     <option value="brand">Brand</option>
