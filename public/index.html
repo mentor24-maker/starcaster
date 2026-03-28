@@ -2958,11 +2958,11 @@
                   <label><strong>Body:</strong></label>
                   <div>
                     <div class="messaging-richtext-toolbar">
-                      <button type="button" data-richtext-command="bold"><strong>B</strong></button>
-                      <button type="button" data-richtext-command="italic"><em>I</em></button>
-                      <button type="button" data-richtext-command="formatBlock" data-richtext-value="h3">H3</button>
-                      <button type="button" data-richtext-command="insertUnorderedList">List</button>
-                      <button type="button" data-richtext-command="removeFormat">Clear</button>
+                      <button type="button" data-richtext-command="bold" title="Bold" aria-label="Bold"><strong>B</strong></button>
+                      <button type="button" data-richtext-command="italic" title="Italic" aria-label="Italic"><em>I</em></button>
+                      <button type="button" data-richtext-command="formatBlock" data-richtext-value="h3" title="Heading" aria-label="Heading"><strong>H3</strong></button>
+                      <button type="button" data-richtext-command="insertUnorderedList" title="Bullet List" aria-label="Bullet List">&bull;</button>
+                      <button type="button" data-richtext-command="removeFormat" title="Clear Formatting" aria-label="Clear Formatting">&#215;</button>
                     </div>
                     <div id="messagingCreateContentGeneratedBodyEditor" class="messaging-richtext-editor" contenteditable="true"></div>
                   </div>
@@ -3136,15 +3136,67 @@
             <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
-        <form id="messagingTweetsForm" class="stack-form hidden">
-          <textarea name="content" rows="6" placeholder="Content" required></textarea>
-          <input name="url" placeholder="URL" />
-          <input name="hashtags" placeholder="Hashtags (comma-separated)" />
-          <select id="messagingTweetImageSelect" name="image_asset_id">
-            <option value="">Image (optional)</option>
-          </select>
-          <button type="submit">Save Tweet</button>
-        </form>
+        <div id="messagingTweetsWorkspace" class="messaging-create-content-layout hidden" style="margin-bottom: 18px;">
+          <div class="messaging-create-content-column">
+            <form id="messagingTweetsForm" class="stack-form labeled-form" style="max-width: none;">
+              <div class="form-row">
+                <label for="messagingTweetTopic"><strong>Topic:</strong></label>
+                <select id="messagingTweetTopic" name="category" data-messaging-category-select="true">
+                  <option value="">Select Topic</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="messagingTweetContent"><strong>Tweet:</strong></label>
+                <textarea id="messagingTweetContent" name="content" rows="6" placeholder="Content" required></textarea>
+              </div>
+              <div class="form-row">
+                <label for="messagingTweetUrl"><strong>URL:</strong></label>
+                <input id="messagingTweetUrl" name="url" placeholder="https://..." />
+              </div>
+              <div class="form-row">
+                <label for="messagingTweetHashtags"><strong>Hashtags:</strong></label>
+                <input id="messagingTweetHashtags" name="hashtags" placeholder="#tag1, #tag2" />
+              </div>
+              <div class="form-row">
+                <label for="messagingTweetImageSelect"><strong>Image:</strong></label>
+                <select id="messagingTweetImageSelect" name="image_asset_id">
+                  <option value="">Image (optional)</option>
+                </select>
+              </div>
+              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingTweetsGenerateBtn" type="button">Generate Option(s)</button>
+                <button id="messagingTweetsSubmitBtn" type="submit">Save Tweet</button>
+              </div>
+            </form>
+          </div>
+          <div class="messaging-create-content-column messaging-create-content-results">
+            <div class="page-heading-row" style="align-items: center;">
+              <h3 style="margin: 0;">Generated Options</h3>
+              <div class="page-heading-actions">
+                <button id="messagingTweetsClearSuggestionsBtn" type="button">Clear Options</button>
+              </div>
+            </div>
+            <div id="messagingTweetsSuggestionsEmpty">
+              Use <strong>Generate Option(s)</strong> to create tweet suggestions from the fields on the left.
+            </div>
+            <div id="messagingTweetsShortSuggestions" class="hidden">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 44px;"><input id="messagingTweetsSelectAllSuggestions" type="checkbox" /></th>
+                      <th>Tweet</th>
+                    </tr>
+                  </thead>
+                  <tbody id="messagingTweetsSuggestionsTable"></tbody>
+                </table>
+              </div>
+              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingTweetsSaveSelectedBtn" type="button">Save Selected</button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <form id="messagingTweetsEditForm" class="stack-form hidden">
           <input name="id" type="hidden" />
@@ -3152,6 +3204,9 @@
             <h3>Edit Tweet</h3>
             <button id="messagingTweetsCancelEditBtn" type="button">Cancel Edit</button>
           </div>
+          <select name="category" data-messaging-category-select="true">
+            <option value="">Topic</option>
+          </select>
           <textarea name="content" rows="6" placeholder="Content" required></textarea>
           <input name="url" placeholder="URL" />
           <input name="hashtags" placeholder="Hashtags (comma-separated)" />
