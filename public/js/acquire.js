@@ -578,7 +578,8 @@ App.acquire = (function () {
       keywordTd.className = 'direct-acquire-contact-label';
       keywordTd.textContent = String(keyword || '');
       const scoreTd = document.createElement('td');
-      scoreTd.textContent = String(score || '');
+      const numericScore = Number(score || 0) || 0;
+      scoreTd.textContent = numericScore ? numericScore.toFixed(1) : '0.0';
       tr.appendChild(keywordTd);
       tr.appendChild(scoreTd);
       tableBody.appendChild(tr);
