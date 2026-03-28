@@ -99,12 +99,12 @@ const {
   deleteMessagingCta,
 } = require('../lib/messagingCtasStore');
 const {
-  listMessagingCategories,
-  createMessagingCategory,
-  getMessagingCategory,
-  updateMessagingCategory,
-  deleteMessagingCategory,
-} = require('../lib/messagingCategoriesStore');
+  listMessagingTopics,
+  createMessagingTopic,
+  getMessagingTopic,
+  updateMessagingTopic,
+  deleteMessagingTopic,
+} = require('../lib/messagingTopicsStore');
 const {
   listMessagingTags,
   createMessagingTag,
@@ -764,47 +764,47 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { hashtags: result.data }, { total: result.data.length }), true;
   }
 
-  if (pathname === '/api/messaging/categories' && requestMethod === 'GET') {
+  if ((pathname === '/api/messaging/topics' || pathname === '/api/messaging/categories') && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingCategories(limit);
+    const result = await listMessagingTopics(limit);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    const categories = result.data || [];
-    return sendOk(res, 200, categories, { categories }, { total: categories.length }), true;
+    const topics = result.data || [];
+    return sendOk(res, 200, topics, { topics, categories: topics }, { total: topics.length }), true;
   }
 
-  if (pathname === '/api/messaging/categories' && requestMethod === 'POST') {
+  if ((pathname === '/api/messaging/topics' || pathname === '/api/messaging/categories') && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
-    const category = String(body?.category || '').trim();
-    if (!category) return sendErr(res, 400, 'category is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingCategory(body || {});
+    const topic = String(body?.topic || body?.category || '').trim();
+    if (!topic) return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createMessagingTopic({ topic });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    return sendOk(res, 201, result.data, { category: result.data }), true;
+    return sendOk(res, 201, result.data, { topic: result.data, category: result.data }), true;
   }
 
-  const messagingCategoryIdMatch = String(pathname || '').match(/^\/api\/messaging\/categories\/(\d+)\/?$/);
-  if (messagingCategoryIdMatch && requestMethod === 'GET') {
-    const id = Number(messagingCategoryIdMatch[1]);
-    const result = await getMessagingCategory(id);
+  const messagingTopicIdMatch = String(pathname || '').match(/^\/api\/messaging\/(?:topics|categories)\/(\d+)\/?$/);
+  if (messagingTopicIdMatch && requestMethod === 'GET') {
+    const id = Number(messagingTopicIdMatch[1]);
+    const result = await getMessagingTopic(id);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    return sendOk(res, 200, result.data, { category: result.data }), true;
+    return sendOk(res, 200, result.data, { topic: result.data, category: result.data }), true;
   }
 
-  if (messagingCategoryIdMatch && (requestMethod === 'PATCH' || requestMethod === 'PUT')) {
-    const id = Number(messagingCategoryIdMatch[1]);
+  if (messagingTopicIdMatch && (requestMethod === 'PATCH' || requestMethod === 'PUT')) {
+    const id = Number(messagingTopicIdMatch[1]);
     const body = await parseJsonBody(req);
-    const category = String(body?.category || '').trim();
-    if (!category) return sendErr(res, 400, 'category is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingCategory(id, body || {});
+    const topic = String(body?.topic || body?.category || '').trim();
+    if (!topic) return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await updateMessagingTopic(id, { topic });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    return sendOk(res, 200, result.data, { category: result.data }), true;
+    return sendOk(res, 200, result.data, { topic: result.data, category: result.data }), true;
   }
 
-  if (messagingCategoryIdMatch && requestMethod === 'DELETE') {
-    const id = Number(messagingCategoryIdMatch[1]);
-    const result = await deleteMessagingCategory(id);
+  if (messagingTopicIdMatch && requestMethod === 'DELETE') {
+    const id = Number(messagingTopicIdMatch[1]);
+    const result = await deleteMessagingTopic(id);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    return sendOk(res, 200, result.data, { category: result.data }), true;
+    return sendOk(res, 200, result.data, { topic: result.data, category: result.data }), true;
   }
 
   if (pathname === '/api/messaging/tags' && requestMethod === 'GET') {
