@@ -14,6 +14,7 @@ App.acquire = (function () {
   const BLUESKY_REPLY_FEEDBACK_KEY_PREFIX = 'alphire:bluesky:reply-feedback:';
   const YT_MINER_RESPONSE_CONTEXT_KEY = 'yt_miner_response_context_v1';
   const YT_MINER_RESPONSE_GUIDELINES_KEY = 'yt_miner_response_guidelines_v1';
+  const DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY = 'alphire:direct-acquire:keyword-exclusions:v1';
 
   function blueskyDiscoveryFeedbackKey(itemOrUrl) {
     const postUrl = typeof itemOrUrl === 'string'
@@ -1971,6 +1972,21 @@ App.acquire = (function () {
   function init() {
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
+    const directAcquireKeywordExclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
+    if (directAcquireKeywordExclusionsInput) {
+      try {
+        directAcquireKeywordExclusionsInput.value = String(window.localStorage.getItem(DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY) || '').trim();
+      } catch (_) {
+        // ignore local storage failures
+      }
+      directAcquireKeywordExclusionsInput.addEventListener('change', function () {
+        try {
+          window.localStorage.setItem(DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY, String(directAcquireKeywordExclusionsInput.value || '').trim());
+        } catch (_) {
+          // ignore local storage failures
+        }
+      });
+    }
     clearRedditHarvestProgress();
     const redditProgressWrap = document.getElementById('redditHarvestProgressWrap');
     const redditProgressBar = document.getElementById('redditHarvestProgressBar');
@@ -2019,7 +2035,15 @@ App.acquire = (function () {
             max_pages: Number(formData.get('max_pages') || 5),
             body_snippet_chars: Number(formData.get('body_snippet_chars') || 600),
             capture_contact_data: formData.get('capture_contact_data') === 'on',
+            keyword_exclusions: String(formData.get('keyword_exclusions') || '').trim(),
           };
+          if (directAcquireKeywordExclusionsInput) {
+            try {
+              window.localStorage.setItem(DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY, payload.keyword_exclusions);
+            } catch (_) {
+              // ignore local storage failures
+            }
+          }
           const res = await api('/api/acquire/direct-run', { method: 'POST', body: JSON.stringify(payload) });
           state.directAcquireCurrentRun = res.run || null;
           renderDirectHarvestPagesTable();
