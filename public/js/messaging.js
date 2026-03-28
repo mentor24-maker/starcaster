@@ -284,18 +284,18 @@ App.messaging = (function () {
     { format: 'Calls to Action', pageId: 'messagingCtasPage', field: 'cta', source: () => simpleContentState.ctas.items },
   ];
   const createContentFormatSchemas = {
-    Headlines: { kind: 'simple', endpoint: '/api/messaging/headlines', primaryKey: 'headline', primaryLabel: 'Headline', primaryRows: 3, fields: ['author', 'primary'] },
-    'Sub-headings': { kind: 'simple', endpoint: '/api/messaging/subheadings', primaryKey: 'subheading', primaryLabel: 'Sub-heading', primaryRows: 3, fields: ['author', 'primary'] },
-    Taglines: { kind: 'simple', endpoint: '/api/messaging/taglines', primaryKey: 'tagline', primaryLabel: 'Tagline', primaryRows: 3, fields: ['author', 'primary'] },
-    Pitches: { kind: 'simple', endpoint: '/api/messaging/pitches', primaryKey: 'pitch', primaryLabel: 'Pitch', primaryRows: 5, fields: ['author', 'primary'] },
-    Emails: { kind: 'simple', endpoint: '/api/messaging/emails', primaryKey: 'email', primaryLabel: 'Email Body', primaryRows: 12, fields: ['author', 'subject', 'primary'] },
-    Tweets: { kind: 'tweet', endpoint: '/api/messaging/tweets', primaryKey: 'content', primaryLabel: 'Tweet', primaryRows: 6, fields: ['author', 'primary', 'url', 'hashtags', 'image'] },
-    Posts: { kind: 'simple', endpoint: '/api/messaging/posts', primaryKey: 'post', primaryLabel: 'Post', primaryRows: 6, fields: ['author', 'primary', 'url', 'image'] },
-    Descriptions: { kind: 'simple', endpoint: '/api/messaging/descriptions', primaryKey: 'description', primaryLabel: 'Description', primaryRows: 6, fields: ['author', 'primary'] },
-    Transcripts: { kind: 'simple', endpoint: '/api/messaging/transcripts', primaryKey: 'transcript', primaryLabel: 'Transcript', primaryRows: 10, fields: ['author', 'primary', 'url'] },
-    Comments: { kind: 'simple', endpoint: '/api/messaging/comments', primaryKey: 'comment', primaryLabel: 'Comment', primaryRows: 6, fields: ['author', 'primary', 'url'] },
-    Hashtags: { kind: 'simple', endpoint: '/api/messaging/hashtags', primaryKey: 'hashtag', primaryLabel: 'Hashtags', primaryRows: 4, fields: ['author', 'primary'] },
-    'Calls to Action': { kind: 'simple', endpoint: '/api/messaging/ctas', primaryKey: 'cta', primaryLabel: 'CTA', primaryRows: 4, fields: ['author', 'primary', 'url'] },
+    Headlines: { kind: 'simple', endpoint: '/api/messaging/headlines', primaryKey: 'headline', primaryLabel: 'Headline', primaryRows: 3, fields: ['primary'] },
+    'Sub-headings': { kind: 'simple', endpoint: '/api/messaging/subheadings', primaryKey: 'subheading', primaryLabel: 'Sub-heading', primaryRows: 3, fields: ['primary'] },
+    Taglines: { kind: 'simple', endpoint: '/api/messaging/taglines', primaryKey: 'tagline', primaryLabel: 'Tagline', primaryRows: 3, fields: ['primary'] },
+    Pitches: { kind: 'simple', endpoint: '/api/messaging/pitches', primaryKey: 'pitch', primaryLabel: 'Pitch', primaryRows: 5, fields: ['primary'] },
+    Emails: { kind: 'simple', endpoint: '/api/messaging/emails', primaryKey: 'email', primaryLabel: 'Email Body', primaryRows: 12, fields: ['subject', 'primary'] },
+    Tweets: { kind: 'tweet', endpoint: '/api/messaging/tweets', primaryKey: 'content', primaryLabel: 'Tweet', primaryRows: 6, fields: ['primary', 'url', 'hashtags', 'image'] },
+    Posts: { kind: 'simple', endpoint: '/api/messaging/posts', primaryKey: 'post', primaryLabel: 'Post', primaryRows: 6, fields: ['primary', 'url', 'image'] },
+    Descriptions: { kind: 'simple', endpoint: '/api/messaging/descriptions', primaryKey: 'description', primaryLabel: 'Description', primaryRows: 6, fields: ['primary'] },
+    Transcripts: { kind: 'simple', endpoint: '/api/messaging/transcripts', primaryKey: 'transcript', primaryLabel: 'Transcript', primaryRows: 10, fields: ['primary', 'url'] },
+    Comments: { kind: 'simple', endpoint: '/api/messaging/comments', primaryKey: 'comment', primaryLabel: 'Comment', primaryRows: 6, fields: ['primary', 'url'] },
+    Hashtags: { kind: 'simple', endpoint: '/api/messaging/hashtags', primaryKey: 'hashtag', primaryLabel: 'Hashtags', primaryRows: 4, fields: ['primary'] },
+    'Calls to Action': { kind: 'simple', endpoint: '/api/messaging/ctas', primaryKey: 'cta', primaryLabel: 'CTA', primaryRows: 4, fields: ['primary', 'url'] },
     Articles: { kind: 'longform', endpoint: '/api/messaging/articles', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body'] },
     Reports: { kind: 'pdfLongform', endpoint: '/api/messaging/reports', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body', 'pdf'] },
     'White Papers': { kind: 'pdfLongform', endpoint: '/api/messaging/white-papers', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body', 'pdf'] },
@@ -2663,20 +2663,26 @@ App.messaging = (function () {
 
   function clearCreateContentSuggestions() {
     currentCreateContentSuggestions = [];
-    const wrap = document.getElementById('messagingCreateContentSuggestionsWrap');
+    const empty = document.getElementById('messagingCreateContentSuggestionsEmpty');
     const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
     const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
     const tbody = document.getElementById('messagingCreateContentSuggestionsTable');
     const checkAll = document.getElementById('messagingCreateContentSelectAllSuggestions');
-    if (wrap) wrap.classList.add('hidden');
+    const generatedTitle = document.getElementById('messagingCreateContentGeneratedTitle');
+    const generatedSubtitle = document.getElementById('messagingCreateContentGeneratedSubtitle');
+    const generatedBody = document.getElementById('messagingCreateContentGeneratedBody');
+    if (empty) empty.classList.remove('hidden');
     if (shortWrap) shortWrap.classList.add('hidden');
     if (longWrap) longWrap.classList.add('hidden');
     if (tbody) tbody.innerHTML = '';
     if (checkAll) checkAll.checked = false;
+    if (generatedTitle) generatedTitle.value = '';
+    if (generatedSubtitle) generatedSubtitle.value = '';
+    if (generatedBody) generatedBody.value = '';
   }
 
   function renderCreateContentShortSuggestions(options) {
-    const wrap = document.getElementById('messagingCreateContentSuggestionsWrap');
+    const empty = document.getElementById('messagingCreateContentSuggestionsEmpty');
     const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
     const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
     const tbody = document.getElementById('messagingCreateContentSuggestionsTable');
@@ -2693,25 +2699,76 @@ App.messaging = (function () {
       tbody.appendChild(tr);
     });
     if (checkAll) checkAll.checked = false;
-    wrap.classList.remove('hidden');
+    if (empty) empty.classList.add('hidden');
     shortWrap.classList.remove('hidden');
     longWrap.classList.add('hidden');
   }
 
   function applyCreateContentLongDraft(draft) {
-    const title = document.getElementById('messagingCreateContentTitle');
-    const subtitle = document.getElementById('messagingCreateContentSubtitle');
-    const body = document.getElementById('messagingCreateContentBody');
-    const wrap = document.getElementById('messagingCreateContentSuggestionsWrap');
+    const title = document.getElementById('messagingCreateContentGeneratedTitle');
+    const subtitle = document.getElementById('messagingCreateContentGeneratedSubtitle');
+    const body = document.getElementById('messagingCreateContentGeneratedBody');
+    const empty = document.getElementById('messagingCreateContentSuggestionsEmpty');
     const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
     const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
     currentCreateContentSuggestions = [];
     if (title && typeof draft?.title === 'string') title.value = draft.title;
     if (subtitle && typeof draft?.subtitle === 'string') subtitle.value = draft.subtitle;
     if (body && typeof draft?.body === 'string') body.value = draft.body;
-    if (wrap) wrap.classList.remove('hidden');
+    if (empty) empty.classList.add('hidden');
     if (shortWrap) shortWrap.classList.add('hidden');
     if (longWrap) longWrap.classList.remove('hidden');
+  }
+
+  async function saveGeneratedCreateContentDraft() {
+    const form = document.getElementById('messagingCreateContentForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const format = cleanText(formData.get('format'));
+    const schema = createContentSchema(format);
+    if (!schema || (schema.kind !== 'longform' && schema.kind !== 'pdfLongform')) {
+      notify('Select a long-form format first', true);
+      return false;
+    }
+    let payload;
+    try {
+      payload = buildCreateContentPayload(formData, schema, {
+        title: cleanText(document.getElementById('messagingCreateContentGeneratedTitle')?.value),
+        subtitle: cleanText(document.getElementById('messagingCreateContentGeneratedSubtitle')?.value),
+        body: cleanText(document.getElementById('messagingCreateContentGeneratedBody')?.value),
+      });
+    } catch (err) {
+      notify(err.message, true);
+      return false;
+    }
+    if (schema.kind === 'pdfLongform') {
+      const pdfFields = await getWhitePaperPdfFields(document.getElementById('messagingCreateContentPdf'));
+      payload.pdf_name = pdfFields.pdf_name;
+      payload.pdf_mime_type = pdfFields.pdf_mime_type;
+      payload.pdf_data_url = pdfFields.pdf_data_url;
+      if (!payload.url && !payload.pdf_data_url) {
+        notify('Provide a URL or upload a PDF', true);
+        return false;
+      }
+    }
+    try {
+      await api(schema.endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify(`${format} saved`);
+      clearCreateContentSuggestions();
+      await Promise.all([
+        refreshArticles(),
+        refreshReports(),
+        refreshWhitePapers(),
+        refreshEbooks(),
+      ]);
+      renderMessagingContentLibraryTable();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
   }
 
   async function generateCreateContentSuggestions() {
@@ -4912,6 +4969,7 @@ App.messaging = (function () {
     const createContentGenerateBtn = document.getElementById('messagingCreateContentGenerateBtn');
     const createContentClearSuggestionsBtn = document.getElementById('messagingCreateContentClearSuggestionsBtn');
     const createContentSaveSelectedBtn = document.getElementById('messagingCreateContentSaveSelectedBtn');
+    const createContentSaveGeneratedBtn = document.getElementById('messagingCreateContentSaveGeneratedBtn');
     const createContentSelectAllSuggestions = document.getElementById('messagingCreateContentSelectAllSuggestions');
     if (createContentFormat) {
       createContentFormat.addEventListener('change', renderCreateContentDynamicFields);
@@ -4927,6 +4985,9 @@ App.messaging = (function () {
     }
     if (createContentSaveSelectedBtn) {
       createContentSaveSelectedBtn.addEventListener('click', saveSelectedCreateContentSuggestions);
+    }
+    if (createContentSaveGeneratedBtn) {
+      createContentSaveGeneratedBtn.addEventListener('click', saveGeneratedCreateContentDraft);
     }
     if (createContentSelectAllSuggestions) {
       createContentSelectAllSuggestions.addEventListener('change', function () {
