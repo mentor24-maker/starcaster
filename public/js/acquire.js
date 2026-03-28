@@ -25,6 +25,10 @@ App.acquire = (function () {
     ['location', 'Location'],
     ['legal', 'Legal'],
   ];
+  let directAcquireImageCategories = [];
+  let directAcquireSelectedImages = new Set();
+  let directAcquireImageCategoryByUrl = new Map();
+  let directAcquireImagesExpanded = false;
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -96,6 +100,197 @@ App.acquire = (function () {
       // ignore local storage failures
     }
     writeDirectAcquireKeywordReasons(nextReasons);
+  }
+
+  function sanitizeImageNameFromUrl(url, index) {
+    try {
+      const parsed = new URL(String(url || '').trim());
+      const last = String(parsed.pathname || '').split('/').filter(Boolean).pop() || '';
+      const cleaned = decodeURIComponent(last).replace(/\.[a-z0-9]{2,8}$/i, '').replace(/[-_]+/g, ' ').trim();
+      if (cleaned) return cleaned;
+      return `Web Image ${index + 1}`;
+    } catch {
+      return `Web Image ${index + 1}`;
+    }
+  }
+
+  function pruneDirectAcquireImageState() {
+    const urls = new Set(
+      (Array.isArray(state.directAcquireCurrentRun?.image_summary?.images) ? state.directAcquireCurrentRun.image_summary.images : [])
+        .map((item) => String(item?.url || '').trim())
+        .filter(Boolean)
+    );
+    directAcquireSelectedImages = new Set(Array.from(directAcquireSelectedImages).filter((url) => urls.has(url)));
+    const nextMap = new Map();
+    directAcquireImageCategoryByUrl.forEach((value, key) => {
+      if (urls.has(key)) nextMap.set(key, value);
+    });
+    directAcquireImageCategoryByUrl = nextMap;
+  }
+
+  async function refreshDirectAcquireImageCategories() {
+    try {
+      const res = await api('/api/asset-categories');
+      const categories = Array.isArray(res?.categories)
+        ? res.categories
+        : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+            ? res
+            : [];
+      directAcquireImageCategories = categories
+        .filter((item) => String(item?.assetType || item?.asset_type || '').trim().toLowerCase() === 'image')
+        .map((item) => String(item?.category || '').trim())
+        .filter(Boolean)
+        .filter((value, index, list) => list.indexOf(value) === index)
+        .sort((a, b) => a.localeCompare(b));
+    } catch (_) {
+      directAcquireImageCategories = [];
+    }
+  }
+
+  function fillDirectAcquireImageCategorySelect(select, selectedValue, placeholder = 'No Category') {
+    if (!select) return;
+    const selected = String(selectedValue || '').trim();
+    select.innerHTML = '';
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.textContent = placeholder;
+    select.appendChild(emptyOption);
+    directAcquireImageCategories.forEach((category) => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      if (category === selected) option.selected = true;
+      select.appendChild(option);
+    });
+  }
+
+  function renderDirectAcquireImageGallery() {
+    const gallery = document.getElementById('directAcquireImageGallery');
+    const emptyEl = document.getElementById('directAcquireImagesEmpty');
+    const selectAll = document.getElementById('directAcquireImageSelectAll');
+    const seeMoreBtn = document.getElementById('directAcquireImagesSeeMoreBtn');
+    const saveBtn = document.getElementById('directAcquireSaveImagesBtn');
+    const bulkCategory = document.getElementById('directAcquireImageBulkCategory');
+    if (!gallery) return;
+    gallery.innerHTML = '';
+    if (bulkCategory) fillDirectAcquireImageCategorySelect(bulkCategory, bulkCategory.value, 'Select Image Category');
+    const images = Array.isArray(state.directAcquireCurrentRun?.image_summary?.images) ? state.directAcquireCurrentRun.image_summary.images : [];
+    pruneDirectAcquireImageState();
+    if (!images.length) {
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      if (seeMoreBtn) seeMoreBtn.classList.add('hidden');
+      if (saveBtn) saveBtn.disabled = true;
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+    const visibleImages = directAcquireImagesExpanded ? images : images.slice(0, 24);
+    visibleImages.forEach((item, index) => {
+      const url = String(item?.url || '').trim();
+      if (!url) return;
+      const card = document.createElement('div');
+      card.className = 'direct-acquire-image-card';
+
+      const selectRow = document.createElement('div');
+      selectRow.className = 'direct-acquire-image-card-top';
+      const checkboxLabel = document.createElement('label');
+      checkboxLabel.className = 'checkbox-row';
+      checkboxLabel.style.margin = '0';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = directAcquireSelectedImages.has(url);
+      checkbox.dataset.imageUrl = url;
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) directAcquireSelectedImages.add(url);
+        else directAcquireSelectedImages.delete(url);
+        renderDirectAcquireImageGallery();
+      });
+      checkboxLabel.appendChild(checkbox);
+      checkboxLabel.appendChild(document.createTextNode(' Select'));
+      selectRow.appendChild(checkboxLabel);
+      card.appendChild(selectRow);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'direct-acquire-image-link';
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = sanitizeImageNameFromUrl(url, index);
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      link.appendChild(img);
+      card.appendChild(link);
+
+      const meta = document.createElement('div');
+      meta.className = 'direct-acquire-image-meta';
+      const name = document.createElement('div');
+      name.className = 'direct-acquire-image-name';
+      name.textContent = sanitizeImageNameFromUrl(url, index);
+      meta.appendChild(name);
+      const categorySelect = document.createElement('select');
+      categorySelect.dataset.imageCategory = url;
+      fillDirectAcquireImageCategorySelect(categorySelect, directAcquireImageCategoryByUrl.get(url) || '', 'No Category');
+      categorySelect.addEventListener('change', () => {
+        const value = String(categorySelect.value || '').trim();
+        if (value) directAcquireImageCategoryByUrl.set(url, value);
+        else directAcquireImageCategoryByUrl.delete(url);
+      });
+      meta.appendChild(categorySelect);
+      card.appendChild(meta);
+
+      gallery.appendChild(card);
+    });
+
+    if (seeMoreBtn) {
+      if (images.length > 24) {
+        seeMoreBtn.classList.remove('hidden');
+        seeMoreBtn.textContent = directAcquireImagesExpanded ? 'Show Less' : `See More (${images.length - 24} more)`;
+      } else {
+        seeMoreBtn.classList.add('hidden');
+      }
+    }
+    if (saveBtn) saveBtn.disabled = directAcquireSelectedImages.size === 0;
+    if (selectAll) {
+      const visibleUrls = visibleImages.map((item) => String(item?.url || '').trim()).filter(Boolean);
+      const checkedCount = visibleUrls.filter((url) => directAcquireSelectedImages.has(url)).length;
+      selectAll.checked = !!visibleUrls.length && checkedCount === visibleUrls.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleUrls.length;
+    }
+  }
+
+  async function saveDirectAcquireSelectedImages() {
+    const images = Array.isArray(state.directAcquireCurrentRun?.image_summary?.images) ? state.directAcquireCurrentRun.image_summary.images : [];
+    const selected = images.filter((item) => directAcquireSelectedImages.has(String(item?.url || '').trim()));
+    if (!selected.length) throw new Error('No images selected.');
+    const sourceUrl = String(state.directAcquireCurrentRun?.source_url || '').trim();
+    let hostTag = '';
+    try {
+      hostTag = new URL(sourceUrl).hostname.replace(/^www\./, '');
+    } catch {
+      hostTag = '';
+    }
+    await Promise.all(selected.map((item, index) => {
+      const url = String(item?.url || '').trim();
+      const category = String(directAcquireImageCategoryByUrl.get(url) || '').trim();
+      return api('/api/assets', {
+        method: 'POST',
+        body: JSON.stringify({
+          assetName: sanitizeImageNameFromUrl(url, index),
+          assetType: 'Image',
+          category,
+          location: url,
+          tags: ['acquire.web', 'web-image'].concat(hostTag ? [hostTag] : []),
+        }),
+      });
+    }));
+    notify(`Saved ${selected.length} image asset${selected.length === 1 ? '' : 's'}`);
   }
 
   function blueskyDiscoveryFeedbackKey(itemOrUrl) {
@@ -603,6 +798,7 @@ App.acquire = (function () {
     }
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
+    renderDirectAcquireImageGallery();
   }
 
   function renderDirectAcquireContactTable() {
@@ -1961,6 +2157,9 @@ App.acquire = (function () {
   async function loadDirectHarvestRun(runId) {
     const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}`);
     state.directAcquireCurrentRun = res.run || null;
+    directAcquireSelectedImages = new Set();
+    directAcquireImageCategoryByUrl = new Map();
+    directAcquireImagesExpanded = false;
     renderDirectHarvestPagesTable();
   }
 
@@ -2113,6 +2312,8 @@ App.acquire = (function () {
   function init() {
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
+    renderDirectAcquireImageGallery();
+    refreshDirectAcquireImageCategories().then(() => renderDirectAcquireImageGallery()).catch(() => {});
     const directAcquireKeywordExclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
     if (directAcquireKeywordExclusionsInput) {
       try {
@@ -2165,6 +2366,58 @@ App.acquire = (function () {
         });
         syncDirectAcquireKeywordExclusionsFromTable();
         renderDirectAcquireKeywordTable();
+      });
+    }
+    const directAcquireImageSelectAll = document.getElementById('directAcquireImageSelectAll');
+    if (directAcquireImageSelectAll) {
+      directAcquireImageSelectAll.addEventListener('change', function () {
+        const images = Array.isArray(state.directAcquireCurrentRun?.image_summary?.images) ? state.directAcquireCurrentRun.image_summary.images : [];
+        const visible = (directAcquireImagesExpanded ? images : images.slice(0, 24))
+          .map((item) => String(item?.url || '').trim())
+          .filter(Boolean);
+        visible.forEach((url) => {
+          if (directAcquireImageSelectAll.checked) directAcquireSelectedImages.add(url);
+          else directAcquireSelectedImages.delete(url);
+        });
+        renderDirectAcquireImageGallery();
+      });
+    }
+    const directAcquireImagesSeeMoreBtn = document.getElementById('directAcquireImagesSeeMoreBtn');
+    if (directAcquireImagesSeeMoreBtn) {
+      directAcquireImagesSeeMoreBtn.addEventListener('click', function () {
+        directAcquireImagesExpanded = !directAcquireImagesExpanded;
+        renderDirectAcquireImageGallery();
+      });
+    }
+    const directAcquireApplyImageCategoryBtn = document.getElementById('directAcquireApplyImageCategoryBtn');
+    const directAcquireImageBulkCategory = document.getElementById('directAcquireImageBulkCategory');
+    if (directAcquireApplyImageCategoryBtn && directAcquireImageBulkCategory) {
+      directAcquireApplyImageCategoryBtn.addEventListener('click', function () {
+        const category = String(directAcquireImageBulkCategory.value || '').trim();
+        if (!category) {
+          notify('Select an image category first', true);
+          return;
+        }
+        if (!directAcquireSelectedImages.size) {
+          notify('Check at least one image first', true);
+          return;
+        }
+        Array.from(directAcquireSelectedImages).forEach((url) => {
+          directAcquireImageCategoryByUrl.set(url, category);
+        });
+        renderDirectAcquireImageGallery();
+      });
+    }
+    const directAcquireSaveImagesBtn = document.getElementById('directAcquireSaveImagesBtn');
+    if (directAcquireSaveImagesBtn) {
+      directAcquireSaveImagesBtn.addEventListener('click', async () => {
+        try {
+          await saveDirectAcquireSelectedImages();
+          await refreshDirectAcquireImageCategories();
+          renderDirectAcquireImageGallery();
+        } catch (err) {
+          notify(err.message || 'Could not save selected images', true);
+        }
       });
     }
     clearRedditHarvestProgress();
@@ -2226,6 +2479,9 @@ App.acquire = (function () {
           }
           const res = await api('/api/acquire/direct-run', { method: 'POST', body: JSON.stringify(payload) });
           state.directAcquireCurrentRun = res.run || null;
+          directAcquireSelectedImages = new Set();
+          directAcquireImageCategoryByUrl = new Map();
+          directAcquireImagesExpanded = false;
           renderDirectHarvestPagesTable();
           await refreshDirectHarvestRuns();
           notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)`);

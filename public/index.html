@@ -957,6 +957,27 @@
                 </table>
               </div>
             </div>
+            <div style="margin-top: 1rem;">
+              <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+                <h3 style="margin:0;">Captured Images</h3>
+                <div class="page-heading-actions" style="justify-content: flex-start; flex-wrap: wrap;">
+                  <label class="checkbox-row" style="margin: 0;">
+                    <input id="directAcquireImageSelectAll" type="checkbox" />
+                    Check All
+                  </label>
+                  <select id="directAcquireImageBulkCategory">
+                    <option value="">Select Image Category</option>
+                  </select>
+                  <button id="directAcquireApplyImageCategoryBtn" type="button" class="tiny-btn">Apply To Checked</button>
+                  <button id="directAcquireSaveImagesBtn" type="button" class="tiny-btn" disabled>Save Selected To Assets</button>
+                </div>
+              </div>
+              <div id="directAcquireImagesEmpty" class="meta">No images captured yet.</div>
+              <div id="directAcquireImageGallery" class="direct-acquire-image-gallery"></div>
+              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
+                <button id="directAcquireImagesSeeMoreBtn" type="button" class="tiny-btn hidden">See More</button>
+              </div>
+            </div>
           </section>
         </div>
 

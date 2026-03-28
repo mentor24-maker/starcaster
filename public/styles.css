@@ -3941,6 +3941,85 @@ th {
   font-weight: 700;
 }
 
+.direct-acquire-image-gallery {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 0.75rem;
+}
+
+.direct-acquire-image-card {
+  border: 1px solid #dbe7ff;
+  border-radius: 10px;
+  background: #f8fbff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.direct-acquire-image-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 10px 0;
+}
+
+.direct-acquire-image-link {
+  display: block;
+  aspect-ratio: 1 / 1;
+  background: #eef4ff;
+  margin: 8px 10px 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.direct-acquire-image-link img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.direct-acquire-image-meta {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.direct-acquire-image-name {
+  font-size: 0.83rem;
+  line-height: 1.2;
+  font-weight: 600;
+  color: #10233f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.direct-acquire-image-meta select {
+  width: 100%;
+}
+
+@media (max-width: 1600px) {
+  .direct-acquire-image-gallery {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .direct-acquire-image-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .direct-acquire-image-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .tiny-btn-blue {
   background: #1a73e8;
   border-color: #1a73e8;
