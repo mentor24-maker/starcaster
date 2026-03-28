@@ -2910,8 +2910,38 @@
               <input id="messagingCreateContentPdf" name="pdf_file" type="file" accept="application/pdf,.pdf" />
             </div>
           </div>
-          <button id="messagingCreateContentSubmitBtn" type="submit" class="hidden">Save Content</button>
+          <div id="messagingCreateContentActionsRow" class="page-heading-actions hidden" style="justify-content: flex-start; margin-top: 10px;">
+            <button id="messagingCreateContentGenerateBtn" type="button">Generate Option(s)</button>
+            <button id="messagingCreateContentSubmitBtn" type="submit" class="hidden">Save Content</button>
+          </div>
         </form>
+        <div id="messagingCreateContentSuggestionsWrap" class="hidden" style="max-width: 980px; margin-top: 16px;">
+          <div class="page-heading-row" style="margin-bottom: 8px;">
+            <h3 style="margin: 0;">Generated Options</h3>
+            <div class="page-heading-actions">
+              <button id="messagingCreateContentClearSuggestionsBtn" type="button">Clear Options</button>
+            </div>
+          </div>
+          <div id="messagingCreateContentShortSuggestions" class="hidden">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 44px;"><input id="messagingCreateContentSelectAllSuggestions" type="checkbox" /></th>
+                    <th>Option</th>
+                  </tr>
+                </thead>
+                <tbody id="messagingCreateContentSuggestionsTable"></tbody>
+              </table>
+            </div>
+            <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+              <button id="messagingCreateContentSaveSelectedBtn" type="button">Save Selected</button>
+            </div>
+          </div>
+          <div id="messagingCreateContentLongSuggestions" class="hidden">
+            <p style="margin: 0;">Generated draft loaded into the form. Edit it and use <strong>Save Content</strong> when ready.</p>
+          </div>
+        </div>
       </section>
 
       <section id="messagingManageContentPage" class="app-page hidden">

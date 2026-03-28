@@ -105,6 +105,7 @@ const {
   updateMessagingCategory,
   deleteMessagingCategory,
 } = require('../lib/messagingCategoriesStore');
+const { generateMessagingContentSuggestions } = require('../lib/messagingContentSuggestions');
 
 function isValidHttpUrl(value) {
   const text = String(value || '').trim();
@@ -192,6 +193,22 @@ async function handleSimpleTextResource(req, res, pathname, requestMethod, optio
 
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
+
+  if (pathname === '/api/messaging/content-suggestions' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const format = String(body?.format || '').trim();
+    if (!format) return sendErr(res, 400, 'format is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await generateMessagingContentSuggestions(body || {});
+    if (!result.ok) {
+      return sendErr(
+        res,
+        result.status || 500,
+        result.error || 'Could not generate messaging content suggestions',
+        { code: 'MESSAGING_CONTENT_SUGGESTIONS_FAILED' }
+      ), true;
+    }
+    return sendOk(res, 200, result.data, result.data), true;
+  }
 
   if (pathname === '/api/messaging/headlines' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);

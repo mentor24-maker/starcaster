@@ -2,6 +2,19 @@ window.App = window.App || {};
 
 App.messaging = (function () {
   const { api, notify, state } = App;
+  function cleanText(value) {
+    return String(value || '').trim();
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   let articleBannerAssets = [];
   let allImageAssets = [];
   let tweetImageAssets = [];
@@ -288,6 +301,7 @@ App.messaging = (function () {
     'White Papers': { kind: 'pdfLongform', endpoint: '/api/messaging/white-papers', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body', 'pdf'] },
     eBooks: { kind: 'pdfLongform', endpoint: '/api/messaging/ebooks', bodyLabel: 'Body', fields: ['author', 'title', 'subtitle', 'url', 'thumbnail', 'body', 'pdf'] },
   };
+  let currentCreateContentSuggestions = [];
 
   function thumbnailOptionLabel(asset) {
     const name = String(asset.assetName || '').trim() || '(unnamed)';
@@ -2444,6 +2458,7 @@ App.messaging = (function () {
       formatSelect.value = activeFormat;
     }
     renderCreateContentDynamicFields();
+    clearCreateContentSuggestions();
     return false;
   }
 
@@ -2533,6 +2548,7 @@ App.messaging = (function () {
     const thumbnailLabel = document.getElementById('messagingCreateContentThumbnailLabel');
     const topicRow = document.getElementById('messagingCreateContentTopicRow');
     const submitBtn = document.getElementById('messagingCreateContentSubmitBtn');
+    const actionsRow = document.getElementById('messagingCreateContentActionsRow');
     if (!schema) {
       if (topicRow) topicRow.classList.add('hidden');
       setCreateContentFieldVisible('messagingCreateContentPrimaryRow', false);
@@ -2547,6 +2563,8 @@ App.messaging = (function () {
       setCreateContentFieldVisible('messagingCreateContentBodyRow', false);
       setCreateContentFieldVisible('messagingCreateContentPdfRow', false);
       if (submitBtn) submitBtn.classList.add('hidden');
+      if (actionsRow) actionsRow.classList.add('hidden');
+      clearCreateContentSuggestions();
       return;
     }
     const visibleFields = Array.isArray(schema?.fields) ? schema.fields : [];
@@ -2601,6 +2619,200 @@ App.messaging = (function () {
     }
     if (thumbnailLabel) thumbnailLabel.textContent = 'Image:';
     if (submitBtn) submitBtn.classList.remove('hidden');
+    if (actionsRow) actionsRow.classList.remove('hidden');
+  }
+
+  function buildCreateContentPayload(formData, schema, overrides = {}) {
+    if (!schema) throw new Error('Select a format');
+    const payload = {};
+    const topic = cleanText(formData.get('topic'));
+    if (schema.kind === 'simple') {
+      const value = cleanText(overrides.primary != null ? overrides.primary : formData.get('primary'));
+      if (!value) throw new Error(`${schema.primaryLabel} is required`);
+      payload[schema.primaryKey] = value;
+      payload.category = topic;
+      if (schema.fields.includes('author')) payload.author = cleanText(formData.get('author'));
+      if (schema.fields.includes('subject')) payload.subject = cleanText(overrides.subject != null ? overrides.subject : formData.get('subject'));
+      if (schema.fields.includes('url')) payload.url = cleanText(formData.get('url'));
+      if (schema.fields.includes('image')) payload.image_asset_id = cleanText(formData.get('image_asset_id'));
+      return payload;
+    }
+    if (schema.kind === 'tweet') {
+      const content = cleanText(overrides.primary != null ? overrides.primary : formData.get('primary'));
+      if (!content) throw new Error('Tweet is required');
+      payload.content = content;
+      payload.author = cleanText(formData.get('author'));
+      payload.url = cleanText(formData.get('url'));
+      payload.hashtags = cleanText(overrides.hashtags != null ? overrides.hashtags : formData.get('hashtags'));
+      payload.image_asset_id = cleanText(formData.get('image_asset_id'));
+      payload.category = topic;
+      return payload;
+    }
+    if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
+      payload.author = cleanText(formData.get('author'));
+      payload.title = cleanText(overrides.title != null ? overrides.title : formData.get('title'));
+      payload.subtitle = cleanText(overrides.subtitle != null ? overrides.subtitle : formData.get('subtitle'));
+      payload.url = cleanText(formData.get('url'));
+      payload.content = cleanText(overrides.body != null ? overrides.body : formData.get('content'));
+      payload.thumbnail_asset_id = cleanText(formData.get('thumbnail_asset_id'));
+      if (!payload.title || !payload.content) throw new Error('Title and content are required');
+      return payload;
+    }
+    throw new Error('Unsupported format');
+  }
+
+  function clearCreateContentSuggestions() {
+    currentCreateContentSuggestions = [];
+    const wrap = document.getElementById('messagingCreateContentSuggestionsWrap');
+    const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
+    const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
+    const tbody = document.getElementById('messagingCreateContentSuggestionsTable');
+    const checkAll = document.getElementById('messagingCreateContentSelectAllSuggestions');
+    if (wrap) wrap.classList.add('hidden');
+    if (shortWrap) shortWrap.classList.add('hidden');
+    if (longWrap) longWrap.classList.add('hidden');
+    if (tbody) tbody.innerHTML = '';
+    if (checkAll) checkAll.checked = false;
+  }
+
+  function renderCreateContentShortSuggestions(options) {
+    const wrap = document.getElementById('messagingCreateContentSuggestionsWrap');
+    const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
+    const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
+    const tbody = document.getElementById('messagingCreateContentSuggestionsTable');
+    const checkAll = document.getElementById('messagingCreateContentSelectAllSuggestions');
+    if (!wrap || !shortWrap || !longWrap || !tbody) return;
+    currentCreateContentSuggestions = Array.isArray(options) ? options.slice() : [];
+    tbody.innerHTML = '';
+    currentCreateContentSuggestions.forEach((option, index) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="checkbox" data-create-content-suggestion-index="${index}" /></td>
+        <td>${escapeHtml(String(option || ''))}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    if (checkAll) checkAll.checked = false;
+    wrap.classList.remove('hidden');
+    shortWrap.classList.remove('hidden');
+    longWrap.classList.add('hidden');
+  }
+
+  function applyCreateContentLongDraft(draft) {
+    const title = document.getElementById('messagingCreateContentTitle');
+    const subtitle = document.getElementById('messagingCreateContentSubtitle');
+    const body = document.getElementById('messagingCreateContentBody');
+    const wrap = document.getElementById('messagingCreateContentSuggestionsWrap');
+    const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
+    const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
+    currentCreateContentSuggestions = [];
+    if (title && typeof draft?.title === 'string') title.value = draft.title;
+    if (subtitle && typeof draft?.subtitle === 'string') subtitle.value = draft.subtitle;
+    if (body && typeof draft?.body === 'string') body.value = draft.body;
+    if (wrap) wrap.classList.remove('hidden');
+    if (shortWrap) shortWrap.classList.add('hidden');
+    if (longWrap) longWrap.classList.remove('hidden');
+  }
+
+  async function generateCreateContentSuggestions() {
+    const form = document.getElementById('messagingCreateContentForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const format = cleanText(formData.get('format'));
+    const schema = createContentSchema(format);
+    if (!schema) {
+      notify('Select a format', true);
+      return false;
+    }
+    const button = document.getElementById('messagingCreateContentGenerateBtn');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Generating...';
+    }
+    try {
+      const imageSelect = document.getElementById('messagingCreateContentImage');
+      const thumbSelect = document.getElementById('messagingCreateContentThumbnail');
+      const pdfInput = document.getElementById('messagingCreateContentPdf');
+      const result = await api('/api/messaging/content-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          format,
+          topic: cleanText(formData.get('topic')),
+          author: cleanText(formData.get('author')),
+          subject: cleanText(formData.get('subject')),
+          title: cleanText(formData.get('title')),
+          subtitle: cleanText(formData.get('subtitle')),
+          url: cleanText(formData.get('url')),
+          hashtags: cleanText(formData.get('hashtags')),
+          body: cleanText(formData.get('content') || formData.get('primary')),
+          image_label: cleanText(imageSelect?.selectedOptions?.[0]?.textContent || thumbSelect?.selectedOptions?.[0]?.textContent),
+          pdf_name: cleanText(pdfInput?.files?.[0]?.name),
+        }),
+      });
+      if (result.kind === 'long') {
+        applyCreateContentLongDraft(result.draft || {});
+        notify('Generated draft loaded into form');
+      } else {
+        renderCreateContentShortSuggestions(Array.isArray(result.options) ? result.options : []);
+        notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
+      }
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Generate Option(s)';
+      }
+    }
+    return false;
+  }
+
+  async function saveSelectedCreateContentSuggestions() {
+    const form = document.getElementById('messagingCreateContentForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const format = cleanText(formData.get('format'));
+    const schema = createContentSchema(format);
+    if (!schema) {
+      notify('Select a format', true);
+      return false;
+    }
+    const selectedIndices = Array.from(document.querySelectorAll('[data-create-content-suggestion-index]:checked'))
+      .map((input) => Number(input.getAttribute('data-create-content-suggestion-index')))
+      .filter((value) => Number.isFinite(value) && currentCreateContentSuggestions[value]);
+    if (!selectedIndices.length) {
+      notify('Select at least one option', true);
+      return false;
+    }
+    try {
+      for (const index of selectedIndices) {
+        const payload = buildCreateContentPayload(formData, schema, {
+          primary: currentCreateContentSuggestions[index],
+        });
+        await api(schema.endpoint, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      }
+      notify(`Saved ${selectedIndices.length} content item${selectedIndices.length === 1 ? '' : 's'}`);
+      clearCreateContentSuggestions();
+      await Promise.all([
+        refreshHeadlines(),
+        refreshSubheadings(),
+        refreshTaglines(),
+        refreshPitches(),
+        refreshArticles(),
+        refreshReports(),
+        refreshWhitePapers(),
+        refreshEbooks(),
+        refreshAllSimpleContentPages(),
+      ]);
+      renderMessagingContentLibraryTable();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
   }
 
   async function submitCreateContentForm(event) {
@@ -2616,59 +2828,21 @@ App.messaging = (function () {
       return false;
     }
 
-    const payload = {};
-    if (schema.kind === 'simple') {
-      const value = String(formData.get('primary') || '').trim();
-      if (!value) {
-        notify(`${schema.primaryLabel} is required`, true);
+    let payload;
+    try {
+      payload = buildCreateContentPayload(formData, schema);
+    } catch (err) {
+      notify(err.message, true);
+      return false;
+    }
+    if (schema.kind === 'pdfLongform') {
+      const pdfFields = await getWhitePaperPdfFields(document.getElementById('messagingCreateContentPdf'));
+      payload.pdf_name = pdfFields.pdf_name;
+      payload.pdf_mime_type = pdfFields.pdf_mime_type;
+      payload.pdf_data_url = pdfFields.pdf_data_url;
+      if (!payload.url && !payload.pdf_data_url) {
+        notify('Provide a URL or upload a PDF', true);
         return false;
-      }
-      payload[schema.primaryKey] = value;
-      payload.category = topic;
-      if (schema.fields.includes('author')) {
-        payload.author = String(formData.get('author') || '').trim();
-      }
-      if (schema.fields.includes('subject')) {
-        payload.subject = String(formData.get('subject') || '').trim();
-      }
-      if (schema.fields.includes('url')) {
-        payload.url = String(formData.get('url') || '').trim();
-      }
-      if (schema.fields.includes('image')) {
-        payload.image_asset_id = String(formData.get('image_asset_id') || '').trim();
-      }
-    } else if (schema.kind === 'tweet') {
-      const content = String(formData.get('primary') || '').trim();
-      if (!content) {
-        notify('Tweet is required', true);
-        return false;
-      }
-      payload.content = content;
-      payload.author = String(formData.get('author') || '').trim();
-      payload.url = String(formData.get('url') || '').trim();
-      payload.hashtags = String(formData.get('hashtags') || '').trim();
-      payload.image_asset_id = String(formData.get('image_asset_id') || '').trim();
-      payload.category = topic;
-    } else if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
-      payload.author = String(formData.get('author') || '').trim();
-      payload.title = String(formData.get('title') || '').trim();
-      payload.subtitle = String(formData.get('subtitle') || '').trim();
-      payload.url = String(formData.get('url') || '').trim();
-      payload.content = String(formData.get('content') || '').trim();
-      payload.thumbnail_asset_id = String(formData.get('thumbnail_asset_id') || '').trim();
-      if (!payload.title || !payload.content) {
-        notify('Title and content are required', true);
-        return false;
-      }
-      if (schema.kind === 'pdfLongform') {
-        const pdfFields = await getWhitePaperPdfFields(document.getElementById('messagingCreateContentPdf'));
-        payload.pdf_name = pdfFields.pdf_name;
-        payload.pdf_mime_type = pdfFields.pdf_mime_type;
-        payload.pdf_data_url = pdfFields.pdf_data_url;
-        if (!payload.url && !payload.pdf_data_url) {
-          notify('Provide a URL or upload a PDF', true);
-          return false;
-        }
       }
     }
 
@@ -2690,6 +2864,7 @@ App.messaging = (function () {
       if (formatSelect) formatSelect.value = keepFormat;
       if (topicSelect && keepTopic) topicSelect.value = keepTopic;
       renderCreateContentDynamicFields();
+      clearCreateContentSuggestions();
       await Promise.all([
         refreshHeadlines(),
         refreshSubheadings(),
@@ -4734,11 +4909,32 @@ App.messaging = (function () {
 
     const createContentFormat = document.getElementById('messagingCreateContentFormat');
     const createContentForm = document.getElementById('messagingCreateContentForm');
+    const createContentGenerateBtn = document.getElementById('messagingCreateContentGenerateBtn');
+    const createContentClearSuggestionsBtn = document.getElementById('messagingCreateContentClearSuggestionsBtn');
+    const createContentSaveSelectedBtn = document.getElementById('messagingCreateContentSaveSelectedBtn');
+    const createContentSelectAllSuggestions = document.getElementById('messagingCreateContentSelectAllSuggestions');
     if (createContentFormat) {
       createContentFormat.addEventListener('change', renderCreateContentDynamicFields);
     }
     if (createContentForm) {
       createContentForm.addEventListener('submit', submitCreateContentForm);
+    }
+    if (createContentGenerateBtn) {
+      createContentGenerateBtn.addEventListener('click', generateCreateContentSuggestions);
+    }
+    if (createContentClearSuggestionsBtn) {
+      createContentClearSuggestionsBtn.addEventListener('click', clearCreateContentSuggestions);
+    }
+    if (createContentSaveSelectedBtn) {
+      createContentSaveSelectedBtn.addEventListener('click', saveSelectedCreateContentSuggestions);
+    }
+    if (createContentSelectAllSuggestions) {
+      createContentSelectAllSuggestions.addEventListener('change', function () {
+        const checked = Boolean(createContentSelectAllSuggestions.checked);
+        document.querySelectorAll('[data-create-content-suggestion-index]').forEach((input) => {
+          input.checked = checked;
+        });
+      });
     }
 
     if (toggleBtn && form) {
@@ -5019,6 +5215,7 @@ App.messaging = (function () {
     openManageContentCategory,
     openContentTarget,
     submitCreateContentForm,
+    generateCreateContentSuggestions,
     submitTopicCreate,
     submitTopicEdit,
     refresh: function () {
