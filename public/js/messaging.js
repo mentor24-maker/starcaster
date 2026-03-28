@@ -2892,7 +2892,7 @@ App.messaging = (function () {
       const value = cleanText(overrides.primary != null ? overrides.primary : formData.get('primary'));
       if (!value) throw new Error(`${schema.primaryLabel} is required`);
       payload[schema.primaryKey] = value;
-      payload.category = topic;
+      payload.topic = topic;
       if (schema.fields.includes('author')) payload.author = cleanText(formData.get('author'));
       if (schema.fields.includes('subject')) payload.subject = cleanText(overrides.subject != null ? overrides.subject : formData.get('subject'));
       if (schema.fields.includes('url')) payload.url = cleanText(formData.get('url'));
@@ -2907,10 +2907,11 @@ App.messaging = (function () {
       payload.url = cleanText(formData.get('url'));
       payload.hashtags = cleanText(overrides.hashtags != null ? overrides.hashtags : formData.get('hashtags'));
       payload.image_asset_id = cleanText(formData.get('image_asset_id'));
-      payload.category = topic;
+      payload.topic = topic;
       return payload;
     }
     if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
+      payload.topic = topic;
       payload.author = cleanText(formData.get('author'));
       payload.title = cleanText(overrides.title != null ? overrides.title : formData.get('title'));
       payload.subtitle = cleanText(overrides.subtitle != null ? overrides.subtitle : formData.get('subtitle'));
@@ -4127,7 +4128,7 @@ App.messaging = (function () {
     const form = document.getElementById('messagingCategoryForm');
     if (!form) return false;
     const formData = new FormData(form);
-    const topic = String(formData.get('category') || formData.get('topic') || '').trim();
+    const topic = String(formData.get('topic') || formData.get('category') || '').trim();
     if (!topic) {
       notify('Topic is required', true);
       return false;
@@ -4154,7 +4155,7 @@ App.messaging = (function () {
     if (!form) return false;
     const formData = new FormData(form);
     const id = Number(formData.get('id') || 0) || 0;
-    const category = String(formData.get('category') || formData.get('topic') || '').trim();
+    const category = String(formData.get('topic') || formData.get('category') || '').trim();
     if (!id) {
       notify('Topic id is required', true);
       return false;
@@ -5533,18 +5534,6 @@ App.messaging = (function () {
       });
     }
 
-    if (messagingCategoryForm) {
-      messagingCategoryForm.addEventListener('submit', async function (e) {
-        return submitTopicCreate(e);
-      });
-    }
-
-    if (messagingCategoryEditForm) {
-      messagingCategoryEditForm.addEventListener('submit', async function (e) {
-        return submitTopicEdit(e);
-      });
-    }
-
     const messagingTagSortBtn = document.getElementById('messagingTagsSortBtn');
     const messagingTagForm = document.getElementById('messagingTagForm');
     const messagingTagEditForm = document.getElementById('messagingTagEditForm');
@@ -5553,18 +5542,6 @@ App.messaging = (function () {
       messagingTagSortBtn.addEventListener('click', function () {
         messagingTagTableState.dir = messagingTagTableState.dir === 'asc' ? 'desc' : 'asc';
         renderMessagingTagsTable(currentMessagingTags);
-      });
-    }
-
-    if (messagingTagForm) {
-      messagingTagForm.addEventListener('submit', async function (e) {
-        return submitTagCreate(e);
-      });
-    }
-
-    if (messagingTagEditForm) {
-      messagingTagEditForm.addEventListener('submit', async function (e) {
-        return submitTagEdit(e);
       });
     }
 
