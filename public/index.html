@@ -3177,7 +3177,7 @@
             <form id="messagingTweetsForm" class="stack-form labeled-form" style="max-width: none;">
               <div class="form-row">
                 <label for="messagingTweetTopic"><strong>Topic:</strong></label>
-                <select id="messagingTweetTopic" name="category" data-messaging-category-select="true">
+                <select id="messagingTweetTopic" name="topic" data-messaging-category-select="true">
                   <option value="">Select Topic</option>
                 </select>
               </div>
@@ -3240,7 +3240,7 @@
             <h3>Edit Tweet</h3>
             <button id="messagingTweetsCancelEditBtn" type="button">Cancel Edit</button>
           </div>
-          <select name="category" data-messaging-category-select="true">
+          <select name="topic" data-messaging-category-select="true">
             <option value="">Topic</option>
           </select>
           <textarea name="content" rows="6" placeholder="Content" required></textarea>
@@ -3301,7 +3301,7 @@
           <div class="grid-form" style="align-items: start;">
             <form id="messagingPitchForm" class="stack-form">
               <h3>Single Create</h3>
-              <select id="messagingPitchCategorySelect" name="category">
+              <select id="messagingPitchCategorySelect" name="topic">
                 <option value="">No Category</option>
               </select>
               <textarea name="pitch" rows="6" placeholder="Pitch text" required></textarea>
@@ -3310,7 +3310,7 @@
 
             <form id="messagingPitchesBulkCreateForm" class="stack-form">
               <h3>Multiple Create</h3>
-              <select id="messagingPitchesBulkCategorySelect" name="category">
+              <select id="messagingPitchesBulkCategorySelect" name="topic">
                 <option value="">No Category</option>
               </select>
               <textarea name="pitches_text" rows="8" placeholder="Paste multiple pitches, one per line"></textarea>
@@ -3325,7 +3325,7 @@
             <h3>Edit Pitch</h3>
             <button id="messagingPitchCancelEditBtn" type="button">Cancel Edit</button>
           </div>
-          <select id="messagingPitchEditCategorySelect" name="category">
+          <select id="messagingPitchEditCategorySelect" name="topic">
             <option value="">No Category</option>
           </select>
           <textarea name="pitch" rows="6" placeholder="Pitch text" required></textarea>
@@ -3371,7 +3371,7 @@
         <form id="messagingPitchesBulkEditForm" class="stack-form labeled-form">
           <div class="stack-form">
             <label for="messagingPitchesBulkEditCategorySelect">Category</label>
-            <select id="messagingPitchesBulkEditCategorySelect" name="category">
+            <select id="messagingPitchesBulkEditCategorySelect" name="topic">
               <option value="">No Category</option>
             </select>
           </div>
@@ -3425,7 +3425,7 @@
           <div class="grid-form" style="align-items: start;">
             <form id="messagingHeadlineForm" class="stack-form">
               <h3>Single Create</h3>
-              <select id="messagingHeadlineCategorySelect" name="category">
+              <select id="messagingHeadlineCategorySelect" name="topic">
                 <option value="">No Topic</option>
               </select>
               <textarea name="headline" rows="4" placeholder="Headline text" required></textarea>
@@ -3434,7 +3434,7 @@
 
             <form id="messagingHeadlinesBulkCreateForm" class="stack-form">
               <h3>Multiple Create</h3>
-              <select id="messagingHeadlinesBulkCategorySelect" name="category">
+              <select id="messagingHeadlinesBulkCategorySelect" name="topic">
                 <option value="">No Topic</option>
               </select>
               <textarea name="headlines_text" rows="8" placeholder="Paste multiple headlines, one per line"></textarea>
@@ -3449,7 +3449,7 @@
             <h3>Edit Headline</h3>
             <button id="messagingHeadlineCancelEditBtn" type="button">Cancel Edit</button>
           </div>
-          <select id="messagingHeadlineEditCategorySelect" name="category">
+          <select id="messagingHeadlineEditCategorySelect" name="topic">
             <option value="">No Topic</option>
           </select>
           <textarea name="headline" rows="4" placeholder="Headline text" required></textarea>
@@ -3502,7 +3502,7 @@
         <form id="messagingHeadlinesBulkEditForm" class="stack-form labeled-form">
           <div class="form-row">
             <label for="messagingHeadlinesBulkEditCategorySelect">Topic</label>
-            <select id="messagingHeadlinesBulkEditCategorySelect" name="category">
+            <select id="messagingHeadlinesBulkEditCategorySelect" name="topic">
               <option value="">No Topic</option>
             </select>
           </div>
@@ -3669,7 +3669,7 @@
           <div class="grid-form" style="align-items: start;">
             <form id="messagingSubheadingForm" class="stack-form">
               <h3>Single Create</h3>
-              <select id="messagingSubheadingCategorySelect" name="category">
+              <select id="messagingSubheadingCategorySelect" name="topic">
                 <option value="">No Category</option>
               </select>
               <textarea name="subheading" rows="4" placeholder="Sub-heading text" required></textarea>
@@ -3678,7 +3678,7 @@
 
             <form id="messagingSubheadingsBulkCreateForm" class="stack-form">
               <h3>Multiple Create</h3>
-              <select id="messagingSubheadingsBulkCategorySelect" name="category">
+              <select id="messagingSubheadingsBulkCategorySelect" name="topic">
                 <option value="">No Category</option>
               </select>
               <textarea name="subheadings_text" rows="8" placeholder="Paste multiple sub-headings, one per line"></textarea>
@@ -3693,7 +3693,7 @@
             <h3>Edit Sub-heading</h3>
             <button id="messagingSubheadingCancelEditBtn" type="button">Cancel Edit</button>
           </div>
-          <select id="messagingSubheadingEditCategorySelect" name="category">
+          <select id="messagingSubheadingEditCategorySelect" name="topic">
             <option value="">No Category</option>
           </select>
           <textarea name="subheading" rows="4" placeholder="Sub-heading text" required></textarea>
@@ -3739,7 +3739,7 @@
         <form id="messagingSubheadingsBulkEditForm" class="stack-form labeled-form">
           <div class="form-row">
             <label for="messagingSubheadingsBulkEditCategorySelect">Category</label>
-            <select id="messagingSubheadingsBulkEditCategorySelect" name="category">
+            <select id="messagingSubheadingsBulkEditCategorySelect" name="topic">
               <option value="">No Category</option>
             </select>
           </div>
@@ -3762,7 +3762,7 @@
           <div class="grid-form" style="align-items: start;">
             <form id="messagingTaglineForm" class="stack-form">
               <h3>Single Create</h3>
-              <select id="messagingTaglineCategorySelect" name="category">
+              <select id="messagingTaglineCategorySelect" name="topic">
                 <option value="">No Category</option>
               </select>
               <textarea name="tagline" rows="4" placeholder="Tagline text" required></textarea>
@@ -3771,7 +3771,7 @@
 
             <form id="messagingTaglinesBulkCreateForm" class="stack-form">
               <h3>Multiple Create</h3>
-              <select id="messagingTaglinesBulkCategorySelect" name="category">
+              <select id="messagingTaglinesBulkCategorySelect" name="topic">
                 <option value="">No Category</option>
               </select>
               <textarea name="taglines_text" rows="8" placeholder="Paste multiple taglines, one per line"></textarea>
@@ -3786,7 +3786,7 @@
             <h3>Edit Tagline</h3>
             <button id="messagingTaglineCancelEditBtn" type="button">Cancel Edit</button>
           </div>
-          <select id="messagingTaglineEditCategorySelect" name="category">
+          <select id="messagingTaglineEditCategorySelect" name="topic">
             <option value="">No Category</option>
           </select>
           <textarea name="tagline" rows="4" placeholder="Tagline text" required></textarea>
@@ -3832,7 +3832,7 @@
         <form id="messagingTaglinesBulkEditForm" class="stack-form labeled-form">
           <div class="form-row">
             <label for="messagingTaglinesBulkEditCategorySelect">Category</label>
-            <select id="messagingTaglinesBulkEditCategorySelect" name="category">
+            <select id="messagingTaglinesBulkEditCategorySelect" name="topic">
               <option value="">No Category</option>
             </select>
           </div>
