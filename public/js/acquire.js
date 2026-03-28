@@ -519,6 +519,7 @@ App.acquire = (function () {
       els.directAcquireErrorsPreview.classList.toggle('hidden', !errors.length);
     }
     renderDirectAcquireContactTable();
+    renderDirectAcquireKeywordTable();
   }
 
   function renderDirectAcquireContactTable() {
@@ -555,6 +556,31 @@ App.acquire = (function () {
       }
       tr.appendChild(labelTd);
       tr.appendChild(valueTd);
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function renderDirectAcquireKeywordTable() {
+    const tableBody = document.getElementById('directAcquireKeywordTable');
+    const emptyEl = document.getElementById('directAcquireKeywordEmpty');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const run = state.directAcquireCurrentRun;
+    const labels = Array.isArray(run?.keyword_labels) ? run.keyword_labels : [];
+    if (!labels.length) {
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+    labels.forEach(([keyword, score]) => {
+      const tr = document.createElement('tr');
+      const keywordTd = document.createElement('td');
+      keywordTd.className = 'direct-acquire-contact-label';
+      keywordTd.textContent = String(keyword || '');
+      const scoreTd = document.createElement('td');
+      scoreTd.textContent = String(score || '');
+      tr.appendChild(keywordTd);
+      tr.appendChild(scoreTd);
       tableBody.appendChild(tr);
     });
   }
@@ -1943,6 +1969,7 @@ App.acquire = (function () {
 
   function init() {
     renderDirectAcquireContactTable();
+    renderDirectAcquireKeywordTable();
     clearRedditHarvestProgress();
     const redditProgressWrap = document.getElementById('redditHarvestProgressWrap');
     const redditProgressBar = document.getElementById('redditHarvestProgressBar');
