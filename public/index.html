@@ -904,7 +904,7 @@
                     Peer Sites
                   </label>
                 </div>
-                <div class="acquire-web-advanced-fields">
+                <div class="acquire-web-advanced-fields acquire-web-advanced-fields-secondary">
                   <div class="form-row">
                     <label for="directAcquireMaxPagesSelect">Pages to Harvest</label>
                     <select id="directAcquireMaxPagesSelect" name="max_pages">
@@ -916,9 +916,31 @@
                     </select>
                   </div>
                   <div class="form-row">
+                    <label for="directAcquirePeerSitesLimitSelect">Peer Sites to Harvest</label>
+                    <select id="directAcquirePeerSitesLimitSelect" name="peer_sites_limit">
+                      <option value="5">5</option>
+                      <option value="10">10</option>
+                      <option value="20" selected>20</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label for="directAcquireImagesLimitSelect">Images to Harvest</label>
+                    <select id="directAcquireImagesLimitSelect" name="images_limit">
+                      <option value="5">5</option>
+                      <option value="10">10</option>
+                      <option value="20" selected>20</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
                     <label for="directAcquireSnippetInput">Snippet Length</label>
                     <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
                   </div>
+                </div>
+                <div class="acquire-web-advanced-fields acquire-web-advanced-fields-tertiary">
                   <div class="form-row">
                     <label for="directAcquireKeywordExclusionsInput">Keyword Exclusions</label>
                     <textarea id="directAcquireKeywordExclusionsInput" name="keyword_exclusions" rows="4" placeholder="Enter brand words or phrases, separated by commas or new lines"></textarea>
