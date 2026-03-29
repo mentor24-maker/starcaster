@@ -10,8 +10,8 @@ create table if not exists public.messaging_formats (
   updated_at timestamptz not null default now()
 );
 
-create unique index if not exists idx_messaging_formats_format
-  on public.messaging_formats (format);
+create unique index if not exists idx_messaging_formats_project_format
+  on public.messaging_formats (project_id, lower(format));
 
 create index if not exists idx_messaging_formats_family
   on public.messaging_formats (family);
