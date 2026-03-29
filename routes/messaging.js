@@ -118,6 +118,12 @@ const {
   updateMessagingTag,
   deleteMessagingTag,
 } = require('../lib/messagingTagsStore');
+const {
+  listMessagingKeywords,
+  createMessagingKeyword,
+  updateMessagingKeyword,
+  deleteMessagingKeyword,
+} = require('../lib/messagingKeywordsStore');
 const { generateMessagingContentSuggestions } = require('../lib/messagingContentSuggestions');
 
 function isValidHttpUrl(value) {
@@ -675,6 +681,17 @@ async function handle(req, res, pathname, method) {
     createFn: createMessagingTranscript,
     updateFn: updateMessagingTranscript,
     deleteFn: deleteMessagingTranscript,
+  })) return true;
+
+  if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
+    path: '/api/messaging/keywords',
+    field: 'keyword',
+    singularKey: 'keyword',
+    pluralKey: 'keywords',
+    listFn: listMessagingKeywords,
+    createFn: createMessagingKeyword,
+    updateFn: updateMessagingKeyword,
+    deleteFn: deleteMessagingKeyword,
   })) return true;
 
   if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
