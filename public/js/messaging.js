@@ -453,6 +453,7 @@ App.messaging = (function () {
                 <option value="">No Topic</option>
               </select>
               <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
+              <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
               <button type="submit">Save ${config.singularLabel}</button>
             </form>
 
@@ -477,6 +478,7 @@ App.messaging = (function () {
             <option value="">No Topic</option>
           </select>
           <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <button type="submit">Update ${config.singularLabel}</button>
         </form>
 
@@ -729,6 +731,7 @@ App.messaging = (function () {
     form.elements.subtitle.value = String(article.subtitle || '');
     form.elements.url.value = String(article.url || '');
     form.elements.content.value = String(article.content || '');
+    if (form.elements.feedback) form.elements.feedback.value = String(article.feedback || '');
     form.elements.thumbnail_asset_id.value = article.thumbnail_asset_id ? String(article.thumbnail_asset_id) : '';
   }
 
@@ -834,6 +837,7 @@ App.messaging = (function () {
       subtitle: String(article?.subtitle || '').trim(),
       url: String(article?.url || '').trim(),
       content: String(article?.content || '').trim(),
+      feedback: String(article?.feedback || '').trim(),
       publish_date: article?.publish_date || null,
       thumbnail_asset_id: Number(article?.thumbnail_asset_id || 0) || null,
     };
@@ -863,6 +867,7 @@ App.messaging = (function () {
     form.elements.subtitle.value = String(report.subtitle || '');
     form.elements.url.value = String(report.url || '');
     form.elements.content.value = String(report.content || '');
+    if (form.elements.feedback) form.elements.feedback.value = String(report.feedback || '');
     form.elements.thumbnail_asset_id.value = report.thumbnail_asset_id ? String(report.thumbnail_asset_id) : '';
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
@@ -896,6 +901,7 @@ App.messaging = (function () {
     form.elements.subtitle.value = String(whitePaper.subtitle || '');
     form.elements.url.value = String(whitePaper.url || '');
     form.elements.content.value = String(whitePaper.content || '');
+    if (form.elements.feedback) form.elements.feedback.value = String(whitePaper.feedback || '');
     form.elements.thumbnail_asset_id.value = whitePaper.thumbnail_asset_id ? String(whitePaper.thumbnail_asset_id) : '';
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
@@ -929,6 +935,7 @@ App.messaging = (function () {
     form.elements.subtitle.value = String(ebook.subtitle || '');
     form.elements.url.value = String(ebook.url || '');
     form.elements.content.value = String(ebook.content || '');
+    if (form.elements.feedback) form.elements.feedback.value = String(ebook.feedback || '');
     form.elements.thumbnail_asset_id.value = ebook.thumbnail_asset_id ? String(ebook.thumbnail_asset_id) : '';
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
@@ -964,6 +971,7 @@ App.messaging = (function () {
     editForm.elements.content.value = String(tweet.content || '');
     editForm.elements.url.value = String(tweet.url || '');
     editForm.elements.hashtags.value = String(tweet.hashtags || '');
+    if (editForm.elements.feedback) editForm.elements.feedback.value = String(tweet.feedback || '');
     editForm.elements.image_asset_id.value = tweet.image_asset_id ? String(tweet.image_asset_id) : '';
     if (workspace) workspace.classList.add('hidden');
     if (addBtn) addBtn.textContent = 'Add Tweet';
@@ -1256,6 +1264,7 @@ App.messaging = (function () {
           ['Subtitle', String(article.subtitle || '').trim() || '-'],
           ['URL', String(article.url || '').trim() || '-'],
           ['Content', String(article.content || '').trim() || '-'],
+          ['Feedback', String(article.feedback || '').trim() || '-'],
         ]);
       });
       actionsTd.appendChild(viewBtn);
@@ -2964,6 +2973,7 @@ App.messaging = (function () {
       if (!value) throw new Error(`${schema.primaryLabel} is required`);
       payload[schema.primaryKey] = value;
       payload.topic = topic;
+      payload.feedback = cleanText(overrides.feedback != null ? overrides.feedback : formData.get('feedback'));
       if (schema.fields.includes('author')) payload.author = cleanText(formData.get('author'));
       if (schema.fields.includes('subject')) payload.subject = cleanText(overrides.subject != null ? overrides.subject : formData.get('subject'));
       if (schema.fields.includes('url')) payload.url = cleanText(formData.get('url'));
@@ -2979,6 +2989,7 @@ App.messaging = (function () {
       payload.hashtags = cleanText(overrides.hashtags != null ? overrides.hashtags : formData.get('hashtags'));
       payload.image_asset_id = cleanText(formData.get('image_asset_id'));
       payload.topic = topic;
+      payload.feedback = cleanText(overrides.feedback != null ? overrides.feedback : formData.get('feedback'));
       return payload;
     }
     if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
@@ -2988,6 +2999,7 @@ App.messaging = (function () {
       payload.subtitle = cleanText(overrides.subtitle != null ? overrides.subtitle : formData.get('subtitle'));
       payload.url = cleanText(formData.get('url'));
       payload.content = cleanText(overrides.body != null ? overrides.body : formData.get('content'));
+      payload.feedback = cleanText(overrides.feedback != null ? overrides.feedback : formData.get('feedback'));
       payload.thumbnail_asset_id = cleanText(formData.get('thumbnail_asset_id'));
       if (!payload.title || !payload.content) throw new Error('Title and content are required');
       return payload;
@@ -3077,6 +3089,7 @@ App.messaging = (function () {
         title: cleanText(document.getElementById('messagingCreateContentGeneratedTitle')?.value),
         subtitle: cleanText(document.getElementById('messagingCreateContentGeneratedSubtitle')?.value),
         body: getGeneratedBodyEditorHtml(),
+        feedback: cleanText(document.getElementById('messagingCreateContentFeedback')?.value),
       });
     } catch (err) {
       notify(err.message, true);
@@ -3387,7 +3400,8 @@ App.messaging = (function () {
       return items.map((item) => ({
         id: item.id,
         content: String(item?.[entry.field] || '').trim(),
-        topic: String(item?.category || '').trim(),
+        topic: String(item?.topic || item?.category || '').trim(),
+        feedback: String(item?.feedback || '').trim(),
         format: entry.format,
         pageId: entry.pageId,
         item,
@@ -3404,6 +3418,7 @@ App.messaging = (function () {
       return {
         [schema.primaryKey]: `${String(item?.[schema.primaryKey] || '').trim() || 'Untitled'} (Clone)`,
         topic: String(item?.topic || item?.category || '').trim(),
+        feedback: String(item?.feedback || '').trim(),
       };
     }
     if (schema.kind === 'tweet') {
@@ -3413,6 +3428,7 @@ App.messaging = (function () {
         hashtags: String(item?.hashtags || '').trim(),
         image_asset_id: Number(item?.image_asset_id || 0) || null,
         topic: String(item?.topic || item?.category || '').trim(),
+        feedback: String(item?.feedback || '').trim(),
       };
     }
     if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
@@ -3423,6 +3439,7 @@ App.messaging = (function () {
         subtitle: String(item?.subtitle || '').trim(),
         url: String(item?.url || '').trim(),
         content: String(item?.content || '').trim(),
+        feedback: String(item?.feedback || '').trim(),
         publish_date: item?.publish_date || null,
         thumbnail_asset_id: Number(item?.thumbnail_asset_id || 0) || null,
         pdf_name: String(item?.pdf_name || '').trim(),
@@ -3448,15 +3465,20 @@ App.messaging = (function () {
         ['Platform', String(item?.platform || '').trim() || '-'],
         ['URL', String(item?.url || '').trim() || '-'],
         ['Content', String(item?.content || '').trim() || '-'],
+        ['Feedback', String(item?.feedback || '').trim() || '-'],
       );
     } else if (format === 'Tweets') {
       pairs.push(
         ['Content', String(item?.content || '').trim() || '-'],
         ['URL', String(item?.url || '').trim() || '-'],
         ['Hashtags', String(item?.hashtags || '').trim() || '-'],
+        ['Feedback', String(item?.feedback || '').trim() || '-'],
       );
     } else {
-      pairs.push(['Content', String(entry?.content || '').trim() || '-']);
+      pairs.push(
+        ['Content', String(entry?.content || '').trim() || '-'],
+        ['Feedback', String(item?.feedback || '').trim() || '-']
+      );
     }
     openMessagingDetailModal(`View ${format}`, pairs);
   }
@@ -3857,6 +3879,9 @@ App.messaging = (function () {
     if (form.elements.topic) {
       form.elements.topic.value = String(item.topic || item.category || '');
     }
+    if (form.elements.feedback) {
+      form.elements.feedback.value = String(item.feedback || '');
+    }
   }
 
   function openSimpleContentEditForm(config, item) {
@@ -4082,6 +4107,7 @@ App.messaging = (function () {
         const payload = {
           [config.field]: String(formData.get(config.field) || '').trim(),
           topic: String(formData.get('topic') || '').trim(),
+          feedback: String(formData.get('feedback') || '').trim(),
         };
         if (!payload[config.field]) {
           notify(`${config.singularLabel} is required`, true);
@@ -4119,7 +4145,7 @@ App.messaging = (function () {
         try {
           await Promise.all(values.map((value) => api(config.endpoint, {
             method: 'POST',
-            body: JSON.stringify({ [config.field]: value, topic: category }),
+            body: JSON.stringify({ [config.field]: value, topic: category, feedback: '' }),
           })));
           notify(`Saved ${values.length} ${config.singularLower}${values.length === 1 ? '' : 's'}`);
           bulkCreateForm.reset();
@@ -4145,6 +4171,7 @@ App.messaging = (function () {
         const payload = {
           [config.field]: String(formData.get(config.field) || '').trim(),
           topic: String(formData.get('topic') || '').trim(),
+          feedback: String(formData.get('feedback') || '').trim(),
         };
         if (!id) {
           notify(`${config.singularLabel} id is required`, true);
@@ -4581,6 +4608,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4600,6 +4628,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4618,6 +4647,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4639,6 +4669,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4658,6 +4689,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4679,6 +4711,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4698,6 +4731,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4719,6 +4753,7 @@ App.messaging = (function () {
       subtitle: String(formData.get('subtitle') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -4736,6 +4771,7 @@ App.messaging = (function () {
       content: String(formData.get('content') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
     };
     await api('/api/messaging/tweets', {
@@ -4752,6 +4788,7 @@ App.messaging = (function () {
       content: String(formData.get('content') || '').trim(),
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
     };
     await api(`/api/messaging/tweets/${encodeURIComponent(id)}`, {
