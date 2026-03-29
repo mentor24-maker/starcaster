@@ -106,6 +106,37 @@ App.acquire = (function () {
     }
   }
 
+  async function saveSelectedKeywordsAsContent(keywordLabels, topics) {
+    const labels = Array.from(keywordLabels || []).map((value) => String(value || '').trim()).filter(Boolean);
+    const topicList = Array.from(topics || []).map((value) => String(value || '').trim()).filter(Boolean);
+    if (!labels.length || !topicList.length) return 0;
+    const existingRes = await api('/api/messaging/keywords?limit=5000');
+    const existing = Array.isArray(existingRes?.keywords)
+      ? existingRes.keywords
+      : Array.isArray(existingRes?.data)
+        ? existingRes.data
+        : Array.isArray(existingRes)
+          ? existingRes
+          : [];
+    const existingPairs = new Set(
+      existing.map((item) => `${normalizeDirectAcquireKeyword(item?.keyword)}::${String(item?.topic || item?.category || '').trim().toLowerCase()}`)
+    );
+    let created = 0;
+    for (const keyword of labels) {
+      for (const topic of topicList) {
+        const pairKey = `${normalizeDirectAcquireKeyword(keyword)}::${String(topic || '').trim().toLowerCase()}`;
+        if (existingPairs.has(pairKey)) continue;
+        await api('/api/messaging/keywords', {
+          method: 'POST',
+          body: JSON.stringify({ keyword, topic }),
+        });
+        existingPairs.add(pairKey);
+        created += 1;
+      }
+    }
+    return created;
+  }
+
   function renderDirectAcquireKeywordTopicOptions() {
     const menu = document.getElementById('directAcquireKeywordTopicsMenu');
     const summary = document.getElementById('directAcquireKeywordTopicsSummary');
@@ -2543,7 +2574,7 @@ App.acquire = (function () {
     const directAcquireKeywordBulkTopics = document.getElementById('directAcquireKeywordTopicsDropdown');
     const directAcquireKeywordBulkReason = document.getElementById('directAcquireKeywordBulkReason');
     if (directAcquireKeywordBulkTopics) {
-      directAcquireKeywordBulkTopics.addEventListener('change', function (event) {
+      directAcquireKeywordBulkTopics.addEventListener('change', async function (event) {
         const changedInput = event.target;
         if (!changedInput || changedInput.type !== 'checkbox' || !changedInput.dataset.topic) return;
         const selected = Array.from(document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]:checked'));
@@ -2562,10 +2593,22 @@ App.acquire = (function () {
           topicMap[keyword] = chosenTopics;
         });
         writeDirectAcquireKeywordTopics(topicMap);
+        const selectedLabels = selected
+          .map((checkbox) => String(checkbox.dataset.keyword || '').trim())
+          .filter(Boolean);
+        let createdCount = 0;
+        if (chosenTopics.length) {
+          try {
+            createdCount = await saveSelectedKeywordsAsContent(selectedLabels, chosenTopics);
+          } catch (err) {
+            notify(err.message || 'Could not save selected keywords as content', true);
+          }
+        }
         renderDirectAcquireKeywordTopicOptions();
         renderDirectAcquireKeywordTable();
         const noun = selected.length === 1 ? 'keyword' : 'keywords';
-        notify(`Updated topics for ${selected.length} ${noun}`);
+        const createdText = createdCount ? ` and added ${createdCount} keyword content record${createdCount === 1 ? '' : 's'}` : '';
+        notify(`Updated topics for ${selected.length} ${noun}${createdText}`);
         directAcquireKeywordBulkTopics.removeAttribute('open');
       });
     }
