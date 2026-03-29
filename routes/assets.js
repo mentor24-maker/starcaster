@@ -15,7 +15,7 @@ const {
 } = require('../lib/googleDrive');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
 
-const ASSET_TYPES = new Set(['Image', 'Video', 'Audio', 'Lead Magnet', 'Screenshot']);
+const ASSET_TYPES = new Set(['Image', 'Video', 'Audio', 'Lead Magnet', 'File']);
 const ASSETS_PATH_RE = /^\/api\/assets\/?$/;
 const MAX_UPLOAD_BASE64_CHARS = 9_000_000;
 
@@ -27,8 +27,10 @@ const ASSET_TYPE_CANONICAL = new Map([
   ['lead magnet', 'Lead Magnet'],
   ['lead_magnet', 'Lead Magnet'],
   ['copy', 'Lead Magnet'],
-  ['screenshot', 'Screenshot'],
-  ['screen shot', 'Screenshot'],
+  ['file', 'File'],
+  ['document', 'File'],
+  ['screenshot', 'File'],
+  ['screen shot', 'File'],
   ['multimedia', 'Video'],
 ]);
 

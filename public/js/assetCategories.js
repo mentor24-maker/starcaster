@@ -23,6 +23,7 @@ App.assetCategories = (function () {
   function displayAssetType(value) {
     const type = safeText(value);
     if (type === 'Lead Magnet') return 'PDF';
+    if (type === 'File') return 'File';
     return type || '-';
   }
 
@@ -241,17 +242,6 @@ App.assetCategories = (function () {
       });
     }
 
-    if (els.assetCategoryForm) {
-      els.assetCategoryForm.addEventListener('submit', async (e) => {
-        return submitCategoryCreate(e);
-      });
-    }
-
-    if (els.assetCategoryEditForm) {
-      els.assetCategoryEditForm.addEventListener('submit', async (e) => {
-        return submitCategoryEdit(e);
-      });
-    }
   }
 
   async function submitCategoryCreate(event) {
