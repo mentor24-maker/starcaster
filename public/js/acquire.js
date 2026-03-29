@@ -1140,6 +1140,7 @@ App.acquire = (function () {
   function renderDirectAcquirePeerSitesTable() {
     const tableBody = document.getElementById('directAcquirePeerSitesTable');
     const metaEl = document.getElementById('directAcquirePeerSitesMeta');
+    const diagnosticsEl = document.getElementById('directAcquirePeerSitesDiagnostics');
     const suggestedWrap = document.getElementById('directAcquirePeerSitesSuggestedWrap');
     const suggestedEl = document.getElementById('directAcquirePeerSitesSuggested');
     if (!tableBody) return;
@@ -1147,10 +1148,30 @@ App.acquire = (function () {
     const summary = state.directAcquireCurrentRun?.peer_summary || {};
     const peers = Array.isArray(summary.peers) ? summary.peers : [];
     const suggestions = Array.isArray(summary.suggested_models) ? summary.suggested_models : [];
+    const searchedKeywords = Array.isArray(summary.searched_keywords) ? summary.searched_keywords.filter(Boolean) : [];
+    if (diagnosticsEl) {
+      const diagnosticParts = [];
+      diagnosticParts.push(`Provider: ${String(summary.provider || 'google_custom_search')}`);
+      diagnosticParts.push(`Configured: ${summary.configured ? 'Yes' : 'No'}`);
+      diagnosticParts.push(`Requested: ${summary.enabled === false ? 'No' : 'Yes'}`);
+      diagnosticParts.push(`Keywords: ${searchedKeywords.length}`);
+      diagnosticParts.push(`Results: ${Number(summary.raw_results_count || 0) || 0}`);
+      diagnosticParts.push(`Unique Domains: ${Number(summary.unique_domains_count || 0) || 0}`);
+      if (Array.isArray(summary.errors) && summary.errors.length) {
+        diagnosticParts.push(`Errors: ${summary.errors.join(' | ')}`);
+      } else if (String(summary.error || '').trim()) {
+        diagnosticParts.push(`Error: ${String(summary.error || '').trim()}`);
+      }
+      diagnosticsEl.textContent = diagnosticParts.join(' | ');
+    }
     if (!peers.length) {
       if (metaEl) {
         metaEl.textContent = String(summary.error || '').trim()
-          || (summary.configured === false ? 'Peer site discovery is not configured yet.' : 'No peer sites discovered yet.');
+          || (summary.enabled === false
+            ? 'Peer site discovery was not selected for this run.'
+            : summary.configured === false
+              ? 'Peer site discovery is not configured yet.'
+              : 'No peer sites discovered yet.');
       }
       if (suggestedWrap) suggestedWrap.classList.add('hidden');
       return;
@@ -2833,6 +2854,7 @@ App.acquire = (function () {
             max_pages: Number(formData.get('max_pages') || 10),
             body_snippet_chars: Number(formData.get('body_snippet_chars') || 600),
             capture_contact_data: formData.get('acquire_social') === 'on',
+            acquire_peer_sites: formData.get('acquire_peer_sites') === 'on',
             keyword_exclusions: String(formData.get('keyword_exclusions') || '').trim(),
           };
           if (directAcquireKeywordExclusionsInput) {
