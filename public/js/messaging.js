@@ -787,6 +787,36 @@ App.messaging = (function () {
     return editor ? String(editor.innerHTML || '').trim() : '';
   }
 
+  function getGeneratedBodyEditorText() {
+    const editor = document.getElementById('messagingCreateContentGeneratedBodyEditor');
+    return editor ? cleanText(editor.innerText || editor.textContent || '') : '';
+  }
+
+  function mergeTrainingContextFeedback(existingContext, feedback) {
+    const marker = '[Messaging Article Revision Feedback]';
+    const existing = cleanText(existingContext);
+    const nextFeedback = cleanText(feedback);
+    const escapedMarker = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const base = existing.replace(new RegExp(`\\n*${escapedMarker}[\\s\\S]*$`, 'i'), '').trim();
+    if (!nextFeedback) return base;
+    return [base, marker, nextFeedback].filter(Boolean).join('\n\n');
+  }
+
+  async function saveCreateContentFeedbackToTraining(feedback) {
+    const current = await api('/api/settings/training/context', { method: 'GET' });
+    const existingContext = cleanText(current?.training_context || current?.data?.training_context);
+    const guidelines = cleanText(current?.training_guidelines || current?.data?.training_guidelines);
+    const trainingContext = mergeTrainingContextFeedback(existingContext, feedback);
+    await api('/api/settings/training/context', {
+      method: 'POST',
+      body: JSON.stringify({
+        training_context: trainingContext,
+        training_guidelines: guidelines,
+      }),
+    });
+    return trainingContext;
+  }
+
   function openMessagingDetailModal(title, pairs) {
     const modal = App.components.Modal({
       title,
@@ -2849,8 +2879,10 @@ App.messaging = (function () {
     const topicRow = document.getElementById('messagingCreateContentTopicRow');
     const submitBtn = document.getElementById('messagingCreateContentSubmitBtn');
     const actionsRow = document.getElementById('messagingCreateContentActionsRow');
+    const feedbackWrap = document.getElementById('messagingCreateContentFeedbackWrap');
     if (!schema) {
       if (topicRow) topicRow.classList.add('hidden');
+      if (feedbackWrap) feedbackWrap.classList.add('hidden');
       setCreateContentFieldVisible('messagingCreateContentPrimaryRow', false);
       setCreateContentFieldVisible('messagingCreateContentAuthorRow', false);
       setCreateContentFieldVisible('messagingCreateContentSubjectRow', false);
@@ -2870,6 +2902,7 @@ App.messaging = (function () {
     const visibleFields = Array.isArray(schema?.fields) ? schema.fields : [];
     const hasField = (name) => visibleFields.includes(name);
     const isLongform = schema?.kind === 'longform' || schema?.kind === 'pdfLongform';
+    if (feedbackWrap && format !== 'Articles') feedbackWrap.classList.add('hidden');
 
     // Reset irrelevant values when switching formats so the visible form stays truthful.
     [
@@ -2972,14 +3005,18 @@ App.messaging = (function () {
     const generatedTitle = document.getElementById('messagingCreateContentGeneratedTitle');
     const generatedSubtitle = document.getElementById('messagingCreateContentGeneratedSubtitle');
     const generatedBody = document.getElementById('messagingCreateContentGeneratedBodyEditor');
+    const feedbackWrap = document.getElementById('messagingCreateContentFeedbackWrap');
+    const feedback = document.getElementById('messagingCreateContentFeedback');
     if (empty) empty.classList.remove('hidden');
     if (shortWrap) shortWrap.classList.add('hidden');
     if (longWrap) longWrap.classList.add('hidden');
+    if (feedbackWrap) feedbackWrap.classList.add('hidden');
     if (tbody) tbody.innerHTML = '';
     if (checkAll) checkAll.checked = false;
     if (generatedTitle) generatedTitle.value = '';
     if (generatedSubtitle) generatedSubtitle.value = '';
     if (generatedBody) generatedBody.innerHTML = '';
+    if (feedback) feedback.value = '';
   }
 
   function renderCreateContentShortSuggestions(options) {
@@ -3012,6 +3049,8 @@ App.messaging = (function () {
     const empty = document.getElementById('messagingCreateContentSuggestionsEmpty');
     const shortWrap = document.getElementById('messagingCreateContentShortSuggestions');
     const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
+    const feedbackWrap = document.getElementById('messagingCreateContentFeedbackWrap');
+    const format = cleanText(document.getElementById('messagingCreateContentFormat')?.value);
     currentCreateContentSuggestions = [];
     if (title && typeof draft?.title === 'string') title.value = draft.title;
     if (subtitle && typeof draft?.subtitle === 'string') subtitle.value = draft.subtitle;
@@ -3019,6 +3058,7 @@ App.messaging = (function () {
     if (empty) empty.classList.add('hidden');
     if (shortWrap) shortWrap.classList.add('hidden');
     if (longWrap) longWrap.classList.remove('hidden');
+    if (feedbackWrap) feedbackWrap.classList.toggle('hidden', format !== 'Articles');
   }
 
   async function saveGeneratedCreateContentDraft() {
@@ -3072,6 +3112,53 @@ App.messaging = (function () {
     return false;
   }
 
+  async function reviseCreateContentDraftWithFeedback() {
+    const form = document.getElementById('messagingCreateContentForm');
+    const feedbackEl = document.getElementById('messagingCreateContentFeedback');
+    const button = document.getElementById('messagingCreateContentReviseBtn');
+    if (!form || !feedbackEl || !button) return false;
+    const formData = new FormData(form);
+    const format = cleanText(formData.get('format'));
+    if (format !== 'Articles') {
+      notify('Feedback revision is currently set up for Articles', true);
+      return false;
+    }
+    const feedback = cleanText(feedbackEl.value);
+    if (!feedback) {
+      notify('Add feedback before requesting a revision', true);
+      return false;
+    }
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Revising...';
+    try {
+      await saveCreateContentFeedbackToTraining(feedback);
+      const thumbSelect = document.getElementById('messagingCreateContentThumbnail');
+      const result = await api('/api/messaging/content-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          format,
+          topic: cleanText(formData.get('topic')),
+          author: cleanText(formData.get('author')),
+          title: cleanText(document.getElementById('messagingCreateContentGeneratedTitle')?.value || formData.get('title')),
+          subtitle: cleanText(document.getElementById('messagingCreateContentGeneratedSubtitle')?.value || formData.get('subtitle')),
+          url: cleanText(formData.get('url')),
+          body: getGeneratedBodyEditorText() || cleanText(formData.get('content')),
+          image_label: cleanText(thumbSelect?.selectedOptions?.[0]?.textContent),
+          feedback,
+        }),
+      });
+      applyCreateContentLongDraft(result.draft || {});
+      notify('Article revised with training feedback');
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText || 'Revise with Feedback';
+    }
+    return false;
+  }
+
   async function generateCreateContentSuggestions() {
     const form = document.getElementById('messagingCreateContentForm');
     if (!form) return false;
@@ -3120,7 +3207,7 @@ App.messaging = (function () {
     } finally {
       if (button) {
         button.disabled = false;
-        button.textContent = originalText || 'Generate Option(s)';
+        button.textContent = originalText || 'Generate with AI';
       }
     }
     return false;
@@ -5778,6 +5865,7 @@ App.messaging = (function () {
     const createContentClearSuggestionsBtn = document.getElementById('messagingCreateContentClearSuggestionsBtn');
     const createContentSaveSelectedBtn = document.getElementById('messagingCreateContentSaveSelectedBtn');
     const createContentSaveGeneratedBtn = document.getElementById('messagingCreateContentSaveGeneratedBtn');
+    const createContentReviseBtn = document.getElementById('messagingCreateContentReviseBtn');
     const createContentSelectAllSuggestions = document.getElementById('messagingCreateContentSelectAllSuggestions');
     const createContentRichtextToolbar = document.querySelector('.messaging-richtext-toolbar');
     if (createContentFormat) {
@@ -5797,6 +5885,9 @@ App.messaging = (function () {
     }
     if (createContentSaveGeneratedBtn) {
       createContentSaveGeneratedBtn.addEventListener('click', saveGeneratedCreateContentDraft);
+    }
+    if (createContentReviseBtn) {
+      createContentReviseBtn.addEventListener('click', reviseCreateContentDraftWithFeedback);
     }
     if (createContentSelectAllSuggestions) {
       createContentSelectAllSuggestions.addEventListener('change', function () {

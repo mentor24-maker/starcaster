@@ -2094,6 +2094,17 @@ th {
   font-weight: 600;
 }
 
+.labeled-form .form-row:has(textarea),
+.labeled-form .form-row:has(.messaging-richtext-editor) {
+  align-items: start;
+}
+
+.labeled-form .form-row:has(textarea) > label,
+.labeled-form .form-row:has(.messaging-richtext-editor) > label {
+  align-self: start;
+  padding-top: 0.55rem;
+}
+
 .labeled-form {
   --label-col-width: 180px;
   --label-col-gap: 0.6rem;
@@ -2170,6 +2181,10 @@ th {
   border-radius: 12px;
   padding: 14px;
   background: #f8fbff;
+}
+
+#messagingCreateContentFeedbackWrap textarea {
+  min-height: 120px;
 }
 
 #messagingCreateContentSuggestionsEmpty {
