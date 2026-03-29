@@ -242,7 +242,7 @@ App.settings = (function () {
       if (actionsCell) {
         const activateBtn = document.createElement('button');
         activateBtn.type = 'button';
-        activateBtn.className = 'tiny-btn';
+        activateBtn.className = isActive ? 'tiny-btn settings-project-active-btn' : 'tiny-btn';
         activateBtn.textContent = isActive ? 'Active' : 'Set Active';
         activateBtn.disabled = isActive;
         activateBtn.addEventListener('click', () => {
