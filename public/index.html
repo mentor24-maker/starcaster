@@ -3084,7 +3084,7 @@
                 </div>
               </div>
               <div id="messagingCreateContentActionsRow" class="page-heading-actions hidden" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingCreateContentGenerateBtn" type="button">Generate Option(s)</button>
+                <button id="messagingCreateContentGenerateBtn" type="button">Generate with AI</button>
                 <button id="messagingCreateContentSubmitBtn" type="submit" class="hidden">Save Content</button>
               </div>
             </form>
@@ -3097,7 +3097,7 @@
               </div>
             </div>
             <div id="messagingCreateContentSuggestionsEmpty">
-              Use <strong>Generate Option(s)</strong> to create suggestions from the content prompt on the left.
+              Use <strong>Generate with AI</strong> to create suggestions from the content prompt on the left.
             </div>
             <div id="messagingCreateContentShortSuggestions" class="hidden">
               <div class="table-wrap">
@@ -3141,6 +3141,15 @@
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
                 <button id="messagingCreateContentSaveGeneratedBtn" type="button">Save Generated Draft</button>
+              </div>
+              <div id="messagingCreateContentFeedbackWrap" class="stack-form labeled-form hidden" style="margin-top: 12px;">
+                <div class="form-row">
+                  <label for="messagingCreateContentFeedback"><strong>Feedback/Training:</strong></label>
+                  <textarea id="messagingCreateContentFeedback" rows="5" placeholder="Share what should change in the generated article so AI can revise it."></textarea>
+                </div>
+                <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingCreateContentReviseBtn" type="button">Revise with Feedback</button>
+                </div>
               </div>
             </div>
           </div>
