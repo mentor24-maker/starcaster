@@ -186,7 +186,7 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/asset-categories' && requestMethod === 'GET') {
-    const result = await listAssetCategories();
+    const result = await listAssetCategories(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const categories = (Array.isArray(result.data) ? result.data : []).map(rowToAssetCategory);
     return sendOk(res, 200, categories, { categories }, { total: categories.length }), true;
@@ -207,7 +207,7 @@ async function handle(req, res, pathname, method) {
     }
     if (!category) return sendErr(res, 400, 'category is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const result = await createAssetCategory({ assetType, category });
+    const result = await createAssetCategory({ assetType, category }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToAssetCategory(created), { category: rowToAssetCategory(created) }), true;
@@ -216,7 +216,7 @@ async function handle(req, res, pathname, method) {
   const assetCategoryIdMatch = String(pathname || '').match(/^\/api\/asset-categories\/(\d+)\/?$/);
   if (assetCategoryIdMatch && requestMethod === 'GET') {
     const categoryId = Number(assetCategoryIdMatch[1]);
-    const result = await getAssetCategoryById(categoryId);
+    const result = await getAssetCategoryById(categoryId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const row = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!row) return sendErr(res, 404, 'Category not found', { code: 'NOT_FOUND' }), true;
@@ -241,7 +241,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'category is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateAssetCategory(categoryId, body);
+    const result = await updateAssetCategory(categoryId, body, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!updated) return sendErr(res, 404, 'Category not found', { code: 'NOT_FOUND' }), true;
@@ -250,7 +250,7 @@ async function handle(req, res, pathname, method) {
 
   if (assetCategoryIdMatch && requestMethod === 'DELETE') {
     const categoryId = Number(assetCategoryIdMatch[1]);
-    const result = await deleteAssetCategory(categoryId);
+    const result = await deleteAssetCategory(categoryId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!deleted) return sendErr(res, 404, 'Category not found', { code: 'NOT_FOUND' }), true;
