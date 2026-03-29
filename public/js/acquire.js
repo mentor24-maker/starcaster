@@ -939,6 +939,7 @@ App.acquire = (function () {
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
+    renderDirectAcquirePeerSitesTable();
     renderDirectAcquireImageGallery();
   }
 
@@ -1134,6 +1135,79 @@ App.acquire = (function () {
       selectAll.checked = !!hashtags.length && checkedCount === hashtags.length;
       selectAll.indeterminate = checkedCount > 0 && checkedCount < hashtags.length;
     }
+  }
+
+  function renderDirectAcquirePeerSitesTable() {
+    const tableBody = document.getElementById('directAcquirePeerSitesTable');
+    const metaEl = document.getElementById('directAcquirePeerSitesMeta');
+    const suggestedWrap = document.getElementById('directAcquirePeerSitesSuggestedWrap');
+    const suggestedEl = document.getElementById('directAcquirePeerSitesSuggested');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const summary = state.directAcquireCurrentRun?.peer_summary || {};
+    const peers = Array.isArray(summary.peers) ? summary.peers : [];
+    const suggestions = Array.isArray(summary.suggested_models) ? summary.suggested_models : [];
+    if (!peers.length) {
+      if (metaEl) {
+        metaEl.textContent = String(summary.error || '').trim()
+          || (summary.configured === false ? 'Peer site discovery is not configured yet.' : 'No peer sites discovered yet.');
+      }
+      if (suggestedWrap) suggestedWrap.classList.add('hidden');
+      return;
+    }
+    if (metaEl) {
+      const uniqueCount = Number(summary.unique_domains_count || peers.length) || peers.length;
+      const rawCount = Number(summary.raw_results_count || 0) || 0;
+      metaEl.textContent = `${uniqueCount} unique domains identified from ${rawCount} search results.`;
+    }
+    if (suggestedWrap && suggestedEl) {
+      if (suggestions.length) {
+        suggestedEl.textContent = suggestions
+          .map((item) => `${item.model} (${item.count})`)
+          .join(', ');
+        suggestedWrap.classList.remove('hidden');
+      } else {
+        suggestedWrap.classList.add('hidden');
+      }
+    }
+    peers.forEach((peer) => {
+      const tr = document.createElement('tr');
+
+      const modelTd = document.createElement('td');
+      modelTd.textContent = String(peer?.model || '').trim() || '-';
+      tr.appendChild(modelTd);
+
+      const domainTd = document.createElement('td');
+      domainTd.className = 'direct-acquire-contact-label';
+      domainTd.textContent = String(peer?.domain || '').trim() || '-';
+      tr.appendChild(domainTd);
+
+      const siteTd = document.createElement('td');
+      const url = String(peer?.url || '').trim();
+      if (url) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = String(peer?.title || '').trim() || url;
+        siteTd.appendChild(link);
+      } else {
+        siteTd.textContent = String(peer?.title || '').trim() || '-';
+      }
+      tr.appendChild(siteTd);
+
+      const keywordsTd = document.createElement('td');
+      keywordsTd.textContent = Array.isArray(peer?.matched_keywords) && peer.matched_keywords.length
+        ? peer.matched_keywords.join(', ')
+        : '-';
+      tr.appendChild(keywordsTd);
+
+      const snippetTd = document.createElement('td');
+      snippetTd.textContent = String(peer?.snippet || '').trim() || '-';
+      tr.appendChild(snippetTd);
+
+      tableBody.appendChild(tr);
+    });
   }
 
   async function saveDirectAcquireSelectedHashtags() {
@@ -2537,6 +2611,7 @@ App.acquire = (function () {
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
+    renderDirectAcquirePeerSitesTable();
     renderDirectAcquireImageGallery();
     refreshDirectAcquireTopics().then(() => renderDirectAcquireKeywordTopicOptions()).catch(() => {});
     refreshDirectAcquireImageCategories().then(() => renderDirectAcquireImageGallery()).catch(() => {});
