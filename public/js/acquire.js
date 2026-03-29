@@ -2852,6 +2852,8 @@ App.acquire = (function () {
           const payload = {
             source_url: String(formData.get('source_url') || '').trim(),
             max_pages: Number(formData.get('max_pages') || 10),
+            peer_sites_limit: Number(formData.get('peer_sites_limit') || 20),
+            images_limit: Number(formData.get('images_limit') || 20),
             body_snippet_chars: Number(formData.get('body_snippet_chars') || 600),
             capture_contact_data: formData.get('acquire_social') === 'on',
             acquire_peer_sites: formData.get('acquire_peer_sites') === 'on',

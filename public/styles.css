@@ -3968,7 +3968,7 @@ th {
 
 .acquire-web-advanced-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 240px) minmax(240px, 320px) minmax(260px, 1fr);
   gap: 2.5rem;
   align-items: start;
 }
@@ -3984,6 +3984,10 @@ th {
 .acquire-web-advanced-fields {
   display: grid;
   gap: 0.9rem;
+}
+
+.acquire-web-advanced-fields-tertiary textarea {
+  min-height: 132px;
 }
 
 .acquire-web-harvest-btn {
