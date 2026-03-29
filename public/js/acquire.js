@@ -2755,7 +2755,7 @@ App.acquire = (function () {
           const formData = new FormData(els.directAcquireForm);
           const payload = {
             source_url: String(formData.get('source_url') || '').trim(),
-            max_pages: 10,
+            max_pages: Number(formData.get('max_pages') || 10),
             body_snippet_chars: Number(formData.get('body_snippet_chars') || 600),
             capture_contact_data: formData.get('acquire_social') === 'on',
             keyword_exclusions: String(formData.get('keyword_exclusions') || '').trim(),

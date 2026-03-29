@@ -903,6 +903,16 @@
                 </div>
                 <div class="acquire-web-advanced-fields">
                   <div class="form-row">
+                    <label for="directAcquireMaxPagesSelect">Pages to Harvest</label>
+                    <select id="directAcquireMaxPagesSelect" name="max_pages">
+                      <option value="5">5</option>
+                      <option value="10" selected>10</option>
+                      <option value="20">20</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
                     <label for="directAcquireSnippetInput">Snippet Length</label>
                     <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
                   </div>
