@@ -3965,6 +3965,26 @@ th {
   flex-wrap: wrap;
 }
 
+.acquire-web-advanced-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.acquire-web-advanced-acquire h4 {
+  margin: 0 0 0.75rem;
+}
+
+.acquire-web-advanced-acquire .checkbox-row {
+  margin: 0 0 0.45rem;
+}
+
+.acquire-web-advanced-fields {
+  display: grid;
+  gap: 0.9rem;
+}
+
 .acquire-web-harvest-btn {
   width: min(100%, 1260px);
   margin: 0 auto;

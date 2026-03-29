@@ -2757,7 +2757,7 @@ App.acquire = (function () {
             source_url: String(formData.get('source_url') || '').trim(),
             max_pages: 10,
             body_snippet_chars: Number(formData.get('body_snippet_chars') || 600),
-            capture_contact_data: formData.get('capture_contact_data') === 'on',
+            capture_contact_data: formData.get('acquire_social') === 'on',
             keyword_exclusions: String(formData.get('keyword_exclusions') || '').trim(),
           };
           if (directAcquireKeywordExclusionsInput) {
