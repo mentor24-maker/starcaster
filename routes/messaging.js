@@ -106,6 +106,12 @@ const {
   deleteMessagingTopic,
 } = require('../lib/messagingTopicsStore');
 const {
+  listMessagingFormats,
+  createMessagingFormat,
+  updateMessagingFormat,
+  deleteMessagingFormat,
+} = require('../lib/messagingFormatsStore');
+const {
   listMessagingTags,
   createMessagingTag,
   getMessagingTag,
@@ -762,6 +768,46 @@ async function handle(req, res, pathname, method) {
     const result = await createMessagingHashtags(body || {});
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { hashtags: result.data }, { total: result.data.length }), true;
+  }
+
+  if (pathname === '/api/messaging/formats' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const limit = Number(urlObj.searchParams.get('limit') || 5000);
+    const result = await listMessagingFormats(limit);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const formats = result.data || [];
+    return sendOk(res, 200, formats, { formats }, { total: formats.length }), true;
+  }
+
+  if (pathname === '/api/messaging/formats' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const format = String(body?.format || body?.content_type_name || '').trim();
+    const family = String(body?.family || '').trim();
+    if (!format) return sendErr(res, 400, 'format is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!family) return sendErr(res, 400, 'family is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createMessagingFormat(body || {});
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, result.data, { format: result.data }), true;
+  }
+
+  const messagingFormatIdMatch = String(pathname || '').match(/^\/api\/messaging\/formats\/(\d+)\/?$/);
+  if (messagingFormatIdMatch && (requestMethod === 'PATCH' || requestMethod === 'PUT')) {
+    const id = Number(messagingFormatIdMatch[1]);
+    const body = await parseJsonBody(req);
+    const format = String(body?.format || body?.content_type_name || '').trim();
+    const family = String(body?.family || '').trim();
+    if (!format) return sendErr(res, 400, 'format is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!family) return sendErr(res, 400, 'family is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await updateMessagingFormat(id, body || {});
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { format: result.data }), true;
+  }
+
+  if (messagingFormatIdMatch && requestMethod === 'DELETE') {
+    const id = Number(messagingFormatIdMatch[1]);
+    const result = await deleteMessagingFormat(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { format: result.data }), true;
   }
 
   if ((pathname === '/api/messaging/topics' || pathname === '/api/messaging/categories') && requestMethod === 'GET') {
