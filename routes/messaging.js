@@ -125,6 +125,7 @@ const {
   deleteMessagingKeyword,
 } = require('../lib/messagingKeywordsStore');
 const { generateMessagingContentSuggestions } = require('../lib/messagingContentSuggestions');
+const { requestProjectScope } = require('../lib/requestProjectScope');
 
 function isValidHttpUrl(value) {
   const text = String(value || '').trim();
@@ -149,10 +150,11 @@ async function handleSimpleTextResource(req, res, pathname, requestMethod, optio
     deleteFn,
     limit = 5000,
   } = options || {};
+  const scope = requestProjectScope(req);
 
   if (pathname === path && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
-    const result = await listFn(Number(urlObj.searchParams.get('limit') || limit));
+    const result = await listFn(Number(urlObj.searchParams.get('limit') || limit), scope);
     if (!result.ok) {
       sendErr(res, result.status || 500, result.error);
       return true;
@@ -169,7 +171,7 @@ async function handleSimpleTextResource(req, res, pathname, requestMethod, optio
       sendErr(res, 400, `${field} is required`, { code: 'VALIDATION_ERROR' });
       return true;
     }
-    const result = await createFn(body || {});
+    const result = await createFn(body || {}, scope);
     if (!result.ok) {
       sendErr(res, result.status || 500, result.error);
       return true;
@@ -187,7 +189,7 @@ async function handleSimpleTextResource(req, res, pathname, requestMethod, optio
       sendErr(res, 400, `${field} is required`, { code: 'VALIDATION_ERROR' });
       return true;
     }
-    const result = await updateFn(id, body || {});
+    const result = await updateFn(id, body || {}, scope);
     if (!result.ok) {
       sendErr(res, result.status || 500, result.error);
       return true;
@@ -198,7 +200,7 @@ async function handleSimpleTextResource(req, res, pathname, requestMethod, optio
 
   if (itemIdMatch && requestMethod === 'DELETE') {
     const id = Number(itemIdMatch[1]);
-    const result = await deleteFn(id);
+    const result = await deleteFn(id, scope);
     if (!result.ok) {
       sendErr(res, result.status || 500, result.error);
       return true;
@@ -212,6 +214,7 @@ async function handleSimpleTextResource(req, res, pathname, requestMethod, optio
 
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
+  const scope = requestProjectScope(req);
 
   if (pathname === '/api/messaging/content-suggestions' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
@@ -232,7 +235,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/headlines' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingHeadlines(limit);
+    const result = await listMessagingHeadlines(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const headlines = result.data || [];
     return sendOk(res, 200, headlines, { headlines }, { total: headlines.length }), true;
@@ -242,7 +245,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const headline = String(body?.headline || '').trim();
     if (!headline) return sendErr(res, 400, 'headline is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingHeadline(body || {});
+    const result = await createMessagingHeadline(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { headline: result.data }), true;
   }
@@ -253,14 +256,14 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const headline = String(body?.headline || '').trim();
     if (!headline) return sendErr(res, 400, 'headline is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingHeadline(id, body || {});
+    const result = await updateMessagingHeadline(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { headline: result.data }), true;
   }
 
   if (headlineIdMatch && requestMethod === 'DELETE') {
     const id = Number(headlineIdMatch[1]);
-    const result = await deleteMessagingHeadline(id);
+    const result = await deleteMessagingHeadline(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { headline: result.data }), true;
   }
@@ -268,7 +271,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/subheadings' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingSubheadings(limit);
+    const result = await listMessagingSubheadings(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const subheadings = result.data || [];
     return sendOk(res, 200, subheadings, { subheadings }, { total: subheadings.length }), true;
@@ -278,7 +281,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const subheading = String(body?.subheading || '').trim();
     if (!subheading) return sendErr(res, 400, 'subheading is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingSubheading(body || {});
+    const result = await createMessagingSubheading(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { subheading: result.data }), true;
   }
@@ -289,14 +292,14 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const subheading = String(body?.subheading || '').trim();
     if (!subheading) return sendErr(res, 400, 'subheading is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingSubheading(id, body || {});
+    const result = await updateMessagingSubheading(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { subheading: result.data }), true;
   }
 
   if (subheadingIdMatch && requestMethod === 'DELETE') {
     const id = Number(subheadingIdMatch[1]);
-    const result = await deleteMessagingSubheading(id);
+    const result = await deleteMessagingSubheading(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { subheading: result.data }), true;
   }
@@ -304,7 +307,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/taglines' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingTaglines(limit);
+    const result = await listMessagingTaglines(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const taglines = result.data || [];
     return sendOk(res, 200, taglines, { taglines }, { total: taglines.length }), true;
@@ -314,7 +317,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const tagline = String(body?.tagline || '').trim();
     if (!tagline) return sendErr(res, 400, 'tagline is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingTagline(body || {});
+    const result = await createMessagingTagline(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { tagline: result.data }), true;
   }
@@ -325,14 +328,14 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const tagline = String(body?.tagline || '').trim();
     if (!tagline) return sendErr(res, 400, 'tagline is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingTagline(id, body || {});
+    const result = await updateMessagingTagline(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tagline: result.data }), true;
   }
 
   if (taglineIdMatch && requestMethod === 'DELETE') {
     const id = Number(taglineIdMatch[1]);
-    const result = await deleteMessagingTagline(id);
+    const result = await deleteMessagingTagline(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tagline: result.data }), true;
   }
@@ -340,7 +343,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/pitches' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingPitches(limit);
+    const result = await listMessagingPitches(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const pitches = result.data || [];
     return sendOk(res, 200, pitches, { pitches }, { total: pitches.length }), true;
@@ -350,7 +353,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const pitch = String(body?.pitch || '').trim();
     if (!pitch) return sendErr(res, 400, 'pitch is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingPitch(body || {});
+    const result = await createMessagingPitch(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { pitch: result.data }), true;
   }
@@ -361,14 +364,14 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const pitch = String(body?.pitch || '').trim();
     if (!pitch) return sendErr(res, 400, 'pitch is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingPitch(id, body || {});
+    const result = await updateMessagingPitch(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { pitch: result.data }), true;
   }
 
   if (pitchIdMatch && requestMethod === 'DELETE') {
     const id = Number(pitchIdMatch[1]);
-    const result = await deleteMessagingPitch(id);
+    const result = await deleteMessagingPitch(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { pitch: result.data }), true;
   }
@@ -376,7 +379,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/articles' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 200);
-    const result = await listMessagingArticles(limit);
+    const result = await listMessagingArticles(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const articles = result.data || [];
     return sendOk(res, 200, articles, { articles }, { total: articles.length }), true;
@@ -396,7 +399,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await createMessagingArticle(body || {});
+    const result = await createMessagingArticle(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { article: result.data }), true;
   }
@@ -417,14 +420,14 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateMessagingArticle(id, body || {});
+    const result = await updateMessagingArticle(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { article: result.data }), true;
   }
 
   if (articleIdMatch && requestMethod === 'DELETE') {
     const id = Number(articleIdMatch[1]);
-    const result = await deleteMessagingArticle(id);
+    const result = await deleteMessagingArticle(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { article: result.data }), true;
   }
@@ -432,7 +435,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/reports' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 200);
-    const result = await listMessagingReports(limit);
+    const result = await listMessagingReports(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const reports = result.data || [];
     return sendOk(res, 200, reports, { reports }, { total: reports.length }), true;
@@ -457,7 +460,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await createMessagingReport(body || {});
+    const result = await createMessagingReport(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { report: result.data }), true;
   }
@@ -483,14 +486,14 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateMessagingReport(id, body || {});
+    const result = await updateMessagingReport(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { report: result.data }), true;
   }
 
   if (reportIdMatch && requestMethod === 'DELETE') {
     const id = Number(reportIdMatch[1]);
-    const result = await deleteMessagingReport(id);
+    const result = await deleteMessagingReport(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { report: result.data }), true;
   }
@@ -498,7 +501,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/white-papers' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 200);
-    const result = await listMessagingWhitePapers(limit);
+    const result = await listMessagingWhitePapers(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const whitePapers = result.data || [];
     return sendOk(res, 200, whitePapers, { whitePapers }, { total: whitePapers.length }), true;
@@ -523,7 +526,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await createMessagingWhitePaper(body || {});
+    const result = await createMessagingWhitePaper(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { whitePaper: result.data }), true;
   }
@@ -549,14 +552,14 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateMessagingWhitePaper(id, body || {});
+    const result = await updateMessagingWhitePaper(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { whitePaper: result.data }), true;
   }
 
   if (whitePaperIdMatch && requestMethod === 'DELETE') {
     const id = Number(whitePaperIdMatch[1]);
-    const result = await deleteMessagingWhitePaper(id);
+    const result = await deleteMessagingWhitePaper(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { whitePaper: result.data }), true;
   }
@@ -564,7 +567,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/ebooks' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 200);
-    const result = await listMessagingEbooks(limit);
+    const result = await listMessagingEbooks(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const ebooks = result.data || [];
     return sendOk(res, 200, ebooks, { ebooks }, { total: ebooks.length }), true;
@@ -589,7 +592,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await createMessagingEbook(body || {});
+    const result = await createMessagingEbook(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { ebook: result.data }), true;
   }
@@ -615,14 +618,14 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'publish_date must be a valid date', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateMessagingEbook(id, body || {});
+    const result = await updateMessagingEbook(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { ebook: result.data }), true;
   }
 
   if (ebookIdMatch && requestMethod === 'DELETE') {
     const id = Number(ebookIdMatch[1]);
-    const result = await deleteMessagingEbook(id);
+    const result = await deleteMessagingEbook(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { ebook: result.data }), true;
   }
@@ -730,7 +733,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/tweets' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 200);
-    const result = await listMessagingTweets(limit);
+    const result = await listMessagingTweets(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const tweets = result.data || [];
     return sendOk(res, 200, tweets, { tweets }, { total: tweets.length }), true;
@@ -742,7 +745,7 @@ async function handle(req, res, pathname, method) {
     const url = String(body?.url || '').trim();
     if (!content) return sendErr(res, 400, 'content is required', { code: 'VALIDATION_ERROR' }), true;
     if (!isValidHttpUrl(url)) return sendErr(res, 400, 'url must be a valid http(s) URL', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingTweet(body || {});
+    const result = await createMessagingTweet(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { tweet: result.data }), true;
   }
@@ -755,14 +758,14 @@ async function handle(req, res, pathname, method) {
     const url = String(body?.url || '').trim();
     if (!content) return sendErr(res, 400, 'content is required', { code: 'VALIDATION_ERROR' }), true;
     if (!isValidHttpUrl(url)) return sendErr(res, 400, 'url must be a valid http(s) URL', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingTweet(id, body || {});
+    const result = await updateMessagingTweet(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tweet: result.data }), true;
   }
 
   if (tweetIdMatch && requestMethod === 'DELETE') {
     const id = Number(tweetIdMatch[1]);
-    const result = await deleteMessagingTweet(id);
+    const result = await deleteMessagingTweet(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tweet: result.data }), true;
   }
@@ -770,7 +773,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/hashtags' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingHashtags(limit);
+    const result = await listMessagingHashtags(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const hashtags = result.data || [];
     return sendOk(res, 200, hashtags, { hashtags }, { total: hashtags.length }), true;
@@ -782,7 +785,7 @@ async function handle(req, res, pathname, method) {
     const campaignId = Number(body?.campaign_id || 0) || 0;
     if (!hashtags.length) return sendErr(res, 400, 'At least one hashtag is required', { code: 'VALIDATION_ERROR' }), true;
     if (!campaignId) return sendErr(res, 400, 'campaign_id is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingHashtags(body || {});
+    const result = await createMessagingHashtags(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { hashtags: result.data }, { total: result.data.length }), true;
   }
@@ -790,7 +793,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/formats' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingFormats(limit);
+    const result = await listMessagingFormats(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const formats = result.data || [];
     return sendOk(res, 200, formats, { formats }, { total: formats.length }), true;
@@ -802,7 +805,7 @@ async function handle(req, res, pathname, method) {
     const family = String(body?.family || '').trim();
     if (!format) return sendErr(res, 400, 'format is required', { code: 'VALIDATION_ERROR' }), true;
     if (!family) return sendErr(res, 400, 'family is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingFormat(body || {});
+    const result = await createMessagingFormat(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { format: result.data }), true;
   }
@@ -815,14 +818,14 @@ async function handle(req, res, pathname, method) {
     const family = String(body?.family || '').trim();
     if (!format) return sendErr(res, 400, 'format is required', { code: 'VALIDATION_ERROR' }), true;
     if (!family) return sendErr(res, 400, 'family is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingFormat(id, body || {});
+    const result = await updateMessagingFormat(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { format: result.data }), true;
   }
 
   if (messagingFormatIdMatch && requestMethod === 'DELETE') {
     const id = Number(messagingFormatIdMatch[1]);
-    const result = await deleteMessagingFormat(id);
+    const result = await deleteMessagingFormat(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { format: result.data }), true;
   }
@@ -830,7 +833,7 @@ async function handle(req, res, pathname, method) {
   if ((pathname === '/api/messaging/topics' || pathname === '/api/messaging/categories') && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingTopics(limit);
+    const result = await listMessagingTopics(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const topics = result.data || [];
     return sendOk(res, 200, topics, { topics, categories: topics }, { total: topics.length }), true;
@@ -840,7 +843,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const topic = String(body?.topic || body?.category || '').trim();
     if (!topic) return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingTopic({ topic });
+    const result = await createMessagingTopic({ topic }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { topic: result.data, category: result.data }), true;
   }
@@ -848,7 +851,7 @@ async function handle(req, res, pathname, method) {
   const messagingTopicIdMatch = String(pathname || '').match(/^\/api\/messaging\/(?:topics|categories)\/(\d+)\/?$/);
   if (messagingTopicIdMatch && requestMethod === 'GET') {
     const id = Number(messagingTopicIdMatch[1]);
-    const result = await getMessagingTopic(id);
+    const result = await getMessagingTopic(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { topic: result.data, category: result.data }), true;
   }
@@ -858,14 +861,14 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const topic = String(body?.topic || body?.category || '').trim();
     if (!topic) return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingTopic(id, { topic });
+    const result = await updateMessagingTopic(id, { topic }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { topic: result.data, category: result.data }), true;
   }
 
   if (messagingTopicIdMatch && requestMethod === 'DELETE') {
     const id = Number(messagingTopicIdMatch[1]);
-    const result = await deleteMessagingTopic(id);
+    const result = await deleteMessagingTopic(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { topic: result.data, category: result.data }), true;
   }
@@ -873,7 +876,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/tags' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const limit = Number(urlObj.searchParams.get('limit') || 5000);
-    const result = await listMessagingTags(limit);
+    const result = await listMessagingTags(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const tags = result.data || [];
     return sendOk(res, 200, tags, { tags }, { total: tags.length }), true;
@@ -883,7 +886,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const tag = String(body?.tag || '').trim();
     if (!tag) return sendErr(res, 400, 'tag is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createMessagingTag(body || {});
+    const result = await createMessagingTag(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { tag: result.data }), true;
   }
@@ -891,7 +894,7 @@ async function handle(req, res, pathname, method) {
   const messagingTagIdMatch = String(pathname || '').match(/^\/api\/messaging\/tags\/(\d+)\/?$/);
   if (messagingTagIdMatch && requestMethod === 'GET') {
     const id = Number(messagingTagIdMatch[1]);
-    const result = await getMessagingTag(id);
+    const result = await getMessagingTag(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tag: result.data }), true;
   }
@@ -901,14 +904,14 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const tag = String(body?.tag || '').trim();
     if (!tag) return sendErr(res, 400, 'tag is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await updateMessagingTag(id, body || {});
+    const result = await updateMessagingTag(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tag: result.data }), true;
   }
 
   if (messagingTagIdMatch && requestMethod === 'DELETE') {
     const id = Number(messagingTagIdMatch[1]);
-    const result = await deleteMessagingTag(id);
+    const result = await deleteMessagingTag(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tag: result.data }), true;
   }
