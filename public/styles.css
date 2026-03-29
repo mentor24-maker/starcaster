@@ -3915,6 +3915,14 @@ th {
   margin-left: 8px;
 }
 
+.settings-project-active-btn,
+.settings-project-active-btn:disabled {
+  background: #1fc04b;
+  border-color: #149238;
+  color: #ffffff;
+  opacity: 1;
+}
+
 .develop-agents-actions-heading {
   text-align: center;
   white-space: nowrap;
