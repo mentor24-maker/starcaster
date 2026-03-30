@@ -34,6 +34,7 @@ App.messaging = (function () {
   let currentMessagingPrompts = [];
   let currentMessagingTags = [];
   let currentMessagingTopicSuggestions = [];
+  let currentHeadlineCreatorSuggestions = [];
   let messagingTopicsProgressTimer = null;
   let activeMessagingContentCategory = '';
   const headlineTableState = {
@@ -3105,6 +3106,200 @@ App.messaging = (function () {
     }
   }
 
+  function renderHeadlinesCreatorSavedPromptOptions(selectedId = null) {
+    const select = document.getElementById('messagingHeadlinesCreatorSavedPrompt');
+    if (!select) return;
+    const topic = cleanText(document.getElementById('messagingHeadlinesCreatorTopic')?.value);
+    const currentValue = String(selectedId || select.value || '').trim();
+    const prompts = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter((item) => {
+      const itemFormat = cleanText(item?.format);
+      const itemTopic = cleanText(item?.topic);
+      if (itemFormat !== 'Headlines') return false;
+      if (topic && itemTopic && itemTopic !== topic) return false;
+      return true;
+    });
+    select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+    prompts.forEach((prompt) => {
+      const option = document.createElement('option');
+      option.value = String(prompt.id || '');
+      const topicSuffix = cleanText(prompt.topic) ? ` - ${cleanText(prompt.topic)}` : '';
+      const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+      option.textContent = `#${prompt.id}${topicSuffix}: ${preview}${preview.length >= 90 ? '...' : ''}`;
+      select.appendChild(option);
+    });
+    if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+      select.value = currentValue;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function clearHeadlinesCreatorSuggestions() {
+    currentHeadlineCreatorSuggestions = [];
+    const empty = document.getElementById('messagingHeadlinesCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingHeadlinesCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingHeadlinesCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingHeadlinesCreatorSelectAllSuggestions');
+    if (empty) empty.classList.remove('hidden');
+    if (wrap) wrap.classList.add('hidden');
+    if (tbody) tbody.innerHTML = '';
+    if (checkAll) checkAll.checked = false;
+  }
+
+  function renderHeadlinesCreatorSuggestions(options) {
+    const empty = document.getElementById('messagingHeadlinesCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingHeadlinesCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingHeadlinesCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingHeadlinesCreatorSelectAllSuggestions');
+    if (!wrap || !tbody) return;
+    currentHeadlineCreatorSuggestions = Array.isArray(options) ? options.slice() : [];
+    tbody.innerHTML = '';
+    currentHeadlineCreatorSuggestions.forEach((option, index) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="checkbox" data-headline-creator-suggestion-index="${index}" /></td>
+        <td>${escapeHtml(String(option || ''))}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    if (checkAll) checkAll.checked = false;
+    if (empty) empty.classList.add('hidden');
+    wrap.classList.remove('hidden');
+  }
+
+  async function saveHeadlinesCreatorPrompt() {
+    const form = document.getElementById('messagingHeadlinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingHeadlinesCreatorSavePromptBtn');
+    const promptIdInput = document.getElementById('messagingHeadlinesCreatorPromptId');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving Prompt...';
+    }
+    try {
+      const result = await api('/api/messaging/prompts', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Headlines',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('headline')),
+        }),
+      });
+      const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
+      if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+      await refreshMessagingPrompts().catch(function () {});
+      renderHeadlinesCreatorSavedPromptOptions(promptId ? String(promptId) : '');
+      notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Save Prompt';
+      }
+    }
+    return false;
+  }
+
+  async function generateHeadlinesCreatorSuggestions() {
+    const form = document.getElementById('messagingHeadlinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingHeadlinesCreatorGenerateBtn');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Generating...';
+    }
+    try {
+      const result = await api('/api/messaging/content-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Headlines',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('headline')),
+        }),
+      });
+      renderHeadlinesCreatorSuggestions(Array.isArray(result.options) ? result.options : []);
+      notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Generate with AI';
+      }
+    }
+    return false;
+  }
+
+  async function submitHeadlinesCreatorForm(event) {
+    if (event) event.preventDefault();
+    const form = document.getElementById('messagingHeadlinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const payload = {
+      headline: cleanText(formData.get('headline')),
+      topic: cleanText(formData.get('topic')),
+      prompt_id: Number(formData.get('prompt_id') || 0) || null,
+    };
+    if (!payload.headline) {
+      notify('Headline/Prompt is required', true);
+      return false;
+    }
+    try {
+      await api('/api/messaging/headlines', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('Headline saved');
+      form.reset();
+      const promptIdInput = document.getElementById('messagingHeadlinesCreatorPromptId');
+      if (promptIdInput) promptIdInput.value = '';
+      renderHeadlinesCreatorSavedPromptOptions();
+      clearHeadlinesCreatorSuggestions();
+      await refreshHeadlines();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function saveSelectedHeadlinesCreatorSuggestions() {
+    const form = document.getElementById('messagingHeadlinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const topic = cleanText(formData.get('topic'));
+    const promptId = Number(formData.get('prompt_id') || 0) || null;
+    const selectedIndices = Array.from(document.querySelectorAll('[data-headline-creator-suggestion-index]:checked'))
+      .map((input) => Number(input.getAttribute('data-headline-creator-suggestion-index')))
+      .filter((value) => Number.isFinite(value) && currentHeadlineCreatorSuggestions[value]);
+    if (!selectedIndices.length) {
+      notify('Select at least one option', true);
+      return false;
+    }
+    try {
+      for (const index of selectedIndices) {
+        await api('/api/messaging/headlines', {
+          method: 'POST',
+          body: JSON.stringify({
+            headline: cleanText(currentHeadlineCreatorSuggestions[index]),
+            topic,
+            prompt_id: promptId,
+          }),
+        });
+      }
+      notify(`Saved ${selectedIndices.length} headline${selectedIndices.length === 1 ? '' : 's'}`);
+      clearHeadlinesCreatorSuggestions();
+      await refreshHeadlines();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
   function renderCreateContentAssetOptions() {
     renderImageOptions(document.getElementById('messagingCreateContentImage'));
     renderThumbnailOptions(document.getElementById('messagingCreateContentThumbnail'));
@@ -5105,6 +5300,14 @@ App.messaging = (function () {
     const headlinesToggleBtn = document.getElementById('messagingHeadlinesToggleFormBtn');
     const headlineForm = document.getElementById('messagingHeadlineForm');
     const headlinesBulkCreateForm = document.getElementById('messagingHeadlinesBulkCreateForm');
+    const headlinesCreatorForm = document.getElementById('messagingHeadlinesCreatorForm');
+    const headlinesCreatorTopic = document.getElementById('messagingHeadlinesCreatorTopic');
+    const headlinesCreatorSavedPrompt = document.getElementById('messagingHeadlinesCreatorSavedPrompt');
+    const headlinesCreatorGenerateBtn = document.getElementById('messagingHeadlinesCreatorGenerateBtn');
+    const headlinesCreatorSavePromptBtn = document.getElementById('messagingHeadlinesCreatorSavePromptBtn');
+    const headlinesCreatorClearSuggestionsBtn = document.getElementById('messagingHeadlinesCreatorClearSuggestionsBtn');
+    const headlinesCreatorSaveSelectedBtn = document.getElementById('messagingHeadlinesCreatorSaveSelectedBtn');
+    const headlinesCreatorSelectAllSuggestions = document.getElementById('messagingHeadlinesCreatorSelectAllSuggestions');
     const headlineEditForm = document.getElementById('messagingHeadlineEditForm');
     const headlineCancelEditBtn = document.getElementById('messagingHeadlineCancelEditBtn');
     const headlineSelectAllVisible = document.getElementById('messagingHeadlinesSelectAllVisible');
@@ -5272,8 +5475,59 @@ App.messaging = (function () {
         const isHidden = headlinesCreateWrap.classList.contains('hidden');
         closeHeadlineEditForm();
         syncHeadlineCategorySelects();
+        renderHeadlinesCreatorSavedPromptOptions();
         headlinesCreateWrap.classList.toggle('hidden', !isHidden);
         headlinesToggleBtn.textContent = isHidden ? 'Hide Create' : 'Create Headlines';
+      });
+    }
+
+    if (headlinesCreatorTopic) {
+      headlinesCreatorTopic.addEventListener('change', function () {
+        renderHeadlinesCreatorSavedPromptOptions();
+      });
+    }
+
+    if (headlinesCreatorSavedPrompt) {
+      headlinesCreatorSavedPrompt.addEventListener('change', function () {
+        const selectedId = String(headlinesCreatorSavedPrompt.value || '').trim();
+        const promptIdInput = document.getElementById('messagingHeadlinesCreatorPromptId');
+        const primaryInput = document.getElementById('messagingHeadlinesCreatorPrimary');
+        const selected = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item?.id || '') === selectedId);
+        if (promptIdInput) promptIdInput.value = selected ? selectedId : '';
+        if (primaryInput && selected) primaryInput.value = cleanText(selected.prompt_text);
+      });
+    }
+
+    if (headlinesCreatorForm) {
+      headlinesCreatorForm.addEventListener('submit', submitHeadlinesCreatorForm);
+    }
+
+    if (headlinesCreatorGenerateBtn) {
+      headlinesCreatorGenerateBtn.addEventListener('click', generateHeadlinesCreatorSuggestions);
+    }
+
+    if (headlinesCreatorSavePromptBtn) {
+      headlinesCreatorSavePromptBtn.addEventListener('click', function () {
+        saveHeadlinesCreatorPrompt().catch(function (err) {
+          notify(err.message, true);
+        });
+      });
+    }
+
+    if (headlinesCreatorClearSuggestionsBtn) {
+      headlinesCreatorClearSuggestionsBtn.addEventListener('click', clearHeadlinesCreatorSuggestions);
+    }
+
+    if (headlinesCreatorSaveSelectedBtn) {
+      headlinesCreatorSaveSelectedBtn.addEventListener('click', saveSelectedHeadlinesCreatorSuggestions);
+    }
+
+    if (headlinesCreatorSelectAllSuggestions) {
+      headlinesCreatorSelectAllSuggestions.addEventListener('change', function () {
+        const checked = Boolean(headlinesCreatorSelectAllSuggestions.checked);
+        document.querySelectorAll('[data-headline-creator-suggestion-index]').forEach((input) => {
+          input.checked = checked;
+        });
       });
     }
 
