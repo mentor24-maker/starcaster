@@ -32,6 +32,8 @@ App.messaging = (function () {
   let currentMessagingTopics = [];
   let currentMessagingFormats = [];
   let currentMessagingTags = [];
+  let currentMessagingTopicSuggestions = [];
+  let messagingTopicsProgressTimer = null;
   let activeMessagingContentCategory = '';
   const headlineTableState = {
     filters: {
@@ -2693,6 +2695,7 @@ App.messaging = (function () {
 
   function openTopicsPage() {
     setTopicsCreateVisible(false);
+    clearMessagingTopicSuggestions();
     App.setActivePage('messagingCategoriesPage');
     refreshMessagingCategories().catch(function (err) {
       notify(`Could not load messaging topics: ${err.message}`, true);
@@ -2701,6 +2704,177 @@ App.messaging = (function () {
       refreshMessagingCategories().catch(function () {});
     }, 250);
     return false;
+  }
+
+  function clearMessagingTopicSuggestions() {
+    currentMessagingTopicSuggestions = [];
+    const wrap = document.getElementById('messagingTopicsSuggestionsWrap');
+    const columns = document.getElementById('messagingTopicsSuggestionsColumns');
+    const meta = document.getElementById('messagingTopicsSuggestionsMeta');
+    const selectAll = document.getElementById('messagingTopicsSelectAllSuggestions');
+    if (wrap) wrap.classList.add('hidden');
+    if (columns) columns.innerHTML = '';
+    if (meta) meta.textContent = '';
+    if (selectAll) selectAll.checked = false;
+  }
+
+  function startMessagingTopicsProgress() {
+    const wrap = document.getElementById('messagingTopicsProgressWrap');
+    const bar = document.getElementById('messagingTopicsProgressBar');
+    const text = document.getElementById('messagingTopicsProgressText');
+    const button = document.getElementById('messagingTopicsGenerateBtn');
+    if (wrap) wrap.classList.remove('hidden');
+    if (bar) bar.value = 10;
+    if (text) text.textContent = 'Reviewing website data and training context...';
+    if (button) button.disabled = true;
+    if (messagingTopicsProgressTimer) clearInterval(messagingTopicsProgressTimer);
+    messagingTopicsProgressTimer = setInterval(function () {
+      if (!bar) return;
+      const current = Number(bar.value || 0);
+      if (current < 82) bar.value = current + 4;
+    }, 700);
+  }
+
+  function finishMessagingTopicsProgress(success, message) {
+    const wrap = document.getElementById('messagingTopicsProgressWrap');
+    const bar = document.getElementById('messagingTopicsProgressBar');
+    const text = document.getElementById('messagingTopicsProgressText');
+    const button = document.getElementById('messagingTopicsGenerateBtn');
+    if (messagingTopicsProgressTimer) {
+      clearInterval(messagingTopicsProgressTimer);
+      messagingTopicsProgressTimer = null;
+    }
+    if (bar) bar.value = success ? 100 : 0;
+    if (text && message) text.textContent = message;
+    if (button) button.disabled = false;
+    window.setTimeout(function () {
+      if (wrap) wrap.classList.add('hidden');
+    }, success ? 900 : 1800);
+  }
+
+  function renderMessagingTopicSuggestions(groups, sourceUrl) {
+    const wrap = document.getElementById('messagingTopicsSuggestionsWrap');
+    const columns = document.getElementById('messagingTopicsSuggestionsColumns');
+    const meta = document.getElementById('messagingTopicsSuggestionsMeta');
+    const selectAll = document.getElementById('messagingTopicsSelectAllSuggestions');
+    if (!columns || !wrap) return;
+    currentMessagingTopicSuggestions = Array.isArray(groups)
+      ? groups.map((group, groupIndex) => ({
+          label: cleanText(group?.label || `Group ${groupIndex + 1}`),
+          topics: Array.isArray(group?.topics)
+            ? group.topics.map((topic, topicIndex) => ({
+                id: `topic-suggestion-${groupIndex}-${topicIndex}`,
+                topic: cleanText(topic),
+              })).filter((row) => row.topic)
+            : [],
+        })).filter((group) => group.topics.length)
+      : [];
+    columns.innerHTML = '';
+    if (!currentMessagingTopicSuggestions.length) {
+      clearMessagingTopicSuggestions();
+      return;
+    }
+    currentMessagingTopicSuggestions.forEach(function (group, groupIndex) {
+      const card = document.createElement('div');
+      card.className = 'messaging-topics-suggestion-card';
+      const title = document.createElement('h4');
+      title.textContent = group.label || `Group ${groupIndex + 1}`;
+      card.appendChild(title);
+      const list = document.createElement('div');
+      list.className = 'messaging-topics-suggestion-list';
+      group.topics.forEach(function (topicItem, topicIndex) {
+        const label = document.createElement('label');
+        label.className = 'checkbox-row';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        checkbox.setAttribute('data-topic-suggestion-group', String(groupIndex));
+        checkbox.setAttribute('data-topic-suggestion-index', String(topicIndex));
+        const text = document.createElement('span');
+        text.textContent = topicItem.topic;
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        list.appendChild(label);
+      });
+      card.appendChild(list);
+      columns.appendChild(card);
+    });
+    if (meta) {
+      const groupCount = currentMessagingTopicSuggestions.length;
+      const topicCount = currentMessagingTopicSuggestions.reduce(function (sum, group) {
+        return sum + group.topics.length;
+      }, 0);
+      meta.textContent = `${topicCount} suggested topics in ${groupCount} groups${sourceUrl ? ` from ${sourceUrl}` : ''}.`;
+    }
+    if (selectAll) selectAll.checked = true;
+    wrap.classList.remove('hidden');
+  }
+
+  async function generateMessagingTopicSuggestions() {
+    startMessagingTopicsProgress();
+    try {
+      const result = await api('/api/messaging/topic-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const groups = Array.isArray(result?.groups)
+        ? result.groups
+        : Array.isArray(result?.data?.groups)
+          ? result.data.groups
+          : [];
+      renderMessagingTopicSuggestions(groups, cleanText(result?.source_url || result?.data?.source_url));
+      const total = groups.reduce(function (sum, group) {
+        return sum + (Array.isArray(group?.topics) ? group.topics.length : 0);
+      }, 0);
+      finishMessagingTopicsProgress(true, `Generated ${total} topic suggestion${total === 1 ? '' : 's'}.`);
+      notify(total ? `Generated ${total} topic suggestion${total === 1 ? '' : 's'}` : 'No topic suggestions returned', !total);
+    } catch (err) {
+      finishMessagingTopicsProgress(false, err.message || 'Topic suggestion generation failed.');
+      notify(err.message, true);
+    }
+  }
+
+  async function saveSelectedMessagingTopicSuggestions() {
+    const selected = Array.from(document.querySelectorAll('#messagingTopicsSuggestionsColumns input[type="checkbox"][data-topic-suggestion-group]:checked'))
+      .map(function (input) {
+        const groupIndex = Number(input.getAttribute('data-topic-suggestion-group'));
+        const topicIndex = Number(input.getAttribute('data-topic-suggestion-index'));
+        const group = currentMessagingTopicSuggestions[groupIndex];
+        const item = group && Array.isArray(group.topics) ? group.topics[topicIndex] : null;
+        return cleanText(item?.topic);
+      })
+      .filter(Boolean);
+    if (!selected.length) {
+      notify('Select at least one suggested topic', true);
+      return false;
+    }
+    const existing = new Set(
+      (Array.isArray(currentMessagingTopics) ? currentMessagingTopics : [])
+        .map((item) => cleanText(item?.topic || item?.category).toLowerCase())
+        .filter(Boolean)
+    );
+    let created = 0;
+    let skipped = 0;
+    for (const topic of selected) {
+      const key = topic.toLowerCase();
+      if (existing.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      await api('/api/messaging/topics', {
+        method: 'POST',
+        body: JSON.stringify({ topic }),
+      });
+      existing.add(key);
+      created += 1;
+    }
+    await refreshMessagingCategories();
+    notify(
+      created
+        ? `Saved ${created} topic${created === 1 ? '' : 's'}${skipped ? ` (${skipped} already existed)` : ''}`
+        : `No new topics saved${skipped ? ` (${skipped} already existed)` : ''}`
+    );
+    return true;
   }
 
   function openTopicsCreate() {
@@ -5820,6 +5994,34 @@ App.messaging = (function () {
       messagingCategorySortBtn.addEventListener('click', function () {
         messagingTopicTableState.dir = messagingTopicTableState.dir === 'asc' ? 'desc' : 'asc';
         renderMessagingCategoriesTable(currentMessagingTopics);
+      });
+    }
+
+    const messagingTopicsGenerateBtn = document.getElementById('messagingTopicsGenerateBtn');
+    const messagingTopicsSelectAllSuggestions = document.getElementById('messagingTopicsSelectAllSuggestions');
+    const messagingTopicsSaveSelectedBtn = document.getElementById('messagingTopicsSaveSelectedBtn');
+
+    if (messagingTopicsGenerateBtn) {
+      messagingTopicsGenerateBtn.addEventListener('click', function () {
+        generateMessagingTopicSuggestions().catch(function (err) {
+          notify(err.message, true);
+        });
+      });
+    }
+
+    if (messagingTopicsSelectAllSuggestions) {
+      messagingTopicsSelectAllSuggestions.addEventListener('change', function () {
+        document.querySelectorAll('#messagingTopicsSuggestionsColumns input[type="checkbox"][data-topic-suggestion-group]').forEach(function (checkbox) {
+          checkbox.checked = messagingTopicsSelectAllSuggestions.checked;
+        });
+      });
+    }
+
+    if (messagingTopicsSaveSelectedBtn) {
+      messagingTopicsSaveSelectedBtn.addEventListener('click', function () {
+        saveSelectedMessagingTopicSuggestions().catch(function (err) {
+          notify(err.message, true);
+        });
       });
     }
 
