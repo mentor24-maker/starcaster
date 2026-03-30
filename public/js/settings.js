@@ -41,6 +41,14 @@ App.settings = (function () {
     if (panel) panel.classList.toggle('hidden', !visible);
   }
 
+  function refreshCurrentPageAfterProjectChange() {
+    const activePage = String(App.state?.activePage || '').trim();
+    if (!activePage || typeof App.setActivePage !== 'function') return;
+    window.setTimeout(() => {
+      App.setActivePage(activePage, { persist: false });
+    }, 0);
+  }
+
   function openProjectsPage() {
     setProjectsCreateVisible(false);
     App.setActivePage('settingsProjectsPage');
@@ -209,6 +217,7 @@ App.settings = (function () {
           renderProjectLists();
           renderProjectDetails();
           applyProjectToHeader();
+          refreshCurrentPageAfterProjectChange();
           notify('Active project updated');
         });
         container.appendChild(row);
@@ -254,6 +263,7 @@ App.settings = (function () {
           renderProjectsTable();
           renderProjectDetails();
           applyProjectToHeader();
+          refreshCurrentPageAfterProjectChange();
           notify('Active project updated');
         });
         const detailsBtn = document.createElement('button');
@@ -269,6 +279,7 @@ App.settings = (function () {
           renderProjectsTable();
           renderProjectDetails();
           applyProjectToHeader();
+          refreshCurrentPageAfterProjectChange();
           const panel = els.settingsProjectDetailsPanel;
           if (panel && typeof panel.scrollIntoView === 'function') {
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
