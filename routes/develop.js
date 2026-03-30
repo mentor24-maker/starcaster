@@ -60,7 +60,7 @@ async function handle(req, res, pathname, method) {
   const scope = requestProjectScope(req);
 
   if (pathname === '/api/develop/forms' && requestMethod === 'GET') {
-    const forms = listForms(scope);
+    const forms = await listForms(scope);
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
   }
 
@@ -85,7 +85,7 @@ async function handle(req, res, pathname, method) {
     if (!submitLabel) return sendErr(res, 400, 'submitLabel is required', { code: 'VALIDATION_ERROR' }), true;
     if (!fields.length) return sendErr(res, 400, 'fields are required', { code: 'VALIDATION_ERROR' }), true;
 
-    const form = createForm({
+    const form = await createForm({
       name,
       formType,
       contactType,
@@ -103,6 +103,7 @@ async function handle(req, res, pathname, method) {
       fields,
     }, scope);
 
+    if (!form) return sendErr(res, 500, 'Could not create form'), true;
     return sendOk(res, 201, form, { form }), true;
   }
 
@@ -537,7 +538,7 @@ async function handle(req, res, pathname, method) {
     if (!submitLabel) return sendErr(res, 400, 'submitLabel is required', { code: 'VALIDATION_ERROR' }), true;
     if (!fields.length) return sendErr(res, 400, 'fields are required', { code: 'VALIDATION_ERROR' }), true;
 
-    const updated = updateForm(formId, {
+    const updated = await updateForm(formId, {
       name,
       formType,
       contactType,
@@ -563,7 +564,7 @@ async function handle(req, res, pathname, method) {
     const formId = decodeURIComponent(formIdMatch[1] || '').trim();
     if (!formId) return sendErr(res, 400, 'form id is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const removed = deleteForm(formId, scope);
+    const removed = await deleteForm(formId, scope);
     if (!removed) return sendErr(res, 404, 'Form not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, removed, { form: removed }), true;
   }
@@ -657,7 +658,7 @@ async function handle(req, res, pathname, method) {
     if (!landingPageRes.ok) return sendErr(res, landingPageRes.status || 404, landingPageRes.error || 'Landing page not found'), true;
     const landingPage = landingPageRes.data;
 
-    const forms = listForms(scope);
+    const forms = await listForms(scope);
     const form = forms.find((item) => String(item?.id || '').trim() === String(landingPage?.formId || '').trim());
     if (!form) return sendErr(res, 400, 'Landing page form is not configured', { code: 'VALIDATION_ERROR' }), true;
     const contactType = String(form.contactType || '').trim();

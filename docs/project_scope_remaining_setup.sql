@@ -12,6 +12,10 @@ alter table if exists public.develop_themes
   add column if not exists project_id text,
   add column if not exists owner_user_id text;
 
+alter table if exists public.develop_forms
+  add column if not exists project_id text,
+  add column if not exists owner_user_id text;
+
 alter table if exists public.develop_email_templates
   add column if not exists project_id text,
   add column if not exists owner_user_id text;
@@ -45,6 +49,12 @@ create index if not exists idx_develop_themes_project_id
 
 create index if not exists idx_develop_themes_owner_user_id
   on public.develop_themes(owner_user_id);
+
+create index if not exists idx_develop_forms_project_id
+  on public.develop_forms(project_id);
+
+create index if not exists idx_develop_forms_owner_user_id
+  on public.develop_forms(owner_user_id);
 
 create index if not exists idx_develop_email_templates_project_id
   on public.develop_email_templates(project_id);

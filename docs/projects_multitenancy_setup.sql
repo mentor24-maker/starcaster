@@ -47,6 +47,9 @@ alter table public.asset_categories
   add column if not exists owner_user_id text;
 
 create index if not exists idx_contacts_project_id on public.contacts(project_id);
+drop index if exists public.contacts_email_unique_idx;
+create unique index if not exists idx_contacts_project_email
+  on public.contacts(project_id, email);
 create index if not exists idx_segments_project_id on public.segments(project_id);
 create index if not exists idx_campaigns_project_id on public.campaigns(project_id);
 create index if not exists idx_assets_project_id on public.assets(project_id);
