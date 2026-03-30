@@ -1,6 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
+const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/developFormsStore');
 const {
   listLandingPages,
@@ -56,6 +57,7 @@ function nextId(prefix) {
 
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
+  const scope = requestProjectScope(req);
 
   if (pathname === '/api/develop/forms' && requestMethod === 'GET') {
     const forms = listForms();
@@ -105,7 +107,7 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/develop/extensions' && requestMethod === 'GET') {
-    const result = await listExtensions();
+    const result = await listExtensions(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load extensions'), true;
     const extensions = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, extensions, { extensions }, { total: extensions.length }), true;
@@ -132,13 +134,13 @@ async function handle(req, res, pathname, method) {
       definition: String(body.definition || '').trim(),
       launchPageId: String(body.launchPageId || body.launch_page_id || '').trim(),
       isFeatured: body.isFeatured === true || body.is_featured === true,
-    });
+    }, scope);
     if (!extensionRes.ok) return sendErr(res, extensionRes.status || 500, extensionRes.error || 'Could not create extension'), true;
     return sendOk(res, 201, extensionRes.data, { extension: extensionRes.data }), true;
   }
 
   if (pathname === '/api/develop/extensions-manager' && requestMethod === 'GET') {
-    const result = await getManagerConfig();
+    const result = await getManagerConfig(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load extension manager config'), true;
     return sendOk(res, 200, result.data, { manager: result.data }), true;
   }
@@ -149,13 +151,13 @@ async function handle(req, res, pathname, method) {
       defaultFilters: body && typeof body.defaultFilters === 'object' ? body.defaultFilters : {},
       defaultSortKey: String(body.defaultSortKey || '').trim(),
       defaultSortDir: String(body.defaultSortDir || '').trim(),
-    });
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not save extension manager config'), true;
     return sendOk(res, 200, result.data, { manager: result.data }), true;
   }
 
   if (pathname === '/api/develop/landing-pages' && requestMethod === 'GET') {
-    const result = await listLandingPages();
+    const result = await listLandingPages(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load landing pages'), true;
     const landingPages = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, landingPages, { landingPages }, { total: landingPages.length }), true;
@@ -198,20 +200,20 @@ async function handle(req, res, pathname, method) {
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
       contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
-    });
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create landing page'), true;
     return sendOk(res, 201, result.data, { landingPage: result.data }), true;
   }
 
   if (pathname === '/api/develop/email-templates' && requestMethod === 'GET') {
-    const result = await listEmailTemplates();
+    const result = await listEmailTemplates(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load email templates'), true;
     const emailTemplates = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, emailTemplates, { emailTemplates }, { total: emailTemplates.length }), true;
   }
 
   if (pathname === '/api/develop/themes' && requestMethod === 'GET') {
-    const result = await listThemes();
+    const result = await listThemes(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load themes'), true;
     const themes = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, themes, { themes }, { total: themes.length }), true;
@@ -234,7 +236,7 @@ async function handle(req, res, pathname, method) {
       logoSquareId: String(body.logoSquareId || '').trim(),
       featureImageId: String(body.featureImageId || '').trim(),
       backgroundImageId: String(body.backgroundImageId || '').trim(),
-    });
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
     return sendOk(res, 201, result.data, { theme: result.data }), true;
   }
@@ -253,7 +255,7 @@ async function handle(req, res, pathname, method) {
       body: body.body,
       cta: body.cta,
       blocks: Array.isArray(body.blocks) ? body.blocks : [],
-    });
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create email template'), true;
     return sendOk(res, 201, result.data, { emailTemplate: result.data }), true;
   }
@@ -274,13 +276,13 @@ async function handle(req, res, pathname, method) {
       logoSquareId: String(body.logoSquareId || '').trim(),
       featureImageId: String(body.featureImageId || '').trim(),
       backgroundImageId: String(body.backgroundImageId || '').trim(),
-    });
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
     return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
 
   if (themeMatch && requestMethod === 'DELETE') {
-    const result = await deleteTheme(themeMatch[1]);
+    const result = await deleteTheme(themeMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete theme'), true;
     return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
@@ -377,7 +379,7 @@ async function handle(req, res, pathname, method) {
     });
     if (!upload.ok) return sendErr(res, upload.status || 500, upload.error || 'Could not upload screenshot to Google Drive'), true;
 
-    const categoriesRes = await listAssetCategories();
+    const categoriesRes = await listAssetCategories(scope);
     if (categoriesRes.ok) {
       const categories = (Array.isArray(categoriesRes.data) ? categoriesRes.data : []).map(rowToAssetCategory);
       const hasCategory = categories.some((item) =>
@@ -385,7 +387,7 @@ async function handle(req, res, pathname, method) {
         && String(item?.category || '').trim() === 'Screenshot'
       );
       if (!hasCategory) {
-        await createAssetCategory({ assetType: 'Image', category: 'Screenshot' });
+        await createAssetCategory({ assetType: 'Image', category: 'Screenshot' }, scope);
       }
     }
 
@@ -398,7 +400,7 @@ async function handle(req, res, pathname, method) {
       size: Math.max(0, Number(upload.data.sizeBytes || Buffer.byteLength(screenshotBuffer) || 0) || 0),
       imageWidth: Math.max(0, Number(upload.data.imageWidth || 640) || 640),
       imageHeight: Math.max(0, Number(upload.data.imageHeight || 360) || 360),
-    });
+    }, scope);
     if (!save.ok) return sendErr(res, save.status || 500, save.error || 'Could not save screenshot asset'), true;
     const created = Array.isArray(save.data) ? save.data[0] : save.data;
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
@@ -459,7 +461,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 502, `Could not generate PDF thumbnail: ${err.message}`), true;
     }
 
-    const categoriesRes = await listAssetCategories();
+    const categoriesRes = await listAssetCategories(scope);
     if (categoriesRes.ok) {
       const categories = (Array.isArray(categoriesRes.data) ? categoriesRes.data : []).map(rowToAssetCategory);
       const hasCategory = categories.some((item) =>
@@ -467,7 +469,7 @@ async function handle(req, res, pathname, method) {
         && String(item?.category || '').trim() === 'Thumbnail'
       );
       if (!hasCategory) {
-        await createAssetCategory({ assetType: 'Image', category: 'Thumbnail' });
+        await createAssetCategory({ assetType: 'Image', category: 'Thumbnail' }, scope);
       }
     }
 
@@ -501,7 +503,7 @@ async function handle(req, res, pathname, method) {
       size: Math.max(0, Number(upload.data.sizeBytes || Buffer.byteLength(thumbnailBuffer) || 0) || 0),
       imageWidth: Math.max(0, Number(upload.data.imageWidth || 1280) || 1280),
       imageHeight: Math.max(0, Number(upload.data.imageHeight || 720) || 720),
-    });
+    }, scope);
     if (!save.ok) return sendErr(res, save.status || 500, save.error || 'Could not save thumbnail asset'), true;
     const created = Array.isArray(save.data) ? save.data[0] : save.data;
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
@@ -582,7 +584,7 @@ async function handle(req, res, pathname, method) {
       body: body.body,
       cta: body.cta,
       blocks: Array.isArray(body.blocks) ? body.blocks : [],
-    });
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update email template'), true;
     return sendOk(res, 200, result.data, { emailTemplate: result.data }), true;
   }
@@ -590,7 +592,7 @@ async function handle(req, res, pathname, method) {
   if (emailTemplateIdMatch && requestMethod === 'DELETE') {
     const templateId = decodeURIComponent(emailTemplateIdMatch[1] || '').trim();
     if (!templateId) return sendErr(res, 400, 'email template id is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await deleteEmailTemplate(templateId);
+    const result = await deleteEmailTemplate(templateId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete email template'), true;
     return sendOk(res, 200, result.data, { emailTemplate: result.data }), true;
   }
@@ -598,7 +600,7 @@ async function handle(req, res, pathname, method) {
   if (extensionUseMatch && requestMethod === 'POST') {
     const extensionId = decodeURIComponent(extensionUseMatch[1] || '').trim();
     if (!extensionId) return sendErr(res, 400, 'extension id is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await trackExtensionUse(extensionId);
+    const result = await trackExtensionUse(extensionId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not track extension use'), true;
     return sendOk(res, 200, result.data, { extension: result.data }), true;
   }
@@ -629,7 +631,7 @@ async function handle(req, res, pathname, method) {
       isFeatured: body.isFeatured === true || body.is_featured === true,
       usageCount: Number(body.usageCount || body.usage_count || 0) || 0,
       lastUsedAt: body.lastUsedAt || body.last_used_at || null,
-    });
+    }, scope);
     if (!updated) return sendErr(res, 404, 'Extension not found', { code: 'NOT_FOUND' }), true;
     if (!updated.ok) return sendErr(res, updated.status || 500, updated.error || 'Could not update extension'), true;
     return sendOk(res, 200, updated.data, { extension: updated.data }), true;
@@ -639,7 +641,7 @@ async function handle(req, res, pathname, method) {
     const extensionId = decodeURIComponent(extensionIdMatch[1] || '').trim();
     if (!extensionId) return sendErr(res, 400, 'extension id is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const removed = await deleteExtension(extensionId);
+    const removed = await deleteExtension(extensionId, scope);
     if (!removed.ok) return sendErr(res, removed.status || 500, removed.error || 'Could not delete extension'), true;
     return sendOk(res, 200, removed.data, { extension: removed.data }), true;
   }
@@ -651,7 +653,7 @@ async function handle(req, res, pathname, method) {
     const landingPageId = decodeURIComponent(landingPageSubmitMatch[1] || '').trim();
     if (!landingPageId) return sendErr(res, 400, 'landing page id is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const landingPageRes = await getLandingPage(landingPageId);
+    const landingPageRes = await getLandingPage(landingPageId, scope);
     if (!landingPageRes.ok) return sendErr(res, landingPageRes.status || 404, landingPageRes.error || 'Landing page not found'), true;
     const landingPage = landingPageRes.data;
 
@@ -689,23 +691,23 @@ async function handle(req, res, pathname, method) {
 
     let result;
     if (contactPayload.email) {
-      const existingRes = await listContacts({ contactType, limit: 5000 });
+      const existingRes = await listContacts({ contactType, limit: 5000 }, scope);
       if (!existingRes.ok) return sendErr(res, existingRes.status || 500, existingRes.error || 'Could not load contacts'), true;
       const existing = (Array.isArray(existingRes.data) ? existingRes.data : [])
         .find((row) => String(row?.email || '').trim().toLowerCase() === contactPayload.email.toLowerCase());
       if (existing) {
-        result = await updateContact(existing.id, contactPayload);
+        result = await updateContact(existing.id, contactPayload, scope);
       } else {
         result = await createContact({
           id: nextId('contact'),
           ...contactPayload,
-        });
+        }, scope);
       }
     } else {
       result = await createContact({
         id: nextId('contact'),
         ...contactPayload,
-      });
+      }, scope);
     }
 
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not save contact'), true;
@@ -753,7 +755,7 @@ async function handle(req, res, pathname, method) {
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
       contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
-    });
+    }, scope);
     if (!result.ok) {
       return sendErr(
         res,
@@ -769,7 +771,7 @@ async function handle(req, res, pathname, method) {
     const landingPageId = decodeURIComponent(landingPageIdMatch[1] || '').trim();
     if (!landingPageId) return sendErr(res, 400, 'landing page id is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const result = await deleteLandingPage(landingPageId);
+    const result = await deleteLandingPage(landingPageId, scope);
     if (!result.ok) {
       return sendErr(
         res,
