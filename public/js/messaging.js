@@ -3094,9 +3094,9 @@ App.messaging = (function () {
     prompts.forEach((prompt) => {
       const option = document.createElement('option');
       option.value = String(prompt.id || '');
-      const topicSuffix = cleanText(prompt.topic) ? ` - ${cleanText(prompt.topic)}` : '';
+      const topicLabel = cleanText(prompt.topic);
       const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
-      option.textContent = `#${prompt.id}${topicSuffix}: ${preview}${preview.length >= 90 ? '...' : ''}`;
+      option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
       select.appendChild(option);
     });
     if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
@@ -3122,9 +3122,9 @@ App.messaging = (function () {
     prompts.forEach((prompt) => {
       const option = document.createElement('option');
       option.value = String(prompt.id || '');
-      const topicSuffix = cleanText(prompt.topic) ? ` - ${cleanText(prompt.topic)}` : '';
+      const topicLabel = cleanText(prompt.topic);
       const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
-      option.textContent = `#${prompt.id}${topicSuffix}: ${preview}${preview.length >= 90 ? '...' : ''}`;
+      option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
       select.appendChild(option);
     });
     if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
@@ -3155,10 +3155,22 @@ App.messaging = (function () {
     currentHeadlineCreatorSuggestions = Array.isArray(options) ? options.slice() : [];
     tbody.innerHTML = '';
     currentHeadlineCreatorSuggestions.forEach((option, index) => {
+      const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
+      const text = typeof option === 'object' && option ? option.headline || option.text || '' : option;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><input type="checkbox" data-headline-creator-suggestion-index="${index}" /></td>
-        <td>${escapeHtml(String(option || ''))}</td>
+        <td>${escapeHtml(String(text || ''))}</td>
+        <td>
+          <select data-headline-creator-quality-index="${index}">
+            <option value="">-</option>
+            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
+            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
+            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
+            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
+            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
+          </select>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -3285,9 +3297,20 @@ App.messaging = (function () {
         await api('/api/messaging/headlines', {
           method: 'POST',
           body: JSON.stringify({
-            headline: cleanText(currentHeadlineCreatorSuggestions[index]),
+            headline: cleanText(
+              typeof currentHeadlineCreatorSuggestions[index] === 'object' && currentHeadlineCreatorSuggestions[index]
+                ? currentHeadlineCreatorSuggestions[index].headline || currentHeadlineCreatorSuggestions[index].text
+                : currentHeadlineCreatorSuggestions[index]
+            ),
             topic,
             prompt_id: promptId,
+            quality_score: Math.max(
+              0,
+              Math.min(
+                Number(document.querySelector(`[data-headline-creator-quality-index="${index}"]`)?.value || 0) || 0,
+                5
+              )
+            ),
           }),
         });
       }
@@ -5308,6 +5331,7 @@ App.messaging = (function () {
     const headlinesCreatorClearSuggestionsBtn = document.getElementById('messagingHeadlinesCreatorClearSuggestionsBtn');
     const headlinesCreatorSaveSelectedBtn = document.getElementById('messagingHeadlinesCreatorSaveSelectedBtn');
     const headlinesCreatorSelectAllSuggestions = document.getElementById('messagingHeadlinesCreatorSelectAllSuggestions');
+    const headlinesCreatorBulkQuality = document.getElementById('messagingHeadlinesCreatorBulkQuality');
     const headlineEditForm = document.getElementById('messagingHeadlineEditForm');
     const headlineCancelEditBtn = document.getElementById('messagingHeadlineCancelEditBtn');
     const headlineSelectAllVisible = document.getElementById('messagingHeadlinesSelectAllVisible');
@@ -5527,6 +5551,18 @@ App.messaging = (function () {
         const checked = Boolean(headlinesCreatorSelectAllSuggestions.checked);
         document.querySelectorAll('[data-headline-creator-suggestion-index]').forEach((input) => {
           input.checked = checked;
+        });
+      });
+    }
+
+    if (headlinesCreatorBulkQuality) {
+      headlinesCreatorBulkQuality.addEventListener('change', function () {
+        const value = String(headlinesCreatorBulkQuality.value || '').trim();
+        if (!value) return;
+        document.querySelectorAll('[data-headline-creator-suggestion-index]:checked').forEach((input) => {
+          const index = String(input.getAttribute('data-headline-creator-suggestion-index') || '').trim();
+          const select = document.querySelector(`[data-headline-creator-quality-index="${index}"]`);
+          if (select) select.value = value;
         });
       });
     }
