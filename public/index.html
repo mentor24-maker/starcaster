@@ -5601,21 +5601,41 @@
               </select>
             </div>
             <div class="develop-landing-pages-column">
-              <select id="developLandingBannerImageSelect" name="website_banner_image_id">
-                <option value="">Website Banner Image</option>
-              </select>
-              <select id="developLandingBackgroundImageSelect" name="background_image_id">
-                <option value="">Background Image</option>
-              </select>
-              <select id="developLandingFeatureImageSelect" name="feature_image_id">
-                <option value="">Feature Image</option>
-              </select>
-              <select id="developLandingHighlightImageSelect" name="highlight_image_id">
-                <option value="">Highlight Image</option>
-              </select>
-              <select id="developLandingLogoSquareSelect" name="logo_square_id">
-                <option value="">Logo - Square</option>
-              </select>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingBannerImageSelect" name="website_banner_image_id" class="hidden">
+                  <option value="">Website Banner Image</option>
+                </select>
+                <button id="developLandingBannerImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Website Banner Image</button>
+                <div id="developLandingBannerImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingBackgroundImageSelect" name="background_image_id" class="hidden">
+                  <option value="">Background Image</option>
+                </select>
+                <button id="developLandingBackgroundImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Background Image</button>
+                <div id="developLandingBackgroundImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingFeatureImageSelect" name="feature_image_id" class="hidden">
+                  <option value="">Feature Image</option>
+                </select>
+                <button id="developLandingFeatureImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Feature Image</button>
+                <div id="developLandingFeatureImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingHighlightImageSelect" name="highlight_image_id" class="hidden">
+                  <option value="">Highlight Image</option>
+                </select>
+                <button id="developLandingHighlightImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Highlight Image</button>
+                <div id="developLandingHighlightImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingLogoSquareSelect" name="logo_square_id" class="hidden">
+                  <option value="">Logo - Square</option>
+                </select>
+                <button id="developLandingLogoSquarePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Logo - Square</button>
+                <div id="developLandingLogoSquarePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
             </div>
           </div>
           <button id="developLandingPagesSubmitBtn" type="submit">Save Page</button>
