@@ -1,6 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
+const { requestProjectScope } = require('../lib/requestProjectScope');
 const {
   rowToChannel,
   listChannels,
@@ -12,9 +13,10 @@ const {
 
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
+  const scope = requestProjectScope(req);
 
   if (pathname === '/api/channels' && requestMethod === 'GET') {
-    const result = await listChannels();
+    const result = await listChannels(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const channels = (Array.isArray(result.data) ? result.data : []).map(rowToChannel);
     return sendOk(res, 200, channels, { channels }, { total: channels.length }), true;
@@ -32,7 +34,7 @@ async function handle(req, res, pathname, method) {
     if (!email) return sendErr(res, 400, 'email is required', { code: 'VALIDATION_ERROR' }), true;
     if (!password) return sendErr(res, 400, 'password is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const result = await createChannel({ channel, userName, email, password });
+    const result = await createChannel({ channel, userName, email, password }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToChannel(created), { channel: rowToChannel(created) }), true;
@@ -41,7 +43,7 @@ async function handle(req, res, pathname, method) {
   const channelIdMatch = String(pathname || '').match(/^\/api\/channels\/(\d+)\/?$/);
   if (channelIdMatch && requestMethod === 'GET') {
     const channelId = Number(channelIdMatch[1]);
-    const result = await getChannelById(channelId);
+    const result = await getChannelById(channelId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, rowToChannel(result.data), { channel: rowToChannel(result.data) }), true;
   }
@@ -68,7 +70,7 @@ async function handle(req, res, pathname, method) {
       if (!patch.password) return sendErr(res, 400, 'password is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateChannel(channelId, patch);
+    const result = await updateChannel(channelId, patch, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!updated) return sendErr(res, 404, 'Channel not found', { code: 'NOT_FOUND' }), true;
@@ -77,7 +79,7 @@ async function handle(req, res, pathname, method) {
 
   if (channelIdMatch && requestMethod === 'DELETE') {
     const channelId = Number(channelIdMatch[1]);
-    const result = await deleteChannel(channelId);
+    const result = await deleteChannel(channelId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!deleted) return sendErr(res, 404, 'Channel not found', { code: 'NOT_FOUND' }), true;
