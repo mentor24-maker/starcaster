@@ -33,6 +33,8 @@ App.acquire = (function () {
   let directAcquireSelectedHashtags = new Set();
   let directAcquireProgressTimer = null;
   let directAcquireTopics = [];
+  let directAcquireWebsitePeers = [];
+  let directAcquireWebsitePeerEditingId = '';
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -1168,7 +1170,7 @@ App.acquire = (function () {
       if (metaEl) {
         metaEl.textContent = String(summary.error || '').trim()
           || (summary.enabled === false
-            ? 'Peer site discovery was not selected for this run.'
+            ? 'Peer sites not searched.'
             : summary.configured === false
               ? 'Peer site discovery is not configured yet.'
               : 'No peer sites discovered yet.');
@@ -1229,6 +1231,165 @@ App.acquire = (function () {
 
       tableBody.appendChild(tr);
     });
+  }
+
+  function resetDirectAcquireWebsitePeerForm() {
+    directAcquireWebsitePeerEditingId = '';
+    const form = document.getElementById('directAcquireWebsitePeerForm');
+    if (!form) return;
+    form.reset();
+    const idInput = document.getElementById('directAcquireWebsitePeerId');
+    if (idInput) idInput.value = '';
+    const typeInput = document.getElementById('directAcquireWebsitePeerType');
+    if (typeInput) typeInput.value = 'peer';
+    const sourceUrlInput = document.getElementById('directAcquireWebsitePeerSourceUrl');
+    if (sourceUrlInput && state.directAcquireCurrentRun?.source_url) {
+      sourceUrlInput.value = String(state.directAcquireCurrentRun.source_url || '').trim();
+    }
+  }
+
+  function fillDirectAcquireWebsitePeerForm(peer) {
+    directAcquireWebsitePeerEditingId = String(peer?.id || '').trim();
+    const idInput = document.getElementById('directAcquireWebsitePeerId');
+    const typeInput = document.getElementById('directAcquireWebsitePeerType');
+    const sourceUrlInput = document.getElementById('directAcquireWebsitePeerSourceUrl');
+    const siteUrlInput = document.getElementById('directAcquireWebsitePeerSiteUrl');
+    const titleInput = document.getElementById('directAcquireWebsitePeerTitle');
+    const modelInput = document.getElementById('directAcquireWebsitePeerModel');
+    const keywordsInput = document.getElementById('directAcquireWebsitePeerKeywords');
+    const snippetInput = document.getElementById('directAcquireWebsitePeerSnippet');
+    const notesInput = document.getElementById('directAcquireWebsitePeerNotes');
+    if (idInput) idInput.value = directAcquireWebsitePeerEditingId;
+    if (typeInput) typeInput.value = String(peer?.site_type || 'peer').trim() || 'peer';
+    if (sourceUrlInput) sourceUrlInput.value = String(peer?.source_url || '').trim();
+    if (siteUrlInput) siteUrlInput.value = String(peer?.site_url || '').trim();
+    if (titleInput) titleInput.value = String(peer?.title || '').trim();
+    if (modelInput) modelInput.value = String(peer?.website_model || '').trim();
+    if (keywordsInput) keywordsInput.value = Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.join(', ') : '';
+    if (snippetInput) snippetInput.value = String(peer?.snippet || '').trim();
+    if (notesInput) notesInput.value = String(peer?.notes || '').trim();
+  }
+
+  function renderDirectAcquireWebsitePeersTable() {
+    const tableBody = document.getElementById('directAcquireWebsitePeersTable');
+    const metaEl = document.getElementById('directAcquireWebsitePeersMeta');
+    const countEl = document.getElementById('directAcquireWebsitePeersCount');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const peers = Array.isArray(directAcquireWebsitePeers) ? directAcquireWebsitePeers : [];
+    state.directAcquireWebsitePeers = peers.slice();
+    if (countEl) countEl.textContent = `${peers.length} saved`;
+    if (!peers.length) {
+      if (metaEl) metaEl.textContent = 'No website peers saved yet.';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 8;
+      td.textContent = 'No website peers saved yet.';
+      tr.appendChild(td);
+      tableBody.appendChild(tr);
+      return;
+    }
+    if (metaEl) metaEl.textContent = `${peers.length} website record${peers.length === 1 ? '' : 's'} available for this project.`;
+    peers.forEach((peer) => {
+      const tr = document.createElement('tr');
+
+      const typeTd = document.createElement('td');
+      typeTd.textContent = String(peer?.site_type || 'peer').trim() === 'source' ? 'Source' : 'Peer';
+      tr.appendChild(typeTd);
+
+      const modelTd = document.createElement('td');
+      modelTd.textContent = String(peer?.website_model || '').trim() || '-';
+      tr.appendChild(modelTd);
+
+      const domainTd = document.createElement('td');
+      domainTd.className = 'direct-acquire-contact-label';
+      domainTd.textContent = String(peer?.domain || '').trim() || '-';
+      tr.appendChild(domainTd);
+
+      const siteTd = document.createElement('td');
+      if (String(peer?.site_url || '').trim()) {
+        const link = document.createElement('a');
+        link.href = String(peer.site_url).trim();
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = String(peer?.title || peer?.site_url || '').trim();
+        siteTd.appendChild(link);
+      } else {
+        siteTd.textContent = String(peer?.title || '').trim() || '-';
+      }
+      tr.appendChild(siteTd);
+
+      const keywordsTd = document.createElement('td');
+      keywordsTd.textContent = Array.isArray(peer?.matched_keywords) && peer.matched_keywords.length
+        ? peer.matched_keywords.join(', ')
+        : '-';
+      tr.appendChild(keywordsTd);
+
+      const sourceTd = document.createElement('td');
+      sourceTd.textContent = String(peer?.source_domain || peer?.source_url || '').trim() || '-';
+      tr.appendChild(sourceTd);
+
+      const updatedTd = document.createElement('td');
+      updatedTd.textContent = String(peer?.updated_at || peer?.last_harvested_at || '').trim() || '-';
+      tr.appendChild(updatedTd);
+
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'crud-actions-cell';
+
+      const viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'tiny-btn';
+      viewBtn.textContent = 'View';
+      viewBtn.addEventListener('click', () => {
+        if (String(peer?.site_url || '').trim()) window.open(String(peer.site_url).trim(), '_blank', 'noopener');
+      });
+      actionsTd.appendChild(viewBtn);
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'tiny-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => {
+        fillDirectAcquireWebsitePeerForm(peer);
+        const panel = document.getElementById('directAcquireWebsitePeersPanel');
+        if (panel) panel.open = true;
+      });
+      actionsTd.appendChild(editBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'tiny-btn danger';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm(`Delete ${String(peer?.domain || peer?.site_url || 'this website').trim()}?`)) return;
+        try {
+          await api(`/api/acquire/website-peers/${encodeURIComponent(peer.id)}`, { method: 'DELETE' });
+          directAcquireWebsitePeers = directAcquireWebsitePeers.filter((item) => String(item?.id || '') !== String(peer.id));
+          renderDirectAcquireWebsitePeersTable();
+          if (String(directAcquireWebsitePeerEditingId || '') === String(peer.id)) resetDirectAcquireWebsitePeerForm();
+          notify('Website peer deleted');
+        } catch (err) {
+          notify(err.message || 'Could not delete website peer', true);
+        }
+      });
+      actionsTd.appendChild(deleteBtn);
+
+      tr.appendChild(actionsTd);
+      tableBody.appendChild(tr);
+    });
+  }
+
+  async function refreshDirectAcquireWebsitePeers() {
+    const res = await api('/api/acquire/website-peers?limit=500');
+    directAcquireWebsitePeers = Array.isArray(res?.websitePeers)
+      ? res.websitePeers
+      : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+          ? res
+          : [];
+    state.directAcquireWebsitePeers = directAcquireWebsitePeers.slice();
+    renderDirectAcquireWebsitePeersTable();
   }
 
   async function saveDirectAcquireSelectedHashtags() {
@@ -2634,8 +2795,11 @@ App.acquire = (function () {
     renderDirectAcquireHashtagTable();
     renderDirectAcquirePeerSitesTable();
     renderDirectAcquireImageGallery();
+    renderDirectAcquireWebsitePeersTable();
+    resetDirectAcquireWebsitePeerForm();
     refreshDirectAcquireTopics().then(() => renderDirectAcquireKeywordTopicOptions()).catch(() => {});
     refreshDirectAcquireImageCategories().then(() => renderDirectAcquireImageGallery()).catch(() => {});
+    refreshDirectAcquireWebsitePeers().catch(() => {});
     const directAcquireKeywordExclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
     if (directAcquireKeywordExclusionsInput) {
       try {
@@ -2805,6 +2969,63 @@ App.acquire = (function () {
         }
       });
     }
+    const directAcquireWebsitePeersRefreshBtn = document.getElementById('directAcquireWebsitePeersRefreshBtn');
+    if (directAcquireWebsitePeersRefreshBtn) {
+      directAcquireWebsitePeersRefreshBtn.addEventListener('click', async () => {
+        try {
+          await refreshDirectAcquireWebsitePeers();
+          notify('Website peers refreshed');
+        } catch (err) {
+          notify(err.message || 'Could not refresh website peers', true);
+        }
+      });
+    }
+    const directAcquireWebsitePeerCancelBtn = document.getElementById('directAcquireWebsitePeerCancelBtn');
+    if (directAcquireWebsitePeerCancelBtn) {
+      directAcquireWebsitePeerCancelBtn.addEventListener('click', function () {
+        resetDirectAcquireWebsitePeerForm();
+      });
+    }
+    const directAcquireWebsitePeerForm = document.getElementById('directAcquireWebsitePeerForm');
+    if (directAcquireWebsitePeerForm) {
+      directAcquireWebsitePeerForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(directAcquireWebsitePeerForm);
+          const payload = {
+            site_type: String(formData.get('site_type') || 'peer').trim(),
+            source_url: String(formData.get('source_url') || '').trim(),
+            site_url: String(formData.get('site_url') || '').trim(),
+            title: String(formData.get('title') || '').trim(),
+            website_model: String(formData.get('website_model') || '').trim(),
+            matched_keywords: String(formData.get('matched_keywords') || '').trim(),
+            snippet: String(formData.get('snippet') || '').trim(),
+            notes: String(formData.get('notes') || '').trim(),
+          };
+          if (!payload.site_url) throw new Error('Website URL is required.');
+          if (!payload.source_url && payload.site_type === 'peer' && state.directAcquireCurrentRun?.source_url) {
+            payload.source_url = String(state.directAcquireCurrentRun.source_url || '').trim();
+          }
+          if (directAcquireWebsitePeerEditingId) {
+            await api(`/api/acquire/website-peers/${encodeURIComponent(directAcquireWebsitePeerEditingId)}`, {
+              method: 'PATCH',
+              body: JSON.stringify(payload),
+            });
+            notify('Website peer updated');
+          } else {
+            await api('/api/acquire/website-peers', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+            notify('Website peer created');
+          }
+          resetDirectAcquireWebsitePeerForm();
+          await refreshDirectAcquireWebsitePeers();
+        } catch (err) {
+          notify(err.message || 'Could not save website peer', true);
+        }
+      });
+    }
     clearRedditHarvestProgress();
     const redditProgressWrap = document.getElementById('redditHarvestProgressWrap');
     const redditProgressBar = document.getElementById('redditHarvestProgressBar');
@@ -2873,9 +3094,18 @@ App.acquire = (function () {
           directAcquireImagesExpanded = false;
           directAcquireSelectedHashtags = new Set();
           renderDirectHarvestPagesTable();
+          try {
+            await refreshDirectAcquireWebsitePeers();
+          } catch (_) {
+            // keep the direct acquire result visible even if peer-table refresh fails
+          }
           await refreshDirectHarvestRuns();
           finishDirectAcquireProgress(true, `Harvest complete (${res.run?.pages_succeeded || 0} pages processed).`);
-          notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)`);
+          const peerSaveCount = Number(res.website_peers_saved_count || 0) || 0;
+          const peerSaveError = String(res.website_peers_error || '').trim();
+          const peerSaveText = peerSaveCount ? ` and saved ${peerSaveCount} website peer record${peerSaveCount === 1 ? '' : 's'}` : '';
+          notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)${peerSaveText}`);
+          if (peerSaveError) notify(peerSaveError, true);
         } catch (err) {
           finishDirectAcquireProgress(false, err.message || 'Harvest failed.');
           notify(err.message, true);

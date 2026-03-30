@@ -71,6 +71,7 @@ App.state = {
   acquireBusyByJob: {},
   directAcquireRuns: [],
   directAcquireCurrentRun: null,
+  directAcquireWebsitePeers: [],
   xHarvestRuns: [],
   xHarvestCurrentRun: null,
   redditHarvestRuns: [],

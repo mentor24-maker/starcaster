@@ -956,6 +956,81 @@
           </div>
         </form>
 
+        <details id="directAcquireWebsitePeersPanel" class="card acquire-web-expandable-card" style="margin-top: 1rem;">
+          <summary class="acquire-web-expandable-summary">
+            <span>Website Peers</span>
+            <span id="directAcquireWebsitePeersCount" class="meta">0 saved</span>
+          </summary>
+          <div class="acquire-web-expandable-body">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Website Peers</h3>
+              <div class="page-heading-actions">
+                <button id="directAcquireWebsitePeersRefreshBtn" type="button" class="tiny-btn">Refresh</button>
+              </div>
+            </div>
+            <div id="directAcquireWebsitePeersMeta" class="meta" style="margin-bottom: 0.75rem;">No website peers saved yet.</div>
+            <form id="directAcquireWebsitePeerForm" class="labeled-form" style="margin-bottom: 1rem;">
+              <input type="hidden" id="directAcquireWebsitePeerId" name="id" />
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerType">Site Type</label>
+                <select id="directAcquireWebsitePeerType" name="site_type">
+                  <option value="peer">Peer</option>
+                  <option value="source">Source</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
+                <input id="directAcquireWebsitePeerSourceUrl" name="source_url" type="url" placeholder="https://example.com" />
+              </div>
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerSiteUrl">Website URL</label>
+                <input id="directAcquireWebsitePeerSiteUrl" name="site_url" type="url" required placeholder="https://peer-site.example" />
+              </div>
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerTitle">Site Title</label>
+                <input id="directAcquireWebsitePeerTitle" name="title" type="text" />
+              </div>
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerModel">Website Model</label>
+                <input id="directAcquireWebsitePeerModel" name="website_model" type="text" placeholder="Direct Competitors" />
+              </div>
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerKeywords">Matched Keywords</label>
+                <textarea id="directAcquireWebsitePeerKeywords" name="matched_keywords" rows="2" placeholder="behavioral science, human behavior"></textarea>
+              </div>
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerSnippet">Snippet</label>
+                <textarea id="directAcquireWebsitePeerSnippet" name="snippet" rows="3"></textarea>
+              </div>
+              <div class="form-row">
+                <label for="directAcquireWebsitePeerNotes">Notes</label>
+                <textarea id="directAcquireWebsitePeerNotes" name="notes" rows="3"></textarea>
+              </div>
+              <div class="page-heading-actions" style="justify-content: center; margin-top: 0.75rem;">
+                <button id="directAcquireWebsitePeerSaveBtn" type="submit">Save Website</button>
+                <button id="directAcquireWebsitePeerCancelBtn" type="button" class="tiny-btn">Cancel</button>
+              </div>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Model</th>
+                    <th>Domain</th>
+                    <th>Site</th>
+                    <th>Matched Keywords</th>
+                    <th>Source Website</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireWebsitePeersTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+
         <div id="directAcquireResultsWrap" class="hidden">
         <div class="acquire-web-results-grid">
           <section class="card">
