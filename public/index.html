@@ -3304,6 +3304,7 @@
                 </select>
               </div>
               <div id="messagingCreateContentDynamicFields" class="stack-form" style="margin: 0;">
+                <input id="messagingCreateContentPromptId" name="prompt_id" type="hidden" />
                 <div class="form-row hidden" id="messagingCreateContentPrimaryRow">
                   <label for="messagingCreateContentPrimaryInput"><strong id="messagingCreateContentPrimaryLabel">Content:</strong></label>
                   <textarea id="messagingCreateContentPrimaryInput" name="primary" rows="5" placeholder="Enter content"></textarea>
@@ -3355,6 +3356,7 @@
               </div>
               <div id="messagingCreateContentActionsRow" class="page-heading-actions hidden" style="justify-content: flex-start; margin-top: 10px;">
                 <button id="messagingCreateContentGenerateBtn" type="button">Generate with AI</button>
+                <button id="messagingCreateContentSavePromptBtn" type="button">Save Prompt</button>
                 <button id="messagingCreateContentSubmitBtn" type="submit" class="hidden">Save Content</button>
               </div>
             </form>

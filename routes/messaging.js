@@ -112,6 +112,11 @@ const {
   deleteMessagingFormat,
 } = require('../lib/messagingFormatsStore');
 const {
+  listMessagingPrompts,
+  getMessagingPrompt,
+  createMessagingPrompt,
+} = require('../lib/messagingPromptsStore');
+const {
   listMessagingTags,
   createMessagingTag,
   getMessagingTag,
@@ -124,7 +129,7 @@ const {
   updateMessagingKeyword,
   deleteMessagingKeyword,
 } = require('../lib/messagingKeywordsStore');
-const { generateMessagingContentSuggestions, generateMessagingTopicSuggestions } = require('../lib/messagingContentSuggestions');
+const { generateMessagingContentSuggestions, generateMessagingTopicSuggestions, prepareMessagingContentPrompt } = require('../lib/messagingContentSuggestions');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 
 function isValidHttpUrl(value) {
@@ -230,6 +235,32 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
     return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/messaging/prompts' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const result = await listMessagingPrompts(Number(urlObj.searchParams.get('limit') || 200), scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const prompts = result.data || [];
+    return sendOk(res, 200, prompts, { prompts }, { total: prompts.length }), true;
+  }
+
+  if (pathname === '/api/messaging/prompts' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const prepared = await prepareMessagingContentPrompt(body || {});
+    if (!prepared.ok) {
+      return sendErr(res, prepared.status || 500, prepared.error || 'Could not prepare messaging prompt', { code: 'MESSAGING_PROMPT_PREPARE_FAILED' }), true;
+    }
+    const result = await createMessagingPrompt(prepared.data || {}, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, result.data, { prompt: result.data, prepared_prompt: prepared.data }), true;
+  }
+
+  const promptMatch = pathname.match(/^\/api\/messaging\/prompts\/(\d+)\/?$/);
+  if (promptMatch && requestMethod === 'GET') {
+    const result = await getMessagingPrompt(Number(promptMatch[1]), scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { prompt: result.data }), true;
   }
 
   if (pathname === '/api/messaging/topic-suggestions' && requestMethod === 'POST') {
