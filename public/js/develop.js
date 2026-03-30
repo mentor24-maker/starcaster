@@ -612,18 +612,250 @@ App.develop = (function () {
     return getAssetsByType('Image');
   }
 
+  const THEME_ASSET_PICKERS = {
+    developThemesLogoWideSelect: {
+      selectId: 'developThemesLogoWideSelect',
+      buttonId: 'developThemesLogoWidePickerBtn',
+      previewId: 'developThemesLogoWidePreview',
+      title: 'Logo - Wide',
+      category: 'Logo - Wide',
+      categories: ['Logo - Wide'],
+      tags: ['theme', 'logo-wide', 'builder'],
+    },
+    developThemesLogoSquareSelect: {
+      selectId: 'developThemesLogoSquareSelect',
+      buttonId: 'developThemesLogoSquarePickerBtn',
+      previewId: 'developThemesLogoSquarePreview',
+      title: 'Logo - Square',
+      category: 'Logo - Square',
+      categories: ['Logo - Square', 'Square Logo'],
+      tags: ['theme', 'logo-square', 'builder'],
+    },
+    developThemesFeatureImageSelect: {
+      selectId: 'developThemesFeatureImageSelect',
+      buttonId: 'developThemesFeatureImagePickerBtn',
+      previewId: 'developThemesFeatureImagePreview',
+      title: 'Feature Image',
+      category: 'Feature Image',
+      categories: ['Feature Image', 'Feature', 'Feature Graphic', 'Featured Image'],
+      tags: ['theme', 'feature-image', 'builder'],
+    },
+    developThemesBackgroundImageSelect: {
+      selectId: 'developThemesBackgroundImageSelect',
+      buttonId: 'developThemesBackgroundImagePickerBtn',
+      previewId: 'developThemesBackgroundImagePreview',
+      title: 'Background Image',
+      category: 'Background Image',
+      categories: ['Background Image'],
+      tags: ['theme', 'background-image', 'builder'],
+    },
+  };
+
+  function getThemePickerConfig(selectId) {
+    return THEME_ASSET_PICKERS[String(selectId || '').trim()] || null;
+  }
+
+  function getThemePickerAssets(selectId, currentValue = '') {
+    const config = getThemePickerConfig(selectId);
+    const currentId = safeText(currentValue);
+    const allowedCategories = new Set((config?.categories || []).map((item) => safeText(item)).filter(Boolean));
+    const rows = getThemeImageAssets().filter((asset) => {
+      if (!allowedCategories.size) return true;
+      return allowedCategories.has(safeText(asset?.category));
+    });
+    if (currentId && !rows.some((asset) => String(asset.id) === currentId)) {
+      const currentAsset = (Array.isArray(state.assets) ? state.assets : []).find((asset) => String(asset.id) === currentId);
+      if (currentAsset && safeText(currentAsset.assetType) === 'Image') rows.unshift(currentAsset);
+    }
+    return rows;
+  }
+
+  function renderThemeAssetPickerDisplay(selectId) {
+    const config = getThemePickerConfig(selectId);
+    if (!config) return;
+    const select = byId(config.selectId);
+    const button = byId(config.buttonId);
+    const preview = byId(config.previewId);
+    const selectedId = safeText(select?.value);
+    const asset = selectedId
+      ? (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === selectedId)
+      : null;
+    if (button) button.textContent = asset ? `Change ${config.title}` : `Choose ${config.title}`;
+    if (!preview) return;
+    if (!asset) {
+      preview.innerHTML = 'No image selected';
+      return;
+    }
+    const imageUrl = toDirectAssetUrl(asset.location);
+    preview.innerHTML = `
+      ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(asset.assetName) || config.title}" />` : ''}
+      <div class="develop-theme-asset-preview-text">
+        <strong>${safeText(assetLabel(asset, config.title))}</strong>
+        <span>${safeText(asset.category) || 'Image'}</span>
+      </div>
+    `;
+  }
+
   function renderThemeAssetSelect(selectId, currentValue, placeholderLabel) {
     const select = byId(selectId);
     if (!select) return;
     setSelectOptions(
       select,
-      getThemeImageAssets().map((asset) => ({
+      getThemePickerAssets(selectId, currentValue).map((asset) => ({
         value: String(asset.id),
         label: assetLabel(asset, `Asset ${asset.id}`),
       })),
       placeholderLabel || 'None',
       currentValue
     );
+    renderThemeAssetPickerDisplay(selectId);
+  }
+
+  async function uploadThemeAssetFile(file, selectId) {
+    const config = getThemePickerConfig(selectId);
+    if (!file || !config) return null;
+    if (!String(file.type || '').startsWith('image/')) {
+      throw new Error('Please choose an image file');
+    }
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    const result = await api('/api/assets/upload-google-drive', {
+      method: 'POST',
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        fileBase64: btoa(binary),
+        fileSize: Number(file.size || 0),
+        assetType: 'Image',
+        assetName: file.name.replace(/\.[^.]+$/, '') || file.name,
+        category: config.category,
+        tags: config.tags,
+      }),
+    });
+    const asset = result?.asset || result?.data?.asset || null;
+    if (!asset?.id) throw new Error('Image upload did not return an asset');
+    state.assets = [asset].concat(Array.isArray(state.assets) ? state.assets.filter((item) => String(item.id) !== String(asset.id)) : []);
+    renderThemeAssetSelect(selectId, String(asset.id), 'None');
+    renderThemesTable();
+    renderThemesPreview();
+    return asset;
+  }
+
+  function openThemeAssetPicker(selectId) {
+    const config = getThemePickerConfig(selectId);
+    const select = byId(selectId);
+    if (!config || !select || !App.components || typeof App.components.Modal !== 'function') return;
+    const body = document.createElement('div');
+    const toolbar = document.createElement('div');
+    toolbar.className = 'develop-theme-picker-toolbar';
+
+    const filterInput = document.createElement('input');
+    filterInput.placeholder = `Filter ${config.title.toLowerCase()}`;
+
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear Selection';
+
+    const uploadWrap = document.createElement('div');
+    uploadWrap.className = 'develop-theme-picker-upload';
+    const uploadInput = document.createElement('input');
+    uploadInput.type = 'file';
+    uploadInput.accept = 'image/*';
+    const uploadBtn = document.createElement('button');
+    uploadBtn.type = 'button';
+    uploadBtn.textContent = 'Upload Image';
+    uploadWrap.appendChild(uploadInput);
+    uploadWrap.appendChild(uploadBtn);
+
+    toolbar.appendChild(filterInput);
+    toolbar.appendChild(clearBtn);
+    toolbar.appendChild(uploadWrap);
+
+    const grid = document.createElement('div');
+    grid.className = 'develop-theme-picker-grid';
+    body.appendChild(toolbar);
+    body.appendChild(grid);
+
+    let modal = null;
+
+    function renderGrid() {
+      const filter = safeText(filterInput.value).toLowerCase();
+      const assets = getThemePickerAssets(selectId, select.value).filter((asset) => {
+        if (!filter) return true;
+        const haystack = [
+          assetLabel(asset, ''),
+          safeText(asset.category),
+          safeText(asset.assetName),
+          safeText(asset.location),
+        ].join(' ').toLowerCase();
+        return haystack.includes(filter);
+      });
+      grid.innerHTML = '';
+      if (!assets.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No matching images found.';
+        grid.appendChild(empty);
+        return;
+      }
+      assets.forEach((asset) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `develop-theme-picker-card${String(asset.id) === safeText(select.value) ? ' is-selected' : ''}`;
+        const imageUrl = toDirectAssetUrl(asset.location);
+        card.innerHTML = `
+          ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />` : '<div class="develop-theme-table-thumb-empty">No Image</div>'}
+          <div class="develop-theme-picker-card-title">${safeText(assetLabel(asset, config.title))}</div>
+          <div class="develop-theme-picker-card-meta">${safeText(asset.category) || 'Image'}</div>
+        `;
+        card.addEventListener('click', () => {
+          select.value = String(asset.id);
+          renderThemeAssetPickerDisplay(selectId);
+          renderThemesPreview();
+          if (modal) modal.close();
+        });
+        grid.appendChild(card);
+      });
+    }
+
+    filterInput.addEventListener('input', renderGrid);
+    clearBtn.addEventListener('click', () => {
+      select.value = '';
+      renderThemeAssetPickerDisplay(selectId);
+      renderThemesPreview();
+      if (modal) modal.close();
+    });
+    uploadBtn.addEventListener('click', async () => {
+      const file = uploadInput.files && uploadInput.files[0];
+      if (!file) {
+        notify('Choose an image file first', true);
+        return;
+      }
+      try {
+        uploadBtn.disabled = true;
+        await uploadThemeAssetFile(file, selectId);
+        notify('Image uploaded');
+        renderGrid();
+        if (modal) modal.close();
+      } catch (err) {
+        notify(err.message || 'Could not upload image', true);
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    });
+
+    modal = App.components.Modal({
+      title: `Choose ${config.title}`,
+      body,
+      dialogClass: 'develop-theme-picker-modal',
+    });
+    renderGrid();
+    modal.open();
   }
 
   function buildThemePayload() {
@@ -712,7 +944,6 @@ App.develop = (function () {
     const current = getThemeById(selectedThemeId);
     if (current) applyThemeToBuilder(current);
     else resetThemeBuilder();
-    renderThemesInventory();
   }
 
   function getThemeAssetLabel(id, fallback = '-') {
@@ -803,7 +1034,7 @@ App.develop = (function () {
       featureTd.className = 'develop-theme-table-thumb';
       const featureAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(theme.featureImageId));
       const featureUrl = featureAsset ? toDirectAssetUrl(featureAsset.location) : '';
-      featureTd.innerHTML = featureUrl ? `<img src="${featureUrl}" alt="Feature image" style="width:56px;height:56px;object-fit:cover;border-radius:10px;" />` : '-';
+      featureTd.innerHTML = featureUrl ? `<img src="${featureUrl}" alt="Feature image" />` : '<div class="develop-theme-table-thumb-empty">None</div>';
       const nameTd = document.createElement('td');
       nameTd.textContent = safeText(theme.name) || '-';
       const paletteTd = document.createElement('td');
@@ -4958,6 +5189,59 @@ App.develop = (function () {
         setThemesBuilderVisible(true);
       });
     }
+
+    [
+      'developThemesNameInput',
+      'developThemesPrimaryColorInput',
+      'developThemesBackgroundColorInput',
+      'developThemesAccentColorInput',
+      'developThemesLogoWideSelect',
+      'developThemesLogoSquareSelect',
+      'developThemesFeatureImageSelect',
+      'developThemesBackgroundImageSelect',
+    ].forEach((id) => {
+      const node = byId(id);
+      if (!node) return;
+      node.addEventListener('input', () => {
+        if (id.endsWith('Select')) renderThemeAssetPickerDisplay(id);
+        renderThemesPreview();
+      });
+      node.addEventListener('change', () => {
+        if (id.endsWith('Select')) renderThemeAssetPickerDisplay(id);
+        renderThemesPreview();
+      });
+    });
+
+    [
+      'developThemesBorderThicknessInput',
+      'developThemesBorderRadiusInput',
+      'developThemesContainerBlurInput',
+      'developThemesContrastLevelInput',
+    ].forEach((id) => {
+      const input = byId(id);
+      if (!input) return;
+      input.addEventListener('input', () => {
+        syncThemeRangeLabels();
+        renderThemesPreview();
+      });
+      input.addEventListener('change', () => {
+        syncThemeRangeLabels();
+        renderThemesPreview();
+      });
+    });
+
+    [
+      ['developThemesLogoWidePickerBtn', 'developThemesLogoWideSelect'],
+      ['developThemesLogoSquarePickerBtn', 'developThemesLogoSquareSelect'],
+      ['developThemesFeatureImagePickerBtn', 'developThemesFeatureImageSelect'],
+      ['developThemesBackgroundImagePickerBtn', 'developThemesBackgroundImageSelect'],
+    ].forEach(([buttonId, selectId]) => {
+      const button = byId(buttonId);
+      if (!button) return;
+      button.addEventListener('click', () => {
+        openThemeAssetPicker(selectId);
+      });
+    });
 
     if (themesSaveBtn) {
       themesSaveBtn.addEventListener('click', async () => {

@@ -5382,29 +5382,45 @@
             <article class="develop-themes-card">
               <h3>Assets</h3>
               <div class="develop-themes-stack">
-                <div class="form-row">
+                <div class="form-row develop-theme-asset-row">
                   <label for="developThemesLogoWideSelect">Logo - Wide</label>
-                  <select id="developThemesLogoWideSelect">
-                    <option value="">None</option>
-                  </select>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesLogoWideSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesLogoWidePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Logo - Wide</button>
+                    <div id="developThemesLogoWidePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 </div>
-                <div class="form-row">
+                <div class="form-row develop-theme-asset-row">
                   <label for="developThemesLogoSquareSelect">Logo - Square</label>
-                  <select id="developThemesLogoSquareSelect">
-                    <option value="">None</option>
-                  </select>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesLogoSquareSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesLogoSquarePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Logo - Square</button>
+                    <div id="developThemesLogoSquarePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 </div>
-                <div class="form-row">
+                <div class="form-row develop-theme-asset-row">
                   <label for="developThemesFeatureImageSelect">Feature</label>
-                  <select id="developThemesFeatureImageSelect">
-                    <option value="">None</option>
-                  </select>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesFeatureImageSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesFeatureImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Feature Image</button>
+                    <div id="developThemesFeatureImagePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 </div>
-                <div class="form-row">
+                <div class="form-row develop-theme-asset-row">
                   <label for="developThemesBackgroundImageSelect">Background</label>
-                  <select id="developThemesBackgroundImageSelect">
-                    <option value="">None</option>
-                  </select>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesBackgroundImageSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesBackgroundImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Background Image</button>
+                    <div id="developThemesBackgroundImagePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 </div>
               </div>
             </article>
@@ -5413,23 +5429,6 @@
             <h3>Preview</h3>
             <div id="developThemesPreviewHost" class="develop-themes-preview-host"></div>
           </section>
-        </section>
-        <section class="develop-themes-card">
-          <h3>Consolidation Targets</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Area</th>
-                  <th>Current Controls</th>
-                  <th>Persistence</th>
-                  <th>Target Consolidation</th>
-                </tr>
-              </thead>
-              <tbody id="developThemesInventoryBody"></tbody>
-            </table>
-          </div>
-          <ul id="developThemesConsolidationList" class="develop-themes-plan"></ul>
         </section>
       </section>
 
