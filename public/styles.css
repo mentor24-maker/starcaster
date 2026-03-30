@@ -3855,12 +3855,13 @@ th {
 }
 
 .develop-theme-picker-modal {
-  max-width: min(1120px, 94vw);
+  width: min(1440px, 96vw);
+  max-width: min(1440px, 96vw);
 }
 
 .develop-theme-picker-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(280px, 1.6fr) auto auto auto;
   gap: 0.6rem;
   align-items: center;
   margin-bottom: 0.9rem;
@@ -3868,6 +3869,14 @@ th {
 
 .develop-theme-picker-toolbar input {
   margin: 0;
+}
+
+.develop-theme-picker-result-count {
+  min-width: 110px;
+  text-align: center;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #3f5872;
 }
 
 .develop-theme-picker-upload {
@@ -3879,8 +3888,11 @@ th {
 
 .develop-theme-picker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 0.8rem;
+  max-height: min(72vh, 920px);
+  overflow: auto;
+  padding-right: 0.35rem;
 }
 
 .develop-theme-picker-card {
@@ -3918,12 +3930,24 @@ th {
   font-weight: 700;
   color: #123d67;
   font-size: 0.92rem;
+  word-break: break-word;
 }
 
 .develop-theme-picker-card-meta {
   color: #5a6f84;
   font-size: 0.82rem;
   line-height: 1.35;
+  word-break: break-word;
+}
+
+@media (max-width: 980px) {
+  .develop-theme-picker-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .develop-theme-picker-result-count {
+    text-align: left;
+  }
 }
 
 .develop-save-notice {
