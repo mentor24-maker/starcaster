@@ -1090,6 +1090,36 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { websitePeer: result.data }), true;
   }
 
+  // POST /api/acquire/website-peers/discover — discover peer-site candidates without saving them yet
+  if (pathname === '/api/acquire/website-peers/discover' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'harvest.direct')) return true;
+    const body = await parseJsonBody(req);
+    const sourceUrl = safeText(body?.source_url || body?.site_url);
+    if (!sourceUrl) return sendErr(res, 400, 'source_url is required'), true;
+    const run = await runDirectAcquire({
+      source_url: sourceUrl,
+      max_pages: Number(body?.max_pages || 10) || 10,
+      body_snippet_chars: Number(body?.body_snippet_chars || 500) || 500,
+      capture_contact_data: body?.capture_contact_data === true || String(body?.capture_contact_data || '').trim().toLowerCase() === 'true',
+      acquire_peer_sites: true,
+      peer_sites_limit: Number(body?.peer_sites_limit || 20) || 20,
+      images_limit: Number(body?.images_limit || 20) || 20,
+      keyword_exclusions: body?.keyword_exclusions || '',
+      persist_run: false,
+    });
+    return sendOk(res, 200, {
+      source_url: run?.source_url || sourceUrl,
+      pages_succeeded: Number(run?.pages_succeeded || 0) || 0,
+      keyword_summary: run?.keyword_summary || {},
+      peer_summary: run?.peer_summary || {},
+    }, {
+      source_url: run?.source_url || sourceUrl,
+      pages_succeeded: Number(run?.pages_succeeded || 0) || 0,
+      keyword_summary: run?.keyword_summary || {},
+      peer_summary: run?.peer_summary || {},
+    }), true;
+  }
+
   const websitePeerMatch = pathname.match(/^\/api\/acquire\/website-peers\/([^/]+)$/);
   if (websitePeerMatch && method === 'GET') {
     const scope = requestProjectScope(req);

@@ -322,7 +322,42 @@
             <button id="contactsPeerSiteSaveBtn" type="submit">Save Peer Site</button>
             <button id="contactsPeerSiteCancelBtn" type="button" class="tiny-btn">Cancel</button>
           </div>
+          <div class="page-heading-actions" style="justify-content: center; margin-top: 0.75rem;">
+            <button id="contactsPeerSitesAcquireBtn" type="button">Acquire Peer Sites</button>
+          </div>
         </form>
+        <div id="contactsPeerSitesAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite" style="margin-bottom: 1rem;">
+          <div id="contactsPeerSitesAcquireProgressText" class="asset-upload-progress-text">Acquiring peer sites...</div>
+          <progress id="contactsPeerSitesAcquireProgressBar" max="100" value="8"></progress>
+        </div>
+        <section id="contactsPeerSitesDiscoveryWrap" class="card hidden" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Peer Site Candidates</h3>
+            <div class="page-heading-actions">
+              <label class="checkbox-row" style="margin:0;">
+                <input id="contactsPeerSitesDiscoverySelectAll" type="checkbox" />
+                <span>Check All</span>
+              </label>
+              <button id="contactsPeerSitesSaveSelectedBtn" type="button">Save Selected Peer Sites</button>
+            </div>
+          </div>
+          <div id="contactsPeerSitesDiscoveryMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site candidates loaded yet.</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Domain</th>
+                  <th>Site</th>
+                  <th>Matched Keywords</th>
+                  <th>Site Type</th>
+                  <th>Snippet</th>
+                </tr>
+              </thead>
+              <tbody id="contactsPeerSitesDiscoveryTable"></tbody>
+            </table>
+          </div>
+        </section>
         <div class="table-wrap">
           <table>
             <thead>
