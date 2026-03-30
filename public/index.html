@@ -3307,7 +3307,12 @@
                 <input id="messagingCreateContentPromptId" name="prompt_id" type="hidden" />
                 <div class="form-row hidden" id="messagingCreateContentPrimaryRow">
                   <label for="messagingCreateContentPrimaryInput"><strong id="messagingCreateContentPrimaryLabel">Content:</strong></label>
-                  <textarea id="messagingCreateContentPrimaryInput" name="primary" rows="5" placeholder="Enter content"></textarea>
+                  <div class="field-stack">
+                    <select id="messagingCreateContentSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingCreateContentPrimaryInput" name="primary" rows="5" placeholder="Enter content"></textarea>
+                  </div>
                 </div>
                 <div class="form-row hidden" id="messagingCreateContentAuthorRow">
                   <label for="messagingCreateContentAuthor"><strong>Author:</strong></label>

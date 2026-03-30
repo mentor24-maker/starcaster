@@ -2117,6 +2117,13 @@ th {
   font-weight: 600;
 }
 
+.labeled-form .form-row .field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .labeled-form .form-row:has(textarea),
 .labeled-form .form-row:has(.messaging-richtext-editor) {
   align-items: start;

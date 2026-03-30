@@ -31,6 +31,7 @@ App.messaging = (function () {
   let currentHashtags = [];
   let currentMessagingTopics = [];
   let currentMessagingFormats = [];
+  let currentMessagingPrompts = [];
   let currentMessagingTags = [];
   let currentMessagingTopicSuggestions = [];
   let messagingTopicsProgressTimer = null;
@@ -2965,6 +2966,7 @@ App.messaging = (function () {
     App.setActivePage('messagingCreateContentPage');
     await refreshMessagingFormats().catch(function () {});
     await refreshMessagingCategories();
+    await refreshMessagingPrompts().catch(function () {});
     await loadThumbnailOptions();
     renderCreateContentFormatOptions();
     await renderCreateContentTopicOptions();
@@ -2975,6 +2977,7 @@ App.messaging = (function () {
       formatSelect.value = activeFormat;
     }
     renderCreateContentDynamicFields();
+    renderCreateContentSavedPromptOptions();
     clearCreateContentSuggestions();
     return false;
   }
@@ -3055,6 +3058,53 @@ App.messaging = (function () {
     if (currentValue && topics.includes(currentValue)) select.value = currentValue;
   }
 
+  async function refreshMessagingPrompts() {
+    const res = await api('/api/messaging/prompts?limit=1000');
+    const prompts = Array.isArray(res?.prompts)
+      ? res.prompts
+      : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+          ? res
+          : [];
+    currentMessagingPrompts = prompts.slice();
+    return currentMessagingPrompts;
+  }
+
+  function filteredCreateContentPrompts() {
+    const format = cleanText(document.getElementById('messagingCreateContentFormat')?.value);
+    const topic = cleanText(document.getElementById('messagingCreateContentTopic')?.value);
+    return (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter((item) => {
+      const itemFormat = cleanText(item?.format);
+      const itemTopic = cleanText(item?.topic);
+      if (!itemFormat || itemFormat !== format) return false;
+      if (topic && itemTopic && itemTopic !== topic) return false;
+      return true;
+    });
+  }
+
+  function renderCreateContentSavedPromptOptions(selectedId = null) {
+    const select = document.getElementById('messagingCreateContentSavedPrompt');
+    const schema = createContentSchema(document.getElementById('messagingCreateContentFormat')?.value);
+    if (!select) return;
+    const currentValue = String(selectedId || select.value || '').trim();
+    const prompts = schema?.fields?.includes('primary') ? filteredCreateContentPrompts() : [];
+    select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+    prompts.forEach((prompt) => {
+      const option = document.createElement('option');
+      option.value = String(prompt.id || '');
+      const topicSuffix = cleanText(prompt.topic) ? ` - ${cleanText(prompt.topic)}` : '';
+      const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+      option.textContent = `#${prompt.id}${topicSuffix}: ${preview}${preview.length >= 90 ? '...' : ''}`;
+      select.appendChild(option);
+    });
+    if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+      select.value = currentValue;
+    } else {
+      select.value = '';
+    }
+  }
+
   function renderCreateContentAssetOptions() {
     renderImageOptions(document.getElementById('messagingCreateContentImage'));
     renderThumbnailOptions(document.getElementById('messagingCreateContentThumbnail'));
@@ -3072,9 +3122,11 @@ App.messaging = (function () {
     const submitBtn = document.getElementById('messagingCreateContentSubmitBtn');
     const actionsRow = document.getElementById('messagingCreateContentActionsRow');
     const promptIdInput = document.getElementById('messagingCreateContentPromptId');
+    const savedPromptSelect = document.getElementById('messagingCreateContentSavedPrompt');
     const feedbackWrap = document.getElementById('messagingCreateContentFeedbackWrap');
     if (!schema) {
       if (promptIdInput) promptIdInput.value = '';
+      if (savedPromptSelect) savedPromptSelect.value = '';
       if (topicRow) topicRow.classList.add('hidden');
       if (feedbackWrap) feedbackWrap.classList.add('hidden');
       setCreateContentFieldVisible('messagingCreateContentPrimaryRow', false);
@@ -3121,6 +3173,7 @@ App.messaging = (function () {
       }
     });
     if (promptIdInput) promptIdInput.value = '';
+    if (savedPromptSelect) savedPromptSelect.value = '';
 
     if (topicRow) topicRow.classList.remove('hidden');
     setCreateContentFieldVisible('messagingCreateContentPrimaryRow', hasField('primary'));
@@ -3148,6 +3201,7 @@ App.messaging = (function () {
     if (thumbnailLabel) thumbnailLabel.textContent = 'Image:';
     if (submitBtn) submitBtn.classList.remove('hidden');
     if (actionsRow) actionsRow.classList.remove('hidden');
+    renderCreateContentSavedPromptOptions();
   }
 
   function buildCreateContentPayload(formData, schema, overrides = {}) {
@@ -3402,6 +3456,8 @@ App.messaging = (function () {
       });
       const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
       if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+      await refreshMessagingPrompts().catch(function () {});
+      renderCreateContentSavedPromptOptions(promptId ? String(promptId) : '');
       notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
     } catch (err) {
       notify(err.message, true);
@@ -6170,6 +6226,8 @@ App.messaging = (function () {
     const createContentForm = document.getElementById('messagingCreateContentForm');
     const createContentGenerateBtn = document.getElementById('messagingCreateContentGenerateBtn');
     const createContentSavePromptBtn = document.getElementById('messagingCreateContentSavePromptBtn');
+    const createContentTopic = document.getElementById('messagingCreateContentTopic');
+    const createContentSavedPrompt = document.getElementById('messagingCreateContentSavedPrompt');
     const createContentClearSuggestionsBtn = document.getElementById('messagingCreateContentClearSuggestionsBtn');
     const createContentSaveSelectedBtn = document.getElementById('messagingCreateContentSaveSelectedBtn');
     const createContentSaveGeneratedBtn = document.getElementById('messagingCreateContentSaveGeneratedBtn');
@@ -6178,6 +6236,21 @@ App.messaging = (function () {
     const createContentRichtextToolbar = document.querySelector('.messaging-richtext-toolbar');
     if (createContentFormat) {
       createContentFormat.addEventListener('change', renderCreateContentDynamicFields);
+    }
+    if (createContentTopic) {
+      createContentTopic.addEventListener('change', function () {
+        renderCreateContentSavedPromptOptions();
+      });
+    }
+    if (createContentSavedPrompt) {
+      createContentSavedPrompt.addEventListener('change', function () {
+        const selectedId = String(createContentSavedPrompt.value || '').trim();
+        const promptIdInput = document.getElementById('messagingCreateContentPromptId');
+        const primaryInput = document.getElementById('messagingCreateContentPrimaryInput');
+        const selected = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item?.id || '') === selectedId);
+        if (promptIdInput) promptIdInput.value = selected ? selectedId : '';
+        if (primaryInput && selected) primaryInput.value = cleanText(selected.prompt_text);
+      });
     }
     if (createContentForm) {
       createContentForm.addEventListener('submit', submitCreateContentForm);
