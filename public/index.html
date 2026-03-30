@@ -333,13 +333,112 @@
                 <th>Site</th>
                 <th>Matched Keywords</th>
                 <th>Source Website</th>
-                <th>Updated</th>
-                <th>Actions</th>
+                <th class="contacts-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody id="contactsPeerSitesTable"></tbody>
           </table>
         </div>
+      </section>
+
+      <section id="contactsPeerSiteDetailsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contacts: Peer Site Details</h2>
+          <div class="page-heading-actions">
+            <button id="contactsPeerSiteDetailsEditBtn" type="button">Edit Peer Site</button>
+            <button id="contactsPeerSiteDetailsBackBtn" type="button">Back To Peer Sites</button>
+          </div>
+        </div>
+        <div id="contactsPeerSiteDetailsMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site selected.</div>
+        <div class="card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Website Summary</h3>
+          </div>
+          <div id="contactsPeerSiteSummary" class="view-field-list"></div>
+        </div>
+        <div class="acquire-web-results-grid">
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Social</h3>
+            </div>
+            <div id="contactsPeerSiteSocialEmpty" class="meta">No social/contact data stored for this website yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="contactsPeerSiteSocialTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Keywords</h3>
+            </div>
+            <div id="contactsPeerSiteKeywordsEmpty" class="meta">No keywords stored for this website yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Keyword</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody id="contactsPeerSiteKeywordsTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Hashtags</h3>
+            </div>
+            <div id="contactsPeerSiteHashtagsEmpty" class="meta">No hashtags stored for this website yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hashtag</th>
+                    <th>Score</th>
+                    <th>Posts</th>
+                  </tr>
+                </thead>
+                <tbody id="contactsPeerSiteHashtagsTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <section class="card" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Captured Images</h3>
+          </div>
+          <div id="contactsPeerSiteImagesEmpty" class="meta">No harvested images stored for this website yet.</div>
+          <div id="contactsPeerSiteImagesGrid" class="direct-acquire-image-grid"></div>
+        </section>
+        <section class="card" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Website Pages</h3>
+          </div>
+          <div id="contactsPeerSitePagesEmpty" class="meta">No harvested page content stored for this website yet.</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>URL</th>
+                  <th>Title</th>
+                  <th>Emails</th>
+                  <th>Phones</th>
+                  <th>Snippet</th>
+                </tr>
+              </thead>
+              <tbody id="contactsPeerSitePagesTable"></tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <section id="contactsPersonasPage" class="app-page hidden">
