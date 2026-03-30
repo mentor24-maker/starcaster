@@ -35,6 +35,7 @@ App.messaging = (function () {
   let currentMessagingTags = [];
   let currentMessagingTopicSuggestions = [];
   let currentHeadlineCreatorSuggestions = [];
+  let currentTaglineCreatorSuggestions = [];
   let messagingTopicsProgressTimer = null;
   let activeMessagingContentCategory = '';
   const headlineTableState = {
@@ -545,7 +546,7 @@ App.messaging = (function () {
 
   function ensureSimpleContentPages() {
     simpleContentConfigs.forEach((config) => {
-      if (config.pageId === 'messagingTweetsPage') return;
+      if (config.pageId === 'messagingTweetsPage' || config.pageId === 'messagingTaglinesPage') return;
       const page = document.getElementById(config.pageId);
       if (page) {
         page.innerHTML = buildSimpleContentPageMarkup(config);
@@ -2469,7 +2470,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 7;
       td.textContent = 'No taglines match current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -2495,6 +2496,7 @@ App.messaging = (function () {
       [
         String(item.tagline || '').trim() || '-',
         String(item.category || '').trim() || '-',
+        (Math.max(0, Math.min(Number(item.quality_score || 0) || 0, 5)) || '-'),
         item.created_at ? new Date(item.created_at).toLocaleString() : '-',
         item.updated_at ? new Date(item.updated_at).toLocaleString() : '-',
       ].forEach((value) => {
@@ -3238,6 +3240,34 @@ App.messaging = (function () {
     }
   }
 
+  function renderTaglinesCreatorSavedPromptOptions(selectedId = null) {
+    const select = document.getElementById('messagingTaglinesCreatorSavedPrompt');
+    if (!select) return;
+    const topic = cleanText(document.getElementById('messagingTaglinesCreatorTopic')?.value);
+    const currentValue = String(selectedId || select.value || '').trim();
+    const prompts = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter((item) => {
+      const itemFormat = cleanText(item?.format);
+      const itemTopic = cleanText(item?.topic);
+      if (itemFormat !== 'Taglines') return false;
+      if (topic && itemTopic && itemTopic !== topic) return false;
+      return true;
+    });
+    select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+    prompts.forEach((prompt) => {
+      const option = document.createElement('option');
+      option.value = String(prompt.id || '');
+      const topicLabel = cleanText(prompt.topic);
+      const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+      option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
+      select.appendChild(option);
+    });
+    if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+      select.value = currentValue;
+    } else {
+      select.value = '';
+    }
+  }
+
   function clearHeadlinesCreatorSuggestions() {
     currentHeadlineCreatorSuggestions = [];
     const empty = document.getElementById('messagingHeadlinesCreatorSuggestionsEmpty');
@@ -3248,6 +3278,20 @@ App.messaging = (function () {
     if (wrap) wrap.classList.add('hidden');
     if (tbody) tbody.innerHTML = '';
     if (checkAll) checkAll.checked = false;
+  }
+
+  function clearTaglinesCreatorSuggestions() {
+    currentTaglineCreatorSuggestions = [];
+    const empty = document.getElementById('messagingTaglinesCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingTaglinesCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingTaglinesCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingTaglinesCreatorSelectAllSuggestions');
+    const bulkQuality = document.getElementById('messagingTaglinesCreatorBulkQuality');
+    if (empty) empty.classList.remove('hidden');
+    if (wrap) wrap.classList.add('hidden');
+    if (tbody) tbody.innerHTML = '';
+    if (checkAll) checkAll.checked = false;
+    if (bulkQuality) bulkQuality.value = '';
   }
 
   function renderHeadlinesCreatorSuggestions(options) {
@@ -3267,6 +3311,39 @@ App.messaging = (function () {
         <td>${escapeHtml(String(text || ''))}</td>
         <td>
           <select data-headline-creator-quality-index="${index}">
+            <option value="">-</option>
+            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
+            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
+            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
+            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
+            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
+          </select>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    if (checkAll) checkAll.checked = false;
+    if (empty) empty.classList.add('hidden');
+    wrap.classList.remove('hidden');
+  }
+
+  function renderTaglinesCreatorSuggestions(options) {
+    const empty = document.getElementById('messagingTaglinesCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingTaglinesCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingTaglinesCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingTaglinesCreatorSelectAllSuggestions');
+    if (!wrap || !tbody) return;
+    currentTaglineCreatorSuggestions = Array.isArray(options) ? options.slice() : [];
+    tbody.innerHTML = '';
+    currentTaglineCreatorSuggestions.forEach((option, index) => {
+      const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
+      const text = typeof option === 'object' && option ? option.tagline || option.text || '' : option;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="checkbox" data-tagline-creator-suggestion-index="${index}" /></td>
+        <td>${escapeHtml(String(text || ''))}</td>
+        <td>
+          <select data-tagline-creator-quality-index="${index}">
             <option value="">-</option>
             <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
             <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
@@ -3319,6 +3396,42 @@ App.messaging = (function () {
     return false;
   }
 
+  async function saveTaglinesCreatorPrompt() {
+    const form = document.getElementById('messagingTaglinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingTaglinesCreatorSavePromptBtn');
+    const promptIdInput = document.getElementById('messagingTaglinesCreatorPromptId');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving Prompt...';
+    }
+    try {
+      const result = await api('/api/messaging/prompts', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Taglines',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('tagline')),
+        }),
+      });
+      const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
+      if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+      await refreshMessagingPrompts().catch(function () {});
+      renderTaglinesCreatorSavedPromptOptions(promptId ? String(promptId) : '');
+      notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Save Prompt';
+      }
+    }
+    return false;
+  }
+
   async function generateHeadlinesCreatorSuggestions() {
     const form = document.getElementById('messagingHeadlinesCreatorForm');
     if (!form) return false;
@@ -3339,6 +3452,38 @@ App.messaging = (function () {
         }),
       });
       renderHeadlinesCreatorSuggestions(Array.isArray(result.options) ? result.options : []);
+      notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Generate with AI';
+      }
+    }
+    return false;
+  }
+
+  async function generateTaglinesCreatorSuggestions() {
+    const form = document.getElementById('messagingTaglinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingTaglinesCreatorGenerateBtn');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Generating...';
+    }
+    try {
+      const result = await api('/api/messaging/content-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Taglines',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('tagline')),
+        }),
+      });
+      renderTaglinesCreatorSuggestions(Array.isArray(result.options) ? result.options : []);
       notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
     } catch (err) {
       notify(err.message, true);
@@ -3383,6 +3528,38 @@ App.messaging = (function () {
     return false;
   }
 
+  async function submitTaglinesCreatorForm(event) {
+    if (event) event.preventDefault();
+    const form = document.getElementById('messagingTaglinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const payload = {
+      tagline: cleanText(formData.get('tagline')),
+      topic: cleanText(formData.get('topic')),
+      prompt_id: Number(formData.get('prompt_id') || 0) || null,
+    };
+    if (!payload.tagline) {
+      notify('Tagline/Prompt is required', true);
+      return false;
+    }
+    try {
+      await api('/api/messaging/taglines', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('Tagline saved');
+      form.reset();
+      const promptIdInput = document.getElementById('messagingTaglinesCreatorPromptId');
+      if (promptIdInput) promptIdInput.value = '';
+      renderTaglinesCreatorSavedPromptOptions();
+      clearTaglinesCreatorSuggestions();
+      await refreshTaglines();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
   async function saveSelectedHeadlinesCreatorSuggestions() {
     const form = document.getElementById('messagingHeadlinesCreatorForm');
     if (!form) return false;
@@ -3421,6 +3598,50 @@ App.messaging = (function () {
       notify(`Saved ${selectedIndices.length} headline${selectedIndices.length === 1 ? '' : 's'}`);
       clearHeadlinesCreatorSuggestions();
       await refreshHeadlines();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function saveSelectedTaglinesCreatorSuggestions() {
+    const form = document.getElementById('messagingTaglinesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const topic = cleanText(formData.get('topic'));
+    const promptId = Number(formData.get('prompt_id') || 0) || null;
+    const selectedIndices = Array.from(document.querySelectorAll('[data-tagline-creator-suggestion-index]:checked'))
+      .map((input) => Number(input.getAttribute('data-tagline-creator-suggestion-index')))
+      .filter((value) => Number.isFinite(value) && currentTaglineCreatorSuggestions[value]);
+    if (!selectedIndices.length) {
+      notify('Select at least one option', true);
+      return false;
+    }
+    try {
+      for (const index of selectedIndices) {
+        await api('/api/messaging/taglines', {
+          method: 'POST',
+          body: JSON.stringify({
+            tagline: cleanText(
+              typeof currentTaglineCreatorSuggestions[index] === 'object' && currentTaglineCreatorSuggestions[index]
+                ? currentTaglineCreatorSuggestions[index].tagline || currentTaglineCreatorSuggestions[index].text
+                : currentTaglineCreatorSuggestions[index]
+            ),
+            topic,
+            prompt_id: promptId,
+            quality_score: Math.max(
+              0,
+              Math.min(
+                Number(document.querySelector(`[data-tagline-creator-quality-index="${index}"]`)?.value || 0) || 0,
+                5
+              )
+            ),
+          }),
+        });
+      }
+      notify(`Saved ${selectedIndices.length} tagline${selectedIndices.length === 1 ? '' : 's'}`);
+      clearTaglinesCreatorSuggestions();
+      await refreshTaglines();
     } catch (err) {
       notify(err.message, true);
     }
@@ -5444,6 +5665,15 @@ async function saveTweetFromForm(form) {
     const headlinesCreatorSaveSelectedBtn = document.getElementById('messagingHeadlinesCreatorSaveSelectedBtn');
     const headlinesCreatorSelectAllSuggestions = document.getElementById('messagingHeadlinesCreatorSelectAllSuggestions');
     const headlinesCreatorBulkQuality = document.getElementById('messagingHeadlinesCreatorBulkQuality');
+    const taglinesCreatorForm = document.getElementById('messagingTaglinesCreatorForm');
+    const taglinesCreatorTopic = document.getElementById('messagingTaglinesCreatorTopic');
+    const taglinesCreatorSavedPrompt = document.getElementById('messagingTaglinesCreatorSavedPrompt');
+    const taglinesCreatorGenerateBtn = document.getElementById('messagingTaglinesCreatorGenerateBtn');
+    const taglinesCreatorSavePromptBtn = document.getElementById('messagingTaglinesCreatorSavePromptBtn');
+    const taglinesCreatorClearSuggestionsBtn = document.getElementById('messagingTaglinesCreatorClearSuggestionsBtn');
+    const taglinesCreatorSaveSelectedBtn = document.getElementById('messagingTaglinesCreatorSaveSelectedBtn');
+    const taglinesCreatorSelectAllSuggestions = document.getElementById('messagingTaglinesCreatorSelectAllSuggestions');
+    const taglinesCreatorBulkQuality = document.getElementById('messagingTaglinesCreatorBulkQuality');
     const headlineEditForm = document.getElementById('messagingHeadlineEditForm');
     const headlineCancelEditBtn = document.getElementById('messagingHeadlineCancelEditBtn');
     const headlineSelectAllVisible = document.getElementById('messagingHeadlinesSelectAllVisible');
@@ -5707,8 +5937,71 @@ async function saveTweetFromForm(form) {
         const isHidden = taglinesCreateWrap.classList.contains('hidden');
         closeTaglineEditForm();
         syncHeadlineCategorySelects();
+        renderTaglinesCreatorSavedPromptOptions();
         taglinesCreateWrap.classList.toggle('hidden', !isHidden);
         taglinesToggleBtn.textContent = isHidden ? 'Hide Create' : 'Create Taglines';
+      });
+    }
+
+    if (taglinesCreatorTopic) {
+      taglinesCreatorTopic.addEventListener('change', function () {
+        renderTaglinesCreatorSavedPromptOptions();
+      });
+    }
+
+    if (taglinesCreatorSavedPrompt) {
+      taglinesCreatorSavedPrompt.addEventListener('change', function () {
+        const selectedId = String(taglinesCreatorSavedPrompt.value || '').trim();
+        const promptIdInput = document.getElementById('messagingTaglinesCreatorPromptId');
+        const primaryInput = document.getElementById('messagingTaglinesCreatorPrimary');
+        const selected = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item?.id || '') === selectedId);
+        if (promptIdInput) promptIdInput.value = selected ? selectedId : '';
+        if (primaryInput && selected) primaryInput.value = cleanText(selected.prompt_text);
+      });
+    }
+
+    if (taglinesCreatorForm) {
+      taglinesCreatorForm.addEventListener('submit', submitTaglinesCreatorForm);
+    }
+
+    if (taglinesCreatorGenerateBtn) {
+      taglinesCreatorGenerateBtn.addEventListener('click', generateTaglinesCreatorSuggestions);
+    }
+
+    if (taglinesCreatorSavePromptBtn) {
+      taglinesCreatorSavePromptBtn.addEventListener('click', function () {
+        saveTaglinesCreatorPrompt().catch(function (err) {
+          notify(err.message, true);
+        });
+      });
+    }
+
+    if (taglinesCreatorClearSuggestionsBtn) {
+      taglinesCreatorClearSuggestionsBtn.addEventListener('click', clearTaglinesCreatorSuggestions);
+    }
+
+    if (taglinesCreatorSaveSelectedBtn) {
+      taglinesCreatorSaveSelectedBtn.addEventListener('click', saveSelectedTaglinesCreatorSuggestions);
+    }
+
+    if (taglinesCreatorSelectAllSuggestions) {
+      taglinesCreatorSelectAllSuggestions.addEventListener('change', function () {
+        const checked = Boolean(taglinesCreatorSelectAllSuggestions.checked);
+        document.querySelectorAll('[data-tagline-creator-suggestion-index]').forEach((input) => {
+          input.checked = checked;
+        });
+      });
+    }
+
+    if (taglinesCreatorBulkQuality) {
+      taglinesCreatorBulkQuality.addEventListener('change', function () {
+        const value = String(taglinesCreatorBulkQuality.value || '').trim();
+        if (!value) return;
+        document.querySelectorAll('[data-tagline-creator-suggestion-index]:checked').forEach((input) => {
+          const index = String(input.getAttribute('data-tagline-creator-suggestion-index') || '').trim();
+          const select = document.querySelector(`[data-tagline-creator-quality-index="${index}"]`);
+          if (select) select.value = value;
+        });
       });
     }
 
