@@ -513,6 +513,29 @@ button {
   box-shadow: 0 0 0 2px rgba(212, 63, 58, 0.14);
 }
 
+.develop-landing-pages-form {
+  gap: 0.9rem;
+}
+
+.develop-landing-pages-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem 1.2rem;
+  align-items: start;
+}
+
+.develop-landing-pages-column {
+  display: grid;
+  gap: 0.8rem;
+  align-content: start;
+}
+
+.develop-landing-pages-column > input,
+.develop-landing-pages-column > select,
+.develop-landing-pages-column .develop-color-control {
+  margin: 0;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;
@@ -4630,6 +4653,9 @@ th {
     grid-template-columns: 1fr;
   }
   .develop-themes-stack .form-row {
+    grid-template-columns: 1fr;
+  }
+  .develop-landing-pages-grid {
     grid-template-columns: 1fr;
   }
   .develop-visual-toolbar {
