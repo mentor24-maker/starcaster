@@ -320,7 +320,7 @@ App.messaging = (function () {
     { format: 'Calls to Action', pageId: 'messagingCtasPage', field: 'cta', source: () => simpleContentState.ctas.items },
   ];
   const createContentFormatSchemas = {
-    Headlines: { kind: 'simple', endpoint: '/api/messaging/headlines', primaryKey: 'headline', primaryLabel: 'Headline', primaryRows: 3, fields: ['primary'] },
+    Headlines: { kind: 'simple', endpoint: '/api/messaging/headlines', primaryKey: 'headline', primaryLabel: 'Headline/Prompt', primaryRows: 3, fields: ['primary'] },
     'Sub-headings': { kind: 'simple', endpoint: '/api/messaging/subheadings', primaryKey: 'subheading', primaryLabel: 'Sub-heading', primaryRows: 3, fields: ['primary'] },
     Taglines: { kind: 'simple', endpoint: '/api/messaging/taglines', primaryKey: 'tagline', primaryLabel: 'Tagline', primaryRows: 3, fields: ['primary'] },
     Pitches: { kind: 'simple', endpoint: '/api/messaging/pitches', primaryKey: 'pitch', primaryLabel: 'Pitch', primaryRows: 5, fields: ['primary'] },
@@ -3071,8 +3071,10 @@ App.messaging = (function () {
     const topicRow = document.getElementById('messagingCreateContentTopicRow');
     const submitBtn = document.getElementById('messagingCreateContentSubmitBtn');
     const actionsRow = document.getElementById('messagingCreateContentActionsRow');
+    const promptIdInput = document.getElementById('messagingCreateContentPromptId');
     const feedbackWrap = document.getElementById('messagingCreateContentFeedbackWrap');
     if (!schema) {
+      if (promptIdInput) promptIdInput.value = '';
       if (topicRow) topicRow.classList.add('hidden');
       if (feedbackWrap) feedbackWrap.classList.add('hidden');
       setCreateContentFieldVisible('messagingCreateContentPrimaryRow', false);
@@ -3118,6 +3120,7 @@ App.messaging = (function () {
         return;
       }
     });
+    if (promptIdInput) promptIdInput.value = '';
 
     if (topicRow) topicRow.classList.remove('hidden');
     setCreateContentFieldVisible('messagingCreateContentPrimaryRow', hasField('primary'));
@@ -3151,11 +3154,13 @@ App.messaging = (function () {
     if (!schema) throw new Error('Select a format');
     const payload = {};
     const topic = cleanText(formData.get('topic'));
+    const promptId = Number(formData.get('prompt_id') || overrides.prompt_id || 0) || null;
     if (schema.kind === 'simple') {
       const value = cleanText(overrides.primary != null ? overrides.primary : formData.get('primary'));
       if (!value) throw new Error(`${schema.primaryLabel} is required`);
       payload[schema.primaryKey] = value;
       payload.topic = topic;
+      payload.prompt_id = promptId;
       payload.feedback = cleanText(overrides.feedback != null ? overrides.feedback : formData.get('feedback'));
       if (schema.fields.includes('author')) payload.author = cleanText(formData.get('author'));
       if (schema.fields.includes('subject')) payload.subject = cleanText(overrides.subject != null ? overrides.subject : formData.get('subject'));
@@ -3172,11 +3177,13 @@ App.messaging = (function () {
       payload.hashtags = cleanText(overrides.hashtags != null ? overrides.hashtags : formData.get('hashtags'));
       payload.image_asset_id = cleanText(formData.get('image_asset_id'));
       payload.topic = topic;
+      payload.prompt_id = promptId;
       payload.feedback = cleanText(overrides.feedback != null ? overrides.feedback : formData.get('feedback'));
       return payload;
     }
     if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
       payload.topic = topic;
+      payload.prompt_id = promptId;
       payload.author = cleanText(formData.get('author'));
       payload.title = cleanText(overrides.title != null ? overrides.title : formData.get('title'));
       payload.subtitle = cleanText(overrides.subtitle != null ? overrides.subtitle : formData.get('subtitle'));
@@ -3351,6 +3358,58 @@ App.messaging = (function () {
     } finally {
       button.disabled = false;
       button.textContent = originalText || 'Revise with Feedback';
+    }
+    return false;
+  }
+
+  async function saveCreateContentPrompt() {
+    const form = document.getElementById('messagingCreateContentForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const format = cleanText(formData.get('format'));
+    const schema = createContentSchema(format);
+    if (!schema) {
+      notify('Select a format', true);
+      return false;
+    }
+    const button = document.getElementById('messagingCreateContentSavePromptBtn');
+    const promptIdInput = document.getElementById('messagingCreateContentPromptId');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving Prompt...';
+    }
+    try {
+      const imageSelect = document.getElementById('messagingCreateContentImage');
+      const thumbSelect = document.getElementById('messagingCreateContentThumbnail');
+      const pdfInput = document.getElementById('messagingCreateContentPdf');
+      const result = await api('/api/messaging/prompts', {
+        method: 'POST',
+        body: JSON.stringify({
+          format,
+          topic: cleanText(formData.get('topic')),
+          author: cleanText(formData.get('author')),
+          subject: cleanText(formData.get('subject')),
+          title: cleanText(formData.get('title')),
+          subtitle: cleanText(formData.get('subtitle')),
+          url: cleanText(formData.get('url')),
+          hashtags: cleanText(formData.get('hashtags')),
+          body: cleanText(formData.get('content') || formData.get('primary')),
+          image_label: cleanText(imageSelect?.selectedOptions?.[0]?.textContent || thumbSelect?.selectedOptions?.[0]?.textContent),
+          pdf_name: cleanText(pdfInput?.files?.[0]?.name),
+          feedback: cleanText(formData.get('feedback')),
+        }),
+      });
+      const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
+      if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+      notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Save Prompt';
+      }
     }
     return false;
   }
@@ -6110,6 +6169,7 @@ App.messaging = (function () {
     const createContentFormat = document.getElementById('messagingCreateContentFormat');
     const createContentForm = document.getElementById('messagingCreateContentForm');
     const createContentGenerateBtn = document.getElementById('messagingCreateContentGenerateBtn');
+    const createContentSavePromptBtn = document.getElementById('messagingCreateContentSavePromptBtn');
     const createContentClearSuggestionsBtn = document.getElementById('messagingCreateContentClearSuggestionsBtn');
     const createContentSaveSelectedBtn = document.getElementById('messagingCreateContentSaveSelectedBtn');
     const createContentSaveGeneratedBtn = document.getElementById('messagingCreateContentSaveGeneratedBtn');
@@ -6124,6 +6184,13 @@ App.messaging = (function () {
     }
     if (createContentGenerateBtn) {
       createContentGenerateBtn.addEventListener('click', generateCreateContentSuggestions);
+    }
+    if (createContentSavePromptBtn) {
+      createContentSavePromptBtn.addEventListener('click', function () {
+        saveCreateContentPrompt().catch(function (err) {
+          notify(err.message, true);
+        });
+      });
     }
     if (createContentClearSuggestionsBtn) {
       createContentClearSuggestionsBtn.addEventListener('click', clearCreateContentSuggestions);
