@@ -3220,7 +3220,7 @@ App.messaging = (function () {
     const longWrap = document.getElementById('messagingCreateContentLongSuggestions');
     const tbody = document.getElementById('messagingCreateContentSuggestionsTable');
     const checkAll = document.getElementById('messagingCreateContentSelectAllSuggestions');
-    if (!wrap || !shortWrap || !longWrap || !tbody) return;
+    if (!shortWrap || !longWrap || !tbody) return;
     currentCreateContentSuggestions = Array.isArray(options) ? options.slice() : [];
     tbody.innerHTML = '';
     currentCreateContentSuggestions.forEach((option, index) => {
