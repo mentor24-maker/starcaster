@@ -4957,84 +4957,92 @@
             <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
-        <form id="developLandingPagesForm" class="stack-form">
+        <form id="developLandingPagesForm" class="stack-form develop-landing-pages-form">
           <input id="developLandingPageIdInput" name="page_id" type="hidden" />
-          <input id="developLandingPageNameInput" name="page_name" placeholder="Page Name" required />
-          <select id="developLandingTemplateSelect" name="template_id">
-            <option value="">Template</option>
-          </select>
-          <div class="develop-color-control">
-            <label for="developLandingPrimaryColorInput" class="develop-color-control-label">
-              <span class="develop-color-control-icon" aria-hidden="true"></span>
-              Color Scheme: Primary Color
-            </label>
-            <input id="developLandingPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
+          <div class="develop-landing-pages-grid">
+            <div class="develop-landing-pages-column">
+              <input id="developLandingPageNameInput" name="page_name" placeholder="Page Name" required />
+              <select id="developLandingTemplateSelect" name="template_id">
+                <option value="">Template</option>
+              </select>
+              <div class="develop-color-control">
+                <label for="developLandingPrimaryColorInput" class="develop-color-control-label">
+                  <span class="develop-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Primary Color
+                </label>
+                <input id="developLandingPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
+              </div>
+              <div class="develop-color-control">
+                <label for="developLandingBackgroundColorInput" class="develop-color-control-label">
+                  <span class="develop-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Background Color
+                </label>
+                <input id="developLandingBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
+              </div>
+              <div class="develop-color-control">
+                <label for="developLandingAccentColorInput" class="develop-color-control-label">
+                  <span class="develop-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Accent Color
+                </label>
+                <input id="developLandingAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
+              </div>
+              <select id="developLandingFormSelect" name="form_id">
+                <option value="">Form</option>
+              </select>
+              <select id="developLandingLeadMagnetSelect" name="lead_magnet_id">
+                <option value="">PDF</option>
+              </select>
+              <select id="developLandingCtaSelect" name="cta_id">
+                <option value="">CTA</option>
+              </select>
+            </div>
+            <div class="develop-landing-pages-column">
+              <select id="developLandingHeadlineSelect" name="headline_id">
+                <option value="">Headline</option>
+              </select>
+              <select id="developLandingPitchSelect" name="pitch_id">
+                <option value="">Pitch</option>
+              </select>
+              <select id="developLandingFeatureHeadlineSelect" name="feature_headline_id">
+                <option value="">Feature One Headline</option>
+              </select>
+              <select id="developLandingFeatureSubheadingSelect" name="feature_subheading_id">
+                <option value="">Feature One Sub-heading</option>
+              </select>
+              <select id="developLandingHighlightHeadlineSelect" name="highlight_headline_id">
+                <option value="">Feature Two Headline</option>
+              </select>
+              <select id="developLandingHighlightPitchSelect" name="highlight_pitch_id">
+                <option value="">Feature Two Pitch</option>
+              </select>
+              <select id="developLandingBodyHeadlineSelect" name="body_headline_id">
+                <option value="">Body Headline</option>
+              </select>
+              <select id="developLandingBodySubheadingSelect" name="body_subheading_id">
+                <option value="">Body Sub-heading</option>
+              </select>
+              <select id="developLandingBodyPitchSelect" name="body_pitch_id">
+                <option value="">Body Pitch</option>
+              </select>
+            </div>
+            <div class="develop-landing-pages-column">
+              <select id="developLandingBannerImageSelect" name="website_banner_image_id">
+                <option value="">Website Banner Image</option>
+              </select>
+              <select id="developLandingBackgroundImageSelect" name="background_image_id">
+                <option value="">Background Image</option>
+              </select>
+              <select id="developLandingFeatureImageSelect" name="feature_image_id">
+                <option value="">Feature Image</option>
+              </select>
+              <select id="developLandingHighlightImageSelect" name="highlight_image_id">
+                <option value="">Highlight Image</option>
+              </select>
+              <select id="developLandingLogoSquareSelect" name="logo_square_id">
+                <option value="">Logo - Square</option>
+              </select>
+            </div>
           </div>
-          <div class="develop-color-control">
-            <label for="developLandingBackgroundColorInput" class="develop-color-control-label">
-              <span class="develop-color-control-icon" aria-hidden="true"></span>
-              Color Scheme: Background Color
-            </label>
-            <input id="developLandingBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
-          </div>
-          <div class="develop-color-control">
-            <label for="developLandingAccentColorInput" class="develop-color-control-label">
-              <span class="develop-color-control-icon" aria-hidden="true"></span>
-              Color Scheme: Accent Color
-            </label>
-            <input id="developLandingAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
-          </div>
-          <select id="developLandingFormSelect" name="form_id">
-            <option value="">Form</option>
-          </select>
-          <select id="developLandingLeadMagnetSelect" name="lead_magnet_id">
-            <option value="">PDF</option>
-          </select>
-          <select id="developLandingHeadlineSelect" name="headline_id">
-            <option value="">Headline</option>
-          </select>
-          <select id="developLandingPitchSelect" name="pitch_id">
-            <option value="">Pitch</option>
-          </select>
-          <select id="developLandingCtaSelect" name="cta_id">
-            <option value="">CTA</option>
-          </select>
-          <select id="developLandingBannerImageSelect" name="website_banner_image_id">
-            <option value="">Website Banner Image</option>
-          </select>
-          <select id="developLandingBackgroundImageSelect" name="background_image_id">
-            <option value="">Background Image</option>
-          </select>
-          <select id="developLandingFeatureImageSelect" name="feature_image_id">
-            <option value="">Feature Image</option>
-          </select>
-          <select id="developLandingHighlightImageSelect" name="highlight_image_id">
-            <option value="">Highlight Image</option>
-          </select>
-          <select id="developLandingFeatureHeadlineSelect" name="feature_headline_id">
-            <option value="">Feature One Headline</option>
-          </select>
-          <select id="developLandingFeatureSubheadingSelect" name="feature_subheading_id">
-            <option value="">Feature One Sub-heading</option>
-          </select>
-          <select id="developLandingHighlightHeadlineSelect" name="highlight_headline_id">
-            <option value="">Feature Two Headline</option>
-          </select>
-          <select id="developLandingHighlightPitchSelect" name="highlight_pitch_id">
-            <option value="">Feature Two Pitch</option>
-          </select>
-          <select id="developLandingBodyHeadlineSelect" name="body_headline_id">
-            <option value="">Body Headline</option>
-          </select>
-          <select id="developLandingBodySubheadingSelect" name="body_subheading_id">
-            <option value="">Body Sub-heading</option>
-          </select>
-          <select id="developLandingBodyPitchSelect" name="body_pitch_id">
-            <option value="">Body Pitch</option>
-          </select>
-          <select id="developLandingLogoSquareSelect" name="logo_square_id">
-            <option value="">Logo - Square</option>
-          </select>
           <button id="developLandingPagesSubmitBtn" type="submit">Save Page</button>
         </form>
       </section>
