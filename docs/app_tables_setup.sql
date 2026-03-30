@@ -12,7 +12,7 @@
 -- ---------------------------------------------------------------------------
 create table if not exists public.contacts (
   id          text        not null primary key,  -- keeps format "contact_<ts>_<rand>"
-  email       text        not null unique,
+  email       text        not null,
   first_name  text        not null default '',
   last_name   text        not null default '',
   city        text        not null default '',
