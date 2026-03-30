@@ -3852,24 +3852,59 @@
         </div>
 
         <section id="messagingHeadlinesCreateWrap" class="hidden">
-          <div class="grid-form" style="align-items: start;">
-            <form id="messagingHeadlineForm" class="stack-form">
-              <h3>Single Create</h3>
-              <select id="messagingHeadlineCategorySelect" name="topic">
-                <option value="">No Topic</option>
-              </select>
-              <textarea name="headline" rows="4" placeholder="Headline text" required></textarea>
-              <button type="submit">Save Headline</button>
-            </form>
-
-            <form id="messagingHeadlinesBulkCreateForm" class="stack-form">
-              <h3>Multiple Create</h3>
-              <select id="messagingHeadlinesBulkCategorySelect" name="topic">
-                <option value="">No Topic</option>
-              </select>
-              <textarea name="headlines_text" rows="8" placeholder="Paste multiple headlines, one per line"></textarea>
-              <button type="submit">Create Multiple Headlines</button>
-            </form>
+          <div class="messaging-create-content-layout">
+            <div class="messaging-create-content-column">
+              <form id="messagingHeadlinesCreatorForm" class="stack-form labeled-form" style="max-width: none;">
+                <div class="form-row">
+                  <label for="messagingHeadlinesCreatorTopic"><strong>Topic:</strong></label>
+                  <select id="messagingHeadlinesCreatorTopic" name="topic" data-messaging-category-select="true">
+                    <option value="">No Topic</option>
+                  </select>
+                </div>
+                <input id="messagingHeadlinesCreatorPromptId" name="prompt_id" type="hidden" />
+                <div class="form-row">
+                  <label for="messagingHeadlinesCreatorPrimary"><strong>Headline/Prompt:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingHeadlinesCreatorSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingHeadlinesCreatorPrimary" name="headline" rows="4" placeholder="Enter headline or prompt"></textarea>
+                  </div>
+                </div>
+                <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingHeadlinesCreatorGenerateBtn" type="button">Generate with AI</button>
+                  <button id="messagingHeadlinesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <button id="messagingHeadlinesCreatorSubmitBtn" type="submit">Save Headline</button>
+                </div>
+              </form>
+            </div>
+            <div class="messaging-create-content-column messaging-create-content-results">
+              <div class="page-heading-row" style="margin-bottom: 8px;">
+                <h3 style="margin: 0;">Generated Options</h3>
+                <div class="page-heading-actions">
+                  <button id="messagingHeadlinesCreatorClearSuggestionsBtn" type="button">Clear</button>
+                  <button id="messagingHeadlinesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                </div>
+              </div>
+              <p id="messagingHeadlinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review headline options here.</p>
+              <div id="messagingHeadlinesCreatorSuggestionsWrap" class="hidden">
+                <label class="checkbox-row" style="margin-bottom: 8px;">
+                  <input id="messagingHeadlinesCreatorSelectAllSuggestions" type="checkbox" />
+                  Check All
+                </label>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Headline</th>
+                      </tr>
+                    </thead>
+                    <tbody id="messagingHeadlinesCreatorSuggestionsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
