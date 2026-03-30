@@ -66,6 +66,8 @@ App.contacts = (function () {
   let activeWebsitePeerId = '';
   let activeWebsitePeerDetail = null;
   let activeWebsitePeerRun = null;
+  let websitePeerDiscoveryResults = [];
+  let contactsPeerSitesProgressTimer = null;
   const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
 
   const EXPLORE_FILTER_MODES = [
@@ -671,6 +673,41 @@ App.contacts = (function () {
     populateWebsitePeerTypeSelect();
   }
 
+  function startContactsPeerSitesProgress() {
+    const wrap = document.getElementById('contactsPeerSitesAcquireProgressWrap');
+    const bar = document.getElementById('contactsPeerSitesAcquireProgressBar');
+    const text = document.getElementById('contactsPeerSitesAcquireProgressText');
+    const button = document.getElementById('contactsPeerSitesAcquireBtn');
+    if (wrap) wrap.classList.remove('hidden');
+    if (bar) bar.value = 8;
+    if (text) text.textContent = 'Reviewing website content and discovering peer sites...';
+    if (button) button.disabled = true;
+    if (contactsPeerSitesProgressTimer) clearInterval(contactsPeerSitesProgressTimer);
+    contactsPeerSitesProgressTimer = setInterval(function () {
+      if (!bar) return;
+      const value = Number(bar.value || 0);
+      const step = value < 72 ? 5 : (value < 90 ? 2 : 1);
+      bar.value = Math.min(value + step, 94);
+    }, 320);
+  }
+
+  function finishContactsPeerSitesProgress(success, message) {
+    const wrap = document.getElementById('contactsPeerSitesAcquireProgressWrap');
+    const bar = document.getElementById('contactsPeerSitesAcquireProgressBar');
+    const text = document.getElementById('contactsPeerSitesAcquireProgressText');
+    const button = document.getElementById('contactsPeerSitesAcquireBtn');
+    if (contactsPeerSitesProgressTimer) {
+      clearInterval(contactsPeerSitesProgressTimer);
+      contactsPeerSitesProgressTimer = null;
+    }
+    if (bar) bar.value = success ? 100 : 0;
+    if (text && message) text.textContent = message;
+    if (button) button.disabled = false;
+    window.setTimeout(function () {
+      if (wrap) wrap.classList.add('hidden');
+    }, success ? 900 : 1800);
+  }
+
   function fillWebsitePeerForm(peer) {
     activeWebsitePeerId = String(peer?.id || '').trim();
     const idInput = document.getElementById('contactsPeerSiteId');
@@ -781,6 +818,217 @@ App.contacts = (function () {
           ? res
           : [];
     renderWebsitePeers();
+  }
+
+  function createWebsitePeerTypeSelect(selectedValue) {
+    const select = document.createElement('select');
+    WEBSITE_PEER_MODELS.forEach((model) => {
+      const option = document.createElement('option');
+      option.value = model;
+      option.textContent = model;
+      select.appendChild(option);
+    });
+    const value = String(selectedValue || '').trim();
+    if (value && WEBSITE_PEER_MODELS.includes(value)) select.value = value;
+    else if (WEBSITE_PEER_MODELS.includes('Direct Competitors')) select.value = 'Direct Competitors';
+    else if (WEBSITE_PEER_MODELS.length) select.value = WEBSITE_PEER_MODELS[0];
+    return select;
+  }
+
+  function renderWebsitePeerDiscoveryResults() {
+    const wrap = document.getElementById('contactsPeerSitesDiscoveryWrap');
+    const tbody = document.getElementById('contactsPeerSitesDiscoveryTable');
+    const metaEl = document.getElementById('contactsPeerSitesDiscoveryMeta');
+    const selectAll = document.getElementById('contactsPeerSitesDiscoverySelectAll');
+    const saveBtn = document.getElementById('contactsPeerSitesSaveSelectedBtn');
+    if (!wrap || !tbody) return;
+    tbody.innerHTML = '';
+    if (!websitePeerDiscoveryResults.length) {
+      wrap.classList.add('hidden');
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+      if (saveBtn) saveBtn.disabled = true;
+      return;
+    }
+    wrap.classList.remove('hidden');
+    websitePeerDiscoveryResults.forEach((item, index) => {
+      const tr = document.createElement('tr');
+
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = item.selected !== false;
+      checkbox.addEventListener('change', function () {
+        websitePeerDiscoveryResults[index].selected = checkbox.checked;
+        renderWebsitePeerDiscoveryResults();
+      });
+      selectTd.appendChild(checkbox);
+      tr.appendChild(selectTd);
+
+      const domainTd = document.createElement('td');
+      domainTd.className = 'direct-acquire-contact-label';
+      domainTd.textContent = String(item.domain || '').trim() || '-';
+      tr.appendChild(domainTd);
+
+      const siteTd = document.createElement('td');
+      const url = String(item.url || '').trim();
+      if (url) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = String(item.title || '').trim() || url;
+        siteTd.appendChild(link);
+      } else {
+        siteTd.textContent = String(item.title || '').trim() || '-';
+      }
+      tr.appendChild(siteTd);
+
+      const keywordsTd = document.createElement('td');
+      keywordsTd.textContent = Array.isArray(item.matched_keywords) && item.matched_keywords.length
+        ? item.matched_keywords.join(', ')
+        : '-';
+      tr.appendChild(keywordsTd);
+
+      const typeTd = document.createElement('td');
+      const typeSelect = createWebsitePeerTypeSelect(item.website_model || item.model || '');
+      typeSelect.addEventListener('change', function () {
+        websitePeerDiscoveryResults[index].website_model = String(typeSelect.value || '').trim();
+      });
+      typeTd.appendChild(typeSelect);
+      tr.appendChild(typeTd);
+
+      const snippetTd = document.createElement('td');
+      snippetTd.textContent = String(item.snippet || '').trim() || '-';
+      tr.appendChild(snippetTd);
+
+      tbody.appendChild(tr);
+    });
+    const selectedCount = websitePeerDiscoveryResults.filter((item) => item.selected !== false).length;
+    if (metaEl) {
+      metaEl.textContent = `${websitePeerDiscoveryResults.length} peer site candidate${websitePeerDiscoveryResults.length === 1 ? '' : 's'} discovered.`;
+    }
+    if (selectAll) {
+      selectAll.checked = !!websitePeerDiscoveryResults.length && selectedCount === websitePeerDiscoveryResults.length;
+      selectAll.indeterminate = selectedCount > 0 && selectedCount < websitePeerDiscoveryResults.length;
+    }
+    if (saveBtn) saveBtn.disabled = selectedCount === 0;
+  }
+
+  async function acquirePeerSiteCandidates() {
+    const sourceUrlInput = document.getElementById('contactsPeerSiteSourceUrl');
+    const siteUrlInput = document.getElementById('contactsPeerSiteUrl');
+    const sourceUrl = normalizeWebsitePeerUrl((sourceUrlInput && sourceUrlInput.value) || (siteUrlInput && siteUrlInput.value) || '');
+    if (!sourceUrl) {
+      notify('Enter a source website URL or website URL first', true);
+      return;
+    }
+    startContactsPeerSitesProgress();
+    try {
+      const result = await api('/api/acquire/website-peers/discover', {
+        method: 'POST',
+        body: JSON.stringify({
+          source_url: sourceUrl,
+          max_pages: 10,
+          peer_sites_limit: 20,
+          images_limit: 20,
+          body_snippet_chars: 500,
+          capture_contact_data: true,
+        }),
+      });
+      const summary = result?.peer_summary || result?.data?.peer_summary || {};
+      const peers = Array.isArray(summary?.peers) ? summary.peers : [];
+      const normalizedSource = normalizeWebsitePeerUrl(result?.source_url || result?.data?.source_url || sourceUrl);
+      let sourceDomain = '';
+      try {
+        sourceDomain = new URL(normalizedSource).hostname.replace(/^www\./, '').toLowerCase();
+      } catch (_) {
+        sourceDomain = '';
+      }
+      const existingKeys = new Set(
+        (Array.isArray(websitePeers) ? websitePeers : []).map((peer) => {
+          const peerSourceDomain = String(peer?.source_domain || '').trim().toLowerCase();
+          const domain = String(peer?.domain || '').trim().toLowerCase();
+          return `${peerSourceDomain}::${domain}`;
+        })
+      );
+      websitePeerDiscoveryResults = peers
+        .map((peer) => {
+          const domain = String(peer?.domain || '').trim().toLowerCase();
+          return {
+            source_url: normalizedSource,
+            url: String(peer?.url || '').trim(),
+            domain,
+            title: String(peer?.title || '').trim(),
+            matched_keywords: Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.slice() : [],
+            snippet: String(peer?.snippet || '').trim(),
+            website_model: String(peer?.model || '').trim() || (WEBSITE_PEER_MODELS[0] || ''),
+            selected: !existingKeys.has(`${sourceDomain}::${domain}`),
+          };
+        })
+        .filter((peer) => peer.url && peer.domain);
+      renderWebsitePeerDiscoveryResults();
+      const count = websitePeerDiscoveryResults.length;
+      finishContactsPeerSitesProgress(true, `Discovered ${count} peer site candidate${count === 1 ? '' : 's'}.`);
+      notify(count ? `Discovered ${count} peer site candidate${count === 1 ? '' : 's'}` : 'No peer sites returned', !count);
+    } catch (err) {
+      websitePeerDiscoveryResults = [];
+      renderWebsitePeerDiscoveryResults();
+      finishContactsPeerSitesProgress(false, err.message || 'Peer site discovery failed.');
+      notify(err.message, true);
+    }
+  }
+
+  async function saveSelectedWebsitePeerCandidates() {
+    const selected = websitePeerDiscoveryResults.filter((item) => item.selected !== false);
+    if (!selected.length) {
+      notify('Select at least one peer site candidate', true);
+      return;
+    }
+    const existingKeys = new Set(
+      (Array.isArray(websitePeers) ? websitePeers : []).map((peer) => {
+        const sourceDomain = String(peer?.source_domain || '').trim().toLowerCase();
+        const domain = String(peer?.domain || '').trim().toLowerCase();
+        return `${sourceDomain}::${domain}`;
+      })
+    );
+    let created = 0;
+    let skipped = 0;
+    for (const peer of selected) {
+      let sourceDomain = '';
+      try {
+        sourceDomain = new URL(String(peer.source_url || '').trim()).hostname.replace(/^www\./, '').toLowerCase();
+      } catch (_) {
+        sourceDomain = '';
+      }
+      const key = `${sourceDomain}::${String(peer.domain || '').trim().toLowerCase()}`;
+      if (existingKeys.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      await api('/api/acquire/website-peers', {
+        method: 'POST',
+        body: JSON.stringify({
+          source_url: peer.source_url,
+          site_url: peer.url,
+          title: peer.title,
+          matched_keywords: peer.matched_keywords,
+          snippet: peer.snippet,
+          website_model: peer.website_model,
+          site_type: 'peer',
+        }),
+      });
+      existingKeys.add(key);
+      created += 1;
+    }
+    await refreshWebsitePeers();
+    notify(
+      created
+        ? `Saved ${created} peer site${created === 1 ? '' : 's'}${skipped ? ` (${skipped} already existed)` : ''}`
+        : `No new peer sites saved${skipped ? ` (${skipped} already existed)` : ''}`
+    );
   }
 
   function renderPeerSiteSummary(peer, run) {
@@ -2132,6 +2380,32 @@ App.contacts = (function () {
     const contactsPeerSiteCancelBtn = document.getElementById('contactsPeerSiteCancelBtn');
     if (contactsPeerSiteCancelBtn) {
       contactsPeerSiteCancelBtn.addEventListener('click', () => resetWebsitePeerForm());
+    }
+    const contactsPeerSitesAcquireBtn = document.getElementById('contactsPeerSitesAcquireBtn');
+    if (contactsPeerSitesAcquireBtn) {
+      contactsPeerSitesAcquireBtn.addEventListener('click', function () {
+        acquirePeerSiteCandidates().catch(function (err) {
+          notify(err.message, true);
+        });
+      });
+    }
+    const contactsPeerSitesDiscoverySelectAll = document.getElementById('contactsPeerSitesDiscoverySelectAll');
+    if (contactsPeerSitesDiscoverySelectAll) {
+      contactsPeerSitesDiscoverySelectAll.addEventListener('change', function () {
+        websitePeerDiscoveryResults = websitePeerDiscoveryResults.map((item) => ({
+          ...item,
+          selected: contactsPeerSitesDiscoverySelectAll.checked,
+        }));
+        renderWebsitePeerDiscoveryResults();
+      });
+    }
+    const contactsPeerSitesSaveSelectedBtn = document.getElementById('contactsPeerSitesSaveSelectedBtn');
+    if (contactsPeerSitesSaveSelectedBtn) {
+      contactsPeerSitesSaveSelectedBtn.addEventListener('click', function () {
+        saveSelectedWebsitePeerCandidates().catch(function (err) {
+          notify(err.message, true);
+        });
+      });
     }
     const contactsPeerSiteForm = document.getElementById('contactsPeerSiteForm');
     if (contactsPeerSiteForm) {
