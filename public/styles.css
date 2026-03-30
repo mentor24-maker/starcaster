@@ -2301,6 +2301,50 @@ th {
   height: 12px;
 }
 
+.messaging-topics-ai-toolbar {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0 0.6rem;
+}
+
+.messaging-topics-ai-toolbar button {
+  width: auto;
+  min-width: 260px;
+}
+
+.messaging-topics-suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.messaging-topics-suggestion-card {
+  border: 1px solid #c9def4;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  background: #f8fbff;
+}
+
+.messaging-topics-suggestion-card h4 {
+  margin: 0 0 0.75rem;
+  color: #17324d;
+}
+
+.messaging-topics-suggestion-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.messaging-topics-suggestion-list .checkbox-row {
+  align-items: flex-start;
+  padding: 0;
+}
+
+.messaging-topics-suggestion-list .checkbox-row span {
+  line-height: 1.35;
+}
+
 .asset-edit-layout #assetForm {
   margin: 0;
 }

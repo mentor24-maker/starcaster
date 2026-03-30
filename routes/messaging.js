@@ -124,7 +124,7 @@ const {
   updateMessagingKeyword,
   deleteMessagingKeyword,
 } = require('../lib/messagingKeywordsStore');
-const { generateMessagingContentSuggestions } = require('../lib/messagingContentSuggestions');
+const { generateMessagingContentSuggestions, generateMessagingTopicSuggestions } = require('../lib/messagingContentSuggestions');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 
 function isValidHttpUrl(value) {
@@ -227,6 +227,20 @@ async function handle(req, res, pathname, method) {
         result.status || 500,
         result.error || 'Could not generate messaging content suggestions',
         { code: 'MESSAGING_CONTENT_SUGGESTIONS_FAILED' }
+      ), true;
+    }
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/messaging/topic-suggestions' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await generateMessagingTopicSuggestions(body || {}, scope);
+    if (!result.ok) {
+      return sendErr(
+        res,
+        result.status || 500,
+        result.error || 'Could not generate messaging topic suggestions',
+        { code: 'MESSAGING_TOPIC_SUGGESTIONS_FAILED' }
       ), true;
     }
     return sendOk(res, 200, result.data, result.data), true;

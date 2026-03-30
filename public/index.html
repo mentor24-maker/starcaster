@@ -3671,6 +3671,27 @@
             <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
+        <div class="messaging-topics-ai-toolbar">
+          <button id="messagingTopicsGenerateBtn" type="button">Generate AI Suggestions</button>
+        </div>
+        <div id="messagingTopicsProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+          <div id="messagingTopicsProgressText" class="asset-upload-progress-text">Reviewing website data and training context...</div>
+          <progress id="messagingTopicsProgressBar" max="100" value="8"></progress>
+        </div>
+        <section id="messagingTopicsSuggestionsWrap" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>AI Topic Suggestions</h3>
+            <div class="page-heading-actions">
+              <label class="checkbox-row" style="padding: 0;">
+                <input id="messagingTopicsSelectAllSuggestions" type="checkbox" />
+                Check All
+              </label>
+              <button id="messagingTopicsSaveSelectedBtn" type="button">Save Selected Topics</button>
+            </div>
+          </div>
+          <div id="messagingTopicsSuggestionsMeta" class="meta" style="margin-bottom: 0.8rem;"></div>
+          <div id="messagingTopicsSuggestionsColumns" class="messaging-topics-suggestions-grid"></div>
+        </section>
         <section id="messagingTopicCreatePanel" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
             <h3>Create Messaging Topic</h3>
