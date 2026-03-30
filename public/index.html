@@ -4278,24 +4278,68 @@
         <p>Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingTaglinesCreateWrap" class="hidden">
-          <div class="grid-form" style="align-items: start;">
-            <form id="messagingTaglineForm" class="stack-form">
-              <h3>Single Create</h3>
-              <select id="messagingTaglineCategorySelect" name="topic">
-                <option value="">No Category</option>
-              </select>
-              <textarea name="tagline" rows="4" placeholder="Tagline text" required></textarea>
-              <button type="submit">Save Tagline</button>
-            </form>
-
-            <form id="messagingTaglinesBulkCreateForm" class="stack-form">
-              <h3>Multiple Create</h3>
-              <select id="messagingTaglinesBulkCategorySelect" name="topic">
-                <option value="">No Category</option>
-              </select>
-              <textarea name="taglines_text" rows="8" placeholder="Paste multiple taglines, one per line"></textarea>
-              <button type="submit">Create Multiple Taglines</button>
-            </form>
+          <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
+            <div class="messaging-create-content-column messaging-create-content-form">
+              <form id="messagingTaglinesCreatorForm" class="stack-form labeled-form" style="max-width: none;">
+                <div class="form-row">
+                  <label for="messagingTaglinesCreatorTopic"><strong>Topic:</strong></label>
+                  <select id="messagingTaglinesCreatorTopic" name="topic" data-messaging-category-select="true">
+                    <option value="">No Topic</option>
+                  </select>
+                </div>
+                <input id="messagingTaglinesCreatorPromptId" name="prompt_id" type="hidden" />
+                <div class="form-row">
+                  <label for="messagingTaglinesCreatorPrimary"><strong>Tagline/Prompt:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingTaglinesCreatorSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingTaglinesCreatorPrimary" name="tagline" rows="4" placeholder="Enter tagline or prompt"></textarea>
+                  </div>
+                </div>
+                <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingTaglinesCreatorGenerateBtn" type="button">Generate with AI</button>
+                  <button id="messagingTaglinesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <button id="messagingTaglinesCreatorSubmitBtn" type="submit">Save Tagline</button>
+                </div>
+              </form>
+            </div>
+            <div class="messaging-create-content-column messaging-create-content-results">
+              <div class="page-heading-row" style="margin-bottom: 8px;">
+                <h3 style="margin: 0;">Generated Options</h3>
+                <div class="page-heading-actions">
+                  <select id="messagingTaglinesCreatorBulkQuality" style="min-width: 140px;">
+                    <option value="">Set Quality</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  <button id="messagingTaglinesCreatorClearSuggestionsBtn" type="button">Clear</button>
+                  <button id="messagingTaglinesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                </div>
+              </div>
+              <p id="messagingTaglinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review tagline options here.</p>
+              <div id="messagingTaglinesCreatorSuggestionsWrap" class="hidden">
+                <label class="checkbox-row" style="margin-bottom: 8px;">
+                  <input id="messagingTaglinesCreatorSelectAllSuggestions" type="checkbox" />
+                  Check All
+                </label>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Tagline</th>
+                        <th>Quality</th>
+                      </tr>
+                    </thead>
+                    <tbody id="messagingTaglinesCreatorSuggestionsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -4326,12 +4370,14 @@
                 </th>
                 <th></th>
                 <th></th>
+                <th></th>
                 <th><button id="messagingTaglinesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
                 <th><button id="messagingTaglinesSortTextBtn" type="button" class="tiny-btn">Tagline</button></th>
                 <th><button id="messagingTaglinesSortCategoryBtn" type="button" class="tiny-btn">Category</button></th>
+                <th>Score</th>
                 <th><button id="messagingTaglinesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
                 <th><button id="messagingTaglinesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
                 <th>Actions</th>

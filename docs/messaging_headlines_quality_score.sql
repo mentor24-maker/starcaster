@@ -3,3 +3,6 @@ alter table if exists public.messaging_headlines
 
 alter table if exists public.messaging_tweets
   add column if not exists quality_score integer;
+
+alter table if exists public.messaging_taglines
+  add column if not exists quality_score integer;
