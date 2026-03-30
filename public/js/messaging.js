@@ -2813,9 +2813,18 @@ App.messaging = (function () {
   async function generateMessagingTopicSuggestions() {
     startMessagingTopicsProgress();
     try {
+      const websiteRun = state.directAcquireCurrentRun && typeof state.directAcquireCurrentRun === 'object'
+        ? state.directAcquireCurrentRun
+        : null;
       const result = await api('/api/messaging/topic-suggestions', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          website_data: websiteRun ? {
+            source_url: cleanText(websiteRun.source_url),
+            keywords: Array.isArray(websiteRun?.keyword_summary?.top_keywords) ? websiteRun.keyword_summary.top_keywords : [],
+            pages: Array.isArray(websiteRun?.pages) ? websiteRun.pages : [],
+          } : null,
+        }),
       });
       const groups = Array.isArray(result?.groups)
         ? result.groups
