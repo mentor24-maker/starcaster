@@ -3180,25 +3180,34 @@ App.messaging = (function () {
   }
 
   function renderCreateContentSavedPromptOptions(selectedId = null) {
-    const select = document.getElementById('messagingCreateContentSavedPrompt');
     const schema = createContentSchema(document.getElementById('messagingCreateContentFormat')?.value);
-    if (!select) return;
-    const currentValue = String(selectedId || select.value || '').trim();
-    const prompts = schema?.fields?.includes('primary') ? filteredCreateContentPrompts() : [];
-    select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
-    prompts.forEach((prompt) => {
-      const option = document.createElement('option');
-      option.value = String(prompt.id || '');
-      const topicLabel = cleanText(prompt.topic);
-      const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
-      option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
-      select.appendChild(option);
+    const primarySelect = document.getElementById('messagingCreateContentSavedPrompt');
+    const bodySelect = document.getElementById('messagingCreateContentSavedBodyPrompt');
+    const prompts = filteredCreateContentPrompts();
+    [
+      { select: primarySelect, enabled: Boolean(schema?.fields?.includes('primary')) },
+      { select: bodySelect, enabled: Boolean(cleanText(document.getElementById('messagingCreateContentFormat')?.value) === 'Articles' && schema?.fields?.includes('body')) },
+    ].forEach(({ select, enabled }) => {
+      if (!select) return;
+      const currentValue = String(selectedId || select.value || '').trim();
+      select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+      if (enabled) {
+        prompts.forEach((prompt) => {
+          const option = document.createElement('option');
+          option.value = String(prompt.id || '');
+          const topicLabel = cleanText(prompt.topic);
+          const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+          option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
+          select.appendChild(option);
+        });
+      }
+      if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+        select.value = currentValue;
+      } else {
+        select.value = '';
+      }
+      select.classList.toggle('hidden', !enabled);
     });
-    if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
-      select.value = currentValue;
-    } else {
-      select.value = '';
-    }
   }
 
   function renderHeadlinesCreatorSavedPromptOptions(selectedId = null) {
@@ -3436,10 +3445,12 @@ App.messaging = (function () {
     const actionsRow = document.getElementById('messagingCreateContentActionsRow');
     const promptIdInput = document.getElementById('messagingCreateContentPromptId');
     const savedPromptSelect = document.getElementById('messagingCreateContentSavedPrompt');
+    const savedBodyPromptSelect = document.getElementById('messagingCreateContentSavedBodyPrompt');
     const feedbackWrap = document.getElementById('messagingCreateContentFeedbackWrap');
     if (!schema) {
       if (promptIdInput) promptIdInput.value = '';
       if (savedPromptSelect) savedPromptSelect.value = '';
+      if (savedBodyPromptSelect) savedBodyPromptSelect.value = '';
       if (topicRow) topicRow.classList.add('hidden');
       if (feedbackWrap) feedbackWrap.classList.add('hidden');
       setCreateContentFieldVisible('messagingCreateContentPrimaryRow', false);
@@ -3487,6 +3498,7 @@ App.messaging = (function () {
     });
     if (promptIdInput) promptIdInput.value = '';
     if (savedPromptSelect) savedPromptSelect.value = '';
+    if (savedBodyPromptSelect) savedBodyPromptSelect.value = '';
 
     if (topicRow) topicRow.classList.remove('hidden');
     setCreateContentFieldVisible('messagingCreateContentPrimaryRow', hasField('primary'));
@@ -3506,7 +3518,10 @@ App.messaging = (function () {
       primaryInput.placeholder = schema?.primaryLabel ? `Enter ${schema.primaryLabel.toLowerCase()}` : 'Enter content';
       primaryInput.rows = Number(schema?.primaryRows || 5);
     }
-    if (bodyLabel) bodyLabel.textContent = isLongform ? `${schema?.bodyLabel || 'Body'}:` : 'Body:';
+    if (bodyLabel) {
+      const bodyPromptLabel = format === 'Articles' ? 'Body/Prompt' : (schema?.bodyLabel || 'Body');
+      bodyLabel.textContent = `${bodyPromptLabel}:`;
+    }
     if (bodyInput) {
       bodyInput.placeholder = isLongform ? String(schema?.bodyLabel || 'Body') : 'Body';
       bodyInput.rows = isLongform ? 10 : 6;
@@ -6619,6 +6634,7 @@ async function saveTweetFromForm(form) {
     const createContentSavePromptBtn = document.getElementById('messagingCreateContentSavePromptBtn');
     const createContentTopic = document.getElementById('messagingCreateContentTopic');
     const createContentSavedPrompt = document.getElementById('messagingCreateContentSavedPrompt');
+    const createContentSavedBodyPrompt = document.getElementById('messagingCreateContentSavedBodyPrompt');
     const createContentClearSuggestionsBtn = document.getElementById('messagingCreateContentClearSuggestionsBtn');
     const createContentSaveSelectedBtn = document.getElementById('messagingCreateContentSaveSelectedBtn');
     const createContentSaveGeneratedBtn = document.getElementById('messagingCreateContentSaveGeneratedBtn');
@@ -6641,6 +6657,16 @@ async function saveTweetFromForm(form) {
         const selected = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item?.id || '') === selectedId);
         if (promptIdInput) promptIdInput.value = selected ? selectedId : '';
         if (primaryInput && selected) primaryInput.value = cleanText(selected.prompt_text);
+      });
+    }
+    if (createContentSavedBodyPrompt) {
+      createContentSavedBodyPrompt.addEventListener('change', function () {
+        const selectedId = String(createContentSavedBodyPrompt.value || '').trim();
+        const promptIdInput = document.getElementById('messagingCreateContentPromptId');
+        const bodyInput = document.getElementById('messagingCreateContentBody');
+        const selected = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item?.id || '') === selectedId);
+        if (promptIdInput) promptIdInput.value = selected ? selectedId : '';
+        if (bodyInput && selected) bodyInput.value = cleanText(selected.prompt_text);
       });
     }
     if (createContentForm) {

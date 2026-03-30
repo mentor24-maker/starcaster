@@ -3352,7 +3352,12 @@
                 </div>
                 <div class="form-row hidden" id="messagingCreateContentBodyRow">
                   <label for="messagingCreateContentBody"><strong id="messagingCreateContentBodyLabel">Body:</strong></label>
-                  <textarea id="messagingCreateContentBody" name="content" rows="10" placeholder="Content"></textarea>
+                  <div class="field-stack">
+                    <select id="messagingCreateContentSavedBodyPrompt" name="saved_body_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingCreateContentBody" name="content" rows="10" placeholder="Content"></textarea>
+                  </div>
                 </div>
                 <div class="form-row hidden" id="messagingCreateContentPdfRow">
                   <label for="messagingCreateContentPdf"><strong>PDF:</strong></label>
