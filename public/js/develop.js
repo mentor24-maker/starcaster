@@ -157,6 +157,12 @@ App.develop = (function () {
     { value: 'partner', label: 'Partner' },
     { value: 'other', label: 'Other' },
   ];
+  const FORM_LEAD_MAGNET_TYPES = [
+    { value: 'White Paper', label: 'White Paper' },
+    { value: 'Report', label: 'Report' },
+    { value: 'Video', label: 'Video' },
+    { value: 'Infographic', label: 'Infographic' },
+  ];
   let selectedTemplateId = LANDING_TEMPLATES[0].id;
   let selectedFormTemplateId = FORM_TEMPLATES[0].id;
   let selectedEmailTemplateId = '';
@@ -552,6 +558,41 @@ App.develop = (function () {
     return (Array.isArray(state.assets) ? state.assets : []).filter(
       (asset) => safeText(asset?.assetType) === safeText(assetType)
     );
+  }
+
+  function getFormLeadMagnetTypeDisplayLabel(type) {
+    const value = safeText(type);
+    const match = FORM_LEAD_MAGNET_TYPES.find((item) => safeText(item.value) === value);
+    return match ? match.label : getAssetTypeDisplayLabel(value);
+  }
+
+  function getFormLeadMagnetTypeOptions(currentType) {
+    const rows = FORM_LEAD_MAGNET_TYPES.map((item) => ({ value: item.value, label: item.label }));
+    const legacy = safeText(currentType);
+    if (legacy && !rows.some((item) => safeText(item.value) === legacy)) {
+      rows.push({ value: legacy, label: getFormLeadMagnetTypeDisplayLabel(legacy) });
+    }
+    return rows;
+  }
+
+  function assetMatchesFormLeadMagnetType(asset, leadMagnetType) {
+    const type = safeText(leadMagnetType);
+    const assetType = safeText(asset?.assetType);
+    const category = safeText(asset?.category);
+    if (!type) return true;
+    if (type === 'White Paper') {
+      return (assetType === 'Lead Magnet' || assetType === 'File') && category === 'White Paper';
+    }
+    if (type === 'Report') {
+      return (assetType === 'Lead Magnet' || assetType === 'File') && category === 'Report';
+    }
+    if (type === 'Video') {
+      return assetType === 'Video';
+    }
+    if (type === 'Infographic') {
+      return assetType === 'Image' && category === 'Infographic';
+    }
+    return assetType === type || category === type;
   }
 
   function getAssetTypeDisplayLabel(assetType) {
@@ -1071,7 +1112,7 @@ App.develop = (function () {
         case 'formType':
           return safeText(getFormTemplateById(row?.formType).name).toLowerCase();
         case 'leadMagnetType':
-          return safeText(getAssetTypeDisplayLabel(row?.leadMagnetType)).toLowerCase();
+          return safeText(getFormLeadMagnetTypeDisplayLabel(row?.leadMagnetType)).toLowerCase();
         case 'leadMagnetId':
           return safeText(getLandingPageAssetName(row?.leadMagnetId, '')).toLowerCase();
         case 'ctaId':
@@ -1156,7 +1197,7 @@ App.develop = (function () {
       typeTd.textContent = getFormTemplateById(form.formType).name;
 
       const leadMagnetTypeTd = document.createElement('td');
-      leadMagnetTypeTd.textContent = getAssetTypeDisplayLabel(form.leadMagnetType) || '-';
+      leadMagnetTypeTd.textContent = getFormLeadMagnetTypeDisplayLabel(form.leadMagnetType) || '-';
 
       const leadMagnetTd = document.createElement('td');
       leadMagnetTd.textContent = getLandingPageAssetName(form.leadMagnetId, '-') || '-';
@@ -3560,19 +3601,18 @@ App.develop = (function () {
     if (typeSelect) typeSelect.value = current.formType;
     if (contactTypeSelect) contactTypeSelect.value = current.contactType || 'lead';
     if (leadMagnetTypeSelect) {
-      const typeValues = Array.from(new Set((Array.isArray(state.assets) ? state.assets : []).map((asset) => safeText(asset?.assetType)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
       setSelectOptions(
         leadMagnetTypeSelect,
-        typeValues.map((value) => ({ value, label: getAssetTypeDisplayLabel(value) })),
+        getFormLeadMagnetTypeOptions(current.leadMagnetType),
         'Lead Magnet Type',
         current.leadMagnetType || ''
       );
     }
     if (leadMagnetSelect) {
       const selectedType = safeText(current.leadMagnetType);
-      const options = selectedType
-        ? (Array.isArray(state.assets) ? state.assets : []).filter((asset) => safeText(asset?.assetType) === selectedType)
-        : (Array.isArray(state.assets) ? state.assets : []);
+      const options = (Array.isArray(state.assets) ? state.assets : []).filter((asset) =>
+        assetMatchesFormLeadMagnetType(asset, selectedType)
+      );
       setSelectOptions(
         leadMagnetSelect,
         options.map((asset) => ({ value: String(asset.id), label: assetLabel(asset, String(asset.id)) })),
@@ -3588,7 +3628,7 @@ App.develop = (function () {
       setSelectOptions(
         ctaSelect,
         landingPageCtas.map((row) => ({ value: String(row.id), label: safeText(row.cta) || `CTA ${row.id}` })),
-        'Call To Action',
+        landingPageCtas.length ? 'Call To Action' : 'Call To Action (optional)',
         current.ctaId || ''
       );
     }
@@ -5568,7 +5608,6 @@ App.develop = (function () {
         try {
           const payload = buildCurrentFormPayload();
           if (!payload.name) throw new Error('Form name is required');
-          if (!payload.ctaId) throw new Error('Call To Action is required');
           if (!payload.heading) throw new Error('Heading is required');
           if (!payload.successMessage) throw new Error('Success confirmation message is required');
           if (!payload.errorMessage) throw new Error('Error confirmation message is required');
