@@ -181,6 +181,7 @@ App.develop = (function () {
   };
   let savedForms = [];
   let savedLandingPages = [];
+  let savedPageTemplates = [];
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -193,7 +194,9 @@ App.develop = (function () {
   let pendingLandingPageFormRecord = null;
   let selectedLandingPageIds = new Set();
   let activeLandingPagePreviewRecord = null;
+  let activeLandingPagePreviewMode = 'page';
   let activeLandingPageVisualRecord = null;
+  let activeLandingPageVisualMode = 'page';
   let landingPageVisualEditMode = true;
   let landingPageVisualDraft = {};
   let landingPageThankYouState = null;
@@ -755,7 +758,11 @@ App.develop = (function () {
     toolbar.className = 'develop-theme-picker-toolbar';
 
     const filterInput = document.createElement('input');
-    filterInput.placeholder = `Filter ${config.title.toLowerCase()}`;
+    filterInput.placeholder = 'Search images by name, category, or tag';
+
+    const resultCount = document.createElement('div');
+    resultCount.className = 'develop-theme-picker-result-count';
+    resultCount.textContent = '0 images';
 
     const clearBtn = document.createElement('button');
     clearBtn.type = 'button';
@@ -773,6 +780,7 @@ App.develop = (function () {
     uploadWrap.appendChild(uploadBtn);
 
     toolbar.appendChild(filterInput);
+    toolbar.appendChild(resultCount);
     toolbar.appendChild(clearBtn);
     toolbar.appendChild(uploadWrap);
 
@@ -787,14 +795,19 @@ App.develop = (function () {
       const filter = safeText(filterInput.value).toLowerCase();
       const assets = getThemePickerAssets(selectId, select.value).filter((asset) => {
         if (!filter) return true;
+        const tagText = Array.isArray(asset?.tags)
+          ? asset.tags.map((item) => safeText(item)).filter(Boolean).join(' ')
+          : safeText(asset?.tags).replace(/[;,]+/g, ' ');
         const haystack = [
           assetLabel(asset, ''),
           safeText(asset.category),
           safeText(asset.assetName),
           safeText(asset.location),
+          tagText,
         ].join(' ').toLowerCase();
         return haystack.includes(filter);
       });
+      resultCount.textContent = `${assets.length} image${assets.length === 1 ? '' : 's'}`;
       grid.innerHTML = '';
       if (!assets.length) {
         const empty = document.createElement('div');
@@ -1539,6 +1552,15 @@ App.develop = (function () {
   async function loadSavedLandingPages() {
     const result = await api('/api/develop/landing-pages');
     savedLandingPages = Array.isArray(result.landingPages) ? result.landingPages : [];
+  }
+
+  async function loadSavedPageTemplates() {
+    try {
+      const result = await api('/api/develop/page-templates');
+      savedPageTemplates = Array.isArray(result.pageTemplates) ? result.pageTemplates : [];
+    } catch (_) {
+      savedPageTemplates = [];
+    }
   }
 
   async function loadSavedExtensions() {
@@ -3402,10 +3424,54 @@ App.develop = (function () {
     updateLandingPageFieldOutlines();
   }
 
+  function buildEmptyLandingRecord(name, templateId) {
+    return {
+      id: '',
+      name: safeText(name, 255),
+      templateId: safeText(templateId, 120) || LANDING_TEMPLATES[0].id,
+      primaryColor: DEFAULT_LANDING_PRIMARY,
+      backgroundColor: DEFAULT_LANDING_BACKGROUND,
+      accentColor: DEFAULT_LANDING_ACCENT,
+      formId: '',
+      leadMagnetId: '',
+      headlineId: '',
+      pitchId: '',
+      ctaId: '',
+      websiteBannerImageId: '',
+      backgroundImageId: '',
+      featureImageId: '',
+      highlightImageId: '',
+      featureHeadlineId: '',
+      featureSubheadingId: '',
+      featureTitle: '',
+      featureCopy: '',
+      highlightHeadlineId: '',
+      highlightPitchId: '',
+      highlightTitle: '',
+      highlightCopy: '',
+      bodyHeadlineId: '',
+      bodySubheadingId: '',
+      bodyPitchId: '',
+      logoWideId: '',
+      logoSquareId: '',
+      contentOverrides: {},
+      createdAt: '',
+      updatedAt: '',
+    };
+  }
+
   function openCreateLandingPage() {
     resetLandingPageForm();
     loadLandingPageBuilderOptions().catch(() => {});
     App.setActivePage('developLandingPagesPage');
+  }
+
+  function openCreateLandingTemplate() {
+    const baseTemplate = getTemplateById(selectedTemplateId);
+    const suggestedName = `${safeText(baseTemplate?.name) || 'Page'} Template`;
+    const name = safeText(window.prompt('Template name', suggestedName), 255) || suggestedName;
+    const record = buildEmptyLandingRecord(name, safeText(baseTemplate?.id) || selectedTemplateId);
+    openLandingPageVisualEditor(record, { mode: 'template' });
   }
 
   function openEditLandingPage(record) {
@@ -3443,12 +3509,14 @@ App.develop = (function () {
     if (!host || !record) return;
 
     activeLandingPagePreviewRecord = record;
-    if (title) title.textContent = safeText(record.name) || 'Page Preview';
+    if (title) title.textContent = safeText(record.name) || (activeLandingPagePreviewMode === 'template' ? 'Template Preview' : 'Page Preview');
     if (modeBtn) modeBtn.disabled = false;
     host.innerHTML = buildLandingPageMarkup(record);
     bindLandingImageFallbacks(host);
     applyLandingPageAutoFit(host);
-    bindLandingPageRuntimeForms(host, record);
+    if (activeLandingPagePreviewMode !== 'template') {
+      bindLandingPageRuntimeForms(host, record);
+    }
   }
 
   function saveLandingPageThankYouState(payload) {
@@ -3565,19 +3633,29 @@ App.develop = (function () {
       });
   }
 
-  function openLandingPagePreview(record) {
+  function openLandingPagePreview(record, options = {}) {
     if (!record) return;
     ensureAssetsLoaded()
       .catch(() => {})
       .finally(() => {
+        activeLandingPagePreviewMode = safeText(options.mode) === 'template' ? 'template' : 'page';
         renderLandingPagePreview(record);
         App.setActivePage('developLandingPagePreviewPage');
       });
   }
 
+  function syncLandingVisualChrome(record) {
+    const title = byId('developLandingPageVisualEditorTitle');
+    const saveBtn = byId('developLandingPageVisualSaveBtn');
+    const backBtn = byId('developLandingPageVisualBackBtn');
+    const subject = activeLandingPageVisualMode === 'template' ? 'Template' : 'Page';
+    if (title) title.textContent = record ? `Visual Editor: ${safeText(record.name) || subject}` : `Visual ${subject} Editor`;
+    if (saveBtn) saveBtn.textContent = activeLandingPageVisualMode === 'template' ? 'Save Template' : 'Save All Changes';
+    if (backBtn) backBtn.textContent = activeLandingPageVisualMode === 'template' ? 'Back To Templates' : 'Back To Pages';
+  }
+
   function renderLandingPageVisualEditor() {
     const host = byId('developLandingPageVisualEditorHost');
-    const title = byId('developLandingPageVisualEditorTitle');
     const saveBtn = byId('developLandingPageVisualSaveBtn');
     const modeBtn = byId('developLandingPageVisualModeBtn');
     const record = getActiveLandingPageVisualRecord();
@@ -3588,10 +3666,10 @@ App.develop = (function () {
     }
     if (!record) {
       host.innerHTML = '';
-      if (title) title.textContent = 'Visual Page Editor';
+      syncLandingVisualChrome(null);
       return;
     }
-    if (title) title.textContent = `Visual Editor: ${safeText(record.name) || 'Page'}`;
+    syncLandingVisualChrome(record);
     host.innerHTML = buildLandingPageMarkup(record, { interactive: landingPageVisualEditMode });
     bindLandingImageFallbacks(host);
     applyLandingPageAutoFit(host);
@@ -3633,11 +3711,12 @@ App.develop = (function () {
     });
   }
 
-  function openLandingPageVisualEditor(record) {
+  function openLandingPageVisualEditor(record, options = {}) {
     if (!record) return;
     ensureAssetsLoaded()
       .catch(() => {})
       .finally(() => {
+        activeLandingPageVisualMode = safeText(options.mode) === 'template' ? 'template' : 'page';
         activeLandingPageVisualRecord = {
           ...record,
           contentOverrides: normalizeLandingPageContentOverrides(record.contentOverrides),
@@ -4306,24 +4385,23 @@ App.develop = (function () {
   }
 
   function renderPageTemplateRecordsTable() {
-    const rows = savedLandingPages.map((page) => {
+    const rows = savedPageTemplates.map((page) => {
       const actions = document.createElement('div');
       actions.className = 'page-heading-actions';
       actions.style.justifyContent = 'flex-start';
-      const viewBtn = App.makeIconButton('view', 'View Page', () => {
-        openLandingPagePreview(page);
+      const viewBtn = App.makeIconButton('view', 'View Template', () => {
+        openLandingPagePreview(page, { mode: 'template' });
       });
-      const editBtn = App.makeIconButton('edit', 'Edit Page', () => {
-        openLandingPageVisualEditor(page);
+      const editBtn = App.makeIconButton('edit', 'Edit Template', () => {
+        openLandingPageVisualEditor(page, { mode: 'template' });
       }, { marginLeft: '8px' });
-      const deleteBtn = App.makeIconButton('delete', 'Delete Page', async () => {
+      const deleteBtn = App.makeIconButton('delete', 'Delete Template', async () => {
         const id = safeText(page.id);
-        if (!window.confirm(`Delete page "${safeText(page.name) || id}"?`)) return;
+        if (!window.confirm(`Delete template "${safeText(page.name) || id}"?`)) return;
         try {
-          await api(`/api/develop/landing-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
-          selectedLandingPageIds.delete(id);
+          await api(`/api/develop/page-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
           await refresh();
-          notify('Landing page deleted');
+          notify('Page template deleted');
         } catch (err) {
           notify(err.message, true);
         }
@@ -4340,7 +4418,7 @@ App.develop = (function () {
     });
     renderTemplateRecordsTable(
       'developPageTemplatesTableHost',
-      'Saved Pages',
+      'Saved Page Templates',
       ['Name', 'Template', 'Updated', 'Actions'],
       rows
     );
@@ -5036,6 +5114,7 @@ App.develop = (function () {
       loadSavedThemes(),
       loadSavedEmailTemplates(),
       loadSavedLandingPages(),
+      loadSavedPageTemplates(),
       loadSavedExtensions(),
       loadExtensionManagerConfig(),
     ]);
@@ -5637,9 +5716,18 @@ App.develop = (function () {
       });
     }
 
+    const createPageTemplateBtn = byId('developCreatePageTemplateBtn');
+    if (createPageTemplateBtn) {
+      createPageTemplateBtn.addEventListener('click', () => {
+        openCreateLandingTemplate();
+      });
+    }
+
     const visualSaveBtn = byId('developLandingPageVisualSaveBtn');
     const visualModeBtn = byId('developLandingPageVisualModeBtn');
+    const visualBackBtn = byId('developLandingPageVisualBackBtn');
     const previewModeBtn = byId('developLandingPagePreviewModeBtn');
+    const previewBackBtn = byId('developLandingPagePreviewBackBtn');
     const thankYouBackBtn = byId('developLandingThankYouBackBtn');
     const saveSelectorDefaultsBtn = byId('developLandingSaveSelectorDefaultsBtn');
 
@@ -5665,7 +5753,19 @@ App.develop = (function () {
           notify('Open a page preview first', true);
           return;
         }
-        openLandingPageVisualEditor(activeLandingPagePreviewRecord);
+        openLandingPageVisualEditor(activeLandingPagePreviewRecord, { mode: activeLandingPagePreviewMode });
+      });
+    }
+
+    if (previewBackBtn) {
+      previewBackBtn.addEventListener('click', () => {
+        App.setActivePage(activeLandingPagePreviewMode === 'template' ? 'developTemplatesPage' : 'developManageLandingPagesPage');
+      });
+    }
+
+    if (visualBackBtn) {
+      visualBackBtn.addEventListener('click', () => {
+        App.setActivePage(activeLandingPageVisualMode === 'template' ? 'developTemplatesPage' : 'developManageLandingPagesPage');
       });
     }
 
@@ -5682,13 +5782,17 @@ App.develop = (function () {
     if (visualSaveBtn) {
       visualSaveBtn.addEventListener('click', async () => {
         const record = getActiveLandingPageVisualRecord();
-        if (!record || !safeText(record.id)) {
-          notify('Open a page in the visual editor first', true);
+        if (!record) {
+          notify('Open an item in the visual editor first', true);
           return;
         }
         try {
-          const result = await api(`/api/develop/landing-pages/${encodeURIComponent(record.id)}`, {
-            method: 'PATCH',
+          const endpointBase = activeLandingPageVisualMode === 'template'
+            ? '/api/develop/page-templates'
+            : '/api/develop/landing-pages';
+          const hasId = Boolean(safeText(record.id));
+          const result = await api(hasId ? `${endpointBase}/${encodeURIComponent(record.id)}` : endpointBase, {
+            method: hasId ? 'PATCH' : 'POST',
             body: JSON.stringify({
               name: safeText(record.name),
               templateId: safeText(record.templateId),
@@ -5720,11 +5824,13 @@ App.develop = (function () {
               contentOverrides: normalizeLandingPageContentOverrides(record.contentOverrides),
             }),
           });
-          activeLandingPageVisualRecord = result?.landingPage || result?.data || record;
+          activeLandingPageVisualRecord = result?.landingPage || result?.pageTemplate || result?.data || record;
           landingPageVisualDraft = {};
           await refresh();
           renderLandingPageVisualEditor();
-          notify('Landing page updated');
+          notify(activeLandingPageVisualMode === 'template'
+            ? (hasId ? 'Page template updated' : 'Page template created')
+            : (hasId ? 'Landing page updated' : 'Landing page created'));
         } catch (err) {
           notify(err.message, true);
         }
