@@ -545,6 +545,7 @@ App.messaging = (function () {
 
   function ensureSimpleContentPages() {
     simpleContentConfigs.forEach((config) => {
+      if (config.pageId === 'messagingTweetsPage') return;
       const page = document.getElementById(config.pageId);
       if (page) {
         page.innerHTML = buildSimpleContentPageMarkup(config);
