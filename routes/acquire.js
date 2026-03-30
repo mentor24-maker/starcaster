@@ -16,6 +16,15 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listAcquireJobs }    = require('../lib/acquireJobs');
 const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
 const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
+const { requestProjectScope } = require('../lib/requestProjectScope');
+const {
+  listWebsitePeers,
+  getWebsitePeer,
+  createWebsitePeer,
+  updateWebsitePeer,
+  deleteWebsitePeer,
+  upsertWebsitePeersFromRun,
+} = require('../lib/websitePeersStore');
 const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
 const { runXHarvest } = require('../lib/harvest/XHarvestRun');
 const { runRedditHarvest } = require('../lib/harvest/RedditHarvestRun');
@@ -1062,17 +1071,72 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, run, { run }), true;
   }
 
+  // GET /api/acquire/website-peers — project-scoped persistent peer website dataset
+  if (pathname === '/api/acquire/website-peers' && method === 'GET') {
+    const limit = Number(urlObj.searchParams.get('limit') || 500);
+    const scope = requestProjectScope(req);
+    const result = await listWebsitePeers(limit, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const websitePeers = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, websitePeers, { websitePeers }, { total: websitePeers.length }), true;
+  }
+
+  // POST /api/acquire/website-peers — manual create/update support for curated peer dataset
+  if (pathname === '/api/acquire/website-peers' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
+    const result = await createWebsitePeer(body || {}, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, result.data, { websitePeer: result.data }), true;
+  }
+
+  const websitePeerMatch = pathname.match(/^\/api\/acquire\/website-peers\/([^/]+)$/);
+  if (websitePeerMatch && method === 'GET') {
+    const scope = requestProjectScope(req);
+    const result = await getWebsitePeer(decodeURIComponent(websitePeerMatch[1]), scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { websitePeer: result.data }), true;
+  }
+
+  if (websitePeerMatch && method === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
+    const result = await updateWebsitePeer(decodeURIComponent(websitePeerMatch[1]), body || {}, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { websitePeer: result.data }), true;
+  }
+
+  if (websitePeerMatch && method === 'DELETE') {
+    const scope = requestProjectScope(req);
+    const result = await deleteWebsitePeer(decodeURIComponent(websitePeerMatch[1]), scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { websitePeer: result.data }), true;
+  }
+
   // POST /api/acquire/direct-run — ⚡ RATE LIMITED (hits external web)
   if (pathname === '/api/acquire/direct-run' && method === 'POST') {
     if (checkEndpointLimit(req, res, 'harvest.direct')) return true;
 
     const body = await parseJsonBody(req);
     const run = await runDirectAcquire(body || {});
+    const scope = requestProjectScope(req);
+    let websitePeersSavedCount = 0;
+    let websitePeersError = '';
+    const websitePeersResult = await upsertWebsitePeersFromRun(run, scope);
+    if (websitePeersResult.ok) {
+      websitePeersSavedCount = Number(websitePeersResult.data?.count || 0) || 0;
+    } else {
+      websitePeersError = String(websitePeersResult.error || '').trim();
+    }
     logActivity({
       action: 'acquire.direct_run', entityType: 'acquire', entityId: run?.id,
       summary: `Direct acquire run: ${body.url || 'unknown URL'}`
     });
-    return sendOk(res, 201, run, { run }), true;
+    return sendOk(res, 201, run, {
+      run,
+      website_peers_saved_count: websitePeersSavedCount,
+      website_peers_error: websitePeersError,
+    }), true;
   }
 
   // POST /api/acquire/youtube — ⚡ RATE LIMITED (hits YouTube + transcript APIs)
