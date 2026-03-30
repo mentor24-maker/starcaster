@@ -87,6 +87,7 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link active" data-page="contactsPage">Contacts</a>
           <div class="submenu">
+            <a href="#" class="menu-link submenu-link" onclick="App.contacts.openPeerSitesPage(); return false;" data-page="contactsPeerSitesPage">Peer Sites</a>
             <a href="#" class="menu-link submenu-link" onclick="App.contactPersonas.openPersonasPage(); return false;" data-page="contactsPersonasPage">Personas</a>
             <a href="#" class="menu-link submenu-link" data-page="contactsExplorePage">Explore</a>
             <a href="#" class="menu-link submenu-link" data-page="segmentsPage">Segments</a>
@@ -276,6 +277,69 @@
           </div>
         </form>
 
+      </section>
+
+      <section id="contactsPeerSitesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contacts: Peer Sites</h2>
+          <div class="page-heading-actions">
+            <button id="contactsPeerSitesRefreshBtn" type="button">Refresh</button>
+            <button id="contactsPeerSitesBackBtn" type="button">Back To Contacts</button>
+          </div>
+        </div>
+        <div id="contactsPeerSitesMeta" class="meta" style="margin-bottom: 0.75rem;">No peer sites saved yet.</div>
+        <form id="contactsPeerSiteForm" class="labeled-form" style="margin-bottom: 1rem;">
+          <input type="hidden" id="contactsPeerSiteId" name="id" />
+          <div class="form-row">
+            <label for="contactsPeerSiteType">Site Type</label>
+            <select id="contactsPeerSiteType" name="website_model"></select>
+          </div>
+          <div class="form-row">
+            <label for="contactsPeerSiteSourceUrl">Source Website</label>
+            <input id="contactsPeerSiteSourceUrl" name="source_url" type="url" placeholder="https://example.com" />
+          </div>
+          <div class="form-row">
+            <label for="contactsPeerSiteUrl">Website URL</label>
+            <input id="contactsPeerSiteUrl" name="site_url" type="url" required placeholder="https://peer-site.example" />
+          </div>
+          <div class="form-row">
+            <label for="contactsPeerSiteTitle">Site Title</label>
+            <input id="contactsPeerSiteTitle" name="title" type="text" />
+          </div>
+          <div class="form-row">
+            <label for="contactsPeerSiteKeywords">Matched Keywords</label>
+            <textarea id="contactsPeerSiteKeywords" name="matched_keywords" rows="2" placeholder="behavioral science, human behavior"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="contactsPeerSiteSnippet">Snippet</label>
+            <textarea id="contactsPeerSiteSnippet" name="snippet" rows="3"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="contactsPeerSiteNotes">Notes</label>
+            <textarea id="contactsPeerSiteNotes" name="notes" rows="3"></textarea>
+          </div>
+          <div class="page-heading-actions" style="justify-content: center; margin-top: 0.75rem;">
+            <button id="contactsPeerSiteSaveBtn" type="submit">Save Peer Site</button>
+            <button id="contactsPeerSiteCancelBtn" type="button" class="tiny-btn">Cancel</button>
+          </div>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Scope</th>
+                <th>Site Type</th>
+                <th>Domain</th>
+                <th>Site</th>
+                <th>Matched Keywords</th>
+                <th>Source Website</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="contactsPeerSitesTable"></tbody>
+          </table>
+        </div>
       </section>
 
       <section id="contactsPersonasPage" class="app-page hidden">
@@ -973,10 +1037,7 @@
               <input type="hidden" id="directAcquireWebsitePeerId" name="id" />
               <div class="form-row">
                 <label for="directAcquireWebsitePeerType">Site Type</label>
-                <select id="directAcquireWebsitePeerType" name="site_type">
-                  <option value="peer">Peer</option>
-                  <option value="source">Source</option>
-                </select>
+                <select id="directAcquireWebsitePeerType" name="website_model"></select>
               </div>
               <div class="form-row">
                 <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
@@ -991,8 +1052,8 @@
                 <input id="directAcquireWebsitePeerTitle" name="title" type="text" />
               </div>
               <div class="form-row">
-                <label for="directAcquireWebsitePeerModel">Website Model</label>
-                <input id="directAcquireWebsitePeerModel" name="website_model" type="text" placeholder="Direct Competitors" />
+                <label for="directAcquireWebsitePeerModel">Scope</label>
+                <input id="directAcquireWebsitePeerModel" name="site_scope_display" type="text" value="Peer / Source is inferred automatically" readonly />
               </div>
               <div class="form-row">
                 <label for="directAcquireWebsitePeerKeywords">Matched Keywords</label>
@@ -1015,8 +1076,8 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Type</th>
-                    <th>Model</th>
+                    <th>Scope</th>
+                    <th>Site Type</th>
                     <th>Domain</th>
                     <th>Site</th>
                     <th>Matched Keywords</th>

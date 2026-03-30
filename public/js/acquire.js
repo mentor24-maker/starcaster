@@ -35,6 +35,7 @@ App.acquire = (function () {
   let directAcquireTopics = [];
   let directAcquireWebsitePeers = [];
   let directAcquireWebsitePeerEditingId = '';
+  const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -1241,10 +1242,40 @@ App.acquire = (function () {
     const idInput = document.getElementById('directAcquireWebsitePeerId');
     if (idInput) idInput.value = '';
     const typeInput = document.getElementById('directAcquireWebsitePeerType');
-    if (typeInput) typeInput.value = 'peer';
+    if (typeInput) typeInput.value = WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || '');
     const sourceUrlInput = document.getElementById('directAcquireWebsitePeerSourceUrl');
     if (sourceUrlInput && state.directAcquireCurrentRun?.source_url) {
       sourceUrlInput.value = String(state.directAcquireCurrentRun.source_url || '').trim();
+    }
+    const scopeInput = document.getElementById('directAcquireWebsitePeerModel');
+    if (scopeInput) scopeInput.value = 'Peer / Source is inferred automatically';
+  }
+
+  function populateWebsitePeerModelSelect(selectEl) {
+    if (!selectEl) return;
+    const current = String(selectEl.value || '').trim();
+    selectEl.innerHTML = '';
+    WEBSITE_PEER_MODELS.forEach((label) => {
+      const option = document.createElement('option');
+      option.value = label;
+      option.textContent = label;
+      selectEl.appendChild(option);
+    });
+    if (current && WEBSITE_PEER_MODELS.includes(current)) selectEl.value = current;
+  }
+
+  function deriveWebsitePeerScope(payload, existingPeer) {
+    const sourceUrl = String(payload?.source_url || existingPeer?.source_url || '').trim();
+    const siteUrl = String(payload?.site_url || existingPeer?.site_url || '').trim();
+    if (!sourceUrl || !siteUrl) return String(existingPeer?.site_type || 'peer').trim() || 'peer';
+    try {
+      const source = new URL(sourceUrl);
+      const site = new URL(siteUrl);
+      const sourceHost = String(source.hostname || '').toLowerCase().replace(/^www\./, '');
+      const siteHost = String(site.hostname || '').toLowerCase().replace(/^www\./, '');
+      return sourceHost === siteHost ? 'source' : 'peer';
+    } catch (_) {
+      return String(existingPeer?.site_type || 'peer').trim() || 'peer';
     }
   }
 
@@ -1260,11 +1291,11 @@ App.acquire = (function () {
     const snippetInput = document.getElementById('directAcquireWebsitePeerSnippet');
     const notesInput = document.getElementById('directAcquireWebsitePeerNotes');
     if (idInput) idInput.value = directAcquireWebsitePeerEditingId;
-    if (typeInput) typeInput.value = String(peer?.site_type || 'peer').trim() || 'peer';
+    if (typeInput) typeInput.value = String(peer?.website_model || '').trim() || (WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || ''));
     if (sourceUrlInput) sourceUrlInput.value = String(peer?.source_url || '').trim();
     if (siteUrlInput) siteUrlInput.value = String(peer?.site_url || '').trim();
     if (titleInput) titleInput.value = String(peer?.title || '').trim();
-    if (modelInput) modelInput.value = String(peer?.website_model || '').trim();
+    if (modelInput) modelInput.value = String(peer?.site_type || '').trim() === 'source' ? 'Source Website' : 'Peer Website';
     if (keywordsInput) keywordsInput.value = Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.join(', ') : '';
     if (snippetInput) snippetInput.value = String(peer?.snippet || '').trim();
     if (notesInput) notesInput.value = String(peer?.notes || '').trim();
@@ -2988,12 +3019,13 @@ App.acquire = (function () {
     }
     const directAcquireWebsitePeerForm = document.getElementById('directAcquireWebsitePeerForm');
     if (directAcquireWebsitePeerForm) {
+      populateWebsitePeerModelSelect(document.getElementById('directAcquireWebsitePeerType'));
       directAcquireWebsitePeerForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         try {
           const formData = new FormData(directAcquireWebsitePeerForm);
+          const existingPeer = directAcquireWebsitePeers.find((item) => String(item?.id || '') === String(directAcquireWebsitePeerEditingId || '')) || null;
           const payload = {
-            site_type: String(formData.get('site_type') || 'peer').trim(),
             source_url: String(formData.get('source_url') || '').trim(),
             site_url: String(formData.get('site_url') || '').trim(),
             title: String(formData.get('title') || '').trim(),
@@ -3003,9 +3035,10 @@ App.acquire = (function () {
             notes: String(formData.get('notes') || '').trim(),
           };
           if (!payload.site_url) throw new Error('Website URL is required.');
-          if (!payload.source_url && payload.site_type === 'peer' && state.directAcquireCurrentRun?.source_url) {
+          if (!payload.source_url && state.directAcquireCurrentRun?.source_url) {
             payload.source_url = String(state.directAcquireCurrentRun.source_url || '').trim();
           }
+          payload.site_type = deriveWebsitePeerScope(payload, existingPeer);
           if (directAcquireWebsitePeerEditingId) {
             await api(`/api/acquire/website-peers/${encodeURIComponent(directAcquireWebsitePeerEditingId)}`, {
               method: 'PATCH',
