@@ -975,6 +975,7 @@ App.messaging = (function () {
     editForm.elements.content.value = String(tweet.content || '');
     editForm.elements.url.value = String(tweet.url || '');
     editForm.elements.hashtags.value = String(tweet.hashtags || '');
+    if (editForm.elements.quality_score) editForm.elements.quality_score.value = tweet.quality_score ? String(tweet.quality_score) : '';
     if (editForm.elements.feedback) editForm.elements.feedback.value = String(tweet.feedback || '');
     editForm.elements.image_asset_id.value = tweet.image_asset_id ? String(tweet.image_asset_id) : '';
     if (workspace) workspace.classList.add('hidden');
@@ -999,6 +1000,36 @@ App.messaging = (function () {
     if (shortWrap) shortWrap.classList.add('hidden');
     if (tbody) tbody.innerHTML = '';
     if (checkAll) checkAll.checked = false;
+    const bulkQuality = document.getElementById('messagingTweetsBulkQuality');
+    if (bulkQuality) bulkQuality.value = '';
+  }
+
+  function renderTweetSavedPromptOptions(selectedId = null) {
+    const select = document.getElementById('messagingTweetSavedPrompt');
+    if (!select) return;
+    const topic = cleanText(document.getElementById('messagingTweetTopic')?.value);
+    const currentValue = String(selectedId || select.value || '').trim();
+    const prompts = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter((item) => {
+      const itemFormat = cleanText(item?.format);
+      const itemTopic = cleanText(item?.topic);
+      if (itemFormat !== 'Tweets') return false;
+      if (topic && itemTopic && itemTopic !== topic) return false;
+      return true;
+    });
+    select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+    prompts.forEach((prompt) => {
+      const option = document.createElement('option');
+      option.value = String(prompt.id || '');
+      const topicLabel = cleanText(prompt.topic);
+      const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+      option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
+      select.appendChild(option);
+    });
+    if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+      select.value = currentValue;
+    } else {
+      select.value = '';
+    }
   }
 
   function renderTweetSuggestions(options) {
@@ -1008,7 +1039,7 @@ App.messaging = (function () {
     const checkAll = document.getElementById('messagingTweetsSelectAllSuggestions');
     if (!tbody) return;
     currentTweetSuggestions = Array.isArray(options)
-      ? options.map((item) => String(item || '').trim()).filter(Boolean)
+      ? options.slice()
       : [];
     tbody.innerHTML = '';
     if (!currentTweetSuggestions.length) {
@@ -1017,6 +1048,8 @@ App.messaging = (function () {
     }
     if (checkAll) checkAll.checked = true;
     currentTweetSuggestions.forEach((option, index) => {
+      const text = typeof option === 'object' && option ? option.content || option.text || '' : option;
+      const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
       const tr = document.createElement('tr');
       const selectTd = document.createElement('td');
       const checkbox = document.createElement('input');
@@ -1026,8 +1059,20 @@ App.messaging = (function () {
       selectTd.appendChild(checkbox);
       tr.appendChild(selectTd);
       const valueTd = document.createElement('td');
-      valueTd.textContent = option;
+      valueTd.textContent = String(text || '').trim();
       tr.appendChild(valueTd);
+      const qualityTd = document.createElement('td');
+      qualityTd.innerHTML = `
+        <select data-tweet-quality-index="${index}">
+          <option value="">-</option>
+          <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
+          <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
+          <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
+          <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
+          <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
+        </select>
+      `;
+      tr.appendChild(qualityTd);
       tbody.appendChild(tr);
     });
     if (empty) empty.classList.add('hidden');
@@ -1069,8 +1114,48 @@ App.messaging = (function () {
       notify(err.message, true);
     } finally {
       button.disabled = false;
-      button.textContent = originalText || 'Generate Option(s)';
+      button.textContent = originalText || 'Generate with AI';
     }
+  }
+
+  async function saveTweetPrompt() {
+    const form = document.getElementById('messagingTweetsForm');
+    const button = document.getElementById('messagingTweetsSavePromptBtn');
+    const promptIdInput = document.getElementById('messagingTweetPromptId');
+    if (!form || !button) return false;
+    const formData = new FormData(form);
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Saving Prompt...';
+    try {
+      const imageSelect = document.getElementById('messagingTweetImageSelect');
+      const imageLabel = imageSelect && imageSelect.selectedIndex >= 0
+        ? String(imageSelect.options[imageSelect.selectedIndex]?.textContent || '').trim()
+        : '';
+      const result = await api('/api/messaging/prompts', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Tweets',
+          topic: cleanText(formData.get('topic')),
+          url: cleanText(formData.get('url')),
+          hashtags: cleanText(formData.get('hashtags')),
+          body: cleanText(formData.get('content')),
+          image_label: imageLabel,
+          feedback: cleanText(formData.get('feedback')),
+        }),
+      });
+      const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
+      if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+      await refreshMessagingPrompts().catch(function () {});
+      renderTweetSavedPromptOptions(promptId ? String(promptId) : '');
+      notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText || 'Save Prompt';
+    }
+    return false;
   }
 
   async function saveSelectedTweetSuggestions() {
@@ -1090,13 +1175,16 @@ App.messaging = (function () {
       url: String(formData.get('url') || '').trim(),
       hashtags: String(formData.get('hashtags') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
+      prompt_id: Number(formData.get('prompt_id') || 0) || null,
     };
     for (const index of selectedIndexes) {
+      const option = currentTweetSuggestions[index];
       await api('/api/messaging/tweets', {
         method: 'POST',
         body: JSON.stringify({
           ...basePayload,
-          content: currentTweetSuggestions[index],
+          content: typeof option === 'object' && option ? option.content || option.text || '' : option,
+          quality_score: Math.max(0, Math.min(Number(document.querySelector(`[data-tweet-quality-index="${index}"]`)?.value || 0) || 0, 5)),
         }),
       });
     }
@@ -1691,7 +1779,7 @@ App.messaging = (function () {
     if (!sortedRows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 7;
       td.textContent = 'No tweets yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -1750,6 +1838,11 @@ App.messaging = (function () {
         imageTd.textContent = '-';
       }
       tr.appendChild(imageTd);
+
+      const qualityTd = document.createElement('td');
+      const quality = Math.max(0, Math.min(Number(tweet.quality_score || 0) || 0, 5));
+      qualityTd.textContent = quality ? String(quality) : '-';
+      tr.appendChild(qualityTd);
 
       const actionsTd = document.createElement('td');
       const editBtn = App.makeIconButton('edit', 'Edit Tweet', function () {
@@ -2013,7 +2106,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 7;
+      td.colSpan = 8;
       td.textContent = 'No headlines match current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -2040,6 +2133,7 @@ App.messaging = (function () {
         String(item.headline || '').trim() || '-',
         String(item.category || '').trim() || '-',
         'Headlines',
+        (Math.max(0, Math.min(Number(item.quality_score || 0) || 0, 5)) || '-'),
         item.created_at ? new Date(item.created_at).toLocaleString() : '-',
         item.updated_at ? new Date(item.updated_at).toLocaleString() : '-',
       ].forEach((value) => {
@@ -5280,7 +5374,7 @@ App.messaging = (function () {
     });
   }
 
-  async function saveTweetFromForm(form) {
+async function saveTweetFromForm(form) {
     const formData = new FormData(form);
     const payload = {
       topic: String(formData.get('topic') || formData.get('category') || '').trim(),
@@ -5289,6 +5383,7 @@ App.messaging = (function () {
       hashtags: String(formData.get('hashtags') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
+      prompt_id: Number(formData.get('prompt_id') || 0) || null,
     };
     await api('/api/messaging/tweets', {
       method: 'POST',
@@ -5306,6 +5401,7 @@ App.messaging = (function () {
       hashtags: String(formData.get('hashtags') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
+      prompt_id: Number(formData.get('prompt_id') || 0) || null,
     };
     await api(`/api/messaging/tweets/${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -5406,9 +5502,13 @@ App.messaging = (function () {
     const tweetToggleBtn = document.getElementById('messagingTweetsToggleFormBtn');
     const tweetCancelEditBtn = document.getElementById('messagingTweetsCancelEditBtn');
     const tweetGenerateBtn = document.getElementById('messagingTweetsGenerateBtn');
+    const tweetSavePromptBtn = document.getElementById('messagingTweetsSavePromptBtn');
+    const tweetSavedPrompt = document.getElementById('messagingTweetSavedPrompt');
+    const tweetTopic = document.getElementById('messagingTweetTopic');
     const tweetClearSuggestionsBtn = document.getElementById('messagingTweetsClearSuggestionsBtn');
     const tweetSaveSelectedBtn = document.getElementById('messagingTweetsSaveSelectedBtn');
     const tweetSelectAllSuggestions = document.getElementById('messagingTweetsSelectAllSuggestions');
+    const tweetBulkQuality = document.getElementById('messagingTweetsBulkQuality');
     const hashtagsForm = document.getElementById('messagingHashtagsForm');
     const hashtagsToggleBtn = document.getElementById('messagingHashtagsToggleFormBtn');
     const openMessagingCategoriesBtn = document.getElementById('openMessagingCategoriesPageBtn');
@@ -6773,9 +6873,29 @@ App.messaging = (function () {
         closeTweetEditForm();
         tweetsWorkspace.classList.toggle('hidden', !isHidden);
         if (isHidden) {
+          refreshMessagingPrompts().catch(function () {}).finally(function () {
+            renderTweetSavedPromptOptions();
+          });
           clearTweetSuggestions();
         }
         tweetToggleBtn.textContent = isHidden ? 'Hide Form' : 'Add Tweet';
+      });
+    }
+
+    if (tweetTopic) {
+      tweetTopic.addEventListener('change', function () {
+        renderTweetSavedPromptOptions();
+      });
+    }
+
+    if (tweetSavedPrompt) {
+      tweetSavedPrompt.addEventListener('change', function () {
+        const selectedId = String(tweetSavedPrompt.value || '').trim();
+        const promptIdInput = document.getElementById('messagingTweetPromptId');
+        const primaryInput = document.getElementById('messagingTweetContent');
+        const selected = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item?.id || '') === selectedId);
+        if (promptIdInput) promptIdInput.value = selected ? selectedId : '';
+        if (primaryInput && selected) primaryInput.value = cleanText(selected.prompt_text);
       });
     }
 
@@ -6786,9 +6906,12 @@ App.messaging = (function () {
           await saveTweetFromForm(tweetsForm);
           notify('Tweet saved');
           tweetsForm.reset();
+          const promptIdInput = document.getElementById('messagingTweetPromptId');
+          if (promptIdInput) promptIdInput.value = '';
           clearTweetSuggestions();
           renderMessagingCategorySelects();
           renderImageOptions(document.getElementById('messagingTweetImageSelect'));
+          renderTweetSavedPromptOptions();
           if (tweetToggleBtn) tweetToggleBtn.textContent = 'Add Tweet';
           if (tweetsWorkspace) tweetsWorkspace.classList.add('hidden');
           await refreshTweets();
@@ -6810,6 +6933,12 @@ App.messaging = (function () {
       });
     }
 
+    if (tweetSavePromptBtn) {
+      tweetSavePromptBtn.addEventListener('click', function () {
+        saveTweetPrompt();
+      });
+    }
+
     if (tweetClearSuggestionsBtn) {
       tweetClearSuggestionsBtn.addEventListener('click', function () {
         clearTweetSuggestions();
@@ -6826,6 +6955,18 @@ App.messaging = (function () {
       tweetSelectAllSuggestions.addEventListener('change', function () {
         document.querySelectorAll('#messagingTweetsSuggestionsTable input[type="checkbox"][data-index]').forEach((checkbox) => {
           checkbox.checked = tweetSelectAllSuggestions.checked;
+        });
+      });
+    }
+
+    if (tweetBulkQuality) {
+      tweetBulkQuality.addEventListener('change', function () {
+        const value = String(tweetBulkQuality.value || '').trim();
+        if (!value) return;
+        document.querySelectorAll('#messagingTweetsSuggestionsTable input[type="checkbox"][data-index]:checked').forEach((checkbox) => {
+          const index = String(checkbox.dataset.index || '').trim();
+          const select = document.querySelector(`[data-tweet-quality-index="${index}"]`);
+          if (select) select.value = value;
         });
       });
     }
