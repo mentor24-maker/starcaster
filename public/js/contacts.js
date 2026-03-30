@@ -62,6 +62,9 @@ App.contacts = (function () {
   ];
   const CONTACT_PAYLOAD_FIELDS = new Set(CONTACT_EDITABLE_FIELDS);
   let activeContactId = '';
+  let websitePeers = [];
+  let activeWebsitePeerId = '';
+  const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
 
   const EXPLORE_FILTER_MODES = [
     { value: 'contains', label: 'Contains' },
@@ -608,6 +611,197 @@ App.contacts = (function () {
   function openContactsPage() {
     App.setActivePage('contactsPage');
     renderContacts();
+  }
+
+  function populateWebsitePeerTypeSelect() {
+    const select = document.getElementById('contactsPeerSiteType');
+    if (!select) return;
+    const current = String(select.value || '').trim();
+    select.innerHTML = '';
+    WEBSITE_PEER_MODELS.forEach((label) => {
+      const option = document.createElement('option');
+      option.value = label;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+    if (current && WEBSITE_PEER_MODELS.includes(current)) select.value = current;
+    else if (WEBSITE_PEER_MODELS.includes('Direct Competitors')) select.value = 'Direct Competitors';
+  }
+
+  function normalizeWebsitePeerUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw);
+      parsed.hash = '';
+      return parsed.toString();
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  function deriveWebsitePeerScope(payload, existingPeer) {
+    const sourceUrl = normalizeWebsitePeerUrl(payload?.source_url || existingPeer?.source_url || '');
+    const siteUrl = normalizeWebsitePeerUrl(payload?.site_url || existingPeer?.site_url || '');
+    if (!sourceUrl || !siteUrl) return String(existingPeer?.site_type || 'peer').trim() || 'peer';
+    try {
+      const source = new URL(sourceUrl);
+      const site = new URL(siteUrl);
+      const sourceHost = String(source.hostname || '').toLowerCase().replace(/^www\./, '');
+      const siteHost = String(site.hostname || '').toLowerCase().replace(/^www\./, '');
+      return sourceHost === siteHost ? 'source' : 'peer';
+    } catch (_) {
+      return String(existingPeer?.site_type || 'peer').trim() || 'peer';
+    }
+  }
+
+  function resetWebsitePeerForm() {
+    activeWebsitePeerId = '';
+    const form = document.getElementById('contactsPeerSiteForm');
+    if (!form) return;
+    form.reset();
+    const idInput = document.getElementById('contactsPeerSiteId');
+    const sourceUrlInput = document.getElementById('contactsPeerSiteSourceUrl');
+    if (idInput) idInput.value = '';
+    if (sourceUrlInput && state.directAcquireCurrentRun?.source_url) {
+      sourceUrlInput.value = String(state.directAcquireCurrentRun.source_url || '').trim();
+    }
+    populateWebsitePeerTypeSelect();
+  }
+
+  function fillWebsitePeerForm(peer) {
+    activeWebsitePeerId = String(peer?.id || '').trim();
+    const idInput = document.getElementById('contactsPeerSiteId');
+    const typeInput = document.getElementById('contactsPeerSiteType');
+    const sourceUrlInput = document.getElementById('contactsPeerSiteSourceUrl');
+    const siteUrlInput = document.getElementById('contactsPeerSiteUrl');
+    const titleInput = document.getElementById('contactsPeerSiteTitle');
+    const keywordsInput = document.getElementById('contactsPeerSiteKeywords');
+    const snippetInput = document.getElementById('contactsPeerSiteSnippet');
+    const notesInput = document.getElementById('contactsPeerSiteNotes');
+    if (idInput) idInput.value = activeWebsitePeerId;
+    if (typeInput) typeInput.value = String(peer?.website_model || '').trim() || (WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || ''));
+    if (sourceUrlInput) sourceUrlInput.value = String(peer?.source_url || '').trim();
+    if (siteUrlInput) siteUrlInput.value = String(peer?.site_url || '').trim();
+    if (titleInput) titleInput.value = String(peer?.title || '').trim();
+    if (keywordsInput) keywordsInput.value = Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.join(', ') : '';
+    if (snippetInput) snippetInput.value = String(peer?.snippet || '').trim();
+    if (notesInput) notesInput.value = String(peer?.notes || '').trim();
+  }
+
+  function renderWebsitePeers() {
+    const tbody = document.getElementById('contactsPeerSitesTable');
+    const metaEl = document.getElementById('contactsPeerSitesMeta');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!websitePeers.length) {
+      if (metaEl) metaEl.textContent = 'No peer sites saved yet.';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 8;
+      td.textContent = 'No peer sites saved yet.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    if (metaEl) metaEl.textContent = `${websitePeers.length} peer site record${websitePeers.length === 1 ? '' : 's'} available for this project.`;
+    websitePeers.forEach((peer) => {
+      const tr = document.createElement('tr');
+      const scopeTd = document.createElement('td');
+      scopeTd.textContent = String(peer?.site_type || '').trim() === 'source' ? 'Source' : 'Peer';
+      tr.appendChild(scopeTd);
+
+      const typeTd = document.createElement('td');
+      typeTd.textContent = String(peer?.website_model || '').trim() || '-';
+      tr.appendChild(typeTd);
+
+      const domainTd = document.createElement('td');
+      domainTd.className = 'direct-acquire-contact-label';
+      domainTd.textContent = String(peer?.domain || '').trim() || '-';
+      tr.appendChild(domainTd);
+
+      const siteTd = document.createElement('td');
+      if (String(peer?.site_url || '').trim()) {
+        const link = document.createElement('a');
+        link.href = String(peer.site_url).trim();
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = String(peer?.title || peer?.site_url || '').trim();
+        siteTd.appendChild(link);
+      } else {
+        siteTd.textContent = String(peer?.title || '').trim() || '-';
+      }
+      tr.appendChild(siteTd);
+
+      const keywordsTd = document.createElement('td');
+      keywordsTd.textContent = Array.isArray(peer?.matched_keywords) && peer.matched_keywords.length ? peer.matched_keywords.join(', ') : '-';
+      tr.appendChild(keywordsTd);
+
+      const sourceTd = document.createElement('td');
+      sourceTd.textContent = String(peer?.source_domain || peer?.source_url || '').trim() || '-';
+      tr.appendChild(sourceTd);
+
+      const updatedTd = document.createElement('td');
+      updatedTd.textContent = String(peer?.updated_at || peer?.last_harvested_at || '').trim() || '-';
+      tr.appendChild(updatedTd);
+
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'crud-actions-cell';
+
+      const viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'tiny-btn';
+      viewBtn.textContent = 'View';
+      viewBtn.addEventListener('click', () => {
+        if (String(peer?.site_url || '').trim()) window.open(String(peer.site_url).trim(), '_blank', 'noopener');
+      });
+      actionsTd.appendChild(viewBtn);
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'tiny-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => fillWebsitePeerForm(peer));
+      actionsTd.appendChild(editBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'tiny-btn danger';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', async () => {
+        if (!window.confirm(`Delete ${String(peer?.domain || peer?.site_url || 'this website').trim()}?`)) return;
+        try {
+          await api(`/api/acquire/website-peers/${encodeURIComponent(peer.id)}`, { method: 'DELETE' });
+          websitePeers = websitePeers.filter((item) => String(item?.id || '') !== String(peer.id));
+          renderWebsitePeers();
+          if (String(activeWebsitePeerId || '') === String(peer.id)) resetWebsitePeerForm();
+          notify('Peer site deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+      actionsTd.appendChild(deleteBtn);
+
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function refreshWebsitePeers() {
+    const res = await api('/api/acquire/website-peers?limit=500');
+    websitePeers = Array.isArray(res?.websitePeers)
+      ? res.websitePeers
+      : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+          ? res
+          : [];
+    renderWebsitePeers();
+  }
+
+  function openPeerSitesPage() {
+    App.setActivePage('contactsPeerSitesPage');
+    refreshWebsitePeers().catch((err) => notify(err.message, true));
   }
 
   function openViewPage(contactOrId) {
@@ -1651,6 +1845,68 @@ App.contacts = (function () {
         renderContacts();
       });
     }
+    const contactsPeerSitesBackBtn = document.getElementById('contactsPeerSitesBackBtn');
+    if (contactsPeerSitesBackBtn) {
+      contactsPeerSitesBackBtn.addEventListener('click', () => openContactsPage());
+    }
+    const contactsPeerSitesRefreshBtn = document.getElementById('contactsPeerSitesRefreshBtn');
+    if (contactsPeerSitesRefreshBtn) {
+      contactsPeerSitesRefreshBtn.addEventListener('click', async () => {
+        try {
+          await refreshWebsitePeers();
+          notify('Peer sites refreshed');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+    const contactsPeerSiteCancelBtn = document.getElementById('contactsPeerSiteCancelBtn');
+    if (contactsPeerSiteCancelBtn) {
+      contactsPeerSiteCancelBtn.addEventListener('click', () => resetWebsitePeerForm());
+    }
+    const contactsPeerSiteForm = document.getElementById('contactsPeerSiteForm');
+    if (contactsPeerSiteForm) {
+      populateWebsitePeerTypeSelect();
+      resetWebsitePeerForm();
+      contactsPeerSiteForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(contactsPeerSiteForm);
+        const existingPeer = websitePeers.find((item) => String(item?.id || '') === String(activeWebsitePeerId || '')) || null;
+        const payload = {
+          source_url: String(formData.get('source_url') || '').trim(),
+          site_url: String(formData.get('site_url') || '').trim(),
+          title: String(formData.get('title') || '').trim(),
+          website_model: String(formData.get('website_model') || '').trim(),
+          matched_keywords: String(formData.get('matched_keywords') || '').trim(),
+          snippet: String(formData.get('snippet') || '').trim(),
+          notes: String(formData.get('notes') || '').trim(),
+        };
+        if (!payload.site_url) return notify('Website URL is required', true);
+        payload.site_type = deriveWebsitePeerScope(payload, existingPeer);
+        if (!payload.source_url && state.directAcquireCurrentRun?.source_url) {
+          payload.source_url = String(state.directAcquireCurrentRun.source_url || '').trim();
+        }
+        try {
+          if (activeWebsitePeerId) {
+            await api(`/api/acquire/website-peers/${encodeURIComponent(activeWebsitePeerId)}`, {
+              method: 'PATCH',
+              body: JSON.stringify(payload),
+            });
+            notify('Peer site updated');
+          } else {
+            await api('/api/acquire/website-peers', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+            notify('Peer site created');
+          }
+          resetWebsitePeerForm();
+          await refreshWebsitePeers();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
     if (els.viewSegmentsBtn) {
       els.viewSegmentsBtn.addEventListener('click', () => {
         App.setActivePage('segmentsPage');
@@ -1708,8 +1964,13 @@ App.contacts = (function () {
   }
 
   return {
-    manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage' },
+    manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage', pagePrefixes: ['contacts'] },
     init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment,
-    openContactsPage, openViewPage, openEditPage, openClonePage
+    openContactsPage, openPeerSitesPage, openViewPage, openEditPage, openClonePage,
+    onPageActivated() {
+      if (String(state.activePage || '') === 'contactsPeerSitesPage') {
+        refreshWebsitePeers().catch((err) => notify(err.message, true));
+      }
+    }
   };
 })();

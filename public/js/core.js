@@ -48,6 +48,25 @@ App.SEGMENT_EXCLUDED_COLUMNS = new Set([
   'id', 'source', 'status', 'notes', 'created_at', 'updated_at'
 ]);
 
+App.WEBSITE_PEER_MODELS = [
+  'Mega hubs',
+  'Industry Hubs and Publications',
+  'Comparison Sites',
+  'Multinational Corporations',
+  'Large Institutions/Organization',
+  'Media Giants and Publishers',
+  'Thought Leaders/Influencers',
+  'Direct Competitors',
+  'Academic / Research',
+  'Government / Civic',
+  'Communities / Forums',
+  'Tools / SaaS Platforms',
+  'Agencies / Consultancies',
+  'Directories / Marketplaces',
+  'Nonprofit / Advocacy',
+  'Local / Regional Organizations',
+];
+
 // ---------------------------------------------------------------------------
 // State — single source of truth for all UI data
 // ---------------------------------------------------------------------------
