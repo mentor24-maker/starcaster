@@ -194,17 +194,8 @@ App.channels = (function () {
       });
     }
 
-    if (els.channelForm) {
-      els.channelForm.addEventListener('submit', async (e) => {
-        return submitChannelCreate(e);
-      });
-    }
-
-    if (els.channelEditForm) {
-      els.channelEditForm.addEventListener('submit', async (e) => {
-        return submitChannelEdit(e);
-      });
-    }
+    // Forms already submit through inline onsubmit handlers in index.html.
+    // Avoid binding duplicate listeners here or create/update will fire twice.
   }
 
   async function submitChannelCreate(event) {

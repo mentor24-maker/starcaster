@@ -60,7 +60,7 @@ async function handle(req, res, pathname, method) {
   const scope = requestProjectScope(req);
 
   if (pathname === '/api/develop/forms' && requestMethod === 'GET') {
-    const forms = listForms();
+    const forms = listForms(scope);
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
   }
 
@@ -101,7 +101,7 @@ async function handle(req, res, pathname, method) {
       landingColorMode: String(body.landingColorMode || '').trim(),
       useLandingBackground: Boolean(body.useLandingBackground),
       fields,
-    });
+    }, scope);
 
     return sendOk(res, 201, form, { form }), true;
   }
@@ -553,7 +553,7 @@ async function handle(req, res, pathname, method) {
       landingColorMode: String(body.landingColorMode || '').trim(),
       useLandingBackground: Boolean(body.useLandingBackground),
       fields,
-    });
+    }, scope);
 
     if (!updated) return sendErr(res, 404, 'Form not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, updated, { form: updated }), true;
@@ -563,7 +563,7 @@ async function handle(req, res, pathname, method) {
     const formId = decodeURIComponent(formIdMatch[1] || '').trim();
     if (!formId) return sendErr(res, 400, 'form id is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const removed = deleteForm(formId);
+    const removed = deleteForm(formId, scope);
     if (!removed) return sendErr(res, 404, 'Form not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, removed, { form: removed }), true;
   }
@@ -657,7 +657,7 @@ async function handle(req, res, pathname, method) {
     if (!landingPageRes.ok) return sendErr(res, landingPageRes.status || 404, landingPageRes.error || 'Landing page not found'), true;
     const landingPage = landingPageRes.data;
 
-    const forms = listForms();
+    const forms = listForms(scope);
     const form = forms.find((item) => String(item?.id || '').trim() === String(landingPage?.formId || '').trim());
     if (!form) return sendErr(res, 400, 'Landing page form is not configured', { code: 'VALIDATION_ERROR' }), true;
     const contactType = String(form.contactType || '').trim();
