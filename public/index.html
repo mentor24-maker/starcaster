@@ -5627,7 +5627,7 @@
           <h2 id="developLandingPagePreviewTitle">Page Preview</h2>
           <div class="page-heading-actions">
             <button id="developLandingPagePreviewModeBtn" type="button">Edit Mode</button>
-            <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
+            <button id="developLandingPagePreviewBackBtn" type="button">Back To Pages</button>
             <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
@@ -5640,7 +5640,7 @@
           <div class="page-heading-actions">
             <button id="developLandingPageVisualModeBtn" type="button">Preview Mode</button>
             <button id="developLandingPageVisualSaveBtn" type="button">Save All Changes</button>
-            <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
+            <button id="developLandingPageVisualBackBtn" type="button">Back To Pages</button>
           </div>
         </div>
         <div class="develop-visual-toolbar">
@@ -5932,7 +5932,10 @@
       <section id="developTemplatesPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Builder: Templates</h2>
-          <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          <div class="page-heading-actions">
+            <button id="developCreatePageTemplateBtn" type="button">Create Template</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
         </div>
         <div id="developEmailTemplatesPrimaryTableHost" class="develop-template-records-host"></div>
         <section id="developTemplateEditorPanel" class="develop-template-section develop-template-editor hidden">

@@ -11,6 +11,12 @@ const {
   deleteLandingPage,
 } = require('../lib/developLandingPagesStore');
 const {
+  listPageTemplates,
+  createPageTemplate,
+  updatePageTemplate,
+  deletePageTemplate,
+} = require('../lib/developPageTemplatesStore');
+const {
   listEmailTemplates,
   createEmailTemplate,
   updateEmailTemplate,
@@ -204,6 +210,55 @@ async function handle(req, res, pathname, method) {
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create landing page'), true;
     return sendOk(res, 201, result.data, { landingPage: result.data }), true;
+  }
+
+  if (pathname === '/api/develop/page-templates' && requestMethod === 'GET') {
+    const result = await listPageTemplates(undefined, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load page templates'), true;
+    const pageTemplates = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, pageTemplates, { pageTemplates }, { total: pageTemplates.length }), true;
+  }
+
+  if (pathname === '/api/develop/page-templates' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    const templateId = String(body.templateId || '').trim();
+
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!templateId) return sendErr(res, 400, 'templateId is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const result = await createPageTemplate({
+      name,
+      templateId,
+      primaryColor: String(body.primaryColor || '').trim(),
+      backgroundColor: String(body.backgroundColor || '').trim(),
+      accentColor: String(body.accentColor || '').trim(),
+      formId: String(body.formId || '').trim(),
+      leadMagnetId: String(body.leadMagnetId || '').trim(),
+      headlineId: String(body.headlineId || '').trim(),
+      pitchId: String(body.pitchId || '').trim(),
+      ctaId: String(body.ctaId || '').trim(),
+      websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
+      backgroundImageId: String(body.backgroundImageId || '').trim(),
+      featureImageId: String(body.featureImageId || '').trim(),
+      highlightImageId: String(body.highlightImageId || '').trim(),
+      featureHeadlineId: String(body.featureHeadlineId || '').trim(),
+      featureSubheadingId: String(body.featureSubheadingId || '').trim(),
+      featureTitle: String(body.featureTitle || '').trim(),
+      featureCopy: String(body.featureCopy || '').trim(),
+      highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
+      highlightPitchId: String(body.highlightPitchId || '').trim(),
+      highlightTitle: String(body.highlightTitle || '').trim(),
+      highlightCopy: String(body.highlightCopy || '').trim(),
+      bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
+      bodySubheadingId: String(body.bodySubheadingId || '').trim(),
+      bodyPitchId: String(body.bodyPitchId || '').trim(),
+      logoWideId: String(body.logoWideId || '').trim(),
+      logoSquareId: String(body.logoSquareId || '').trim(),
+      contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
+    }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create page template'), true;
+    return sendOk(res, 201, result.data, { pageTemplate: result.data }), true;
   }
 
   if (pathname === '/api/develop/email-templates' && requestMethod === 'GET') {
@@ -649,6 +704,7 @@ async function handle(req, res, pathname, method) {
 
   const landingPageIdMatch = String(pathname || '').match(/^\/api\/develop\/landing-pages\/([^/]+)\/?$/);
   const landingPageSubmitMatch = String(pathname || '').match(/^\/api\/develop\/landing-pages\/([^/]+)\/submit\/?$/);
+  const pageTemplateIdMatch = String(pathname || '').match(/^\/api\/develop\/page-templates\/([^/]+)\/?$/);
 
   if (landingPageSubmitMatch && requestMethod === 'POST') {
     const landingPageId = decodeURIComponent(landingPageSubmitMatch[1] || '').trim();
@@ -782,6 +838,74 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
     return sendOk(res, 200, result.data, { landingPage: result.data }), true;
+  }
+
+  if (pageTemplateIdMatch && requestMethod === 'PATCH') {
+    const pageTemplateId = decodeURIComponent(pageTemplateIdMatch[1] || '').trim();
+    if (!pageTemplateId) return sendErr(res, 400, 'page template id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    const templateId = String(body.templateId || '').trim();
+
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!templateId) return sendErr(res, 400, 'templateId is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const result = await updatePageTemplate(pageTemplateId, {
+      name,
+      templateId,
+      primaryColor: String(body.primaryColor || '').trim(),
+      backgroundColor: String(body.backgroundColor || '').trim(),
+      accentColor: String(body.accentColor || '').trim(),
+      formId: String(body.formId || '').trim(),
+      leadMagnetId: String(body.leadMagnetId || '').trim(),
+      headlineId: String(body.headlineId || '').trim(),
+      pitchId: String(body.pitchId || '').trim(),
+      ctaId: String(body.ctaId || '').trim(),
+      websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
+      backgroundImageId: String(body.backgroundImageId || '').trim(),
+      featureImageId: String(body.featureImageId || '').trim(),
+      highlightImageId: String(body.highlightImageId || '').trim(),
+      featureHeadlineId: String(body.featureHeadlineId || '').trim(),
+      featureSubheadingId: String(body.featureSubheadingId || '').trim(),
+      featureTitle: String(body.featureTitle || '').trim(),
+      featureCopy: String(body.featureCopy || '').trim(),
+      highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
+      highlightPitchId: String(body.highlightPitchId || '').trim(),
+      highlightTitle: String(body.highlightTitle || '').trim(),
+      highlightCopy: String(body.highlightCopy || '').trim(),
+      bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
+      bodySubheadingId: String(body.bodySubheadingId || '').trim(),
+      bodyPitchId: String(body.bodyPitchId || '').trim(),
+      logoWideId: String(body.logoWideId || '').trim(),
+      logoSquareId: String(body.logoSquareId || '').trim(),
+      contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
+    }, scope);
+    if (!result.ok) {
+      return sendErr(
+        res,
+        result.status || 500,
+        result.error || 'Could not update page template',
+        { code: result.status === 404 ? 'NOT_FOUND' : null }
+      ), true;
+    }
+    return sendOk(res, 200, result.data, { pageTemplate: result.data }), true;
+  }
+
+  if (pageTemplateIdMatch && requestMethod === 'DELETE') {
+    const pageTemplateId = decodeURIComponent(pageTemplateIdMatch[1] || '').trim();
+    if (!pageTemplateId) return sendErr(res, 400, 'page template id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const result = await deletePageTemplate(pageTemplateId, scope);
+    if (!result.ok) {
+      return sendErr(
+        res,
+        result.status || 500,
+        result.error || 'Could not delete page template',
+        { code: result.status === 404 ? 'NOT_FOUND' : null }
+      ), true;
+    }
+    return sendOk(res, 200, result.data, { pageTemplate: result.data }), true;
   }
 
   return false;
