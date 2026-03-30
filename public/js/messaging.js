@@ -35,7 +35,9 @@ App.messaging = (function () {
   let currentMessagingTags = [];
   let currentMessagingTopicSuggestions = [];
   let currentHeadlineCreatorSuggestions = [];
+  let currentSubheadingCreatorSuggestions = [];
   let currentTaglineCreatorSuggestions = [];
+  let currentPitchCreatorSuggestions = [];
   let messagingTopicsProgressTimer = null;
   let activeMessagingContentCategory = '';
   const headlineTableState = {
@@ -272,6 +274,7 @@ App.messaging = (function () {
     {
       items: [],
       selected: new Set(),
+      suggestions: [],
       filters: { text: '', category: '' },
       sort: { key: 'created_at', dir: 'desc' },
     }
@@ -435,6 +438,21 @@ App.messaging = (function () {
       bulkSummaryId: `${config.pageStem}LibraryBulkEditSummary`,
       bulkEditFormId: `${config.pageStem}LibraryBulkEditForm`,
       bulkEditCategorySelectId: `${config.pageStem}LibraryBulkEditCategorySelect`,
+      creatorFormId: `${config.pageStem}LibraryCreatorForm`,
+      creatorTopicId: `${config.pageStem}LibraryCreatorTopic`,
+      creatorPromptId: `${config.pageStem}LibraryCreatorPromptId`,
+      creatorSavedPromptId: `${config.pageStem}LibraryCreatorSavedPrompt`,
+      creatorPrimaryId: `${config.pageStem}LibraryCreatorPrimary`,
+      creatorGenerateBtnId: `${config.pageStem}LibraryCreatorGenerateBtn`,
+      creatorSavePromptBtnId: `${config.pageStem}LibraryCreatorSavePromptBtn`,
+      creatorSubmitBtnId: `${config.pageStem}LibraryCreatorSubmitBtn`,
+      creatorBulkQualityId: `${config.pageStem}LibraryCreatorBulkQuality`,
+      creatorClearSuggestionsBtnId: `${config.pageStem}LibraryCreatorClearSuggestionsBtn`,
+      creatorSaveSelectedBtnId: `${config.pageStem}LibraryCreatorSaveSelectedBtn`,
+      creatorSuggestionsEmptyId: `${config.pageStem}LibraryCreatorSuggestionsEmpty`,
+      creatorSuggestionsWrapId: `${config.pageStem}LibraryCreatorSuggestionsWrap`,
+      creatorSelectAllSuggestionsId: `${config.pageStem}LibraryCreatorSelectAllSuggestions`,
+      creatorSuggestionsTableId: `${config.pageStem}LibraryCreatorSuggestionsTable`,
     };
   }
 
@@ -451,25 +469,68 @@ App.messaging = (function () {
         </div>
 
         <section id="${ids.createWrapId}" class="hidden">
-          <div class="grid-form" style="align-items: start;">
-            <form id="${ids.formId}" class="stack-form">
-              <h3>Single Create</h3>
-              <select id="${ids.formCategorySelectId}" name="topic" data-messaging-category-select="true">
-                <option value="">No Topic</option>
-              </select>
-              <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
-              <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
-              <button type="submit">Save ${config.singularLabel}</button>
-            </form>
-
-            <form id="${ids.bulkCreateFormId}" class="stack-form">
-              <h3>Multiple Create</h3>
-              <select id="${ids.bulkCreateCategorySelectId}" name="topic" data-messaging-category-select="true">
-                <option value="">No Topic</option>
-              </select>
-              <textarea name="${config.field}_text" rows="8" placeholder="Paste multiple ${config.pluralLower}, one per line"></textarea>
-              <button type="submit">Create Multiple ${config.pluralLabel}</button>
-            </form>
+          <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
+            <div class="messaging-create-content-column messaging-create-content-form">
+              <form id="${ids.creatorFormId}" class="stack-form labeled-form" style="max-width: none;">
+                <div class="form-row">
+                  <label for="${ids.creatorTopicId}"><strong>Topic:</strong></label>
+                  <select id="${ids.creatorTopicId}" name="topic" data-messaging-category-select="true">
+                    <option value="">No Topic</option>
+                  </select>
+                </div>
+                <input id="${ids.creatorPromptId}" name="prompt_id" type="hidden" />
+                <div class="form-row">
+                  <label for="${ids.creatorPrimaryId}"><strong>${config.singularLabel}/Prompt:</strong></label>
+                  <div class="field-stack">
+                    <select id="${ids.creatorSavedPromptId}" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="${ids.creatorPrimaryId}" name="${config.field}" rows="${config.rows}" placeholder="Enter ${config.singularLower} or prompt"></textarea>
+                  </div>
+                </div>
+                <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="${ids.creatorGenerateBtnId}" type="button">Generate with AI</button>
+                  <button id="${ids.creatorSavePromptBtnId}" type="button">Save Prompt</button>
+                  <button id="${ids.creatorSubmitBtnId}" type="submit">Save ${config.singularLabel}</button>
+                </div>
+              </form>
+            </div>
+            <div class="messaging-create-content-column messaging-create-content-results">
+              <div class="page-heading-row" style="margin-bottom: 8px;">
+                <h3 style="margin: 0;">Generated Options</h3>
+                <div class="page-heading-actions">
+                  <select id="${ids.creatorBulkQualityId}" style="min-width: 140px;">
+                    <option value="">Set Quality</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  <button id="${ids.creatorClearSuggestionsBtnId}" type="button">Clear</button>
+                  <button id="${ids.creatorSaveSelectedBtnId}" type="button">Save Selected</button>
+                </div>
+              </div>
+              <p id="${ids.creatorSuggestionsEmptyId}" style="margin-top: 0;">Generate with AI to review ${config.singularLower} options here.</p>
+              <div id="${ids.creatorSuggestionsWrapId}" class="hidden">
+                <label class="checkbox-row" style="margin-bottom: 8px;">
+                  <input id="${ids.creatorSelectAllSuggestionsId}" type="checkbox" />
+                  Check All
+                </label>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>${config.singularLabel}</th>
+                        <th>Quality</th>
+                      </tr>
+                    </thead>
+                    <tbody id="${ids.creatorSuggestionsTableId}"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -484,6 +545,14 @@ App.messaging = (function () {
           </select>
           <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
           <button type="submit">Update ${config.singularLabel}</button>
         </form>
 
@@ -506,6 +575,7 @@ App.messaging = (function () {
                 </th>
                 <th></th>
                 <th></th>
+                <th></th>
                 <th><button id="${ids.bulkEditBtnId}" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
@@ -513,6 +583,7 @@ App.messaging = (function () {
                 <th><button id="${ids.sortTextBtnId}" type="button" class="tiny-btn">${config.singularLabel}</button></th>
                 <th><button id="${ids.sortCategoryBtnId}" type="button" class="tiny-btn">Topic</button></th>
                 <th>Format</th>
+                <th>Score</th>
                 <th><button id="${ids.sortCreatedBtnId}" type="button" class="tiny-btn">Created</button></th>
                 <th><button id="${ids.sortUpdatedBtnId}" type="button" class="tiny-btn">Updated</button></th>
                 <th>Actions</th>
@@ -738,6 +809,7 @@ App.messaging = (function () {
     form.elements.url.value = String(article.url || '');
     form.elements.content.value = String(article.content || '');
     if (form.elements.feedback) form.elements.feedback.value = String(article.feedback || '');
+    if (form.elements.quality_score) form.elements.quality_score.value = article.quality_score ? String(article.quality_score) : '';
     form.elements.thumbnail_asset_id.value = article.thumbnail_asset_id ? String(article.thumbnail_asset_id) : '';
   }
 
@@ -874,6 +946,7 @@ App.messaging = (function () {
     form.elements.url.value = String(report.url || '');
     form.elements.content.value = String(report.content || '');
     if (form.elements.feedback) form.elements.feedback.value = String(report.feedback || '');
+    if (form.elements.quality_score) form.elements.quality_score.value = report.quality_score ? String(report.quality_score) : '';
     form.elements.thumbnail_asset_id.value = report.thumbnail_asset_id ? String(report.thumbnail_asset_id) : '';
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
@@ -908,6 +981,7 @@ App.messaging = (function () {
     form.elements.url.value = String(whitePaper.url || '');
     form.elements.content.value = String(whitePaper.content || '');
     if (form.elements.feedback) form.elements.feedback.value = String(whitePaper.feedback || '');
+    if (form.elements.quality_score) form.elements.quality_score.value = whitePaper.quality_score ? String(whitePaper.quality_score) : '';
     form.elements.thumbnail_asset_id.value = whitePaper.thumbnail_asset_id ? String(whitePaper.thumbnail_asset_id) : '';
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
@@ -942,6 +1016,7 @@ App.messaging = (function () {
     form.elements.url.value = String(ebook.url || '');
     form.elements.content.value = String(ebook.content || '');
     if (form.elements.feedback) form.elements.feedback.value = String(ebook.feedback || '');
+    if (form.elements.quality_score) form.elements.quality_score.value = ebook.quality_score ? String(ebook.quality_score) : '';
     form.elements.thumbnail_asset_id.value = ebook.thumbnail_asset_id ? String(ebook.thumbnail_asset_id) : '';
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
@@ -2006,6 +2081,7 @@ App.messaging = (function () {
     form.elements.id.value = String(item.id || '');
     form.elements.headline.value = String(item.headline || '');
     if (form.elements.topic) form.elements.topic.value = String(item.topic || item.category || '');
+    if (form.elements.quality_score) form.elements.quality_score.value = item.quality_score ? String(item.quality_score) : '';
   }
 
   function openHeadlineEditForm(item) {
@@ -2190,6 +2266,7 @@ App.messaging = (function () {
     form.elements.id.value = String(item.id || '');
     form.elements.subheading.value = String(item.subheading || '');
     if (form.elements.topic) form.elements.topic.value = String(item.topic || item.category || '');
+    if (form.elements.quality_score) form.elements.quality_score.value = item.quality_score ? String(item.quality_score) : '';
   }
 
   function openSubheadingEditForm(item) {
@@ -2290,7 +2367,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 7;
       td.textContent = 'No sub-headings match current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -2316,6 +2393,7 @@ App.messaging = (function () {
       [
         String(item.subheading || '').trim() || '-',
         String(item.category || '').trim() || '-',
+        (Math.max(0, Math.min(Number(item.quality_score || 0) || 0, 5)) || '-'),
         item.created_at ? new Date(item.created_at).toLocaleString() : '-',
         item.updated_at ? new Date(item.updated_at).toLocaleString() : '-',
       ].forEach((value) => {
@@ -2470,7 +2548,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 7;
+      td.colSpan = 8;
       td.textContent = 'No taglines match current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -2551,6 +2629,7 @@ App.messaging = (function () {
     form.elements.id.value = String(item.id || '');
     form.elements.pitch.value = String(item.pitch || '');
     if (form.elements.topic) form.elements.topic.value = String(item.topic || item.category || '');
+    if (form.elements.quality_score) form.elements.quality_score.value = item.quality_score ? String(item.quality_score) : '';
   }
 
   function openPitchEditForm(item) {
@@ -2651,7 +2730,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 7;
       td.textContent = 'No pitches match current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -2677,6 +2756,7 @@ App.messaging = (function () {
       [
         String(item.pitch || '').trim() || '-',
         String(item.category || '').trim() || '-',
+        (Math.max(0, Math.min(Number(item.quality_score || 0) || 0, 5)) || '-'),
         item.created_at ? new Date(item.created_at).toLocaleString() : '-',
         item.updated_at ? new Date(item.updated_at).toLocaleString() : '-',
       ].forEach((value) => {
@@ -3166,6 +3246,11 @@ App.messaging = (function () {
           ? res
           : [];
     currentMessagingPrompts = prompts.slice();
+    renderCreateContentSavedPromptOptions();
+    renderHeadlinesCreatorSavedPromptOptions();
+    renderSubheadingsCreatorSavedPromptOptions();
+    renderTaglinesCreatorSavedPromptOptions();
+    renderPitchesCreatorSavedPromptOptions();
     return currentMessagingPrompts;
   }
 
@@ -3268,6 +3353,62 @@ App.messaging = (function () {
     }
   }
 
+  function renderSubheadingsCreatorSavedPromptOptions(selectedId = null) {
+    const select = document.getElementById('messagingSubheadingsCreatorSavedPrompt');
+    if (!select) return;
+    const topic = cleanText(document.getElementById('messagingSubheadingsCreatorTopic')?.value);
+    const currentValue = String(selectedId || select.value || '').trim();
+    const prompts = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter((item) => {
+      const itemFormat = cleanText(item?.format);
+      const itemTopic = cleanText(item?.topic);
+      if (itemFormat !== 'Sub-headings') return false;
+      if (topic && itemTopic && itemTopic !== topic) return false;
+      return true;
+    });
+    select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+    prompts.forEach((prompt) => {
+      const option = document.createElement('option');
+      option.value = String(prompt.id || '');
+      const topicLabel = cleanText(prompt.topic);
+      const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+      option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
+      select.appendChild(option);
+    });
+    if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+      select.value = currentValue;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function renderPitchesCreatorSavedPromptOptions(selectedId = null) {
+    const select = document.getElementById('messagingPitchesCreatorSavedPrompt');
+    if (!select) return;
+    const topic = cleanText(document.getElementById('messagingPitchesCreatorTopic')?.value);
+    const currentValue = String(selectedId || select.value || '').trim();
+    const prompts = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter((item) => {
+      const itemFormat = cleanText(item?.format);
+      const itemTopic = cleanText(item?.topic);
+      if (itemFormat !== 'Pitches') return false;
+      if (topic && itemTopic && itemTopic !== topic) return false;
+      return true;
+    });
+    select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+    prompts.forEach((prompt) => {
+      const option = document.createElement('option');
+      option.value = String(prompt.id || '');
+      const topicLabel = cleanText(prompt.topic);
+      const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+      option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
+      select.appendChild(option);
+    });
+    if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+      select.value = currentValue;
+    } else {
+      select.value = '';
+    }
+  }
+
   function clearHeadlinesCreatorSuggestions() {
     currentHeadlineCreatorSuggestions = [];
     const empty = document.getElementById('messagingHeadlinesCreatorSuggestionsEmpty');
@@ -3287,6 +3428,34 @@ App.messaging = (function () {
     const tbody = document.getElementById('messagingTaglinesCreatorSuggestionsTable');
     const checkAll = document.getElementById('messagingTaglinesCreatorSelectAllSuggestions');
     const bulkQuality = document.getElementById('messagingTaglinesCreatorBulkQuality');
+    if (empty) empty.classList.remove('hidden');
+    if (wrap) wrap.classList.add('hidden');
+    if (tbody) tbody.innerHTML = '';
+    if (checkAll) checkAll.checked = false;
+    if (bulkQuality) bulkQuality.value = '';
+  }
+
+  function clearSubheadingsCreatorSuggestions() {
+    currentSubheadingCreatorSuggestions = [];
+    const empty = document.getElementById('messagingSubheadingsCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingSubheadingsCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingSubheadingsCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingSubheadingsCreatorSelectAllSuggestions');
+    const bulkQuality = document.getElementById('messagingSubheadingsCreatorBulkQuality');
+    if (empty) empty.classList.remove('hidden');
+    if (wrap) wrap.classList.add('hidden');
+    if (tbody) tbody.innerHTML = '';
+    if (checkAll) checkAll.checked = false;
+    if (bulkQuality) bulkQuality.value = '';
+  }
+
+  function clearPitchesCreatorSuggestions() {
+    currentPitchCreatorSuggestions = [];
+    const empty = document.getElementById('messagingPitchesCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingPitchesCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingPitchesCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingPitchesCreatorSelectAllSuggestions');
+    const bulkQuality = document.getElementById('messagingPitchesCreatorBulkQuality');
     if (empty) empty.classList.remove('hidden');
     if (wrap) wrap.classList.add('hidden');
     if (tbody) tbody.innerHTML = '';
@@ -3344,6 +3513,72 @@ App.messaging = (function () {
         <td>${escapeHtml(String(text || ''))}</td>
         <td>
           <select data-tagline-creator-quality-index="${index}">
+            <option value="">-</option>
+            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
+            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
+            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
+            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
+            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
+          </select>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    if (checkAll) checkAll.checked = false;
+    if (empty) empty.classList.add('hidden');
+    wrap.classList.remove('hidden');
+  }
+
+  function renderSubheadingsCreatorSuggestions(options) {
+    const empty = document.getElementById('messagingSubheadingsCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingSubheadingsCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingSubheadingsCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingSubheadingsCreatorSelectAllSuggestions');
+    if (!wrap || !tbody) return;
+    currentSubheadingCreatorSuggestions = Array.isArray(options) ? options.slice() : [];
+    tbody.innerHTML = '';
+    currentSubheadingCreatorSuggestions.forEach((option, index) => {
+      const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
+      const text = typeof option === 'object' && option ? option.subheading || option.text || '' : option;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="checkbox" data-subheading-creator-suggestion-index="${index}" /></td>
+        <td>${escapeHtml(String(text || ''))}</td>
+        <td>
+          <select data-subheading-creator-quality-index="${index}">
+            <option value="">-</option>
+            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
+            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
+            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
+            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
+            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
+          </select>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    if (checkAll) checkAll.checked = false;
+    if (empty) empty.classList.add('hidden');
+    wrap.classList.remove('hidden');
+  }
+
+  function renderPitchesCreatorSuggestions(options) {
+    const empty = document.getElementById('messagingPitchesCreatorSuggestionsEmpty');
+    const wrap = document.getElementById('messagingPitchesCreatorSuggestionsWrap');
+    const tbody = document.getElementById('messagingPitchesCreatorSuggestionsTable');
+    const checkAll = document.getElementById('messagingPitchesCreatorSelectAllSuggestions');
+    if (!wrap || !tbody) return;
+    currentPitchCreatorSuggestions = Array.isArray(options) ? options.slice() : [];
+    tbody.innerHTML = '';
+    currentPitchCreatorSuggestions.forEach((option, index) => {
+      const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
+      const text = typeof option === 'object' && option ? option.pitch || option.text || '' : option;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="checkbox" data-pitch-creator-suggestion-index="${index}" /></td>
+        <td>${escapeHtml(String(text || ''))}</td>
+        <td>
+          <select data-pitch-creator-quality-index="${index}">
             <option value="">-</option>
             <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
             <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
@@ -3432,6 +3667,78 @@ App.messaging = (function () {
     return false;
   }
 
+  async function saveSubheadingsCreatorPrompt() {
+    const form = document.getElementById('messagingSubheadingsCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingSubheadingsCreatorSavePromptBtn');
+    const promptIdInput = document.getElementById('messagingSubheadingsCreatorPromptId');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving Prompt...';
+    }
+    try {
+      const result = await api('/api/messaging/prompts', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Sub-headings',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('subheading')),
+        }),
+      });
+      const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
+      if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+      await refreshMessagingPrompts().catch(function () {});
+      renderSubheadingsCreatorSavedPromptOptions(promptId ? String(promptId) : '');
+      notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Save Prompt';
+      }
+    }
+    return false;
+  }
+
+  async function savePitchesCreatorPrompt() {
+    const form = document.getElementById('messagingPitchesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingPitchesCreatorSavePromptBtn');
+    const promptIdInput = document.getElementById('messagingPitchesCreatorPromptId');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving Prompt...';
+    }
+    try {
+      const result = await api('/api/messaging/prompts', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Pitches',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('pitch')),
+        }),
+      });
+      const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
+      if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+      await refreshMessagingPrompts().catch(function () {});
+      renderPitchesCreatorSavedPromptOptions(promptId ? String(promptId) : '');
+      notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Save Prompt';
+      }
+    }
+    return false;
+  }
+
   async function generateHeadlinesCreatorSuggestions() {
     const form = document.getElementById('messagingHeadlinesCreatorForm');
     if (!form) return false;
@@ -3484,6 +3791,70 @@ App.messaging = (function () {
         }),
       });
       renderTaglinesCreatorSuggestions(Array.isArray(result.options) ? result.options : []);
+      notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Generate with AI';
+      }
+    }
+    return false;
+  }
+
+  async function generateSubheadingsCreatorSuggestions() {
+    const form = document.getElementById('messagingSubheadingsCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingSubheadingsCreatorGenerateBtn');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Generating...';
+    }
+    try {
+      const result = await api('/api/messaging/content-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Sub-headings',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('subheading')),
+        }),
+      });
+      renderSubheadingsCreatorSuggestions(Array.isArray(result.options) ? result.options : []);
+      notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Generate with AI';
+      }
+    }
+    return false;
+  }
+
+  async function generatePitchesCreatorSuggestions() {
+    const form = document.getElementById('messagingPitchesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const button = document.getElementById('messagingPitchesCreatorGenerateBtn');
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Generating...';
+    }
+    try {
+      const result = await api('/api/messaging/content-suggestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          format: 'Pitches',
+          topic: cleanText(formData.get('topic')),
+          body: cleanText(formData.get('pitch')),
+        }),
+      });
+      renderPitchesCreatorSuggestions(Array.isArray(result.options) ? result.options : []);
       notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
     } catch (err) {
       notify(err.message, true);
@@ -3554,6 +3925,70 @@ App.messaging = (function () {
       renderTaglinesCreatorSavedPromptOptions();
       clearTaglinesCreatorSuggestions();
       await refreshTaglines();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function submitSubheadingsCreatorForm(event) {
+    if (event) event.preventDefault();
+    const form = document.getElementById('messagingSubheadingsCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const payload = {
+      subheading: cleanText(formData.get('subheading')),
+      topic: cleanText(formData.get('topic')),
+      prompt_id: Number(formData.get('prompt_id') || 0) || null,
+    };
+    if (!payload.subheading) {
+      notify('Sub-heading/Prompt is required', true);
+      return false;
+    }
+    try {
+      await api('/api/messaging/subheadings', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('Sub-heading saved');
+      form.reset();
+      const promptIdInput = document.getElementById('messagingSubheadingsCreatorPromptId');
+      if (promptIdInput) promptIdInput.value = '';
+      renderSubheadingsCreatorSavedPromptOptions();
+      clearSubheadingsCreatorSuggestions();
+      await refreshSubheadings();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function submitPitchesCreatorForm(event) {
+    if (event) event.preventDefault();
+    const form = document.getElementById('messagingPitchesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const payload = {
+      pitch: cleanText(formData.get('pitch')),
+      topic: cleanText(formData.get('topic')),
+      prompt_id: Number(formData.get('prompt_id') || 0) || null,
+    };
+    if (!payload.pitch) {
+      notify('Pitch/Prompt is required', true);
+      return false;
+    }
+    try {
+      await api('/api/messaging/pitches', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('Pitch saved');
+      form.reset();
+      const promptIdInput = document.getElementById('messagingPitchesCreatorPromptId');
+      if (promptIdInput) promptIdInput.value = '';
+      renderPitchesCreatorSavedPromptOptions();
+      clearPitchesCreatorSuggestions();
+      await refreshPitches();
     } catch (err) {
       notify(err.message, true);
     }
@@ -3642,6 +4077,94 @@ App.messaging = (function () {
       notify(`Saved ${selectedIndices.length} tagline${selectedIndices.length === 1 ? '' : 's'}`);
       clearTaglinesCreatorSuggestions();
       await refreshTaglines();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function saveSelectedSubheadingsCreatorSuggestions() {
+    const form = document.getElementById('messagingSubheadingsCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const topic = cleanText(formData.get('topic'));
+    const promptId = Number(formData.get('prompt_id') || 0) || null;
+    const selectedIndices = Array.from(document.querySelectorAll('[data-subheading-creator-suggestion-index]:checked'))
+      .map((input) => Number(input.getAttribute('data-subheading-creator-suggestion-index')))
+      .filter((value) => Number.isFinite(value) && currentSubheadingCreatorSuggestions[value]);
+    if (!selectedIndices.length) {
+      notify('Select at least one option', true);
+      return false;
+    }
+    try {
+      for (const index of selectedIndices) {
+        await api('/api/messaging/subheadings', {
+          method: 'POST',
+          body: JSON.stringify({
+            subheading: cleanText(
+              typeof currentSubheadingCreatorSuggestions[index] === 'object' && currentSubheadingCreatorSuggestions[index]
+                ? currentSubheadingCreatorSuggestions[index].subheading || currentSubheadingCreatorSuggestions[index].text
+                : currentSubheadingCreatorSuggestions[index]
+            ),
+            topic,
+            prompt_id: promptId,
+            quality_score: Math.max(
+              0,
+              Math.min(
+                Number(document.querySelector(`[data-subheading-creator-quality-index="${index}"]`)?.value || 0) || 0,
+                5
+              )
+            ),
+          }),
+        });
+      }
+      notify(`Saved ${selectedIndices.length} sub-heading${selectedIndices.length === 1 ? '' : 's'}`);
+      clearSubheadingsCreatorSuggestions();
+      await refreshSubheadings();
+    } catch (err) {
+      notify(err.message, true);
+    }
+    return false;
+  }
+
+  async function saveSelectedPitchesCreatorSuggestions() {
+    const form = document.getElementById('messagingPitchesCreatorForm');
+    if (!form) return false;
+    const formData = new FormData(form);
+    const topic = cleanText(formData.get('topic'));
+    const promptId = Number(formData.get('prompt_id') || 0) || null;
+    const selectedIndices = Array.from(document.querySelectorAll('[data-pitch-creator-suggestion-index]:checked'))
+      .map((input) => Number(input.getAttribute('data-pitch-creator-suggestion-index')))
+      .filter((value) => Number.isFinite(value) && currentPitchCreatorSuggestions[value]);
+    if (!selectedIndices.length) {
+      notify('Select at least one option', true);
+      return false;
+    }
+    try {
+      for (const index of selectedIndices) {
+        await api('/api/messaging/pitches', {
+          method: 'POST',
+          body: JSON.stringify({
+            pitch: cleanText(
+              typeof currentPitchCreatorSuggestions[index] === 'object' && currentPitchCreatorSuggestions[index]
+                ? currentPitchCreatorSuggestions[index].pitch || currentPitchCreatorSuggestions[index].text
+                : currentPitchCreatorSuggestions[index]
+            ),
+            topic,
+            prompt_id: promptId,
+            quality_score: Math.max(
+              0,
+              Math.min(
+                Number(document.querySelector(`[data-pitch-creator-quality-index="${index}"]`)?.value || 0) || 0,
+                5
+              )
+            ),
+          }),
+        });
+      }
+      notify(`Saved ${selectedIndices.length} pitch${selectedIndices.length === 1 ? '' : 'es'}`);
+      clearPitchesCreatorSuggestions();
+      await refreshPitches();
     } catch (err) {
       notify(err.message, true);
     }
@@ -4729,6 +5252,9 @@ App.messaging = (function () {
     if (form.elements.feedback) {
       form.elements.feedback.value = String(item.feedback || '');
     }
+    if (form.elements.quality_score) {
+      form.elements.quality_score.value = item.quality_score ? String(item.quality_score) : '';
+    }
   }
 
   function openSimpleContentEditForm(config, item) {
@@ -4866,6 +5392,7 @@ App.messaging = (function () {
         String(item[config.field] || '').trim() || '-',
         String(item.category || '').trim() || '-',
         config.pluralLabel,
+        (Math.max(0, Math.min(Number(item.quality_score || 0) || 0, 5)) || '-'),
         item.created_at ? new Date(item.created_at).toLocaleString() : '-',
         item.updated_at ? new Date(item.updated_at).toLocaleString() : '-',
       ].forEach((value) => {
@@ -4927,12 +5454,97 @@ App.messaging = (function () {
     const bulkSummary = document.getElementById(ids.bulkSummaryId);
     const categoriesBtn = document.getElementById(ids.categoryBtnId);
     const stateForType = simpleContentState[config.key];
+    const creatorForm = document.getElementById(ids.creatorFormId);
+    const creatorTopic = document.getElementById(ids.creatorTopicId);
+    const creatorSavedPrompt = document.getElementById(ids.creatorSavedPromptId);
+    const creatorGenerateBtn = document.getElementById(ids.creatorGenerateBtnId);
+    const creatorSavePromptBtn = document.getElementById(ids.creatorSavePromptBtnId);
+    const creatorClearSuggestionsBtn = document.getElementById(ids.creatorClearSuggestionsBtnId);
+    const creatorSaveSelectedBtn = document.getElementById(ids.creatorSaveSelectedBtnId);
+    const creatorSelectAllSuggestions = document.getElementById(ids.creatorSelectAllSuggestionsId);
+    const creatorBulkQuality = document.getElementById(ids.creatorBulkQualityId);
+
+    function renderCreatorSavedPromptOptions(selectedId = null) {
+      const select = document.getElementById(ids.creatorSavedPromptId);
+      if (!select) return;
+      const topic = cleanText(document.getElementById(ids.creatorTopicId)?.value);
+      const currentValue = String(selectedId || select.value || '').trim();
+      const prompts = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter((item) => {
+        const itemFormat = cleanText(item?.format);
+        const itemTopic = cleanText(item?.topic);
+        if (itemFormat !== config.pluralLabel) return false;
+        if (topic && itemTopic && itemTopic !== topic) return false;
+        return true;
+      });
+      select.innerHTML = '<option value="">Select Saved Prompt (optional)</option>';
+      prompts.forEach((prompt) => {
+        const option = document.createElement('option');
+        option.value = String(prompt.id || '');
+        const topicLabel = cleanText(prompt.topic);
+        const preview = cleanText(prompt.prompt_text).replace(/\s+/g, ' ').slice(0, 90);
+        option.textContent = `${topicLabel ? `${topicLabel}: ` : ''}${preview}${preview.length >= 90 ? '...' : ''}`;
+        select.appendChild(option);
+      });
+      if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+        select.value = currentValue;
+      } else {
+        select.value = '';
+      }
+    }
+
+    function clearCreatorSuggestions() {
+      stateForType.suggestions = [];
+      const empty = document.getElementById(ids.creatorSuggestionsEmptyId);
+      const wrap = document.getElementById(ids.creatorSuggestionsWrapId);
+      const tbody = document.getElementById(ids.creatorSuggestionsTableId);
+      const checkAll = document.getElementById(ids.creatorSelectAllSuggestionsId);
+      const bulkQuality = document.getElementById(ids.creatorBulkQualityId);
+      if (empty) empty.classList.remove('hidden');
+      if (wrap) wrap.classList.add('hidden');
+      if (tbody) tbody.innerHTML = '';
+      if (checkAll) checkAll.checked = false;
+      if (bulkQuality) bulkQuality.value = '';
+    }
+
+    function renderCreatorSuggestions(options) {
+      const empty = document.getElementById(ids.creatorSuggestionsEmptyId);
+      const wrap = document.getElementById(ids.creatorSuggestionsWrapId);
+      const tbody = document.getElementById(ids.creatorSuggestionsTableId);
+      const checkAll = document.getElementById(ids.creatorSelectAllSuggestionsId);
+      if (!wrap || !tbody) return;
+      stateForType.suggestions = Array.isArray(options) ? options.slice() : [];
+      tbody.innerHTML = '';
+      stateForType.suggestions.forEach((option, index) => {
+        const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
+        const text = typeof option === 'object' && option ? option[config.field] || option.text || '' : option;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" data-simple-creator-key="${config.key}" data-simple-creator-index="${index}" /></td>
+          <td>${escapeHtml(String(text || ''))}</td>
+          <td>
+            <select data-simple-creator-quality-key="${config.key}" data-simple-creator-quality-index="${index}">
+              <option value="">-</option>
+              <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
+              <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
+              <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
+              <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
+              <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
+            </select>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      if (checkAll) checkAll.checked = false;
+      if (empty) empty.classList.add('hidden');
+      wrap.classList.remove('hidden');
+    }
 
     if (toggleBtn && createWrap) {
       toggleBtn.addEventListener('click', function () {
         const isHidden = createWrap.classList.contains('hidden');
         closeSimpleContentEditForm(config);
         syncHeadlineCategorySelects();
+        renderCreatorSavedPromptOptions();
         createWrap.classList.toggle('hidden', !isHidden);
         toggleBtn.textContent = isHidden ? 'Hide Create' : `Create ${config.pluralLabel}`;
       });
@@ -4947,14 +5559,31 @@ App.messaging = (function () {
       });
     }
 
-    if (form) {
-      form.addEventListener('submit', async function (e) {
+    if (creatorTopic) {
+      creatorTopic.addEventListener('change', function () {
+        renderCreatorSavedPromptOptions();
+      });
+    }
+
+    if (creatorSavedPrompt) {
+      creatorSavedPrompt.addEventListener('change', function () {
+        const selectedId = String(creatorSavedPrompt.value || '').trim();
+        const promptIdInput = document.getElementById(ids.creatorPromptId);
+        const primaryInput = document.getElementById(ids.creatorPrimaryId);
+        const selected = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item?.id || '') === selectedId);
+        if (promptIdInput) promptIdInput.value = selected ? selectedId : '';
+        if (primaryInput && selected) primaryInput.value = cleanText(selected.prompt_text);
+      });
+    }
+
+    if (creatorForm) {
+      creatorForm.addEventListener('submit', async function (e) {
         e.preventDefault();
-        const formData = new FormData(form);
+        const formData = new FormData(creatorForm);
         const payload = {
           [config.field]: String(formData.get(config.field) || '').trim(),
           topic: String(formData.get('topic') || '').trim(),
-          feedback: String(formData.get('feedback') || '').trim(),
+          prompt_id: Number(formData.get('prompt_id') || 0) || null,
         };
         if (!payload[config.field]) {
           notify(`${config.singularLabel} is required`, true);
@@ -4966,7 +5595,11 @@ App.messaging = (function () {
             body: JSON.stringify(payload),
           });
           notify(`${config.singularLabel} saved`);
-          form.reset();
+          creatorForm.reset();
+          const promptIdInput = document.getElementById(ids.creatorPromptId);
+          if (promptIdInput) promptIdInput.value = '';
+          renderCreatorSavedPromptOptions();
+          clearCreatorSuggestions();
           syncHeadlineCategorySelects();
           await refreshSimpleContent(config);
         } catch (err) {
@@ -4975,28 +5608,123 @@ App.messaging = (function () {
       });
     }
 
-    if (bulkCreateForm) {
-      bulkCreateForm.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const formData = new FormData(bulkCreateForm);
-        const category = String(formData.get('topic') || '').trim();
-        const values = Array.from(new Set(
-          parseSimpleContentTextarea(formData.get(`${config.field}_text`))
-            .map((item) => String(item || '').trim())
-            .filter(Boolean)
-        ));
-        if (!values.length) {
-          notify(`Add at least one ${config.singularLower} in the textarea`, true);
+    if (creatorGenerateBtn) {
+      creatorGenerateBtn.addEventListener('click', async function () {
+        const formData = new FormData(creatorForm);
+        const originalText = creatorGenerateBtn.textContent;
+        creatorGenerateBtn.disabled = true;
+        creatorGenerateBtn.textContent = 'Generating...';
+        try {
+          const result = await api('/api/messaging/content-suggestions', {
+            method: 'POST',
+            body: JSON.stringify({
+              format: config.pluralLabel,
+              topic: cleanText(formData.get('topic')),
+              body: cleanText(formData.get(config.field)),
+            }),
+          });
+          renderCreatorSuggestions(Array.isArray(result.options) ? result.options : []);
+          notify(`Generated ${(Array.isArray(result.options) ? result.options.length : 0)} option(s)`);
+        } catch (err) {
+          notify(err.message, true);
+        } finally {
+          creatorGenerateBtn.disabled = false;
+          creatorGenerateBtn.textContent = originalText || 'Generate with AI';
+        }
+      });
+    }
+
+    if (creatorSavePromptBtn) {
+      creatorSavePromptBtn.addEventListener('click', async function () {
+        const formData = new FormData(creatorForm);
+        const promptIdInput = document.getElementById(ids.creatorPromptId);
+        const originalText = creatorSavePromptBtn.textContent;
+        creatorSavePromptBtn.disabled = true;
+        creatorSavePromptBtn.textContent = 'Saving Prompt...';
+        try {
+          const result = await api('/api/messaging/prompts', {
+            method: 'POST',
+            body: JSON.stringify({
+              format: config.pluralLabel,
+              topic: cleanText(formData.get('topic')),
+              body: cleanText(formData.get(config.field)),
+            }),
+          });
+          const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
+          if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
+          await refreshMessagingPrompts().catch(function () {});
+          renderCreatorSavedPromptOptions(promptId ? String(promptId) : '');
+          notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
+        } catch (err) {
+          notify(err.message, true);
+        } finally {
+          creatorSavePromptBtn.disabled = false;
+          creatorSavePromptBtn.textContent = originalText || 'Save Prompt';
+        }
+      });
+    }
+
+    if (creatorClearSuggestionsBtn) {
+      creatorClearSuggestionsBtn.addEventListener('click', clearCreatorSuggestions);
+    }
+
+    if (creatorSelectAllSuggestions) {
+      creatorSelectAllSuggestions.addEventListener('change', function () {
+        const checked = Boolean(creatorSelectAllSuggestions.checked);
+        document.querySelectorAll(`[data-simple-creator-key="${config.key}"][data-simple-creator-index]`).forEach((input) => {
+          input.checked = checked;
+        });
+      });
+    }
+
+    if (creatorBulkQuality) {
+      creatorBulkQuality.addEventListener('change', function () {
+        const value = String(creatorBulkQuality.value || '').trim();
+        if (!value) return;
+        document.querySelectorAll(`[data-simple-creator-key="${config.key}"][data-simple-creator-index]:checked`).forEach((input) => {
+          const index = String(input.getAttribute('data-simple-creator-index') || '').trim();
+          const select = document.querySelector(`[data-simple-creator-quality-key="${config.key}"][data-simple-creator-quality-index="${index}"]`);
+          if (select) select.value = value;
+        });
+      });
+    }
+
+    if (creatorSaveSelectedBtn) {
+      creatorSaveSelectedBtn.addEventListener('click', async function () {
+        const formData = new FormData(creatorForm);
+        const topic = cleanText(formData.get('topic'));
+        const promptId = Number(formData.get('prompt_id') || 0) || null;
+        const selectedIndices = Array.from(document.querySelectorAll(`[data-simple-creator-key="${config.key}"][data-simple-creator-index]:checked`))
+          .map((input) => Number(input.getAttribute('data-simple-creator-index')))
+          .filter((value) => Number.isFinite(value) && stateForType.suggestions[value]);
+        if (!selectedIndices.length) {
+          notify('Select at least one option', true);
           return;
         }
         try {
-          await Promise.all(values.map((value) => api(config.endpoint, {
-            method: 'POST',
-            body: JSON.stringify({ [config.field]: value, topic: category, feedback: '' }),
-          })));
-          notify(`Saved ${values.length} ${config.singularLower}${values.length === 1 ? '' : 's'}`);
-          bulkCreateForm.reset();
-          syncHeadlineCategorySelects();
+          for (const index of selectedIndices) {
+            await api(config.endpoint, {
+              method: 'POST',
+              body: JSON.stringify({
+                [config.field]: cleanText(
+                  typeof stateForType.suggestions[index] === 'object' && stateForType.suggestions[index]
+                    ? stateForType.suggestions[index][config.field] || stateForType.suggestions[index].text
+                    : stateForType.suggestions[index]
+                ),
+                topic,
+                prompt_id: promptId,
+                quality_score: Math.max(
+                  0,
+                  Math.min(
+                    Number(document.querySelector(`[data-simple-creator-quality-key="${config.key}"][data-simple-creator-quality-index="${index}"]`)?.value || 0) || 0,
+                    5
+                  )
+                ),
+              }),
+            });
+          }
+          notify(`Saved ${selectedIndices.length} ${config.singularLower}${selectedIndices.length === 1 ? '' : 's'}`);
+          clearCreatorSuggestions();
           await refreshSimpleContent(config);
         } catch (err) {
           notify(err.message, true);
@@ -5019,6 +5747,7 @@ App.messaging = (function () {
           [config.field]: String(formData.get(config.field) || '').trim(),
           topic: String(formData.get('topic') || '').trim(),
           feedback: String(formData.get('feedback') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!id) {
           notify(`${config.singularLabel} id is required`, true);
@@ -5456,6 +6185,7 @@ App.messaging = (function () {
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -5476,6 +6206,7 @@ App.messaging = (function () {
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -5495,6 +6226,7 @@ App.messaging = (function () {
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -5517,6 +6249,7 @@ App.messaging = (function () {
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -5537,6 +6270,7 @@ App.messaging = (function () {
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -5559,6 +6293,7 @@ App.messaging = (function () {
       url: String(formData.get('url') || '').trim(),
       content: String(formData.get('content') || '').trim(),
       feedback: String(formData.get('feedback') || '').trim(),
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
       publish_date: String(formData.get('publish_date') || '').trim(),
       thumbnail_asset_id: Number(formData.get('thumbnail_asset_id') || 0) || null,
     };
@@ -5621,6 +6356,7 @@ async function saveTweetFromForm(form) {
       feedback: String(formData.get('feedback') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
       prompt_id: Number(formData.get('prompt_id') || 0) || null,
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
     };
     await api('/api/messaging/tweets', {
       method: 'POST',
@@ -5639,6 +6375,7 @@ async function saveTweetFromForm(form) {
       feedback: String(formData.get('feedback') || '').trim(),
       image_asset_id: Number(formData.get('image_asset_id') || 0) || null,
       prompt_id: Number(formData.get('prompt_id') || 0) || null,
+      quality_score: Number(formData.get('quality_score') || 0) || 0,
     };
     await api(`/api/messaging/tweets/${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -6040,6 +6777,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           headline: String(formData.get('headline') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!payload.headline) {
           notify('Headline is required', true);
@@ -6060,6 +6798,140 @@ async function saveTweetFromForm(form) {
       });
     }
 
+    const subheadingsCreatorForm = document.getElementById('messagingSubheadingsCreatorForm');
+    const subheadingsCreatorTopic = document.getElementById('messagingSubheadingsCreatorTopic');
+    const subheadingsCreatorSavedPrompt = document.getElementById('messagingSubheadingsCreatorSavedPrompt');
+    const subheadingsCreatorPrimary = document.getElementById('messagingSubheadingsCreatorPrimary');
+    const subheadingsCreatorPromptId = document.getElementById('messagingSubheadingsCreatorPromptId');
+    const subheadingsCreatorGenerateBtn = document.getElementById('messagingSubheadingsCreatorGenerateBtn');
+    const subheadingsCreatorSavePromptBtn = document.getElementById('messagingSubheadingsCreatorSavePromptBtn');
+    const subheadingsCreatorSelectAll = document.getElementById('messagingSubheadingsCreatorSelectAllSuggestions');
+    const subheadingsCreatorBulkQuality = document.getElementById('messagingSubheadingsCreatorBulkQuality');
+    const subheadingsCreatorClearBtn = document.getElementById('messagingSubheadingsCreatorClearSuggestionsBtn');
+    const subheadingsCreatorSaveSelectedBtn = document.getElementById('messagingSubheadingsCreatorSaveSelectedBtn');
+
+    if (subheadingsCreatorTopic) {
+      subheadingsCreatorTopic.addEventListener('change', function () {
+        renderSubheadingsCreatorSavedPromptOptions();
+      });
+    }
+    if (subheadingsCreatorSavedPrompt) {
+      subheadingsCreatorSavedPrompt.addEventListener('change', function () {
+        const selectedId = cleanText(subheadingsCreatorSavedPrompt.value);
+        const selectedPrompt = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item.id || '') === selectedId);
+        if (subheadingsCreatorPrimary) subheadingsCreatorPrimary.value = selectedPrompt ? cleanText(selectedPrompt.prompt_text) : '';
+        if (subheadingsCreatorPromptId) subheadingsCreatorPromptId.value = selectedId;
+      });
+    }
+    if (subheadingsCreatorGenerateBtn) {
+      subheadingsCreatorGenerateBtn.addEventListener('click', function () {
+        generateSubheadingsCreatorSuggestions();
+      });
+    }
+    if (subheadingsCreatorSavePromptBtn) {
+      subheadingsCreatorSavePromptBtn.addEventListener('click', function () {
+        saveSubheadingsCreatorPrompt();
+      });
+    }
+    if (subheadingsCreatorForm) {
+      subheadingsCreatorForm.addEventListener('submit', submitSubheadingsCreatorForm);
+    }
+    if (subheadingsCreatorSelectAll) {
+      subheadingsCreatorSelectAll.addEventListener('change', function () {
+        document.querySelectorAll('[data-subheading-creator-suggestion-index]').forEach((input) => {
+          input.checked = subheadingsCreatorSelectAll.checked;
+        });
+      });
+    }
+    if (subheadingsCreatorBulkQuality) {
+      subheadingsCreatorBulkQuality.addEventListener('change', function () {
+        const value = cleanText(subheadingsCreatorBulkQuality.value);
+        if (!value) return;
+        document.querySelectorAll('[data-subheading-creator-suggestion-index]:checked').forEach((input) => {
+          const index = input.getAttribute('data-subheading-creator-suggestion-index');
+          const select = document.querySelector(`[data-subheading-creator-quality-index="${index}"]`);
+          if (select) select.value = value;
+        });
+      });
+    }
+    if (subheadingsCreatorClearBtn) {
+      subheadingsCreatorClearBtn.addEventListener('click', function () {
+        clearSubheadingsCreatorSuggestions();
+      });
+    }
+    if (subheadingsCreatorSaveSelectedBtn) {
+      subheadingsCreatorSaveSelectedBtn.addEventListener('click', function () {
+        saveSelectedSubheadingsCreatorSuggestions();
+      });
+    }
+
+    const pitchesCreatorForm = document.getElementById('messagingPitchesCreatorForm');
+    const pitchesCreatorTopic = document.getElementById('messagingPitchesCreatorTopic');
+    const pitchesCreatorSavedPrompt = document.getElementById('messagingPitchesCreatorSavedPrompt');
+    const pitchesCreatorPrimary = document.getElementById('messagingPitchesCreatorPrimary');
+    const pitchesCreatorPromptId = document.getElementById('messagingPitchesCreatorPromptId');
+    const pitchesCreatorGenerateBtn = document.getElementById('messagingPitchesCreatorGenerateBtn');
+    const pitchesCreatorSavePromptBtn = document.getElementById('messagingPitchesCreatorSavePromptBtn');
+    const pitchesCreatorSelectAll = document.getElementById('messagingPitchesCreatorSelectAllSuggestions');
+    const pitchesCreatorBulkQuality = document.getElementById('messagingPitchesCreatorBulkQuality');
+    const pitchesCreatorClearBtn = document.getElementById('messagingPitchesCreatorClearSuggestionsBtn');
+    const pitchesCreatorSaveSelectedBtn = document.getElementById('messagingPitchesCreatorSaveSelectedBtn');
+
+    if (pitchesCreatorTopic) {
+      pitchesCreatorTopic.addEventListener('change', function () {
+        renderPitchesCreatorSavedPromptOptions();
+      });
+    }
+    if (pitchesCreatorSavedPrompt) {
+      pitchesCreatorSavedPrompt.addEventListener('change', function () {
+        const selectedId = cleanText(pitchesCreatorSavedPrompt.value);
+        const selectedPrompt = (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).find((item) => String(item.id || '') === selectedId);
+        if (pitchesCreatorPrimary) pitchesCreatorPrimary.value = selectedPrompt ? cleanText(selectedPrompt.prompt_text) : '';
+        if (pitchesCreatorPromptId) pitchesCreatorPromptId.value = selectedId;
+      });
+    }
+    if (pitchesCreatorGenerateBtn) {
+      pitchesCreatorGenerateBtn.addEventListener('click', function () {
+        generatePitchesCreatorSuggestions();
+      });
+    }
+    if (pitchesCreatorSavePromptBtn) {
+      pitchesCreatorSavePromptBtn.addEventListener('click', function () {
+        savePitchesCreatorPrompt();
+      });
+    }
+    if (pitchesCreatorForm) {
+      pitchesCreatorForm.addEventListener('submit', submitPitchesCreatorForm);
+    }
+    if (pitchesCreatorSelectAll) {
+      pitchesCreatorSelectAll.addEventListener('change', function () {
+        document.querySelectorAll('[data-pitch-creator-suggestion-index]').forEach((input) => {
+          input.checked = pitchesCreatorSelectAll.checked;
+        });
+      });
+    }
+    if (pitchesCreatorBulkQuality) {
+      pitchesCreatorBulkQuality.addEventListener('change', function () {
+        const value = cleanText(pitchesCreatorBulkQuality.value);
+        if (!value) return;
+        document.querySelectorAll('[data-pitch-creator-suggestion-index]:checked').forEach((input) => {
+          const index = input.getAttribute('data-pitch-creator-suggestion-index');
+          const select = document.querySelector(`[data-pitch-creator-quality-index="${index}"]`);
+          if (select) select.value = value;
+        });
+      });
+    }
+    if (pitchesCreatorClearBtn) {
+      pitchesCreatorClearBtn.addEventListener('click', function () {
+        clearPitchesCreatorSuggestions();
+      });
+    }
+    if (pitchesCreatorSaveSelectedBtn) {
+      pitchesCreatorSaveSelectedBtn.addEventListener('click', function () {
+        saveSelectedPitchesCreatorSuggestions();
+      });
+    }
+
     if (subheadingForm) {
       subheadingForm.addEventListener('submit', async function (e) {
         e.preventDefault();
@@ -6067,6 +6939,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           subheading: String(formData.get('subheading') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!payload.subheading) {
           notify('Sub-heading is required', true);
@@ -6094,6 +6967,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           tagline: String(formData.get('tagline') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!payload.tagline) {
           notify('Tagline is required', true);
@@ -6121,6 +6995,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           pitch: String(formData.get('pitch') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!payload.pitch) {
           notify('Pitch is required', true);
@@ -6277,6 +7152,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           headline: String(formData.get('headline') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!id) {
           notify('Headline id is required', true);
@@ -6308,6 +7184,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           subheading: String(formData.get('subheading') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!id) {
           notify('Sub-heading id is required', true);
@@ -6339,6 +7216,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           tagline: String(formData.get('tagline') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!id) {
           notify('Tagline id is required', true);
@@ -6370,6 +7248,7 @@ async function saveTweetFromForm(form) {
         const payload = {
           pitch: String(formData.get('pitch') || '').trim(),
           topic: String(formData.get('topic') || formData.get('category') || '').trim(),
+          quality_score: Number(formData.get('quality_score') || 0) || 0,
         };
         if (!id) {
           notify('Pitch id is required', true);
