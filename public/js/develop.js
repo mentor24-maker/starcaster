@@ -654,12 +654,80 @@ App.develop = (function () {
     },
   };
 
+  const LANDING_IMAGE_PICKERS = {
+    developLandingBannerImageSelect: {
+      selectId: 'developLandingBannerImageSelect',
+      buttonId: 'developLandingBannerImagePickerBtn',
+      previewId: 'developLandingBannerImagePreview',
+      title: 'Website Banner Image',
+      category: 'Banner Image',
+      categories: ['Banner Image', 'Website Banner', 'Website Banner Image', 'Hero Banner', 'Article Banner'],
+      tags: ['landing-page', 'website-banner', 'builder'],
+    },
+    developLandingBackgroundImageSelect: {
+      selectId: 'developLandingBackgroundImageSelect',
+      buttonId: 'developLandingBackgroundImagePickerBtn',
+      previewId: 'developLandingBackgroundImagePreview',
+      title: 'Background Image',
+      category: 'Background Image',
+      categories: ['Background Image'],
+      tags: ['landing-page', 'background-image', 'builder'],
+    },
+    developLandingFeatureImageSelect: {
+      selectId: 'developLandingFeatureImageSelect',
+      buttonId: 'developLandingFeatureImagePickerBtn',
+      previewId: 'developLandingFeatureImagePreview',
+      title: 'Feature Image',
+      category: 'Feature Image',
+      categories: ['Feature Image', 'Feature', 'Feature Graphic', 'Featured Image'],
+      tags: ['landing-page', 'feature-image', 'builder'],
+    },
+    developLandingHighlightImageSelect: {
+      selectId: 'developLandingHighlightImageSelect',
+      buttonId: 'developLandingHighlightImagePickerBtn',
+      previewId: 'developLandingHighlightImagePreview',
+      title: 'Highlight Image',
+      category: 'Highlight Image',
+      categories: ['Highlight Image', 'Highlight'],
+      tags: ['landing-page', 'highlight-image', 'builder'],
+    },
+    developLandingLogoSquareSelect: {
+      selectId: 'developLandingLogoSquareSelect',
+      buttonId: 'developLandingLogoSquarePickerBtn',
+      previewId: 'developLandingLogoSquarePreview',
+      title: 'Logo - Square',
+      category: 'Logo - Square',
+      categories: ['Logo - Square', 'Square Logo'],
+      tags: ['landing-page', 'logo-square', 'builder'],
+    },
+  };
+
+  function isLandingImageFieldKey(fieldKey) {
+    return [
+      'websiteBannerImageId',
+      'backgroundImageId',
+      'featureImageId',
+      'highlightImageId',
+      'logoSquareId',
+      'logoWideId',
+    ].includes(safeText(fieldKey));
+  }
+
+  function isLandingImageSelectId(selectId) {
+    return Boolean(LANDING_IMAGE_PICKERS[safeText(selectId)]);
+  }
+
+  function getImagePickerConfig(selectId) {
+    const key = String(selectId || '').trim();
+    return THEME_ASSET_PICKERS[key] || LANDING_IMAGE_PICKERS[key] || null;
+  }
+
   function getThemePickerConfig(selectId) {
     return THEME_ASSET_PICKERS[String(selectId || '').trim()] || null;
   }
 
-  function getThemePickerAssets(selectId, currentValue = '') {
-    const config = getThemePickerConfig(selectId);
+  function getImagePickerAssets(selectId, currentValue = '') {
+    const config = getImagePickerConfig(selectId);
     const currentId = safeText(currentValue);
     const allowedCategories = new Set((config?.categories || []).map((item) => safeText(item)).filter(Boolean));
     const rows = getThemeImageAssets().filter((asset) => {
@@ -673,8 +741,38 @@ App.develop = (function () {
     return rows;
   }
 
+  function getThemePickerAssets(selectId, currentValue = '') {
+    return getImagePickerAssets(selectId, currentValue);
+  }
+
   function renderThemeAssetPickerDisplay(selectId) {
-    const config = getThemePickerConfig(selectId);
+    const config = getImagePickerConfig(selectId);
+    if (!config) return;
+    const select = byId(config.selectId);
+    const button = byId(config.buttonId);
+    const preview = byId(config.previewId);
+    const selectedId = safeText(select?.value);
+    const asset = selectedId
+      ? (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === selectedId)
+      : null;
+    if (button) button.textContent = asset ? `Change ${config.title}` : `Choose ${config.title}`;
+    if (!preview) return;
+    if (!asset) {
+      preview.innerHTML = 'No image selected';
+      return;
+    }
+    const imageUrl = toDirectAssetUrl(asset.location);
+    preview.innerHTML = `
+      ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(asset.assetName) || config.title}" />` : ''}
+      <div class="develop-theme-asset-preview-text">
+        <strong>${safeText(assetLabel(asset, config.title))}</strong>
+        <span>${safeText(asset.category) || 'Image'}</span>
+      </div>
+    `;
+  }
+
+  function renderLandingAssetPickerDisplay(selectId) {
+    const config = getImagePickerConfig(selectId);
     if (!config) return;
     const select = byId(config.selectId);
     const button = byId(config.buttonId);
@@ -714,8 +812,23 @@ App.develop = (function () {
     renderThemeAssetPickerDisplay(selectId);
   }
 
+  function renderLandingAssetSelect(selectId, currentValue, placeholderLabel) {
+    const select = byId(selectId);
+    if (!select) return;
+    setSelectOptions(
+      select,
+      getImagePickerAssets(selectId, currentValue).map((asset) => ({
+        value: String(asset.id),
+        label: assetLabel(asset, `Asset ${asset.id}`),
+      })),
+      placeholderLabel || 'None',
+      currentValue
+    );
+    renderLandingAssetPickerDisplay(selectId);
+  }
+
   async function uploadThemeAssetFile(file, selectId) {
-    const config = getThemePickerConfig(selectId);
+    const config = getImagePickerConfig(selectId);
     if (!file || !config) return null;
     if (!String(file.type || '').startsWith('image/')) {
       throw new Error('Please choose an image file');
@@ -743,17 +856,32 @@ App.develop = (function () {
     const asset = result?.asset || result?.data?.asset || null;
     if (!asset?.id) throw new Error('Image upload did not return an asset');
     state.assets = [asset].concat(Array.isArray(state.assets) ? state.assets.filter((item) => String(item.id) !== String(asset.id)) : []);
-    renderThemeAssetSelect(selectId, String(asset.id), 'None');
-    renderThemesTable();
-    renderThemesPreview();
     return asset;
   }
 
-  function openThemeAssetPicker(selectId) {
-    const config = getThemePickerConfig(selectId);
+  async function uploadLandingAssetFile(file, selectId) {
+    const asset = await uploadThemeAssetFile(file, selectId);
+    renderLandingAssetSelect(selectId, String(asset.id), 'None');
+    updateLandingPageFieldOutlines();
+    return asset;
+  }
+
+  function openImageAssetPicker(selectId, options = {}) {
+    const config = getImagePickerConfig(selectId);
     const select = byId(selectId);
-    if (!config || !select || !App.components || typeof App.components.Modal !== 'function') return;
+    if (!config || !App.components || typeof App.components.Modal !== 'function') return;
+    const getValue = typeof options.getValue === 'function' ? options.getValue : (() => safeText(select.value));
+    const setValue = typeof options.setValue === 'function'
+      ? options.setValue
+      : ((value) => {
+        if (select) select.value = safeText(value);
+      });
+    const afterChange = typeof options.afterChange === 'function' ? options.afterChange : (() => {});
+    const uploadHandler = typeof options.uploadHandler === 'function'
+      ? options.uploadHandler
+      : ((file) => uploadThemeAssetFile(file, selectId));
     const body = document.createElement('div');
+    body.className = 'develop-theme-picker-body';
     const toolbar = document.createElement('div');
     toolbar.className = 'develop-theme-picker-toolbar';
 
@@ -790,10 +918,34 @@ App.develop = (function () {
     body.appendChild(grid);
 
     let modal = null;
+    let previewModal = null;
+
+    function openImagePreview(asset) {
+      if (!asset || !App.components || typeof App.components.Modal !== 'function') return;
+      const imageUrl = toDirectAssetUrl(asset.location);
+      if (!imageUrl) return;
+      const previewBody = document.createElement('div');
+      previewBody.className = 'develop-theme-image-preview-modal-body';
+      previewBody.innerHTML = `
+        <div class="develop-theme-image-preview-stage">
+          <img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />
+        </div>
+        <div class="develop-theme-image-preview-meta">
+          <strong>${safeText(assetLabel(asset, config.title))}</strong>
+          <span>${safeText(asset.category) || 'Image'}</span>
+        </div>
+      `;
+      previewModal = App.components.Modal({
+        title: safeText(assetLabel(asset, config.title)) || config.title,
+        body: previewBody,
+        dialogClass: 'develop-theme-image-preview-modal',
+      });
+      previewModal.open();
+    }
 
     function renderGrid() {
       const filter = safeText(filterInput.value).toLowerCase();
-      const assets = getThemePickerAssets(selectId, select.value).filter((asset) => {
+      const assets = getImagePickerAssets(selectId, getValue()).filter((asset) => {
         if (!filter) return true;
         const tagText = Array.isArray(asset?.tags)
           ? asset.tags.map((item) => safeText(item)).filter(Boolean).join(' ')
@@ -817,30 +969,49 @@ App.develop = (function () {
         return;
       }
       assets.forEach((asset) => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = `develop-theme-picker-card${String(asset.id) === safeText(select.value) ? ' is-selected' : ''}`;
+        const card = document.createElement('div');
+        card.className = `develop-theme-picker-card${String(asset.id) === getValue() ? ' is-selected' : ''}`;
         const imageUrl = toDirectAssetUrl(asset.location);
         card.innerHTML = `
-          ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />` : '<div class="develop-theme-table-thumb-empty">No Image</div>'}
+          <button type="button" class="develop-theme-picker-card-image-btn">
+            ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />` : '<div class="develop-theme-table-thumb-empty">No Image</div>'}
+          </button>
           <div class="develop-theme-picker-card-title">${safeText(assetLabel(asset, config.title))}</div>
           <div class="develop-theme-picker-card-meta">${safeText(asset.category) || 'Image'}</div>
+          <div class="develop-theme-picker-card-actions">
+            <button type="button" class="tiny-btn develop-theme-picker-preview-btn">Preview</button>
+            <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Image</button>
+          </div>
         `;
-        card.addEventListener('click', () => {
-          select.value = String(asset.id);
-          renderThemeAssetPickerDisplay(selectId);
-          renderThemesPreview();
+        const imageBtn = card.querySelector('.develop-theme-picker-card-image-btn');
+        const previewBtn = card.querySelector('.develop-theme-picker-preview-btn');
+        const selectBtn = card.querySelector('.develop-theme-picker-select-btn');
+        const choose = () => {
+          setValue(String(asset.id));
+          afterChange(asset);
           if (modal) modal.close();
-        });
+        };
+        if (imageBtn) {
+          imageBtn.addEventListener('click', () => {
+            openImagePreview(asset);
+          });
+        }
+        if (previewBtn) {
+          previewBtn.addEventListener('click', () => {
+            openImagePreview(asset);
+          });
+        }
+        if (selectBtn) {
+          selectBtn.addEventListener('click', choose);
+        }
         grid.appendChild(card);
       });
     }
 
     filterInput.addEventListener('input', renderGrid);
     clearBtn.addEventListener('click', () => {
-      select.value = '';
-      renderThemeAssetPickerDisplay(selectId);
-      renderThemesPreview();
+      setValue('');
+      afterChange(null);
       if (modal) modal.close();
     });
     uploadBtn.addEventListener('click', async () => {
@@ -851,8 +1022,12 @@ App.develop = (function () {
       }
       try {
         uploadBtn.disabled = true;
-        await uploadThemeAssetFile(file, selectId);
+        const asset = await uploadHandler(file);
         notify('Image uploaded');
+        if (asset?.id) {
+          setValue(String(asset.id));
+          afterChange(asset);
+        }
         renderGrid();
         if (modal) modal.close();
       } catch (err) {
@@ -869,6 +1044,31 @@ App.develop = (function () {
     });
     renderGrid();
     modal.open();
+  }
+
+  function openThemeAssetPicker(selectId) {
+    openImageAssetPicker(selectId, {
+      afterChange: () => {
+        renderThemeAssetPickerDisplay(selectId);
+        renderThemesPreview();
+      },
+      uploadHandler: (file) => uploadThemeAssetFile(file, selectId).then((asset) => {
+        renderThemeAssetSelect(selectId, String(asset.id), 'None');
+        renderThemesTable();
+        renderThemesPreview();
+        return asset;
+      }),
+    });
+  }
+
+  function openLandingAssetPicker(selectId) {
+    openImageAssetPicker(selectId, {
+      afterChange: () => {
+        renderLandingAssetPickerDisplay(selectId);
+        updateLandingPageFieldOutlines();
+      },
+      uploadHandler: (file) => uploadLandingAssetFile(file, selectId),
+    });
   }
 
   function buildThemePayload() {
@@ -2168,9 +2368,14 @@ App.develop = (function () {
   function ensureLandingPageFieldFilterSelect(select, fieldKey) {
     if (!select) return null;
     const key = safeText(fieldKey);
+    const wrapId = `${select.id}FilterWrap`;
+    const existingWrap = byId(wrapId);
+    if (isLandingImageFieldKey(key)) {
+      if (existingWrap) existingWrap.remove();
+      return null;
+    }
     const meta = getLandingPageFieldFilterMeta(key);
     const state = getLandingPageFilterState(key);
-    const wrapId = `${select.id}FilterWrap`;
     let wrap = byId(wrapId);
     if (!wrap) {
       wrap = document.createElement('div');
@@ -2289,6 +2494,10 @@ App.develop = (function () {
     select.dataset.placeholder = placeholder;
     const currentValue = safeText(select.value);
     ensureLandingPageFieldFilterSelect(select, fieldKey);
+    if (isLandingImageSelectId(selectId)) {
+      renderLandingAssetSelect(selectId, currentValue, placeholder);
+      return;
+    }
     setSelectOptions(
       select,
       getLandingPageVisualEditorOptions(fieldKey, getLandingPageFilterState(fieldKey)),
@@ -2846,13 +3055,9 @@ App.develop = (function () {
     const controls = document.createElement('div');
     controls.className = 'develop-inline-asset-nav';
 
-    const prevBtn = document.createElement('button');
-    prevBtn.type = 'button';
-    prevBtn.textContent = 'Prev';
-
-    const nextBtn = document.createElement('button');
-    nextBtn.type = 'button';
-    nextBtn.textContent = 'Next';
+    const chooseBtn = document.createElement('button');
+    chooseBtn.type = 'button';
+    chooseBtn.textContent = `Choose ${label}`;
 
     const clearBtn = document.createElement('button');
     clearBtn.type = 'button';
@@ -2864,58 +3069,56 @@ App.develop = (function () {
     const preview = document.createElement('div');
     preview.className = 'develop-inline-asset-preview';
 
-    const options = getLandingPageVisualEditorOptions(fieldKey);
-    let currentValue = safeText(record[fieldKey]);
-    let currentIndex = options.findIndex((item) => safeText(item.value) === currentValue);
-
     const updateStatus = () => {
-      currentValue = safeText(getActiveLandingPageVisualRecord()?.[fieldKey] || currentValue);
-      currentIndex = options.findIndex((item) => safeText(item.value) === currentValue);
-      const active = currentIndex >= 0 ? options[currentIndex] : null;
-      status.textContent = active ? active.label : placeholder;
-      const asset = getAssetById(active ? active.value : '');
+      const currentValue = safeText(getActiveLandingPageVisualRecord()?.[fieldKey] || record[fieldKey]);
+      const asset = getAssetById(currentValue);
+      status.textContent = asset ? assetLabel(asset, label) : placeholder;
       const assetUrl = asset ? toDirectAssetUrl(asset.location) : '';
       preview.innerHTML = '';
       if (assetUrl) {
         const img = document.createElement('img');
         img.src = assetUrl;
-        img.alt = active?.label || label;
+        img.alt = assetLabel(asset, label);
         preview.appendChild(img);
       } else {
         const fallback = document.createElement('span');
-        fallback.textContent = active ? active.label : 'No asset selected';
+        fallback.textContent = asset ? assetLabel(asset, label) : 'No asset selected';
         preview.appendChild(fallback);
       }
-      prevBtn.disabled = options.length < 2;
-      nextBtn.disabled = options.length < 2;
     };
 
-    const cycle = (direction) => {
-      if (!options.length) return;
-      let nextIndex = currentIndex;
-      if (nextIndex < 0) {
-        nextIndex = direction > 0 ? 0 : options.length - 1;
-      } else {
-        nextIndex = (nextIndex + direction + options.length) % options.length;
-      }
-      const nextItem = options[nextIndex];
-      setLandingPageVisualDraftValue(fieldKey, nextItem?.value || '');
-    };
-
-    prevBtn.addEventListener('click', () => cycle(-1));
-    nextBtn.addEventListener('click', () => cycle(1));
+    chooseBtn.addEventListener('click', () => {
+      const config = getLandingPageImagePickerConfigForField(fieldKey);
+      if (!config) return;
+      openImageAssetPicker(config.selectId, {
+        getValue: () => safeText(getActiveLandingPageVisualRecord()?.[fieldKey] || record[fieldKey]),
+        setValue: (value) => {
+          setLandingPageVisualDraftValue(fieldKey, value);
+        },
+        afterChange: () => {
+          updateStatus();
+        },
+        uploadHandler: (file) => {
+          return uploadThemeAssetFile(file, config.selectId);
+        },
+      });
+    });
     clearBtn.addEventListener('click', () => {
       setLandingPageVisualDraftValue(fieldKey, '');
     });
 
-    controls.appendChild(prevBtn);
+    controls.appendChild(chooseBtn);
     controls.appendChild(status);
-    controls.appendChild(nextBtn);
     controls.appendChild(clearBtn);
     wrap.appendChild(controls);
     wrap.appendChild(preview);
     updateStatus();
     return wrap;
+  }
+
+  function getLandingPageImagePickerConfigForField(fieldKey) {
+    const key = safeText(fieldKey);
+    return Object.values(LANDING_IMAGE_PICKERS).find((config) => safeText(config.fieldKey) === key) || null;
   }
 
   function createLandingPageInlineEditor(key, record) {
@@ -5319,6 +5522,20 @@ App.develop = (function () {
       if (!button) return;
       button.addEventListener('click', () => {
         openThemeAssetPicker(selectId);
+      });
+    });
+
+    [
+      ['developLandingBannerImagePickerBtn', 'developLandingBannerImageSelect'],
+      ['developLandingBackgroundImagePickerBtn', 'developLandingBackgroundImageSelect'],
+      ['developLandingFeatureImagePickerBtn', 'developLandingFeatureImageSelect'],
+      ['developLandingHighlightImagePickerBtn', 'developLandingHighlightImageSelect'],
+      ['developLandingLogoSquarePickerBtn', 'developLandingLogoSquareSelect'],
+    ].forEach(([buttonId, selectId]) => {
+      const button = byId(buttonId);
+      if (!button) return;
+      button.addEventListener('click', () => {
+        openLandingAssetPicker(selectId);
       });
     });
 
