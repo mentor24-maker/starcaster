@@ -2447,6 +2447,8 @@ th {
   --lp-primary: #0b82d4;
   --lp-background: #f5fbff;
   --lp-accent: #1a4f81;
+  --lp-page-background-image: none;
+  --lp-page-background-overlay: linear-gradient(135deg, rgba(238, 248, 255, 0.54) 0%, rgba(248, 252, 255, 0.62) 44%, rgba(237, 244, 255, 0.58) 100%);
   --lp-border-thickness: 1px;
   --lp-radius: 12px;
   --lp-blur: 0px;
@@ -2462,13 +2464,15 @@ th {
   padding: 1rem;
   border: var(--lp-border-thickness, 1px) solid var(--lp-border, var(--border));
   border-radius: calc(var(--lp-radius, 12px) + 2px);
-  background:
-    radial-gradient(circle at 20% 20%, rgba(71, 176, 255, 0.22), transparent 34%),
-    radial-gradient(circle at 82% 18%, rgba(22, 84, 163, 0.28), transparent 26%),
-    linear-gradient(135deg, #eef8ff 0%, #f8fcff 44%, #edf4ff 100%);
-  background-size: auto, auto, auto;
-  background-position: center, center, center;
-  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-color: var(--lp-background, #f5fbff);
+  background-image:
+    var(--lp-page-background-overlay),
+    var(--lp-page-background-image),
+    radial-gradient(circle at 20% 20%, rgba(71, 176, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(22, 84, 163, 0.22), transparent 26%);
+  background-size: cover, cover, auto, auto;
+  background-position: center center, center center, center, center;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
   filter: var(--lp-filter, none);
 }
 
@@ -2958,7 +2962,7 @@ th {
   grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
   gap: 1rem;
   align-items: start;
-  background: var(--lp-background, #f5fbff);
+  background: transparent;
   filter: var(--lp-filter, none);
   border-radius: calc(var(--lp-radius, 12px) * 0.95);
   padding: 0.2rem;
@@ -2968,7 +2972,7 @@ th {
   padding: 1.2rem;
   border: var(--lp-border-thickness, 1px) solid var(--lp-border, rgba(15, 79, 143, 0.22));
   border-radius: var(--lp-radius, 14px);
-  background: var(--lp-surface-soft, rgba(255, 255, 255, 0.88));
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(var(--lp-blur, 2px));
 }
 
@@ -3066,7 +3070,7 @@ th {
   padding: 1.1rem;
   border: var(--lp-border-thickness, 1px) solid var(--lp-border, rgba(15, 79, 143, 0.24));
   border-radius: var(--lp-radius, 14px);
-  background: var(--lp-surface-strong, rgba(255, 255, 255, 0.94));
+  background: rgba(255, 255, 255, 0.84);
   backdrop-filter: blur(var(--lp-blur, 0px));
   box-shadow: 0 12px 28px rgba(7, 33, 66, 0.08);
 }
@@ -3228,6 +3232,7 @@ th {
 .develop-template-body-copy {
   padding: 1.1rem;
   min-height: 200px;
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .develop-template-body-copy h3 {
