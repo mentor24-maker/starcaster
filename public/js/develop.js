@@ -182,6 +182,7 @@ App.develop = (function () {
   let savedForms = [];
   let savedLandingPages = [];
   let savedPageTemplates = [];
+  let modularPageTemplateDraft = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -264,6 +265,15 @@ App.develop = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  function escapeHtml(value) {
+    return safeText(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function byId(id) {
@@ -2986,6 +2996,115 @@ App.develop = (function () {
     return normalizePageTemplateKind(value) === 'modular' ? 'Modular' : 'Fixed';
   }
 
+  function nextModularPageId(prefix) {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  const MODULAR_PAGE_LAYOUT_OPTIONS = [
+    { value: 'banner', label: 'Banner', columns: ['full'] },
+    { value: 'hero-form-right', label: 'Hero + Form Right', columns: ['main', 'side'] },
+    { value: 'two-column', label: 'Two Column', columns: ['left', 'right'] },
+    { value: 'feature-grid-2', label: 'Feature Grid (2)', columns: ['left', 'right'] },
+    { value: 'single', label: 'Single Column', columns: ['main'] },
+  ];
+
+  const MODULAR_PAGE_MODULE_TYPES = [
+    { value: 'eyebrow', label: 'Eyebrow', fieldKey: null },
+    { value: 'headline', label: 'Headline', fieldKey: 'headlineId' },
+    { value: 'subheading', label: 'Sub-heading', fieldKey: 'bodySubheadingId' },
+    { value: 'pitch', label: 'Pitch', fieldKey: 'pitchId' },
+    { value: 'cta', label: 'CTA', fieldKey: 'ctaId' },
+    { value: 'form', label: 'Form', fieldKey: 'formId' },
+    { value: 'image', label: 'Image', fieldKey: 'featureImageId' },
+    { value: 'logo-wide', label: 'Logo - Wide', fieldKey: null },
+    { value: 'logo-square', label: 'Logo - Square', fieldKey: 'logoSquareId' },
+    { value: 'spacer', label: 'Spacer', fieldKey: null },
+    { value: 'text', label: 'Text', fieldKey: null },
+  ];
+
+  function getModularPageLayoutMeta(layout) {
+    const normalized = safeText(layout);
+    return MODULAR_PAGE_LAYOUT_OPTIONS.find((item) => item.value === normalized) || MODULAR_PAGE_LAYOUT_OPTIONS[4];
+  }
+
+  function createModularPageSection(layout = 'single') {
+    const meta = getModularPageLayoutMeta(layout);
+    return {
+      id: nextModularPageId('section'),
+      layout: meta.value,
+      title: '',
+      modules: [],
+    };
+  }
+
+  function createModularPageModule(type = 'text', column = 'main') {
+    return {
+      id: nextModularPageId('module'),
+      type: safeText(type) || 'text',
+      column: safeText(column) || 'main',
+      contentId: '',
+      assetId: '',
+      text: '',
+      settings: {},
+    };
+  }
+
+  function createDefaultModularPageSections() {
+    const hero = createModularPageSection('hero-form-right');
+    hero.modules = [
+      createModularPageModule('eyebrow', 'main'),
+      createModularPageModule('headline', 'main'),
+      createModularPageModule('pitch', 'main'),
+      createModularPageModule('cta', 'main'),
+      createModularPageModule('form', 'side'),
+      createModularPageModule('logo-square', 'side'),
+    ];
+    const features = createModularPageSection('feature-grid-2');
+    features.modules = [
+      createModularPageModule('image', 'left'),
+      createModularPageModule('headline', 'left'),
+      createModularPageModule('subheading', 'left'),
+      createModularPageModule('image', 'right'),
+      createModularPageModule('headline', 'right'),
+      createModularPageModule('pitch', 'right'),
+    ];
+    return [hero, features];
+  }
+
+  function getPageModuleTypeMeta(type) {
+    const normalized = safeText(type);
+    return MODULAR_PAGE_MODULE_TYPES.find((item) => item.value === normalized) || MODULAR_PAGE_MODULE_TYPES[0];
+  }
+
+  function getModularModuleContentOptions(type) {
+    const meta = getPageModuleTypeMeta(type);
+    if (!meta.fieldKey) return [];
+    return getLandingPageVisualEditorOptions(meta.fieldKey, getLandingPageFilterState(meta.fieldKey));
+  }
+
+  function getModularModuleContentLabel(module) {
+    const type = safeText(module?.type);
+    if (type === 'image' || type === 'logo-wide' || type === 'logo-square') {
+      const asset = getAssetById(module?.assetId || module?.contentId);
+      return assetLabel(asset, 'No asset selected');
+    }
+    if (type === 'form') return getSavedFormName(module?.contentId) || 'No form selected';
+    if (type === 'headline') return getLandingPageHeadlineLabel(module?.contentId) || 'No headline selected';
+    if (type === 'subheading') {
+      const row = landingPageSubheadings.find((item) => String(item?.id) === String(module?.contentId));
+      return safeText(row?.subheading) || 'No sub-heading selected';
+    }
+    if (type === 'pitch') {
+      const row = landingPagePitches.find((item) => String(item?.id) === String(module?.contentId));
+      return safeText(row?.pitch) || 'No pitch selected';
+    }
+    if (type === 'cta') {
+      const row = landingPageCtas.find((item) => String(item?.id) === String(module?.contentId));
+      return safeText(row?.cta) || 'No CTA selected';
+    }
+    return safeText(module?.text) || 'No text set';
+  }
+
   function getLandingPageMergedContentOverrides(record) {
     const base = normalizeLandingPageContentOverrides(record?.contentOverrides);
     const draft = normalizeLandingPageContentOverrides(landingPageVisualDraft.contentOverrides);
@@ -4095,6 +4214,22 @@ App.develop = (function () {
     openLandingPageVisualEditor(record, { mode: 'template' });
   }
 
+  async function openCreateModularLandingTemplate() {
+    try {
+      await loadLandingPageBuilderOptions();
+    } catch (_) {
+      await ensureAssetsLoaded().catch(() => {});
+    }
+    const baseTemplate = getTemplateById(selectedTemplateId);
+    openModularPageTemplateEditor({
+      id: '',
+      name: `${safeText(baseTemplate?.name) || 'Page'} Modular Template`,
+      templateKind: 'modular',
+      templateId: safeText(baseTemplate?.id) || selectedTemplateId,
+      layoutSections: createDefaultModularPageSections(),
+    });
+  }
+
   function openEditLandingPage(record) {
     if (!record) return;
     clearLandingPageSelectorFilters();
@@ -5013,10 +5148,18 @@ App.develop = (function () {
       actions.className = 'page-heading-actions';
       actions.style.justifyContent = 'flex-start';
       const viewBtn = App.makeIconButton('view', 'View Template', () => {
-        openLandingPagePreview(page, { mode: 'template' });
+        if (normalizePageTemplateKind(page.templateKind) === 'modular') {
+          openModularPageTemplatePreviewModal(page);
+        } else {
+          openLandingPagePreview(page, { mode: 'template' });
+        }
       });
       const editBtn = App.makeIconButton('edit', 'Edit Template', () => {
-        openLandingPageVisualEditor(page, { mode: 'template' });
+        if (normalizePageTemplateKind(page.templateKind) === 'modular') {
+          openModularPageTemplateEditor(page);
+        } else {
+          openLandingPageVisualEditor(page, { mode: 'template' });
+        }
       }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Template', async () => {
         const id = safeText(page.id);
@@ -5201,6 +5344,15 @@ App.develop = (function () {
     panel.classList.toggle('hidden', !visible);
     if (visible) {
       setCollapsibleSectionExpanded('developTemplateEditorToggle', 'developTemplateEditorBody', true);
+    }
+  }
+
+  function setPageTemplateEditorVisible(visible) {
+    const panel = byId('developPageTemplateEditorPanel');
+    if (!panel) return;
+    panel.classList.toggle('hidden', !visible);
+    if (visible) {
+      setCollapsibleSectionExpanded('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', true);
     }
   }
 
@@ -5481,6 +5633,350 @@ App.develop = (function () {
       item.appendChild(fields);
       host.appendChild(item);
     });
+  }
+
+  function syncPageTemplateEditorInputs() {
+    const idInput = byId('developPageTemplateEditorIdInput');
+    const nameInput = byId('developPageTemplateEditorNameInput');
+    const baseTemplateSelect = byId('developPageTemplateEditorBaseTemplateSelect');
+    if (idInput) idInput.value = safeText(modularPageTemplateDraft?.id);
+    if (nameInput) nameInput.value = safeText(modularPageTemplateDraft?.name, 255);
+    if (baseTemplateSelect) {
+      setSelectOptions(
+        baseTemplateSelect,
+        LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+        'Base Template',
+        safeText(modularPageTemplateDraft?.templateId) || selectedTemplateId
+      );
+    }
+  }
+
+  function openModularPageTemplateEditor(template) {
+    const source = template && typeof template === 'object' ? template : {};
+    const next = applyLandingPageDefaultSelections({
+      id: safeText(source.id),
+      name: safeText(source.name, 255) || 'Modular Page Template',
+      templateKind: 'modular',
+      templateId: safeText(source.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id,
+      primaryColor: safeText(source.primaryColor),
+      backgroundColor: safeText(source.backgroundColor),
+      accentColor: safeText(source.accentColor),
+      formId: safeText(source.formId),
+      leadMagnetId: safeText(source.leadMagnetId),
+      headlineId: safeText(source.headlineId),
+      pitchId: safeText(source.pitchId),
+      ctaId: safeText(source.ctaId),
+      websiteBannerImageId: safeText(source.websiteBannerImageId),
+      backgroundImageId: safeText(source.backgroundImageId),
+      featureImageId: safeText(source.featureImageId),
+      highlightImageId: safeText(source.highlightImageId),
+      featureHeadlineId: safeText(source.featureHeadlineId),
+      featureSubheadingId: safeText(source.featureSubheadingId),
+      featureTitle: safeText(source.featureTitle, 500),
+      featureCopy: safeText(source.featureCopy, 5000),
+      highlightHeadlineId: safeText(source.highlightHeadlineId),
+      highlightPitchId: safeText(source.highlightPitchId),
+      highlightTitle: safeText(source.highlightTitle, 500),
+      highlightCopy: safeText(source.highlightCopy, 5000),
+      bodyHeadlineId: safeText(source.bodyHeadlineId),
+      bodySubheadingId: safeText(source.bodySubheadingId),
+      bodyPitchId: safeText(source.bodyPitchId),
+      logoWideId: safeText(source.logoWideId),
+      logoSquareId: safeText(source.logoSquareId),
+      contentOverrides: normalizeLandingPageContentOverrides(source.contentOverrides),
+      layoutSections: normalizePageTemplateLayoutSections(source.layoutSections).length
+        ? normalizePageTemplateLayoutSections(source.layoutSections)
+        : createDefaultModularPageSections(),
+    });
+    modularPageTemplateDraft = next;
+    syncPageTemplateEditorInputs();
+    renderModularPageTemplateEditor();
+    setPageTemplateEditorVisible(true);
+  }
+
+  function renderModularPageTemplateEditor() {
+    const title = byId('developPageTemplateEditorTitle');
+    const meta = byId('developPageTemplateEditorMeta');
+    const host = byId('developPageTemplateEditorSections');
+    if (!host || !modularPageTemplateDraft) return;
+    if (title) title.textContent = 'Page: Modular';
+    if (meta) meta.textContent = 'Build reusable landing page templates as ordered sections, each with its own layout and content modules.';
+    host.innerHTML = '';
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    if (!sections.length) {
+      modularPageTemplateDraft.layoutSections = createDefaultModularPageSections();
+    }
+    normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).forEach((section, sectionIndex) => {
+      const item = document.createElement('div');
+      item.className = 'develop-template-module-item';
+
+      const grip = document.createElement('div');
+      grip.className = 'develop-template-module-grip';
+      grip.textContent = '::';
+      item.appendChild(grip);
+
+      const fields = document.createElement('div');
+      fields.className = 'develop-template-module-fields';
+
+      const layoutSelect = document.createElement('select');
+      MODULAR_PAGE_LAYOUT_OPTIONS.forEach((optionDef) => {
+        const option = document.createElement('option');
+        option.value = optionDef.value;
+        option.textContent = optionDef.label;
+        layoutSelect.appendChild(option);
+      });
+      layoutSelect.value = safeText(section.layout) || 'single';
+      layoutSelect.addEventListener('change', () => {
+        section.layout = safeText(layoutSelect.value) || 'single';
+        renderModularPageTemplateEditor();
+      });
+      fields.appendChild(layoutSelect);
+
+      const titleInput = document.createElement('input');
+      titleInput.type = 'text';
+      titleInput.placeholder = 'Section title (optional)';
+      titleInput.value = safeText(section.title, 255);
+      titleInput.addEventListener('input', () => {
+        section.title = safeText(titleInput.value, 255);
+      });
+      fields.appendChild(titleInput);
+
+      const modulesWrap = document.createElement('div');
+      modulesWrap.className = 'develop-template-module-span develop-page-template-section-modules';
+      const modulesHeading = document.createElement('div');
+      modulesHeading.className = 'develop-page-template-section-heading';
+      modulesHeading.textContent = 'Modules';
+      modulesWrap.appendChild(modulesHeading);
+
+      const columnOptions = getModularPageLayoutMeta(section.layout).columns;
+      section.modules.forEach((module, moduleIndex) => {
+        const moduleCard = document.createElement('div');
+        moduleCard.className = 'develop-page-template-module-card';
+
+        const typeSelect = document.createElement('select');
+        MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
+          const option = document.createElement('option');
+          option.value = typeDef.value;
+          option.textContent = typeDef.label;
+          typeSelect.appendChild(option);
+        });
+        typeSelect.value = safeText(module.type) || 'text';
+        typeSelect.addEventListener('change', () => {
+          module.type = safeText(typeSelect.value) || 'text';
+          if (!['image', 'logo-wide', 'logo-square'].includes(module.type)) {
+            module.assetId = '';
+          }
+          if (['text', 'eyebrow', 'spacer'].includes(module.type)) {
+            module.contentId = '';
+          }
+          renderModularPageTemplateEditor();
+        });
+
+        const columnSelect = document.createElement('select');
+        columnOptions.forEach((column) => {
+          const option = document.createElement('option');
+          option.value = column;
+          option.textContent = column.charAt(0).toUpperCase() + column.slice(1);
+          columnSelect.appendChild(option);
+        });
+        if (!columnOptions.includes(module.column)) module.column = columnOptions[0];
+        columnSelect.value = module.column;
+        columnSelect.addEventListener('change', () => {
+          module.column = safeText(columnSelect.value) || columnOptions[0];
+        });
+
+        const moduleTextInput = document.createElement(module.type === 'text' ? 'textarea' : 'input');
+        if (module.type === 'text') moduleTextInput.rows = 3;
+        moduleTextInput.placeholder = 'Module text (optional)';
+        moduleTextInput.value = safeText(module.text, 10000);
+        moduleTextInput.addEventListener('input', () => {
+          module.text = safeText(moduleTextInput.value, 10000);
+        });
+
+        const contentSelect = document.createElement('select');
+        setSelectOptions(
+          contentSelect,
+          getModularModuleContentOptions(module.type),
+          'No linked content',
+          safeText(module.contentId)
+        );
+        contentSelect.disabled = !getPageModuleTypeMeta(module.type).fieldKey;
+        contentSelect.addEventListener('change', () => {
+          module.contentId = safeText(contentSelect.value);
+        });
+
+        const assetSelect = document.createElement('select');
+        const assetOptions = (module.type === 'image'
+          ? getLandingPageVisualEditorOptions('featureImageId', getLandingPageFilterState('featureImageId'))
+          : module.type === 'logo-wide'
+            ? getAssetsByCategoryAliases(['Logo - Wide', 'Wide Logo'], 'Image').map((asset) => ({ value: asset.id, label: assetLabel(asset, String(asset.id)) }))
+            : module.type === 'logo-square'
+              ? getLandingPageVisualEditorOptions('logoSquareId', getLandingPageFilterState('logoSquareId'))
+              : []);
+        setSelectOptions(assetSelect, assetOptions, 'No image asset', safeText(module.assetId));
+        assetSelect.disabled = !['image', 'logo-wide', 'logo-square'].includes(module.type);
+        assetSelect.addEventListener('change', () => {
+          module.assetId = safeText(assetSelect.value);
+        });
+
+        const summary = document.createElement('div');
+        summary.className = 'develop-page-template-module-summary';
+        summary.textContent = getModularModuleContentLabel(module);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => {
+          section.modules.splice(moduleIndex, 1);
+          renderModularPageTemplateEditor();
+        });
+
+        moduleCard.appendChild(typeSelect);
+        moduleCard.appendChild(columnSelect);
+        moduleCard.appendChild(contentSelect);
+        moduleCard.appendChild(assetSelect);
+        moduleCard.appendChild(moduleTextInput);
+        moduleCard.appendChild(summary);
+        moduleCard.appendChild(removeBtn);
+        modulesWrap.appendChild(moduleCard);
+      });
+
+      const addModuleRow = document.createElement('div');
+      addModuleRow.className = 'page-heading-actions';
+      addModuleRow.style.justifyContent = 'flex-start';
+      MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `Add ${typeDef.label}`;
+        button.addEventListener('click', () => {
+          section.modules.push(createModularPageModule(typeDef.value, columnOptions[0]));
+          renderModularPageTemplateEditor();
+        });
+        addModuleRow.appendChild(button);
+      });
+      modulesWrap.appendChild(addModuleRow);
+      fields.appendChild(modulesWrap);
+
+      const actions = document.createElement('div');
+      actions.className = 'develop-template-module-actions develop-template-module-span';
+      const upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.textContent = 'Move Up';
+      upBtn.disabled = sectionIndex === 0;
+      upBtn.addEventListener('click', () => {
+        const prior = modularPageTemplateDraft.layoutSections[sectionIndex - 1];
+        modularPageTemplateDraft.layoutSections[sectionIndex - 1] = section;
+        modularPageTemplateDraft.layoutSections[sectionIndex] = prior;
+        renderModularPageTemplateEditor();
+      });
+      const downBtn = document.createElement('button');
+      downBtn.type = 'button';
+      downBtn.textContent = 'Move Down';
+      downBtn.disabled = sectionIndex === modularPageTemplateDraft.layoutSections.length - 1;
+      downBtn.addEventListener('click', () => {
+        const next = modularPageTemplateDraft.layoutSections[sectionIndex + 1];
+        modularPageTemplateDraft.layoutSections[sectionIndex + 1] = section;
+        modularPageTemplateDraft.layoutSections[sectionIndex] = next;
+        renderModularPageTemplateEditor();
+      });
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = 'Remove Section';
+      removeBtn.addEventListener('click', () => {
+        modularPageTemplateDraft.layoutSections.splice(sectionIndex, 1);
+        if (!modularPageTemplateDraft.layoutSections.length) {
+          modularPageTemplateDraft.layoutSections = createDefaultModularPageSections();
+        }
+        renderModularPageTemplateEditor();
+      });
+      actions.appendChild(upBtn);
+      actions.appendChild(downBtn);
+      actions.appendChild(removeBtn);
+      fields.appendChild(actions);
+
+      item.appendChild(fields);
+      host.appendChild(item);
+    });
+  }
+
+  function buildModularPageTemplatePayload() {
+    return {
+      id: safeText(byId('developPageTemplateEditorIdInput')?.value),
+      name: safeText(byId('developPageTemplateEditorNameInput')?.value, 255),
+      templateKind: 'modular',
+      templateId: safeText(byId('developPageTemplateEditorBaseTemplateSelect')?.value) || selectedTemplateId || LANDING_TEMPLATES[0].id,
+      layoutSections: normalizePageTemplateLayoutSections(modularPageTemplateDraft?.layoutSections),
+      contentOverrides: {},
+      primaryColor: '',
+      backgroundColor: '',
+      accentColor: '',
+      formId: '',
+      leadMagnetId: '',
+      headlineId: '',
+      pitchId: '',
+      ctaId: '',
+      websiteBannerImageId: '',
+      backgroundImageId: '',
+      featureImageId: '',
+      highlightImageId: '',
+      featureHeadlineId: '',
+      featureSubheadingId: '',
+      featureTitle: '',
+      featureCopy: '',
+      highlightHeadlineId: '',
+      highlightPitchId: '',
+      highlightTitle: '',
+      highlightCopy: '',
+      bodyHeadlineId: '',
+      bodySubheadingId: '',
+      bodyPitchId: '',
+      logoWideId: '',
+      logoSquareId: '',
+    };
+  }
+
+  function buildModularPageTemplatePreviewMarkup(template) {
+    const sections = normalizePageTemplateLayoutSections(template?.layoutSections);
+    const renderModule = (module) => {
+      const type = safeText(module.type);
+      const contentLabel = escapeHtml(getModularModuleContentLabel(module));
+      if (type === 'form') return `<div class="develop-template-form-card"><h3>${contentLabel}</h3><input type="text" placeholder="First Name" /><input type="email" placeholder="Email" /><button type="button">Submit Form</button></div>`;
+      if (type === 'image' || type === 'logo-wide' || type === 'logo-square') return `<div class="develop-template-image-slot">${contentLabel}</div>`;
+      if (type === 'headline') return `<h3>${contentLabel}</h3>`;
+      if (type === 'subheading') return `<h4>${contentLabel}</h4>`;
+      if (type === 'pitch' || type === 'text') return `<p>${contentLabel}</p>`;
+      if (type === 'cta') return `<div class="develop-template-cta-row"><button type="button">${contentLabel}</button></div>`;
+      if (type === 'eyebrow') return `<div class="develop-template-eyebrow">${contentLabel}</div>`;
+      if (type === 'spacer') return `<div style="height:1.25rem;"></div>`;
+      return `<div class="meta">${contentLabel}</div>`;
+    };
+    const renderColumn = (modules, className) => `<div class="${className}">${modules.map(renderModule).join('')}</div>`;
+    const markup = sections.map((section) => {
+      const layout = getModularPageLayoutMeta(section.layout);
+      const columnMarkup = layout.columns.map((column) => {
+        const modules = section.modules.filter((module) => safeText(module.column) === column);
+        return renderColumn(modules, `develop-modular-page-column develop-modular-page-column-${column}`);
+      }).join('');
+      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">
+        ${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}
+        <div class="develop-modular-page-columns">${columnMarkup}</div>
+      </section>`;
+    }).join('');
+    return `<div class="develop-template-canvas develop-modular-page-preview">${markup}</div>`;
+  }
+
+  function openModularPageTemplatePreviewModal(template) {
+    if (!template || !App.components || typeof App.components.Modal !== 'function') return;
+    const body = document.createElement('div');
+    body.innerHTML = buildModularPageTemplatePreviewMarkup(template);
+    const modal = App.components.Modal({
+      title: `${safeText(template.name) || 'Modular Page Template'} Preview`,
+      body,
+      actions: [{ label: 'Close', onClick: () => modal.close() }],
+      dialogClass: 'develop-email-template-modal',
+      bodyClass: 'develop-email-template-modal-body',
+    });
+    modal.open();
   }
 
   function renderFormTemplateLibrary() {
@@ -6048,6 +6544,7 @@ App.develop = (function () {
     }
 
     bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: false });
+    bindCollapsibleSection('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', { defaultExpanded: false });
     bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: false });
@@ -6367,6 +6864,13 @@ App.develop = (function () {
       });
     }
 
+    const createModularPageTemplateBtn = byId('developCreateModularPageTemplateBtn');
+    if (createModularPageTemplateBtn) {
+      createModularPageTemplateBtn.addEventListener('click', () => {
+        openCreateModularLandingTemplate();
+      });
+    }
+
     const visualSaveBtn = byId('developLandingPageVisualSaveBtn');
     const visualModeBtn = byId('developLandingPageVisualModeBtn');
     const visualBackBtn = byId('developLandingPageVisualBackBtn');
@@ -6374,12 +6878,91 @@ App.develop = (function () {
     const previewBackBtn = byId('developLandingPagePreviewBackBtn');
     const thankYouBackBtn = byId('developLandingThankYouBackBtn');
     const saveSelectorDefaultsBtn = byId('developLandingSaveSelectorDefaultsBtn');
+    const pageTemplateEditorNameInput = byId('developPageTemplateEditorNameInput');
+    const pageTemplateEditorBaseTemplateSelect = byId('developPageTemplateEditorBaseTemplateSelect');
+    const pageTemplateEditorCloseBtnTop = byId('developPageTemplateEditorCloseBtnTop');
+    const pageTemplateEditorPreviewBtn = byId('developPageTemplateEditorPreviewBtn');
+    const pageTemplateEditorToolbar = byId('developPageTemplateEditorToolbar');
 
     if (saveSelectorDefaultsBtn) {
       saveSelectorDefaultsBtn.addEventListener('click', () => {
         saveLandingPageSelectorDefaults();
       });
     }
+
+    if (pageTemplateEditorNameInput) {
+      pageTemplateEditorNameInput.addEventListener('input', () => {
+        if (!modularPageTemplateDraft) return;
+        modularPageTemplateDraft.name = safeText(pageTemplateEditorNameInput.value, 255);
+      });
+    }
+
+    if (pageTemplateEditorBaseTemplateSelect) {
+      pageTemplateEditorBaseTemplateSelect.addEventListener('change', () => {
+        if (!modularPageTemplateDraft) return;
+        modularPageTemplateDraft.templateId = safeText(pageTemplateEditorBaseTemplateSelect.value);
+      });
+    }
+
+    if (pageTemplateEditorCloseBtnTop) {
+      pageTemplateEditorCloseBtnTop.addEventListener('click', () => {
+        setPageTemplateEditorVisible(false);
+      });
+    }
+
+    if (pageTemplateEditorPreviewBtn) {
+      pageTemplateEditorPreviewBtn.addEventListener('click', () => {
+        if (!modularPageTemplateDraft) {
+          notify('Open a modular template first', true);
+          return;
+        }
+        openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+      });
+    }
+
+    if (pageTemplateEditorToolbar) {
+      pageTemplateEditorToolbar.querySelectorAll('button[data-section-layout]').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (!modularPageTemplateDraft) {
+            modularPageTemplateDraft = buildEmptyLandingRecord('Modular Page Template', selectedTemplateId || LANDING_TEMPLATES[0].id);
+            modularPageTemplateDraft.templateKind = 'modular';
+            modularPageTemplateDraft.layoutSections = [];
+          }
+          const layout = safeText(button.getAttribute('data-section-layout')) || 'single';
+          modularPageTemplateDraft.layoutSections.push(createModularPageSection(layout));
+          renderModularPageTemplateEditor();
+        });
+      });
+    }
+
+    const bindSaveModularPageTemplateButton = (button) => {
+      if (!button) return;
+      button.addEventListener('click', async () => {
+        const payload = buildModularPageTemplatePayload();
+        if (!payload.name) {
+          notify('Template name is required', true);
+          return;
+        }
+        try {
+          const hasId = Boolean(safeText(payload.id));
+          const endpoint = hasId
+            ? `/api/develop/page-templates/${encodeURIComponent(payload.id)}`
+            : '/api/develop/page-templates';
+          const method = hasId ? 'PATCH' : 'POST';
+          const result = await api(endpoint, { method, body: JSON.stringify(payload) });
+          modularPageTemplateDraft = result?.pageTemplate || result?.data || payload;
+          await refresh();
+          syncPageTemplateEditorInputs();
+          renderModularPageTemplateEditor();
+          setPageTemplateEditorVisible(true);
+          notify(hasId ? 'Modular page template updated' : 'Modular page template created');
+        } catch (err) {
+          notify(err.message || 'Could not save modular page template', true);
+        }
+      });
+    };
+    bindSaveModularPageTemplateButton(byId('developPageTemplateEditorSaveBtnTop'));
+    bindSaveModularPageTemplateButton(byId('developPageTemplateEditorSaveBtnBottom'));
 
     if (visualModeBtn) {
       visualModeBtn.addEventListener('click', () => {

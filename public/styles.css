@@ -2872,8 +2872,75 @@ th {
   min-height: 68px;
 }
 
+.develop-page-template-section-heading {
+  font-weight: 700;
+  color: #214c71;
+  margin-bottom: 0.5rem;
+}
+
+.develop-page-template-section-modules {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.develop-page-template-module-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid rgba(15, 79, 143, 0.16);
+  border-radius: 10px;
+  background: #f9fcff;
+}
+
+.develop-page-template-module-summary {
+  grid-column: 1 / -1;
+  color: #315879;
+  font-size: 0.9rem;
+}
+
+.develop-modular-page-preview {
+  display: grid;
+  gap: 1rem;
+}
+
+.develop-modular-page-section {
+  border: 1px solid rgba(15, 79, 143, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 1rem;
+}
+
+.develop-modular-page-columns {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.develop-modular-page-layout-hero-form-right .develop-modular-page-columns,
+.develop-modular-page-layout-two-column .develop-modular-page-columns,
+.develop-modular-page-layout-feature-grid-2 .develop-modular-page-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.develop-modular-page-layout-banner .develop-modular-page-columns,
+.develop-modular-page-layout-single .develop-modular-page-columns {
+  grid-template-columns: 1fr;
+}
+
+.develop-modular-page-column {
+  display: grid;
+  gap: 0.7rem;
+}
+
 @media (max-width: 900px) {
   .develop-template-module-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .develop-page-template-module-card,
+  .develop-modular-page-layout-hero-form-right .develop-modular-page-columns,
+  .develop-modular-page-layout-two-column .develop-modular-page-columns,
+  .develop-modular-page-layout-feature-grid-2 .develop-modular-page-columns {
     grid-template-columns: 1fr;
   }
 }
