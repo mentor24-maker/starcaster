@@ -657,6 +657,7 @@ App.develop = (function () {
   const LANDING_IMAGE_PICKERS = {
     developLandingBannerImageSelect: {
       selectId: 'developLandingBannerImageSelect',
+      fieldKey: 'websiteBannerImageId',
       buttonId: 'developLandingBannerImagePickerBtn',
       previewId: 'developLandingBannerImagePreview',
       title: 'Website Banner Image',
@@ -666,6 +667,7 @@ App.develop = (function () {
     },
     developLandingBackgroundImageSelect: {
       selectId: 'developLandingBackgroundImageSelect',
+      fieldKey: 'backgroundImageId',
       buttonId: 'developLandingBackgroundImagePickerBtn',
       previewId: 'developLandingBackgroundImagePreview',
       title: 'Background Image',
@@ -675,6 +677,7 @@ App.develop = (function () {
     },
     developLandingFeatureImageSelect: {
       selectId: 'developLandingFeatureImageSelect',
+      fieldKey: 'featureImageId',
       buttonId: 'developLandingFeatureImagePickerBtn',
       previewId: 'developLandingFeatureImagePreview',
       title: 'Feature Image',
@@ -684,6 +687,7 @@ App.develop = (function () {
     },
     developLandingHighlightImageSelect: {
       selectId: 'developLandingHighlightImageSelect',
+      fieldKey: 'highlightImageId',
       buttonId: 'developLandingHighlightImagePickerBtn',
       previewId: 'developLandingHighlightImagePreview',
       title: 'Highlight Image',
@@ -693,6 +697,7 @@ App.develop = (function () {
     },
     developLandingLogoSquareSelect: {
       selectId: 'developLandingLogoSquareSelect',
+      fieldKey: 'logoSquareId',
       buttonId: 'developLandingLogoSquarePickerBtn',
       previewId: 'developLandingLogoSquarePreview',
       title: 'Logo - Square',
