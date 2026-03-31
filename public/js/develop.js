@@ -2778,6 +2778,73 @@ App.develop = (function () {
     return getLandingMessageLabel(landingPageCtas, ctaId, 'cta', 'CTA');
   }
 
+  function getDefaultLandingPageFieldValue(fieldKey) {
+    const rows = getLandingPageFieldRows(fieldKey);
+    const first = Array.isArray(rows) && rows.length ? rows[0] : null;
+    return safeText(first?.id);
+  }
+
+  function applyLandingPageDefaultSelections(record, options = {}) {
+    const source = record && typeof record === 'object' ? record : {};
+    const overwrite = options.overwrite === true;
+    const next = { ...source };
+    [
+      'formId',
+      'leadMagnetId',
+      'headlineId',
+      'pitchId',
+      'ctaId',
+      'websiteBannerImageId',
+      'backgroundImageId',
+      'featureImageId',
+      'highlightImageId',
+      'featureHeadlineId',
+      'featureSubheadingId',
+      'highlightHeadlineId',
+      'highlightPitchId',
+      'bodyHeadlineId',
+      'bodySubheadingId',
+      'bodyPitchId',
+      'logoSquareId',
+    ].forEach((fieldKey) => {
+      if (!overwrite && safeText(next[fieldKey])) return;
+      next[fieldKey] = getDefaultLandingPageFieldValue(fieldKey);
+    });
+    return next;
+  }
+
+  function applyLandingPageDefaultsToForm() {
+    const form = els.developLandingPagesForm;
+    if (!form) return;
+    const current = getLandingPageFormPayload(new FormData(form));
+    const next = applyLandingPageDefaultSelections(current);
+    [
+      ['developLandingFormSelect', next.formId],
+      ['developLandingLeadMagnetSelect', next.leadMagnetId],
+      ['developLandingHeadlineSelect', next.headlineId],
+      ['developLandingPitchSelect', next.pitchId],
+      ['developLandingCtaSelect', next.ctaId],
+      ['developLandingBannerImageSelect', next.websiteBannerImageId],
+      ['developLandingBackgroundImageSelect', next.backgroundImageId],
+      ['developLandingFeatureImageSelect', next.featureImageId],
+      ['developLandingHighlightImageSelect', next.highlightImageId],
+      ['developLandingFeatureHeadlineSelect', next.featureHeadlineId],
+      ['developLandingFeatureSubheadingSelect', next.featureSubheadingId],
+      ['developLandingHighlightHeadlineSelect', next.highlightHeadlineId],
+      ['developLandingHighlightPitchSelect', next.highlightPitchId],
+      ['developLandingBodyHeadlineSelect', next.bodyHeadlineId],
+      ['developLandingBodySubheadingSelect', next.bodySubheadingId],
+      ['developLandingBodyPitchSelect', next.bodyPitchId],
+      ['developLandingLogoSquareSelect', next.logoSquareId],
+    ].forEach(([id, value]) => {
+      const node = byId(id);
+      if (node && !safeText(node.value) && safeText(value)) {
+        node.value = safeText(value);
+      }
+    });
+    updateLandingPageFieldOutlines();
+  }
+
   function getAssetById(assetId) {
     const targetId = safeText(assetId);
     if (!targetId) return null;
@@ -3045,10 +3112,7 @@ App.develop = (function () {
       `--lp-accent:${ctx.accentColor};`,
     ];
     if (ctx.backgroundUrl) {
-      canvasStyles.push(`background-image: linear-gradient(135deg, rgba(238,248,255,0.76) 0%, rgba(248,252,255,0.84) 44%, rgba(237,244,255,0.82) 100%), url('${safeText(ctx.backgroundUrl)}');`);
-      canvasStyles.push('background-size: cover, cover;');
-      canvasStyles.push('background-position: center center, center center;');
-      canvasStyles.push('background-repeat: no-repeat, no-repeat;');
+      canvasStyles.push(`--lp-page-background-image:url('${safeText(ctx.backgroundUrl)}');`);
     }
     const runtimeFieldMarkup = ctx.formFields.map((field, index) => {
       const fieldType = safeText(field?.type) || 'text';
@@ -3928,7 +3992,7 @@ App.develop = (function () {
   }
 
   function buildEmptyLandingRecord(name, templateId) {
-    return {
+    return applyLandingPageDefaultSelections({
       id: '',
       name: safeText(name, 255),
       templateId: safeText(templateId, 120) || LANDING_TEMPLATES[0].id,
@@ -3960,7 +4024,7 @@ App.develop = (function () {
       contentOverrides: {},
       createdAt: '',
       updatedAt: '',
-    };
+    });
   }
 
   function openCreateLandingPage() {
@@ -3969,7 +4033,12 @@ App.develop = (function () {
     App.setActivePage('developLandingPagesPage');
   }
 
-  function openCreateLandingTemplate() {
+  async function openCreateLandingTemplate() {
+    try {
+      await loadLandingPageBuilderOptions();
+    } catch (_) {
+      // We can still open the editor with whatever builder data is currently available.
+    }
     const baseTemplate = getTemplateById(selectedTemplateId);
     const suggestedName = `${safeText(baseTemplate?.name) || 'Page'} Template`;
     const name = safeText(window.prompt('Template name', suggestedName), 255) || suggestedName;
@@ -4216,14 +4285,14 @@ App.develop = (function () {
 
   function openLandingPageVisualEditor(record, options = {}) {
     if (!record) return;
-    ensureAssetsLoaded()
-      .catch(() => {})
+    loadLandingPageBuilderOptions()
+      .catch(() => ensureAssetsLoaded().catch(() => {}))
       .finally(() => {
         activeLandingPageVisualMode = safeText(options.mode) === 'template' ? 'template' : 'page';
-        activeLandingPageVisualRecord = {
+        activeLandingPageVisualRecord = applyLandingPageDefaultSelections({
           ...record,
           contentOverrides: normalizeLandingPageContentOverrides(record.contentOverrides),
-        };
+        });
         landingPageVisualEditMode = true;
         landingPageVisualDraft = {};
         activeLandingPageVisualEditors.clear();
@@ -5545,7 +5614,7 @@ App.develop = (function () {
   }
 
   async function loadLandingPageBuilderOptions() {
-    if (!byId('developLandingTemplateSelect')) return;
+    const landingTemplateSelectEl = byId('developLandingTemplateSelect');
     const [assetsResult, headlinesResult, subheadingsResult, pitchesResult, ctasResult] = await Promise.allSettled([
       api('/api/assets'),
       api('/api/messaging/headlines?limit=200'),
@@ -5573,12 +5642,14 @@ App.develop = (function () {
       ? (Array.isArray(ctasResult.value.ctas) ? ctasResult.value.ctas : [])
       : [];
 
-    setSelectOptions(
-      byId('developLandingTemplateSelect'),
-      LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
-      'Template',
-      selectedTemplateId
-    );
+    if (landingTemplateSelectEl) {
+      setSelectOptions(
+        landingTemplateSelectEl,
+        LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+        'Template',
+        selectedTemplateId
+      );
+    }
 
     const landingPrimaryInput = byId('developLandingPrimaryColorInput');
     const landingBackgroundInput = byId('developLandingBackgroundColorInput');
@@ -5587,26 +5658,30 @@ App.develop = (function () {
     if (landingBackgroundInput) landingBackgroundInput.value = landingPageColors.background;
     if (landingAccentInput) landingAccentInput.value = landingPageColors.accent;
 
-    renderLandingPageBuilderSelect('developLandingFormSelect', 'formId', savedForms.length ? 'Form' : 'Form (save a form first)');
-    renderLandingPageBuilderSelect('developLandingLeadMagnetSelect', 'leadMagnetId', getLandingPageFieldRows('leadMagnetId').length ? 'PDF' : 'PDF (add assets with type "Lead Magnet")');
-    renderLandingPageBuilderSelect('developLandingHeadlineSelect', 'headlineId', landingPageHeadlines.length ? 'Headline' : 'Headline (add Messaging > Headlines first)');
-    renderLandingPageBuilderSelect('developLandingPitchSelect', 'pitchId', landingPagePitches.length ? 'Pitch' : 'Pitch (add Messaging > Pitches first)');
-    renderLandingPageBuilderSelect('developLandingCtaSelect', 'ctaId', landingPageCtas.length ? 'CTA' : 'CTA (add Messaging > Calls to Action first)');
-    renderLandingPageBuilderSelect('developLandingBannerImageSelect', 'websiteBannerImageId', getLandingPageFieldRows('websiteBannerImageId').length ? 'Website Banner Image' : 'Website Banner Image (add image assets in "Banner Image")');
-    renderLandingPageBuilderSelect('developLandingBackgroundImageSelect', 'backgroundImageId', getLandingPageFieldRows('backgroundImageId').length ? 'Background Image' : 'Background Image (add image assets in "Background Image")');
-    renderLandingPageBuilderSelect('developLandingFeatureImageSelect', 'featureImageId', getLandingPageFieldRows('featureImageId').length ? 'Feature Image' : 'Feature Image (add image assets in "Feature Image")');
-    renderLandingPageBuilderSelect('developLandingHighlightImageSelect', 'highlightImageId', getLandingPageFieldRows('highlightImageId').length ? 'Highlight Image' : 'Highlight Image (add image assets in "Highlight Image")');
-    renderLandingPageBuilderSelect('developLandingFeatureHeadlineSelect', 'featureHeadlineId', landingPageHeadlines.length ? 'Feature One Headline' : 'Feature One Headline (add Messaging > Headlines first)');
-    renderLandingPageBuilderSelect('developLandingFeatureSubheadingSelect', 'featureSubheadingId', landingPageSubheadings.length ? 'Feature One Sub-heading' : 'Feature One Sub-heading (add Messaging > Sub-headings first)');
-    renderLandingPageBuilderSelect('developLandingHighlightHeadlineSelect', 'highlightHeadlineId', landingPageHeadlines.length ? 'Feature Two Headline' : 'Feature Two Headline (add Messaging > Headlines first)');
-    renderLandingPageBuilderSelect('developLandingHighlightPitchSelect', 'highlightPitchId', landingPagePitches.length ? 'Feature Two Pitch' : 'Feature Two Pitch (add Messaging > Pitches first)');
-    renderLandingPageBuilderSelect('developLandingBodyHeadlineSelect', 'bodyHeadlineId', landingPageHeadlines.length ? 'Body Headline' : 'Body Headline (add Messaging > Headlines first)');
-    renderLandingPageBuilderSelect('developLandingBodySubheadingSelect', 'bodySubheadingId', landingPageSubheadings.length ? 'Body Sub-heading' : 'Body Sub-heading (add Messaging > Sub-headings first)');
-    renderLandingPageBuilderSelect('developLandingBodyPitchSelect', 'bodyPitchId', landingPagePitches.length ? 'Body Pitch' : 'Body Pitch (add Messaging > Pitches first)');
-    renderLandingPageBuilderSelect('developLandingLogoSquareSelect', 'logoSquareId', getLandingPageFieldRows('logoSquareId').length ? 'Logo - Square' : 'Logo - Square (add image assets in "Logo - Square")');
+    if (landingTemplateSelectEl) {
+      renderLandingPageBuilderSelect('developLandingFormSelect', 'formId', savedForms.length ? 'Form' : 'Form (save a form first)');
+      renderLandingPageBuilderSelect('developLandingLeadMagnetSelect', 'leadMagnetId', getLandingPageFieldRows('leadMagnetId').length ? 'PDF' : 'PDF (add assets with type "Lead Magnet")');
+      renderLandingPageBuilderSelect('developLandingHeadlineSelect', 'headlineId', landingPageHeadlines.length ? 'Headline' : 'Headline (add Messaging > Headlines first)');
+      renderLandingPageBuilderSelect('developLandingPitchSelect', 'pitchId', landingPagePitches.length ? 'Pitch' : 'Pitch (add Messaging > Pitches first)');
+      renderLandingPageBuilderSelect('developLandingCtaSelect', 'ctaId', landingPageCtas.length ? 'CTA' : 'CTA (add Messaging > Calls to Action first)');
+      renderLandingPageBuilderSelect('developLandingBannerImageSelect', 'websiteBannerImageId', getLandingPageFieldRows('websiteBannerImageId').length ? 'Website Banner Image' : 'Website Banner Image (add image assets in "Banner Image")');
+      renderLandingPageBuilderSelect('developLandingBackgroundImageSelect', 'backgroundImageId', getLandingPageFieldRows('backgroundImageId').length ? 'Background Image' : 'Background Image (add image assets in "Background Image")');
+      renderLandingPageBuilderSelect('developLandingFeatureImageSelect', 'featureImageId', getLandingPageFieldRows('featureImageId').length ? 'Feature Image' : 'Feature Image (add image assets in "Feature Image")');
+      renderLandingPageBuilderSelect('developLandingHighlightImageSelect', 'highlightImageId', getLandingPageFieldRows('highlightImageId').length ? 'Highlight Image' : 'Highlight Image (add image assets in "Highlight Image")');
+      renderLandingPageBuilderSelect('developLandingFeatureHeadlineSelect', 'featureHeadlineId', landingPageHeadlines.length ? 'Feature One Headline' : 'Feature One Headline (add Messaging > Headlines first)');
+      renderLandingPageBuilderSelect('developLandingFeatureSubheadingSelect', 'featureSubheadingId', landingPageSubheadings.length ? 'Feature One Sub-heading' : 'Feature One Sub-heading (add Messaging > Sub-headings first)');
+      renderLandingPageBuilderSelect('developLandingHighlightHeadlineSelect', 'highlightHeadlineId', landingPageHeadlines.length ? 'Feature Two Headline' : 'Feature Two Headline (add Messaging > Headlines first)');
+      renderLandingPageBuilderSelect('developLandingHighlightPitchSelect', 'highlightPitchId', landingPagePitches.length ? 'Feature Two Pitch' : 'Feature Two Pitch (add Messaging > Pitches first)');
+      renderLandingPageBuilderSelect('developLandingBodyHeadlineSelect', 'bodyHeadlineId', landingPageHeadlines.length ? 'Body Headline' : 'Body Headline (add Messaging > Headlines first)');
+      renderLandingPageBuilderSelect('developLandingBodySubheadingSelect', 'bodySubheadingId', landingPageSubheadings.length ? 'Body Sub-heading' : 'Body Sub-heading (add Messaging > Sub-headings first)');
+      renderLandingPageBuilderSelect('developLandingBodyPitchSelect', 'bodyPitchId', landingPagePitches.length ? 'Body Pitch' : 'Body Pitch (add Messaging > Pitches first)');
+      renderLandingPageBuilderSelect('developLandingLogoSquareSelect', 'logoSquareId', getLandingPageFieldRows('logoSquareId').length ? 'Logo - Square' : 'Logo - Square (add image assets in "Logo - Square")');
+    }
 
     if (pendingLandingPageFormRecord) {
       applyLandingPageRecordToForm(pendingLandingPageFormRecord);
+    } else if (landingTemplateSelectEl) {
+      applyLandingPageDefaultsToForm();
     }
   }
 
