@@ -5954,11 +5954,50 @@
         <div class="page-heading-row">
           <h2>Builder: Templates</h2>
           <div class="page-heading-actions">
+            <button id="developCreateModularPageTemplateBtn" type="button">Create Modular Template</button>
             <button id="developCreatePageTemplateBtn" type="button">Create Template</button>
             <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
         <div id="developEmailTemplatesPrimaryTableHost" class="develop-template-records-host"></div>
+        <section id="developPageTemplateEditorPanel" class="develop-template-section develop-template-editor hidden">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developPageTemplateEditorToggle"
+              class="develop-template-section-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="developPageTemplateEditorBody"
+            >
+              <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
+              <span id="developPageTemplateEditorTitle" class="develop-template-section-title">Page: Modular</span>
+            </button>
+          </div>
+          <div id="developPageTemplateEditorBody" class="develop-template-section-body">
+            <p id="developPageTemplateEditorMeta" class="meta">Build landing-page templates as ordered sections with configurable layouts and module slots.</p>
+            <input id="developPageTemplateEditorIdInput" type="hidden" />
+            <div class="grid-form" style="margin-bottom:0.75rem;">
+              <input id="developPageTemplateEditorNameInput" type="text" placeholder="Template name" />
+              <select id="developPageTemplateEditorBaseTemplateSelect"></select>
+            </div>
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button id="developPageTemplateEditorSaveBtnTop" type="button">Save Modular Template</button>
+              <button id="developPageTemplateEditorCloseBtnTop" type="button">Close</button>
+            </div>
+            <div id="developPageTemplateEditorToolbar" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button type="button" data-section-layout="banner">Add Banner</button>
+              <button type="button" data-section-layout="hero-form-right">Add Hero + Form</button>
+              <button type="button" data-section-layout="two-column">Add Two Column</button>
+              <button type="button" data-section-layout="feature-grid-2">Add Feature Grid</button>
+              <button type="button" data-section-layout="single">Add Single Column</button>
+            </div>
+            <div id="developPageTemplateEditorSections" class="develop-template-module-list"></div>
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
+              <button id="developPageTemplateEditorSaveBtnBottom" type="button">Save Modular Template</button>
+              <button id="developPageTemplateEditorPreviewBtn" type="button">Preview Modular Template</button>
+            </div>
+          </div>
+        </section>
         <section id="developTemplateEditorPanel" class="develop-template-section develop-template-editor hidden">
           <div class="develop-template-section-header-row">
             <button
