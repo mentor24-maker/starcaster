@@ -1223,21 +1223,73 @@ App.develop = (function () {
     return assetLabel(asset, fallback);
   }
 
+  function renderThemePaletteSwatches(theme) {
+    const colors = [
+      { label: 'Primary', value: safeText(theme?.primaryColor) },
+      { label: 'Background', value: safeText(theme?.backgroundColor) },
+      { label: 'Accent', value: safeText(theme?.accentColor) },
+    ].filter((item) => item.value);
+    if (!colors.length) return '-';
+    return `
+      <div class="develop-theme-palette-cell">
+        ${colors.map((item) => `
+          <span class="develop-theme-palette-chip" title="${item.label}: ${item.value}">
+            <span class="develop-theme-palette-dot" style="background:${item.value};"></span>
+            <span>${item.value}</span>
+          </span>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderThemeStyleGlyph(theme) {
+    const borderThickness = Math.max(0, Number(theme?.borderThickness || 0) || 0);
+    const borderRadius = Math.max(0, Number(theme?.borderRadius || 0) || 0);
+    const scaledRadius = Math.min(14, Math.round(borderRadius / 4));
+    const borderWidth = borderThickness > 0 ? 1 : 0;
+    return `
+      <div class="develop-theme-style-cell">
+        <span class="develop-theme-style-glyph" style="border-width:${borderWidth}px;border-radius:${scaledRadius}px;"></span>
+        <span>B:${borderThickness} R:${borderRadius} Blur:${theme?.containerBlur ?? 0} C:${theme?.contrastLevel ?? 0}</span>
+      </div>
+    `;
+  }
+
   function renderThemesPreview() {
     const host = byId('developThemesPreviewHost');
     if (!host) return;
     const payload = buildThemePayload();
+    const logoWideAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.logoWideId));
+    const logoSquareAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.logoSquareId));
     const featureAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.featureImageId));
+    const backgroundAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.backgroundImageId));
+    const logoWideUrl = logoWideAsset ? toDirectAssetUrl(logoWideAsset.location) : '';
+    const logoSquareUrl = logoSquareAsset ? toDirectAssetUrl(logoSquareAsset.location) : '';
     const featureUrl = featureAsset ? toDirectAssetUrl(featureAsset.location) : '';
+    const backgroundUrl = backgroundAsset ? toDirectAssetUrl(backgroundAsset.location) : '';
     host.innerHTML = `
-      <div class="develop-themes-preview-card" style="background:${payload.backgroundColor}; border:${payload.borderThickness}px solid ${payload.accentColor}; border-radius:${payload.borderRadius}px; backdrop-filter:blur(${payload.containerBlur}px);">
-        <div class="develop-themes-preview-eyebrow" style="color:${payload.accentColor};">Theme Preview</div>
-        <h4 style="color:${payload.primaryColor};">${safeText(payload.name) || 'Untitled Theme'}</h4>
-        <p>Primary, background, accent, and structural settings appear here as a quick visual preview.</p>
-        ${featureUrl ? `<div class="develop-template-image-slot" style="margin:0 0 1rem 0;"><img src="${featureUrl}" alt="Feature" style="display:block;width:100%;max-height:180px;object-fit:cover;border-radius:${payload.borderRadius}px;" /></div>` : ''}
-        <div class="develop-themes-preview-actions">
-          <button type="button" style="background:${payload.primaryColor}; border-color:${payload.primaryColor};">Primary CTA</button>
-          <button type="button" style="border:${payload.borderThickness}px solid ${payload.accentColor}; color:${payload.accentColor}; background:transparent;">Secondary CTA</button>
+      <div class="develop-themes-preview-frame" style="${backgroundUrl ? `background-image:linear-gradient(rgba(7,33,66,0.18), rgba(7,33,66,0.18)), url('${backgroundUrl}');` : `background:${payload.backgroundColor};`}">
+        <div class="develop-themes-preview-card" style="background:${payload.backgroundColor}; border:${payload.borderThickness}px solid ${payload.accentColor}; border-radius:${payload.borderRadius}px; backdrop-filter:blur(${payload.containerBlur}px);">
+          <div class="develop-themes-preview-header">
+            <div class="develop-themes-preview-brand">
+              ${logoWideUrl ? `<img class="develop-themes-preview-logo-wide" src="${logoWideUrl}" alt="Wide logo" />` : `<div class="develop-themes-preview-logo-fallback" style="color:${payload.primaryColor};">${safeText(payload.name) || 'Theme Brand'}</div>`}
+              <div class="develop-themes-preview-eyebrow" style="color:${payload.accentColor};">Landing Page Theme</div>
+            </div>
+            ${logoSquareUrl ? `<img class="develop-themes-preview-logo-square" src="${logoSquareUrl}" alt="Square logo" />` : ''}
+          </div>
+          <div class="develop-themes-preview-hero">
+            <div class="develop-themes-preview-copy">
+              <h4 style="color:${payload.primaryColor};">${safeText(payload.name) || 'Untitled Theme'}</h4>
+              <p>Primary, background, accent, and structural settings appear here as a website-ready preview.</p>
+              <div class="develop-themes-preview-actions">
+                <button type="button" style="background:${payload.primaryColor}; border-color:${payload.primaryColor};">Primary CTA</button>
+                <button type="button" style="border:${Math.max(1, payload.borderThickness)}px solid ${payload.accentColor}; color:${payload.accentColor}; background:transparent;">Secondary CTA</button>
+              </div>
+            </div>
+            <div class="develop-themes-preview-feature" style="border-radius:${payload.borderRadius}px;">
+              ${featureUrl ? `<img src="${featureUrl}" alt="Feature" />` : '<div class="develop-themes-preview-feature-placeholder">Feature Image</div>'}
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -1308,9 +1360,9 @@ App.develop = (function () {
       const nameTd = document.createElement('td');
       nameTd.textContent = safeText(theme.name) || '-';
       const paletteTd = document.createElement('td');
-      paletteTd.textContent = [safeText(theme.primaryColor), safeText(theme.backgroundColor), safeText(theme.accentColor)].filter(Boolean).join(' / ') || '-';
+      paletteTd.innerHTML = renderThemePaletteSwatches(theme);
       const stylesTd = document.createElement('td');
-      stylesTd.textContent = `B:${theme.borderThickness ?? 1} R:${theme.borderRadius ?? 12} Blur:${theme.containerBlur ?? 0} C:${theme.contrastLevel ?? 0}`;
+      stylesTd.innerHTML = renderThemeStyleGlyph(theme);
       const updatedTd = document.createElement('td');
       updatedTd.textContent = theme.updatedAt ? new Date(theme.updatedAt).toLocaleString() : '-';
       const actionsTd = document.createElement('td');

@@ -5328,58 +5328,60 @@
           </section>
           <div id="developThemesStatusMsg" class="develop-themes-status hidden" role="status" aria-live="polite"></div>
           <section class="develop-themes-columns">
-            <article class="develop-themes-card">
-              <h3>Palette</h3>
-              <div class="develop-themes-stack">
-                <div class="develop-color-control">
-                  <label for="developThemesPrimaryColorInput" class="develop-color-control-label">
-                    <span class="develop-color-control-icon" aria-hidden="true"></span>
-                    Primary Color
-                  </label>
-                  <input id="developThemesPrimaryColorInput" name="themes_primary_color" type="color" value="#0b82d4" />
+            <div class="develop-themes-side-stack">
+              <article class="develop-themes-card">
+                <h3>Palette</h3>
+                <div class="develop-themes-stack">
+                  <div class="develop-color-control">
+                    <label for="developThemesPrimaryColorInput" class="develop-color-control-label">
+                      <span class="develop-color-control-icon" aria-hidden="true"></span>
+                      Primary Color
+                    </label>
+                    <input id="developThemesPrimaryColorInput" name="themes_primary_color" type="color" value="#0b82d4" />
+                  </div>
+                  <div class="develop-color-control">
+                    <label for="developThemesBackgroundColorInput" class="develop-color-control-label">
+                      <span class="develop-color-control-icon" aria-hidden="true"></span>
+                      Background Color
+                    </label>
+                    <input id="developThemesBackgroundColorInput" name="themes_background_color" type="color" value="#f5fbff" />
+                  </div>
+                  <div class="develop-color-control">
+                    <label for="developThemesAccentColorInput" class="develop-color-control-label">
+                      <span class="develop-color-control-icon" aria-hidden="true"></span>
+                      Accent Color
+                    </label>
+                    <input id="developThemesAccentColorInput" name="themes_accent_color" type="color" value="#1a4f81" />
+                  </div>
                 </div>
-                <div class="develop-color-control">
-                  <label for="developThemesBackgroundColorInput" class="develop-color-control-label">
-                    <span class="develop-color-control-icon" aria-hidden="true"></span>
-                    Background Color
-                  </label>
-                  <input id="developThemesBackgroundColorInput" name="themes_background_color" type="color" value="#f5fbff" />
+              </article>
+              <article class="develop-themes-card">
+                <h3>Styles</h3>
+                <div class="develop-themes-stack">
+                  <div class="form-row">
+                    <label for="developThemesBorderThicknessInput">Thickness</label>
+                    <input id="developThemesBorderThicknessInput" type="range" min="0" max="20" step="1" value="1" />
+                    <span id="developThemesBorderThicknessValue">1</span>
+                  </div>
+                  <div class="form-row">
+                    <label for="developThemesBorderRadiusInput">Radius</label>
+                    <input id="developThemesBorderRadiusInput" type="range" min="0" max="50" step="1" value="12" />
+                    <span id="developThemesBorderRadiusValue">12</span>
+                  </div>
+                  <div class="form-row">
+                    <label for="developThemesContainerBlurInput">Blur</label>
+                    <input id="developThemesContainerBlurInput" type="range" min="0" max="24" step="1" value="0" />
+                    <span id="developThemesContainerBlurValue">0</span>
+                  </div>
+                  <div class="form-row">
+                    <label for="developThemesContrastLevelInput">Contrast</label>
+                    <input id="developThemesContrastLevelInput" type="range" min="0" max="100" step="1" value="0" />
+                    <span id="developThemesContrastLevelValue">0</span>
+                  </div>
                 </div>
-                <div class="develop-color-control">
-                  <label for="developThemesAccentColorInput" class="develop-color-control-label">
-                    <span class="develop-color-control-icon" aria-hidden="true"></span>
-                    Accent Color
-                  </label>
-                  <input id="developThemesAccentColorInput" name="themes_accent_color" type="color" value="#1a4f81" />
-                </div>
-              </div>
-            </article>
-            <article class="develop-themes-card">
-              <h3>Styles</h3>
-              <div class="develop-themes-stack">
-                <div class="form-row">
-                  <label for="developThemesBorderThicknessInput">Thickness</label>
-                  <input id="developThemesBorderThicknessInput" type="range" min="0" max="20" step="1" value="1" />
-                  <span id="developThemesBorderThicknessValue">1</span>
-                </div>
-                <div class="form-row">
-                  <label for="developThemesBorderRadiusInput">Radius</label>
-                  <input id="developThemesBorderRadiusInput" type="range" min="0" max="50" step="1" value="12" />
-                  <span id="developThemesBorderRadiusValue">12</span>
-                </div>
-                <div class="form-row">
-                  <label for="developThemesContainerBlurInput">Blur</label>
-                  <input id="developThemesContainerBlurInput" type="range" min="0" max="24" step="1" value="0" />
-                  <span id="developThemesContainerBlurValue">0</span>
-                </div>
-                <div class="form-row">
-                  <label for="developThemesContrastLevelInput">Contrast</label>
-                  <input id="developThemesContrastLevelInput" type="range" min="0" max="100" step="1" value="0" />
-                  <span id="developThemesContrastLevelValue">0</span>
-                </div>
-              </div>
-            </article>
-            <article class="develop-themes-card">
+              </article>
+            </div>
+            <article class="develop-themes-card develop-themes-assets-card">
               <h3>Assets</h3>
               <div class="develop-themes-stack">
                 <div class="form-row develop-theme-asset-row">
