@@ -2466,6 +2466,9 @@ th {
     radial-gradient(circle at 20% 20%, rgba(71, 176, 255, 0.22), transparent 34%),
     radial-gradient(circle at 82% 18%, rgba(22, 84, 163, 0.28), transparent 26%),
     linear-gradient(135deg, #eef8ff 0%, #f8fcff 44%, #edf4ff 100%);
+  background-size: auto, auto, auto;
+  background-position: center, center, center;
+  background-repeat: no-repeat, no-repeat, no-repeat;
   filter: var(--lp-filter, none);
 }
 
@@ -3217,13 +3220,14 @@ th {
 
 .develop-template-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   margin-top: 1rem;
 }
 
 .develop-template-body-copy {
   padding: 1.1rem;
+  min-height: 200px;
 }
 
 .develop-template-body-copy h3 {
@@ -4073,13 +4077,14 @@ th {
 
 .develop-theme-picker-toolbar {
   display: grid;
-  grid-template-columns: minmax(280px, 1.6fr) auto auto auto;
+  grid-template-columns: minmax(240px, 1.45fr) repeat(3, minmax(170px, 0.75fr)) auto auto;
   gap: 0.6rem;
   align-items: center;
   margin-bottom: 0.9rem;
 }
 
-.develop-theme-picker-toolbar input {
+.develop-theme-picker-toolbar input,
+.develop-theme-picker-toolbar select {
   margin: 0;
 }
 

@@ -731,13 +731,42 @@ App.develop = (function () {
     return THEME_ASSET_PICKERS[String(selectId || '').trim()] || null;
   }
 
+  function normalizeAssetFilterToken(value) {
+    return safeText(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function getAssetTagText(asset) {
+    return Array.isArray(asset?.tags)
+      ? asset.tags.map((item) => safeText(item)).filter(Boolean).join(' ')
+      : safeText(asset?.tags).replace(/[;,]+/g, ' ');
+  }
+
+  function assetMatchesPickerContext(asset, config) {
+    if (!asset || !config) return false;
+    const category = normalizeAssetFilterToken(asset?.category);
+    const haystack = [
+      category,
+      normalizeAssetFilterToken(asset?.assetName),
+      normalizeAssetFilterToken(asset?.location),
+      normalizeAssetFilterToken(getAssetTagText(asset)),
+    ].join(' ').trim();
+    const allowedCategories = (config?.categories || []).map((item) => normalizeAssetFilterToken(item)).filter(Boolean);
+    const contextTags = (config?.tags || []).map((item) => normalizeAssetFilterToken(item)).filter(Boolean);
+    if (allowedCategories.some((value) => value && (category === value || haystack.includes(value)))) {
+      return true;
+    }
+    if (contextTags.some((value) => value && haystack.includes(value))) {
+      return true;
+    }
+    return false;
+  }
+
   function getImagePickerAssets(selectId, currentValue = '') {
     const config = getImagePickerConfig(selectId);
     const currentId = safeText(currentValue);
-    const allowedCategories = new Set((config?.categories || []).map((item) => safeText(item)).filter(Boolean));
     const rows = getThemeImageAssets().filter((asset) => {
-      if (!allowedCategories.size) return true;
-      return allowedCategories.has(safeText(asset?.category));
+      if (!config) return true;
+      return assetMatchesPickerContext(asset, config);
     });
     if (currentId && !rows.some((asset) => String(asset.id) === currentId)) {
       const currentAsset = (Array.isArray(state.assets) ? state.assets : []).find((asset) => String(asset.id) === currentId);
@@ -893,6 +922,10 @@ App.develop = (function () {
     const filterInput = document.createElement('input');
     filterInput.placeholder = 'Search images by name, category, or tag';
 
+    const categoryFilter = document.createElement('select');
+    const orientationFilter = document.createElement('select');
+    const tagFilter = document.createElement('select');
+
     const resultCount = document.createElement('div');
     resultCount.className = 'develop-theme-picker-result-count';
     resultCount.textContent = '0 images';
@@ -913,6 +946,9 @@ App.develop = (function () {
     uploadWrap.appendChild(uploadBtn);
 
     toolbar.appendChild(filterInput);
+    toolbar.appendChild(categoryFilter);
+    toolbar.appendChild(orientationFilter);
+    toolbar.appendChild(tagFilter);
     toolbar.appendChild(resultCount);
     toolbar.appendChild(clearBtn);
     toolbar.appendChild(uploadWrap);
@@ -948,6 +984,47 @@ App.develop = (function () {
       return width && height ? `${width} x ${height}` : '';
     }
 
+    function getScopedAssets() {
+      return getImagePickerAssets(selectId, getValue());
+    }
+
+    function syncPickerFilters() {
+      const scopedAssets = getScopedAssets();
+      const categoryValues = Array.from(new Set(scopedAssets.map((asset) => safeText(asset?.category)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      const tagValues = Array.from(new Set(
+        scopedAssets.flatMap((asset) => {
+          const tags = Array.isArray(asset?.tags)
+            ? asset.tags
+            : safeText(asset?.tags).split(/[;,]+/g);
+          return tags.map((item) => safeText(item)).filter(Boolean);
+        })
+      )).sort((a, b) => a.localeCompare(b));
+
+      setSelectOptions(
+        categoryFilter,
+        categoryValues.map((value) => ({ value, label: value })),
+        'All Relevant Categories',
+        safeText(categoryFilter.value)
+      );
+      setSelectOptions(
+        orientationFilter,
+        [
+          { value: 'wide', label: 'Wide' },
+          { value: 'square', label: 'Square' },
+          { value: 'tall', label: 'Tall' },
+          { value: 'unknown', label: 'Other' },
+        ],
+        'All Shapes',
+        safeText(orientationFilter.value)
+      );
+      setSelectOptions(
+        tagFilter,
+        tagValues.map((value) => ({ value, label: value })),
+        'All Relevant Tags',
+        safeText(tagFilter.value)
+      );
+    }
+
     function openImagePreview(asset) {
       if (!asset || !App.components || typeof App.components.Modal !== 'function') return;
       const imageUrl = toDirectAssetUrl(asset.location);
@@ -972,12 +1049,17 @@ App.develop = (function () {
     }
 
     function renderGrid() {
+      syncPickerFilters();
       const filter = safeText(filterInput.value).toLowerCase();
-      const assets = getImagePickerAssets(selectId, getValue()).filter((asset) => {
+      const categoryValue = safeText(categoryFilter.value);
+      const orientationValue = safeText(orientationFilter.value);
+      const tagValue = safeText(tagFilter.value).toLowerCase();
+      const assets = getScopedAssets().filter((asset) => {
+        if (categoryValue && safeText(asset?.category) !== categoryValue) return false;
+        if (orientationValue && getAssetOrientation(asset) !== orientationValue) return false;
+        const tagText = getAssetTagText(asset).toLowerCase();
+        if (tagValue && !tagText.includes(tagValue)) return false;
         if (!filter) return true;
-        const tagText = Array.isArray(asset?.tags)
-          ? asset.tags.map((item) => safeText(item)).filter(Boolean).join(' ')
-          : safeText(asset?.tags).replace(/[;,]+/g, ' ');
         const haystack = [
           assetLabel(asset, ''),
           safeText(asset.category),
@@ -1071,6 +1153,9 @@ App.develop = (function () {
     }
 
     filterInput.addEventListener('input', renderGrid);
+    categoryFilter.addEventListener('change', renderGrid);
+    orientationFilter.addEventListener('change', renderGrid);
+    tagFilter.addEventListener('change', renderGrid);
     clearBtn.addEventListener('click', () => {
       setValue('');
       afterChange(null);
@@ -2942,7 +3027,7 @@ App.develop = (function () {
       interactive = false,
       editableClass = 'develop-landing-editable',
     } = options;
-        const ctx = getLandingPagePreviewContext(record);
+    const ctx = getLandingPagePreviewContext(record);
     const attr = (key, label, slot = '') => (
       interactive
         ? ` data-edit-key="${key}" data-edit-label="${label}"${slot ? ` data-edit-slot="${slot}"` : ''}`
@@ -2954,6 +3039,17 @@ App.develop = (function () {
       if (interactive) classes.push(editableClass);
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
+    const canvasStyles = [
+      `--lp-primary:${ctx.primaryColor};`,
+      `--lp-background:${ctx.backgroundColor};`,
+      `--lp-accent:${ctx.accentColor};`,
+    ];
+    if (ctx.backgroundUrl) {
+      canvasStyles.push(`background-image: linear-gradient(135deg, rgba(238,248,255,0.76) 0%, rgba(248,252,255,0.84) 44%, rgba(237,244,255,0.82) 100%), url('${safeText(ctx.backgroundUrl)}');`);
+      canvasStyles.push('background-size: cover, cover;');
+      canvasStyles.push('background-position: center center, center center;');
+      canvasStyles.push('background-repeat: no-repeat, no-repeat;');
+    }
     const runtimeFieldMarkup = ctx.formFields.map((field, index) => {
       const fieldType = safeText(field?.type) || 'text';
       const fieldLabel = safeText(field?.label) || 'Field';
@@ -2963,7 +3059,7 @@ App.develop = (function () {
     }).join('');
 
     return `
-        <div class="develop-template-canvas">
+        <div class="develop-template-canvas"${attr('backgroundImageId', 'Background Image', 'page-background')} style="${canvasStyles.join(' ')}">
           <div${editable('develop-template-banner')}${attr('websiteBannerImageId', 'Website Banner Image', 'banner')}>${
           ctx.bannerUrl
             ? buildLandingAssetImage(record.websiteBannerImageId, getLandingPageAssetName(record.websiteBannerImageId, 'Page Banner Image'), 'develop-template-banner-img')
@@ -3022,11 +3118,6 @@ App.develop = (function () {
             <p${editable()}${attr('theme', 'Theme', 'body-lead')}${buildLandingPageTextAttrs(record, 'body-lead')}>${ctx.bodyLead}</p>
             <p${editable()}${attr('theme', 'Theme', 'body-copy')}${buildLandingPageTextAttrs(record, 'body-copy')}>${ctx.bodyCopy}</p>
           </div>
-          <div${editable('develop-template-side-image')}${attr('backgroundImageId', 'Background Image', 'background-image')}>${
-            ctx.backgroundUrl
-              ? buildLandingAssetImage(record.backgroundImageId, getLandingPageAssetName(record.backgroundImageId, 'Background Image / Supporting Visual'))
-              : getLandingPageAssetName(record.backgroundImageId, 'Background Image / Supporting Visual')
-          }</div>
         </div>
       </div>
     `;
