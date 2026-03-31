@@ -1255,10 +1255,31 @@ App.develop = (function () {
     `;
   }
 
+  function getThemePreviewMessagingContent() {
+    const headlineRows = Array.isArray(landingPageHeadlines) ? landingPageHeadlines : [];
+    const subheadingRows = Array.isArray(landingPageSubheadings) ? landingPageSubheadings : [];
+    const pitchRows = Array.isArray(landingPagePitches) ? landingPagePitches : [];
+    const ctaRows = Array.isArray(landingPageCtas) ? landingPageCtas : [];
+    return {
+      heroHeadline: safeText(headlineRows[0]?.headline) || 'Messaging headline preview',
+      heroPitch: safeText(pitchRows[0]?.pitch) || 'Use real Headlines, Pitches, and Calls to Action from this project to preview a landing page theme in context.',
+      primaryCta: safeText(ctaRows[0]?.cta) || 'Primary CTA',
+      secondaryCta: safeText(ctaRows[1]?.cta || ctaRows[0]?.cta) || 'Secondary CTA',
+      featureHeadline: safeText(headlineRows[1]?.headline || headlineRows[0]?.headline) || 'Feature headline',
+      featureSubheading: safeText(subheadingRows[0]?.subheading) || 'Feature sub-heading from Messaging',
+      highlightHeadline: safeText(headlineRows[2]?.headline || headlineRows[0]?.headline) || 'Highlight headline',
+      highlightPitch: safeText(pitchRows[1]?.pitch || pitchRows[0]?.pitch) || 'Highlight support copy from Messaging Pitches.',
+      bodyHeadline: safeText(headlineRows[3]?.headline || headlineRows[0]?.headline) || 'Body headline',
+      bodySubheading: safeText(subheadingRows[1]?.subheading || subheadingRows[0]?.subheading) || 'Body sub-heading',
+      bodyPitch: safeText(pitchRows[2]?.pitch || pitchRows[0]?.pitch) || 'Body pitch content appears here using project-scoped Messaging records.',
+    };
+  }
+
   function renderThemesPreview() {
     const host = byId('developThemesPreviewHost');
     if (!host) return;
     const payload = buildThemePayload();
+    const content = getThemePreviewMessagingContent();
     const logoWideAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.logoWideId));
     const logoSquareAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.logoSquareId));
     const featureAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(payload.featureImageId));
@@ -1279,15 +1300,36 @@ App.develop = (function () {
           </div>
           <div class="develop-themes-preview-hero">
             <div class="develop-themes-preview-copy">
-              <h4 style="color:${payload.primaryColor};">${safeText(payload.name) || 'Untitled Theme'}</h4>
-              <p>Primary, background, accent, and structural settings appear here as a website-ready preview.</p>
+              <div class="develop-themes-preview-kicker" style="color:${payload.accentColor};">${safeText(payload.name) || 'Untitled Theme'}</div>
+              <h4 style="color:${payload.primaryColor};">${content.heroHeadline}</h4>
+              <p>${content.heroPitch}</p>
               <div class="develop-themes-preview-actions">
-                <button type="button" style="background:${payload.primaryColor}; border-color:${payload.primaryColor};">Primary CTA</button>
-                <button type="button" style="border:${Math.max(1, payload.borderThickness)}px solid ${payload.accentColor}; color:${payload.accentColor}; background:transparent;">Secondary CTA</button>
+                <button type="button" style="background:${payload.primaryColor}; border-color:${payload.primaryColor};">${content.primaryCta}</button>
+                <button type="button" style="border:${Math.max(1, payload.borderThickness)}px solid ${payload.accentColor}; color:${payload.accentColor}; background:transparent;">${content.secondaryCta}</button>
               </div>
             </div>
             <div class="develop-themes-preview-feature" style="border-radius:${payload.borderRadius}px;">
               ${featureUrl ? `<img src="${featureUrl}" alt="Feature" />` : '<div class="develop-themes-preview-feature-placeholder">Feature Image</div>'}
+            </div>
+          </div>
+          <div class="develop-themes-preview-modules">
+            <article class="develop-themes-preview-module">
+              <h5 style="color:${payload.primaryColor};">${content.featureHeadline}</h5>
+              <p class="develop-themes-preview-module-subheading">${content.featureSubheading}</p>
+            </article>
+            <article class="develop-themes-preview-module">
+              <h5 style="color:${payload.primaryColor};">${content.highlightHeadline}</h5>
+              <p>${content.highlightPitch}</p>
+            </article>
+          </div>
+          <div class="develop-themes-preview-body">
+            <div class="develop-themes-preview-body-copy">
+              <h5 style="color:${payload.primaryColor};">${content.bodyHeadline}</h5>
+              <p class="develop-themes-preview-module-subheading">${content.bodySubheading}</p>
+              <p>${content.bodyPitch}</p>
+            </div>
+            <div class="develop-themes-preview-body-side" style="border-radius:${payload.borderRadius}px; border:${Math.max(1, payload.borderThickness)}px solid ${payload.accentColor};">
+              <span style="color:${payload.accentColor};">${content.secondaryCta}</span>
             </div>
           </div>
         </div>
