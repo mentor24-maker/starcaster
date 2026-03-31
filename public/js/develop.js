@@ -920,6 +920,29 @@ App.develop = (function () {
     let modal = null;
     let previewModal = null;
 
+    function getAssetDimensions(asset) {
+      const width = Number(asset?.width || asset?.imageWidth || asset?.assetWidth || 0);
+      const height = Number(asset?.height || asset?.imageHeight || asset?.assetHeight || 0);
+      return {
+        width: Number.isFinite(width) && width > 0 ? width : 0,
+        height: Number.isFinite(height) && height > 0 ? height : 0,
+      };
+    }
+
+    function getAssetOrientation(asset) {
+      const { width, height } = getAssetDimensions(asset);
+      if (!width || !height) return 'unknown';
+      const ratio = width / height;
+      if (ratio >= 1.2) return 'wide';
+      if (ratio <= 0.82) return 'tall';
+      return 'square';
+    }
+
+    function getAssetDimensionLabel(asset) {
+      const { width, height } = getAssetDimensions(asset);
+      return width && height ? `${width} x ${height}` : '';
+    }
+
     function openImagePreview(asset) {
       if (!asset || !App.components || typeof App.components.Modal !== 'function') return;
       const imageUrl = toDirectAssetUrl(asset.location);
@@ -968,43 +991,77 @@ App.develop = (function () {
         grid.appendChild(empty);
         return;
       }
+      const grouped = {
+        wide: [],
+        square: [],
+        tall: [],
+        unknown: [],
+      };
       assets.forEach((asset) => {
-        const card = document.createElement('div');
-        card.className = `develop-theme-picker-card${String(asset.id) === getValue() ? ' is-selected' : ''}`;
-        const imageUrl = toDirectAssetUrl(asset.location);
-        card.innerHTML = `
-          <button type="button" class="develop-theme-picker-card-image-btn">
-            ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />` : '<div class="develop-theme-table-thumb-empty">No Image</div>'}
-          </button>
-          <div class="develop-theme-picker-card-title">${safeText(assetLabel(asset, config.title))}</div>
-          <div class="develop-theme-picker-card-meta">${safeText(asset.category) || 'Image'}</div>
-          <div class="develop-theme-picker-card-actions">
-            <button type="button" class="tiny-btn develop-theme-picker-preview-btn">Preview</button>
-            <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Image</button>
-          </div>
-        `;
-        const imageBtn = card.querySelector('.develop-theme-picker-card-image-btn');
-        const previewBtn = card.querySelector('.develop-theme-picker-preview-btn');
-        const selectBtn = card.querySelector('.develop-theme-picker-select-btn');
-        const choose = () => {
-          setValue(String(asset.id));
-          afterChange(asset);
-          if (modal) modal.close();
-        };
-        if (imageBtn) {
-          imageBtn.addEventListener('click', () => {
-            openImagePreview(asset);
-          });
-        }
-        if (previewBtn) {
-          previewBtn.addEventListener('click', () => {
-            openImagePreview(asset);
-          });
-        }
-        if (selectBtn) {
-          selectBtn.addEventListener('click', choose);
-        }
-        grid.appendChild(card);
+        grouped[getAssetOrientation(asset)].push(asset);
+      });
+
+      [
+        ['wide', 'Wide Images'],
+        ['square', 'Square Images'],
+        ['tall', 'Tall Images'],
+        ['unknown', 'Other Images'],
+      ].forEach(([groupKey, label]) => {
+        const rows = grouped[groupKey];
+        if (!rows.length) return;
+        const section = document.createElement('section');
+        section.className = 'develop-theme-picker-group';
+
+        const heading = document.createElement('div');
+        heading.className = 'develop-theme-picker-group-heading';
+        heading.innerHTML = `<strong>${label}</strong><span>${rows.length}</span>`;
+        section.appendChild(heading);
+
+        const sectionGrid = document.createElement('div');
+        sectionGrid.className = `develop-theme-picker-grid develop-theme-picker-grid--${groupKey}`;
+
+        rows.forEach((asset) => {
+          const card = document.createElement('div');
+          card.className = `develop-theme-picker-card develop-theme-picker-card--${groupKey}${String(asset.id) === getValue() ? ' is-selected' : ''}`;
+          const imageUrl = toDirectAssetUrl(asset.location);
+          const dimensionLabel = getAssetDimensionLabel(asset);
+          card.innerHTML = `
+            <button type="button" class="develop-theme-picker-card-image-btn">
+              ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />` : '<div class="develop-theme-table-thumb-empty">No Image</div>'}
+            </button>
+            <div class="develop-theme-picker-card-title">${safeText(assetLabel(asset, config.title))}</div>
+            <div class="develop-theme-picker-card-meta">${safeText(asset.category) || 'Image'}${dimensionLabel ? ` • ${dimensionLabel}` : ''}</div>
+            <div class="develop-theme-picker-card-actions">
+              <button type="button" class="tiny-btn develop-theme-picker-preview-btn">Preview</button>
+              <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Image</button>
+            </div>
+          `;
+          const imageBtn = card.querySelector('.develop-theme-picker-card-image-btn');
+          const previewBtn = card.querySelector('.develop-theme-picker-preview-btn');
+          const selectBtn = card.querySelector('.develop-theme-picker-select-btn');
+          const choose = () => {
+            setValue(String(asset.id));
+            afterChange(asset);
+            if (modal) modal.close();
+          };
+          if (imageBtn) {
+            imageBtn.addEventListener('click', () => {
+              openImagePreview(asset);
+            });
+          }
+          if (previewBtn) {
+            previewBtn.addEventListener('click', () => {
+              openImagePreview(asset);
+            });
+          }
+          if (selectBtn) {
+            selectBtn.addEventListener('click', choose);
+          }
+          sectionGrid.appendChild(card);
+        });
+
+        section.appendChild(sectionGrid);
+        grid.appendChild(section);
       });
     }
 
