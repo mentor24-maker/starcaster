@@ -229,6 +229,7 @@ async function handle(req, res, pathname, method) {
 
     const result = await createPageTemplate({
       name,
+      templateKind: body.templateKind || body.template_kind,
       templateId,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
@@ -255,6 +256,9 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
+        ? (body.layoutSections || body.layout_sections)
+        : [],
       contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create page template'), true;
@@ -316,7 +320,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { emailTemplate: result.data }), true;
   }
 
-  const themeMatch = pathname.match(/^\/api\/develop\/themes\/(\d+)$/);
+  const themeMatch = pathname.match(/^\/api\/develop\/themes\/([^/]+)$/);
   if (themeMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateTheme(themeMatch[1], {
@@ -853,6 +857,7 @@ async function handle(req, res, pathname, method) {
 
     const result = await updatePageTemplate(pageTemplateId, {
       name,
+      templateKind: body.templateKind || body.template_kind,
       templateId,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
@@ -879,6 +884,9 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
+        ? (body.layoutSections || body.layout_sections)
+        : [],
       contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
     }, scope);
     if (!result.ok) {

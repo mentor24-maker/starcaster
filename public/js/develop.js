@@ -2939,6 +2939,53 @@ App.develop = (function () {
     return {};
   }
 
+  function normalizePageTemplateKind(value) {
+    return safeText(value).toLowerCase() === 'modular' ? 'modular' : 'fixed';
+  }
+
+  function normalizePageTemplateLayoutSections(value) {
+    if (!value) return [];
+    if (typeof value === 'string') {
+      try {
+        return normalizePageTemplateLayoutSections(JSON.parse(value));
+      } catch (_) {
+        return [];
+      }
+    }
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((section, index) => {
+        if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+        const id = safeText(section.id) || `section_${index + 1}`;
+        const layout = safeText(section.layout) || 'single';
+        const title = safeText(section.title, 255);
+        const modules = Array.isArray(section.modules)
+          ? section.modules
+            .map((module, moduleIndex) => {
+              if (!module || typeof module !== 'object' || Array.isArray(module)) return null;
+              return {
+                id: safeText(module.id) || `${id}_module_${moduleIndex + 1}`,
+                type: safeText(module.type) || 'text',
+                column: safeText(module.column) || 'main',
+                contentId: safeText(module.contentId),
+                assetId: safeText(module.assetId),
+                text: safeText(module.text, 10000),
+                settings: module.settings && typeof module.settings === 'object' && !Array.isArray(module.settings)
+                  ? module.settings
+                  : {},
+              };
+            })
+            .filter(Boolean)
+          : [];
+        return { id, layout, title, modules };
+      })
+      .filter(Boolean);
+  }
+
+  function getPageTemplateKindLabel(value) {
+    return normalizePageTemplateKind(value) === 'modular' ? 'Modular' : 'Fixed';
+  }
+
   function getLandingPageMergedContentOverrides(record) {
     const base = normalizeLandingPageContentOverrides(record?.contentOverrides);
     const draft = normalizeLandingPageContentOverrides(landingPageVisualDraft.contentOverrides);
@@ -3995,6 +4042,7 @@ App.develop = (function () {
     return applyLandingPageDefaultSelections({
       id: '',
       name: safeText(name, 255),
+      templateKind: 'fixed',
       templateId: safeText(templateId, 120) || LANDING_TEMPLATES[0].id,
       primaryColor: DEFAULT_LANDING_PRIMARY,
       backgroundColor: DEFAULT_LANDING_BACKGROUND,
@@ -4021,6 +4069,7 @@ App.develop = (function () {
       bodyPitchId: '',
       logoWideId: '',
       logoSquareId: '',
+      layoutSections: [],
       contentOverrides: {},
       createdAt: '',
       updatedAt: '',
@@ -4291,6 +4340,8 @@ App.develop = (function () {
         activeLandingPageVisualMode = safeText(options.mode) === 'template' ? 'template' : 'page';
         activeLandingPageVisualRecord = applyLandingPageDefaultSelections({
           ...record,
+          templateKind: normalizePageTemplateKind(record.templateKind || record.template_kind),
+          layoutSections: normalizePageTemplateLayoutSections(record.layoutSections || record.layout_sections),
           contentOverrides: normalizeLandingPageContentOverrides(record.contentOverrides),
         });
         landingPageVisualEditMode = true;
@@ -4983,6 +5034,7 @@ App.develop = (function () {
       actions.appendChild(deleteBtn);
       return [
         safeText(page.name) || '-',
+        getPageTemplateKindLabel(page.templateKind),
         getLandingPageTemplateName(page.templateId) || '-',
         page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '-',
         actions,
@@ -4991,7 +5043,7 @@ App.develop = (function () {
     renderTemplateRecordsTable(
       'developPageTemplatesTableHost',
       'Saved Page Templates',
-      ['Name', 'Template', 'Updated', 'Actions'],
+      ['Name', 'Kind', 'Template', 'Updated', 'Actions'],
       rows
     );
   }
@@ -6387,6 +6439,7 @@ App.develop = (function () {
             method: hasId ? 'PATCH' : 'POST',
             body: JSON.stringify({
               name: safeText(record.name),
+              templateKind: normalizePageTemplateKind(record.templateKind),
               templateId: safeText(record.templateId),
               primaryColor: safeText(record.primaryColor),
               backgroundColor: safeText(record.backgroundColor),
@@ -6413,6 +6466,7 @@ App.develop = (function () {
               bodyPitchId: safeText(record.bodyPitchId),
               logoWideId: safeText(record.logoWideId),
               logoSquareId: safeText(record.logoSquareId),
+              layoutSections: normalizePageTemplateLayoutSections(record.layoutSections),
               contentOverrides: normalizeLandingPageContentOverrides(record.contentOverrides),
             }),
           });
