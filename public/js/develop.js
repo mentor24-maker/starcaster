@@ -3194,9 +3194,12 @@ App.develop = (function () {
     return wrap;
   }
 
-  function createLandingPageVisualAssetNavigator(record, fieldKey, label, placeholder) {
+  function createLandingPageVisualAssetNavigator(record, fieldKey, label, placeholder, options = {}) {
     const wrap = document.createElement('div');
     wrap.className = 'develop-inline-editor-field';
+    wrap.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
 
     const title = document.createElement('span');
     title.className = 'develop-inline-editor-field-label';
@@ -3214,7 +3217,11 @@ App.develop = (function () {
     clearBtn.type = 'button';
     clearBtn.textContent = 'Clear';
 
-    const status = document.createElement('div');
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Close';
+
+    const status = document.createElement('span');
     status.className = 'develop-inline-asset-status';
 
     const preview = document.createElement('div');
@@ -3257,10 +3264,20 @@ App.develop = (function () {
     clearBtn.addEventListener('click', () => {
       setLandingPageVisualDraftValue(fieldKey, '');
     });
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof options.onClose === 'function') {
+        options.onClose();
+      }
+    });
 
     controls.appendChild(chooseBtn);
     controls.appendChild(status);
     controls.appendChild(clearBtn);
+    if (typeof options.onClose === 'function') {
+      controls.appendChild(closeBtn);
+    }
     wrap.appendChild(controls);
     wrap.appendChild(preview);
     updateStatus();
@@ -3343,83 +3360,24 @@ App.develop = (function () {
     const current = safeText(record?.[key]);
     if (isLandingPageImageEditorKey(key)) {
       const wrap = document.createElement('div');
-      wrap.className = 'develop-inline-image-select';
-
-      const chooser = document.createElement('div');
-      chooser.className = 'develop-inline-editor-field';
-
-      const title = document.createElement('span');
-      title.className = 'develop-inline-editor-field-label';
-      title.textContent = label;
-      chooser.appendChild(title);
-
-      const controls = document.createElement('div');
-      controls.className = 'develop-inline-asset-nav';
-
-      const chooseBtn = document.createElement('button');
-      chooseBtn.type = 'button';
-      chooseBtn.textContent = `Choose ${label}`;
-      chooseBtn.addEventListener('click', (event) => {
-        event.preventDefault();
+      wrap.className = 'develop-inline-textarea-wrap';
+      wrap.addEventListener('click', (event) => {
         event.stopPropagation();
-        const pickerConfig = getLandingPageImagePickerConfigForField(key);
-        if (!pickerConfig) return;
-        openImageAssetPicker(pickerConfig.selectId, {
-          getValue: () => safeText(getActiveLandingPageVisualRecord()?.[key] || record?.[key]),
-          setValue: (value) => {
-            setLandingPageVisualDraftValue(key, value);
-          },
-          afterChange: () => {
+      });
+      wrap.appendChild(createLandingPageVisualAssetNavigator(
+        record,
+        key,
+        label,
+        safeText(config.placeholder) || `Select ${label}`,
+        {
+          onClose: () => {
+            activeLandingPageVisualEditors.delete(editorId);
             renderLandingPageVisualEditor();
           },
-          uploadHandler: (file) => uploadThemeAssetFile(file, pickerConfig.selectId),
-        });
-      });
-
-      const clearBtn = document.createElement('button');
-      clearBtn.type = 'button';
-      clearBtn.textContent = 'Clear';
-      clearBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setLandingPageVisualDraftValue(key, '');
-      });
-
-      const closeBtn = document.createElement('button');
-      closeBtn.type = 'button';
-      closeBtn.textContent = 'Close';
-      closeBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        activeLandingPageVisualEditors.delete(editorId);
-        renderLandingPageVisualEditor();
-      });
-
-      const status = document.createElement('div');
-      status.className = 'develop-inline-asset-status';
-      const currentAsset = getAssetById(safeText(getActiveLandingPageVisualRecord()?.[key] || current));
-      status.textContent = currentAsset ? assetLabel(currentAsset, label) : (safeText(config.placeholder) || `Select ${label}`);
-
-      controls.appendChild(chooseBtn);
-      controls.appendChild(status);
-      controls.appendChild(clearBtn);
-      controls.appendChild(closeBtn);
-      chooser.appendChild(controls);
-
-      const preview = document.createElement('div');
-      preview.className = 'develop-inline-asset-preview';
-      const assetUrl = currentAsset ? toDirectAssetUrl(currentAsset.location) : '';
-      if (assetUrl) {
-        preview.innerHTML = `<img src="${assetUrl}" alt="${safeText(assetLabel(currentAsset, label))}" />`;
-      } else {
-        preview.innerHTML = `<span>${currentAsset ? assetLabel(currentAsset, label) : 'No asset selected'}</span>`;
-      }
-      chooser.appendChild(preview);
-
-      wrap.appendChild(chooser);
-      target.innerHTML = '';
-      target.appendChild(wrap);
-      target.classList.add('develop-inline-image-editor-target');
+        }
+      ));
+      target.classList.add('develop-inline-hidden-target');
+      target.insertAdjacentElement('afterend', wrap);
       return;
     }
 
