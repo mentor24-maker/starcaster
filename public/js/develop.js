@@ -869,7 +869,7 @@ App.develop = (function () {
   function openImageAssetPicker(selectId, options = {}) {
     const config = getImagePickerConfig(selectId);
     const select = byId(selectId);
-    if (!config || !App.components || typeof App.components.Modal !== 'function') return;
+    if (!config || !App.components || typeof App.components.Modal !== 'function') return false;
     const getValue = typeof options.getValue === 'function' ? options.getValue : (() => safeText(select.value));
     const setValue = typeof options.setValue === 'function'
       ? options.setValue
@@ -1101,6 +1101,7 @@ App.develop = (function () {
     });
     renderGrid();
     modal.open();
+    return modal;
   }
 
   function openThemeAssetPicker(selectId) {
@@ -3245,23 +3246,35 @@ App.develop = (function () {
       }
     };
 
-    chooseBtn.addEventListener('click', () => {
+    chooseBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       const config = getLandingPageImagePickerConfigForField(fieldKey);
-      if (!config) return;
-      openImageAssetPicker(config.selectId, {
-        getValue: () => safeText(getActiveLandingPageVisualRecord()?.[fieldKey] || record[fieldKey]),
-        setValue: (value) => {
-          setLandingPageVisualDraftValue(fieldKey, value);
-        },
-        afterChange: () => {
-          updateStatus();
-        },
-        uploadHandler: (file) => {
-          return uploadThemeAssetFile(file, config.selectId);
-        },
-      });
+      if (!config) {
+        notify(`No image picker is configured for ${label}`, true);
+        return;
+      }
+      window.setTimeout(() => {
+        const modal = openImageAssetPicker(config.selectId, {
+          getValue: () => safeText(getActiveLandingPageVisualRecord()?.[fieldKey] || record[fieldKey]),
+          setValue: (value) => {
+            setLandingPageVisualDraftValue(fieldKey, value);
+          },
+          afterChange: () => {
+            updateStatus();
+          },
+          uploadHandler: (file) => {
+            return uploadThemeAssetFile(file, config.selectId);
+          },
+        });
+        if (!modal) {
+          notify(`Could not open the image picker for ${label}`, true);
+        }
+      }, 0);
     });
-    clearBtn.addEventListener('click', () => {
+    clearBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       setLandingPageVisualDraftValue(fieldKey, '');
     });
     closeBtn.addEventListener('click', (event) => {
