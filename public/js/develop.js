@@ -715,6 +715,16 @@ App.develop = (function () {
       categories: ['Logo - Square', 'Square Logo'],
       tags: ['landing-page', 'logo-square', 'builder'],
     },
+    developLandingLogoWideSelect: {
+      selectId: 'developLandingLogoWideSelect',
+      fieldKey: 'logoWideId',
+      buttonId: 'developLandingLogoWidePickerBtn',
+      previewId: 'developLandingLogoWidePreview',
+      title: 'Logo - Wide',
+      category: 'Logo - Wide',
+      categories: ['Logo - Wide', 'Wide Logo'],
+      tags: ['landing-page', 'logo-wide', 'builder'],
+    },
   };
 
   function isLandingImageFieldKey(fieldKey) {
@@ -735,6 +745,13 @@ App.develop = (function () {
   function getImagePickerConfig(selectId) {
     const key = String(selectId || '').trim();
     return THEME_ASSET_PICKERS[key] || LANDING_IMAGE_PICKERS[key] || null;
+  }
+
+  function resolveImagePickerConfig(target) {
+    if (!target) return null;
+    if (typeof target === 'string') return getImagePickerConfig(target);
+    if (typeof target === 'object' && !Array.isArray(target)) return target;
+    return null;
   }
 
   function getThemePickerConfig(selectId) {
@@ -910,9 +927,10 @@ App.develop = (function () {
     return asset;
   }
 
-  function openImageAssetPicker(selectId, options = {}) {
-    const config = getImagePickerConfig(selectId);
-    const select = byId(selectId);
+  function openImageAssetPicker(target, options = {}) {
+    const config = resolveImagePickerConfig(target);
+    const selectId = safeText(config?.selectId) || safeText(target);
+    const select = selectId ? byId(selectId) : null;
     if (!config || !App.components || typeof App.components.Modal !== 'function') return false;
     const getValue = typeof options.getValue === 'function' ? options.getValue : (() => safeText(select.value));
     const setValue = typeof options.setValue === 'function'
@@ -1634,9 +1652,32 @@ App.develop = (function () {
     setSelectOptions(select, items, 'Source Asset (Optional)');
   }
 
-  function getTemplateById(templateId) {
+  function getBaseLandingTemplateById(templateId) {
     const id = safeText(templateId);
     return LANDING_TEMPLATES.find((item) => item.id === id) || LANDING_TEMPLATES[0];
+  }
+
+  function getSavedPageTemplateById(templateId) {
+    const id = safeText(templateId);
+    return savedPageTemplates.find((item) => String(item?.id) === id) || null;
+  }
+
+  function getTemplateById(templateId) {
+    const saved = getSavedPageTemplateById(templateId);
+    if (saved) return saved;
+    return getBaseLandingTemplateById(templateId);
+  }
+
+  function getPageTemplateSelectOptions() {
+    const base = LANDING_TEMPLATES.map((template) => ({
+      value: template.id,
+      label: `Base: ${template.name}`,
+    }));
+    const saved = savedPageTemplates.map((template) => ({
+      value: String(template.id),
+      label: `${normalizePageTemplateKind(template.templateKind) === 'modular' ? 'Modular' : 'Template'}: ${safeText(template.name) || `Template ${template.id}`}`,
+    }));
+    return [...saved, ...base];
   }
 
   function getFormTemplateById(templateId) {
@@ -2393,9 +2434,12 @@ App.develop = (function () {
   function getLandingPageFormPayload(formData) {
     const landingPageId = safeText(formData.get('landing_page_id'));
     const existing = savedLandingPages.find((item) => safeText(item.id) === landingPageId) || null;
+    const templateId = safeText(formData.get('template_id')) || selectedTemplateId;
+    const selectedSavedTemplate = getSavedPageTemplateById(templateId);
     return {
       name: safeText(formData.get('landing_page_name')),
-      templateId: safeText(formData.get('template_id')) || selectedTemplateId,
+      templateKind: normalizePageTemplateKind(existing?.templateKind || selectedSavedTemplate?.templateKind),
+      templateId,
       primaryColor: landingPageColors.primary,
       backgroundColor: landingPageColors.background,
       accentColor: landingPageColors.accent,
@@ -2421,12 +2465,17 @@ App.develop = (function () {
       bodyPitchId: safeText(formData.get('body_pitch_id')),
       logoWideId: safeText(formData.get('logo_wide_id')),
       logoSquareId: safeText(formData.get('logo_square_id')),
+      layoutSections: normalizePageTemplateLayoutSections(existing?.layoutSections).length
+        ? normalizePageTemplateLayoutSections(existing?.layoutSections)
+        : normalizePageTemplateLayoutSections(selectedSavedTemplate?.layoutSections),
       contentOverrides: normalizeLandingPageContentOverrides(existing?.contentOverrides),
     };
   }
 
   function getLandingPageTemplateName(templateId) {
-    return getTemplateById(templateId).name;
+    const saved = getSavedPageTemplateById(templateId);
+    if (saved) return safeText(saved.name) || `Template ${saved.id}`;
+    return getBaseLandingTemplateById(templateId).name;
   }
 
   function getLandingPageFieldRows(key) {
@@ -2460,6 +2509,9 @@ App.develop = (function () {
     }
     if (fieldKey === 'logoSquareId') {
       return getAssetsByCategoryAliases(['Logo - Square', 'Square Logo'], 'Image');
+    }
+    if (fieldKey === 'logoWideId') {
+      return getAssetsByCategoryAliases(['Logo - Wide', 'Wide Logo'], 'Image');
     }
     return [];
   }
@@ -2511,6 +2563,7 @@ App.develop = (function () {
       'featureImageId',
       'highlightImageId',
       'logoSquareId',
+      'logoWideId',
     ].includes(fieldKey)) {
       return {
         placeholder: 'All Categories',
@@ -2549,6 +2602,7 @@ App.develop = (function () {
         'featureImageId',
         'highlightImageId',
         'logoSquareId',
+        'logoWideId',
       ].includes(key)) {
         landingPageSelectorFilterState[key] = {
           asset_name: safeText(saved.asset_name),
@@ -2578,7 +2632,7 @@ App.develop = (function () {
 
   function getLandingPageVisualEditorOptions(key, filterValue = '') {
     if (safeText(key) === 'templateId') {
-      return LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name }));
+      return getPageTemplateSelectOptions();
     }
     const rows = getLandingPageFieldRows(key);
     const meta = getLandingPageFieldFilterMeta(key);
@@ -2648,8 +2702,9 @@ App.develop = (function () {
       'backgroundImageId',
       'featureImageId',
       'highlightImageId',
-      'logoSquareId',
-    ].includes(key)) {
+        'logoSquareId',
+        'logoWideId',
+      ].includes(key)) {
       const rows = getLandingPageFieldRows(key);
       const typeValues = Array.from(new Set(rows.map((row) => safeText(row?.assetType)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
       const categoryValues = Array.from(new Set(rows.map((row) => safeText(row?.category)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -3207,13 +3262,113 @@ App.develop = (function () {
     };
   }
 
+  function getLandingPageResolvedTemplateRecord(record) {
+    const page = record && typeof record === 'object' ? record : {};
+    const savedTemplate = getSavedPageTemplateById(page.templateId);
+    if (!savedTemplate) return page;
+    const merged = {
+      ...savedTemplate,
+      ...page,
+      templateKind: normalizePageTemplateKind(page.templateKind || savedTemplate.templateKind),
+      contentOverrides: {
+        ...normalizeLandingPageContentOverrides(savedTemplate.contentOverrides),
+        ...normalizeLandingPageContentOverrides(page.contentOverrides),
+      },
+      layoutSections: normalizePageTemplateLayoutSections(page.layoutSections).length
+        ? normalizePageTemplateLayoutSections(page.layoutSections)
+        : normalizePageTemplateLayoutSections(savedTemplate.layoutSections),
+    };
+    [
+      'primaryColor','backgroundColor','accentColor','formId','leadMagnetId','headlineId','pitchId','ctaId',
+      'websiteBannerImageId','backgroundImageId','featureImageId','highlightImageId','featureHeadlineId',
+      'featureSubheadingId','featureTitle','featureCopy','highlightHeadlineId','highlightPitchId',
+      'highlightTitle','highlightCopy','bodyHeadlineId','bodySubheadingId','bodyPitchId','logoWideId','logoSquareId'
+    ].forEach((key) => {
+      if (!safeText(merged[key]) && safeText(savedTemplate[key])) merged[key] = safeText(savedTemplate[key]);
+    });
+    return merged;
+  }
+
+  function buildModularPageModuleContent(record, module) {
+    const type = safeText(module?.type);
+    const linkedId = safeText(module?.contentId);
+    const assetId = safeText(module?.assetId || module?.contentId);
+    if (type === 'headline') return getLandingPageHeadlineLabel(linkedId);
+    if (type === 'subheading') return getLandingPageSubheadingLabel(linkedId);
+    if (type === 'pitch') return getLandingPagePitchLabel(linkedId);
+    if (type === 'cta') return getLandingPageCtaLabel(linkedId);
+    if (type === 'form') {
+      const form = savedForms.find((item) => String(item?.id) === linkedId);
+      return { title: safeText(form?.heading) || 'Form', submitLabel: safeText(form?.submitLabel) || 'Submit Form', form };
+    }
+    if (type === 'image' || type === 'logo-wide' || type === 'logo-square') {
+      return { assetId, assetName: getLandingPageAssetName(assetId, 'Image'), assetUrl: getLandingPageAssetUrl(assetId) };
+    }
+    return safeText(module?.text, 10000);
+  }
+
+  function buildModularLandingPageMarkup(record, options = {}) {
+    const { interactive = false, editableClass = 'develop-landing-editable' } = options;
+    const resolvedRecord = getLandingPageResolvedTemplateRecord(record);
+    const sections = normalizePageTemplateLayoutSections(resolvedRecord.layoutSections);
+    const attr = (key, label, slot = '') => (
+      interactive ? ` data-edit-key="${key}" data-edit-label="${label}"${slot ? ` data-edit-slot="${slot}"` : ''}` : ''
+    );
+    const editable = (baseClass = '') => {
+      const classes = [];
+      if (baseClass) classes.push(baseClass);
+      if (interactive) classes.push(editableClass);
+      return classes.length ? ` class="${classes.join(' ')}"` : '';
+    };
+    const baseTemplate = getBaseLandingTemplateById(resolvedRecord.templateId);
+    const canvasStyles = [
+      `--lp-primary:${safeText(resolvedRecord.primaryColor) || DEFAULT_LANDING_PRIMARY};`,
+      `--lp-background:${safeText(resolvedRecord.backgroundColor) || DEFAULT_LANDING_BACKGROUND};`,
+      `--lp-accent:${safeText(resolvedRecord.accentColor) || DEFAULT_LANDING_ACCENT};`,
+    ];
+    const backgroundUrl = getLandingPageAssetUrl(resolvedRecord.backgroundImageId);
+    if (backgroundUrl) canvasStyles.push(`--lp-page-background-image:url('${safeText(backgroundUrl)}');`);
+    const sectionMarkup = sections.map((section, sectionIndex) => {
+      const layout = getModularPageLayoutMeta(section.layout);
+      const columns = layout.columns.map((column) => {
+        const modules = section.modules.filter((module) => safeText(module.column) === column);
+        const moduleMarkup = modules.map((module, moduleIndex) => {
+          const moduleKey = `modularModule::${section.id}::${module.id}`;
+          const content = buildModularPageModuleContent(resolvedRecord, module);
+          const titleText = safeText(module.settings?.title || module.text || content?.title || '');
+          if (module.type === 'form') {
+            const formFields = Array.isArray(content?.form?.fields) && content.form.fields.length
+              ? content.form.fields
+              : [{ key: 'first_name', label: 'First Name', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'email', required: true }];
+            const runtimeFieldMarkup = formFields.map((field, fieldIndex) => `<input name="${safeText(field?.key) || `field_${fieldIndex}`}" type="${safeText(field?.type) || 'text'}" placeholder="${safeText(field?.label) || 'Field'}${field?.required ? ' *' : ''}"${field?.required ? ' required' : ''}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} />`).join('');
+            return `<aside${editable('develop-template-form-card')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}><h3>${escapeHtml(content?.title || titleText || 'Form')}</h3>${runtimeFieldMarkup}<button type="button">${escapeHtml(content?.submitLabel || 'Submit Form')}</button></aside>`;
+          }
+          if (module.type === 'image' || module.type === 'logo-wide' || module.type === 'logo-square') {
+            return `<div${editable('develop-template-image-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${content?.assetUrl ? buildLandingAssetImage(content.assetId, content.assetName) : escapeHtml(content?.assetName || 'Image')}</div>`;
+          }
+          if (module.type === 'headline') return `<h3${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.headline)}</h3>`;
+          if (module.type === 'subheading') return `<h4${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</h4>`;
+          if (module.type === 'pitch' || module.type === 'text') return `<p${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</p>`;
+          if (module.type === 'cta') return `<div class="develop-template-cta-row"><button type="button"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Call To Action')}</button></div>`;
+          if (module.type === 'eyebrow') return `<div${editable('develop-template-eyebrow')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.eyebrow)}</div>`;
+          if (module.type === 'spacer') return '<div style="height:1.25rem;"></div>';
+          return `<div class="meta"${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Module')}</div>`;
+        }).join('');
+        return `<div class="develop-modular-page-column develop-modular-page-column-${column}">${moduleMarkup}</div>`;
+      }).join('');
+      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns">${columns}</div></section>`;
+    }).join('');
+    return `<div class="develop-template-canvas develop-modular-page-preview"${attr('backgroundImageId', 'Background Image', 'page-background')} style="${canvasStyles.join(' ')}">${sectionMarkup}</div>`;
+  }
+
   function getLandingPagePreviewContext(record) {
-    const template = getTemplateById(record?.templateId);
+    const resolvedRecord = getLandingPageResolvedTemplateRecord(record);
+    const template = getBaseLandingTemplateById(resolvedRecord?.templateId);
     const overrides = getLandingPageMergedContentOverrides(record);
-    const headline = overrides.headline || getLandingPageHeadlineLabel(record?.headlineId) || template.headline;
-    const pitch = overrides.pitch || getLandingPagePitchLabel(record?.pitchId) || template.lead;
-    const cta = overrides['primary-cta'] || getLandingPageCtaLabel(record?.ctaId) || template.primaryCta;
-    const form = savedForms.find((item) => safeText(item.id) === safeText(record?.formId)) || null;
+    const headline = overrides.headline || getLandingPageHeadlineLabel(resolvedRecord?.headlineId) || template.headline;
+    const pitch = overrides.pitch || getLandingPagePitchLabel(resolvedRecord?.pitchId) || template.lead;
+    const cta = overrides['primary-cta'] || getLandingPageCtaLabel(resolvedRecord?.ctaId) || template.primaryCta;
+    const form = savedForms.find((item) => safeText(item.id) === safeText(resolvedRecord?.formId)) || null;
     const formFields = Array.isArray(form?.fields) && form.fields.length
       ? form.fields
       : [
@@ -3230,37 +3385,41 @@ App.develop = (function () {
       cta,
       form,
       formFields,
-      bannerUrl: getLandingPageAssetUrl(record?.websiteBannerImageId),
-      backgroundUrl: getLandingPageAssetUrl(record?.backgroundImageId),
-      featureUrl: getLandingPageAssetUrl(record?.featureImageId),
-      highlightUrl: getLandingPageAssetUrl(record?.highlightImageId),
-      logoWideUrl: getLandingPageAssetUrl(record?.logoWideId),
-      logoSquareUrl: getLandingPageAssetUrl(record?.logoSquareId),
-      primaryColor: safeText(record?.primaryColor) || DEFAULT_LANDING_PRIMARY,
-      backgroundColor: safeText(record?.backgroundColor) || DEFAULT_LANDING_BACKGROUND,
-      accentColor: safeText(record?.accentColor) || DEFAULT_LANDING_ACCENT,
+      bannerUrl: getLandingPageAssetUrl(resolvedRecord?.websiteBannerImageId),
+      backgroundUrl: getLandingPageAssetUrl(resolvedRecord?.backgroundImageId),
+      featureUrl: getLandingPageAssetUrl(resolvedRecord?.featureImageId),
+      highlightUrl: getLandingPageAssetUrl(resolvedRecord?.highlightImageId),
+      logoWideUrl: getLandingPageAssetUrl(resolvedRecord?.logoWideId),
+      logoSquareUrl: getLandingPageAssetUrl(resolvedRecord?.logoSquareId),
+      primaryColor: safeText(resolvedRecord?.primaryColor) || DEFAULT_LANDING_PRIMARY,
+      backgroundColor: safeText(resolvedRecord?.backgroundColor) || DEFAULT_LANDING_BACKGROUND,
+      accentColor: safeText(resolvedRecord?.accentColor) || DEFAULT_LANDING_ACCENT,
       eyebrow: overrides.eyebrow || template.eyebrow,
       secondaryCta: overrides['secondary-cta'] || template.secondaryCta,
-      featureOneTitle: getLandingPageHeadlineLabel(record?.featureHeadlineId) || safeText(record?.featureTitle, 500) || overrides['feature-one-title'] || template.featureOneTitle,
-      featureOneCopy: getLandingPageSubheadingLabel(record?.featureSubheadingId) || safeText(record?.featureCopy, 5000) || overrides['feature-one-copy'] || template.featureOneCopy,
-      featureTwoTitle: getLandingPageHeadlineLabel(record?.highlightHeadlineId) || safeText(record?.highlightTitle, 500) || overrides['feature-two-title'] || template.featureTwoTitle,
-      featureTwoCopy: getLandingPagePitchLabel(record?.highlightPitchId) || safeText(record?.highlightCopy, 5000) || overrides['feature-two-copy'] || template.featureTwoCopy,
+      featureOneTitle: getLandingPageHeadlineLabel(resolvedRecord?.featureHeadlineId) || safeText(resolvedRecord?.featureTitle, 500) || overrides['feature-one-title'] || template.featureOneTitle,
+      featureOneCopy: getLandingPageSubheadingLabel(resolvedRecord?.featureSubheadingId) || safeText(resolvedRecord?.featureCopy, 5000) || overrides['feature-one-copy'] || template.featureOneCopy,
+      featureTwoTitle: getLandingPageHeadlineLabel(resolvedRecord?.highlightHeadlineId) || safeText(resolvedRecord?.highlightTitle, 500) || overrides['feature-two-title'] || template.featureTwoTitle,
+      featureTwoCopy: getLandingPagePitchLabel(resolvedRecord?.highlightPitchId) || safeText(resolvedRecord?.highlightCopy, 5000) || overrides['feature-two-copy'] || template.featureTwoCopy,
       formTitle: overrides['form-heading'] || safeText(form?.heading) || template.formTitle,
       formCopy: overrides['form-copy'] || template.formCopy,
       formSubmitLabel: overrides['form-submit'] || safeText(form?.submitLabel) || 'Submit Form',
-      bodyTitle: getLandingPageHeadlineLabel(record?.bodyHeadlineId) || overrides['body-title'] || template.bodyTitle,
-      bodyLead: getLandingPageSubheadingLabel(record?.bodySubheadingId) || overrides['body-lead'] || template.lead,
-      bodyCopy: getLandingPagePitchLabel(record?.bodyPitchId) || overrides['body-copy'] || template.featureOneCopy,
+      bodyTitle: getLandingPageHeadlineLabel(resolvedRecord?.bodyHeadlineId) || overrides['body-title'] || template.bodyTitle,
+      bodyLead: getLandingPageSubheadingLabel(resolvedRecord?.bodySubheadingId) || overrides['body-lead'] || template.lead,
+      bodyCopy: getLandingPagePitchLabel(resolvedRecord?.bodyPitchId) || overrides['body-copy'] || template.featureOneCopy,
     };
   }
 
   function buildLandingPageMarkup(record, options = {}) {
     if (!record) return '';
+    const resolvedRecord = getLandingPageResolvedTemplateRecord(record);
+    if (normalizePageTemplateKind(resolvedRecord.templateKind) === 'modular' && normalizePageTemplateLayoutSections(resolvedRecord.layoutSections).length) {
+      return buildModularLandingPageMarkup(resolvedRecord, options);
+    }
     const {
       interactive = false,
       editableClass = 'develop-landing-editable',
     } = options;
-    const ctx = getLandingPagePreviewContext(record);
+    const ctx = getLandingPagePreviewContext(resolvedRecord);
     const attr = (key, label, slot = '') => (
       interactive
         ? ` data-edit-key="${key}" data-edit-label="${label}"${slot ? ` data-edit-slot="${slot}"` : ''}`
@@ -3581,7 +3740,7 @@ App.develop = (function () {
         return;
       }
       window.setTimeout(() => {
-        const modal = openImageAssetPicker(config.selectId, {
+        const modal = openImageAssetPicker(config, {
           getValue: () => safeText(getActiveLandingPageVisualRecord()?.[fieldKey] || record[fieldKey]),
           setValue: (value) => {
             setLandingPageVisualDraftValue(fieldKey, value);
@@ -3671,6 +3830,8 @@ App.develop = (function () {
       body.appendChild(createLandingPageVisualAssetNavigator(record, 'websiteBannerImageId', 'Website Banner Image', 'No Banner Image'));
     } else if (key === 'featureImageId') {
       body.appendChild(createLandingPageVisualAssetNavigator(record, 'featureImageId', 'Feature Image', 'No Feature Image'));
+    } else if (key === 'highlightImageId') {
+      body.appendChild(createLandingPageVisualAssetNavigator(record, 'highlightImageId', 'Highlight Image', 'No Highlight Image'));
     } else if (key === 'backgroundImageId') {
       body.appendChild(createLandingPageVisualAssetNavigator(record, 'backgroundImageId', 'Background Image', 'No Background Image'));
     } else if (key === 'logoWideId') {
@@ -4158,10 +4319,11 @@ App.develop = (function () {
   }
 
   function buildEmptyLandingRecord(name, templateId) {
+    const savedTemplate = getSavedPageTemplateById(templateId);
     return applyLandingPageDefaultSelections({
       id: '',
       name: safeText(name, 255),
-      templateKind: 'fixed',
+      templateKind: normalizePageTemplateKind(savedTemplate?.templateKind),
       templateId: safeText(templateId, 120) || LANDING_TEMPLATES[0].id,
       primaryColor: DEFAULT_LANDING_PRIMARY,
       backgroundColor: DEFAULT_LANDING_BACKGROUND,
@@ -4188,7 +4350,7 @@ App.develop = (function () {
       bodyPitchId: '',
       logoWideId: '',
       logoSquareId: '',
-      layoutSections: [],
+      layoutSections: normalizePageTemplateLayoutSections(savedTemplate?.layoutSections),
       contentOverrides: {},
       createdAt: '',
       updatedAt: '',
@@ -6193,7 +6355,7 @@ App.develop = (function () {
     if (landingTemplateSelectEl) {
       setSelectOptions(
         landingTemplateSelectEl,
-        LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+        getPageTemplateSelectOptions(),
         'Template',
         selectedTemplateId
       );
