@@ -3022,7 +3022,7 @@ App.develop = (function () {
       .map((section, index) => {
         if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
         const id = safeText(section.id) || `section_${index + 1}`;
-        const layout = safeText(section.layout) || 'single';
+        const layout = safeText(section.layout) || '6';
         const title = safeText(section.title, 255);
         const modules = Array.isArray(section.modules)
           ? section.modules
@@ -3056,11 +3056,13 @@ App.develop = (function () {
   }
 
   const MODULAR_PAGE_LAYOUT_OPTIONS = [
-    { value: 'banner', label: 'Banner', columns: ['full'] },
-    { value: 'hero-form-right', label: 'Hero + Form Right', columns: ['main', 'side'] },
-    { value: 'two-column', label: 'Two Column', columns: ['left', 'right'] },
-    { value: 'feature-grid-2', label: 'Feature Grid (2)', columns: ['left', 'right'] },
-    { value: 'single', label: 'Single Column', columns: ['main'] },
+    { value: '1-5', label: '1-5 (Left Column)', columns: [{ id: 'col1', span: 1 }, { id: 'col2', span: 5 }] },
+    { value: '2-4', label: '2-4 (1-2 Ratio)', columns: [{ id: 'col1', span: 2 }, { id: 'col2', span: 4 }] },
+    { value: '2-2-2', label: '2-2-2 (Three Columns)', columns: [{ id: 'col1', span: 2 }, { id: 'col2', span: 2 }, { id: 'col3', span: 2 }] },
+    { value: '3-3', label: '3-3 (50-50%)', columns: [{ id: 'col1', span: 3 }, { id: 'col2', span: 3 }] },
+    { value: '4-2', label: '4-2 (2-1 Ratio)', columns: [{ id: 'col1', span: 4 }, { id: 'col2', span: 2 }] },
+    { value: '5-1', label: '5-1 (Right Column)', columns: [{ id: 'col1', span: 5 }, { id: 'col2', span: 1 }] },
+    { value: '6', label: '6 (Full Width)', columns: [{ id: 'col1', span: 6 }] },
   ];
 
   const MODULAR_PAGE_MODULE_TYPES = [
@@ -3079,10 +3081,18 @@ App.develop = (function () {
 
   function getModularPageLayoutMeta(layout) {
     const normalized = safeText(layout);
-    return MODULAR_PAGE_LAYOUT_OPTIONS.find((item) => item.value === normalized) || MODULAR_PAGE_LAYOUT_OPTIONS[4];
+    const legacyMap = {
+      banner: '6',
+      single: '6',
+      'hero-form-right': '4-2',
+      'two-column': '3-3',
+      'feature-grid-2': '3-3',
+    };
+    const resolved = legacyMap[normalized] || normalized;
+    return MODULAR_PAGE_LAYOUT_OPTIONS.find((item) => item.value === resolved) || MODULAR_PAGE_LAYOUT_OPTIONS[3];
   }
 
-  function createModularPageSection(layout = 'single') {
+  function createModularPageSection(layout = '3-3') {
     const meta = getModularPageLayoutMeta(layout);
     return {
       id: nextModularPageId('section'),
@@ -3092,11 +3102,11 @@ App.develop = (function () {
     };
   }
 
-  function createModularPageModule(type = 'text', column = 'main') {
+  function createModularPageModule(type = 'text', column = 'col1') {
     return {
       id: nextModularPageId('module'),
       type: safeText(type) || 'text',
-      column: safeText(column) || 'main',
+      column: safeText(column) || 'col1',
       contentId: '',
       assetId: '',
       text: '',
@@ -3105,23 +3115,23 @@ App.develop = (function () {
   }
 
   function createDefaultModularPageSections() {
-    const hero = createModularPageSection('hero-form-right');
+    const hero = createModularPageSection('4-2');
     hero.modules = [
-      createModularPageModule('eyebrow', 'main'),
-      createModularPageModule('headline', 'main'),
-      createModularPageModule('pitch', 'main'),
-      createModularPageModule('cta', 'main'),
-      createModularPageModule('form', 'side'),
-      createModularPageModule('logo-square', 'side'),
+      createModularPageModule('eyebrow', 'col1'),
+      createModularPageModule('headline', 'col1'),
+      createModularPageModule('pitch', 'col1'),
+      createModularPageModule('cta', 'col1'),
+      createModularPageModule('form', 'col2'),
+      createModularPageModule('logo-square', 'col2'),
     ];
-    const features = createModularPageSection('feature-grid-2');
+    const features = createModularPageSection('3-3');
     features.modules = [
-      createModularPageModule('image', 'left'),
-      createModularPageModule('headline', 'left'),
-      createModularPageModule('subheading', 'left'),
-      createModularPageModule('image', 'right'),
-      createModularPageModule('headline', 'right'),
-      createModularPageModule('pitch', 'right'),
+      createModularPageModule('image', 'col1'),
+      createModularPageModule('headline', 'col1'),
+      createModularPageModule('subheading', 'col1'),
+      createModularPageModule('image', 'col2'),
+      createModularPageModule('headline', 'col2'),
+      createModularPageModule('pitch', 'col2'),
     ];
     return [hero, features];
   }
@@ -3129,6 +3139,11 @@ App.develop = (function () {
   function getPageModuleTypeMeta(type) {
     const normalized = safeText(type);
     return MODULAR_PAGE_MODULE_TYPES.find((item) => item.value === normalized) || MODULAR_PAGE_MODULE_TYPES[0];
+  }
+
+  function buildModularPageGridTemplate(layout) {
+    const meta = getModularPageLayoutMeta(layout);
+    return meta.columns.map((column) => `minmax(0, ${Math.max(1, Number(column.span) || 1)}fr)`).join(' ');
   }
 
   function getModularModuleContentOptions(type) {
@@ -3330,7 +3345,8 @@ App.develop = (function () {
     if (backgroundUrl) canvasStyles.push(`--lp-page-background-image:url('${safeText(backgroundUrl)}');`);
     const sectionMarkup = sections.map((section, sectionIndex) => {
       const layout = getModularPageLayoutMeta(section.layout);
-      const columns = layout.columns.map((column) => {
+      const columns = layout.columns.map((columnDef) => {
+        const column = safeText(columnDef.id) || 'col1';
         const modules = section.modules.filter((module) => safeText(module.column) === column);
         const moduleMarkup = modules.map((module, moduleIndex) => {
           const moduleKey = `modularModule::${section.id}::${module.id}`;
@@ -3356,7 +3372,7 @@ App.develop = (function () {
         }).join('');
         return `<div class="develop-modular-page-column develop-modular-page-column-${column}">${moduleMarkup}</div>`;
       }).join('');
-      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns">${columns}</div></section>`;
+      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columns}</div></section>`;
     }).join('');
     return `<div class="develop-template-canvas develop-modular-page-preview"${attr('backgroundImageId', 'Background Image', 'page-background')} style="${canvasStyles.join(' ')}">${sectionMarkup}</div>`;
   }
@@ -5958,9 +5974,9 @@ App.develop = (function () {
         option.textContent = optionDef.label;
         layoutSelect.appendChild(option);
       });
-      layoutSelect.value = safeText(section.layout) || 'single';
+      layoutSelect.value = safeText(section.layout) || '6';
       layoutSelect.addEventListener('change', () => {
-        section.layout = safeText(layoutSelect.value) || 'single';
+        section.layout = safeText(layoutSelect.value) || '6';
         renderModularPageTemplateEditor();
       });
       fields.appendChild(layoutSelect);
@@ -5983,15 +5999,17 @@ App.develop = (function () {
 
       const columnOptions = getModularPageLayoutMeta(section.layout).columns;
       const columnGroups = document.createElement('div');
-      columnGroups.className = `develop-page-template-column-groups develop-page-template-column-groups--${safeText(section.layout) || 'single'}`;
-      columnOptions.forEach((column) => {
+      columnGroups.className = 'develop-page-template-column-groups';
+      columnGroups.style.gridTemplateColumns = buildModularPageGridTemplate(section.layout);
+      columnOptions.forEach((columnDef) => {
+        const column = safeText(columnDef.id) || 'col1';
         const columnGroup = document.createElement('div');
         columnGroup.className = 'develop-page-template-column-group';
         columnGroup.dataset.column = column;
 
         const columnHeading = document.createElement('div');
         columnHeading.className = 'develop-page-template-column-heading';
-        columnHeading.textContent = `${column.charAt(0).toUpperCase() + column.slice(1)} Column`;
+        columnHeading.textContent = `${safeText(columnDef.span) || '1'}/6 Column`;
         columnGroup.appendChild(columnHeading);
 
         const columnDropZone = document.createElement('div');
@@ -6085,10 +6103,11 @@ App.develop = (function () {
           });
 
           const columnSelect = document.createElement('select');
-          columnOptions.forEach((columnValue) => {
+          columnOptions.forEach((columnMeta) => {
+            const columnValue = safeText(columnMeta.id) || 'col1';
             const option = document.createElement('option');
             option.value = columnValue;
-            option.textContent = columnValue.charAt(0).toUpperCase() + columnValue.slice(1);
+            option.textContent = `${safeText(columnMeta.span) || '1'}/6 Column`;
             columnSelect.appendChild(option);
           });
           columnSelect.value = module.column;
@@ -7245,7 +7264,7 @@ App.develop = (function () {
             modularPageTemplateDraft.templateKind = 'modular';
             modularPageTemplateDraft.layoutSections = [];
           }
-          const layout = safeText(button.getAttribute('data-section-layout')) || 'single';
+          const layout = safeText(button.getAttribute('data-section-layout')) || '6';
           modularPageTemplateDraft.layoutSections.push(createModularPageSection(layout));
           renderModularPageTemplateEditor();
         });
