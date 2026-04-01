@@ -180,6 +180,7 @@ async function handle(req, res, pathname, method) {
 
     const result = await createLandingPage({
       name,
+      templateKind: body.templateKind || body.template_kind,
       templateId,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
@@ -206,6 +207,9 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
+        ? (body.layoutSections || body.layout_sections)
+        : [],
       contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create landing page'), true;
@@ -789,6 +793,7 @@ async function handle(req, res, pathname, method) {
 
     const result = await updateLandingPage(landingPageId, {
       name,
+      templateKind: body.templateKind || body.template_kind,
       templateId,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
@@ -815,6 +820,9 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
+        ? (body.layoutSections || body.layout_sections)
+        : [],
       contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
     }, scope);
     if (!result.ok) {

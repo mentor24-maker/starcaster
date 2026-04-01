@@ -1,6 +1,7 @@
 create table if not exists public.develop_landing_page (
   id bigserial primary key,
   name text not null default '',
+  template_kind text not null default 'fixed',
   template_id text not null default '',
   primary_color text not null default '',
   background_color text not null default '',
@@ -27,6 +28,7 @@ create table if not exists public.develop_landing_page (
   body_pitch_id text not null default '',
   logo_wide_id text not null default '',
   logo_square_id text not null default '',
+  layout_sections jsonb not null default '[]'::jsonb,
   content_overrides jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

@@ -100,45 +100,6 @@ App.assets = (function () {
     return String(asset?.[key] || '');
   }
 
-  function renderAssetsLanding() {
-    const container = document.getElementById('assetsCategoriesMap');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const items = Array.isArray(state.assetCategories) ? state.assetCategories : [];
-    if (!items.length) {
-      const empty = document.createElement('div');
-      empty.className = 'messaging-content-node asset-category-node';
-      empty.innerHTML = '<span class="messaging-content-node-kicker">Assets</span><span class="messaging-content-node-title">No Categories Yet</span>';
-      container.appendChild(empty);
-      return;
-    }
-
-    items
-      .filter((item) => String(item?.category || '').trim())
-      .sort((a, b) => {
-        const aType = String(a?.assetType || '').trim().toLowerCase();
-        const bType = String(b?.assetType || '').trim().toLowerCase();
-        if (aType !== bType) return aType < bType ? -1 : 1;
-        const aCategory = String(a?.category || '').trim().toLowerCase();
-        const bCategory = String(b?.category || '').trim().toLowerCase();
-        if (aCategory === bCategory) return 0;
-        return aCategory < bCategory ? -1 : 1;
-      })
-      .forEach((item) => {
-        const assetType = String(item.assetType || '').trim();
-        const category = String(item.category || '').trim();
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'messaging-content-node asset-category-node';
-        button.innerHTML = `<span class="messaging-content-node-kicker">${displayAssetType(assetType) || 'Asset'}</span><span class="messaging-content-node-title">${category}</span>`;
-        button.addEventListener('click', function () {
-          openAssetsManager(assetType, category);
-        });
-        container.appendChild(button);
-      });
-  }
-
   function resetBulkDraft() {
     bulkDraft = {
       asset_name: '',
@@ -767,7 +728,6 @@ App.assets = (function () {
     }
 
     renderAssets();
-    renderAssetsLanding();
   }
 
   async function openAssetsLanding() {

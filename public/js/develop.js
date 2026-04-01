@@ -5856,6 +5856,42 @@ App.develop = (function () {
     setPageTemplateEditorVisible(true);
   }
 
+  function reorderModularPageSections(fromIndex, toIndex) {
+    if (!modularPageTemplateDraft) return;
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= sections.length || toIndex >= sections.length) return;
+    const [moved] = sections.splice(fromIndex, 1);
+    const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+    sections.splice(insertIndex, 0, moved);
+    modularPageTemplateDraft.layoutSections = sections;
+  }
+
+  function moveModularPageModule({
+    fromSectionIndex,
+    fromModuleIndex,
+    toSectionIndex,
+    toModuleIndex = null,
+    toColumn = '',
+    append = false,
+  }) {
+    if (!modularPageTemplateDraft) return;
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const fromSection = sections[fromSectionIndex];
+    const toSection = sections[toSectionIndex];
+    if (!fromSection || !toSection) return;
+    if (fromModuleIndex < 0 || fromModuleIndex >= fromSection.modules.length) return;
+    const [moved] = fromSection.modules.splice(fromModuleIndex, 1);
+    if (!moved) return;
+    moved.column = safeText(toColumn) || moved.column || 'main';
+
+    let insertIndex = typeof toModuleIndex === 'number' ? toModuleIndex : toSection.modules.length;
+    if (append || typeof toModuleIndex !== 'number') insertIndex = toSection.modules.length;
+    if (fromSectionIndex === toSectionIndex && fromModuleIndex < insertIndex) insertIndex -= 1;
+    insertIndex = Math.max(0, Math.min(insertIndex, toSection.modules.length));
+    toSection.modules.splice(insertIndex, 0, moved);
+    modularPageTemplateDraft.layoutSections = sections;
+  }
+
   function renderModularPageTemplateEditor() {
     const title = byId('developPageTemplateEditorTitle');
     const meta = byId('developPageTemplateEditorMeta');
@@ -5868,6 +5904,8 @@ App.develop = (function () {
     if (!sections.length) {
       modularPageTemplateDraft.layoutSections = createDefaultModularPageSections();
     }
+    let draggedSectionIndex = null;
+    let draggedModuleState = null;
     normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).forEach((section, sectionIndex) => {
       const item = document.createElement('div');
       item.className = 'develop-template-module-item';
@@ -5875,7 +5913,40 @@ App.develop = (function () {
       const grip = document.createElement('div');
       grip.className = 'develop-template-module-grip';
       grip.textContent = '::';
+      grip.draggable = true;
+      grip.title = 'Drag to reorder section';
+      grip.addEventListener('dragstart', (event) => {
+        draggedSectionIndex = sectionIndex;
+        item.classList.add('is-dragging');
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', `section:${sectionIndex}`);
+        }
+      });
+      grip.addEventListener('dragend', () => {
+        draggedSectionIndex = null;
+        host.querySelectorAll('.develop-template-module-item').forEach((node) => {
+          node.classList.remove('is-drag-over', 'is-dragging');
+        });
+      });
       item.appendChild(grip);
+
+      item.addEventListener('dragover', (event) => {
+        if (draggedSectionIndex === null || draggedSectionIndex === sectionIndex) return;
+        event.preventDefault();
+        item.classList.add('is-drag-over');
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      });
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('is-drag-over');
+      });
+      item.addEventListener('drop', (event) => {
+        if (draggedSectionIndex === null || draggedSectionIndex === sectionIndex) return;
+        event.preventDefault();
+        item.classList.remove('is-drag-over');
+        reorderModularPageSections(draggedSectionIndex, sectionIndex);
+        renderModularPageTemplateEditor();
+      });
 
       const fields = document.createElement('div');
       fields.className = 'develop-template-module-fields';
@@ -5911,112 +5982,196 @@ App.develop = (function () {
       modulesWrap.appendChild(modulesHeading);
 
       const columnOptions = getModularPageLayoutMeta(section.layout).columns;
-      section.modules.forEach((module, moduleIndex) => {
-        const moduleCard = document.createElement('div');
-        moduleCard.className = 'develop-page-template-module-card';
+      const columnGroups = document.createElement('div');
+      columnGroups.className = `develop-page-template-column-groups develop-page-template-column-groups--${safeText(section.layout) || 'single'}`;
+      columnOptions.forEach((column) => {
+        const columnGroup = document.createElement('div');
+        columnGroup.className = 'develop-page-template-column-group';
+        columnGroup.dataset.column = column;
 
-        const typeSelect = document.createElement('select');
+        const columnHeading = document.createElement('div');
+        columnHeading.className = 'develop-page-template-column-heading';
+        columnHeading.textContent = `${column.charAt(0).toUpperCase() + column.slice(1)} Column`;
+        columnGroup.appendChild(columnHeading);
+
+        const columnDropZone = document.createElement('div');
+        columnDropZone.className = 'develop-page-template-column-dropzone';
+        columnDropZone.addEventListener('dragover', (event) => {
+          if (!draggedModuleState) return;
+          event.preventDefault();
+          columnDropZone.classList.add('is-drag-over');
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        });
+        columnDropZone.addEventListener('dragleave', () => {
+          columnDropZone.classList.remove('is-drag-over');
+        });
+        columnDropZone.addEventListener('drop', (event) => {
+          if (!draggedModuleState) return;
+          event.preventDefault();
+          columnDropZone.classList.remove('is-drag-over');
+          moveModularPageModule({
+            fromSectionIndex: draggedModuleState.sectionIndex,
+            fromModuleIndex: draggedModuleState.moduleIndex,
+            toSectionIndex: sectionIndex,
+            toColumn: column,
+            append: true,
+          });
+          draggedModuleState = null;
+          renderModularPageTemplateEditor();
+        });
+
+        section.modules.forEach((module, moduleIndex) => {
+          if (!columnOptions.includes(module.column)) module.column = columnOptions[0];
+          if (safeText(module.column) !== column) return;
+
+          const moduleCard = document.createElement('div');
+          moduleCard.className = 'develop-page-template-module-card';
+          moduleCard.draggable = true;
+          moduleCard.addEventListener('dragstart', (event) => {
+            draggedModuleState = { sectionIndex, moduleIndex, moduleId: module.id, column };
+            moduleCard.classList.add('is-dragging');
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', `module:${sectionIndex}:${moduleIndex}`);
+            }
+          });
+          moduleCard.addEventListener('dragend', () => {
+            draggedModuleState = null;
+            host.querySelectorAll('.develop-page-template-module-card, .develop-page-template-column-dropzone').forEach((node) => {
+              node.classList.remove('is-drag-over', 'is-dragging');
+            });
+          });
+          moduleCard.addEventListener('dragover', (event) => {
+            if (!draggedModuleState) return;
+            event.preventDefault();
+            moduleCard.classList.add('is-drag-over');
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+          });
+          moduleCard.addEventListener('dragleave', () => {
+            moduleCard.classList.remove('is-drag-over');
+          });
+          moduleCard.addEventListener('drop', (event) => {
+            if (!draggedModuleState) return;
+            event.preventDefault();
+            moduleCard.classList.remove('is-drag-over');
+            moveModularPageModule({
+              fromSectionIndex: draggedModuleState.sectionIndex,
+              fromModuleIndex: draggedModuleState.moduleIndex,
+              toSectionIndex: sectionIndex,
+              toModuleIndex: moduleIndex,
+              toColumn: column,
+            });
+            draggedModuleState = null;
+            renderModularPageTemplateEditor();
+          });
+
+          const moduleGrip = document.createElement('div');
+          moduleGrip.className = 'develop-page-template-module-card-grip';
+          moduleGrip.textContent = '⋮⋮';
+
+          const typeSelect = document.createElement('select');
+          MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
+            const option = document.createElement('option');
+            option.value = typeDef.value;
+            option.textContent = typeDef.label;
+            typeSelect.appendChild(option);
+          });
+          typeSelect.value = safeText(module.type) || 'text';
+          typeSelect.addEventListener('change', () => {
+            module.type = safeText(typeSelect.value) || 'text';
+            if (!['image', 'logo-wide', 'logo-square'].includes(module.type)) module.assetId = '';
+            if (['text', 'eyebrow', 'spacer'].includes(module.type)) module.contentId = '';
+            renderModularPageTemplateEditor();
+          });
+
+          const columnSelect = document.createElement('select');
+          columnOptions.forEach((columnValue) => {
+            const option = document.createElement('option');
+            option.value = columnValue;
+            option.textContent = columnValue.charAt(0).toUpperCase() + columnValue.slice(1);
+            columnSelect.appendChild(option);
+          });
+          columnSelect.value = module.column;
+          columnSelect.addEventListener('change', () => {
+            module.column = safeText(columnSelect.value) || columnOptions[0];
+            renderModularPageTemplateEditor();
+          });
+
+          const moduleTextInput = document.createElement(module.type === 'text' ? 'textarea' : 'input');
+          if (module.type === 'text') moduleTextInput.rows = 3;
+          moduleTextInput.placeholder = 'Module text (optional)';
+          moduleTextInput.value = safeText(module.text, 10000);
+          moduleTextInput.addEventListener('input', () => {
+            module.text = safeText(moduleTextInput.value, 10000);
+          });
+
+          const contentSelect = document.createElement('select');
+          setSelectOptions(
+            contentSelect,
+            getModularModuleContentOptions(module.type),
+            'No linked content',
+            safeText(module.contentId)
+          );
+          contentSelect.disabled = !getPageModuleTypeMeta(module.type).fieldKey;
+          contentSelect.addEventListener('change', () => {
+            module.contentId = safeText(contentSelect.value);
+          });
+
+          const assetSelect = document.createElement('select');
+          const assetOptions = (module.type === 'image'
+            ? getLandingPageVisualEditorOptions('featureImageId', getLandingPageFilterState('featureImageId'))
+            : module.type === 'logo-wide'
+              ? getAssetsByCategoryAliases(['Logo - Wide', 'Wide Logo'], 'Image').map((asset) => ({ value: asset.id, label: assetLabel(asset, String(asset.id)) }))
+              : module.type === 'logo-square'
+                ? getLandingPageVisualEditorOptions('logoSquareId', getLandingPageFilterState('logoSquareId'))
+                : []);
+          setSelectOptions(assetSelect, assetOptions, 'No image asset', safeText(module.assetId));
+          assetSelect.disabled = !['image', 'logo-wide', 'logo-square'].includes(module.type);
+          assetSelect.addEventListener('change', () => {
+            module.assetId = safeText(assetSelect.value);
+          });
+
+          const summary = document.createElement('div');
+          summary.className = 'develop-page-template-module-summary';
+          summary.textContent = getModularModuleContentLabel(module);
+
+          const removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.textContent = 'Remove';
+          removeBtn.addEventListener('click', () => {
+            section.modules.splice(moduleIndex, 1);
+            renderModularPageTemplateEditor();
+          });
+
+          moduleCard.appendChild(moduleGrip);
+          moduleCard.appendChild(typeSelect);
+          moduleCard.appendChild(columnSelect);
+          moduleCard.appendChild(contentSelect);
+          moduleCard.appendChild(assetSelect);
+          moduleCard.appendChild(moduleTextInput);
+          moduleCard.appendChild(summary);
+          moduleCard.appendChild(removeBtn);
+          columnDropZone.appendChild(moduleCard);
+        });
+
+        const addModuleRow = document.createElement('div');
+        addModuleRow.className = 'page-heading-actions develop-page-template-add-module-row';
+        addModuleRow.style.justifyContent = 'flex-start';
         MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
-          const option = document.createElement('option');
-          option.value = typeDef.value;
-          option.textContent = typeDef.label;
-          typeSelect.appendChild(option);
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = `Add ${typeDef.label}`;
+          button.addEventListener('click', () => {
+            section.modules.push(createModularPageModule(typeDef.value, column));
+            renderModularPageTemplateEditor();
+          });
+          addModuleRow.appendChild(button);
         });
-        typeSelect.value = safeText(module.type) || 'text';
-        typeSelect.addEventListener('change', () => {
-          module.type = safeText(typeSelect.value) || 'text';
-          if (!['image', 'logo-wide', 'logo-square'].includes(module.type)) {
-            module.assetId = '';
-          }
-          if (['text', 'eyebrow', 'spacer'].includes(module.type)) {
-            module.contentId = '';
-          }
-          renderModularPageTemplateEditor();
-        });
-
-        const columnSelect = document.createElement('select');
-        columnOptions.forEach((column) => {
-          const option = document.createElement('option');
-          option.value = column;
-          option.textContent = column.charAt(0).toUpperCase() + column.slice(1);
-          columnSelect.appendChild(option);
-        });
-        if (!columnOptions.includes(module.column)) module.column = columnOptions[0];
-        columnSelect.value = module.column;
-        columnSelect.addEventListener('change', () => {
-          module.column = safeText(columnSelect.value) || columnOptions[0];
-        });
-
-        const moduleTextInput = document.createElement(module.type === 'text' ? 'textarea' : 'input');
-        if (module.type === 'text') moduleTextInput.rows = 3;
-        moduleTextInput.placeholder = 'Module text (optional)';
-        moduleTextInput.value = safeText(module.text, 10000);
-        moduleTextInput.addEventListener('input', () => {
-          module.text = safeText(moduleTextInput.value, 10000);
-        });
-
-        const contentSelect = document.createElement('select');
-        setSelectOptions(
-          contentSelect,
-          getModularModuleContentOptions(module.type),
-          'No linked content',
-          safeText(module.contentId)
-        );
-        contentSelect.disabled = !getPageModuleTypeMeta(module.type).fieldKey;
-        contentSelect.addEventListener('change', () => {
-          module.contentId = safeText(contentSelect.value);
-        });
-
-        const assetSelect = document.createElement('select');
-        const assetOptions = (module.type === 'image'
-          ? getLandingPageVisualEditorOptions('featureImageId', getLandingPageFilterState('featureImageId'))
-          : module.type === 'logo-wide'
-            ? getAssetsByCategoryAliases(['Logo - Wide', 'Wide Logo'], 'Image').map((asset) => ({ value: asset.id, label: assetLabel(asset, String(asset.id)) }))
-            : module.type === 'logo-square'
-              ? getLandingPageVisualEditorOptions('logoSquareId', getLandingPageFilterState('logoSquareId'))
-              : []);
-        setSelectOptions(assetSelect, assetOptions, 'No image asset', safeText(module.assetId));
-        assetSelect.disabled = !['image', 'logo-wide', 'logo-square'].includes(module.type);
-        assetSelect.addEventListener('change', () => {
-          module.assetId = safeText(assetSelect.value);
-        });
-
-        const summary = document.createElement('div');
-        summary.className = 'develop-page-template-module-summary';
-        summary.textContent = getModularModuleContentLabel(module);
-
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.textContent = 'Remove';
-        removeBtn.addEventListener('click', () => {
-          section.modules.splice(moduleIndex, 1);
-          renderModularPageTemplateEditor();
-        });
-
-        moduleCard.appendChild(typeSelect);
-        moduleCard.appendChild(columnSelect);
-        moduleCard.appendChild(contentSelect);
-        moduleCard.appendChild(assetSelect);
-        moduleCard.appendChild(moduleTextInput);
-        moduleCard.appendChild(summary);
-        moduleCard.appendChild(removeBtn);
-        modulesWrap.appendChild(moduleCard);
+        columnGroup.appendChild(columnDropZone);
+        columnGroup.appendChild(addModuleRow);
+        columnGroups.appendChild(columnGroup);
       });
-
-      const addModuleRow = document.createElement('div');
-      addModuleRow.className = 'page-heading-actions';
-      addModuleRow.style.justifyContent = 'flex-start';
-      MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = `Add ${typeDef.label}`;
-        button.addEventListener('click', () => {
-          section.modules.push(createModularPageModule(typeDef.value, columnOptions[0]));
-          renderModularPageTemplateEditor();
-        });
-        addModuleRow.appendChild(button);
-      });
-      modulesWrap.appendChild(addModuleRow);
+      modulesWrap.appendChild(columnGroups);
       fields.appendChild(modulesWrap);
 
       const actions = document.createElement('div');
