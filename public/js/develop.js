@@ -289,21 +289,21 @@ App.develop = (function () {
     {
       value: 'izzy',
       label: 'Izzy',
-      description: 'An embedded assistant block for guided conversation, onboarding, and contextual help.',
+      description: 'A positioned Izzy character block with pose selection and editable commentary.',
       starterName: 'Izzy',
       defaults: {
-        assistantName: 'Izzy',
-        greeting: 'Hi, I am Izzy. How can I help?',
-        placeholder: 'Ask Izzy a question...',
-        accentColor: '#0b82d4',
-        mode: 'guide',
+        pose: 'standing',
+        comments: 'Let Izzy introduce the idea, give guidance, or frame the section.',
+        pagePosition: 'bottom-right',
+        offsetX: 0,
+        offsetY: 0,
       },
       fields: [
-        { key: 'assistantName', label: 'Assistant Name', control: 'text', placeholder: 'Izzy' },
-        { key: 'greeting', label: 'Greeting', control: 'textarea', rows: 3, placeholder: 'Hi, I am Izzy. How can I help?' },
-        { key: 'placeholder', label: 'Input Placeholder', control: 'text', placeholder: 'Ask Izzy a question...' },
-        { key: 'accentColor', label: 'Accent Color', control: 'color' },
-        { key: 'mode', label: 'Mode', control: 'select', options: ['guide', 'assistant', 'support', 'concierge'] },
+        { key: 'pose', label: 'Pose', control: 'select', options: ['standing', 'pointing-right', 'pointing-left', 'thinking', 'welcoming', 'celebrating'] },
+        { key: 'comments', label: 'Comments', control: 'textarea', rows: 4, placeholder: 'What should Izzy say in this section?' },
+        { key: 'pagePosition', label: 'Page Position', control: 'select', options: ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right'] },
+        { key: 'offsetX', label: 'Horizontal Offset', control: 'number', min: -400, max: 400, step: 5 },
+        { key: 'offsetY', label: 'Vertical Offset', control: 'number', min: -400, max: 400, step: 5 },
       ],
     },
   ];
@@ -2189,6 +2189,31 @@ App.develop = (function () {
     }));
   }
 
+  async function reconcileStarterModuleDuplicates() {
+    const starters = getDevelopModuleStarterBlueprints();
+    const removals = [];
+    starters.forEach((starter) => {
+      const matches = savedModules
+        .filter((module) =>
+          safeText(module.moduleType) === safeText(starter.moduleType)
+          && safeText(module.name).toLowerCase() === safeText(starter.name).toLowerCase()
+        )
+        .sort((a, b) => {
+          const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          return bTime - aTime;
+        });
+      matches.slice(1).forEach((module) => removals.push(module.id));
+    });
+
+    if (!removals.length) return false;
+    for (const id of removals) {
+      if (!safeText(id)) continue;
+      await api(`/api/develop/modules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    }
+    return true;
+  }
+
   function populateDevelopModuleTypeOptions() {
     const select = byId('developModulesTypeSelect');
     if (!select) return;
@@ -2338,7 +2363,7 @@ App.develop = (function () {
       return `${safeText(settings.label) || 'Textarea'} · ${safeText(settings.rows)} rows${settings.required ? ' · Required' : ''}`;
     }
     if (type === 'izzy') {
-      return `${safeText(settings.assistantName) || 'Izzy'} · ${safeText(settings.mode) || 'guide'}`;
+      return `${safeText(settings.pose) || 'standing'} · ${safeText(settings.pagePosition) || 'bottom-right'} · ${safeText(settings.comments, 120) || 'No comments set'}`;
     }
     return safeText(module?.name) || '-';
   }
@@ -2422,6 +2447,10 @@ App.develop = (function () {
     try {
       const result = await api('/api/develop/modules');
       savedModules = Array.isArray(result.modules) ? result.modules : [];
+      if (await reconcileStarterModuleDuplicates()) {
+        const deduped = await api('/api/develop/modules');
+        savedModules = Array.isArray(deduped.modules) ? deduped.modules : [];
+      }
       const starterModules = getDevelopModuleStarterBlueprints();
       const missingStarterModules = starterModules.filter((starter) => !savedModules.some((module) => {
         const sameType = safeText(module.moduleType) === safeText(starter.moduleType);
