@@ -184,6 +184,7 @@ App.develop = (function () {
   let savedPageTemplates = [];
   let modularPageTemplateDraft = null;
   let draggedNewPageSectionLayout = '';
+  let draggedNewPageSectionLayoutClearTimer = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -6019,6 +6020,10 @@ App.develop = (function () {
       if (droppedLayout) {
         insertModularPageSectionAt(droppedLayout);
         draggedNewPageSectionLayout = '';
+        if (draggedNewPageSectionLayoutClearTimer) {
+          clearTimeout(draggedNewPageSectionLayoutClearTimer);
+          draggedNewPageSectionLayoutClearTimer = null;
+        }
         renderModularPageTemplateEditor();
       }
     });
@@ -6076,6 +6081,10 @@ App.develop = (function () {
         if (droppedLayout) {
           insertModularPageSectionAt(droppedLayout, before ? sectionIndex : sectionIndex + 1);
           draggedNewPageSectionLayout = '';
+          if (draggedNewPageSectionLayoutClearTimer) {
+            clearTimeout(draggedNewPageSectionLayoutClearTimer);
+            draggedNewPageSectionLayoutClearTimer = null;
+          }
           renderModularPageTemplateEditor();
           return;
         }
@@ -7133,31 +7142,43 @@ App.develop = (function () {
     }
 
     if (pageTemplateEditorToolbar) {
-      pageTemplateEditorToolbar.querySelectorAll('button[data-section-layout]').forEach((button) => {
-        button.draggable = true;
-        button.addEventListener('dragstart', (event) => {
-          draggedNewPageSectionLayout = safeText(button.getAttribute('data-section-layout')) || '6';
-          button.classList.add('is-dragging');
+      pageTemplateEditorToolbar.querySelectorAll('[data-section-layout]').forEach((tile) => {
+        tile.draggable = true;
+        tile.addEventListener('dragstart', (event) => {
+          if (draggedNewPageSectionLayoutClearTimer) {
+            clearTimeout(draggedNewPageSectionLayoutClearTimer);
+            draggedNewPageSectionLayoutClearTimer = null;
+          }
+          draggedNewPageSectionLayout = safeText(tile.getAttribute('data-section-layout')) || '6';
+          tile.classList.add('is-dragging');
           if (event.dataTransfer) {
             event.dataTransfer.effectAllowed = 'copy';
             event.dataTransfer.setData('text/plain', `layout:${draggedNewPageSectionLayout}`);
           }
         });
-        button.addEventListener('dragend', () => {
-          draggedNewPageSectionLayout = '';
-          button.classList.remove('is-dragging');
+        tile.addEventListener('dragend', () => {
+          draggedNewPageSectionLayoutClearTimer = window.setTimeout(() => {
+            draggedNewPageSectionLayout = '';
+            draggedNewPageSectionLayoutClearTimer = null;
+          }, 120);
+          tile.classList.remove('is-dragging');
           const workspace = byId('developPageTemplateEditorSections');
           workspace?.classList.remove('is-drag-over');
         });
-        button.addEventListener('click', () => {
+        tile.addEventListener('click', () => {
           if (!modularPageTemplateDraft) {
             modularPageTemplateDraft = buildEmptyLandingRecord('Modular Page Template', selectedTemplateId || LANDING_TEMPLATES[0].id);
             modularPageTemplateDraft.templateKind = 'modular';
             modularPageTemplateDraft.layoutSections = [];
           }
-          const layout = safeText(button.getAttribute('data-section-layout')) || '6';
+          const layout = safeText(tile.getAttribute('data-section-layout')) || '6';
           modularPageTemplateDraft.layoutSections.push(createModularPageSection(layout));
           renderModularPageTemplateEditor();
+        });
+        tile.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          tile.click();
         });
       });
     }
