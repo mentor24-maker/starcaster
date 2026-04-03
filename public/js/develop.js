@@ -2201,29 +2201,23 @@ App.develop = (function () {
     }));
   }
 
-  async function reconcileStarterModuleDuplicates() {
-    const starters = getDevelopModuleStarterBlueprints();
-    const removals = [];
-    starters.forEach((starter) => {
-      const matches = savedModules
-        .filter((module) =>
-          safeText(module.moduleType) === safeText(starter.moduleType)
-          && safeText(module.name).toLowerCase() === safeText(starter.name).toLowerCase()
-        )
-        .sort((a, b) => {
-          const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
-          const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
-          return bTime - aTime;
-        });
-      matches.slice(1).forEach((module) => removals.push(module.id));
+  function getCanonicalSavedModules(modulesInput = savedModules) {
+    const seen = new Map();
+    (Array.isArray(modulesInput) ? modulesInput : []).forEach((module) => {
+      const key = `${safeText(module?.moduleType).toLowerCase()}::${safeText(module?.name).toLowerCase()}`;
+      if (!key || key === '::') return;
+      const nextTime = new Date(module?.updatedAt || module?.createdAt || 0).getTime();
+      const existing = seen.get(key);
+      const existingTime = existing ? new Date(existing.updatedAt || existing.createdAt || 0).getTime() : -1;
+      if (!existing || nextTime >= existingTime) {
+        seen.set(key, module);
+      }
     });
-
-    if (!removals.length) return false;
-    for (const id of removals) {
-      if (!safeText(id)) continue;
-      await api(`/api/develop/modules/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    }
-    return true;
+    return Array.from(seen.values()).sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
   }
 
   function populateDevelopModuleTypeOptions() {
@@ -2398,7 +2392,8 @@ App.develop = (function () {
     const tbody = byId('developModulesTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
-    if (!savedModules.length) {
+    const modules = getCanonicalSavedModules(savedModules);
+    if (!modules.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
       cell.colSpan = 5;
@@ -2408,7 +2403,7 @@ App.develop = (function () {
       return;
     }
 
-    savedModules.forEach((module) => {
+    modules.forEach((module) => {
       const row = document.createElement('tr');
       const nameTd = document.createElement('td');
       const typeTd = document.createElement('td');
@@ -2459,12 +2454,9 @@ App.develop = (function () {
     try {
       const result = await api('/api/develop/modules');
       savedModules = Array.isArray(result.modules) ? result.modules : [];
-      if (await reconcileStarterModuleDuplicates()) {
-        const deduped = await api('/api/develop/modules');
-        savedModules = Array.isArray(deduped.modules) ? deduped.modules : [];
-      }
       const starterModules = getDevelopModuleStarterBlueprints();
-      const missingStarterModules = starterModules.filter((starter) => !savedModules.some((module) => {
+      const canonicalModules = getCanonicalSavedModules(savedModules);
+      const missingStarterModules = starterModules.filter((starter) => !canonicalModules.some((module) => {
         const sameType = safeText(module.moduleType) === safeText(starter.moduleType);
         const sameName = safeText(module.name).toLowerCase() === safeText(starter.name).toLowerCase();
         return sameType && sameName;
