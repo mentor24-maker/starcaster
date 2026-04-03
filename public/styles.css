@@ -2872,12 +2872,6 @@ th {
   min-height: 68px;
 }
 
-.develop-page-template-section-heading {
-  font-weight: 700;
-  color: #214c71;
-  margin-bottom: 0.5rem;
-}
-
 .develop-layout-toolbar {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -2996,11 +2990,6 @@ th {
   color: #173c61;
 }
 
-.develop-page-template-section-summary-meta {
-  font-size: 0.84rem;
-  color: #587592;
-}
-
 .develop-page-template-section-summary-layout {
   min-width: 110px;
 }
@@ -3057,7 +3046,7 @@ th {
 
 .develop-page-template-section-modules {
   display: grid;
-  gap: 0.6rem;
+  gap: 0;
 }
 
 .develop-page-template-workspace {
@@ -3142,26 +3131,17 @@ th {
 
 .develop-page-template-column-group {
   display: grid;
-  gap: 0.55rem;
+  gap: 0;
   align-content: start;
-}
-
-.develop-page-template-column-heading {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #214c71;
 }
 
 .develop-page-template-column-dropzone {
   display: grid;
-  gap: 0.6rem;
-  min-height: 140px;
+  min-height: 160px;
   padding: 0.65rem;
   border: 1px dashed rgba(15, 79, 143, 0.22);
   border-radius: 12px;
   background: rgba(240, 248, 255, 0.62);
-  place-items: center;
-  text-align: center;
 }
 
 .develop-page-template-column-dropzone.is-drag-over {
@@ -3178,16 +3158,6 @@ th {
   border: 1px solid rgba(15, 79, 143, 0.16);
   border-radius: 10px;
   background: #f9fcff;
-}
-
-.develop-page-template-column-placeholder-title {
-  font-weight: 800;
-  color: #173c61;
-}
-
-.develop-page-template-column-placeholder-copy {
-  font-size: 0.88rem;
-  color: #587592;
 }
 
 .develop-page-template-module-card.is-drag-over {

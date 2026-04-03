@@ -5989,7 +5989,7 @@ App.develop = (function () {
     const host = byId('developPageTemplateEditorSections');
     if (!host || !modularPageTemplateDraft) return;
     if (title) title.textContent = 'Page: Modular';
-    if (meta) meta.textContent = 'Drag row layouts into the workspace, then reorder rows to build the page structure.';
+    if (meta) meta.textContent = 'Drag row layouts into the workspace. Each drop creates a row with empty containers you can use later.';
     host.innerHTML = '';
     host.className = 'develop-template-module-list develop-page-template-workspace';
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
@@ -6096,7 +6096,6 @@ App.develop = (function () {
       summaryName.className = 'develop-page-template-section-summary-name';
       summaryName.innerHTML = `
         <span class="develop-page-template-section-summary-title">${escapeHtml(safeText(section.title) || `Row ${sectionIndex + 1}`)}</span>
-        <span class="develop-page-template-section-summary-meta">${section.modules.length} module${section.modules.length === 1 ? '' : 's'}</span>
       `;
       sectionSummary.appendChild(summaryName);
 
@@ -6140,10 +6139,6 @@ App.develop = (function () {
 
       const modulesWrap = document.createElement('div');
       modulesWrap.className = 'develop-template-module-span develop-page-template-section-modules';
-      const modulesHeading = document.createElement('div');
-      modulesHeading.className = 'develop-page-template-section-heading';
-      modulesHeading.textContent = 'Containers';
-      modulesWrap.appendChild(modulesHeading);
 
       const columnOptions = getModularPageLayoutMeta(section.layout).columns;
       const columnGroups = document.createElement('div');
@@ -6156,17 +6151,8 @@ App.develop = (function () {
         columnGroup.className = 'develop-page-template-column-group';
         columnGroup.dataset.column = column;
 
-        const columnHeading = document.createElement('div');
-        columnHeading.className = 'develop-page-template-column-heading';
-        columnHeading.textContent = `${safeText(columnDef.span) || '1'}/6 Column`;
-        columnGroup.appendChild(columnHeading);
-
         const columnDropZone = document.createElement('div');
         columnDropZone.className = 'develop-page-template-column-dropzone';
-        columnDropZone.innerHTML = `
-          <div class="develop-page-template-column-placeholder-title">${safeText(columnDef.span) || '1'}/6 Container</div>
-          <div class="develop-page-template-column-placeholder-copy">Drop modules here later</div>
-        `;
         columnGroup.appendChild(columnDropZone);
         columnGroups.appendChild(columnGroup);
       });
