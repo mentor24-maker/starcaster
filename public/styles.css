@@ -3204,6 +3204,11 @@ th {
   box-shadow: 0 10px 24px rgba(15, 79, 143, 0.12);
 }
 
+.develop-page-template-cell-add:hover,
+.develop-page-template-cell-add:focus-visible {
+  transform: translate(-50%, -50%);
+}
+
 .develop-page-template-row-cell:has(.develop-page-template-module-pill) .develop-page-template-cell-add {
   inset: auto 0.8rem 0.8rem auto;
   transform: none;
@@ -3211,6 +3216,11 @@ th {
   height: 38px;
   min-width: 38px;
   font-size: 1.45rem;
+}
+
+.develop-page-template-row-cell:has(.develop-page-template-module-pill) .develop-page-template-cell-add:hover,
+.develop-page-template-row-cell:has(.develop-page-template-module-pill) .develop-page-template-cell-add:focus-visible {
+  transform: none;
 }
 
 .develop-page-template-module-pill {

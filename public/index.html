@@ -118,6 +118,7 @@
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" onclick="App.develop.openThemesPage(); return false;" data-page="developThemesPage">Themes</a>
             <a href="#" class="menu-link submenu-link" data-page="developTemplatesPage">Templates</a>
+            <a href="#" class="menu-link submenu-link" data-page="developModulesPage">Modules</a>
             <a href="#" class="menu-link submenu-link" data-page="developFormsPage">Forms</a>
             <a href="#" class="menu-link submenu-link" data-page="developManageLandingPagesPage">Pages</a>
             <a href="#" class="menu-link submenu-link" data-page="developToolsPage">Extensions</a>
@@ -5278,6 +5279,95 @@
             <span class="develop-flow-node-title">Agents</span>
           </button>
         </div>
+        <div class="page-heading-actions" style="justify-content:center; margin-top:1rem;">
+          <button type="button" onclick="App.setActivePage('developModulesPage')">Open Modules Library</button>
+        </div>
+      </section>
+
+      <section id="developModulesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Modules</h2>
+          <div class="page-heading-actions">
+            <button id="developModulesCreateBtn" type="button">Create Module</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Build reusable content modules for modular page layouts. We’ll start with simple header modules and expand the library type by type.</p>
+        <section class="develop-template-section">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developModulesEditorToggle"
+              class="develop-template-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developModulesEditorBody"
+            >
+              <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
+              <span class="develop-template-section-title">Module Builder</span>
+            </button>
+          </div>
+          <div id="developModulesEditorBody" class="develop-template-section-body">
+            <form id="developModulesForm" class="stack-form">
+              <input id="developModulesIdInput" type="hidden" />
+              <div class="grid-form">
+                <input id="developModulesNameInput" type="text" placeholder="Module name" />
+                <select id="developModulesTypeSelect">
+                  <option value="header">Header</option>
+                </select>
+              </div>
+              <div id="developModulesHeaderFields" class="grid-form">
+                <textarea id="developModulesHeaderTextInput" rows="4" placeholder="Header text"></textarea>
+                <div class="stack-form">
+                  <select id="developModulesHeaderLevelSelect">
+                    <option value="H1">H1</option>
+                    <option value="H2">H2</option>
+                    <option value="H3">H3</option>
+                    <option value="H4">H4</option>
+                    <option value="H5">H5</option>
+                    <option value="H6">H6</option>
+                  </select>
+                  <input id="developModulesHeaderColorInput" type="color" value="#173c61" />
+                </div>
+              </div>
+              <div class="page-heading-actions" style="justify-content:flex-start;">
+                <button type="submit">Save Module</button>
+                <button id="developModulesResetBtn" type="button">Reset</button>
+              </div>
+            </form>
+          </div>
+        </section>
+        <section class="develop-template-section">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developModulesLibraryToggle"
+              class="develop-template-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developModulesLibraryBody"
+            >
+              <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
+              <span class="develop-template-section-title">Saved Modules</span>
+            </button>
+          </div>
+          <div id="developModulesLibraryBody" class="develop-template-section-body">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Preview</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="developModulesTableBody">
+                  <tr><td colspan="5">No saved modules yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section id="developThemesPage" class="app-page hidden">
