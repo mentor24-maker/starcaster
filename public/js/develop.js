@@ -183,6 +183,7 @@ App.develop = (function () {
   let savedLandingPages = [];
   let savedPageTemplates = [];
   let modularPageTemplateDraft = null;
+  let draggedNewPageSectionLayout = '';
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -3065,6 +3066,7 @@ App.develop = (function () {
     { value: '3-3', label: '3-3 (50-50%)', columns: [{ id: 'col1', span: 3 }, { id: 'col2', span: 3 }] },
     { value: '4-2', label: '4-2 (2-1 Ratio)', columns: [{ id: 'col1', span: 4 }, { id: 'col2', span: 2 }] },
     { value: '5-1', label: '5-1 (Right Column)', columns: [{ id: 'col1', span: 5 }, { id: 'col2', span: 1 }] },
+    { value: '1-4-1', label: '1-4-1 (Center Focus)', columns: [{ id: 'col1', span: 1 }, { id: 'col2', span: 4 }, { id: 'col3', span: 1 }] },
     { value: '6', label: '6 (Full Width)', columns: [{ id: 'col1', span: 6 }] },
   ];
 
@@ -5962,17 +5964,43 @@ App.develop = (function () {
     const host = byId('developPageTemplateEditorSections');
     if (!host || !modularPageTemplateDraft) return;
     if (title) title.textContent = 'Page: Modular';
-    if (meta) meta.textContent = 'Build reusable landing page templates as ordered sections, each with its own layout and content modules.';
+    if (meta) meta.textContent = 'Drag row layouts into the workspace, then reorder rows to build the page structure.';
     host.innerHTML = '';
+    host.className = 'develop-template-module-list develop-page-template-workspace';
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
-    if (!sections.length) {
-      modularPageTemplateDraft.layoutSections = createDefaultModularPageSections();
-    }
+    if (!sections.length) modularPageTemplateDraft.layoutSections = [];
     let draggedSectionIndex = null;
-    let draggedModuleState = null;
+    host.addEventListener('dragover', (event) => {
+      if (!draggedNewPageSectionLayout && draggedSectionIndex === null) return;
+      event.preventDefault();
+      host.classList.add('is-drag-over');
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    });
+    host.addEventListener('dragleave', () => {
+      host.classList.remove('is-drag-over');
+    });
+    host.addEventListener('drop', (event) => {
+      if (!draggedNewPageSectionLayout && draggedSectionIndex === null) return;
+      event.preventDefault();
+      host.classList.remove('is-drag-over');
+      if (draggedNewPageSectionLayout) {
+        modularPageTemplateDraft.layoutSections.push(createModularPageSection(draggedNewPageSectionLayout));
+        draggedNewPageSectionLayout = '';
+        renderModularPageTemplateEditor();
+      }
+    });
+    if (!normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).length) {
+      const emptyState = document.createElement('div');
+      emptyState.className = 'develop-page-template-workspace-empty';
+      emptyState.innerHTML = `
+        <div class="develop-page-template-workspace-empty-title">Workspace</div>
+        <div class="develop-page-template-workspace-empty-copy">Drag a row layout from below into this workspace to start building your page.</div>
+      `;
+      host.appendChild(emptyState);
+    }
     normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).forEach((section, sectionIndex) => {
       const item = document.createElement('div');
-      item.className = 'develop-template-module-item develop-page-template-section-card';
+      item.className = 'develop-template-module-item develop-page-template-section-card develop-page-template-workspace-row';
 
       const grip = document.createElement('div');
       grip.className = 'develop-template-module-grip develop-page-template-section-summary-grip';
@@ -6047,25 +6075,6 @@ App.develop = (function () {
       fields.className = 'develop-template-module-fields develop-page-template-section-body';
       fields.hidden = Boolean(section.collapsed);
 
-      const layoutPicker = document.createElement('div');
-      layoutPicker.className = 'develop-template-module-span develop-page-template-row-config';
-      MODULAR_PAGE_LAYOUT_OPTIONS.forEach((optionDef) => {
-        const layoutBtn = document.createElement('button');
-        layoutBtn.type = 'button';
-        layoutBtn.className = `develop-layout-picker-btn${safeText(section.layout) === optionDef.value ? ' is-active' : ''}`;
-        layoutBtn.title = optionDef.label;
-        layoutBtn.innerHTML = `
-          <span class="develop-layout-picker-icon develop-layout-picker-icon--${escapeHtml(optionDef.value)}">${getModularPageLayoutVisual(optionDef.value)}</span>
-          <span class="develop-layout-picker-label">${escapeHtml(optionDef.value)}</span>
-        `;
-        layoutBtn.addEventListener('click', () => {
-          section.layout = optionDef.value;
-          renderModularPageTemplateEditor();
-        });
-        layoutPicker.appendChild(layoutBtn);
-      });
-      fields.appendChild(layoutPicker);
-
       const titleInput = document.createElement('input');
       titleInput.type = 'text';
       titleInput.placeholder = 'Row name (optional)';
@@ -6079,7 +6088,7 @@ App.develop = (function () {
       modulesWrap.className = 'develop-template-module-span develop-page-template-section-modules';
       const modulesHeading = document.createElement('div');
       modulesHeading.className = 'develop-page-template-section-heading';
-      modulesHeading.textContent = 'Modules';
+      modulesHeading.textContent = 'Containers';
       modulesWrap.appendChild(modulesHeading);
 
       const columnOptions = getModularPageLayoutMeta(section.layout).columns;
@@ -6100,229 +6109,11 @@ App.develop = (function () {
 
         const columnDropZone = document.createElement('div');
         columnDropZone.className = 'develop-page-template-column-dropzone';
-        columnDropZone.addEventListener('dragover', (event) => {
-          if (!draggedModuleState) return;
-          event.preventDefault();
-          columnDropZone.classList.add('is-drag-over');
-          if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-        });
-        columnDropZone.addEventListener('dragleave', () => {
-          columnDropZone.classList.remove('is-drag-over');
-        });
-        columnDropZone.addEventListener('drop', (event) => {
-          if (!draggedModuleState) return;
-          event.preventDefault();
-          columnDropZone.classList.remove('is-drag-over');
-          moveModularPageModule({
-            fromSectionIndex: draggedModuleState.sectionIndex,
-            fromModuleIndex: draggedModuleState.moduleIndex,
-            toSectionIndex: sectionIndex,
-            toColumn: column,
-            append: true,
-          });
-          draggedModuleState = null;
-          renderModularPageTemplateEditor();
-        });
-
-        section.modules.forEach((module, moduleIndex) => {
-          if (!columnIds.includes(safeText(module.column))) module.column = columnIds[0];
-          if (safeText(module.column) !== column) return;
-
-          const moduleCard = document.createElement('div');
-          moduleCard.className = 'develop-page-template-module-card';
-          moduleCard.draggable = true;
-          moduleCard.addEventListener('dragstart', (event) => {
-            draggedModuleState = { sectionIndex, moduleIndex, moduleId: module.id, column };
-            moduleCard.classList.add('is-dragging');
-            if (event.dataTransfer) {
-              event.dataTransfer.effectAllowed = 'move';
-              event.dataTransfer.setData('text/plain', `module:${sectionIndex}:${moduleIndex}`);
-            }
-          });
-          moduleCard.addEventListener('dragend', () => {
-            draggedModuleState = null;
-            host.querySelectorAll('.develop-page-template-module-card, .develop-page-template-column-dropzone').forEach((node) => {
-              node.classList.remove('is-drag-over', 'is-dragging');
-            });
-          });
-          moduleCard.addEventListener('dragover', (event) => {
-            if (!draggedModuleState) return;
-            event.preventDefault();
-            moduleCard.classList.add('is-drag-over');
-            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-          });
-          moduleCard.addEventListener('dragleave', () => {
-            moduleCard.classList.remove('is-drag-over');
-          });
-          moduleCard.addEventListener('drop', (event) => {
-            if (!draggedModuleState) return;
-            event.preventDefault();
-            moduleCard.classList.remove('is-drag-over');
-            moveModularPageModule({
-              fromSectionIndex: draggedModuleState.sectionIndex,
-              fromModuleIndex: draggedModuleState.moduleIndex,
-              toSectionIndex: sectionIndex,
-              toModuleIndex: moduleIndex,
-              toColumn: column,
-            });
-            draggedModuleState = null;
-            renderModularPageTemplateEditor();
-          });
-
-          const moduleGrip = document.createElement('div');
-          moduleGrip.className = 'develop-page-template-module-card-grip';
-          moduleGrip.textContent = '⋮⋮';
-
-          const moduleSummaryBar = document.createElement('button');
-          moduleSummaryBar.type = 'button';
-          moduleSummaryBar.className = 'develop-page-template-module-summary-bar';
-          moduleSummaryBar.setAttribute('aria-expanded', module.collapsed ? 'false' : 'true');
-          moduleSummaryBar.addEventListener('click', () => {
-            module.collapsed = !module.collapsed;
-            renderModularPageTemplateEditor();
-          });
-          moduleSummaryBar.appendChild(moduleGrip);
-
-          const moduleSummaryName = document.createElement('span');
-          moduleSummaryName.className = 'develop-page-template-module-summary-name';
-          moduleSummaryName.textContent = getModularModuleDisplayName(module);
-          moduleSummaryBar.appendChild(moduleSummaryName);
-
-          const moduleSummaryType = document.createElement('span');
-          moduleSummaryType.className = 'develop-page-template-module-summary-type';
-          moduleSummaryType.textContent = getPageModuleTypeMeta(module.type).label;
-          moduleSummaryBar.appendChild(moduleSummaryType);
-
-          const moduleSummaryToggle = document.createElement('span');
-          moduleSummaryToggle.className = 'develop-page-template-module-toggle';
-          moduleSummaryToggle.textContent = module.collapsed ? '▸' : '▾';
-          moduleSummaryBar.appendChild(moduleSummaryToggle);
-
-          const typeSelect = document.createElement('select');
-          MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
-            const option = document.createElement('option');
-            option.value = typeDef.value;
-            option.textContent = typeDef.label;
-            typeSelect.appendChild(option);
-          });
-          typeSelect.value = safeText(module.type) || 'text';
-          typeSelect.addEventListener('change', () => {
-            module.type = safeText(typeSelect.value) || 'text';
-            if (!['image', 'logo-wide', 'logo-square'].includes(module.type)) module.assetId = '';
-            if (['text', 'eyebrow', 'spacer'].includes(module.type)) module.contentId = '';
-            renderModularPageTemplateEditor();
-          });
-
-          const columnSelect = document.createElement('select');
-          columnOptions.forEach((columnMeta) => {
-            const columnValue = safeText(columnMeta.id) || 'col1';
-            const option = document.createElement('option');
-            option.value = columnValue;
-            option.textContent = `${safeText(columnMeta.span) || '1'}/6 Column`;
-            columnSelect.appendChild(option);
-          });
-          columnSelect.value = module.column;
-          columnSelect.addEventListener('change', () => {
-            module.column = safeText(columnSelect.value) || columnOptions[0];
-            renderModularPageTemplateEditor();
-          });
-
-          const moduleTextInput = document.createElement(module.type === 'text' ? 'textarea' : 'input');
-          if (module.type === 'text') moduleTextInput.rows = 3;
-          moduleTextInput.placeholder = 'Module text (optional)';
-          moduleTextInput.value = safeText(module.text, 10000);
-          moduleTextInput.addEventListener('input', () => {
-            module.text = safeText(moduleTextInput.value, 10000);
-          });
-
-          const contentSelect = document.createElement('select');
-          setSelectOptions(
-            contentSelect,
-            getModularModuleContentOptions(module.type),
-            'No linked content',
-            safeText(module.contentId)
-          );
-          contentSelect.disabled = !getPageModuleTypeMeta(module.type).fieldKey;
-          contentSelect.addEventListener('change', () => {
-            module.contentId = safeText(contentSelect.value);
-          });
-
-          const assetSelect = document.createElement('select');
-          const assetOptions = (module.type === 'image'
-            ? getLandingPageVisualEditorOptions('featureImageId', getLandingPageFilterState('featureImageId'))
-            : module.type === 'logo-wide'
-              ? getAssetsByCategoryAliases(['Logo - Wide', 'Wide Logo'], 'Image').map((asset) => ({ value: asset.id, label: assetLabel(asset, String(asset.id)) }))
-              : module.type === 'logo-square'
-                ? getLandingPageVisualEditorOptions('logoSquareId', getLandingPageFilterState('logoSquareId'))
-                : []);
-          setSelectOptions(assetSelect, assetOptions, 'No image asset', safeText(module.assetId));
-          assetSelect.disabled = !['image', 'logo-wide', 'logo-square'].includes(module.type);
-          assetSelect.addEventListener('change', () => {
-            module.assetId = safeText(assetSelect.value);
-          });
-
-          const summary = document.createElement('div');
-          summary.className = 'develop-page-template-module-summary';
-          summary.textContent = getModularModuleContentLabel(module);
-
-          const nameInput = document.createElement('input');
-          nameInput.type = 'text';
-          nameInput.placeholder = 'Custom module name';
-          nameInput.value = safeText(module.name, 255);
-          nameInput.addEventListener('input', () => {
-            module.name = safeText(nameInput.value, 255);
-          });
-
-          const removeBtn = document.createElement('button');
-          removeBtn.type = 'button';
-          removeBtn.textContent = 'Remove';
-          removeBtn.addEventListener('click', () => {
-            section.modules.splice(moduleIndex, 1);
-            renderModularPageTemplateEditor();
-          });
-
-          const moduleBody = document.createElement('div');
-          moduleBody.className = 'develop-page-template-module-body';
-          moduleBody.hidden = Boolean(module.collapsed);
-
-          moduleBody.appendChild(nameInput);
-          moduleBody.appendChild(typeSelect);
-          moduleBody.appendChild(columnSelect);
-          moduleBody.appendChild(contentSelect);
-          moduleBody.appendChild(assetSelect);
-          moduleBody.appendChild(moduleTextInput);
-          moduleBody.appendChild(summary);
-          moduleBody.appendChild(removeBtn);
-
-          const moduleIcon = document.createElement('span');
-          moduleIcon.className = 'develop-page-template-module-icon';
-          moduleIcon.textContent = getModularModuleIcon(module.type);
-          moduleSummaryBar.insertBefore(moduleIcon, moduleSummaryName);
-
-          moduleCard.appendChild(moduleSummaryBar);
-          moduleCard.appendChild(moduleBody);
-          columnDropZone.appendChild(moduleCard);
-        });
-
-        const addModuleRow = document.createElement('div');
-        addModuleRow.className = 'develop-page-template-add-module-row';
-        MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'develop-page-template-module-add-btn';
-          button.title = `Add ${typeDef.label}`;
-          button.innerHTML = `
-            <span class="develop-page-template-module-icon">${escapeHtml(getModularModuleIcon(typeDef.value))}</span>
-            <span class="develop-page-template-module-add-label">${escapeHtml(typeDef.label)}</span>
-          `;
-          button.addEventListener('click', () => {
-            section.modules.push(createModularPageModule(typeDef.value, column));
-            renderModularPageTemplateEditor();
-          });
-          addModuleRow.appendChild(button);
-        });
+        columnDropZone.innerHTML = `
+          <div class="develop-page-template-column-placeholder-title">${safeText(columnDef.span) || '1'}/6 Container</div>
+          <div class="develop-page-template-column-placeholder-copy">Drop modules here later</div>
+        `;
         columnGroup.appendChild(columnDropZone);
-        columnGroup.appendChild(addModuleRow);
         columnGroups.appendChild(columnGroup);
       });
       modulesWrap.appendChild(columnGroups);
@@ -7393,6 +7184,21 @@ App.develop = (function () {
 
     if (pageTemplateEditorToolbar) {
       pageTemplateEditorToolbar.querySelectorAll('button[data-section-layout]').forEach((button) => {
+        button.draggable = true;
+        button.addEventListener('dragstart', (event) => {
+          draggedNewPageSectionLayout = safeText(button.getAttribute('data-section-layout')) || '6';
+          button.classList.add('is-dragging');
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'copy';
+            event.dataTransfer.setData('text/plain', `layout:${draggedNewPageSectionLayout}`);
+          }
+        });
+        button.addEventListener('dragend', () => {
+          draggedNewPageSectionLayout = '';
+          button.classList.remove('is-dragging');
+          const workspace = byId('developPageTemplateEditorSections');
+          workspace?.classList.remove('is-drag-over');
+        });
         button.addEventListener('click', () => {
           if (!modularPageTemplateDraft) {
             modularPageTemplateDraft = buildEmptyLandingRecord('Modular Page Template', selectedTemplateId || LANDING_TEMPLATES[0].id);
