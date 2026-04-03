@@ -163,6 +163,150 @@ App.develop = (function () {
     { value: 'Video', label: 'Video' },
     { value: 'Infographic', label: 'Infographic' },
   ];
+  const MODULE_TYPE_DEFINITIONS = [
+    {
+      value: 'header',
+      label: 'Header',
+      description: 'A reusable heading block for page titles, section headers, and callout headlines.',
+      starterName: 'Header',
+      defaults: {
+        text: 'Section Heading',
+        headingLevel: 'H2',
+        textColor: '#173c61',
+        align: 'left',
+      },
+      fields: [
+        { key: 'text', label: 'Text', control: 'textarea', rows: 3, placeholder: 'Header text' },
+        { key: 'headingLevel', label: 'Heading Level', control: 'select', options: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'] },
+        { key: 'textColor', label: 'Text Color', control: 'color' },
+        { key: 'align', label: 'Alignment', control: 'select', options: ['left', 'center', 'right'] },
+      ],
+    },
+    {
+      value: 'form',
+      label: 'Form',
+      description: 'Embed or style a lead-capture form module with form selection and CTA settings.',
+      starterName: 'Form',
+      defaults: {
+        title: 'Request More Information',
+        formId: '',
+        submitLabel: 'Submit Form',
+        width: 'standard',
+        backgroundColor: '#f5fbff',
+      },
+      fields: [
+        { key: 'title', label: 'Title', control: 'text', placeholder: 'Form title' },
+        { key: 'formId', label: 'Saved Form', control: 'saved-form-select' },
+        { key: 'submitLabel', label: 'Submit Label', control: 'text', placeholder: 'Submit Form' },
+        { key: 'width', label: 'Width', control: 'select', options: ['compact', 'standard', 'wide', 'full'] },
+        { key: 'backgroundColor', label: 'Background Color', control: 'color' },
+      ],
+    },
+    {
+      value: 'image',
+      label: 'Image',
+      description: 'A flexible image block with linking, sizing, and overlay treatment controls.',
+      starterName: 'Image',
+      defaults: {
+        imageUrl: '',
+        altText: 'Image',
+        linkUrl: '',
+        maxWidth: 100,
+        overlayOpacity: 0,
+        aspectRatio: 'auto',
+      },
+      fields: [
+        { key: 'imageUrl', label: 'Image URL', control: 'text', placeholder: 'https://...' },
+        { key: 'altText', label: 'Alt Text', control: 'text', placeholder: 'Describe the image' },
+        { key: 'linkUrl', label: 'Link URL', control: 'text', placeholder: 'https://...' },
+        { key: 'maxWidth', label: 'Max Width %', control: 'number', min: 10, max: 100, step: 5 },
+        { key: 'overlayOpacity', label: 'Overlay Opacity', control: 'number', min: 0, max: 100, step: 5 },
+        { key: 'aspectRatio', label: 'Aspect Ratio', control: 'select', options: ['auto', '16:9', '4:3', '3:2', '1:1', '9:16'] },
+      ],
+    },
+    {
+      value: 'video',
+      label: 'Video',
+      description: 'A video block with source, poster, playback, and aspect-ratio controls.',
+      starterName: 'Video',
+      defaults: {
+        videoUrl: '',
+        posterUrl: '',
+        aspectRatio: '16:9',
+        autoplay: false,
+        muted: true,
+        controls: true,
+      },
+      fields: [
+        { key: 'videoUrl', label: 'Video URL', control: 'text', placeholder: 'https://...' },
+        { key: 'posterUrl', label: 'Poster URL', control: 'text', placeholder: 'https://...' },
+        { key: 'aspectRatio', label: 'Aspect Ratio', control: 'select', options: ['16:9', '4:3', '1:1', '9:16'] },
+        { key: 'autoplay', label: 'Autoplay', control: 'checkbox' },
+        { key: 'muted', label: 'Muted', control: 'checkbox' },
+        { key: 'controls', label: 'Show Controls', control: 'checkbox' },
+      ],
+    },
+    {
+      value: 'table',
+      label: 'Table',
+      description: 'A structured table block for pricing, comparisons, or data snapshots.',
+      starterName: 'Table',
+      defaults: {
+        caption: 'Comparison Table',
+        columns: 'Feature, Option A, Option B',
+        striped: true,
+        bordered: true,
+        compact: false,
+      },
+      fields: [
+        { key: 'caption', label: 'Caption', control: 'text', placeholder: 'Table caption' },
+        { key: 'columns', label: 'Columns', control: 'textarea', rows: 3, placeholder: 'Feature, Option A, Option B' },
+        { key: 'striped', label: 'Striped Rows', control: 'checkbox' },
+        { key: 'bordered', label: 'Bordered', control: 'checkbox' },
+        { key: 'compact', label: 'Compact', control: 'checkbox' },
+      ],
+    },
+    {
+      value: 'textarea',
+      label: 'Textarea',
+      description: 'A configurable multi-line text input block for forms, surveys, and feedback.',
+      starterName: 'Textarea',
+      defaults: {
+        label: 'Message',
+        placeholder: 'Write your message here',
+        rows: 5,
+        required: false,
+        helperText: '',
+      },
+      fields: [
+        { key: 'label', label: 'Label', control: 'text', placeholder: 'Message' },
+        { key: 'placeholder', label: 'Placeholder', control: 'text', placeholder: 'Write your message here' },
+        { key: 'rows', label: 'Rows', control: 'number', min: 2, max: 12, step: 1 },
+        { key: 'required', label: 'Required', control: 'checkbox' },
+        { key: 'helperText', label: 'Helper Text', control: 'text', placeholder: 'Optional helper text' },
+      ],
+    },
+    {
+      value: 'izzy',
+      label: 'Izzy',
+      description: 'An embedded assistant block for guided conversation, onboarding, and contextual help.',
+      starterName: 'Izzy',
+      defaults: {
+        assistantName: 'Izzy',
+        greeting: 'Hi, I am Izzy. How can I help?',
+        placeholder: 'Ask Izzy a question...',
+        accentColor: '#0b82d4',
+        mode: 'guide',
+      },
+      fields: [
+        { key: 'assistantName', label: 'Assistant Name', control: 'text', placeholder: 'Izzy' },
+        { key: 'greeting', label: 'Greeting', control: 'textarea', rows: 3, placeholder: 'Hi, I am Izzy. How can I help?' },
+        { key: 'placeholder', label: 'Input Placeholder', control: 'text', placeholder: 'Ask Izzy a question...' },
+        { key: 'accentColor', label: 'Accent Color', control: 'color' },
+        { key: 'mode', label: 'Mode', control: 'select', options: ['guide', 'assistant', 'support', 'concierge'] },
+      ],
+    },
+  ];
   let selectedTemplateId = LANDING_TEMPLATES[0].id;
   let selectedFormTemplateId = FORM_TEMPLATES[0].id;
   let selectedEmailTemplateId = '';
@@ -2025,27 +2169,150 @@ App.develop = (function () {
     const idInput = byId('developModulesIdInput');
     const nameInput = byId('developModulesNameInput');
     const typeSelect = byId('developModulesTypeSelect');
-    const textInput = byId('developModulesHeaderTextInput');
-    const levelSelect = byId('developModulesHeaderLevelSelect');
-    const colorInput = byId('developModulesHeaderColorInput');
     if (idInput) idInput.value = '';
     if (nameInput) nameInput.value = '';
     if (typeSelect) typeSelect.value = 'header';
-    if (textInput) textInput.value = '';
-    if (levelSelect) levelSelect.value = 'H1';
-    if (colorInput) colorInput.value = '#173c61';
+    updateDevelopModuleTypeFields();
+    if (nameInput) nameInput.focus();
+  }
+
+  function getDevelopModuleTypeDefinition(type) {
+    const normalized = safeText(type);
+    return MODULE_TYPE_DEFINITIONS.find((item) => item.value === normalized) || MODULE_TYPE_DEFINITIONS[0];
+  }
+
+  function getDevelopModuleStarterBlueprints() {
+    return MODULE_TYPE_DEFINITIONS.map((definition) => ({
+      name: definition.starterName,
+      moduleType: definition.value,
+      settings: { ...(definition.defaults || {}) },
+    }));
+  }
+
+  function populateDevelopModuleTypeOptions() {
+    const select = byId('developModulesTypeSelect');
+    if (!select) return;
+    select.innerHTML = '';
+    MODULE_TYPE_DEFINITIONS.forEach((definition) => {
+      const option = document.createElement('option');
+      option.value = definition.value;
+      option.textContent = definition.label;
+      select.appendChild(option);
+    });
+  }
+
+  function renderDevelopModuleSettingsFields(type, settings = {}) {
+    const host = byId('developModulesSettingsFields');
+    const help = byId('developModulesTypeHelp');
+    if (!host) return;
+    const definition = getDevelopModuleTypeDefinition(type);
+    host.innerHTML = '';
+    host.className = 'grid-form';
+    if (help) {
+      help.textContent = safeText(definition.description, 500);
+    }
+
+    definition.fields.forEach((field) => {
+      const wrap = document.createElement('label');
+      wrap.className = field.control === 'textarea' ? 'stack-form' : 'stack-form';
+      const label = document.createElement('span');
+      label.textContent = field.label;
+      wrap.appendChild(label);
+
+      const value = Object.prototype.hasOwnProperty.call(settings || {}, field.key)
+        ? settings[field.key]
+        : definition.defaults?.[field.key];
+
+      let control = null;
+      if (field.control === 'textarea') {
+        control = document.createElement('textarea');
+        control.rows = Number(field.rows) || 3;
+        control.value = safeText(value, 10000);
+      } else if (field.control === 'select') {
+        control = document.createElement('select');
+        (field.options || []).forEach((optionValue) => {
+          const option = document.createElement('option');
+          option.value = String(optionValue);
+          option.textContent = String(optionValue);
+          control.appendChild(option);
+        });
+        control.value = safeText(value) || String(field.options?.[0] || '');
+      } else if (field.control === 'saved-form-select') {
+        control = document.createElement('select');
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = savedForms.length ? 'Choose a form' : 'No forms available yet';
+        control.appendChild(empty);
+        savedForms.forEach((form) => {
+          const option = document.createElement('option');
+          option.value = safeText(form.id);
+          option.textContent = safeText(form.name) || safeText(form.id);
+          control.appendChild(option);
+        });
+        control.value = safeText(value);
+      } else if (field.control === 'color') {
+        control = document.createElement('input');
+        control.type = 'color';
+        control.value = safeText(value) || '#173c61';
+      } else if (field.control === 'number') {
+        control = document.createElement('input');
+        control.type = 'number';
+        control.value = value === null || value === undefined || value === '' ? '' : String(value);
+        if (field.min !== undefined) control.min = String(field.min);
+        if (field.max !== undefined) control.max = String(field.max);
+        if (field.step !== undefined) control.step = String(field.step);
+      } else if (field.control === 'checkbox') {
+        wrap.className = 'checkbox-row';
+        control = document.createElement('input');
+        control.type = 'checkbox';
+        control.checked = Boolean(value);
+        wrap.innerHTML = '';
+        wrap.appendChild(control);
+        wrap.appendChild(label);
+      } else {
+        control = document.createElement('input');
+        control.type = 'text';
+        control.value = safeText(value, 10000);
+      }
+
+      control.id = `developModuleField_${field.key}`;
+      control.setAttribute('data-module-field-key', field.key);
+      control.setAttribute('data-module-field-control', field.control);
+      if (field.placeholder && 'placeholder' in control) {
+        control.placeholder = field.placeholder;
+      }
+      if (field.control !== 'checkbox') {
+        wrap.appendChild(control);
+      }
+      host.appendChild(wrap);
+    });
+  }
+
+  function getDevelopModuleSettingsFromForm(type) {
+    const definition = getDevelopModuleTypeDefinition(type);
+    const settings = {};
+    definition.fields.forEach((field) => {
+      const input = byId(`developModuleField_${field.key}`);
+      if (!input) return;
+      if (field.control === 'checkbox') {
+        settings[field.key] = Boolean(input.checked);
+      } else if (field.control === 'number') {
+        const raw = safeText(input.value);
+        settings[field.key] = raw ? Number(raw) : '';
+      } else {
+        settings[field.key] = safeText(input.value, 10000);
+      }
+    });
+    return settings;
   }
 
   function getDevelopModulePayloadFromForm() {
+    const moduleType = safeText(byId('developModulesTypeSelect')?.value) || 'header';
     return {
       id: safeText(byId('developModulesIdInput')?.value),
       name: safeText(byId('developModulesNameInput')?.value),
-      moduleType: safeText(byId('developModulesTypeSelect')?.value) || 'header',
-      settings: {
-        text: safeText(byId('developModulesHeaderTextInput')?.value, 10000),
-        headingLevel: safeText(byId('developModulesHeaderLevelSelect')?.value) || 'H1',
-        textColor: safeText(byId('developModulesHeaderColorInput')?.value) || '#173c61',
-      },
+      moduleType,
+      settings: getDevelopModuleSettingsFromForm(moduleType),
     };
   }
 
@@ -2054,6 +2321,24 @@ App.develop = (function () {
     const settings = module?.settings || {};
     if (type === 'header') {
       return `${safeText(settings.headingLevel) || 'H1'}: ${safeText(settings.text) || 'No text set'}`;
+    }
+    if (type === 'form') {
+      return `${safeText(settings.title) || 'Form'} · ${safeText(getSavedFormName(settings.formId)) || 'No form linked'}`;
+    }
+    if (type === 'image') {
+      return `${safeText(settings.altText) || 'Image'} · ${safeText(settings.aspectRatio) || 'auto'} · ${safeText(settings.maxWidth)}%`;
+    }
+    if (type === 'video') {
+      return `${safeText(settings.videoUrl) ? 'Video linked' : 'No video set'} · ${safeText(settings.aspectRatio) || '16:9'}`;
+    }
+    if (type === 'table') {
+      return `${safeText(settings.caption) || 'Table'} · ${settings.striped ? 'Striped' : 'Plain'} · ${settings.bordered ? 'Bordered' : 'Borderless'}`;
+    }
+    if (type === 'textarea') {
+      return `${safeText(settings.label) || 'Textarea'} · ${safeText(settings.rows)} rows${settings.required ? ' · Required' : ''}`;
+    }
+    if (type === 'izzy') {
+      return `${safeText(settings.assistantName) || 'Izzy'} · ${safeText(settings.mode) || 'guide'}`;
     }
     return safeText(module?.name) || '-';
   }
@@ -2066,15 +2351,10 @@ App.develop = (function () {
     const idInput = byId('developModulesIdInput');
     const nameInput = byId('developModulesNameInput');
     const typeSelect = byId('developModulesTypeSelect');
-    const textInput = byId('developModulesHeaderTextInput');
-    const levelSelect = byId('developModulesHeaderLevelSelect');
-    const colorInput = byId('developModulesHeaderColorInput');
     if (idInput) idInput.value = safeText(module.id);
     if (nameInput) nameInput.value = safeText(module.name);
     if (typeSelect) typeSelect.value = safeText(module.moduleType) || 'header';
-    if (textInput) textInput.value = safeText(module.settings?.text, 10000);
-    if (levelSelect) levelSelect.value = safeText(module.settings?.headingLevel) || 'H1';
-    if (colorInput) colorInput.value = safeText(module.settings?.textColor) || '#173c61';
+    updateDevelopModuleTypeFields(module.settings || {});
   }
 
   function renderSavedModules() {
@@ -2100,7 +2380,7 @@ App.develop = (function () {
       const actionsTd = document.createElement('td');
 
       nameTd.textContent = safeText(module.name) || '-';
-      typeTd.textContent = safeText(module.moduleType) || '-';
+      typeTd.textContent = getDevelopModuleTypeDefinition(module.moduleType).label;
       previewTd.textContent = getDevelopModulePreview(module);
       updatedTd.textContent = module.updatedAt ? new Date(module.updatedAt).toLocaleString() : '-';
 
@@ -2142,17 +2422,31 @@ App.develop = (function () {
     try {
       const result = await api('/api/develop/modules');
       savedModules = Array.isArray(result.modules) ? result.modules : [];
+      const starterModules = getDevelopModuleStarterBlueprints();
+      const missingStarterModules = starterModules.filter((starter) => !savedModules.some((module) => {
+        const sameType = safeText(module.moduleType) === safeText(starter.moduleType);
+        const sameName = safeText(module.name).toLowerCase() === safeText(starter.name).toLowerCase();
+        return sameType && sameName;
+      }));
+      if (missingStarterModules.length) {
+        for (const module of missingStarterModules) {
+          // Seed the first-pass module library once per empty project.
+          await api('/api/develop/modules', {
+            method: 'POST',
+            body: JSON.stringify(module),
+          });
+        }
+        const seeded = await api('/api/develop/modules');
+        savedModules = Array.isArray(seeded.modules) ? seeded.modules : [];
+      }
     } catch (_) {
       savedModules = [];
     }
   }
 
-  function updateDevelopModuleTypeFields() {
+  function updateDevelopModuleTypeFields(settings = null) {
     const type = safeText(byId('developModulesTypeSelect')?.value) || 'header';
-    const headerFields = byId('developModulesHeaderFields');
-    if (headerFields) {
-      headerFields.classList.toggle('hidden', type !== 'header');
-    }
+    renderDevelopModuleSettingsFields(type, settings || {});
   }
 
   async function loadSavedThemes() {
@@ -7192,6 +7486,8 @@ App.develop = (function () {
     const developModulesResetBtn = byId('developModulesResetBtn');
     const developModulesTypeSelect = byId('developModulesTypeSelect');
     const developModulesForm = byId('developModulesForm');
+
+    populateDevelopModuleTypeOptions();
 
     if (developModulesCreateBtn) {
       developModulesCreateBtn.addEventListener('click', () => {
