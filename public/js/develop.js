@@ -5989,7 +5989,7 @@ App.develop = (function () {
     const host = byId('developPageTemplateEditorSections');
     if (!host || !modularPageTemplateDraft) return;
     if (title) title.textContent = 'Page: Modular';
-    if (meta) meta.textContent = 'Drag row layouts into the workspace. Each drop creates a row with empty containers you can use later.';
+    if (meta) meta.textContent = 'Drag row layouts into the workspace. Dropping a layout creates a row of empty cells.';
     host.innerHTML = '';
     host.className = 'develop-template-module-list develop-page-template-workspace';
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
@@ -6011,11 +6011,13 @@ App.develop = (function () {
       clearWorkspaceDropIndicators();
     });
     host.addEventListener('drop', (event) => {
-      if (!draggedNewPageSectionLayout && draggedSectionIndex === null) return;
+      const droppedLayout = draggedNewPageSectionLayout || safeText(event.dataTransfer?.getData('text/plain')).replace(/^layout:/, '');
+      if (!droppedLayout && draggedSectionIndex === null) return;
       event.preventDefault();
+      event.stopPropagation();
       clearWorkspaceDropIndicators();
-      if (draggedNewPageSectionLayout) {
-        insertModularPageSectionAt(draggedNewPageSectionLayout);
+      if (droppedLayout) {
+        insertModularPageSectionAt(droppedLayout);
         draggedNewPageSectionLayout = '';
         renderModularPageTemplateEditor();
       }
@@ -6031,14 +6033,10 @@ App.develop = (function () {
     }
     normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).forEach((section, sectionIndex) => {
       const item = document.createElement('div');
-      item.className = 'develop-template-module-item develop-page-template-section-card develop-page-template-workspace-row';
-
-      const grip = document.createElement('div');
-      grip.className = 'develop-template-module-grip develop-page-template-section-summary-grip';
-      grip.textContent = '::';
-      grip.draggable = true;
-      grip.title = 'Drag to reorder section';
-      grip.addEventListener('dragstart', (event) => {
+      item.className = 'develop-page-template-workspace-row';
+      item.draggable = true;
+      item.title = 'Drag to reorder row';
+      item.addEventListener('dragstart', (event) => {
         draggedSectionIndex = sectionIndex;
         item.classList.add('is-dragging');
         if (event.dataTransfer) {
@@ -6046,17 +6044,18 @@ App.develop = (function () {
           event.dataTransfer.setData('text/plain', `section:${sectionIndex}`);
         }
       });
-      grip.addEventListener('dragend', () => {
+      item.addEventListener('dragend', () => {
         draggedSectionIndex = null;
-        host.querySelectorAll('.develop-template-module-item').forEach((node) => {
-          node.classList.remove('is-drag-over', 'is-dragging');
+        clearWorkspaceDropIndicators();
+        host.querySelectorAll('.develop-page-template-workspace-row').forEach((node) => {
+          node.classList.remove('is-dragging');
         });
       });
-      item.appendChild(grip);
 
       item.addEventListener('dragover', (event) => {
         if (!draggedNewPageSectionLayout && (draggedSectionIndex === null || draggedSectionIndex === sectionIndex)) return;
         event.preventDefault();
+        event.stopPropagation();
         clearWorkspaceDropIndicators();
         const rect = item.getBoundingClientRect();
         const before = event.clientY < rect.top + (rect.height / 2);
@@ -6067,13 +6066,15 @@ App.develop = (function () {
         item.classList.remove('is-drop-before', 'is-drop-after');
       });
       item.addEventListener('drop', (event) => {
-        if (!draggedNewPageSectionLayout && (draggedSectionIndex === null || draggedSectionIndex === sectionIndex)) return;
+        const droppedLayout = draggedNewPageSectionLayout || safeText(event.dataTransfer?.getData('text/plain')).replace(/^layout:/, '');
+        if (!droppedLayout && (draggedSectionIndex === null || draggedSectionIndex === sectionIndex)) return;
         event.preventDefault();
+        event.stopPropagation();
         const rect = item.getBoundingClientRect();
         const before = event.clientY < rect.top + (rect.height / 2);
         clearWorkspaceDropIndicators();
-        if (draggedNewPageSectionLayout) {
-          insertModularPageSectionAt(draggedNewPageSectionLayout, before ? sectionIndex : sectionIndex + 1);
+        if (droppedLayout) {
+          insertModularPageSectionAt(droppedLayout, before ? sectionIndex : sectionIndex + 1);
           draggedNewPageSectionLayout = '';
           renderModularPageTemplateEditor();
           return;
@@ -6082,84 +6083,30 @@ App.develop = (function () {
         renderModularPageTemplateEditor();
       });
 
-      const sectionSummary = document.createElement('button');
-      sectionSummary.type = 'button';
-      sectionSummary.className = `develop-page-template-section-summary${section.collapsed ? ' is-collapsed' : ''}`;
-      sectionSummary.setAttribute('aria-expanded', section.collapsed ? 'false' : 'true');
-      sectionSummary.addEventListener('click', () => {
-        section.collapsed = !section.collapsed;
-        renderModularPageTemplateEditor();
-      });
-      sectionSummary.appendChild(grip);
-
-      const summaryName = document.createElement('div');
-      summaryName.className = 'develop-page-template-section-summary-name';
-      summaryName.innerHTML = `
-        <span class="develop-page-template-section-summary-title">${escapeHtml(safeText(section.title) || `Row ${sectionIndex + 1}`)}</span>
-      `;
-      sectionSummary.appendChild(summaryName);
-
-      const summaryLayout = document.createElement('div');
-      summaryLayout.className = 'develop-page-template-section-summary-layout';
-      summaryLayout.innerHTML = `
-        <div class="develop-layout-picker-icon develop-layout-picker-icon--${escapeHtml(getModularPageLayoutShortLabel(section.layout))}">${getModularPageLayoutVisual(section.layout)}</div>
-      `;
-      sectionSummary.appendChild(summaryLayout);
-
-      const summaryToggle = document.createElement('span');
-      summaryToggle.className = 'develop-page-template-section-summary-toggle';
-      summaryToggle.textContent = section.collapsed ? '▸' : '▾';
-      sectionSummary.appendChild(summaryToggle);
-
       const sectionRemove = document.createElement('button');
       sectionRemove.type = 'button';
       sectionRemove.className = 'develop-page-template-section-remove';
       sectionRemove.textContent = 'Remove';
+      sectionRemove.title = `Remove ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
       sectionRemove.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
         modularPageTemplateDraft.layoutSections.splice(sectionIndex, 1);
         renderModularPageTemplateEditor();
       });
-      sectionSummary.appendChild(sectionRemove);
-      item.appendChild(sectionSummary);
-
-      const fields = document.createElement('div');
-      fields.className = 'develop-template-module-fields develop-page-template-section-body';
-      fields.hidden = Boolean(section.collapsed);
-
-      const titleInput = document.createElement('input');
-      titleInput.type = 'text';
-      titleInput.placeholder = 'Row name (optional)';
-      titleInput.value = safeText(section.title, 255);
-      titleInput.addEventListener('input', () => {
-        section.title = safeText(titleInput.value, 255);
-      });
-      fields.appendChild(titleInput);
-
-      const modulesWrap = document.createElement('div');
-      modulesWrap.className = 'develop-template-module-span develop-page-template-section-modules';
+      item.appendChild(sectionRemove);
 
       const columnOptions = getModularPageLayoutMeta(section.layout).columns;
       const columnGroups = document.createElement('div');
-      columnGroups.className = 'develop-page-template-column-groups';
+      columnGroups.className = 'develop-page-template-row-cells';
       columnGroups.style.gridTemplateColumns = buildModularPageGridTemplate(section.layout);
-      const columnIds = columnOptions.map((columnMeta) => safeText(columnMeta.id) || 'col1');
       columnOptions.forEach((columnDef) => {
-        const column = safeText(columnDef.id) || 'col1';
-        const columnGroup = document.createElement('div');
-        columnGroup.className = 'develop-page-template-column-group';
-        columnGroup.dataset.column = column;
-
         const columnDropZone = document.createElement('div');
-        columnDropZone.className = 'develop-page-template-column-dropzone';
-        columnGroup.appendChild(columnDropZone);
-        columnGroups.appendChild(columnGroup);
+        columnDropZone.className = 'develop-page-template-row-cell';
+        columnDropZone.dataset.column = safeText(columnDef.id) || 'col1';
+        columnGroups.appendChild(columnDropZone);
       });
-      modulesWrap.appendChild(columnGroups);
-      fields.appendChild(modulesWrap);
-
-      item.appendChild(fields);
+      item.appendChild(columnGroups);
       host.appendChild(item);
     });
   }
