@@ -2894,6 +2894,7 @@ th {
   border-radius: 12px;
   background: #f7fbff;
   cursor: grab;
+  user-select: none;
 }
 
 .develop-layout-tile:focus-visible {
@@ -2917,9 +2918,18 @@ th {
 .develop-layout-toolbar-icon span,
 .develop-layout-picker-icon span {
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(15, 79, 143, 0.24);
+  background: rgba(15, 79, 143, 0.18);
   min-height: 30px;
+}
+
+.develop-layout-tile-ghost {
+  position: fixed;
+  z-index: 10000;
+  width: 140px;
+  pointer-events: none;
+  opacity: 0.88;
+  box-shadow: 0 12px 28px rgba(15, 79, 143, 0.18);
 }
 
 .develop-layout-toolbar-icon--1-5,
