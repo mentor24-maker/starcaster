@@ -2878,6 +2878,163 @@ th {
   margin-bottom: 0.5rem;
 }
 
+.develop-layout-toolbar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.develop-layout-toolbar button {
+  display: grid;
+  gap: 0.45rem;
+  justify-items: center;
+  padding: 0.7rem 0.5rem;
+}
+
+.develop-layout-toolbar-icon,
+.develop-layout-picker-icon {
+  display: grid;
+  width: 100%;
+  min-height: 28px;
+  gap: 0.18rem;
+}
+
+.develop-layout-toolbar-icon span,
+.develop-layout-picker-icon span {
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.2);
+  min-height: 24px;
+}
+
+.develop-layout-toolbar-icon--1-5,
+.develop-layout-picker-icon--1-5 {
+  grid-template-columns: 1fr 5fr;
+}
+
+.develop-layout-toolbar-icon--2-4,
+.develop-layout-picker-icon--2-4 {
+  grid-template-columns: 2fr 4fr;
+}
+
+.develop-layout-toolbar-icon--2-2-2,
+.develop-layout-picker-icon--2-2-2 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.develop-layout-toolbar-icon--3-3,
+.develop-layout-picker-icon--3-3 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.develop-layout-toolbar-icon--4-2,
+.develop-layout-picker-icon--4-2 {
+  grid-template-columns: 4fr 2fr;
+}
+
+.develop-layout-toolbar-icon--5-1,
+.develop-layout-picker-icon--5-1 {
+  grid-template-columns: 5fr 1fr;
+}
+
+.develop-layout-toolbar-icon--6,
+.develop-layout-picker-icon--6 {
+  grid-template-columns: 1fr;
+}
+
+.develop-layout-toolbar-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.develop-page-template-section-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.develop-page-template-section-summary {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(15, 79, 143, 0.16);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #eef6fd 100%);
+  text-align: left;
+}
+
+.develop-page-template-section-summary.is-collapsed {
+  background: linear-gradient(180deg, #f7fbff 0%, #e7f2fb 100%);
+}
+
+.develop-page-template-section-summary-grip {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #315879;
+  cursor: grab;
+}
+
+.develop-page-template-section-summary-name {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.develop-page-template-section-summary-title {
+  font-weight: 700;
+  color: #173c61;
+}
+
+.develop-page-template-section-summary-meta {
+  font-size: 0.84rem;
+  color: #587592;
+}
+
+.develop-page-template-section-summary-layout {
+  min-width: 110px;
+}
+
+.develop-page-template-section-summary-toggle {
+  font-size: 0.95rem;
+  color: #173c61;
+}
+
+.develop-page-template-section-body {
+  display: grid;
+  gap: 0.75rem;
+  padding-left: 0.2rem;
+}
+
+.develop-page-template-row-config {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.develop-layout-picker-btn {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.55rem 0.45rem;
+  border: 1px solid rgba(15, 79, 143, 0.16);
+  border-radius: 12px;
+  background: #f7fbff;
+  cursor: pointer;
+}
+
+.develop-layout-picker-btn.is-active {
+  border-color: #0b82d4;
+  box-shadow: 0 0 0 2px rgba(11, 130, 212, 0.12);
+  background: #e9f4ff;
+}
+
+.develop-layout-picker-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  color: #214c71;
+}
+
 .develop-page-template-section-modules {
   display: grid;
   gap: 0.6rem;
@@ -2918,7 +3075,7 @@ th {
 
 .develop-page-template-module-card {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr auto;
   gap: 0.5rem;
   padding: 0.7rem;
   border: 1px solid rgba(15, 79, 143, 0.16);
@@ -2936,7 +3093,7 @@ th {
 }
 
 .develop-page-template-module-card-grip {
-  grid-column: 1 / -1;
+  grid-column: 1 / 2;
   align-self: start;
   justify-self: start;
   padding: 0.2rem 0.4rem;
@@ -2950,14 +3107,89 @@ th {
   user-select: none;
 }
 
+.develop-page-template-module-summary-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid rgba(15, 79, 143, 0.12);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+}
+
+.develop-page-template-module-icon {
+  min-width: 36px;
+  height: 30px;
+  padding: 0 0.3rem;
+  border-radius: 8px;
+  background: #e9f4ff;
+  color: #214c71;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.develop-page-template-module-summary-name {
+  font-weight: 700;
+  color: #173c61;
+}
+
+.develop-page-template-module-summary-type {
+  font-size: 0.82rem;
+  color: #587592;
+  font-weight: 700;
+}
+
+.develop-page-template-module-toggle {
+  font-size: 0.92rem;
+  color: #173c61;
+}
+
+.develop-page-template-module-body {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.develop-page-template-module-body textarea,
+.develop-page-template-module-body input,
+.develop-page-template-module-body select {
+  width: 100%;
+}
+
 .develop-page-template-add-module-row {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
 }
 
 .develop-page-template-module-summary {
   grid-column: 1 / -1;
   color: #315879;
   font-size: 0.9rem;
+}
+
+.develop-page-template-module-add-btn {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: center;
+  align-items: center;
+  min-height: 58px;
+  padding: 0.45rem 0.25rem;
+  border-radius: 10px;
+}
+
+.develop-page-template-module-add-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .develop-modular-page-preview {
@@ -2987,10 +3219,22 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .develop-layout-toolbar,
+  .develop-page-template-row-config,
+  .develop-page-template-add-module-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .develop-page-template-column-groups,
   .develop-page-template-module-card,
-  .develop-modular-page-columns {
+  .develop-modular-page-columns,
+  .develop-page-template-module-body {
     grid-template-columns: 1fr;
+  }
+
+  .develop-page-template-section-summary,
+  .develop-page-template-module-summary-bar {
+    grid-template-columns: auto 1fr auto;
   }
 }
 

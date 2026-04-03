@@ -3024,17 +3024,20 @@ App.develop = (function () {
         const id = safeText(section.id) || `section_${index + 1}`;
         const layout = safeText(section.layout) || '6';
         const title = safeText(section.title, 255);
+        const collapsed = Boolean(section.collapsed);
         const modules = Array.isArray(section.modules)
           ? section.modules
             .map((module, moduleIndex) => {
               if (!module || typeof module !== 'object' || Array.isArray(module)) return null;
               return {
                 id: safeText(module.id) || `${id}_module_${moduleIndex + 1}`,
+                name: safeText(module.name, 255),
                 type: safeText(module.type) || 'text',
                 column: safeText(module.column) || 'main',
                 contentId: safeText(module.contentId),
                 assetId: safeText(module.assetId),
                 text: safeText(module.text, 10000),
+                collapsed: Boolean(module.collapsed),
                 settings: module.settings && typeof module.settings === 'object' && !Array.isArray(module.settings)
                   ? module.settings
                   : {},
@@ -3042,7 +3045,7 @@ App.develop = (function () {
             })
             .filter(Boolean)
           : [];
-        return { id, layout, title, modules };
+        return { id, layout, title, collapsed, modules };
       })
       .filter(Boolean);
   }
@@ -3098,6 +3101,7 @@ App.develop = (function () {
       id: nextModularPageId('section'),
       layout: meta.value,
       title: '',
+      collapsed: false,
       modules: [],
     };
   }
@@ -3105,11 +3109,13 @@ App.develop = (function () {
   function createModularPageModule(type = 'text', column = 'col1') {
     return {
       id: nextModularPageId('module'),
+      name: '',
       type: safeText(type) || 'text',
       column: safeText(column) || 'col1',
       contentId: '',
       assetId: '',
       text: '',
+      collapsed: false,
       settings: {},
     };
   }
@@ -3139,6 +3145,48 @@ App.develop = (function () {
   function getPageModuleTypeMeta(type) {
     const normalized = safeText(type);
     return MODULAR_PAGE_MODULE_TYPES.find((item) => item.value === normalized) || MODULAR_PAGE_MODULE_TYPES[0];
+  }
+
+  function getModularPageLayoutShortLabel(layout) {
+    return getModularPageLayoutMeta(layout).value;
+  }
+
+  function getModularPageLayoutVisual(layout) {
+    return getModularPageLayoutMeta(layout)
+      .columns
+      .map((column) => `<span class="develop-layout-tile-cell" style="grid-column:span ${Math.max(1, Number(column.span) || 1)};"></span>`)
+      .join('');
+  }
+
+  function getModularModuleIcon(type) {
+    switch (safeText(type)) {
+      case 'eyebrow':
+        return 'Ey';
+      case 'headline':
+        return 'H1';
+      case 'subheading':
+        return 'H2';
+      case 'pitch':
+        return 'P';
+      case 'cta':
+        return 'Go';
+      case 'form':
+        return 'F';
+      case 'image':
+        return 'Img';
+      case 'logo-wide':
+        return 'LW';
+      case 'logo-square':
+        return 'LS';
+      case 'spacer':
+        return 'Sp';
+      default:
+        return 'Txt';
+    }
+  }
+
+  function getModularModuleDisplayName(module) {
+    return safeText(module?.name, 255) || getModularModuleContentLabel(module);
   }
 
   function buildModularPageGridTemplate(layout) {
@@ -5924,10 +5972,10 @@ App.develop = (function () {
     let draggedModuleState = null;
     normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).forEach((section, sectionIndex) => {
       const item = document.createElement('div');
-      item.className = 'develop-template-module-item';
+      item.className = 'develop-template-module-item develop-page-template-section-card';
 
       const grip = document.createElement('div');
-      grip.className = 'develop-template-module-grip';
+      grip.className = 'develop-template-module-grip develop-page-template-section-summary-grip';
       grip.textContent = '::';
       grip.draggable = true;
       grip.title = 'Drag to reorder section';
@@ -5964,26 +6012,63 @@ App.develop = (function () {
         renderModularPageTemplateEditor();
       });
 
-      const fields = document.createElement('div');
-      fields.className = 'develop-template-module-fields';
-
-      const layoutSelect = document.createElement('select');
-      MODULAR_PAGE_LAYOUT_OPTIONS.forEach((optionDef) => {
-        const option = document.createElement('option');
-        option.value = optionDef.value;
-        option.textContent = optionDef.label;
-        layoutSelect.appendChild(option);
-      });
-      layoutSelect.value = safeText(section.layout) || '6';
-      layoutSelect.addEventListener('change', () => {
-        section.layout = safeText(layoutSelect.value) || '6';
+      const sectionSummary = document.createElement('button');
+      sectionSummary.type = 'button';
+      sectionSummary.className = `develop-page-template-section-summary${section.collapsed ? ' is-collapsed' : ''}`;
+      sectionSummary.setAttribute('aria-expanded', section.collapsed ? 'false' : 'true');
+      sectionSummary.addEventListener('click', () => {
+        section.collapsed = !section.collapsed;
         renderModularPageTemplateEditor();
       });
-      fields.appendChild(layoutSelect);
+      sectionSummary.appendChild(grip);
+
+      const summaryName = document.createElement('div');
+      summaryName.className = 'develop-page-template-section-summary-name';
+      summaryName.innerHTML = `
+        <span class="develop-page-template-section-summary-title">${escapeHtml(safeText(section.title) || `Row ${sectionIndex + 1}`)}</span>
+        <span class="develop-page-template-section-summary-meta">${section.modules.length} module${section.modules.length === 1 ? '' : 's'}</span>
+      `;
+      sectionSummary.appendChild(summaryName);
+
+      const summaryLayout = document.createElement('div');
+      summaryLayout.className = 'develop-page-template-section-summary-layout';
+      summaryLayout.innerHTML = `
+        <div class="develop-layout-picker-icon develop-layout-picker-icon--${escapeHtml(getModularPageLayoutShortLabel(section.layout))}">${getModularPageLayoutVisual(section.layout)}</div>
+      `;
+      sectionSummary.appendChild(summaryLayout);
+
+      const summaryToggle = document.createElement('span');
+      summaryToggle.className = 'develop-page-template-section-summary-toggle';
+      summaryToggle.textContent = section.collapsed ? '▸' : '▾';
+      sectionSummary.appendChild(summaryToggle);
+      item.appendChild(sectionSummary);
+
+      const fields = document.createElement('div');
+      fields.className = 'develop-template-module-fields develop-page-template-section-body';
+      fields.hidden = Boolean(section.collapsed);
+
+      const layoutPicker = document.createElement('div');
+      layoutPicker.className = 'develop-template-module-span develop-page-template-row-config';
+      MODULAR_PAGE_LAYOUT_OPTIONS.forEach((optionDef) => {
+        const layoutBtn = document.createElement('button');
+        layoutBtn.type = 'button';
+        layoutBtn.className = `develop-layout-picker-btn${safeText(section.layout) === optionDef.value ? ' is-active' : ''}`;
+        layoutBtn.title = optionDef.label;
+        layoutBtn.innerHTML = `
+          <span class="develop-layout-picker-icon develop-layout-picker-icon--${escapeHtml(optionDef.value)}">${getModularPageLayoutVisual(optionDef.value)}</span>
+          <span class="develop-layout-picker-label">${escapeHtml(optionDef.value)}</span>
+        `;
+        layoutBtn.addEventListener('click', () => {
+          section.layout = optionDef.value;
+          renderModularPageTemplateEditor();
+        });
+        layoutPicker.appendChild(layoutBtn);
+      });
+      fields.appendChild(layoutPicker);
 
       const titleInput = document.createElement('input');
       titleInput.type = 'text';
-      titleInput.placeholder = 'Section title (optional)';
+      titleInput.placeholder = 'Row name (optional)';
       titleInput.value = safeText(section.title, 255);
       titleInput.addEventListener('input', () => {
         section.title = safeText(titleInput.value, 255);
@@ -6001,6 +6086,7 @@ App.develop = (function () {
       const columnGroups = document.createElement('div');
       columnGroups.className = 'develop-page-template-column-groups';
       columnGroups.style.gridTemplateColumns = buildModularPageGridTemplate(section.layout);
+      const columnIds = columnOptions.map((columnMeta) => safeText(columnMeta.id) || 'col1');
       columnOptions.forEach((columnDef) => {
         const column = safeText(columnDef.id) || 'col1';
         const columnGroup = document.createElement('div');
@@ -6039,7 +6125,7 @@ App.develop = (function () {
         });
 
         section.modules.forEach((module, moduleIndex) => {
-          if (!columnOptions.includes(module.column)) module.column = columnOptions[0];
+          if (!columnIds.includes(safeText(module.column))) module.column = columnIds[0];
           if (safeText(module.column) !== column) return;
 
           const moduleCard = document.createElement('div');
@@ -6086,6 +6172,31 @@ App.develop = (function () {
           const moduleGrip = document.createElement('div');
           moduleGrip.className = 'develop-page-template-module-card-grip';
           moduleGrip.textContent = '⋮⋮';
+
+          const moduleSummaryBar = document.createElement('button');
+          moduleSummaryBar.type = 'button';
+          moduleSummaryBar.className = 'develop-page-template-module-summary-bar';
+          moduleSummaryBar.setAttribute('aria-expanded', module.collapsed ? 'false' : 'true');
+          moduleSummaryBar.addEventListener('click', () => {
+            module.collapsed = !module.collapsed;
+            renderModularPageTemplateEditor();
+          });
+          moduleSummaryBar.appendChild(moduleGrip);
+
+          const moduleSummaryName = document.createElement('span');
+          moduleSummaryName.className = 'develop-page-template-module-summary-name';
+          moduleSummaryName.textContent = getModularModuleDisplayName(module);
+          moduleSummaryBar.appendChild(moduleSummaryName);
+
+          const moduleSummaryType = document.createElement('span');
+          moduleSummaryType.className = 'develop-page-template-module-summary-type';
+          moduleSummaryType.textContent = getPageModuleTypeMeta(module.type).label;
+          moduleSummaryBar.appendChild(moduleSummaryType);
+
+          const moduleSummaryToggle = document.createElement('span');
+          moduleSummaryToggle.className = 'develop-page-template-module-toggle';
+          moduleSummaryToggle.textContent = module.collapsed ? '▸' : '▾';
+          moduleSummaryBar.appendChild(moduleSummaryToggle);
 
           const typeSelect = document.createElement('select');
           MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
@@ -6154,6 +6265,14 @@ App.develop = (function () {
           summary.className = 'develop-page-template-module-summary';
           summary.textContent = getModularModuleContentLabel(module);
 
+          const nameInput = document.createElement('input');
+          nameInput.type = 'text';
+          nameInput.placeholder = 'Custom module name';
+          nameInput.value = safeText(module.name, 255);
+          nameInput.addEventListener('input', () => {
+            module.name = safeText(nameInput.value, 255);
+          });
+
           const removeBtn = document.createElement('button');
           removeBtn.type = 'button';
           removeBtn.textContent = 'Remove';
@@ -6162,24 +6281,40 @@ App.develop = (function () {
             renderModularPageTemplateEditor();
           });
 
-          moduleCard.appendChild(moduleGrip);
-          moduleCard.appendChild(typeSelect);
-          moduleCard.appendChild(columnSelect);
-          moduleCard.appendChild(contentSelect);
-          moduleCard.appendChild(assetSelect);
-          moduleCard.appendChild(moduleTextInput);
-          moduleCard.appendChild(summary);
-          moduleCard.appendChild(removeBtn);
+          const moduleBody = document.createElement('div');
+          moduleBody.className = 'develop-page-template-module-body';
+          moduleBody.hidden = Boolean(module.collapsed);
+
+          moduleBody.appendChild(nameInput);
+          moduleBody.appendChild(typeSelect);
+          moduleBody.appendChild(columnSelect);
+          moduleBody.appendChild(contentSelect);
+          moduleBody.appendChild(assetSelect);
+          moduleBody.appendChild(moduleTextInput);
+          moduleBody.appendChild(summary);
+          moduleBody.appendChild(removeBtn);
+
+          const moduleIcon = document.createElement('span');
+          moduleIcon.className = 'develop-page-template-module-icon';
+          moduleIcon.textContent = getModularModuleIcon(module.type);
+          moduleSummaryBar.insertBefore(moduleIcon, moduleSummaryName);
+
+          moduleCard.appendChild(moduleSummaryBar);
+          moduleCard.appendChild(moduleBody);
           columnDropZone.appendChild(moduleCard);
         });
 
         const addModuleRow = document.createElement('div');
-        addModuleRow.className = 'page-heading-actions develop-page-template-add-module-row';
-        addModuleRow.style.justifyContent = 'flex-start';
+        addModuleRow.className = 'develop-page-template-add-module-row';
         MODULAR_PAGE_MODULE_TYPES.forEach((typeDef) => {
           const button = document.createElement('button');
           button.type = 'button';
-          button.textContent = `Add ${typeDef.label}`;
+          button.className = 'develop-page-template-module-add-btn';
+          button.title = `Add ${typeDef.label}`;
+          button.innerHTML = `
+            <span class="develop-page-template-module-icon">${escapeHtml(getModularModuleIcon(typeDef.value))}</span>
+            <span class="develop-page-template-module-add-label">${escapeHtml(typeDef.label)}</span>
+          `;
           button.addEventListener('click', () => {
             section.modules.push(createModularPageModule(typeDef.value, column));
             renderModularPageTemplateEditor();
