@@ -28,6 +28,12 @@ const {
   updateTheme,
   deleteTheme,
 } = require('../lib/developThemesStore');
+const {
+  listModules,
+  createModule,
+  updateModule,
+  deleteModule,
+} = require('../lib/developModulesStore');
 const { createIcon } = require('../lib/developIconStore');
 const { createAsset, rowToAsset } = require('../lib/assetsStore');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
@@ -305,6 +311,26 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { theme: result.data }), true;
   }
 
+  if (pathname === '/api/develop/modules' && requestMethod === 'GET') {
+    const modules = await listModules(scope);
+    return sendOk(res, 200, modules, { modules }, { total: modules.length }), true;
+  }
+
+  if (pathname === '/api/develop/modules' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    const moduleType = String(body.moduleType || body.module_type || '').trim();
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!moduleType) return sendErr(res, 400, 'moduleType is required', { code: 'VALIDATION_ERROR' }), true;
+    const module = await createModule({
+      name,
+      moduleType,
+      settings: body && typeof body.settings === 'object' ? body.settings : {},
+    }, scope);
+    if (!module) return sendErr(res, 500, 'Could not create module'), true;
+    return sendOk(res, 201, module, { module }), true;
+  }
+
   if (pathname === '/api/develop/email-templates' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
@@ -349,6 +375,24 @@ async function handle(req, res, pathname, method) {
     const result = await deleteTheme(themeMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete theme'), true;
     return sendOk(res, 200, result.data, { theme: result.data }), true;
+  }
+
+  const moduleMatch = pathname.match(/^\/api\/develop\/modules\/([^/]+)$/);
+  if (moduleMatch && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const module = await updateModule(moduleMatch[1], {
+      name: String(body.name || '').trim(),
+      moduleType: String(body.moduleType || body.module_type || '').trim(),
+      settings: body && typeof body.settings === 'object' ? body.settings : {},
+    }, scope);
+    if (!module) return sendErr(res, 500, 'Could not update module'), true;
+    return sendOk(res, 200, module, { module }), true;
+  }
+
+  if (moduleMatch && requestMethod === 'DELETE') {
+    const ok = await deleteModule(moduleMatch[1], scope);
+    if (!ok) return sendErr(res, 500, 'Could not delete module'), true;
+    return sendOk(res, 200, { id: moduleMatch[1] }, { module: { id: moduleMatch[1] } }), true;
   }
 
   if (pathname === '/api/develop/icon-builder' && requestMethod === 'POST') {

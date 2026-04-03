@@ -180,6 +180,7 @@ App.develop = (function () {
     accent: DEFAULT_LANDING_ACCENT,
   };
   let savedForms = [];
+  let savedModules = [];
   let savedLandingPages = [];
   let savedPageTemplates = [];
   let modularPageTemplateDraft = null;
@@ -2020,9 +2021,138 @@ App.develop = (function () {
     });
   }
 
+  function resetDevelopModuleForm() {
+    const idInput = byId('developModulesIdInput');
+    const nameInput = byId('developModulesNameInput');
+    const typeSelect = byId('developModulesTypeSelect');
+    const textInput = byId('developModulesHeaderTextInput');
+    const levelSelect = byId('developModulesHeaderLevelSelect');
+    const colorInput = byId('developModulesHeaderColorInput');
+    if (idInput) idInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (typeSelect) typeSelect.value = 'header';
+    if (textInput) textInput.value = '';
+    if (levelSelect) levelSelect.value = 'H1';
+    if (colorInput) colorInput.value = '#173c61';
+  }
+
+  function getDevelopModulePayloadFromForm() {
+    return {
+      id: safeText(byId('developModulesIdInput')?.value),
+      name: safeText(byId('developModulesNameInput')?.value),
+      moduleType: safeText(byId('developModulesTypeSelect')?.value) || 'header',
+      settings: {
+        text: safeText(byId('developModulesHeaderTextInput')?.value, 10000),
+        headingLevel: safeText(byId('developModulesHeaderLevelSelect')?.value) || 'H1',
+        textColor: safeText(byId('developModulesHeaderColorInput')?.value) || '#173c61',
+      },
+    };
+  }
+
+  function getDevelopModulePreview(module) {
+    const type = safeText(module?.moduleType);
+    const settings = module?.settings || {};
+    if (type === 'header') {
+      return `${safeText(settings.headingLevel) || 'H1'}: ${safeText(settings.text) || 'No text set'}`;
+    }
+    return safeText(module?.name) || '-';
+  }
+
+  function applyDevelopModuleToForm(module) {
+    if (!module) {
+      resetDevelopModuleForm();
+      return;
+    }
+    const idInput = byId('developModulesIdInput');
+    const nameInput = byId('developModulesNameInput');
+    const typeSelect = byId('developModulesTypeSelect');
+    const textInput = byId('developModulesHeaderTextInput');
+    const levelSelect = byId('developModulesHeaderLevelSelect');
+    const colorInput = byId('developModulesHeaderColorInput');
+    if (idInput) idInput.value = safeText(module.id);
+    if (nameInput) nameInput.value = safeText(module.name);
+    if (typeSelect) typeSelect.value = safeText(module.moduleType) || 'header';
+    if (textInput) textInput.value = safeText(module.settings?.text, 10000);
+    if (levelSelect) levelSelect.value = safeText(module.settings?.headingLevel) || 'H1';
+    if (colorInput) colorInput.value = safeText(module.settings?.textColor) || '#173c61';
+  }
+
+  function renderSavedModules() {
+    const tbody = byId('developModulesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!savedModules.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.textContent = 'No saved modules yet.';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
+
+    savedModules.forEach((module) => {
+      const row = document.createElement('tr');
+      const nameTd = document.createElement('td');
+      const typeTd = document.createElement('td');
+      const previewTd = document.createElement('td');
+      const updatedTd = document.createElement('td');
+      const actionsTd = document.createElement('td');
+
+      nameTd.textContent = safeText(module.name) || '-';
+      typeTd.textContent = safeText(module.moduleType) || '-';
+      previewTd.textContent = getDevelopModulePreview(module);
+      updatedTd.textContent = module.updatedAt ? new Date(module.updatedAt).toLocaleString() : '-';
+
+      const editBtn = App.makeIconButton('edit', 'Edit Module', () => {
+        applyDevelopModuleToForm(module);
+        updateDevelopModuleTypeFields();
+        setCollapsibleSectionExpanded('developModulesEditorToggle', 'developModulesEditorBody', true);
+        setCollapsibleSectionExpanded('developModulesLibraryToggle', 'developModulesLibraryBody', true);
+        notify(`Editing module: ${safeText(module.name) || module.id}`);
+      });
+      const deleteBtn = App.makeIconButton('delete', 'Delete Module', async () => {
+        if (!window.confirm(`Delete module "${safeText(module.name) || module.id}"?`)) return;
+        try {
+          await api(`/api/develop/modules/${encodeURIComponent(module.id)}`, { method: 'DELETE' });
+          await refresh();
+          notify('Module deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(deleteBtn);
+
+      row.appendChild(nameTd);
+      row.appendChild(typeTd);
+      row.appendChild(previewTd);
+      row.appendChild(updatedTd);
+      row.appendChild(actionsTd);
+      tbody.appendChild(row);
+    });
+  }
+
   async function loadSavedForms() {
     const result = await api('/api/develop/forms');
     savedForms = Array.isArray(result.forms) ? result.forms : [];
+  }
+
+  async function loadSavedModules() {
+    try {
+      const result = await api('/api/develop/modules');
+      savedModules = Array.isArray(result.modules) ? result.modules : [];
+    } catch (_) {
+      savedModules = [];
+    }
+  }
+
+  function updateDevelopModuleTypeFields() {
+    const type = safeText(byId('developModulesTypeSelect')?.value) || 'header';
+    const headerFields = byId('developModulesHeaderFields');
+    if (headerFields) {
+      headerFields.classList.toggle('hidden', type !== 'header');
+    }
   }
 
   async function loadSavedThemes() {
@@ -6750,6 +6880,7 @@ App.develop = (function () {
     loadSavedAgents();
     await Promise.all([
       loadSavedForms(),
+      loadSavedModules(),
       loadSavedThemes(),
       loadSavedEmailTemplates(),
       loadSavedLandingPages(),
@@ -6767,6 +6898,7 @@ App.develop = (function () {
     renderFormBuilderFieldConfig();
     renderFormBuilderPreview();
     renderSavedForms();
+    renderSavedModules();
     renderThemesTable();
     syncThemesBuilder();
     renderThemesPreview();
@@ -7056,11 +7188,41 @@ App.develop = (function () {
       });
     }
 
+    const developModulesCreateBtn = byId('developModulesCreateBtn');
+    const developModulesResetBtn = byId('developModulesResetBtn');
+    const developModulesTypeSelect = byId('developModulesTypeSelect');
+    const developModulesForm = byId('developModulesForm');
+
+    if (developModulesCreateBtn) {
+      developModulesCreateBtn.addEventListener('click', () => {
+        resetDevelopModuleForm();
+        updateDevelopModuleTypeFields();
+        setCollapsibleSectionExpanded('developModulesEditorToggle', 'developModulesEditorBody', true);
+      });
+    }
+
+    if (developModulesResetBtn) {
+      developModulesResetBtn.addEventListener('click', () => {
+        resetDevelopModuleForm();
+        updateDevelopModuleTypeFields();
+      });
+    }
+
+    if (developModulesTypeSelect) {
+      developModulesTypeSelect.addEventListener('change', () => {
+        updateDevelopModuleTypeFields();
+      });
+    }
+
     bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: false });
     bindCollapsibleSection('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', { defaultExpanded: false });
+    bindCollapsibleSection('developModulesEditorToggle', 'developModulesEditorBody', { defaultExpanded: true });
+    bindCollapsibleSection('developModulesLibraryToggle', 'developModulesLibraryBody', { defaultExpanded: true });
     bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: false });
+
+    updateDevelopModuleTypeFields();
 
     const templateEditorToolbar = byId('developTemplateEditorToolbar');
     if (templateEditorToolbar) {
@@ -7105,6 +7267,40 @@ App.develop = (function () {
           await refresh();
         } catch (err) {
           notify(err.message || 'Could not save email template', true);
+        }
+      });
+    }
+
+    if (developModulesForm) {
+      developModulesForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const payload = getDevelopModulePayloadFromForm();
+        const id = safeText(payload.id);
+        if (!payload.name) {
+          notify('Module name is required', true);
+          return;
+        }
+        if (!payload.moduleType) {
+          notify('Module type is required', true);
+          return;
+        }
+        if (payload.moduleType === 'header' && !safeText(payload.settings?.text, 10000)) {
+          notify('Header text is required', true);
+          return;
+        }
+        try {
+          const endpoint = id
+            ? `/api/develop/modules/${encodeURIComponent(id)}`
+            : '/api/develop/modules';
+          const method = id ? 'PATCH' : 'POST';
+          await api(endpoint, { method, body: JSON.stringify(payload) });
+          notify(id ? 'Module updated' : 'Module created');
+          resetDevelopModuleForm();
+          updateDevelopModuleTypeFields();
+          await refresh();
+          setCollapsibleSectionExpanded('developModulesLibraryToggle', 'developModulesLibraryBody', true);
+        } catch (err) {
+          notify(err.message || 'Could not save module', true);
         }
       });
     }
