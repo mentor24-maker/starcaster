@@ -2964,7 +2964,7 @@ th {
 
 .develop-page-template-section-summary {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto auto auto;
   align-items: center;
   gap: 0.65rem;
   width: 100%;
@@ -3008,6 +3008,16 @@ th {
 .develop-page-template-section-summary-toggle {
   font-size: 0.95rem;
   color: #173c61;
+}
+
+.develop-page-template-section-remove {
+  padding: 0.38rem 0.7rem;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 27, 74, 0.12);
+  background: #fff5f8;
+  color: #941b4a;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .develop-page-template-section-body {
@@ -3102,6 +3112,27 @@ th {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.88);
   padding: 0.8rem;
+  position: relative;
+}
+
+.develop-page-template-workspace-row.is-drop-before::before,
+.develop-page-template-workspace-row.is-drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 4px;
+  border-radius: 999px;
+  background: #0b82d4;
+  box-shadow: 0 0 0 2px rgba(11, 130, 212, 0.12);
+}
+
+.develop-page-template-workspace-row.is-drop-before::before {
+  top: -8px;
+}
+
+.develop-page-template-workspace-row.is-drop-after::after {
+  bottom: -8px;
 }
 
 .develop-page-template-column-groups {
@@ -3311,6 +3342,11 @@ th {
   .develop-page-template-section-summary,
   .develop-page-template-module-summary-bar {
     grid-template-columns: auto 1fr auto;
+  }
+
+  .develop-page-template-section-remove {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 

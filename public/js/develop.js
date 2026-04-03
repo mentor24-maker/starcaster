@@ -5932,6 +5932,31 @@ App.develop = (function () {
     modularPageTemplateDraft.layoutSections = sections;
   }
 
+  function insertModularPageSectionAt(layout, index = null) {
+    if (!modularPageTemplateDraft) return;
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const nextSection = createModularPageSection(layout);
+    const insertIndex = typeof index === 'number'
+      ? Math.max(0, Math.min(index, sections.length))
+      : sections.length;
+    sections.splice(insertIndex, 0, nextSection);
+    modularPageTemplateDraft.layoutSections = sections;
+  }
+
+  function moveModularPageSection(fromIndex, targetIndex, before = true) {
+    if (!modularPageTemplateDraft) return;
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    if (fromIndex < 0 || fromIndex >= sections.length || targetIndex < 0 || targetIndex >= sections.length) return;
+    const [moved] = sections.splice(fromIndex, 1);
+    if (!moved) return;
+    let insertIndex = targetIndex;
+    if (fromIndex < targetIndex) insertIndex -= 1;
+    if (!before) insertIndex += 1;
+    insertIndex = Math.max(0, Math.min(insertIndex, sections.length));
+    sections.splice(insertIndex, 0, moved);
+    modularPageTemplateDraft.layoutSections = sections;
+  }
+
   function moveModularPageModule({
     fromSectionIndex,
     fromModuleIndex,
@@ -5970,6 +5995,12 @@ App.develop = (function () {
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
     if (!sections.length) modularPageTemplateDraft.layoutSections = [];
     let draggedSectionIndex = null;
+    const clearWorkspaceDropIndicators = () => {
+      host.classList.remove('is-drag-over');
+      host.querySelectorAll('.develop-page-template-workspace-row').forEach((node) => {
+        node.classList.remove('is-drop-before', 'is-drop-after', 'is-drag-over');
+      });
+    };
     host.addEventListener('dragover', (event) => {
       if (!draggedNewPageSectionLayout && draggedSectionIndex === null) return;
       event.preventDefault();
@@ -5977,14 +6008,14 @@ App.develop = (function () {
       if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
     });
     host.addEventListener('dragleave', () => {
-      host.classList.remove('is-drag-over');
+      clearWorkspaceDropIndicators();
     });
     host.addEventListener('drop', (event) => {
       if (!draggedNewPageSectionLayout && draggedSectionIndex === null) return;
       event.preventDefault();
-      host.classList.remove('is-drag-over');
+      clearWorkspaceDropIndicators();
       if (draggedNewPageSectionLayout) {
-        modularPageTemplateDraft.layoutSections.push(createModularPageSection(draggedNewPageSectionLayout));
+        insertModularPageSectionAt(draggedNewPageSectionLayout);
         draggedNewPageSectionLayout = '';
         renderModularPageTemplateEditor();
       }
@@ -6024,19 +6055,30 @@ App.develop = (function () {
       item.appendChild(grip);
 
       item.addEventListener('dragover', (event) => {
-        if (draggedSectionIndex === null || draggedSectionIndex === sectionIndex) return;
+        if (!draggedNewPageSectionLayout && (draggedSectionIndex === null || draggedSectionIndex === sectionIndex)) return;
         event.preventDefault();
-        item.classList.add('is-drag-over');
+        clearWorkspaceDropIndicators();
+        const rect = item.getBoundingClientRect();
+        const before = event.clientY < rect.top + (rect.height / 2);
+        item.classList.add(before ? 'is-drop-before' : 'is-drop-after');
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
       });
       item.addEventListener('dragleave', () => {
-        item.classList.remove('is-drag-over');
+        item.classList.remove('is-drop-before', 'is-drop-after');
       });
       item.addEventListener('drop', (event) => {
-        if (draggedSectionIndex === null || draggedSectionIndex === sectionIndex) return;
+        if (!draggedNewPageSectionLayout && (draggedSectionIndex === null || draggedSectionIndex === sectionIndex)) return;
         event.preventDefault();
-        item.classList.remove('is-drag-over');
-        reorderModularPageSections(draggedSectionIndex, sectionIndex);
+        const rect = item.getBoundingClientRect();
+        const before = event.clientY < rect.top + (rect.height / 2);
+        clearWorkspaceDropIndicators();
+        if (draggedNewPageSectionLayout) {
+          insertModularPageSectionAt(draggedNewPageSectionLayout, before ? sectionIndex : sectionIndex + 1);
+          draggedNewPageSectionLayout = '';
+          renderModularPageTemplateEditor();
+          return;
+        }
+        moveModularPageSection(draggedSectionIndex, sectionIndex, before);
         renderModularPageTemplateEditor();
       });
 
@@ -6069,6 +6111,18 @@ App.develop = (function () {
       summaryToggle.className = 'develop-page-template-section-summary-toggle';
       summaryToggle.textContent = section.collapsed ? '▸' : '▾';
       sectionSummary.appendChild(summaryToggle);
+
+      const sectionRemove = document.createElement('button');
+      sectionRemove.type = 'button';
+      sectionRemove.className = 'develop-page-template-section-remove';
+      sectionRemove.textContent = 'Remove';
+      sectionRemove.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        modularPageTemplateDraft.layoutSections.splice(sectionIndex, 1);
+        renderModularPageTemplateEditor();
+      });
+      sectionSummary.appendChild(sectionRemove);
       item.appendChild(sectionSummary);
 
       const fields = document.createElement('div');
@@ -6118,43 +6172,6 @@ App.develop = (function () {
       });
       modulesWrap.appendChild(columnGroups);
       fields.appendChild(modulesWrap);
-
-      const actions = document.createElement('div');
-      actions.className = 'develop-template-module-actions develop-template-module-span';
-      const upBtn = document.createElement('button');
-      upBtn.type = 'button';
-      upBtn.textContent = 'Move Up';
-      upBtn.disabled = sectionIndex === 0;
-      upBtn.addEventListener('click', () => {
-        const prior = modularPageTemplateDraft.layoutSections[sectionIndex - 1];
-        modularPageTemplateDraft.layoutSections[sectionIndex - 1] = section;
-        modularPageTemplateDraft.layoutSections[sectionIndex] = prior;
-        renderModularPageTemplateEditor();
-      });
-      const downBtn = document.createElement('button');
-      downBtn.type = 'button';
-      downBtn.textContent = 'Move Down';
-      downBtn.disabled = sectionIndex === modularPageTemplateDraft.layoutSections.length - 1;
-      downBtn.addEventListener('click', () => {
-        const next = modularPageTemplateDraft.layoutSections[sectionIndex + 1];
-        modularPageTemplateDraft.layoutSections[sectionIndex + 1] = section;
-        modularPageTemplateDraft.layoutSections[sectionIndex] = next;
-        renderModularPageTemplateEditor();
-      });
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.textContent = 'Remove Section';
-      removeBtn.addEventListener('click', () => {
-        modularPageTemplateDraft.layoutSections.splice(sectionIndex, 1);
-        if (!modularPageTemplateDraft.layoutSections.length) {
-          modularPageTemplateDraft.layoutSections = createDefaultModularPageSections();
-        }
-        renderModularPageTemplateEditor();
-      });
-      actions.appendChild(upBtn);
-      actions.appendChild(downBtn);
-      actions.appendChild(removeBtn);
-      fields.appendChild(actions);
 
       item.appendChild(fields);
       host.appendChild(item);
