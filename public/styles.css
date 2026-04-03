@@ -2878,15 +2878,30 @@ th {
   gap: 0.6rem;
 }
 
-.develop-layout-toolbar button {
+.develop-layout-toolbar {
   display: grid;
-  gap: 0.45rem;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.develop-layout-tile {
+  display: grid;
+  align-items: center;
   justify-items: center;
-  padding: 0.7rem 0.5rem;
+  min-height: 78px;
+  padding: 0.7rem;
+  border: 1px solid rgba(15, 79, 143, 0.16);
+  border-radius: 12px;
+  background: #f7fbff;
   cursor: grab;
 }
 
-.develop-layout-toolbar button.is-dragging {
+.develop-layout-tile:focus-visible {
+  outline: 2px solid #0b82d4;
+  outline-offset: 2px;
+}
+
+.develop-layout-tile.is-dragging {
   opacity: 0.7;
 }
 
@@ -2894,8 +2909,9 @@ th {
 .develop-layout-picker-icon {
   display: grid;
   width: 100%;
-  min-height: 28px;
-  gap: 0.18rem;
+  max-width: 112px;
+  min-height: 30px;
+  gap: 0.28rem;
 }
 
 .develop-layout-toolbar-icon span,
@@ -2903,7 +2919,7 @@ th {
   border-radius: 5px;
   border: 1px solid rgba(255, 255, 255, 0.55);
   background: rgba(255, 255, 255, 0.2);
-  min-height: 24px;
+  min-height: 30px;
 }
 
 .develop-layout-toolbar-icon--1-5,
@@ -2944,11 +2960,6 @@ th {
 .develop-layout-toolbar-icon--6,
 .develop-layout-picker-icon--6 {
   grid-template-columns: 1fr;
-}
-
-.develop-layout-toolbar-label {
-  font-size: 0.82rem;
-  font-weight: 700;
 }
 
 .develop-page-template-section-card {
