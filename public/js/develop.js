@@ -186,6 +186,8 @@ App.develop = (function () {
   let draggedNewPageSectionLayout = '';
   let draggedNewPageSectionLayoutClearTimer = null;
   let activePageLayoutPointerDrag = null;
+  let activePageModulePointerDrag = null;
+  let activeModularPageModulePicker = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -3193,6 +3195,14 @@ App.develop = (function () {
     return safeText(module?.name, 255) || getModularModuleContentLabel(module);
   }
 
+  function getModularModulePickerItems() {
+    return MODULAR_PAGE_MODULE_TYPES.map((item) => ({
+      value: item.value,
+      label: item.label,
+      icon: getModularModuleIcon(item.value),
+    }));
+  }
+
   function buildModularPageGridTemplate(layout) {
     const meta = getModularPageLayoutMeta(layout);
     return meta.columns.map((column) => `minmax(0, ${Math.max(1, Number(column.span) || 1)}fr)`).join(' ');
@@ -6016,6 +6026,154 @@ App.develop = (function () {
     activePageLayoutPointerDrag = null;
   }
 
+  function closeModularPageModulePicker() {
+    const picker = activeModularPageModulePicker;
+    if (!picker) return;
+    picker.panel.remove();
+    activeModularPageModulePicker = null;
+  }
+
+  function clearModularPageModuleCellIndicators() {
+    const host = byId('developPageTemplateEditorSections');
+    if (!host) return;
+    host.querySelectorAll('.develop-page-template-row-cell').forEach((node) => {
+      node.classList.remove('is-module-drop-target');
+    });
+  }
+
+  function getModularPageModuleCellDropTarget(clientX, clientY) {
+    const host = byId('developPageTemplateEditorSections');
+    if (!host) return null;
+    const target = document.elementFromPoint(clientX, clientY);
+    if (!target) return null;
+    const cell = target.closest('.develop-page-template-row-cell');
+    if (!cell || !host.contains(cell)) return null;
+    return {
+      sectionIndex: Number(cell.dataset.sectionIndex),
+      column: safeText(cell.dataset.column) || 'col1',
+      element: cell,
+    };
+  }
+
+  function updateModularPageModuleCellIndicators(clientX, clientY) {
+    clearModularPageModuleCellIndicators();
+    const dropTarget = getModularPageModuleCellDropTarget(clientX, clientY);
+    dropTarget?.element?.classList.add('is-module-drop-target');
+    return dropTarget;
+  }
+
+  function addModularPageModuleToCell(type, sectionIndex, column) {
+    if (!modularPageTemplateDraft) return;
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const section = sections[sectionIndex];
+    if (!section) return;
+    section.modules.push(createModularPageModule(type, column));
+    modularPageTemplateDraft.layoutSections = sections;
+  }
+
+  function endModularPageModulePointerDrag(commit = false) {
+    const drag = activePageModulePointerDrag;
+    if (!drag) return;
+    window.removeEventListener('pointermove', drag.onPointerMove);
+    window.removeEventListener('pointerup', drag.onPointerUp);
+    window.removeEventListener('pointercancel', drag.onPointerUp);
+    document.body.classList.remove('develop-layout-dragging');
+    document.body.style.cursor = '';
+    drag.tile.classList.remove('is-dragging');
+    drag.ghost.remove();
+    if (commit && drag.dropTarget) {
+      addModularPageModuleToCell(drag.moduleType, drag.dropTarget.sectionIndex, drag.dropTarget.column);
+      closeModularPageModulePicker();
+      renderModularPageTemplateEditor();
+    }
+    clearModularPageModuleCellIndicators();
+    activePageModulePointerDrag = null;
+  }
+
+  function startModularPageModulePointerDrag(tile, moduleType, startEvent) {
+    if (!tile || !moduleType) return;
+    endModularPageModulePointerDrag(false);
+    const ghost = tile.cloneNode(true);
+    ghost.classList.add('develop-layout-tile-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(ghost);
+    const positionGhost = (x, y) => {
+      ghost.style.left = `${x + 14}px`;
+      ghost.style.top = `${y + 14}px`;
+    };
+    positionGhost(startEvent.clientX, startEvent.clientY);
+    document.body.classList.add('develop-layout-dragging');
+    document.body.style.cursor = 'grabbing';
+    tile.classList.add('is-dragging');
+    const drag = {
+      tile,
+      moduleType,
+      ghost,
+      dropTarget: null,
+      onPointerMove: null,
+      onPointerUp: null,
+    };
+    drag.onPointerMove = (event) => {
+      positionGhost(event.clientX, event.clientY);
+      drag.dropTarget = updateModularPageModuleCellIndicators(event.clientX, event.clientY);
+    };
+    drag.onPointerUp = () => {
+      endModularPageModulePointerDrag(Boolean(drag.dropTarget));
+    };
+    activePageModulePointerDrag = drag;
+    window.addEventListener('pointermove', drag.onPointerMove);
+    window.addEventListener('pointerup', drag.onPointerUp);
+    window.addEventListener('pointercancel', drag.onPointerUp);
+  }
+
+  function openModularPageModulePicker(sectionIndex, column) {
+    closeModularPageModulePicker();
+    const panel = document.createElement('div');
+    panel.className = 'develop-module-picker-panel';
+    panel.innerHTML = `
+      <div class="develop-module-picker-header">
+        <div>
+          <div class="develop-module-picker-title">Add Module</div>
+          <div class="develop-module-picker-subtitle">Drag a module into any row cell, or click one to add it here.</div>
+        </div>
+        <button type="button" class="develop-module-picker-close" aria-label="Close module picker">Close</button>
+      </div>
+      <div class="develop-module-picker-grid"></div>
+    `;
+    const closeBtn = panel.querySelector('.develop-module-picker-close');
+    const grid = panel.querySelector('.develop-module-picker-grid');
+    closeBtn?.addEventListener('click', () => {
+      closeModularPageModulePicker();
+    });
+    getModularModulePickerItems().forEach((item) => {
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'develop-module-picker-tile';
+      tile.innerHTML = `
+        <span class="develop-module-picker-icon">${escapeHtml(item.icon)}</span>
+        <span class="develop-module-picker-label">${escapeHtml(item.label)}</span>
+      `;
+      tile.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (event.pointerType !== 'mouse') return;
+        event.preventDefault();
+        startModularPageModulePointerDrag(tile, item.value, event);
+      });
+      tile.addEventListener('click', () => {
+        addModularPageModuleToCell(item.value, sectionIndex, column);
+        closeModularPageModulePicker();
+        renderModularPageTemplateEditor();
+      });
+      grid?.appendChild(tile);
+    });
+    document.body.appendChild(panel);
+    activeModularPageModulePicker = {
+      panel,
+      sectionIndex,
+      column,
+    };
+  }
+
   function startModularPageLayoutPointerDrag(tile, layout, startEvent) {
     if (!tile || !layout) return;
     endModularPageLayoutPointerDrag(false);
@@ -6216,9 +6374,37 @@ App.develop = (function () {
       columnGroups.className = 'develop-page-template-row-cells';
       columnGroups.style.gridTemplateColumns = buildModularPageGridTemplate(section.layout);
       columnOptions.forEach((columnDef) => {
+        const columnId = safeText(columnDef.id) || 'col1';
         const columnDropZone = document.createElement('div');
         columnDropZone.className = 'develop-page-template-row-cell';
-        columnDropZone.dataset.column = safeText(columnDef.id) || 'col1';
+        columnDropZone.dataset.column = columnId;
+        columnDropZone.dataset.sectionIndex = String(sectionIndex);
+        const cellModules = section.modules.filter((module) => safeText(module.column) === columnId);
+        const stack = document.createElement('div');
+        stack.className = 'develop-page-template-row-cell-stack';
+        if (cellModules.length) {
+          cellModules.forEach((module) => {
+            const pill = document.createElement('div');
+            pill.className = 'develop-page-template-module-pill';
+            pill.innerHTML = `
+              <span class="develop-page-template-module-pill-icon">${escapeHtml(getModularModuleIcon(module.type))}</span>
+              <span class="develop-page-template-module-pill-label">${escapeHtml(getPageModuleTypeMeta(module.type).label)}</span>
+            `;
+            stack.appendChild(pill);
+          });
+        }
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'develop-page-template-cell-add';
+        addBtn.textContent = '+';
+        addBtn.title = 'Add module';
+        addBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openModularPageModulePicker(sectionIndex, columnId);
+        });
+        columnDropZone.appendChild(stack);
+        columnDropZone.appendChild(addBtn);
         columnGroups.appendChild(columnDropZone);
       });
       item.appendChild(columnGroups);
