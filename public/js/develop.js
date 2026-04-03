@@ -280,9 +280,9 @@ App.develop = (function () {
     },
     {
       value: 'textarea',
-      label: 'Textarea',
+      label: 'Text Block',
       description: 'A rich text content block for body copy, commentary, and formatted editorial content.',
-      starterName: 'Textarea',
+      starterName: 'Text Block',
       defaults: {
         content: '<p>Write your content here.</p>',
         textAlign: 'left',
@@ -291,31 +291,11 @@ App.develop = (function () {
         maxWidth: 'full',
       },
       fields: [
-        { key: 'content', label: 'Rich Text Content', control: 'textarea', rows: 8, placeholder: '<p>Write your content here.</p>' },
+        { key: 'content', label: 'Content', control: 'richtext', rows: 8, placeholder: '<p>Write your content here.</p>' },
         { key: 'textAlign', label: 'Text Alignment', control: 'select', options: ['left', 'center', 'right'] },
         { key: 'textColor', label: 'Text Color', control: 'color' },
         { key: 'backgroundColor', label: 'Background Color', control: 'color' },
         { key: 'maxWidth', label: 'Width', control: 'select', options: ['compact', 'standard', 'wide', 'full'] },
-      ],
-    },
-    {
-      value: 'izzy',
-      label: 'Izzy',
-      description: 'A positioned Izzy character block with pose selection and editable commentary.',
-      starterName: 'Izzy',
-      defaults: {
-        pose: 'standing',
-        comments: 'Let Izzy introduce the idea, give guidance, or frame the section.',
-        pagePosition: 'bottom-right',
-        offsetX: 0,
-        offsetY: 0,
-      },
-      fields: [
-        { key: 'pose', label: 'Pose', control: 'select', options: ['standing', 'pointing-right', 'pointing-left', 'thinking', 'welcoming', 'celebrating'] },
-        { key: 'comments', label: 'Comments', control: 'textarea', rows: 4, placeholder: 'What should Izzy say in this section?' },
-        { key: 'pagePosition', label: 'Page Position', control: 'select', options: ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right'] },
-        { key: 'offsetX', label: 'Horizontal Offset', control: 'number', min: -400, max: 400, step: 5 },
-        { key: 'offsetY', label: 'Vertical Offset', control: 'number', min: -400, max: 400, step: 5 },
       ],
     },
   ];
@@ -2190,6 +2170,7 @@ App.develop = (function () {
 
   function getDevelopModuleTypeDefinition(type) {
     const normalized = safeText(type);
+    if (normalized === 'izzy') return null;
     return MODULE_TYPE_DEFINITIONS.find((item) => item.value === normalized) || MODULE_TYPE_DEFINITIONS[0];
   }
 
@@ -2236,7 +2217,7 @@ App.develop = (function () {
     const host = byId('developModulesSettingsFields');
     const help = byId('developModulesTypeHelp');
     if (!host) return;
-    const definition = getDevelopModuleTypeDefinition(type);
+    const definition = getDevelopModuleTypeDefinition(type) || MODULE_TYPE_DEFINITIONS[0];
     host.innerHTML = '';
     host.className = 'grid-form';
     if (help) {
@@ -2259,6 +2240,55 @@ App.develop = (function () {
         control = document.createElement('textarea');
         control.rows = Number(field.rows) || 3;
         control.value = safeText(value, 10000);
+      } else if (field.control === 'richtext') {
+        wrap.className = 'stack-form';
+        const toolbar = document.createElement('div');
+        toolbar.className = 'develop-richtext-toolbar';
+        const editor = document.createElement('div');
+        editor.id = `developModuleField_${field.key}`;
+        editor.className = 'develop-richtext-editor';
+        editor.contentEditable = 'true';
+        editor.setAttribute('data-module-field-key', field.key);
+        editor.setAttribute('data-module-field-control', field.control);
+        editor.setAttribute('data-placeholder', field.placeholder || '');
+        editor.innerHTML = safeText(value, 20000) || '<p></p>';
+
+        [
+          { label: 'B', command: 'bold' },
+          { label: 'I', command: 'italic' },
+          { label: 'U', command: 'underline' },
+          { label: 'UL', command: 'insertUnorderedList' },
+          { label: 'OL', command: 'insertOrderedList' },
+        ].forEach((tool) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'develop-richtext-tool';
+          button.textContent = tool.label;
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            editor.focus();
+            document.execCommand(tool.command, false, null);
+          });
+          toolbar.appendChild(button);
+        });
+
+        const linkButton = document.createElement('button');
+        linkButton.type = 'button';
+        linkButton.className = 'develop-richtext-tool';
+        linkButton.textContent = 'Link';
+        linkButton.addEventListener('click', (event) => {
+          event.preventDefault();
+          const href = window.prompt('Enter link URL');
+          if (!href) return;
+          editor.focus();
+          document.execCommand('createLink', false, href);
+        });
+        toolbar.appendChild(linkButton);
+
+        wrap.appendChild(toolbar);
+        wrap.appendChild(editor);
+        host.appendChild(wrap);
+        return;
       } else if (field.control === 'select') {
         control = document.createElement('select');
         (field.options || []).forEach((optionValue) => {
@@ -2320,13 +2350,15 @@ App.develop = (function () {
   }
 
   function getDevelopModuleSettingsFromForm(type) {
-    const definition = getDevelopModuleTypeDefinition(type);
+    const definition = getDevelopModuleTypeDefinition(type) || MODULE_TYPE_DEFINITIONS[0];
     const settings = {};
     definition.fields.forEach((field) => {
       const input = byId(`developModuleField_${field.key}`);
       if (!input) return;
       if (field.control === 'checkbox') {
         settings[field.key] = Boolean(input.checked);
+      } else if (field.control === 'richtext') {
+        settings[field.key] = String(input.innerHTML || '').trim();
       } else if (field.control === 'number') {
         const raw = safeText(input.value);
         settings[field.key] = raw ? Number(raw) : '';
@@ -2368,9 +2400,6 @@ App.develop = (function () {
     if (type === 'textarea') {
       return `${safeText(settings.content, 120).replace(/<[^>]+>/g, ' ') || 'No content set'} · ${safeText(settings.maxWidth) || 'full'}`;
     }
-    if (type === 'izzy') {
-      return `${safeText(settings.pose) || 'standing'} · ${safeText(settings.pagePosition) || 'bottom-right'} · ${safeText(settings.comments, 120) || 'No comments set'}`;
-    }
     return safeText(module?.name) || '-';
   }
 
@@ -2392,7 +2421,8 @@ App.develop = (function () {
     const tbody = byId('developModulesTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
-    const modules = getCanonicalSavedModules(savedModules);
+    const modules = getCanonicalSavedModules(savedModules)
+      .filter((module) => Boolean(getDevelopModuleTypeDefinition(module.moduleType)));
     if (!modules.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
@@ -2412,7 +2442,7 @@ App.develop = (function () {
       const actionsTd = document.createElement('td');
 
       nameTd.textContent = safeText(module.name) || '-';
-      typeTd.textContent = getDevelopModuleTypeDefinition(module.moduleType).label;
+      typeTd.textContent = (getDevelopModuleTypeDefinition(module.moduleType) || { label: safeText(module.moduleType) || '-' }).label;
       previewTd.textContent = getDevelopModulePreview(module);
       updatedTd.textContent = module.updatedAt ? new Date(module.updatedAt).toLocaleString() : '-';
 
