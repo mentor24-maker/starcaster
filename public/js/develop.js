@@ -2185,7 +2185,12 @@ App.develop = (function () {
   function getCanonicalSavedModules(modulesInput = savedModules) {
     const seen = new Map();
     (Array.isArray(modulesInput) ? modulesInput : []).forEach((module) => {
-      const key = `${safeText(module?.moduleType).toLowerCase()}::${safeText(module?.name).toLowerCase()}`;
+      const typeKey = safeText(module?.moduleType).toLowerCase();
+      let nameKey = safeText(module?.name).toLowerCase();
+      if (typeKey === 'textarea' && nameKey === 'textarea') {
+        nameKey = 'text block';
+      }
+      const key = `${typeKey}::${nameKey}`;
       if (!key || key === '::') return;
       const nextTime = new Date(module?.updatedAt || module?.createdAt || 0).getTime();
       const existing = seen.get(key);
@@ -2441,7 +2446,10 @@ App.develop = (function () {
       const updatedTd = document.createElement('td');
       const actionsTd = document.createElement('td');
 
-      nameTd.textContent = safeText(module.name) || '-';
+      const displayName = safeText(module.moduleType) === 'textarea' && safeText(module.name).toLowerCase() === 'textarea'
+        ? 'Text Block'
+        : safeText(module.name) || '-';
+      nameTd.textContent = displayName;
       typeTd.textContent = (getDevelopModuleTypeDefinition(module.moduleType) || { label: safeText(module.moduleType) || '-' }).label;
       previewTd.textContent = getDevelopModulePreview(module);
       updatedTd.textContent = module.updatedAt ? new Date(module.updatedAt).toLocaleString() : '-';
@@ -2488,7 +2496,10 @@ App.develop = (function () {
       const canonicalModules = getCanonicalSavedModules(savedModules);
       const missingStarterModules = starterModules.filter((starter) => !canonicalModules.some((module) => {
         const sameType = safeText(module.moduleType) === safeText(starter.moduleType);
-        const sameName = safeText(module.name).toLowerCase() === safeText(starter.name).toLowerCase();
+        const moduleName = safeText(module.name).toLowerCase();
+        const starterName = safeText(starter.name).toLowerCase();
+        const sameName = moduleName === starterName
+          || (safeText(module.moduleType) === 'textarea' && moduleName === 'textarea' && starterName === 'text block');
         return sameType && sameName;
       }));
       if (missingStarterModules.length) {
