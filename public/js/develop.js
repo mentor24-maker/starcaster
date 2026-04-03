@@ -185,6 +185,7 @@ App.develop = (function () {
   let modularPageTemplateDraft = null;
   let draggedNewPageSectionLayout = '';
   let draggedNewPageSectionLayoutClearTimer = null;
+  let activePageLayoutPointerDrag = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -5944,6 +5945,113 @@ App.develop = (function () {
     modularPageTemplateDraft.layoutSections = sections;
   }
 
+  function clearModularPageWorkspaceIndicators() {
+    const host = byId('developPageTemplateEditorSections');
+    if (!host) return;
+    host.classList.remove('is-drag-over');
+    host.querySelectorAll('.develop-page-template-workspace-row').forEach((node) => {
+      node.classList.remove('is-drop-before', 'is-drop-after', 'is-drag-over');
+    });
+  }
+
+  function getModularPageWorkspaceDropTarget(clientX, clientY) {
+    const host = byId('developPageTemplateEditorSections');
+    if (!host) return null;
+    const target = document.elementFromPoint(clientX, clientY);
+    if (!target) return null;
+    const row = target.closest('.develop-page-template-workspace-row');
+    if (row && host.contains(row)) {
+      const index = Number(row.dataset.sectionIndex);
+      if (!Number.isNaN(index)) {
+        const rect = row.getBoundingClientRect();
+        return {
+          type: 'row',
+          index,
+          before: clientY < rect.top + (rect.height / 2),
+        };
+      }
+    }
+    if (host.contains(target)) return { type: 'workspace' };
+    return null;
+  }
+
+  function updateModularPageWorkspacePointerDropIndicators(clientX, clientY) {
+    clearModularPageWorkspaceIndicators();
+    const host = byId('developPageTemplateEditorSections');
+    const dropTarget = getModularPageWorkspaceDropTarget(clientX, clientY);
+    if (!host || !dropTarget) return null;
+    host.classList.add('is-drag-over');
+    if (dropTarget.type === 'row') {
+      const row = host.querySelector(`.develop-page-template-workspace-row[data-section-index="${dropTarget.index}"]`);
+      row?.classList.add(dropTarget.before ? 'is-drop-before' : 'is-drop-after');
+    }
+    return dropTarget;
+  }
+
+  function endModularPageLayoutPointerDrag(commit = false) {
+    const drag = activePageLayoutPointerDrag;
+    if (!drag) return;
+    window.removeEventListener('pointermove', drag.onPointerMove);
+    window.removeEventListener('pointerup', drag.onPointerUp);
+    window.removeEventListener('pointercancel', drag.onPointerUp);
+    document.body.classList.remove('develop-layout-dragging');
+    document.body.style.cursor = '';
+    drag.tile.classList.remove('is-dragging');
+    drag.ghost.remove();
+    if (commit && drag.dropTarget) {
+      if (!modularPageTemplateDraft) {
+        modularPageTemplateDraft = buildEmptyLandingRecord('Modular Page Template', selectedTemplateId || LANDING_TEMPLATES[0].id);
+        modularPageTemplateDraft.templateKind = 'modular';
+        modularPageTemplateDraft.layoutSections = [];
+      }
+      if (drag.dropTarget.type === 'row') {
+        insertModularPageSectionAt(drag.layout, drag.dropTarget.before ? drag.dropTarget.index : drag.dropTarget.index + 1);
+      } else {
+        insertModularPageSectionAt(drag.layout);
+      }
+      renderModularPageTemplateEditor();
+    } else {
+      clearModularPageWorkspaceIndicators();
+    }
+    activePageLayoutPointerDrag = null;
+  }
+
+  function startModularPageLayoutPointerDrag(tile, layout, startEvent) {
+    if (!tile || !layout) return;
+    endModularPageLayoutPointerDrag(false);
+    const ghost = tile.cloneNode(true);
+    ghost.classList.add('develop-layout-tile-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(ghost);
+    const positionGhost = (x, y) => {
+      ghost.style.left = `${x + 14}px`;
+      ghost.style.top = `${y + 14}px`;
+    };
+    positionGhost(startEvent.clientX, startEvent.clientY);
+    document.body.classList.add('develop-layout-dragging');
+    document.body.style.cursor = 'grabbing';
+    tile.classList.add('is-dragging');
+    const drag = {
+      tile,
+      layout,
+      ghost,
+      dropTarget: null,
+      onPointerMove: null,
+      onPointerUp: null,
+    };
+    drag.onPointerMove = (event) => {
+      positionGhost(event.clientX, event.clientY);
+      drag.dropTarget = updateModularPageWorkspacePointerDropIndicators(event.clientX, event.clientY);
+    };
+    drag.onPointerUp = () => {
+      endModularPageLayoutPointerDrag(Boolean(drag.dropTarget));
+    };
+    activePageLayoutPointerDrag = drag;
+    window.addEventListener('pointermove', drag.onPointerMove);
+    window.addEventListener('pointerup', drag.onPointerUp);
+    window.addEventListener('pointercancel', drag.onPointerUp);
+  }
+
   function moveModularPageSection(fromIndex, targetIndex, before = true) {
     if (!modularPageTemplateDraft) return;
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
@@ -5997,10 +6105,7 @@ App.develop = (function () {
     if (!sections.length) modularPageTemplateDraft.layoutSections = [];
     let draggedSectionIndex = null;
     const clearWorkspaceDropIndicators = () => {
-      host.classList.remove('is-drag-over');
-      host.querySelectorAll('.develop-page-template-workspace-row').forEach((node) => {
-        node.classList.remove('is-drop-before', 'is-drop-after', 'is-drag-over');
-      });
+      clearModularPageWorkspaceIndicators();
     };
     host.addEventListener('dragover', (event) => {
       if (!draggedNewPageSectionLayout && draggedSectionIndex === null) return;
@@ -6039,6 +6144,7 @@ App.develop = (function () {
     normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).forEach((section, sectionIndex) => {
       const item = document.createElement('div');
       item.className = 'develop-page-template-workspace-row';
+      item.dataset.sectionIndex = String(sectionIndex);
       item.draggable = true;
       item.title = 'Drag to reorder row';
       item.addEventListener('dragstart', (event) => {
@@ -7144,7 +7250,17 @@ App.develop = (function () {
     if (pageTemplateEditorToolbar) {
       pageTemplateEditorToolbar.querySelectorAll('[data-section-layout]').forEach((tile) => {
         tile.draggable = true;
+        tile.addEventListener('pointerdown', (event) => {
+          if (event.pointerType === 'mouse' && event.button !== 0) return;
+          if (event.pointerType !== 'mouse') return;
+          event.preventDefault();
+          startModularPageLayoutPointerDrag(tile, safeText(tile.getAttribute('data-section-layout')) || '6', event);
+        });
         tile.addEventListener('dragstart', (event) => {
+          if (activePageLayoutPointerDrag) {
+            event.preventDefault();
+            return;
+          }
           if (draggedNewPageSectionLayoutClearTimer) {
             clearTimeout(draggedNewPageSectionLayoutClearTimer);
             draggedNewPageSectionLayoutClearTimer = null;
