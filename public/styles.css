@@ -3330,6 +3330,34 @@ th {
   font-weight: 700;
 }
 
+.develop-richtext-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.develop-richtext-tool {
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+}
+
+.develop-richtext-editor {
+  min-height: 220px;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: #173c61;
+  line-height: 1.6;
+  outline: none;
+}
+
+.develop-richtext-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #7b92aa;
+}
+
 .develop-page-template-module-card {
   display: grid;
   grid-template-columns: 1fr auto;
