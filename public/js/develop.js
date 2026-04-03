@@ -249,41 +249,53 @@ App.develop = (function () {
     {
       value: 'table',
       label: 'Table',
-      description: 'A structured table block for pricing, comparisons, or data snapshots.',
+      description: 'A presentation-ready table block for charts, pricing grids, and structured tabular data.',
       starterName: 'Table',
       defaults: {
-        caption: 'Comparison Table',
-        columns: 'Feature, Option A, Option B',
+        caption: 'Data Table',
+        columnsCount: 3,
+        rowsCount: 4,
+        headerColor: '#173c61',
+        headerTextColor: '#ffffff',
+        borderColor: '#d6e6f5',
+        borderThickness: 1,
+        cellPadding: 14,
         striped: true,
-        bordered: true,
         compact: false,
+        style: 'clean',
       },
       fields: [
         { key: 'caption', label: 'Caption', control: 'text', placeholder: 'Table caption' },
-        { key: 'columns', label: 'Columns', control: 'textarea', rows: 3, placeholder: 'Feature, Option A, Option B' },
+        { key: 'columnsCount', label: 'Columns', control: 'number', min: 1, max: 8, step: 1 },
+        { key: 'rowsCount', label: 'Rows', control: 'number', min: 1, max: 20, step: 1 },
+        { key: 'headerColor', label: 'Header Color', control: 'color' },
+        { key: 'headerTextColor', label: 'Header Text Color', control: 'color' },
+        { key: 'borderColor', label: 'Border Color', control: 'color' },
+        { key: 'borderThickness', label: 'Border Thickness', control: 'number', min: 0, max: 8, step: 1 },
+        { key: 'cellPadding', label: 'Cell Padding', control: 'number', min: 4, max: 40, step: 1 },
+        { key: 'style', label: 'Style', control: 'select', options: ['clean', 'boxed', 'minimal', 'editorial'] },
         { key: 'striped', label: 'Striped Rows', control: 'checkbox' },
-        { key: 'bordered', label: 'Bordered', control: 'checkbox' },
         { key: 'compact', label: 'Compact', control: 'checkbox' },
       ],
     },
     {
       value: 'textarea',
       label: 'Textarea',
-      description: 'A configurable multi-line text input block for forms, surveys, and feedback.',
+      description: 'A rich text content block for body copy, commentary, and formatted editorial content.',
       starterName: 'Textarea',
       defaults: {
-        label: 'Message',
-        placeholder: 'Write your message here',
-        rows: 5,
-        required: false,
-        helperText: '',
+        content: '<p>Write your content here.</p>',
+        textAlign: 'left',
+        textColor: '#173c61',
+        backgroundColor: '#ffffff',
+        maxWidth: 'full',
       },
       fields: [
-        { key: 'label', label: 'Label', control: 'text', placeholder: 'Message' },
-        { key: 'placeholder', label: 'Placeholder', control: 'text', placeholder: 'Write your message here' },
-        { key: 'rows', label: 'Rows', control: 'number', min: 2, max: 12, step: 1 },
-        { key: 'required', label: 'Required', control: 'checkbox' },
-        { key: 'helperText', label: 'Helper Text', control: 'text', placeholder: 'Optional helper text' },
+        { key: 'content', label: 'Rich Text Content', control: 'textarea', rows: 8, placeholder: '<p>Write your content here.</p>' },
+        { key: 'textAlign', label: 'Text Alignment', control: 'select', options: ['left', 'center', 'right'] },
+        { key: 'textColor', label: 'Text Color', control: 'color' },
+        { key: 'backgroundColor', label: 'Background Color', control: 'color' },
+        { key: 'maxWidth', label: 'Width', control: 'select', options: ['compact', 'standard', 'wide', 'full'] },
       ],
     },
     {
@@ -2357,10 +2369,10 @@ App.develop = (function () {
       return `${safeText(settings.videoUrl) ? 'Video linked' : 'No video set'} · ${safeText(settings.aspectRatio) || '16:9'}`;
     }
     if (type === 'table') {
-      return `${safeText(settings.caption) || 'Table'} · ${settings.striped ? 'Striped' : 'Plain'} · ${settings.bordered ? 'Bordered' : 'Borderless'}`;
+      return `${safeText(settings.caption) || 'Table'} · ${safeText(settings.columnsCount) || 0} cols · ${safeText(settings.rowsCount) || 0} rows`;
     }
     if (type === 'textarea') {
-      return `${safeText(settings.label) || 'Textarea'} · ${safeText(settings.rows)} rows${settings.required ? ' · Required' : ''}`;
+      return `${safeText(settings.content, 120).replace(/<[^>]+>/g, ' ') || 'No content set'} · ${safeText(settings.maxWidth) || 'full'}`;
     }
     if (type === 'izzy') {
       return `${safeText(settings.pose) || 'standing'} · ${safeText(settings.pagePosition) || 'bottom-right'} · ${safeText(settings.comments, 120) || 'No comments set'}`;
