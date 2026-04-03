@@ -5292,7 +5292,7 @@
             <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
           </div>
         </div>
-        <p>Build reusable content modules for modular page layouts. We’ll start with simple header modules and expand the library type by type.</p>
+        <p>Build reusable content modules for modular page layouts. The saved library is the important part; this studio is where we configure each module type as we develop it.</p>
         <section class="develop-template-section">
           <div class="develop-template-section-header-row">
             <button
@@ -5303,7 +5303,7 @@
               aria-controls="developModulesEditorBody"
             >
               <span class="develop-template-section-arrow" aria-hidden="true">▾</span>
-              <span class="develop-template-section-title">Module Builder</span>
+              <span class="develop-template-section-title">Module Studio</span>
             </button>
           </div>
           <div id="developModulesEditorBody" class="develop-template-section-body">
@@ -5311,24 +5311,10 @@
               <input id="developModulesIdInput" type="hidden" />
               <div class="grid-form">
                 <input id="developModulesNameInput" type="text" placeholder="Module name" />
-                <select id="developModulesTypeSelect">
-                  <option value="header">Header</option>
-                </select>
+                <select id="developModulesTypeSelect"></select>
               </div>
-              <div id="developModulesHeaderFields" class="grid-form">
-                <textarea id="developModulesHeaderTextInput" rows="4" placeholder="Header text"></textarea>
-                <div class="stack-form">
-                  <select id="developModulesHeaderLevelSelect">
-                    <option value="H1">H1</option>
-                    <option value="H2">H2</option>
-                    <option value="H3">H3</option>
-                    <option value="H4">H4</option>
-                    <option value="H5">H5</option>
-                    <option value="H6">H6</option>
-                  </select>
-                  <input id="developModulesHeaderColorInput" type="color" value="#173c61" />
-                </div>
-              </div>
+              <div id="developModulesTypeHelp" class="meta"></div>
+              <div id="developModulesSettingsFields" class="grid-form"></div>
               <div class="page-heading-actions" style="justify-content:flex-start;">
                 <button type="submit">Save Module</button>
                 <button id="developModulesResetBtn" type="button">Reset</button>
