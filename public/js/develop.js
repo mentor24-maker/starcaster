@@ -3884,9 +3884,9 @@ App.develop = (function () {
       padding: '',
       backgroundColor: '',
       backgroundImageId: '',
-      borderColor: '',
-      borderThickness: '',
-      borderRadius: '',
+      borderColor: '#999',
+      borderThickness: '1',
+      borderRadius: '14',
     };
   }
 
@@ -3906,9 +3906,9 @@ App.develop = (function () {
         padding: safeText(settings.padding, 20),
         backgroundColor: safeText(settings.backgroundColor, 20),
         backgroundImageId: safeText(settings.backgroundImageId, 120),
-        borderColor: safeText(settings.borderColor, 20),
-        borderThickness: safeText(settings.borderThickness, 20),
-        borderRadius: safeText(settings.borderRadius, 20),
+        borderColor: safeText(settings.borderColor, 20) || '#999',
+        borderThickness: safeText(settings.borderThickness, 20) || '1',
+        borderRadius: safeText(settings.borderRadius, 20) || '14',
       };
     });
     return next;
@@ -4027,7 +4027,7 @@ App.develop = (function () {
   function createDefaultRowSettings() {
     return {
       margin: '',
-      padding: '',
+      padding: '20',
       backgroundColor: '',
     };
   }
@@ -4038,7 +4038,7 @@ App.develop = (function () {
       : {};
     return {
       margin: safeText(next.margin),
-      padding: safeText(next.padding),
+      padding: safeText(next.padding) || '20',
       backgroundColor: safeText(next.backgroundColor),
     };
   }
