@@ -7596,25 +7596,21 @@ App.develop = (function () {
 
   function openModularPageTemplatePreviewModal(template) {
     if (!template) return;
-    const previewWindow = window.open('', '_blank', 'noopener,noreferrer');
-    if (!previewWindow) {
-      notify('Could not open preview tab. Please allow pop-ups for this site.', true);
-      return;
-    }
-    const headMarkup = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-      .map((node) => node.outerHTML)
-      .join('\n');
     const title = safeText(template.name) || 'Modular Page Template Preview';
     const pageMarkup = buildModularPageTemplatePreviewMarkup(template);
-    previewWindow.document.open();
-    previewWindow.document.write(`<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(title)}</title>
-    ${headMarkup}
     <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         min-height: 100vh;
@@ -7655,8 +7651,124 @@ App.develop = (function () {
         font-weight: 700;
         cursor: pointer;
       }
-      .develop-preview-page .develop-template-canvas {
+      .develop-template-canvas {
         min-height: calc(100vh - 120px);
+        border-radius: 18px;
+        padding: 24px;
+        background: rgba(255, 255, 255, 0.84);
+        box-shadow: 0 16px 40px rgba(15, 55, 90, 0.12);
+      }
+      .develop-modular-page-preview {
+        display: grid;
+        gap: 1rem;
+      }
+      .develop-modular-page-section {
+        border: 1px solid rgba(15, 79, 143, 0.16);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.82);
+        padding: 1rem;
+      }
+      .develop-modular-page-columns {
+        display: grid;
+        gap: 0.9rem;
+      }
+      .develop-modular-page-column {
+        display: grid;
+        gap: 0.7rem;
+      }
+      .develop-modular-page-column-empty {
+        min-height: 96px;
+        display: grid;
+        place-items: center;
+        border: 2px dashed rgba(15, 79, 143, 0.18);
+        border-radius: 12px;
+        background: rgba(240, 248, 255, 0.58);
+        color: #587592;
+        font-weight: 700;
+        text-align: center;
+        padding: 1rem;
+      }
+      .develop-template-eyebrow {
+        margin-bottom: 0.6rem;
+        color: #315879;
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .develop-template-cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      .develop-template-cta-row button,
+      .develop-template-form-card button {
+        border: 0;
+        border-radius: 12px;
+        background: #2c7cd6;
+        color: #ffffff;
+        font-weight: 700;
+        padding: 0.9rem 1.15rem;
+        cursor: pointer;
+      }
+      .develop-template-form-card {
+        display: grid;
+        gap: 0.75rem;
+        padding: 1rem;
+        border-radius: 16px;
+        background: rgba(245, 251, 255, 0.94);
+        border: 1px solid rgba(15, 79, 143, 0.12);
+      }
+      .develop-template-form-card h3,
+      .develop-modular-page-preview h3,
+      .develop-modular-page-preview h4,
+      .develop-modular-page-preview p {
+        margin: 0;
+      }
+      .develop-template-form-card input,
+      .develop-template-form-card textarea {
+        width: 100%;
+        border: 1px solid rgba(15, 79, 143, 0.16);
+        border-radius: 10px;
+        padding: 0.85rem 0.95rem;
+        font: inherit;
+        background: #ffffff;
+      }
+      .develop-template-image-slot {
+        min-height: 140px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 79, 143, 0.12);
+        background: rgba(240, 248, 255, 0.72);
+        color: #35516c;
+        font-weight: 700;
+        padding: 1rem;
+        text-align: center;
+        overflow: hidden;
+      }
+      .develop-template-image-slot img {
+        max-width: 100%;
+        max-height: 320px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+      .meta {
+        color: #587592;
+      }
+      @media (max-width: 900px) {
+        .develop-preview-page {
+          padding: 16px;
+        }
+        .develop-preview-page__bar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .develop-modular-page-columns {
+          grid-template-columns: 1fr !important;
+        }
       }
     </style>
   </head>
@@ -7674,8 +7786,18 @@ App.develop = (function () {
       </div>
     </div>
   </body>
-</html>`);
-    previewWindow.document.close();
+</html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const previewUrl = URL.createObjectURL(blob);
+    const previewWindow = window.open(previewUrl, '_blank');
+    if (!previewWindow) {
+      URL.revokeObjectURL(previewUrl);
+      notify('Could not open preview tab. Please allow pop-ups for this site.', true);
+      return;
+    }
+    window.setTimeout(() => {
+      URL.revokeObjectURL(previewUrl);
+    }, 60000);
   }
 
   function renderFormTemplateLibrary() {
