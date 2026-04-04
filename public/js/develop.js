@@ -2461,6 +2461,23 @@ App.develop = (function () {
         setCollapsibleSectionExpanded('developModulesLibraryToggle', 'developModulesLibraryBody', true);
         notify(`Editing module: ${safeText(module.name) || module.id}`);
       });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Module', async () => {
+        try {
+          const payload = {
+            name: safeText(module.name),
+            moduleType: safeText(module.moduleType),
+            settings: module && typeof module.settings === 'object' ? JSON.parse(JSON.stringify(module.settings)) : {},
+          };
+          await api('/api/develop/modules', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          await refresh();
+          notify('Module cloned');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Module', async () => {
         if (!window.confirm(`Delete module "${safeText(module.name) || module.id}"?`)) return;
         try {
@@ -2472,6 +2489,7 @@ App.develop = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
 
       row.appendChild(nameTd);
@@ -7585,12 +7603,12 @@ App.develop = (function () {
     }
 
     bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: false });
-    bindCollapsibleSection('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', { defaultExpanded: false });
+    bindCollapsibleSection('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', { defaultExpanded: true });
     bindCollapsibleSection('developModulesEditorToggle', 'developModulesEditorBody', { defaultExpanded: true });
     bindCollapsibleSection('developModulesLibraryToggle', 'developModulesLibraryBody', { defaultExpanded: true });
     bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
-    bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: false });
+    bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: true });
 
     updateDevelopModuleTypeFields();
 
