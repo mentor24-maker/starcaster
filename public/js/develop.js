@@ -7569,7 +7569,12 @@ App.develop = (function () {
       if (type === 'spacer') return `<div style="height:1.25rem;"></div>`;
       return `<div class="meta">${contentLabel}</div>`;
     };
-    const renderColumn = (modules, className, settings) => `<div class="${className}" style="${escapeHtml(styleObjectToCssText(buildContainerStyle(settings)))}">${modules.map(renderModule).join('')}</div>`;
+    const renderColumn = (modules, className, settings) => {
+      const body = modules.length
+        ? modules.map(renderModule).join('')
+        : '<div class="develop-modular-page-column-empty">Empty container</div>';
+      return `<div class="${className}" style="${escapeHtml(styleObjectToCssText(buildContainerStyle(settings)))}">${body}</div>`;
+    };
     const markup = sections.map((section) => {
       const layout = getModularPageLayoutMeta(section.layout);
       const columnMarkup = layout.columns.map((column) => {
@@ -8581,6 +8586,7 @@ App.develop = (function () {
     const pageTemplateEditorNameInput = byId('developPageTemplateEditorNameInput');
     const pageTemplateEditorBaseTemplateSelect = byId('developPageTemplateEditorBaseTemplateSelect');
     const pageTemplateEditorCloseBtnTop = byId('developPageTemplateEditorCloseBtnTop');
+    const pageTemplateEditorPreviewBtnTop = byId('developPageTemplateEditorPreviewBtnTop');
     const pageTemplateEditorPreviewBtn = byId('developPageTemplateEditorPreviewBtn');
     const pageTemplateEditorToolbar = byId('developPageTemplateEditorToolbar');
 
@@ -8612,6 +8618,16 @@ App.develop = (function () {
 
     if (pageTemplateEditorPreviewBtn) {
       pageTemplateEditorPreviewBtn.addEventListener('click', () => {
+        if (!modularPageTemplateDraft) {
+          notify('Open a modular template first', true);
+          return;
+        }
+        openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+      });
+    }
+
+    if (pageTemplateEditorPreviewBtnTop) {
+      pageTemplateEditorPreviewBtnTop.addEventListener('click', () => {
         if (!modularPageTemplateDraft) {
           notify('Open a modular template first', true);
           return;
