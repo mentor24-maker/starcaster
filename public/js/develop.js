@@ -325,6 +325,7 @@ App.develop = (function () {
   let activePageLayoutPointerDrag = null;
   let activePageModulePointerDrag = null;
   let activeModularPageModulePicker = null;
+  let activeModularPageModuleEditor = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -2218,10 +2219,10 @@ App.develop = (function () {
     });
   }
 
-  function renderDevelopModuleSettingsFields(type, settings = {}) {
-    const host = byId('developModulesSettingsFields');
-    const help = byId('developModulesTypeHelp');
+  function renderDevelopModuleSettingsFieldsInto(host, type, settings = {}, options = {}) {
     if (!host) return;
+    const help = options.helpNode || null;
+    const prefix = safeText(options.prefix) || 'developModuleField';
     const definition = getDevelopModuleTypeDefinition(type) || MODULE_TYPE_DEFINITIONS[0];
     host.innerHTML = '';
     host.className = 'grid-form';
@@ -2250,7 +2251,7 @@ App.develop = (function () {
         const toolbar = document.createElement('div');
         toolbar.className = 'develop-richtext-toolbar';
         const editor = document.createElement('div');
-        editor.id = `developModuleField_${field.key}`;
+        editor.id = `${prefix}_${field.key}`;
         editor.className = 'develop-richtext-editor';
         editor.contentEditable = 'true';
         editor.setAttribute('data-module-field-key', field.key);
@@ -2341,7 +2342,7 @@ App.develop = (function () {
         control.value = safeText(value, 10000);
       }
 
-      control.id = `developModuleField_${field.key}`;
+      control.id = `${prefix}_${field.key}`;
       control.setAttribute('data-module-field-key', field.key);
       control.setAttribute('data-module-field-control', field.control);
       if (field.placeholder && 'placeholder' in control) {
@@ -2354,11 +2355,18 @@ App.develop = (function () {
     });
   }
 
-  function getDevelopModuleSettingsFromForm(type) {
+  function renderDevelopModuleSettingsFields(type, settings = {}) {
+    const host = byId('developModulesSettingsFields');
+    const help = byId('developModulesTypeHelp');
+    renderDevelopModuleSettingsFieldsInto(host, type, settings, { helpNode: help, prefix: 'developModuleField' });
+  }
+
+  function getDevelopModuleSettingsFromHost(type, options = {}) {
     const definition = getDevelopModuleTypeDefinition(type) || MODULE_TYPE_DEFINITIONS[0];
+    const prefix = safeText(options.prefix) || 'developModuleField';
     const settings = {};
     definition.fields.forEach((field) => {
-      const input = byId(`developModuleField_${field.key}`);
+      const input = byId(`${prefix}_${field.key}`);
       if (!input) return;
       if (field.control === 'checkbox') {
         settings[field.key] = Boolean(input.checked);
@@ -2372,6 +2380,10 @@ App.develop = (function () {
       }
     });
     return settings;
+  }
+
+  function getDevelopModuleSettingsFromForm(type) {
+    return getDevelopModuleSettingsFromHost(type, { prefix: 'developModuleField' });
   }
 
   function getDevelopModulePayloadFromForm() {
@@ -2406,6 +2418,12 @@ App.develop = (function () {
       return `${safeText(settings.content, 120).replace(/<[^>]+>/g, ' ') || 'No content set'} · ${safeText(settings.maxWidth) || 'full'}`;
     }
     return safeText(module?.name) || '-';
+  }
+
+  function getSavedModuleById(moduleId) {
+    const id = safeText(moduleId);
+    if (!id) return null;
+    return savedModules.find((item) => safeText(item?.id) === id) || null;
   }
 
   function applyDevelopModuleToForm(module) {
@@ -3552,6 +3570,7 @@ App.develop = (function () {
               if (!module || typeof module !== 'object' || Array.isArray(module)) return null;
               return {
                 id: safeText(module.id) || `${id}_module_${moduleIndex + 1}`,
+                sourceModuleId: safeText(module.sourceModuleId),
                 name: safeText(module.name, 255),
                 type: safeText(module.type) || 'text',
                 column: safeText(module.column) || 'main',
@@ -3560,7 +3579,7 @@ App.develop = (function () {
                 text: safeText(module.text, 10000),
                 collapsed: Boolean(module.collapsed),
                 settings: module.settings && typeof module.settings === 'object' && !Array.isArray(module.settings)
-                  ? module.settings
+                  ? JSON.parse(JSON.stringify(module.settings))
                   : {},
               };
             })
@@ -3629,16 +3648,41 @@ App.develop = (function () {
   }
 
   function createModularPageModule(type = 'text', column = 'col1') {
+    const normalizedType = safeText(type) || 'text';
+    const definition = getDevelopModuleTypeDefinition(normalizedType);
     return {
       id: nextModularPageId('module'),
-      name: '',
-      type: safeText(type) || 'text',
+      sourceModuleId: '',
+      name: safeText(definition?.starterName) || '',
+      type: normalizedType,
       column: safeText(column) || 'col1',
       contentId: '',
       assetId: '',
       text: '',
       collapsed: false,
-      settings: {},
+      settings: definition && definition.defaults && typeof definition.defaults === 'object'
+        ? JSON.parse(JSON.stringify(definition.defaults))
+        : {},
+    };
+  }
+
+  function createModularPageModuleFromSavedModule(savedModule, column = 'col1') {
+    const definition = getDevelopModuleTypeDefinition(savedModule?.moduleType);
+    return {
+      id: nextModularPageId('module'),
+      sourceModuleId: safeText(savedModule?.id),
+      name: safeText(savedModule?.name) || safeText(definition?.starterName) || safeText(savedModule?.moduleType) || 'Module',
+      type: safeText(savedModule?.moduleType) || 'header',
+      column: safeText(column) || 'col1',
+      contentId: '',
+      assetId: '',
+      text: '',
+      collapsed: false,
+      settings: savedModule && typeof savedModule.settings === 'object'
+        ? JSON.parse(JSON.stringify(savedModule.settings))
+        : (definition && definition.defaults && typeof definition.defaults === 'object'
+          ? JSON.parse(JSON.stringify(definition.defaults))
+          : {}),
     };
   }
 
@@ -3666,6 +3710,10 @@ App.develop = (function () {
 
   function getPageModuleTypeMeta(type) {
     const normalized = safeText(type);
+    const definition = getDevelopModuleTypeDefinition(normalized);
+    if (definition) {
+      return { value: definition.value, label: definition.label, fieldKey: null };
+    }
     return MODULAR_PAGE_MODULE_TYPES.find((item) => item.value === normalized) || MODULAR_PAGE_MODULE_TYPES[0];
   }
 
@@ -3696,6 +3744,14 @@ App.develop = (function () {
         return 'F';
       case 'image':
         return 'Img';
+      case 'video':
+        return 'Vid';
+      case 'table':
+        return 'Tbl';
+      case 'textarea':
+        return 'Txt';
+      case 'header':
+        return 'Hd';
       case 'logo-wide':
         return 'LW';
       case 'logo-square':
@@ -3708,15 +3764,18 @@ App.develop = (function () {
   }
 
   function getModularModuleDisplayName(module) {
-    return safeText(module?.name, 255) || getModularModuleContentLabel(module);
+    return safeText(module?.name, 255) || safeText(getSavedModuleById(module?.sourceModuleId)?.name, 255) || getModularModuleContentLabel(module);
   }
 
   function getModularModulePickerItems() {
-    return MODULAR_PAGE_MODULE_TYPES.map((item) => ({
-      value: item.value,
-      label: item.label,
-      icon: getModularModuleIcon(item.value),
-    }));
+    return getCanonicalSavedModules(savedModules)
+      .filter((item) => Boolean(getDevelopModuleTypeDefinition(item.moduleType)))
+      .map((item) => ({
+        moduleId: safeText(item.id),
+        value: safeText(item.moduleType),
+        label: safeText(item.name) || getPageModuleTypeMeta(item.moduleType).label,
+        icon: getModularModuleIcon(item.moduleType),
+      }));
   }
 
   function buildModularPageGridTemplate(layout) {
@@ -6664,12 +6723,19 @@ App.develop = (function () {
     return dropTarget;
   }
 
-  function addModularPageModuleToCell(type, sectionIndex, column) {
+  function addModularPageModuleToCell(moduleRef, sectionIndex, column) {
     if (!modularPageTemplateDraft) return;
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
     const section = sections[sectionIndex];
     if (!section) return;
-    section.modules.push(createModularPageModule(type, column));
+    const savedModule = typeof moduleRef === 'object' && moduleRef
+      ? moduleRef
+      : getSavedModuleById(moduleRef);
+    if (savedModule) {
+      section.modules.push(createModularPageModuleFromSavedModule(savedModule, column));
+    } else {
+      section.modules.push(createModularPageModule(moduleRef, column));
+    }
     modularPageTemplateDraft.layoutSections = sections;
   }
 
@@ -6684,7 +6750,7 @@ App.develop = (function () {
     drag.tile.classList.remove('is-dragging');
     drag.ghost.remove();
     if (commit && drag.dropTarget) {
-      addModularPageModuleToCell(drag.moduleType, drag.dropTarget.sectionIndex, drag.dropTarget.column);
+      addModularPageModuleToCell(drag.moduleId || drag.moduleType, drag.dropTarget.sectionIndex, drag.dropTarget.column);
       closeModularPageModulePicker();
       renderModularPageTemplateEditor();
     }
@@ -6692,8 +6758,8 @@ App.develop = (function () {
     activePageModulePointerDrag = null;
   }
 
-  function startModularPageModulePointerDrag(tile, moduleType, startEvent) {
-    if (!tile || !moduleType) return;
+  function startModularPageModulePointerDrag(tile, moduleType, moduleId, startEvent) {
+    if (!tile || (!moduleType && !moduleId)) return;
     endModularPageModulePointerDrag(false);
     const ghost = tile.cloneNode(true);
     ghost.classList.add('develop-layout-tile-ghost');
@@ -6710,6 +6776,7 @@ App.develop = (function () {
     const drag = {
       tile,
       moduleType,
+      moduleId,
       ghost,
       dropTarget: null,
       onPointerMove: null,
@@ -6759,10 +6826,10 @@ App.develop = (function () {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         if (event.pointerType !== 'mouse') return;
         event.preventDefault();
-        startModularPageModulePointerDrag(tile, item.value, event);
+        startModularPageModulePointerDrag(tile, item.value, item.moduleId, event);
       });
       tile.addEventListener('click', () => {
-        addModularPageModuleToCell(item.value, sectionIndex, column);
+        addModularPageModuleToCell(item.moduleId || item.value, sectionIndex, column);
         closeModularPageModulePicker();
         renderModularPageTemplateEditor();
       });
@@ -6774,6 +6841,88 @@ App.develop = (function () {
       sectionIndex,
       column,
     };
+  }
+
+  function closeModularPageModuleEditor() {
+    const editor = activeModularPageModuleEditor;
+    if (!editor) return;
+    editor.panel.remove();
+    activeModularPageModuleEditor = null;
+  }
+
+  function openModularPageModuleEditor(sectionIndex, moduleIndex) {
+    if (!modularPageTemplateDraft) return;
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const section = sections[sectionIndex];
+    const module = section?.modules?.[moduleIndex];
+    if (!module) return;
+    const definition = getDevelopModuleTypeDefinition(module.type);
+    if (!definition) {
+      notify('No editor is configured for this module type yet.', true);
+      return;
+    }
+
+    closeModularPageModuleEditor();
+    const panel = document.createElement('div');
+    panel.className = 'develop-module-editor-modal';
+    panel.innerHTML = `
+      <div class="develop-module-editor-modal__backdrop"></div>
+      <div class="develop-module-editor-modal__dialog">
+        <div class="develop-module-editor-modal__header">
+          <div>
+            <h3>${escapeHtml(getModularModuleDisplayName(module) || definition.label)}</h3>
+            <p>${escapeHtml(definition.label)} · page-specific settings</p>
+          </div>
+          <button type="button" class="develop-module-editor-modal__close">Close</button>
+        </div>
+        <div class="develop-module-editor-modal__body">
+          <label class="stack-form">
+            <span>Module Name</span>
+            <input type="text" id="developPageModuleEditorNameInput" value="${escapeHtml(safeText(module.name, 255))}" />
+          </label>
+          <div id="developPageModuleEditorFields"></div>
+        </div>
+        <div class="develop-module-editor-modal__footer">
+          <button type="button" id="developPageModuleEditorRemoveBtn">Remove Module</button>
+          <div class="page-heading-actions" style="margin-left:auto;">
+            <button type="button" id="developPageModuleEditorCancelBtn">Cancel</button>
+            <button type="button" id="developPageModuleEditorSaveBtn">Save Module</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(panel);
+    renderDevelopModuleSettingsFieldsInto(
+      panel.querySelector('#developPageModuleEditorFields'),
+      module.type,
+      module.settings || {},
+      { prefix: 'developPageModuleEditorField' }
+    );
+    const close = () => closeModularPageModuleEditor();
+    panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
+    panel.querySelector('.develop-module-editor-modal__close')?.addEventListener('click', close);
+    panel.querySelector('#developPageModuleEditorCancelBtn')?.addEventListener('click', close);
+    panel.querySelector('#developPageModuleEditorRemoveBtn')?.addEventListener('click', () => {
+      const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+      const nextSection = nextSections[sectionIndex];
+      if (!nextSection) return;
+      nextSection.modules.splice(moduleIndex, 1);
+      modularPageTemplateDraft.layoutSections = nextSections;
+      closeModularPageModuleEditor();
+      renderModularPageTemplateEditor();
+    });
+    panel.querySelector('#developPageModuleEditorSaveBtn')?.addEventListener('click', () => {
+      const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+      const nextSection = nextSections[sectionIndex];
+      const nextModule = nextSection?.modules?.[moduleIndex];
+      if (!nextModule) return;
+      nextModule.name = safeText(panel.querySelector('#developPageModuleEditorNameInput')?.value, 255);
+      nextModule.settings = getDevelopModuleSettingsFromHost(nextModule.type, { prefix: 'developPageModuleEditorField' });
+      modularPageTemplateDraft.layoutSections = nextSections;
+      closeModularPageModuleEditor();
+      renderModularPageTemplateEditor();
+    });
+    activeModularPageModuleEditor = { panel, sectionIndex, moduleIndex };
   }
 
   function startModularPageLayoutPointerDrag(tile, layout, startEvent) {
@@ -6985,13 +7134,23 @@ App.develop = (function () {
         const stack = document.createElement('div');
         stack.className = 'develop-page-template-row-cell-stack';
         if (cellModules.length) {
-          cellModules.forEach((module) => {
-            const pill = document.createElement('div');
+          cellModules.forEach((module, moduleIndex) => {
+            const pill = document.createElement('button');
+            pill.type = 'button';
             pill.className = 'develop-page-template-module-pill';
             pill.innerHTML = `
               <span class="develop-page-template-module-pill-icon">${escapeHtml(getModularModuleIcon(module.type))}</span>
-              <span class="develop-page-template-module-pill-label">${escapeHtml(getPageModuleTypeMeta(module.type).label)}</span>
+              <span class="develop-page-template-module-pill-copy">
+                <span class="develop-page-template-module-pill-label">${escapeHtml(getModularModuleDisplayName(module))}</span>
+                <span class="develop-page-template-module-pill-type">${escapeHtml(getPageModuleTypeMeta(module.type).label)}</span>
+                <span class="develop-page-template-module-pill-preview">${escapeHtml(getDevelopModulePreview({ moduleType: module.type, name: module.name, settings: module.settings || {} }))}</span>
+              </span>
             `;
+            pill.addEventListener('click', (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              openModularPageModuleEditor(sectionIndex, moduleIndex);
+            });
             stack.appendChild(pill);
           });
         }
