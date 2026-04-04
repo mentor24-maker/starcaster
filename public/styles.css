@@ -5086,6 +5086,32 @@ th {
   box-shadow: 0 24px 64px rgba(15, 55, 90, 0.28);
 }
 
+.c-modal__backdrop.develop-nested-modal-backdrop {
+  z-index: 10040;
+}
+
+.c-modal__backdrop.develop-nested-modal-backdrop--transparent {
+  background: transparent;
+}
+
+.c-modal__backdrop.develop-nested-modal-backdrop--upper-right {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 1rem;
+  pointer-events: none;
+}
+
+.c-modal__backdrop.develop-nested-modal-backdrop--upper-right .c-modal__dialog {
+  pointer-events: auto;
+}
+
+.c-modal__dialog.develop-nested-modal-dialog--upper-right {
+  width: min(1120px, calc(100vw - 2.4rem));
+  max-width: min(1120px, calc(100vw - 2.4rem));
+  max-height: calc(100vh - 2.4rem);
+  box-shadow: 0 24px 64px rgba(15, 55, 90, 0.28);
+}
+
 .c-modal__dialog.develop-theme-picker-modal .c-modal__body {
   padding: 16px 18px 18px;
 }

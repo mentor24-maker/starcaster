@@ -1378,11 +1378,36 @@ App.develop = (function () {
       body,
       dialogClass: ['develop-theme-picker-modal', extraDialogClass].filter(Boolean).join(' '),
     });
+    applyDevelopNestedModalPresentation(modal, {
+      anchor: options.anchor || 'upper-right',
+      transparentBackdrop: options.transparentBackdrop !== false,
+    });
     if (backdropClass && modal?.el) {
       modal.el.classList.add(backdropClass);
     }
     renderGrid();
     modal.open();
+    return modal;
+  }
+
+  function applyDevelopNestedModalPresentation(modal, options = {}) {
+    if (!modal?.el) return modal;
+    const anchor = safeText(options.anchor) || 'upper-right';
+    const transparentBackdrop = options.transparentBackdrop !== false;
+    modal.el.classList.add('develop-nested-modal-backdrop');
+    if (transparentBackdrop) {
+      modal.el.classList.add('develop-nested-modal-backdrop--transparent');
+    }
+    if (anchor === 'upper-right') {
+      modal.el.classList.add('develop-nested-modal-backdrop--upper-right');
+    }
+    const dialog = modal.el.querySelector('.c-modal__dialog');
+    if (dialog) {
+      dialog.classList.add('develop-nested-modal-dialog');
+      if (anchor === 'upper-right') {
+        dialog.classList.add('develop-nested-modal-dialog--upper-right');
+      }
+    }
     return modal;
   }
 
@@ -1463,6 +1488,10 @@ App.develop = (function () {
       body,
       dialogClass: 'develop-theme-picker-modal develop-module-image-picker-modal',
     });
+    applyDevelopNestedModalPresentation(modal, {
+      anchor: 'upper-right',
+      transparentBackdrop: true,
+    });
     renderList();
     modal.open();
     return modal;
@@ -1530,7 +1559,301 @@ App.develop = (function () {
       body,
       dialogClass: 'develop-theme-picker-modal develop-module-image-picker-modal',
     });
+    applyDevelopNestedModalPresentation(modal, {
+      anchor: 'upper-right',
+      transparentBackdrop: true,
+    });
     renderList();
+    modal.open();
+    return modal;
+  }
+
+  function normalizeDevelopTableContents(rawValue, columnsCount = 3, rowsCount = 4) {
+    const cols = Math.max(1, Math.min(8, Number(columnsCount) || 1));
+    const rows = Math.max(1, Math.min(20, Number(rowsCount) || 1));
+    let parsed = rawValue;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = parsed ? JSON.parse(parsed) : [];
+      } catch (_) {
+        parsed = [];
+      }
+    }
+    const source = Array.isArray(parsed) ? parsed : [];
+    const byKey = new Map();
+    source.forEach((cell) => {
+      const row = Number(cell?.row);
+      const column = Number(cell?.column);
+      if (row >= 0 && column >= 0) {
+        byKey.set(`${row}:${column}`, {
+          row,
+          column,
+          cellType: ['empty', 'heading', 'text', 'image', 'video'].includes(safeText(cell?.cellType)) ? safeText(cell.cellType) : 'empty',
+          headingLevel: safeText(cell?.headingLevel) || 'H3',
+          text: safeText(cell?.text, 20000),
+          imageAssetId: safeText(cell?.imageAssetId),
+          videoAssetId: safeText(cell?.videoAssetId),
+        });
+      }
+    });
+    const cells = [];
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < cols; column += 1) {
+        const key = `${row}:${column}`;
+        cells.push(byKey.get(key) || {
+          row,
+          column,
+          cellType: 'empty',
+          headingLevel: 'H3',
+          text: '',
+          imageAssetId: '',
+          videoAssetId: '',
+        });
+      }
+    }
+    return cells;
+  }
+
+  function getDevelopTableContentsSummary(rawValue, columnsCount = 3, rowsCount = 4) {
+    const cells = normalizeDevelopTableContents(rawValue, columnsCount, rowsCount);
+    const configuredCount = cells.filter((cell) => safeText(cell?.cellType) !== 'empty').length;
+    return `${rowsCount} x ${columnsCount} table · ${configuredCount} configured cell${configuredCount === 1 ? '' : 's'}`;
+  }
+
+  function openDevelopTableContentsEditor(options = {}) {
+    if (!App.components || typeof App.components.Modal !== 'function') return false;
+    const getValue = typeof options.getValue === 'function' ? options.getValue : (() => '[]');
+    const setValue = typeof options.setValue === 'function' ? options.setValue : (() => {});
+    const afterChange = typeof options.afterChange === 'function' ? options.afterChange : (() => {});
+    const getDimensions = typeof options.getDimensions === 'function'
+      ? options.getDimensions
+      : (() => ({ columnsCount: 3, rowsCount: 4 }));
+    const title = safeText(options.title) || 'Table Contents';
+    const body = document.createElement('div');
+    body.className = 'stack-form';
+    const summary = document.createElement('div');
+    summary.className = 'meta';
+    const grid = document.createElement('div');
+    grid.className = 'grid-form';
+    body.appendChild(summary);
+    body.appendChild(grid);
+    let modal = null;
+    let cells = [];
+
+    const buildImageChooser = (targetCell, host) => {
+      const controls = document.createElement('div');
+      controls.className = 'develop-inline-asset-nav';
+      const chooseBtn = document.createElement('button');
+      chooseBtn.type = 'button';
+      const status = document.createElement('span');
+      status.className = 'develop-inline-asset-status';
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.textContent = 'Clear';
+      const updateState = () => {
+        const asset = getAssetById(targetCell.imageAssetId);
+        chooseBtn.textContent = asset ? 'Change Image' : 'Choose Image';
+        status.textContent = asset ? assetLabel(asset, 'Image') : 'No image selected';
+      };
+      chooseBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openImageAssetPicker(
+          { selectId: '', title: 'Table Cell Image' },
+          {
+            dialogClass: 'develop-module-image-picker-modal',
+            backdropClass: 'develop-module-image-picker-backdrop',
+            getValue: () => safeText(targetCell.imageAssetId),
+            setValue: (nextValue) => {
+              targetCell.imageAssetId = safeText(nextValue);
+            },
+            afterChange: () => {
+              updateState();
+            },
+          }
+        );
+      });
+      clearBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        targetCell.imageAssetId = '';
+        updateState();
+      });
+      controls.appendChild(chooseBtn);
+      controls.appendChild(status);
+      controls.appendChild(clearBtn);
+      host.appendChild(controls);
+      updateState();
+    };
+
+    const buildVideoChooser = (targetCell, host) => {
+      const controls = document.createElement('div');
+      controls.className = 'develop-inline-asset-nav';
+      const chooseBtn = document.createElement('button');
+      chooseBtn.type = 'button';
+      const status = document.createElement('span');
+      status.className = 'develop-inline-asset-status';
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.textContent = 'Clear';
+      const updateState = () => {
+        const asset = getAssetById(targetCell.videoAssetId);
+        chooseBtn.textContent = asset ? 'Change Video' : 'Choose Video';
+        status.textContent = asset ? assetLabel(asset, 'Video') : 'No video selected';
+      };
+      chooseBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openVideoAssetPicker({
+          title: 'Table Cell Video',
+          getValue: () => safeText(targetCell.videoAssetId),
+          setValue: (nextValue) => {
+            targetCell.videoAssetId = safeText(nextValue);
+          },
+          afterChange: () => {
+            updateState();
+          },
+        });
+      });
+      clearBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        targetCell.videoAssetId = '';
+        updateState();
+      });
+      controls.appendChild(chooseBtn);
+      controls.appendChild(status);
+      controls.appendChild(clearBtn);
+      host.appendChild(controls);
+      updateState();
+    };
+
+    const renderGrid = () => {
+      const { columnsCount, rowsCount } = getDimensions();
+      cells = normalizeDevelopTableContents(getValue(), columnsCount, rowsCount);
+      summary.textContent = getDevelopTableContentsSummary(cells, columnsCount, rowsCount);
+      grid.innerHTML = '';
+      cells.forEach((cell) => {
+        const card = document.createElement('div');
+        card.className = 'stack-form';
+        card.style.padding = '0.85rem';
+        card.style.border = '1px solid #c7d8eb';
+        card.style.borderRadius = '14px';
+        card.style.background = '#f8fbff';
+        const titleNode = document.createElement('strong');
+        titleNode.textContent = `Cell ${cell.row + 1}, ${cell.column + 1}`;
+        card.appendChild(titleNode);
+
+        const typeWrap = document.createElement('label');
+        typeWrap.className = 'stack-form';
+        typeWrap.innerHTML = '<span>Content Type</span>';
+        const typeSelect = document.createElement('select');
+        [
+          ['empty', 'Empty'],
+          ['heading', 'Heading'],
+          ['text', 'Text'],
+          ['image', 'Image'],
+          ['video', 'Video'],
+        ].forEach(([value, label]) => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          typeSelect.appendChild(option);
+        });
+        typeSelect.value = safeText(cell.cellType) || 'empty';
+        typeWrap.appendChild(typeSelect);
+        card.appendChild(typeWrap);
+
+        const detailHost = document.createElement('div');
+        detailHost.className = 'stack-form';
+        card.appendChild(detailHost);
+
+        const renderDetails = () => {
+          detailHost.innerHTML = '';
+          cell.cellType = safeText(typeSelect.value) || 'empty';
+          if (cell.cellType === 'heading') {
+            const levelWrap = document.createElement('label');
+            levelWrap.className = 'stack-form';
+            levelWrap.innerHTML = '<span>Heading Level</span>';
+            const levelSelect = document.createElement('select');
+            ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].forEach((item) => {
+              const option = document.createElement('option');
+              option.value = item;
+              option.textContent = item;
+              levelSelect.appendChild(option);
+            });
+            levelSelect.value = safeText(cell.headingLevel) || 'H3';
+            levelSelect.addEventListener('change', () => {
+              cell.headingLevel = safeText(levelSelect.value) || 'H3';
+            });
+            levelWrap.appendChild(levelSelect);
+            const textWrap = document.createElement('label');
+            textWrap.className = 'stack-form';
+            textWrap.innerHTML = '<span>Text</span>';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = safeText(cell.text, 2000);
+            input.placeholder = 'Heading text';
+            input.addEventListener('input', () => {
+              cell.text = safeText(input.value, 2000);
+            });
+            textWrap.appendChild(input);
+            detailHost.appendChild(levelWrap);
+            detailHost.appendChild(textWrap);
+            return;
+          }
+          if (cell.cellType === 'text') {
+            const textWrap = document.createElement('label');
+            textWrap.className = 'stack-form';
+            textWrap.innerHTML = '<span>Text</span>';
+            const input = document.createElement('textarea');
+            input.rows = 4;
+            input.value = safeText(cell.text, 10000);
+            input.placeholder = 'Cell text';
+            input.addEventListener('input', () => {
+              cell.text = safeText(input.value, 10000);
+            });
+            textWrap.appendChild(input);
+            detailHost.appendChild(textWrap);
+            return;
+          }
+          if (cell.cellType === 'image') {
+            buildImageChooser(cell, detailHost);
+            return;
+          }
+          if (cell.cellType === 'video') {
+            buildVideoChooser(cell, detailHost);
+          }
+        };
+
+        typeSelect.addEventListener('change', renderDetails);
+        renderDetails();
+        grid.appendChild(card);
+      });
+    };
+
+    modal = App.components.Modal({
+      title,
+      body,
+      actions: [
+        { label: 'Cancel', onClick: () => modal.close() },
+        {
+          label: 'Save Contents',
+          onClick: () => {
+            setValue(JSON.stringify(cells));
+            afterChange(cells);
+            modal.close();
+          },
+        },
+      ],
+      dialogClass: 'develop-module-image-picker-modal develop-table-contents-modal',
+      bodyClass: 'develop-email-template-modal-body',
+    });
+    applyDevelopNestedModalPresentation(modal, {
+      anchor: 'upper-right',
+      transparentBackdrop: true,
+    });
+    renderGrid();
     modal.open();
     return modal;
   }
@@ -2840,6 +3163,87 @@ App.develop = (function () {
         return;
       }
 
+      if (field.control === 'table-contents-editor') {
+        const editorId = `${prefix}_${field.key}`;
+        wrap.className = 'stack-form develop-module-image-field';
+
+        control = document.createElement('input');
+        control.type = 'hidden';
+        control.id = editorId;
+        control.value = typeof value === 'string' ? value : JSON.stringify(normalizeDevelopTableContents(value));
+        control.setAttribute('data-module-field-key', field.key);
+        control.setAttribute('data-module-field-control', field.control);
+
+        const pickerControls = document.createElement('div');
+        pickerControls.className = 'develop-inline-asset-nav';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.textContent = 'Edit Contents';
+
+        const status = document.createElement('span');
+        status.className = 'develop-inline-asset-status';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.textContent = 'Clear';
+
+        const preview = document.createElement('div');
+        preview.className = 'develop-inline-asset-preview';
+
+        const getDimensions = () => ({
+          columnsCount: Number(byId(`${prefix}_columnsCount`)?.value) || Number(settings?.columnsCount) || 3,
+          rowsCount: Number(byId(`${prefix}_rowsCount`)?.value) || Number(settings?.rowsCount) || 4,
+        });
+
+        const updateTableState = () => {
+          const { columnsCount, rowsCount } = getDimensions();
+          const normalized = normalizeDevelopTableContents(control.value, columnsCount, rowsCount);
+          control.value = JSON.stringify(normalized);
+          status.textContent = getDevelopTableContentsSummary(normalized, columnsCount, rowsCount);
+          preview.innerHTML = '';
+          const meta = document.createElement('span');
+          const configured = normalized.filter((cell) => safeText(cell?.cellType) !== 'empty').length;
+          meta.textContent = configured
+            ? `${configured} cell${configured === 1 ? '' : 's'} configured`
+            : 'No cell content configured yet';
+          preview.appendChild(meta);
+        };
+
+        editBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openDevelopTableContentsEditor({
+            title: field.label,
+            getValue: () => control.value,
+            setValue: (nextValue) => {
+              control.value = safeText(nextValue, 500000);
+            },
+            getDimensions,
+            afterChange: () => {
+              updateTableState();
+            },
+          });
+        });
+
+        clearBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          control.value = '[]';
+          updateTableState();
+        });
+
+        pickerControls.appendChild(editBtn);
+        pickerControls.appendChild(status);
+        pickerControls.appendChild(clearBtn);
+        wrap.appendChild(pickerControls);
+        wrap.appendChild(preview);
+        wrap.appendChild(control);
+        updateTableState();
+        host.appendChild(wrap);
+        return;
+      }
+
       if (field.control === 'textarea') {
         control = document.createElement('textarea');
         control.rows = Number(field.rows) || 3;
@@ -3023,7 +3427,11 @@ App.develop = (function () {
       return `${videoLabel} · ${safeText(settings.aspectRatio) || '16:9'}`;
     }
     if (type === 'table') {
-      return `${safeText(settings.caption) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'Table'} · ${safeText(settings.columnsCount) || 0} cols · ${safeText(settings.rowsCount) || 0} rows`;
+      const columnsCount = Number(settings.columnsCount) || 0;
+      const rowsCount = Number(settings.rowsCount) || 0;
+      const configured = normalizeDevelopTableContents(settings.tableContents, columnsCount || 1, rowsCount || 1)
+        .filter((cell) => safeText(cell?.cellType) !== 'empty').length;
+      return `${safeText(settings.caption) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'Table'} · ${columnsCount} cols · ${rowsCount} rows · ${configured} cells`;
     }
     if (type === 'textarea') {
       return `${safeText(settings.content, 120).replace(/<[^>]+>/g, ' ') || getDevelopModuleContentSourceOptions('pitch').find((item) => item.value === safeText(settings.pitchId))?.label || 'No content set'} · ${safeText(settings.maxWidth) || 'full'}`;
@@ -4738,6 +5146,29 @@ App.develop = (function () {
         autoplay: Boolean(module?.settings?.autoplay),
       };
     }
+    if (type === 'table') {
+      return {
+        caption: safeText(module?.settings?.caption)
+          || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(module?.settings?.headlineId))?.content
+          || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(module?.settings?.headlineId))?.label
+          || 'Table',
+        columnsCount: Number(module?.settings?.columnsCount) || 3,
+        rowsCount: Number(module?.settings?.rowsCount) || 4,
+        headerColor: safeText(module?.settings?.headerColor) || '#173c61',
+        headerTextColor: safeText(module?.settings?.headerTextColor) || '#ffffff',
+        borderColor: safeText(module?.settings?.borderColor) || '#d6e6f5',
+        borderThickness: Number(module?.settings?.borderThickness) || 1,
+        cellPadding: Number(module?.settings?.cellPadding) || 14,
+        striped: module?.settings?.striped !== false,
+        compact: Boolean(module?.settings?.compact),
+        style: safeText(module?.settings?.style) || 'clean',
+        cells: normalizeDevelopTableContents(
+          module?.settings?.tableContents,
+          Number(module?.settings?.columnsCount) || 3,
+          Number(module?.settings?.rowsCount) || 4
+        ),
+      };
+    }
     return safeText(module?.text, 10000);
   }
 
@@ -4812,6 +5243,40 @@ App.develop = (function () {
               ? `<video src="${escapeHtml(content.assetUrl)}"${posterAttr}${autoplayAttr}${mutedAttr}${controlsAttr}></video>`
               : `<div class="develop-template-empty-slot">${escapeHtml(content?.assetName || 'No video selected')}</div>`;
             return `<div${editable('develop-template-video-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${styleBits.length ? ` style="${styleBits.join(' ')}"` : ''}>${videoMarkup}</div>`;
+          }
+          if (module.type === 'table') {
+            const columnsCount = Number(content?.columnsCount) || 3;
+            const rowsCount = Number(content?.rowsCount) || 4;
+            const cellMap = new Map((Array.isArray(content?.cells) ? content.cells : []).map((cell) => [`${cell.row}:${cell.column}`, cell]));
+            const rowMarkup = Array.from({ length: rowsCount }).map((_, rowIndex) => {
+              const tag = rowIndex === 0 ? 'th' : 'td';
+              const cellMarkup = Array.from({ length: columnsCount }).map((__, columnIndex) => {
+                const cell = cellMap.get(`${rowIndex}:${columnIndex}`) || { cellType: 'empty', text: '' };
+                let cellInner = '&nbsp;';
+                if (cell.cellType === 'heading') {
+                  const headingTag = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(safeText(cell.headingLevel).toLowerCase())
+                    ? safeText(cell.headingLevel).toLowerCase()
+                    : 'h3';
+                  cellInner = `<${headingTag}>${escapeHtml(safeText(cell.text) || 'Heading')}</${headingTag}>`;
+                } else if (cell.cellType === 'text') {
+                  cellInner = escapeHtml(safeText(cell.text) || '');
+                } else if (cell.cellType === 'image') {
+                  cellInner = cell.imageAssetId
+                    ? buildLandingAssetImage(cell.imageAssetId, assetLabel(getAssetById(cell.imageAssetId), 'Image'))
+                    : '<div class="develop-template-empty-slot">No image</div>';
+                } else if (cell.cellType === 'video') {
+                  const videoUrl = cell.videoAssetId ? getLandingPageAssetUrl(cell.videoAssetId) : '';
+                  cellInner = videoUrl
+                    ? `<video src="${escapeHtml(videoUrl)}" controls></video>`
+                    : '<div class="develop-template-empty-slot">No video</div>';
+                }
+                const cellStyle = `padding:${Number(content?.cellPadding) || 14}px;border:${Number(content?.borderThickness) || 1}px solid ${escapeHtml(safeText(content?.borderColor) || '#d6e6f5')};`;
+                return `<${tag} style="${cellStyle}${rowIndex === 0 ? `background:${escapeHtml(safeText(content?.headerColor) || '#173c61')};color:${escapeHtml(safeText(content?.headerTextColor) || '#ffffff')};` : ''}">${cellInner}</${tag}>`;
+              }).join('');
+              const rowStyle = rowIndex > 0 && content?.striped && rowIndex % 2 === 1 ? ' style="background:rgba(11,130,212,0.06);"' : '';
+              return `<tr${rowStyle}>${cellMarkup}</tr>`;
+            }).join('');
+            return `<div${editable('develop-template-table-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${content?.caption ? `<div class="develop-template-eyebrow">${escapeHtml(content.caption)}</div>` : ''}<table style="width:100%;border-collapse:collapse;">${rowMarkup}</table></div>`;
           }
           if (module.type === 'header') {
             const headingLevel = safeText(module.settings?.headingLevel).toLowerCase();
