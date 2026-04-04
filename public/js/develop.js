@@ -7909,7 +7909,9 @@ App.develop = (function () {
       clearWorkspaceDropIndicators();
     });
     host.addEventListener('drop', (event) => {
-      const droppedLayout = draggedNewPageSectionLayout || safeText(event.dataTransfer?.getData('text/plain')).replace(/^layout:/, '');
+      const droppedLayout = draggedSectionIndex === null
+        ? (draggedNewPageSectionLayout || safeText(event.dataTransfer?.getData('text/plain')).replace(/^layout:/, ''))
+        : '';
       if (!droppedLayout && draggedSectionIndex === null) return;
       event.preventDefault();
       event.stopPropagation();
@@ -7941,6 +7943,11 @@ App.develop = (function () {
       item.draggable = true;
       item.title = 'Drag to reorder row';
       item.addEventListener('dragstart', (event) => {
+        draggedNewPageSectionLayout = '';
+        if (draggedNewPageSectionLayoutClearTimer) {
+          clearTimeout(draggedNewPageSectionLayoutClearTimer);
+          draggedNewPageSectionLayoutClearTimer = null;
+        }
         draggedSectionIndex = sectionIndex;
         item.classList.add('is-dragging');
         if (event.dataTransfer) {
@@ -7970,7 +7977,9 @@ App.develop = (function () {
         item.classList.remove('is-drop-before', 'is-drop-after');
       });
       item.addEventListener('drop', (event) => {
-        const droppedLayout = draggedNewPageSectionLayout || safeText(event.dataTransfer?.getData('text/plain')).replace(/^layout:/, '');
+        const droppedLayout = draggedSectionIndex === null
+          ? (draggedNewPageSectionLayout || safeText(event.dataTransfer?.getData('text/plain')).replace(/^layout:/, ''))
+          : '';
         if (!droppedLayout && (draggedSectionIndex === null || draggedSectionIndex === sectionIndex)) return;
         event.preventDefault();
         event.stopPropagation();
