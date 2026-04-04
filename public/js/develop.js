@@ -4152,6 +4152,13 @@ App.develop = (function () {
       .join('');
   }
 
+  function getBuilderInlineIconMarkup(iconKey, extraClass = '') {
+    if (window.App && typeof App.makeInlineIcon === 'function') {
+      return App.makeInlineIcon(iconKey, extraClass).outerHTML;
+    }
+    return `<span class="develop-builder-fallback-icon ${escapeHtml(extraClass)}" aria-hidden="true"></span>`;
+  }
+
   function createDefaultModularPageSections() {
     const hero = createModularPageSection('4-2');
     hero.modules = [
@@ -7989,7 +7996,7 @@ App.develop = (function () {
       const rowEdit = document.createElement('button');
       rowEdit.type = 'button';
       rowEdit.className = 'develop-page-template-row-action';
-      rowEdit.innerHTML = '<span aria-hidden="true">⚙</span>';
+      rowEdit.innerHTML = getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon');
       rowEdit.title = `Edit ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
       rowEdit.addEventListener('click', (event) => {
         event.preventDefault();
@@ -7999,7 +8006,7 @@ App.develop = (function () {
       const rowDelete = document.createElement('button');
       rowDelete.type = 'button';
       rowDelete.className = 'develop-page-template-row-action develop-page-template-row-action--delete';
-      rowDelete.innerHTML = '<span aria-hidden="true">🗑</span>';
+      rowDelete.innerHTML = getBuilderInlineIconMarkup('trash', 'develop-builder-inline-icon');
       rowDelete.title = `Remove ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
       rowDelete.addEventListener('click', (event) => {
         event.preventDefault();
@@ -8031,7 +8038,7 @@ App.develop = (function () {
         const settingsBtn = document.createElement('button');
         settingsBtn.type = 'button';
         settingsBtn.className = 'develop-page-template-cell-settings';
-        settingsBtn.innerHTML = '<span aria-hidden="true">⚙</span>';
+        settingsBtn.innerHTML = getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon');
         settingsBtn.title = 'Container settings';
         settingsBtn.addEventListener('click', async (event) => {
           event.preventDefault();
@@ -8052,8 +8059,8 @@ App.develop = (function () {
                 <span class="develop-page-template-module-pill-preview">${escapeHtml(getDevelopModulePreview({ moduleType: module.type, name: module.name, settings: module.settings || {} }))}</span>
               </span>
               <span class="develop-page-template-module-pill-actions">
-                <button type="button" class="develop-page-template-module-pill-action" title="Edit module" aria-label="Edit module">⚙</button>
-                <button type="button" class="develop-page-template-module-pill-action develop-page-template-module-pill-action--delete" title="Remove module" aria-label="Remove module">🗑</button>
+                <button type="button" class="develop-page-template-module-pill-action" title="Edit module" aria-label="Edit module">${getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon')}</button>
+                <button type="button" class="develop-page-template-module-pill-action develop-page-template-module-pill-action--delete" title="Remove module" aria-label="Remove module">${getBuilderInlineIconMarkup('trash', 'develop-builder-inline-icon')}</button>
               </span>
             `;
             pill.addEventListener('click', (event) => {
@@ -8090,7 +8097,7 @@ App.develop = (function () {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'develop-page-template-cell-add';
-        addBtn.textContent = '+';
+        addBtn.innerHTML = getBuilderInlineIconMarkup('plus', 'develop-builder-inline-icon');
         addBtn.title = 'Add module';
         addBtn.addEventListener('click', (event) => {
           event.preventDefault();
