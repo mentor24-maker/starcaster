@@ -5892,106 +5892,138 @@ App.develop = (function () {
     );
   }
 
-  function renderPageTemplateRecordsTable() {
-    const rows = savedPageTemplates.map((page) => {
-      const actions = document.createElement('div');
-      actions.className = 'page-heading-actions';
-      actions.style.justifyContent = 'flex-start';
-      const viewBtn = App.makeIconButton('view', 'View Template', () => {
-        if (normalizePageTemplateKind(page.templateKind) === 'modular') {
-          openModularPageTemplatePreviewModal(page);
-        } else {
-          openLandingPagePreview(page, { mode: 'template' });
-        }
-      });
-      const editBtn = App.makeIconButton('edit', 'Edit Template', () => {
-        if (normalizePageTemplateKind(page.templateKind) === 'modular') {
-          openModularPageTemplateEditor(page);
-        } else {
-          openLandingPageVisualEditor(page, { mode: 'template' });
-        }
-      }, { marginLeft: '8px' });
-      const cloneBtn = App.makeIconButton('clone', 'Clone Template', async () => {
-        try {
-          const payload = {
-            name: safeText(page.name),
-            templateKind: normalizePageTemplateKind(page.templateKind),
-            templateId: safeText(page.templateId),
-            primaryColor: safeText(page.primaryColor),
-            backgroundColor: safeText(page.backgroundColor),
-            accentColor: safeText(page.accentColor),
-            formId: safeText(page.formId),
-            leadMagnetId: safeText(page.leadMagnetId),
-            headlineId: safeText(page.headlineId),
-            pitchId: safeText(page.pitchId),
-            ctaId: safeText(page.ctaId),
-            websiteBannerImageId: safeText(page.websiteBannerImageId),
-            backgroundImageId: safeText(page.backgroundImageId),
-            featureImageId: safeText(page.featureImageId),
-            highlightImageId: safeText(page.highlightImageId),
-            featureHeadlineId: safeText(page.featureHeadlineId),
-            featureSubheadingId: safeText(page.featureSubheadingId),
-            featureTitle: safeText(page.featureTitle),
-            featureCopy: safeText(page.featureCopy),
-            highlightHeadlineId: safeText(page.highlightHeadlineId),
-            highlightPitchId: safeText(page.highlightPitchId),
-            highlightTitle: safeText(page.highlightTitle),
-            highlightCopy: safeText(page.highlightCopy),
-            bodyHeadlineId: safeText(page.bodyHeadlineId),
-            bodySubheadingId: safeText(page.bodySubheadingId),
-            bodyPitchId: safeText(page.bodyPitchId),
-            logoWideId: safeText(page.logoWideId),
-            logoSquareId: safeText(page.logoSquareId),
-            layoutSections: Array.isArray(page.layoutSections) ? JSON.parse(JSON.stringify(page.layoutSections)) : [],
-            contentOverrides: page && typeof page.contentOverrides === 'object'
-              ? JSON.parse(JSON.stringify(page.contentOverrides))
-              : {},
-          };
-          await api('/api/develop/page-templates', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
-          await refresh();
-          notify('Page template cloned');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      }, { marginLeft: '8px' });
-      const deleteBtn = App.makeIconButton('delete', 'Delete Template', async () => {
-        const id = safeText(page.id);
-        if (!window.confirm(`Delete template "${safeText(page.name) || id}"?`)) return;
-        try {
-          await api(`/api/develop/page-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
-          await refresh();
-          notify('Page template deleted');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      }, { danger: true, marginLeft: '8px' });
-      actions.appendChild(viewBtn);
-      actions.appendChild(editBtn);
-      actions.appendChild(cloneBtn);
-      actions.appendChild(deleteBtn);
-      return [
-        safeText(page.name) || '-',
-        getPageTemplateKindLabel(page.templateKind),
-        getLandingPageTemplateName(page.templateId) || '-',
-        page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '-',
-        actions,
-      ];
+  function createPageTemplateActions(page) {
+    const actions = document.createElement('div');
+    actions.className = 'page-heading-actions';
+    actions.style.justifyContent = 'flex-start';
+    actions.appendChild(App.makeIconButton('view', 'View Template', () => {
+      if (normalizePageTemplateKind(page.templateKind) === 'modular') {
+        openModularPageTemplatePreviewModal(page);
+      } else {
+        openLandingPagePreview(page, { mode: 'template' });
+      }
+    }));
+    actions.appendChild(App.makeIconButton('edit', 'Edit Template', () => {
+      if (normalizePageTemplateKind(page.templateKind) === 'modular') {
+        openModularPageTemplateEditor(page);
+      } else {
+        openLandingPageVisualEditor(page, { mode: 'template' });
+      }
+    }, { marginLeft: '8px' }));
+    actions.appendChild(App.makeIconButton('clone', 'Clone Template', async () => {
+      try {
+        const payload = {
+          name: safeText(page.name),
+          templateKind: normalizePageTemplateKind(page.templateKind),
+          templateId: safeText(page.templateId),
+          primaryColor: safeText(page.primaryColor),
+          backgroundColor: safeText(page.backgroundColor),
+          accentColor: safeText(page.accentColor),
+          formId: safeText(page.formId),
+          leadMagnetId: safeText(page.leadMagnetId),
+          headlineId: safeText(page.headlineId),
+          pitchId: safeText(page.pitchId),
+          ctaId: safeText(page.ctaId),
+          websiteBannerImageId: safeText(page.websiteBannerImageId),
+          backgroundImageId: safeText(page.backgroundImageId),
+          featureImageId: safeText(page.featureImageId),
+          highlightImageId: safeText(page.highlightImageId),
+          featureHeadlineId: safeText(page.featureHeadlineId),
+          featureSubheadingId: safeText(page.featureSubheadingId),
+          featureTitle: safeText(page.featureTitle),
+          featureCopy: safeText(page.featureCopy),
+          highlightHeadlineId: safeText(page.highlightHeadlineId),
+          highlightPitchId: safeText(page.highlightPitchId),
+          highlightTitle: safeText(page.highlightTitle),
+          highlightCopy: safeText(page.highlightCopy),
+          bodyHeadlineId: safeText(page.bodyHeadlineId),
+          bodySubheadingId: safeText(page.bodySubheadingId),
+          bodyPitchId: safeText(page.bodyPitchId),
+          logoWideId: safeText(page.logoWideId),
+          logoSquareId: safeText(page.logoSquareId),
+          layoutSections: Array.isArray(page.layoutSections) ? JSON.parse(JSON.stringify(page.layoutSections)) : [],
+          contentOverrides: page && typeof page.contentOverrides === 'object'
+            ? JSON.parse(JSON.stringify(page.contentOverrides))
+            : {},
+        };
+        await api('/api/develop/page-templates', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        await refresh();
+        notify('Page template cloned');
+      } catch (err) {
+        notify(err.message, true);
+      }
+    }, { marginLeft: '8px' }));
+    actions.appendChild(App.makeIconButton('delete', 'Delete Template', async () => {
+      const id = safeText(page.id);
+      if (!window.confirm(`Delete template "${safeText(page.name) || id}"?`)) return;
+      try {
+        await api(`/api/develop/page-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        await refresh();
+        notify('Page template deleted');
+      } catch (err) {
+        notify(err.message, true);
+      }
+    }, { danger: true, marginLeft: '8px' }));
+    return actions;
+  }
+
+  function renderPageTemplateRecordsTableHost(hostId) {
+    const host = byId(hostId);
+    if (!host) return;
+    host.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'develop-template-records-card';
+    const heading = document.createElement('h4');
+    heading.textContent = 'Saved Page Templates';
+    card.appendChild(heading);
+
+    if (!savedPageTemplates.length) {
+      const empty = document.createElement('div');
+      empty.className = 'develop-template-records-empty';
+      empty.textContent = 'No page templates yet.';
+      card.appendChild(empty);
+      host.appendChild(card);
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'develop-template-records-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Kind</th>
+          <th>Template</th>
+          <th>Updated</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = table.querySelector('tbody');
+    savedPageTemplates.forEach((page) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${safeText(page.name) || '-'}</td>
+        <td>${getPageTemplateKindLabel(page.templateKind)}</td>
+        <td>${getLandingPageTemplateName(page.templateId) || '-'}</td>
+        <td>${page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '-'}</td>
+        <td class="actions-cell"></td>
+      `;
+      const actionsCell = tr.querySelector('.actions-cell');
+      if (actionsCell) actionsCell.appendChild(createPageTemplateActions(page));
+      tbody.appendChild(tr);
     });
-    renderTemplateRecordsTable(
-      'developEmailTemplatesPrimaryTableHost',
-      'Saved Page Templates',
-      ['Name', 'Kind', 'Template', 'Updated', 'Actions'],
-      rows
-    );
-    renderTemplateRecordsTable(
-      'developPageTemplatesTableHost',
-      'Saved Page Templates',
-      ['Name', 'Kind', 'Template', 'Updated', 'Actions'],
-      rows
-    );
+    card.appendChild(table);
+    host.appendChild(card);
+  }
+
+  function renderPageTemplateRecordsTable() {
+    renderPageTemplateRecordsTableHost('developEmailTemplatesPrimaryTableHost');
+    renderPageTemplateRecordsTableHost('developPageTemplatesTableHost');
   }
 
   function renderEmailTemplateLibrary() {
@@ -6109,7 +6141,8 @@ App.develop = (function () {
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function resetEmailTemplateForm() {
+  function resetEmailTemplateForm(options = {}) {
+    const renderBuilder = options.renderBuilder !== false;
     const form = byId('developEmailTemplateForm');
     if (form) form.reset();
     byId('developEmailTemplateIdInput').value = '';
@@ -6130,7 +6163,7 @@ App.develop = (function () {
       createEmailTemplateBlock('paragraph'),
       createEmailTemplateBlock('button'),
     ];
-    renderEmailTemplateBlockEditor();
+    if (renderBuilder) renderEmailTemplateBlockEditor();
     const submitBtn = byId('developEmailTemplateSubmitBtn');
     const submitBtnTop = byId('developEmailTemplateSubmitBtnTop');
     const builderSubmitBtnTop = byId('developTemplateEditorSaveBtnTop');
@@ -6185,7 +6218,6 @@ App.develop = (function () {
     const host = byId('developTemplateEditorModules');
     if (!host) return;
     let draggedIndex = null;
-    setEmailTemplateEditorVisible(true);
     if (title) title.textContent = 'Email: Modular';
     if (meta) meta.textContent = 'Build the email as ordered blocks. Use move buttons to rearrange sections.';
     host.innerHTML = '';
@@ -7354,7 +7386,7 @@ App.develop = (function () {
     renderFormTemplatePreview(selectedFormTemplateId);
     renderEmailTemplateLibrary();
     renderEmailTemplatePreview(selectedEmailTemplateId);
-    resetEmailTemplateForm();
+    resetEmailTemplateForm({ renderBuilder: false });
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
     renderSavedAgentsTable();
