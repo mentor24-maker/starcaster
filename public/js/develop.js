@@ -1809,27 +1809,122 @@ App.develop = (function () {
     return LANDING_TEMPLATES.find((item) => item.id === id) || LANDING_TEMPLATES[0];
   }
 
+  function createStarterHeaderModule(column, text, headingLevel = 'H2') {
+    const module = createModularPageModule('header', column);
+    module.name = safeText(text) || module.name;
+    module.settings.text = safeText(text);
+    module.settings.headingLevel = safeText(headingLevel) || 'H2';
+    return module;
+  }
+
+  function createStarterTextBlockModule(column, content) {
+    const module = createModularPageModule('textarea', column);
+    module.name = safeText(content, 80) || module.name;
+    module.settings.content = safeText(content)
+      ? `<p>${escapeHtml(safeText(content)).replace(/\n/g, '<br />')}</p>`
+      : '<p></p>';
+    return module;
+  }
+
+  function createStarterFormModule(column, title) {
+    const module = createModularPageModule('form', column);
+    module.name = safeText(title) || module.name;
+    module.settings.title = safeText(title) || module.settings.title;
+    return module;
+  }
+
+  function buildStarterModularLayoutSections(baseTemplate) {
+    const template = baseTemplate || LANDING_TEMPLATES[0];
+    const hero = createModularPageSection('4-2');
+    hero.title = safeText(template.eyebrow);
+    hero.modules = [
+      createStarterHeaderModule('col1', safeText(template.headline), 'H1'),
+      createStarterTextBlockModule('col1', safeText(template.lead)),
+      createStarterFormModule('col2', safeText(template.formTitle)),
+    ];
+
+    const features = createModularPageSection('3-3');
+    features.modules = [
+      createStarterHeaderModule('col1', safeText(template.featureOneTitle), 'H3'),
+      createStarterTextBlockModule('col1', safeText(template.featureOneCopy)),
+      createStarterHeaderModule('col2', safeText(template.featureTwoTitle), 'H3'),
+      createStarterTextBlockModule('col2', safeText(template.featureTwoCopy)),
+    ];
+
+    const body = createModularPageSection('6');
+    body.modules = [
+      createStarterHeaderModule('col1', safeText(template.bodyTitle), 'H2'),
+      createStarterTextBlockModule('col1', safeText(template.summary || template.formCopy || template.lead)),
+    ];
+
+    return [hero, features, body];
+  }
+
+  function getStarterModularPageTemplates() {
+    return LANDING_TEMPLATES.map((template) => ({
+      id: `starter::${safeText(template.id)}`,
+      name: safeText(template.name) || 'Starter Template',
+      templateKind: 'modular',
+      templateId: safeText(template.id),
+      isSystemTemplate: true,
+      summary: safeText(template.summary),
+      layoutSections: buildStarterModularLayoutSections(template),
+      createdAt: '',
+      updatedAt: '',
+    }));
+  }
+
+  function getStarterModularPageTemplateById(templateId) {
+    const id = safeText(templateId);
+    return getStarterModularPageTemplates().find((item) => safeText(item.id) === id) || null;
+  }
+
   function getSavedPageTemplateById(templateId) {
     const id = safeText(templateId);
     return savedPageTemplates.find((item) => String(item?.id) === id) || null;
   }
 
+  function getUnifiedModularPageTemplates() {
+    const saved = savedPageTemplates
+      .filter((item) => normalizePageTemplateKind(item.templateKind) === 'modular')
+      .map((item) => ({
+        ...item,
+        isSystemTemplate: false,
+      }))
+      .sort((a, b) => {
+        const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime() || 0;
+        const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime() || 0;
+        return bTime - aTime;
+      });
+    return {
+      saved,
+      starters: getStarterModularPageTemplates(),
+      all: saved.concat(getStarterModularPageTemplates()),
+    };
+  }
+
   function getTemplateById(templateId) {
     const saved = getSavedPageTemplateById(templateId);
     if (saved) return saved;
+    const starter = getStarterModularPageTemplateById(templateId);
+    if (starter) return starter;
     return getBaseLandingTemplateById(templateId);
   }
 
   function getPageTemplateSelectOptions() {
-    const base = LANDING_TEMPLATES.map((template) => ({
-      value: template.id,
-      label: `Base: ${template.name}`,
-    }));
     const saved = savedPageTemplates.map((template) => ({
       value: String(template.id),
       label: `${normalizePageTemplateKind(template.templateKind) === 'modular' ? 'Modular' : 'Template'}: ${safeText(template.name) || `Template ${template.id}`}`,
     }));
-    return [...saved, ...base];
+    const starters = getStarterModularPageTemplates().map((template) => ({
+      value: String(template.id),
+      label: `Starter: ${safeText(template.name) || 'Starter Template'}`,
+    }));
+    const base = LANDING_TEMPLATES.map((template) => ({
+      value: template.id,
+      label: `Base: ${template.name}`,
+    }));
+    return [...saved, ...starters, ...base];
   }
 
   function getFormTemplateById(templateId) {
@@ -3233,6 +3328,8 @@ App.develop = (function () {
   function getLandingPageTemplateName(templateId) {
     const saved = getSavedPageTemplateById(templateId);
     if (saved) return safeText(saved.name) || `Template ${saved.id}`;
+    const starter = getStarterModularPageTemplateById(templateId);
+    if (starter) return safeText(starter.name) || 'Starter Template';
     return getBaseLandingTemplateById(templateId).name;
   }
 
@@ -5372,60 +5469,65 @@ App.develop = (function () {
   }
 
   function openCreateLandingPageTemplatePicker() {
-    const modularTemplates = savedPageTemplates
-      .filter((item) => normalizePageTemplateKind(item.templateKind) === 'modular')
-      .sort((a, b) => {
-        const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime() || 0;
-        const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime() || 0;
-        return bTime - aTime;
-      });
+    const modularTemplates = getUnifiedModularPageTemplates();
     if (!App.components || typeof App.components.Modal !== 'function') {
       notify('Template picker is unavailable right now.', true);
       return;
     }
     const body = document.createElement('div');
     body.className = 'develop-template-records-card';
-    if (!modularTemplates.length) {
+    if (!modularTemplates.all.length) {
       body.innerHTML = '<div class="develop-template-records-empty">No modular page templates yet.</div>';
     } else {
       const intro = document.createElement('p');
       intro.className = 'meta';
-      intro.textContent = 'Choose one of your saved modular templates to use as the starting point for this page.';
+      intro.textContent = 'Choose a modular template to use as the starting point for this page.';
       body.appendChild(intro);
-      const list = document.createElement('div');
-      list.className = 'stack-form';
-      modularTemplates.forEach((template) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'develop-template-picker-row';
-        const updatedLabel = template.updatedAt
-          ? new Date(template.updatedAt).toLocaleString()
-          : (template.createdAt ? new Date(template.createdAt).toLocaleString() : 'Not saved yet');
-        button.innerHTML = `
-          <span class="develop-template-picker-row__copy">
-            <span class="develop-template-picker-row__title">${escapeHtml(safeText(template.name) || 'Untitled Template')}</span>
-            <span class="develop-template-picker-row__meta">Base: ${escapeHtml(getLandingPageTemplateName(template.templateId) || 'Base Template')} · Updated: ${escapeHtml(updatedLabel)}</span>
-          </span>
-          <span class="develop-template-picker-row__action">Use Template</span>
-        `;
-        button.addEventListener('click', () => {
-          const pageName = `${safeText(template.name) || 'Modular'} Page`;
-          openModularPageTemplateEditor({
-            ...template,
-            id: '',
-            name: pageName,
-            templateId: safeText(template.templateId),
-            layoutSections: normalizePageTemplateLayoutSections(template.layoutSections),
-          }, {
-            mode: 'page',
-            sourceTemplateId: safeText(template.id),
-            targetPage: 'developLandingPagesPage',
+      const renderTemplateGroup = (label, templates) => {
+        if (!templates.length) return;
+        const heading = document.createElement('div');
+        heading.className = 'develop-template-records-heading';
+        heading.textContent = label;
+        body.appendChild(heading);
+
+        const list = document.createElement('div');
+        list.className = 'stack-form';
+        templates.forEach((template) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'develop-template-picker-row';
+          const updatedLabel = template.updatedAt
+            ? new Date(template.updatedAt).toLocaleString()
+            : (template.createdAt ? new Date(template.createdAt).toLocaleString() : 'Starter Template');
+          button.innerHTML = `
+            <span class="develop-template-picker-row__copy">
+              <span class="develop-template-picker-row__title">${escapeHtml(safeText(template.name) || 'Untitled Template')}</span>
+              <span class="develop-template-picker-row__meta">Base: ${escapeHtml(getBaseLandingTemplateById(template.templateId).name || 'Base Template')} · Updated: ${escapeHtml(updatedLabel)}</span>
+            </span>
+            <span class="develop-template-picker-row__action">Use Template</span>
+          `;
+          button.addEventListener('click', () => {
+            const pageName = `${safeText(template.name) || 'Modular'} Page`;
+            openModularPageTemplateEditor({
+              ...template,
+              id: '',
+              name: pageName,
+              templateId: safeText(template.templateId),
+              layoutSections: normalizePageTemplateLayoutSections(template.layoutSections),
+            }, {
+              mode: 'page',
+              sourceTemplateId: safeText(template.id),
+              targetPage: 'developLandingPagesPage',
+            });
+            modal.close();
           });
-          modal.close();
+          list.appendChild(button);
         });
-        list.appendChild(button);
-      });
-      body.appendChild(list);
+        body.appendChild(list);
+      };
+
+      renderTemplateGroup('My Templates', modularTemplates.saved);
+      renderTemplateGroup('Starter Templates', modularTemplates.starters);
     }
     const modal = App.components.Modal({
       title: 'Choose Page Template',
