@@ -198,7 +198,7 @@ App.develop = (function () {
       },
       fields: [
         { key: 'title', label: 'Title', control: 'text', placeholder: 'Form title', contentSource: 'headline', contentSettingKey: 'headlineId', contentLabel: 'Saved Headline' },
-        { key: 'formId', label: 'Saved Form', control: 'saved-form-select' },
+        { key: 'formId', label: 'Saved Form', control: 'saved-form-picker' },
         { key: 'submitLabel', label: 'Submit Label', control: 'text', placeholder: 'Submit Form' },
         { key: 'width', label: 'Width', control: 'select', options: ['compact', 'standard', 'wide', 'full'] },
         { key: 'backgroundColor', label: 'Background Color', control: 'color' },
@@ -234,7 +234,9 @@ App.develop = (function () {
       description: 'A video block with source, poster, playback, and aspect-ratio controls.',
       starterName: 'Video',
       defaults: {
+        videoAssetId: '',
         videoUrl: '',
+        posterAssetId: '',
         posterUrl: '',
         aspectRatio: '16:9',
         autoplay: false,
@@ -242,7 +244,9 @@ App.develop = (function () {
         controls: true,
       },
       fields: [
+        { key: 'videoAssetId', label: 'Gallery Video', control: 'video-asset-picker', pickerTitle: 'Module Video' },
         { key: 'videoUrl', label: 'Video URL', control: 'text', placeholder: 'https://...' },
+        { key: 'posterAssetId', label: 'Poster Image', control: 'image-asset-picker', pickerTitle: 'Video Poster' },
         { key: 'posterUrl', label: 'Poster URL', control: 'text', placeholder: 'https://...' },
         { key: 'aspectRatio', label: 'Aspect Ratio', control: 'select', options: ['16:9', '4:3', '1:1', '9:16'] },
         { key: 'autoplay', label: 'Autoplay', control: 'checkbox' },
@@ -260,6 +264,7 @@ App.develop = (function () {
         headlineId: '',
         columnsCount: 3,
         rowsCount: 4,
+        tableContents: '[]',
         headerColor: '#173c61',
         headerTextColor: '#ffffff',
         borderColor: '#d6e6f5',
@@ -273,6 +278,7 @@ App.develop = (function () {
         { key: 'caption', label: 'Caption', control: 'text', placeholder: 'Table caption', contentSource: 'headline', contentSettingKey: 'headlineId', contentLabel: 'Saved Headline' },
         { key: 'columnsCount', label: 'Columns', control: 'number', min: 1, max: 8, step: 1 },
         { key: 'rowsCount', label: 'Rows', control: 'number', min: 1, max: 20, step: 1 },
+        { key: 'tableContents', label: 'Contents', control: 'table-contents-editor' },
         { key: 'headerColor', label: 'Header Color', control: 'color' },
         { key: 'headerTextColor', label: 'Header Text Color', control: 'color' },
         { key: 'borderColor', label: 'Border Color', control: 'color' },
@@ -1403,6 +1409,130 @@ App.develop = (function () {
       },
       uploadHandler: (file) => uploadLandingAssetFile(file, selectId),
     });
+  }
+
+  function getVideoAssets() {
+    return (Array.isArray(state.assets) ? state.assets : []).filter((asset) => safeText(asset?.assetType) === 'Video');
+  }
+
+  function openSavedFormPicker(options = {}) {
+    if (!App.components || typeof App.components.Modal !== 'function') return false;
+    const getValue = typeof options.getValue === 'function' ? options.getValue : (() => '');
+    const setValue = typeof options.setValue === 'function' ? options.setValue : (() => {});
+    const afterChange = typeof options.afterChange === 'function' ? options.afterChange : (() => {});
+    const title = safeText(options.title) || 'Saved Form';
+    const body = document.createElement('div');
+    body.className = 'develop-theme-picker-body';
+    const list = document.createElement('div');
+    list.className = 'develop-theme-picker-grid develop-theme-picker-grid--unknown';
+    body.appendChild(list);
+    let modal = null;
+
+    const renderList = () => {
+      list.innerHTML = '';
+      const forms = Array.isArray(savedForms) ? savedForms.slice() : [];
+      if (!forms.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No saved forms available.';
+        list.appendChild(empty);
+        return;
+      }
+      forms.forEach((form) => {
+        const card = document.createElement('div');
+        card.className = `develop-theme-picker-card${safeText(getValue()) === safeText(form.id) ? ' is-selected' : ''}`;
+        const fieldCount = Array.isArray(form?.fields) ? form.fields.length : 0;
+        card.innerHTML = `
+          <div class="develop-theme-picker-card-title">${escapeHtml(safeText(form?.name) || safeText(form?.id) || 'Saved Form')}</div>
+          <div class="develop-theme-picker-card-meta">${escapeHtml(safeText(form?.formType) || 'Form')} · ${fieldCount} fields</div>
+          <div class="develop-theme-picker-card-actions">
+            <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Form</button>
+          </div>
+        `;
+        card.querySelector('.develop-theme-picker-select-btn')?.addEventListener('click', () => {
+          setValue(safeText(form.id));
+          afterChange(form);
+          modal?.close();
+        });
+        list.appendChild(card);
+      });
+    };
+
+    modal = App.components.Modal({
+      title: `Choose ${title}`,
+      body,
+      dialogClass: 'develop-theme-picker-modal develop-module-image-picker-modal',
+    });
+    renderList();
+    modal.open();
+    return modal;
+  }
+
+  function openVideoAssetPicker(options = {}) {
+    if (!App.components || typeof App.components.Modal !== 'function') return false;
+    const getValue = typeof options.getValue === 'function' ? options.getValue : (() => '');
+    const setValue = typeof options.setValue === 'function' ? options.setValue : (() => {});
+    const afterChange = typeof options.afterChange === 'function' ? options.afterChange : (() => {});
+    const title = safeText(options.title) || 'Video';
+    const body = document.createElement('div');
+    body.className = 'develop-theme-picker-body';
+    const filterInput = document.createElement('input');
+    filterInput.placeholder = 'Search videos by name, category, or tag';
+    const list = document.createElement('div');
+    list.className = 'develop-theme-picker-grid develop-theme-picker-grid--wide';
+    body.appendChild(filterInput);
+    body.appendChild(list);
+    let modal = null;
+
+    const renderList = () => {
+      const filter = safeText(filterInput.value).toLowerCase();
+      const videos = getVideoAssets().filter((asset) => {
+        if (!filter) return true;
+        const haystack = [
+          safeText(assetLabel(asset, 'Video')),
+          safeText(asset?.category),
+          safeText(asset?.assetName),
+          safeText(asset?.location),
+          getAssetTagText(asset),
+        ].join(' ').toLowerCase();
+        return haystack.includes(filter);
+      });
+      list.innerHTML = '';
+      if (!videos.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No matching videos found.';
+        list.appendChild(empty);
+        return;
+      }
+      videos.forEach((asset) => {
+        const card = document.createElement('div');
+        card.className = `develop-theme-picker-card${safeText(getValue()) === safeText(asset.id) ? ' is-selected' : ''}`;
+        card.innerHTML = `
+          <div class="develop-theme-picker-card-title">${escapeHtml(assetLabel(asset, title))}</div>
+          <div class="develop-theme-picker-card-meta">${escapeHtml(safeText(asset.category) || 'Video')}</div>
+          <div class="develop-theme-picker-card-actions">
+            <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Video</button>
+          </div>
+        `;
+        card.querySelector('.develop-theme-picker-select-btn')?.addEventListener('click', () => {
+          setValue(safeText(asset.id));
+          afterChange(asset);
+          modal?.close();
+        });
+        list.appendChild(card);
+      });
+    };
+
+    filterInput.addEventListener('input', renderList);
+    modal = App.components.Modal({
+      title: `Choose ${title}`,
+      body,
+      dialogClass: 'develop-theme-picker-modal develop-module-image-picker-modal',
+    });
+    renderList();
+    modal.open();
+    return modal;
   }
 
   function buildThemePayload() {
@@ -2562,6 +2692,154 @@ App.develop = (function () {
         return;
       }
 
+      if (field.control === 'video-asset-picker') {
+        const pickerId = `${prefix}_${field.key}`;
+        const currentAssetId = safeText(value);
+        const currentAsset = getAssetById(currentAssetId);
+        wrap.className = 'stack-form develop-module-image-field';
+
+        control = document.createElement('input');
+        control.type = 'hidden';
+        control.id = pickerId;
+        control.value = currentAssetId;
+        control.setAttribute('data-module-field-key', field.key);
+        control.setAttribute('data-module-field-control', field.control);
+
+        const pickerControls = document.createElement('div');
+        pickerControls.className = 'develop-inline-asset-nav';
+
+        const chooseBtn = document.createElement('button');
+        chooseBtn.type = 'button';
+        chooseBtn.textContent = currentAsset ? `Change ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}` : `Choose ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}`;
+
+        const status = document.createElement('span');
+        status.className = 'develop-inline-asset-status';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.textContent = 'Clear';
+
+        const preview = document.createElement('div');
+        preview.className = 'develop-inline-asset-preview';
+
+        const updatePickerState = () => {
+          const selectedId = safeText(control.value);
+          const asset = getAssetById(selectedId);
+          chooseBtn.textContent = asset ? `Change ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}` : `Choose ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}`;
+          status.textContent = asset ? assetLabel(asset, safeText(field.pickerTitle) || safeText(field.label) || 'Video') : 'No video selected';
+          preview.innerHTML = '';
+          const meta = document.createElement('span');
+          meta.textContent = asset ? (safeText(asset.category) || 'Video asset') : 'No video selected';
+          preview.appendChild(meta);
+        };
+
+        chooseBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openVideoAssetPicker({
+            title: safeText(field.pickerTitle) || safeText(field.label) || 'Video',
+            getValue: () => safeText(control.value),
+            setValue: (nextValue) => {
+              control.value = safeText(nextValue);
+            },
+            afterChange: () => {
+              updatePickerState();
+            },
+          });
+        });
+
+        clearBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          control.value = '';
+          updatePickerState();
+        });
+
+        pickerControls.appendChild(chooseBtn);
+        pickerControls.appendChild(status);
+        pickerControls.appendChild(clearBtn);
+        wrap.appendChild(pickerControls);
+        wrap.appendChild(preview);
+        wrap.appendChild(control);
+        updatePickerState();
+        host.appendChild(wrap);
+        return;
+      }
+
+      if (field.control === 'saved-form-picker') {
+        const pickerId = `${prefix}_${field.key}`;
+        const currentFormId = safeText(value);
+        wrap.className = 'stack-form develop-module-image-field';
+
+        control = document.createElement('input');
+        control.type = 'hidden';
+        control.id = pickerId;
+        control.value = currentFormId;
+        control.setAttribute('data-module-field-key', field.key);
+        control.setAttribute('data-module-field-control', field.control);
+
+        const pickerControls = document.createElement('div');
+        pickerControls.className = 'develop-inline-asset-nav';
+
+        const chooseBtn = document.createElement('button');
+        chooseBtn.type = 'button';
+
+        const status = document.createElement('span');
+        status.className = 'develop-inline-asset-status';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.textContent = 'Clear';
+
+        const preview = document.createElement('div');
+        preview.className = 'develop-inline-asset-preview';
+
+        const updatePickerState = () => {
+          const selectedId = safeText(control.value);
+          const form = savedForms.find((item) => safeText(item.id) === selectedId) || null;
+          chooseBtn.textContent = form ? `Change ${field.label}` : `Choose ${field.label}`;
+          status.textContent = form ? (safeText(form.name) || safeText(form.id)) : 'No form selected';
+          preview.innerHTML = '';
+          const meta = document.createElement('span');
+          meta.textContent = form
+            ? `${safeText(form.formType) || 'Form'} · ${Array.isArray(form.fields) ? form.fields.length : 0} fields`
+            : 'No form selected';
+          preview.appendChild(meta);
+        };
+
+        chooseBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openSavedFormPicker({
+            title: field.label,
+            getValue: () => safeText(control.value),
+            setValue: (nextValue) => {
+              control.value = safeText(nextValue);
+            },
+            afterChange: () => {
+              updatePickerState();
+            },
+          });
+        });
+
+        clearBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          control.value = '';
+          updatePickerState();
+        });
+
+        pickerControls.appendChild(chooseBtn);
+        pickerControls.appendChild(status);
+        pickerControls.appendChild(clearBtn);
+        wrap.appendChild(pickerControls);
+        wrap.appendChild(preview);
+        wrap.appendChild(control);
+        updatePickerState();
+        host.appendChild(wrap);
+        return;
+      }
+
       if (field.control === 'textarea') {
         control = document.createElement('textarea');
         control.rows = Number(field.rows) || 3;
@@ -2738,7 +3016,11 @@ App.develop = (function () {
       return `${imageLabel} · ${safeText(settings.aspectRatio) || 'auto'} · ${safeText(settings.maxWidth)}%`;
     }
     if (type === 'video') {
-      return `${safeText(settings.videoUrl) ? 'Video linked' : 'No video set'} · ${safeText(settings.aspectRatio) || '16:9'}`;
+      const videoAsset = getAssetById(settings.videoAssetId);
+      const videoLabel = videoAsset
+        ? assetLabel(videoAsset, 'Video')
+        : (safeText(settings.videoUrl) ? 'Video linked' : 'No video set');
+      return `${videoLabel} · ${safeText(settings.aspectRatio) || '16:9'}`;
     }
     if (type === 'table') {
       return `${safeText(settings.caption) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'Table'} · ${safeText(settings.columnsCount) || 0} cols · ${safeText(settings.rowsCount) || 0} rows`;
@@ -4438,6 +4720,24 @@ App.develop = (function () {
         assetUrl: resolvedAssetUrl || manualImageUrl,
       };
     }
+    if (type === 'video') {
+      const settingsVideoAssetId = safeText(module?.settings?.videoAssetId);
+      const settingsPosterAssetId = safeText(module?.settings?.posterAssetId);
+      const videoAsset = getAssetById(settingsVideoAssetId);
+      const posterAsset = getAssetById(settingsPosterAssetId);
+      return {
+        assetId: settingsVideoAssetId,
+        assetName: videoAsset ? assetLabel(videoAsset, 'Video') : 'Video',
+        assetUrl: settingsVideoAssetId ? getLandingPageAssetUrl(settingsVideoAssetId) : safeText(module?.settings?.videoUrl),
+        posterAssetId: settingsPosterAssetId,
+        posterName: posterAsset ? assetLabel(posterAsset, 'Poster') : 'Poster',
+        posterUrl: settingsPosterAssetId ? getLandingPageAssetUrl(settingsPosterAssetId) : safeText(module?.settings?.posterUrl),
+        aspectRatio: safeText(module?.settings?.aspectRatio) || '16:9',
+        controls: module?.settings?.controls !== false,
+        muted: module?.settings?.muted !== false,
+        autoplay: Boolean(module?.settings?.autoplay),
+      };
+    }
     return safeText(module?.text, 10000);
   }
 
@@ -4495,6 +4795,23 @@ App.develop = (function () {
               ? buildLandingAssetImage(content.assetId, content.assetName)
               : (content?.assetUrl ? `<img src="${escapeHtml(content.assetUrl)}" alt="${escapeHtml(content.assetName || 'Image')}" />` : '');
             return `<div${editable('develop-template-image-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${imageMarkup || escapeHtml(content?.assetName || 'Image')}</div>`;
+          }
+          if (module.type === 'video') {
+            const styleBits = [];
+            if (safeText(content?.aspectRatio).includes(':')) {
+              const [widthPart, heightPart] = safeText(content.aspectRatio).split(':');
+              const width = Number(widthPart) || 16;
+              const height = Number(heightPart) || 9;
+              styleBits.push(`aspect-ratio:${width}/${height};`);
+            }
+            const posterAttr = content?.posterUrl ? ` poster="${escapeHtml(content.posterUrl)}"` : '';
+            const autoplayAttr = content?.autoplay ? ' autoplay' : '';
+            const mutedAttr = content?.muted ? ' muted' : '';
+            const controlsAttr = content?.controls ? ' controls' : '';
+            const videoMarkup = content?.assetUrl
+              ? `<video src="${escapeHtml(content.assetUrl)}"${posterAttr}${autoplayAttr}${mutedAttr}${controlsAttr}></video>`
+              : `<div class="develop-template-empty-slot">${escapeHtml(content?.assetName || 'No video selected')}</div>`;
+            return `<div${editable('develop-template-video-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${styleBits.length ? ` style="${styleBits.join(' ')}"` : ''}>${videoMarkup}</div>`;
           }
           if (module.type === 'header') {
             const headingLevel = safeText(module.settings?.headingLevel).toLowerCase();
