@@ -264,13 +264,19 @@ async function handle(req, res, pathname, method) {
     const fileId = decodeURIComponent(driveFileMatch[1] || '').trim();
     if (!fileId) return sendErr(res, 400, 'fileId is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const media = await fetchDriveFileMedia(fileId);
+    const media = await fetchDriveFileMedia(fileId, {
+      range: String(req.headers.range || '').trim(),
+    });
     if (!media.ok) return sendErr(res, media.status || 500, media.error), true;
 
-    res.statusCode = 200;
+    res.statusCode = media.status || 200;
     res.setHeader('Content-Type', media.data.contentType || 'application/octet-stream');
     res.setHeader('Content-Length', String(media.data.contentLength || media.data.buffer.length || 0));
     res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('Accept-Ranges', media.data.acceptRanges || 'bytes');
+    if (media.data.contentRange) {
+      res.setHeader('Content-Range', media.data.contentRange);
+    }
     res.end(media.data.buffer);
     return true;
   }
