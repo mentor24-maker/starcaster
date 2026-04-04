@@ -450,6 +450,13 @@ function readPageFromHash() {
   return isValidPageId(decoded) ? decoded : '';
 }
 
+function normalizeInitialPageId(pageId) {
+  const id = String(pageId || '').trim();
+  if (!id) return '';
+  if (id === 'developLandingPagesPage') return 'developManageLandingPagesPage';
+  return id;
+}
+
 function persistActivePage(pageId) {
   const id = String(pageId || '').trim();
   if (!isValidPageId(id)) return;
@@ -463,11 +470,12 @@ function persistActivePage(pageId) {
 }
 
 App.getInitialPage = function getInitialPage() {
-  const fromHash = readPageFromHash();
-  if (fromHash) return fromHash;
+  const fromHash = normalizeInitialPageId(readPageFromHash());
+  if (fromHash && isValidPageId(fromHash)) return fromHash;
 
   let fromStorage = '';
   try { fromStorage = String(window.localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY) || ''); } catch (_) {}
+  fromStorage = normalizeInitialPageId(fromStorage);
   if (isValidPageId(fromStorage)) return fromStorage;
   return 'contactsPage';
 };
@@ -702,19 +710,33 @@ App.setKeyValueRows = function setKeyValueRows(tbodyEl, entries) {
 };
 
 App.ACTION_ICONS = {
-  view: '<path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2.25" fill="none" stroke="currentColor" stroke-width="1.5"/>',
-  edit: '<path d="M3 11.5 11.6 2.9a1.4 1.4 0 0 1 2 2L5 13.5 2.5 14 3 11.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m10.8 3.7 1.5 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  delete: '<path d="M3.5 4.5h9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 4.5V3.4c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v1.1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 4.5l.6 8c0 .6.5 1 1.1 1h3.6c.6 0 1.1-.4 1.1-1l.6-8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
-  load: '<path d="M8 2.5v7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="m5.5 7.5 2.5 2.5 2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  run: '<path d="M5 4.5v7l6-3.5-6-3.5Z" fill="currentColor"/>',
-  status: '<circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 5.2v3l2 1.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
-  preview: '<path d="M2.5 3.5h11v9h-11z" fill="none" stroke="currentColor" stroke-width="1.5" rx="1"/><path d="M5 6.2h6M5 8.2h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  approve: '<path d="m4 8.1 2.2 2.2L12 4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-  publish: '<path d="M3 8h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="m8 4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  contact: '<circle cx="8" cy="5.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 12.5c.8-2 2.5-3 4.5-3s3.7 1 4.5 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  comments: '<path d="M3 4.2h10v6.3H7.2L4.4 12.8v-2.3H3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.2 6.5h5.6M5.2 8.4h3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  clone: '<path d="M5.2 5.2V3.8c0-.7.5-1.3 1.3-1.3h5.7c.7 0 1.3.5 1.3 1.3v5.7c0 .7-.5 1.3-1.3 1.3h-1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3.8 5.2h5.7c.7 0 1.3.5 1.3 1.3v5.7c0 .7-.5 1.3-1.3 1.3H3.8c-.7 0-1.3-.5-1.3-1.3V6.5c0-.7.5-1.3 1.3-1.3Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
-  copy: '<rect x="5.5" y="2.5" width="8" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.6 2.5v-0.7H8.4v0.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5 5.5v8a1.5 1.5 0 0 0 1.5 1.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  view: '<path d="M2 8s2.7-4.5 6-4.5S14 8 14 8s-2.7 4.5-6 4.5S2 8 2 8Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  edit: '<path d="M3.2 12.8 11.5 4.5a1.6 1.6 0 1 1 2.3 2.3L5.5 15.1 2.5 15.5l.7-2.7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m10.7 5.3 2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  delete: '<path d="M3.5 4.5h9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 4.5V3.6c0-.6.5-1.1 1.1-1.1h1.8c.6 0 1.1.5 1.1 1.1v.9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5.5v6.1c0 .9.7 1.6 1.6 1.6h2.8c.9 0 1.6-.7 1.6-1.6V5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 7.4v3.8M9 7.4v3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  trash: '<path d="M3.5 4.5h9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 4.5V3.6c0-.6.5-1.1 1.1-1.1h1.8c.6 0 1.1.5 1.1 1.1v.9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5.5v6.1c0 .9.7 1.6 1.6 1.6h2.8c.9 0 1.6-.7 1.6-1.6V5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 7.4v3.8M9 7.4v3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  load: '<path d="M8 2.5v7.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="m5.4 7.9 2.6 2.6 2.6-2.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.2 13h9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  run: '<path d="M5 4.3v7.4l6-3.7-6-3.7Z" fill="currentColor"/>',
+  status: '<circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 5.2v3.1l2 1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  preview: '<path d="M2.5 4h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 7h6M5 9.3h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  approve: '<path d="m4.1 8.2 2.1 2.1 5.7-5.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  publish: '<path d="M3 8h8.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="m8.9 4.7 3.1 3.3-3.1 3.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  contact: '<circle cx="8" cy="5.2" r="2.1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.6 12.3c.8-1.9 2.4-2.9 4.4-2.9s3.6 1 4.4 2.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  comments: '<path d="M3.2 4.3h9.6a.8.8 0 0 1 .8.8v5.3a.8.8 0 0 1-.8.8H7.1l-2.8 2v-2H3.2a.8.8 0 0 1-.8-.8V5.1a.8.8 0 0 1 .8-.8Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.2 7h5.6M5.2 8.9h3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  clone: '<path d="M5.5 5.5V4.1c0-.9.7-1.6 1.6-1.6h4.3c.9 0 1.6.7 1.6 1.6v4.3c0 .9-.7 1.6-1.6 1.6h-1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><rect x="3" y="5.5" width="7.8" height="7.8" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  copy: '<rect x="5.2" y="2.5" width="7.3" height="10.2" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 5.3v7.2c0 .8.7 1.5 1.5 1.5h5.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  settings: '<circle cx="8" cy="8" r="1.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.7v1.2M8 12.1v1.2M12.1 8h1.2M2.7 8h1.2M11.7 4.3l-.9.9M5.2 10.8l-.9.9M11.7 11.7l-.9-.9M5.2 5.2l-.9-.9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  plus: '<path d="M8 3.2v9.6M3.2 8h9.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+};
+
+App.makeInlineIcon = function makeInlineIcon(iconKey, extraClass = '') {
+  const wrap = document.createElement('span');
+  wrap.className = `icon-btn-glyph${extraClass ? ` ${extraClass}` : ''}`.trim();
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = App.ACTION_ICONS[iconKey] || App.ACTION_ICONS.view;
+  wrap.appendChild(svg);
+  return wrap;
 };
 
 App.makeIconButton = function makeIconButton(iconKey, label, onClick, options = {}) {
@@ -733,11 +755,7 @@ App.makeIconButton = function makeIconButton(iconKey, label, onClick, options = 
 
   const iconWrap = document.createElement('span');
   iconWrap.className = 'icon-btn-glyph';
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = App.ACTION_ICONS[iconKey] || App.ACTION_ICONS.view;
-  iconWrap.appendChild(svg);
+  iconWrap.appendChild(App.makeInlineIcon(iconKey).querySelector('svg'));
   btn.appendChild(iconWrap);
 
   if (typeof onClick === 'function') btn.addEventListener('click', onClick);

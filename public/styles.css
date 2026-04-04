@@ -3187,6 +3187,7 @@ th {
   border: 1px solid #777;
   border-radius: 14px;
   background: #d7e1ea;
+  overflow: hidden;
 }
 
 .develop-page-template-row-actions {
@@ -3214,6 +3215,19 @@ th {
   line-height: 1;
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+}
+
+.develop-builder-inline-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+.develop-builder-inline-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .develop-page-template-row-action:hover,
@@ -3264,6 +3278,7 @@ th {
   position: relative;
   place-items: center;
   padding: 1rem;
+  overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
@@ -3290,6 +3305,30 @@ th {
 .develop-page-template-cell-settings:focus-visible {
   background: #ffffff;
   border-color: rgba(15, 79, 143, 0.28);
+}
+
+.develop-page-template-cell-settings .develop-builder-inline-icon,
+.develop-page-template-module-pill-action .develop-builder-inline-icon,
+.develop-page-template-row-action .develop-builder-inline-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.develop-page-template-cell-settings .develop-builder-inline-icon svg,
+.develop-page-template-module-pill-action .develop-builder-inline-icon svg,
+.develop-page-template-row-action .develop-builder-inline-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.develop-page-template-cell-add .develop-builder-inline-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.develop-page-template-cell-add .develop-builder-inline-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 .develop-page-template-row-cell.is-module-drop-target {
@@ -3321,8 +3360,8 @@ th {
   border: 1px solid rgba(15, 79, 143, 0.18);
   background: rgba(255, 255, 255, 0.96);
   color: #0f4f8f;
-  font-size: 2rem;
-  line-height: 1;
+  display: inline-grid;
+  place-items: center;
   box-shadow: 0 10px 24px rgba(15, 79, 143, 0.12);
 }
 
@@ -3337,7 +3376,6 @@ th {
   width: 38px;
   height: 38px;
   min-width: 38px;
-  font-size: 1.45rem;
 }
 
 .develop-page-template-row-cell:has(.develop-page-template-module-pill) .develop-page-template-cell-add:hover,
