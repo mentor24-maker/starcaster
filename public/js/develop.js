@@ -7472,6 +7472,32 @@ App.develop = (function () {
         settingsBtn.className = 'develop-page-template-cell-settings';
         settingsBtn.innerHTML = '<span aria-hidden="true">⚙</span>';
         settingsBtn.title = 'Container settings';
+        const resetSettingsBtnScale = () => {
+          settingsBtn.style.setProperty('--develop-gear-scale', '1');
+        };
+        const updateSettingsBtnScale = (clientX, clientY) => {
+          const rect = settingsBtn.getBoundingClientRect();
+          const centerX = rect.left + (rect.width / 2);
+          const centerY = rect.top + (rect.height / 2);
+          const distance = Math.hypot(clientX - centerX, clientY - centerY);
+          const activeRadius = 100;
+          const maxScale = 3.125;
+          if (distance >= activeRadius) {
+            resetSettingsBtnScale();
+            return;
+          }
+          const strength = 1 - (distance / activeRadius);
+          const scale = 1 + ((maxScale - 1) * strength);
+          settingsBtn.style.setProperty('--develop-gear-scale', scale.toFixed(3));
+        };
+        columnDropZone.addEventListener('mousemove', (event) => {
+          updateSettingsBtnScale(event.clientX, event.clientY);
+        });
+        columnDropZone.addEventListener('mouseleave', resetSettingsBtnScale);
+        settingsBtn.addEventListener('focus', () => {
+          settingsBtn.style.setProperty('--develop-gear-scale', '3.125');
+        });
+        settingsBtn.addEventListener('blur', resetSettingsBtnScale);
         settingsBtn.addEventListener('click', async (event) => {
           event.preventDefault();
           event.stopPropagation();
