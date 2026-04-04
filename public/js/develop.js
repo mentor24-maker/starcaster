@@ -8016,8 +8016,6 @@ App.develop = (function () {
       });
       rowActions.appendChild(rowEdit);
       rowActions.appendChild(rowDelete);
-      item.appendChild(rowActions);
-
       const columnOptions = getModularPageLayoutMeta(section.layout).columns;
       const columnGroups = document.createElement('div');
       columnGroups.className = 'develop-page-template-row-cells';
@@ -8110,6 +8108,7 @@ App.develop = (function () {
         columnGroups.appendChild(columnDropZone);
       });
       item.appendChild(columnGroups);
+      item.appendChild(rowActions);
       host.appendChild(item);
     });
   }
