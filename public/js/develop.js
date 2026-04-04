@@ -4218,7 +4218,7 @@ App.develop = (function () {
   function getModularModuleContentLabel(module) {
     const type = safeText(module?.type);
     if (type === 'image' || type === 'logo-wide' || type === 'logo-square') {
-      const asset = getAssetById(module?.assetId || module?.contentId);
+      const asset = getAssetById(module?.settings?.imageAssetId || module?.assetId || module?.contentId);
       return assetLabel(asset, 'No asset selected');
     }
     if (type === 'form') return getSavedFormName(module?.contentId) || 'No form selected';
@@ -4432,7 +4432,10 @@ App.develop = (function () {
             return `<aside${editable('develop-template-form-card')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}><h3>${escapeHtml(content?.title || titleText || 'Form')}</h3>${runtimeFieldMarkup}<button type="button">${escapeHtml(content?.submitLabel || 'Submit Form')}</button></aside>`;
           }
           if (module.type === 'image' || module.type === 'logo-wide' || module.type === 'logo-square') {
-            return `<div${editable('develop-template-image-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${content?.assetUrl ? buildLandingAssetImage(content.assetId, content.assetName) : escapeHtml(content?.assetName || 'Image')}</div>`;
+            const imageMarkup = content?.assetId
+              ? buildLandingAssetImage(content.assetId, content.assetName)
+              : (content?.assetUrl ? `<img src="${escapeHtml(content.assetUrl)}" alt="${escapeHtml(content.assetName || 'Image')}" />` : '');
+            return `<div${editable('develop-template-image-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${imageMarkup || escapeHtml(content?.assetName || 'Image')}</div>`;
           }
           if (module.type === 'headline') return `<h3${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.headline)}</h3>`;
           if (module.type === 'subheading') return `<h4${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</h4>`;
@@ -7474,6 +7477,9 @@ App.develop = (function () {
       if (!nextModule) return;
       nextModule.name = safeText(panel.querySelector('#developPageModuleEditorNameInput')?.value, 255);
       nextModule.settings = getDevelopModuleSettingsFromHost(nextModule.type, { prefix: 'developPageModuleEditorField' });
+      if (nextModule.type === 'image' || nextModule.type === 'logo-wide' || nextModule.type === 'logo-square') {
+        nextModule.assetId = safeText(nextModule.settings?.imageAssetId || nextModule.assetId);
+      }
       modularPageTemplateDraft.layoutSections = nextSections;
       closeModularPageModuleEditor();
       renderModularPageTemplateEditor();
