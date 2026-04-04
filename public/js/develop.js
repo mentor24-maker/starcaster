@@ -5282,7 +5282,7 @@ App.develop = (function () {
           }, {
             mode: 'page',
             sourceTemplateId: safeText(template.id),
-            targetPage: 'developTemplatesPage',
+            targetPage: 'developLandingPagesPage',
           });
           modal.close();
         });
@@ -5696,7 +5696,7 @@ App.develop = (function () {
           openModularPageTemplateEditor(item, {
             mode: 'page',
             sourceTemplateId: safeText(item.templateId),
-            targetPage: 'developTemplatesPage',
+            targetPage: 'developLandingPagesPage',
           });
         } else {
           openLandingPageVisualEditor(item);
@@ -6514,6 +6514,21 @@ App.develop = (function () {
     }
   }
 
+  function syncModularPageEditorPlacement() {
+    const panel = byId('developPageTemplateEditorPanel');
+    const pagesHost = byId('developLandingPagesModularHost');
+    const templatesHost = byId('developTemplatesModularHost');
+    const landingForm = els.developLandingPagesForm || byId('developLandingPagesForm');
+    if (!panel || !pagesHost || !templatesHost) return;
+    if (modularPageEditorMode === 'page') {
+      pagesHost.appendChild(panel);
+      if (landingForm) landingForm.classList.add('hidden');
+    } else {
+      templatesHost.appendChild(panel);
+      if (landingForm) landingForm.classList.remove('hidden');
+    }
+  }
+
   function setCollapsibleSectionExpanded(toggleId, bodyId, expanded) {
     const toggle = byId(toggleId);
     const body = byId(bodyId);
@@ -6862,6 +6877,7 @@ App.develop = (function () {
         : createDefaultModularPageSections(),
     });
     modularPageTemplateDraft = next;
+    syncModularPageEditorPlacement();
     syncPageTemplateEditorInputs();
     renderModularPageTemplateEditor();
     if (safeText(options.targetPage)) {
@@ -8911,6 +8927,7 @@ App.develop = (function () {
       pageTemplateEditorCloseBtnTop.addEventListener('click', () => {
         setPageTemplateEditorVisible(false);
         if (modularPageEditorMode === 'page') {
+          syncModularPageEditorPlacement();
           App.setActivePage('developManageLandingPagesPage');
         }
       });
