@@ -5911,6 +5911,52 @@ App.develop = (function () {
           openLandingPageVisualEditor(page, { mode: 'template' });
         }
       }, { marginLeft: '8px' });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Template', async () => {
+        try {
+          const payload = {
+            name: safeText(page.name),
+            templateKind: normalizePageTemplateKind(page.templateKind),
+            templateId: safeText(page.templateId),
+            primaryColor: safeText(page.primaryColor),
+            backgroundColor: safeText(page.backgroundColor),
+            accentColor: safeText(page.accentColor),
+            formId: safeText(page.formId),
+            leadMagnetId: safeText(page.leadMagnetId),
+            headlineId: safeText(page.headlineId),
+            pitchId: safeText(page.pitchId),
+            ctaId: safeText(page.ctaId),
+            websiteBannerImageId: safeText(page.websiteBannerImageId),
+            backgroundImageId: safeText(page.backgroundImageId),
+            featureImageId: safeText(page.featureImageId),
+            highlightImageId: safeText(page.highlightImageId),
+            featureHeadlineId: safeText(page.featureHeadlineId),
+            featureSubheadingId: safeText(page.featureSubheadingId),
+            featureTitle: safeText(page.featureTitle),
+            featureCopy: safeText(page.featureCopy),
+            highlightHeadlineId: safeText(page.highlightHeadlineId),
+            highlightPitchId: safeText(page.highlightPitchId),
+            highlightTitle: safeText(page.highlightTitle),
+            highlightCopy: safeText(page.highlightCopy),
+            bodyHeadlineId: safeText(page.bodyHeadlineId),
+            bodySubheadingId: safeText(page.bodySubheadingId),
+            bodyPitchId: safeText(page.bodyPitchId),
+            logoWideId: safeText(page.logoWideId),
+            logoSquareId: safeText(page.logoSquareId),
+            layoutSections: Array.isArray(page.layoutSections) ? JSON.parse(JSON.stringify(page.layoutSections)) : [],
+            contentOverrides: page && typeof page.contentOverrides === 'object'
+              ? JSON.parse(JSON.stringify(page.contentOverrides))
+              : {},
+          };
+          await api('/api/develop/page-templates', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          await refresh();
+          notify('Page template cloned');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Template', async () => {
         const id = safeText(page.id);
         if (!window.confirm(`Delete template "${safeText(page.name) || id}"?`)) return;
@@ -5924,6 +5970,7 @@ App.develop = (function () {
       }, { danger: true, marginLeft: '8px' });
       actions.appendChild(viewBtn);
       actions.appendChild(editBtn);
+      actions.appendChild(cloneBtn);
       actions.appendChild(deleteBtn);
       return [
         safeText(page.name) || '-',
@@ -7295,6 +7342,12 @@ App.develop = (function () {
     renderFormTemplateRecordsTable();
     renderEmailTemplateTables();
     renderPageTemplateRecordsTable();
+    setEmailTemplateEditorVisible(false);
+    setCollapsibleSectionExpanded('developTemplateEditorToggle', 'developTemplateEditorBody', false);
+    setCollapsibleSectionExpanded('developFormsSectionToggle', 'developFormsSectionBody', false);
+    setCollapsibleSectionExpanded('developEmailSectionToggle', 'developEmailSectionBody', false);
+    setCollapsibleSectionExpanded('developPagesSectionToggle', 'developPagesSectionBody', true);
+    setCollapsibleSectionExpanded('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', true);
     renderLandingPageThankYouPage();
     renderThumbnailSourceAssetOptions();
     renderFormTemplateLibrary();
