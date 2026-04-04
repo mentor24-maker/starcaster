@@ -7850,9 +7850,10 @@ App.develop = (function () {
         });
         if (cellModules.length) {
           cellModules.forEach(({ module, originalIndex }) => {
-            const pill = document.createElement('button');
-            pill.type = 'button';
+            const pill = document.createElement('div');
             pill.className = 'develop-page-template-module-pill';
+            pill.setAttribute('role', 'button');
+            pill.setAttribute('tabindex', '0');
             pill.innerHTML = `
               <span class="develop-page-template-module-pill-icon">${escapeHtml(getModularModuleIcon(module.type))}</span>
               <span class="develop-page-template-module-pill-copy">
@@ -7860,11 +7861,38 @@ App.develop = (function () {
                 <span class="develop-page-template-module-pill-type">${escapeHtml(getPageModuleTypeMeta(module.type).label)}</span>
                 <span class="develop-page-template-module-pill-preview">${escapeHtml(getDevelopModulePreview({ moduleType: module.type, name: module.name, settings: module.settings || {} }))}</span>
               </span>
+              <span class="develop-page-template-module-pill-actions">
+                <button type="button" class="develop-page-template-module-pill-action" title="Edit module" aria-label="Edit module">⚙</button>
+                <button type="button" class="develop-page-template-module-pill-action develop-page-template-module-pill-action--delete" title="Remove module" aria-label="Remove module">🗑</button>
+              </span>
             `;
             pill.addEventListener('click', (event) => {
               event.preventDefault();
               event.stopPropagation();
               openModularPageModuleEditor(sectionIndex, originalIndex);
+            });
+            pill.addEventListener('keydown', (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              event.stopPropagation();
+              openModularPageModuleEditor(sectionIndex, originalIndex);
+            });
+            const editBtn = pill.querySelector('.develop-page-template-module-pill-action');
+            editBtn?.addEventListener('click', (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              openModularPageModuleEditor(sectionIndex, originalIndex);
+            });
+            const deleteBtn = pill.querySelector('.develop-page-template-module-pill-action--delete');
+            deleteBtn?.addEventListener('click', (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+              const nextSection = nextSections[sectionIndex];
+              if (!nextSection) return;
+              nextSection.modules.splice(originalIndex, 1);
+              modularPageTemplateDraft.layoutSections = nextSections;
+              renderModularPageTemplateEditor();
             });
             stack.appendChild(pill);
           });
