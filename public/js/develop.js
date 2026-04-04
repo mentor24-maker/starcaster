@@ -5810,22 +5810,16 @@ App.develop = (function () {
   }
 
   function renderEmailTemplateTables() {
-    const rows = savedEmailTemplates.map((template) => ([
-      safeText(template.name) || '-',
-      safeText(template.templateKind).toLowerCase() === 'modular' ? 'Email: Modular' : 'Email: Text',
-      safeText(template.subject) || '-',
-      safeText(template.updatedAt ? new Date(template.updatedAt).toLocaleString() : '-') || '-',
-      buildEmailTemplateActions(template),
-    ]));
-    renderTemplateRecordsTable(
-      'developEmailTemplatesPrimaryTableHost',
-      'Saved Templates',
-      ['Name', 'Kind', 'Subject', 'Updated', 'Actions'],
-      rows
-    );
+    const host = byId('developEmailTemplatesPrimaryTableHost');
+    if (host) host.innerHTML = '';
   }
 
   function renderFormTemplateRecordsTable() {
+    const host = byId('developFormTemplatesTableHost');
+    if (host?.closest('.hidden')) {
+      host.innerHTML = '';
+      return;
+    }
     const rows = savedForms.map((form) => {
       const actions = document.createElement('div');
       actions.className = 'page-heading-actions';
@@ -5939,6 +5933,12 @@ App.develop = (function () {
         actions,
       ];
     });
+    renderTemplateRecordsTable(
+      'developEmailTemplatesPrimaryTableHost',
+      'Saved Page Templates',
+      ['Name', 'Kind', 'Template', 'Updated', 'Actions'],
+      rows
+    );
     renderTemplateRecordsTable(
       'developPageTemplatesTableHost',
       'Saved Page Templates',
