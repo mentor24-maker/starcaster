@@ -3200,15 +3200,15 @@ th {
   justify-content: center;
   align-items: center;
   align-self: stretch;
-  width: 48px;
-  min-width: 48px;
+  width: 54px;
+  min-width: 54px;
   padding-left: 0.2rem;
 }
 
 .develop-page-template-row-action {
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
   padding: 0;
   border-radius: 999px;
   border: 1px solid #8c939b;
@@ -3327,13 +3327,13 @@ th {
 }
 
 .develop-page-template-row-action .develop-builder-inline-icon {
-  width: 19px;
-  height: 19px;
+  width: 24px;
+  height: 24px;
 }
 
 .develop-page-template-row-action .develop-builder-inline-icon svg {
-  width: 19px;
-  height: 19px;
+  width: 24px;
+  height: 24px;
 }
 
 .develop-page-template-cell-add .develop-builder-inline-icon {
@@ -5345,26 +5345,41 @@ th {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   vertical-align: middle;
+  border: 1px solid #b9c9d8;
+  background: rgba(255, 255, 255, 0.92);
+  color: #24486b;
+  box-shadow: 0 2px 8px rgba(19, 44, 68, 0.08);
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 
 .icon-btn-glyph {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .icon-btn-glyph svg {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-btn:hover,
+.icon-btn:focus-visible {
+  background: #ffffff;
+  border-color: #8fb0cd;
+  color: #173c61;
+  box-shadow: 0 4px 14px rgba(19, 44, 68, 0.12);
 }
 
 .icon-btn-primary {
