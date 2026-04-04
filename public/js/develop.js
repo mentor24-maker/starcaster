@@ -210,6 +210,7 @@ App.develop = (function () {
       description: 'A flexible image block with linking, sizing, and overlay treatment controls.',
       starterName: 'Image',
       defaults: {
+        imageAssetId: '',
         imageUrl: '',
         altText: 'Image',
         linkUrl: '',
@@ -218,7 +219,8 @@ App.develop = (function () {
         aspectRatio: 'auto',
       },
       fields: [
-        { key: 'imageUrl', label: 'Image URL', control: 'text', placeholder: 'https://...' },
+        { key: 'imageAssetId', label: 'Gallery Image', control: 'image-asset-picker', pickerTitle: 'Module Image' },
+        { key: 'imageUrl', label: 'Manual Image URL', control: 'text', placeholder: 'https://...' },
         { key: 'altText', label: 'Alt Text', control: 'text', placeholder: 'Describe the image' },
         { key: 'linkUrl', label: 'Link URL', control: 'text', placeholder: 'https://...' },
         { key: 'maxWidth', label: 'Max Width %', control: 'number', min: 10, max: 100, step: 5 },
@@ -2328,6 +2330,128 @@ App.develop = (function () {
         host.appendChild(pickerWrap);
       }
 
+      if (field.control === 'image-asset-picker') {
+        const pickerId = `${prefix}_${field.key}`;
+        const pickerConfig = {
+          selectId: pickerId,
+          title: safeText(field.pickerTitle) || safeText(field.label) || 'Image',
+        };
+        const currentAssetId = safeText(value);
+        const currentAsset = getAssetById(currentAssetId);
+        const currentImageUrl = currentAsset
+          ? toDirectAssetUrl(currentAsset.location)
+          : '';
+
+        wrap.className = 'stack-form develop-module-image-field';
+
+        control = document.createElement('input');
+        control.type = 'hidden';
+        control.id = pickerId;
+        control.value = currentAssetId;
+        control.setAttribute('data-module-field-key', field.key);
+        control.setAttribute('data-module-field-control', field.control);
+
+        const pickerControls = document.createElement('div');
+        pickerControls.className = 'develop-inline-asset-nav';
+
+        const chooseBtn = document.createElement('button');
+        chooseBtn.type = 'button';
+        chooseBtn.textContent = currentAsset ? `Change ${pickerConfig.title}` : `Choose ${pickerConfig.title}`;
+
+        const status = document.createElement('span');
+        status.className = 'develop-inline-asset-status';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.textContent = 'Clear';
+
+        const preview = document.createElement('div');
+        preview.className = 'develop-inline-asset-preview';
+
+        const updatePickerState = () => {
+          const selectedId = safeText(control.value);
+          const asset = getAssetById(selectedId);
+          const imageUrl = asset ? toDirectAssetUrl(asset.location) : '';
+          chooseBtn.textContent = asset ? `Change ${pickerConfig.title}` : `Choose ${pickerConfig.title}`;
+          status.textContent = asset ? assetLabel(asset, pickerConfig.title) : 'No image selected';
+          preview.innerHTML = '';
+          if (imageUrl) {
+            const img = document.createElement('img');
+            img.src = imageUrl;
+            img.alt = safeText(assetLabel(asset, pickerConfig.title));
+            preview.appendChild(img);
+          } else {
+            const empty = document.createElement('span');
+            empty.textContent = 'No image selected';
+            preview.appendChild(empty);
+          }
+        };
+
+        chooseBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const modal = openImageAssetPicker(pickerConfig, {
+            getValue: () => safeText(control.value),
+            setValue: (nextValue) => {
+              control.value = safeText(nextValue);
+            },
+            afterChange: () => {
+              updatePickerState();
+            },
+            uploadHandler: async (file) => {
+              if (!file) return null;
+              if (!String(file.type || '').startsWith('image/')) {
+                throw new Error('Please choose an image file');
+              }
+              const buffer = await file.arrayBuffer();
+              const bytes = new Uint8Array(buffer);
+              let binary = '';
+              const chunkSize = 0x8000;
+              for (let index = 0; index < bytes.length; index += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(index, index + chunkSize));
+              }
+              const result = await api('/api/assets/upload-google-drive', {
+                method: 'POST',
+                body: JSON.stringify({
+                  fileName: file.name,
+                  mimeType: file.type || 'application/octet-stream',
+                  fileBase64: btoa(binary),
+                  fileSize: Number(file.size || 0),
+                  assetType: 'Image',
+                  assetName: file.name.replace(/\.[^.]+$/, '') || file.name,
+                  category: 'Image',
+                  tags: ['module', 'gallery'],
+                }),
+              });
+              const asset = result?.asset || result?.data?.asset || null;
+              if (!asset?.id) throw new Error('Image upload did not return an asset');
+              state.assets = [asset].concat(Array.isArray(state.assets) ? state.assets.filter((item) => String(item.id) !== String(asset.id)) : []);
+              return asset;
+            },
+          });
+          if (!modal) {
+            notify(`Could not open the image picker for ${pickerConfig.title}`, true);
+          }
+        });
+
+        clearBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          control.value = '';
+          updatePickerState();
+        });
+
+        pickerControls.appendChild(chooseBtn);
+        pickerControls.appendChild(status);
+        pickerControls.appendChild(clearBtn);
+        wrap.appendChild(pickerControls);
+        wrap.appendChild(preview);
+        wrap.appendChild(control);
+        updatePickerState();
+        host.appendChild(wrap);
+        return;
+      }
+
       if (field.control === 'textarea') {
         control = document.createElement('textarea');
         control.rows = Number(field.rows) || 3;
@@ -2497,7 +2621,11 @@ App.develop = (function () {
       return `${safeText(settings.title) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'Form'} · ${safeText(getSavedFormName(settings.formId)) || 'No form linked'}`;
     }
     if (type === 'image') {
-      return `${safeText(settings.altText) || 'Image'} · ${safeText(settings.aspectRatio) || 'auto'} · ${safeText(settings.maxWidth)}%`;
+      const imageAsset = getAssetById(settings.imageAssetId);
+      const imageLabel = imageAsset
+        ? assetLabel(imageAsset, 'Image')
+        : (safeText(settings.altText) || 'Image');
+      return `${imageLabel} · ${safeText(settings.aspectRatio) || 'auto'} · ${safeText(settings.maxWidth)}%`;
     }
     if (type === 'video') {
       return `${safeText(settings.videoUrl) ? 'Video linked' : 'No video set'} · ${safeText(settings.aspectRatio) || '16:9'}`;
@@ -4141,7 +4269,16 @@ App.develop = (function () {
       return { title: safeText(form?.heading) || 'Form', submitLabel: safeText(form?.submitLabel) || 'Submit Form', form };
     }
     if (type === 'image' || type === 'logo-wide' || type === 'logo-square') {
-      return { assetId, assetName: getLandingPageAssetName(assetId, 'Image'), assetUrl: getLandingPageAssetUrl(assetId) };
+      const settingsAssetId = safeText(module?.settings?.imageAssetId);
+      const resolvedAssetId = settingsAssetId || assetId;
+      const manualImageUrl = safeText(module?.settings?.imageUrl);
+      const asset = getAssetById(resolvedAssetId);
+      const resolvedAssetUrl = resolvedAssetId ? getLandingPageAssetUrl(resolvedAssetId) : '';
+      return {
+        assetId: resolvedAssetId,
+        assetName: asset ? assetLabel(asset, 'Image') : (safeText(module?.settings?.altText) || 'Image'),
+        assetUrl: resolvedAssetUrl || manualImageUrl,
+      };
     }
     return safeText(module?.text, 10000);
   }
