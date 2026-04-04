@@ -2801,6 +2801,41 @@ th {
   color: #3a5873;
 }
 
+.develop-template-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 79, 143, 0.14);
+  background: rgba(255, 255, 255, 0.96);
+  text-align: left;
+}
+
+.develop-template-picker-row__copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.develop-template-picker-row__title {
+  font-weight: 800;
+  color: #173c61;
+}
+
+.develop-template-picker-row__meta {
+  color: #587592;
+  font-size: 0.88rem;
+}
+
+.develop-template-picker-row__action {
+  color: #0b82d4;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .develop-template-module-list {
   display: grid;
   gap: 0.6rem;
