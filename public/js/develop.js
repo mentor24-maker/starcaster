@@ -5336,7 +5336,7 @@ App.develop = (function () {
     const title = byId('developLandingPagesFormTitle');
     const submitBtn = byId('developLandingPagesSubmitBtn');
     const form = els.developLandingPagesForm;
-    if (title) title.textContent = isEditing ? 'Edit Page' : 'Create Page';
+    if (title) title.textContent = isEditing ? 'Builder: Edit Page' : 'Builder: Create Page';
     if (submitBtn) submitBtn.textContent = isEditing ? 'Update Page' : 'Save Page';
     if (form) {
       form.classList.toggle('develop-landing-page-editing', Boolean(isEditing));
@@ -6807,9 +6807,11 @@ App.develop = (function () {
     if (!panel || !pagesHost || !templatesHost) return;
     if (modularPageEditorMode === 'page') {
       pagesHost.appendChild(panel);
+      panel.classList.add('develop-template-editor--page-mode');
       if (landingForm) landingForm.classList.add('hidden');
     } else {
       templatesHost.appendChild(panel);
+      panel.classList.remove('develop-template-editor--page-mode');
       if (landingForm) landingForm.classList.remove('hidden');
     }
   }
@@ -7742,8 +7744,8 @@ App.develop = (function () {
     const meta = byId('developPageTemplateEditorMeta');
     const host = byId('developPageTemplateEditorSections');
     if (!host || !modularPageTemplateDraft) return;
-    if (title) title.textContent = 'Page: Modular';
-    if (meta) meta.textContent = 'Drag row layouts into the workspace. Dropping a layout creates a row of empty cells.';
+    if (title) title.textContent = modularPageEditorMode === 'page' ? '' : 'Page: Modular';
+    if (meta) meta.textContent = modularPageEditorMode === 'page' ? '' : 'Drag row layouts into the workspace. Dropping a layout creates a row of empty cells.';
     host.innerHTML = '';
     host.className = 'develop-template-module-list develop-page-template-workspace';
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
