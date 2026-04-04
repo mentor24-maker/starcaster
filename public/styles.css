@@ -3222,8 +3222,8 @@ th {
   display: grid;
   min-height: 190px;
   border: 2px dashed rgba(15, 79, 143, 0.2);
-  border-radius: 16px;
-  background: rgba(240, 248, 255, 0.72);
+  border-radius: 18px;
+  background: #cfddea;
   position: relative;
   place-items: center;
   padding: 1rem;
@@ -3257,7 +3257,7 @@ th {
 .develop-page-template-row-cell.is-module-drop-target {
   border-color: #0b82d4;
   box-shadow: inset 0 0 0 3px rgba(11, 130, 212, 0.12);
-  background: rgba(225, 241, 255, 0.92);
+  background: #c3d6e8;
 }
 
 .develop-page-template-row-cell-stack {
@@ -3316,7 +3316,7 @@ th {
   min-width: 0;
   border-radius: 999px;
   border: 1px solid rgba(15, 79, 143, 0.16);
-  background: rgba(255, 255, 255, 0.92);
+  background: #aebfd0;
   color: #173c61;
   font-weight: 700;
   cursor: pointer;
@@ -3335,7 +3335,7 @@ th {
   height: 24px;
   padding: 0 0.25rem;
   border-radius: 999px;
-  background: rgba(15, 79, 143, 0.12);
+  background: rgba(23, 60, 97, 0.16);
   font-size: 0.78rem;
 }
 
