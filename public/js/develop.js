@@ -7057,6 +7057,7 @@ App.develop = (function () {
     const idInput = byId('developPageTemplateEditorIdInput');
     const nameInput = byId('developPageTemplateEditorNameInput');
     const baseTemplateSelect = byId('developPageTemplateEditorBaseTemplateSelect');
+    const baseTemplateWrap = byId('developPageTemplateEditorBaseTemplateWrap');
     const title = byId('developPageTemplateEditorTitle');
     const meta = byId('developPageTemplateEditorMeta');
     const saveTop = byId('developPageTemplateEditorSaveBtnTop');
@@ -7071,6 +7072,10 @@ App.develop = (function () {
         'Choose Template',
         safeText(modularPageEditorSourceTemplateId) || safeText(modularPageTemplateDraft?.templateId) || selectedTemplateId
       );
+      baseTemplateSelect.disabled = modularPageEditorMode !== 'page';
+    }
+    if (baseTemplateWrap) {
+      baseTemplateWrap.classList.toggle('hidden', modularPageEditorMode !== 'page');
     }
     if (title) title.textContent = modularPageEditorMode === 'page' ? 'Page: Modular' : 'Page Template: Modular';
     if (meta) {
@@ -7882,7 +7887,9 @@ App.develop = (function () {
       id: safeText(byId('developPageTemplateEditorIdInput')?.value),
       name: safeText(byId('developPageTemplateEditorNameInput')?.value, 255),
       templateKind: 'modular',
-      templateId: safeText(byId('developPageTemplateEditorBaseTemplateSelect')?.value) || selectedTemplateId || LANDING_TEMPLATES[0].id,
+      templateId: modularPageEditorMode === 'page'
+        ? (safeText(byId('developPageTemplateEditorBaseTemplateSelect')?.value) || modularPageEditorSourceTemplateId || selectedTemplateId || LANDING_TEMPLATES[0].id)
+        : (safeText(modularPageTemplateDraft?.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id),
       layoutSections: normalizePageTemplateLayoutSections(modularPageTemplateDraft?.layoutSections),
       contentOverrides: {},
       primaryColor: '',
