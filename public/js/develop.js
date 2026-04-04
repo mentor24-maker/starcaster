@@ -333,6 +333,7 @@ App.develop = (function () {
   let activeModularPageModulePicker = null;
   let activeModularPageModuleEditor = null;
   let activeModularContainerEditor = null;
+  let activeModularRowEditor = null;
   let modularPageEditorMode = 'template';
   let modularPageEditorSourceTemplateId = '';
   let savedExtensions = [];
@@ -3930,6 +3931,7 @@ App.develop = (function () {
         const layout = safeText(section.layout) || '6';
         const title = safeText(section.title, 255);
         const collapsed = Boolean(section.collapsed);
+        const rowSettings = normalizeRowSettings(section.rowSettings);
         const columnIds = getModularPageLayoutMeta(layout).columns.map((column) => safeText(column.id) || 'col1');
         const containerSettings = normalizeContainerSettingsMap(section.containerSettings, columnIds);
         const modules = Array.isArray(section.modules)
@@ -3953,7 +3955,7 @@ App.develop = (function () {
             })
             .filter(Boolean)
         : [];
-      return { id, layout, title, collapsed, containerSettings, modules };
+      return { id, layout, title, collapsed, rowSettings, containerSettings, modules };
     })
     .filter(Boolean);
   }
@@ -4016,8 +4018,28 @@ App.develop = (function () {
       layout: meta.value,
       title: '',
       collapsed: false,
+      rowSettings: createDefaultRowSettings(),
       containerSettings,
       modules: [],
+    };
+  }
+
+  function createDefaultRowSettings() {
+    return {
+      margin: '',
+      padding: '',
+      backgroundColor: '',
+    };
+  }
+
+  function normalizeRowSettings(value) {
+    const next = value && typeof value === 'object' && !Array.isArray(value)
+      ? value
+      : {};
+    return {
+      margin: safeText(next.margin),
+      padding: safeText(next.padding),
+      backgroundColor: safeText(next.backgroundColor),
     };
   }
 
@@ -4069,6 +4091,24 @@ App.develop = (function () {
       section.containerSettings[cleanId] = createDefaultContainerSettings();
     }
     return section.containerSettings[cleanId];
+  }
+
+  function getSectionRowSettings(section) {
+    if (!section.rowSettings || typeof section.rowSettings !== 'object' || Array.isArray(section.rowSettings)) {
+      section.rowSettings = createDefaultRowSettings();
+    }
+    return section.rowSettings;
+  }
+
+  function buildRowStyle(settings) {
+    const next = normalizeRowSettings(settings);
+    const style = {};
+    const margin = Number(safeText(next.margin));
+    const padding = Number(safeText(next.padding));
+    if (Number.isFinite(margin) && margin >= 0) style.margin = `${margin}px`;
+    if (Number.isFinite(padding) && padding >= 0) style.padding = `${padding}px`;
+    if (safeText(next.backgroundColor)) style.background = safeText(next.backgroundColor);
+    return style;
   }
 
   function buildContainerStyle(settings) {
@@ -7525,6 +7565,104 @@ App.develop = (function () {
     activeModularContainerEditor = null;
   }
 
+  function closeModularRowEditor() {
+    const editor = activeModularRowEditor;
+    if (!editor) return;
+    editor.panel.remove();
+    activeModularRowEditor = null;
+  }
+
+  function openModularRowEditor(sectionIndex) {
+    if (!modularPageTemplateDraft) return;
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const section = sections[sectionIndex];
+    if (!section) return;
+    const settings = { ...getSectionRowSettings(section) };
+    closeModularRowEditor();
+    const panel = document.createElement('div');
+    panel.className = 'develop-module-editor-modal';
+    panel.innerHTML = `
+      <div class="develop-module-editor-modal__backdrop"></div>
+      <div class="develop-module-editor-modal__dialog">
+        <div class="develop-module-editor-modal__header">
+          <div>
+            <h3>Row Settings</h3>
+            <p>${escapeHtml(safeText(section.title) || `Row ${sectionIndex + 1}`)} · page-specific styling</p>
+          </div>
+          <button type="button" class="develop-module-editor-modal__close">Close</button>
+        </div>
+        <div class="develop-module-editor-modal__body">
+          <div class="grid-form">
+            <label class="stack-form">
+              <span>Margin</span>
+              <input id="developRowMarginInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.margin))}" />
+            </label>
+            <label class="stack-form">
+              <span>Padding</span>
+              <input id="developRowPaddingInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.padding))}" />
+            </label>
+            <label class="stack-form">
+              <span>Background Color</span>
+              <input id="developRowBackgroundColorInput" type="color" value="${escapeHtml(safeText(settings.backgroundColor) || '#dbe4ec')}" />
+            </label>
+          </div>
+          <div class="develop-container-editor-preview">
+            <div class="develop-container-editor-preview__label">Preview</div>
+            <div id="developRowEditorPreviewBox" class="develop-container-editor-preview__box">Row preview</div>
+          </div>
+        </div>
+        <div class="develop-module-editor-modal__footer">
+          <button type="button" id="developRowSettingsResetBtn">Reset</button>
+          <div class="page-heading-actions" style="margin-left:auto;">
+            <button type="button" id="developRowSettingsCancelBtn">Cancel</button>
+            <button type="button" id="developRowSettingsSaveBtn">Save Row</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(panel);
+    const close = () => closeModularRowEditor();
+    panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
+    panel.querySelector('.develop-module-editor-modal__close')?.addEventListener('click', close);
+    panel.querySelector('#developRowSettingsCancelBtn')?.addEventListener('click', close);
+    const updatePreview = () => {
+      const preview = panel.querySelector('#developRowEditorPreviewBox');
+      if (!preview) return;
+      const previewSettings = {
+        margin: safeText(panel.querySelector('#developRowMarginInput')?.value),
+        padding: safeText(panel.querySelector('#developRowPaddingInput')?.value),
+        backgroundColor: safeText(panel.querySelector('#developRowBackgroundColorInput')?.value),
+      };
+      Object.assign(preview.style, buildRowStyle(previewSettings));
+    };
+    panel.querySelector('#developRowSettingsResetBtn')?.addEventListener('click', () => {
+      panel.querySelector('#developRowMarginInput').value = '';
+      panel.querySelector('#developRowPaddingInput').value = '';
+      panel.querySelector('#developRowBackgroundColorInput').value = '#dbe4ec';
+      updatePreview();
+    });
+    ['#developRowMarginInput', '#developRowPaddingInput', '#developRowBackgroundColorInput'].forEach((selector) => {
+      const input = panel.querySelector(selector);
+      input?.addEventListener('input', updatePreview);
+      input?.addEventListener('change', updatePreview);
+    });
+    updatePreview();
+    panel.querySelector('#developRowSettingsSaveBtn')?.addEventListener('click', () => {
+      const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+      const nextSection = nextSections[sectionIndex];
+      if (!nextSection) return;
+      nextSection.rowSettings = {
+        margin: safeText(panel.querySelector('#developRowMarginInput')?.value),
+        padding: safeText(panel.querySelector('#developRowPaddingInput')?.value),
+        backgroundColor: safeText(panel.querySelector('#developRowBackgroundColorInput')?.value),
+      };
+      modularPageTemplateDraft.layoutSections = nextSections;
+      closeModularRowEditor();
+      renderModularPageTemplateEditor();
+    });
+    activeModularRowEditor = { panel, sectionIndex };
+  }
+
   async function openModularContainerEditor(sectionIndex, columnId) {
     if (!modularPageTemplateDraft) return;
     await ensureAssetsLoaded();
@@ -7792,6 +7930,7 @@ App.develop = (function () {
       const item = document.createElement('div');
       item.className = 'develop-page-template-workspace-row';
       item.dataset.sectionIndex = String(sectionIndex);
+      Object.assign(item.style, buildRowStyle(getSectionRowSettings(section)));
       item.draggable = true;
       item.title = 'Drag to reorder row';
       item.addEventListener('dragstart', (event) => {
@@ -7845,18 +7984,32 @@ App.develop = (function () {
         renderModularPageTemplateEditor();
       });
 
-      const sectionRemove = document.createElement('button');
-      sectionRemove.type = 'button';
-      sectionRemove.className = 'develop-page-template-section-remove';
-      sectionRemove.textContent = 'Remove';
-      sectionRemove.title = `Remove ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
-      sectionRemove.addEventListener('click', (event) => {
+      const rowActions = document.createElement('div');
+      rowActions.className = 'develop-page-template-row-actions';
+      const rowEdit = document.createElement('button');
+      rowEdit.type = 'button';
+      rowEdit.className = 'develop-page-template-row-action';
+      rowEdit.innerHTML = '<span aria-hidden="true">⚙</span>';
+      rowEdit.title = `Edit ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
+      rowEdit.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openModularRowEditor(sectionIndex);
+      });
+      const rowDelete = document.createElement('button');
+      rowDelete.type = 'button';
+      rowDelete.className = 'develop-page-template-row-action develop-page-template-row-action--delete';
+      rowDelete.innerHTML = '<span aria-hidden="true">🗑</span>';
+      rowDelete.title = `Remove ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
+      rowDelete.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
         modularPageTemplateDraft.layoutSections.splice(sectionIndex, 1);
         renderModularPageTemplateEditor();
       });
-      item.appendChild(sectionRemove);
+      rowActions.appendChild(rowEdit);
+      rowActions.appendChild(rowDelete);
+      item.appendChild(rowActions);
 
       const columnOptions = getModularPageLayoutMeta(section.layout).columns;
       const columnGroups = document.createElement('div');
@@ -8026,13 +8179,13 @@ App.develop = (function () {
       const columnMarkup = layout.columns.map((column) => {
         const columnId = safeText(column.id) || 'col1';
         const modules = section.modules.filter((module) => safeText(module.column) === columnId);
-        return renderColumn(
+      return renderColumn(
           modules,
           `develop-modular-page-column develop-modular-page-column-${columnId}`,
           getSectionContainerSettings(section, columnId)
         );
       }).join('');
-      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">
+      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}" style="${escapeHtml(styleObjectToCssText(buildRowStyle(getSectionRowSettings(section))))}">
         ${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}
         <div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columnMarkup}</div>
       </section>`;

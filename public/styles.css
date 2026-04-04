@@ -3189,6 +3189,42 @@ th {
   background: #dbe4ec;
 }
 
+.develop-page-template-row-actions {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  z-index: 3;
+}
+
+.develop-page-template-row-action {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 60, 97, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  color: #173c61;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.develop-page-template-row-action:hover,
+.develop-page-template-row-action:focus-visible {
+  background: #fff;
+  border-color: rgba(23, 60, 97, 0.32);
+}
+
+.develop-page-template-row-action--delete {
+  color: #b42318;
+}
+
 .develop-page-template-workspace-row.is-dragging {
   opacity: 0.55;
 }
@@ -3221,7 +3257,7 @@ th {
 .develop-page-template-row-cell {
   display: grid;
   min-height: 190px;
-  border: 2px dashed rgba(15, 79, 143, 0.2);
+  border: 1px solid #999;
   border-radius: 18px;
   background: #cfddea;
   position: relative;
