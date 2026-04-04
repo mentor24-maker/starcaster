@@ -330,6 +330,7 @@ App.develop = (function () {
   let activePageModulePointerDrag = null;
   let activeModularPageModulePicker = null;
   let activeModularPageModuleEditor = null;
+  let activeModularContainerEditor = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -3635,6 +3636,42 @@ App.develop = (function () {
     return safeText(value).toLowerCase() === 'modular' ? 'modular' : 'fixed';
   }
 
+  function createDefaultContainerSettings() {
+    return {
+      margin: '',
+      padding: '',
+      backgroundColor: '',
+      backgroundImageId: '',
+      borderColor: '',
+      borderThickness: '',
+      borderRadius: '',
+    };
+  }
+
+  function normalizeContainerSettingsMap(value, columnIds = []) {
+    const defaults = {};
+    (Array.isArray(columnIds) ? columnIds : []).forEach((columnId) => {
+      const cleanId = safeText(columnId) || 'col1';
+      defaults[cleanId] = createDefaultContainerSettings();
+    });
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return defaults;
+    const next = { ...defaults };
+    Object.entries(value).forEach(([columnId, raw]) => {
+      const cleanId = safeText(columnId) || 'col1';
+      const settings = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+      next[cleanId] = {
+        margin: safeText(settings.margin, 20),
+        padding: safeText(settings.padding, 20),
+        backgroundColor: safeText(settings.backgroundColor, 20),
+        backgroundImageId: safeText(settings.backgroundImageId, 120),
+        borderColor: safeText(settings.borderColor, 20),
+        borderThickness: safeText(settings.borderThickness, 20),
+        borderRadius: safeText(settings.borderRadius, 20),
+      };
+    });
+    return next;
+  }
+
   function normalizePageTemplateLayoutSections(value) {
     if (!value) return [];
     if (typeof value === 'string') {
@@ -3652,6 +3689,8 @@ App.develop = (function () {
         const layout = safeText(section.layout) || '6';
         const title = safeText(section.title, 255);
         const collapsed = Boolean(section.collapsed);
+        const columnIds = getModularPageLayoutMeta(layout).columns.map((column) => safeText(column.id) || 'col1');
+        const containerSettings = normalizeContainerSettingsMap(section.containerSettings, columnIds);
         const modules = Array.isArray(section.modules)
           ? section.modules
             .map((module, moduleIndex) => {
@@ -3672,10 +3711,10 @@ App.develop = (function () {
               };
             })
             .filter(Boolean)
-          : [];
-        return { id, layout, title, collapsed, modules };
-      })
-      .filter(Boolean);
+        : [];
+      return { id, layout, title, collapsed, containerSettings, modules };
+    })
+    .filter(Boolean);
   }
 
   function getPageTemplateKindLabel(value) {
@@ -3726,11 +3765,17 @@ App.develop = (function () {
 
   function createModularPageSection(layout = '3-3') {
     const meta = getModularPageLayoutMeta(layout);
+    const containerSettings = {};
+    meta.columns.forEach((column) => {
+      const columnId = safeText(column.id) || 'col1';
+      containerSettings[columnId] = createDefaultContainerSettings();
+    });
     return {
       id: nextModularPageId('section'),
       layout: meta.value,
       title: '',
       collapsed: false,
+      containerSettings,
       modules: [],
     };
   }
@@ -3772,6 +3817,58 @@ App.develop = (function () {
           ? JSON.parse(JSON.stringify(definition.defaults))
           : {}),
     };
+  }
+
+  function getSectionContainerSettings(section, columnId) {
+    const cleanId = safeText(columnId) || 'col1';
+    if (!section.containerSettings || typeof section.containerSettings !== 'object' || Array.isArray(section.containerSettings)) {
+      section.containerSettings = {};
+    }
+    if (!section.containerSettings[cleanId] || typeof section.containerSettings[cleanId] !== 'object' || Array.isArray(section.containerSettings[cleanId])) {
+      section.containerSettings[cleanId] = createDefaultContainerSettings();
+    }
+    return section.containerSettings[cleanId];
+  }
+
+  function buildContainerStyle(settings) {
+    const next = settings && typeof settings === 'object' ? settings : {};
+    const style = {};
+    const margin = Number(safeText(next.margin));
+    const padding = Number(safeText(next.padding));
+    const borderThickness = Number(safeText(next.borderThickness));
+    const borderRadius = Number(safeText(next.borderRadius));
+    if (Number.isFinite(margin) && margin >= 0) style.margin = `${margin}px`;
+    if (Number.isFinite(padding) && padding >= 0) style.padding = `${padding}px`;
+    if (safeText(next.backgroundColor)) style.background = safeText(next.backgroundColor);
+    if (safeText(next.borderColor)) style.borderColor = safeText(next.borderColor);
+    if (Number.isFinite(borderThickness) && borderThickness >= 0) {
+      style.borderWidth = `${borderThickness}px`;
+      style.borderStyle = borderThickness > 0 ? 'solid' : 'dashed';
+    }
+    if (Number.isFinite(borderRadius) && borderRadius >= 0) style.borderRadius = `${borderRadius}px`;
+    const backgroundImageId = safeText(next.backgroundImageId);
+    const backgroundImageUrl = getLandingPageAssetUrl(backgroundImageId);
+    if (backgroundImageUrl) {
+      const base = safeText(next.backgroundColor);
+      style.backgroundImage = `${base ? `linear-gradient(${base}, ${base}), ` : ''}url("${backgroundImageUrl}")`;
+      style.backgroundSize = base ? 'cover, cover' : 'cover';
+      style.backgroundPosition = 'center';
+      style.backgroundRepeat = 'no-repeat';
+    }
+    return style;
+  }
+
+  function styleObjectToCssText(style) {
+    if (!style || typeof style !== 'object') return '';
+    return Object.entries(style)
+      .map(([key, value]) => {
+        const cleanValue = safeText(value, 1000);
+        if (!cleanValue) return '';
+        const cssKey = String(key).replace(/([A-Z])/g, '-$1').toLowerCase();
+        return `${cssKey}:${cleanValue};`;
+      })
+      .filter(Boolean)
+      .join('');
   }
 
   function createDefaultModularPageSections() {
@@ -7013,6 +7110,151 @@ App.develop = (function () {
     activeModularPageModuleEditor = { panel, sectionIndex, moduleIndex };
   }
 
+  function closeModularContainerEditor() {
+    const editor = activeModularContainerEditor;
+    if (!editor) return;
+    editor.panel.remove();
+    activeModularContainerEditor = null;
+  }
+
+  async function openModularContainerEditor(sectionIndex, columnId) {
+    if (!modularPageTemplateDraft) return;
+    await ensureAssetsLoaded();
+    const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const section = sections[sectionIndex];
+    if (!section) return;
+    const settings = { ...getSectionContainerSettings(section, columnId) };
+    closeModularContainerEditor();
+    const imageOptions = (Array.isArray(state.assets) ? state.assets : [])
+      .filter((asset) => safeText(asset?.assetType) === 'Image')
+      .map((asset) => ({
+        value: safeText(asset.id),
+        label: assetLabel(asset, safeText(asset.id)),
+      }));
+    const panel = document.createElement('div');
+    panel.className = 'develop-module-editor-modal';
+    panel.innerHTML = `
+      <div class="develop-module-editor-modal__backdrop"></div>
+      <div class="develop-module-editor-modal__dialog">
+        <div class="develop-module-editor-modal__header">
+          <div>
+            <h3>Container Settings</h3>
+            <p>${escapeHtml(safeText(columnId).toUpperCase() || 'Container')} · page-specific styling</p>
+          </div>
+          <button type="button" class="develop-module-editor-modal__close">Close</button>
+        </div>
+        <div class="develop-module-editor-modal__body">
+          <div class="grid-form">
+            <label class="stack-form">
+              <span>Margin</span>
+              <input id="developContainerMarginInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.margin))}" />
+            </label>
+            <label class="stack-form">
+              <span>Padding</span>
+              <input id="developContainerPaddingInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.padding))}" />
+            </label>
+            <label class="stack-form">
+              <span>Background Color</span>
+              <input id="developContainerBackgroundColorInput" type="color" value="${escapeHtml(safeText(settings.backgroundColor) || '#f0f8ff')}" />
+            </label>
+            <label class="stack-form">
+              <span>Background Image</span>
+              <select id="developContainerBackgroundImageInput">
+                <option value="">None</option>
+                ${imageOptions.map((item) => `<option value="${escapeHtml(item.value)}"${safeText(settings.backgroundImageId) === item.value ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="stack-form">
+              <span>Border Color</span>
+              <input id="developContainerBorderColorInput" type="color" value="${escapeHtml(safeText(settings.borderColor) || '#d6e6f5')}" />
+            </label>
+            <label class="stack-form">
+              <span>Border Thickness</span>
+              <input id="developContainerBorderThicknessInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.borderThickness))}" />
+            </label>
+            <label class="stack-form">
+              <span>Border Radius</span>
+              <input id="developContainerBorderRadiusInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.borderRadius))}" />
+            </label>
+          </div>
+          <div class="develop-container-editor-preview">
+            <div class="develop-container-editor-preview__label">Preview</div>
+            <div id="developContainerEditorPreviewBox" class="develop-container-editor-preview__box">Container preview</div>
+          </div>
+        </div>
+        <div class="develop-module-editor-modal__footer">
+          <button type="button" id="developContainerSettingsResetBtn">Reset</button>
+          <div class="page-heading-actions" style="margin-left:auto;">
+            <button type="button" id="developContainerSettingsCancelBtn">Cancel</button>
+            <button type="button" id="developContainerSettingsSaveBtn">Save Container</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(panel);
+    const close = () => closeModularContainerEditor();
+    panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
+    panel.querySelector('.develop-module-editor-modal__close')?.addEventListener('click', close);
+    panel.querySelector('#developContainerSettingsCancelBtn')?.addEventListener('click', close);
+    const updatePreview = () => {
+      const preview = panel.querySelector('#developContainerEditorPreviewBox');
+      if (!preview) return;
+      const previewSettings = {
+        margin: safeText(panel.querySelector('#developContainerMarginInput')?.value),
+        padding: safeText(panel.querySelector('#developContainerPaddingInput')?.value),
+        backgroundColor: safeText(panel.querySelector('#developContainerBackgroundColorInput')?.value),
+        backgroundImageId: safeText(panel.querySelector('#developContainerBackgroundImageInput')?.value),
+        borderColor: safeText(panel.querySelector('#developContainerBorderColorInput')?.value),
+        borderThickness: safeText(panel.querySelector('#developContainerBorderThicknessInput')?.value),
+        borderRadius: safeText(panel.querySelector('#developContainerBorderRadiusInput')?.value),
+      };
+      Object.assign(preview.style, buildContainerStyle(previewSettings));
+    };
+    panel.querySelector('#developContainerSettingsResetBtn')?.addEventListener('click', () => {
+      panel.querySelector('#developContainerMarginInput').value = '';
+      panel.querySelector('#developContainerPaddingInput').value = '';
+      panel.querySelector('#developContainerBackgroundColorInput').value = '#f0f8ff';
+      panel.querySelector('#developContainerBackgroundImageInput').value = '';
+      panel.querySelector('#developContainerBorderColorInput').value = '#d6e6f5';
+      panel.querySelector('#developContainerBorderThicknessInput').value = '';
+      panel.querySelector('#developContainerBorderRadiusInput').value = '';
+      updatePreview();
+    });
+    [
+      '#developContainerMarginInput',
+      '#developContainerPaddingInput',
+      '#developContainerBackgroundColorInput',
+      '#developContainerBackgroundImageInput',
+      '#developContainerBorderColorInput',
+      '#developContainerBorderThicknessInput',
+      '#developContainerBorderRadiusInput',
+    ].forEach((selector) => {
+      const input = panel.querySelector(selector);
+      input?.addEventListener('input', updatePreview);
+      input?.addEventListener('change', updatePreview);
+    });
+    updatePreview();
+    panel.querySelector('#developContainerSettingsSaveBtn')?.addEventListener('click', () => {
+      const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+      const nextSection = nextSections[sectionIndex];
+      if (!nextSection) return;
+      nextSection.containerSettings = nextSection.containerSettings || {};
+      nextSection.containerSettings[columnId] = {
+        margin: safeText(panel.querySelector('#developContainerMarginInput')?.value),
+        padding: safeText(panel.querySelector('#developContainerPaddingInput')?.value),
+        backgroundColor: safeText(panel.querySelector('#developContainerBackgroundColorInput')?.value),
+        backgroundImageId: safeText(panel.querySelector('#developContainerBackgroundImageInput')?.value),
+        borderColor: safeText(panel.querySelector('#developContainerBorderColorInput')?.value),
+        borderThickness: safeText(panel.querySelector('#developContainerBorderThicknessInput')?.value),
+        borderRadius: safeText(panel.querySelector('#developContainerBorderRadiusInput')?.value),
+      };
+      modularPageTemplateDraft.layoutSections = nextSections;
+      closeModularContainerEditor();
+      renderModularPageTemplateEditor();
+    });
+    activeModularContainerEditor = { panel, sectionIndex, columnId };
+  }
+
   function startModularPageLayoutPointerDrag(tile, layout, startEvent) {
     if (!tile || !layout) return;
     endModularPageLayoutPointerDrag(false);
@@ -7218,11 +7460,23 @@ App.develop = (function () {
         columnDropZone.className = 'develop-page-template-row-cell';
         columnDropZone.dataset.column = columnId;
         columnDropZone.dataset.sectionIndex = String(sectionIndex);
+        const containerSettings = getSectionContainerSettings(section, columnId);
+        Object.assign(columnDropZone.style, buildContainerStyle(containerSettings));
         const cellModules = section.modules
           .map((module, originalIndex) => ({ module, originalIndex }))
           .filter((entry) => safeText(entry.module?.column) === columnId);
         const stack = document.createElement('div');
         stack.className = 'develop-page-template-row-cell-stack';
+        const settingsBtn = document.createElement('button');
+        settingsBtn.type = 'button';
+        settingsBtn.className = 'develop-page-template-cell-settings';
+        settingsBtn.innerHTML = '<span aria-hidden="true">⚙</span>';
+        settingsBtn.title = 'Container settings';
+        settingsBtn.addEventListener('click', async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          await openModularContainerEditor(sectionIndex, columnId);
+        });
         if (cellModules.length) {
           cellModules.forEach(({ module, originalIndex }) => {
             const pill = document.createElement('button');
@@ -7254,6 +7508,7 @@ App.develop = (function () {
           event.stopPropagation();
           openModularPageModulePicker(sectionIndex, columnId);
         });
+        columnDropZone.appendChild(settingsBtn);
         columnDropZone.appendChild(stack);
         columnDropZone.appendChild(addBtn);
         columnGroups.appendChild(columnDropZone);
@@ -7314,12 +7569,17 @@ App.develop = (function () {
       if (type === 'spacer') return `<div style="height:1.25rem;"></div>`;
       return `<div class="meta">${contentLabel}</div>`;
     };
-    const renderColumn = (modules, className) => `<div class="${className}">${modules.map(renderModule).join('')}</div>`;
+    const renderColumn = (modules, className, settings) => `<div class="${className}" style="${escapeHtml(styleObjectToCssText(buildContainerStyle(settings)))}">${modules.map(renderModule).join('')}</div>`;
     const markup = sections.map((section) => {
       const layout = getModularPageLayoutMeta(section.layout);
       const columnMarkup = layout.columns.map((column) => {
-        const modules = section.modules.filter((module) => safeText(module.column) === column);
-        return renderColumn(modules, `develop-modular-page-column develop-modular-page-column-${column}`);
+        const columnId = safeText(column.id) || 'col1';
+        const modules = section.modules.filter((module) => safeText(module.column) === columnId);
+        return renderColumn(
+          modules,
+          `develop-modular-page-column develop-modular-page-column-${columnId}`,
+          getSectionContainerSettings(section, columnId)
+        );
       }).join('');
       return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">
         ${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}
