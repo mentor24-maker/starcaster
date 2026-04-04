@@ -5235,24 +5235,41 @@ App.develop = (function () {
   }
 
   function openCreateLandingPageTemplatePicker() {
-    const modularTemplates = savedPageTemplates.filter((item) => normalizePageTemplateKind(item.templateKind) === 'modular');
+    const modularTemplates = savedPageTemplates
+      .filter((item) => normalizePageTemplateKind(item.templateKind) === 'modular')
+      .sort((a, b) => {
+        const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime() || 0;
+        const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime() || 0;
+        return bTime - aTime;
+      });
     if (!App.components || typeof App.components.Modal !== 'function') {
       notify('Template picker is unavailable right now.', true);
       return;
     }
     const body = document.createElement('div');
-    body.className = 'develop-module-picker-grid';
+    body.className = 'develop-template-records-card';
     if (!modularTemplates.length) {
       body.innerHTML = '<div class="develop-template-records-empty">No modular page templates yet.</div>';
     } else {
+      const intro = document.createElement('p');
+      intro.className = 'meta';
+      intro.textContent = 'Choose one of your saved modular templates to use as the starting point for this page.';
+      body.appendChild(intro);
+      const list = document.createElement('div');
+      list.className = 'stack-form';
       modularTemplates.forEach((template) => {
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'develop-module-picker-card';
+        button.className = 'develop-template-picker-row';
+        const updatedLabel = template.updatedAt
+          ? new Date(template.updatedAt).toLocaleString()
+          : (template.createdAt ? new Date(template.createdAt).toLocaleString() : 'Not saved yet');
         button.innerHTML = `
-          <span class="develop-module-picker-icon">Pg</span>
-          <span class="develop-module-picker-label">${escapeHtml(safeText(template.name) || 'Untitled Template')}</span>
-          <span class="develop-module-picker-description">${escapeHtml(getLandingPageTemplateName(template.templateId) || 'Base Template')}</span>
+          <span class="develop-template-picker-row__copy">
+            <span class="develop-template-picker-row__title">${escapeHtml(safeText(template.name) || 'Untitled Template')}</span>
+            <span class="develop-template-picker-row__meta">Base: ${escapeHtml(getLandingPageTemplateName(template.templateId) || 'Base Template')} · Updated: ${escapeHtml(updatedLabel)}</span>
+          </span>
+          <span class="develop-template-picker-row__action">Use Template</span>
         `;
         button.addEventListener('click', () => {
           const pageName = `${safeText(template.name) || 'Modular'} Page`;
@@ -5269,8 +5286,9 @@ App.develop = (function () {
           });
           modal.close();
         });
-        body.appendChild(button);
+        list.appendChild(button);
       });
+      body.appendChild(list);
     }
     const modal = App.components.Modal({
       title: 'Choose Page Template',
