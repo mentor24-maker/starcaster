@@ -171,12 +171,13 @@ App.develop = (function () {
       starterName: 'Header',
       defaults: {
         text: 'Section Heading',
+        headlineId: '',
         headingLevel: 'H2',
         textColor: '#173c61',
         align: 'left',
       },
       fields: [
-        { key: 'text', label: 'Text', control: 'textarea', rows: 3, placeholder: 'Header text' },
+        { key: 'text', label: 'Text', control: 'textarea', rows: 3, placeholder: 'Header text', contentSource: 'headline', contentSettingKey: 'headlineId', contentLabel: 'Saved Headline' },
         { key: 'headingLevel', label: 'Heading Level', control: 'select', options: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'] },
         { key: 'textColor', label: 'Text Color', control: 'color' },
         { key: 'align', label: 'Alignment', control: 'select', options: ['left', 'center', 'right'] },
@@ -189,13 +190,14 @@ App.develop = (function () {
       starterName: 'Form',
       defaults: {
         title: 'Request More Information',
+        headlineId: '',
         formId: '',
         submitLabel: 'Submit Form',
         width: 'standard',
         backgroundColor: '#f5fbff',
       },
       fields: [
-        { key: 'title', label: 'Title', control: 'text', placeholder: 'Form title' },
+        { key: 'title', label: 'Title', control: 'text', placeholder: 'Form title', contentSource: 'headline', contentSettingKey: 'headlineId', contentLabel: 'Saved Headline' },
         { key: 'formId', label: 'Saved Form', control: 'saved-form-select' },
         { key: 'submitLabel', label: 'Submit Label', control: 'text', placeholder: 'Submit Form' },
         { key: 'width', label: 'Width', control: 'select', options: ['compact', 'standard', 'wide', 'full'] },
@@ -253,6 +255,7 @@ App.develop = (function () {
       starterName: 'Table',
       defaults: {
         caption: 'Data Table',
+        headlineId: '',
         columnsCount: 3,
         rowsCount: 4,
         headerColor: '#173c61',
@@ -265,7 +268,7 @@ App.develop = (function () {
         style: 'clean',
       },
       fields: [
-        { key: 'caption', label: 'Caption', control: 'text', placeholder: 'Table caption' },
+        { key: 'caption', label: 'Caption', control: 'text', placeholder: 'Table caption', contentSource: 'headline', contentSettingKey: 'headlineId', contentLabel: 'Saved Headline' },
         { key: 'columnsCount', label: 'Columns', control: 'number', min: 1, max: 8, step: 1 },
         { key: 'rowsCount', label: 'Rows', control: 'number', min: 1, max: 20, step: 1 },
         { key: 'headerColor', label: 'Header Color', control: 'color' },
@@ -285,13 +288,14 @@ App.develop = (function () {
       starterName: 'Text Block',
       defaults: {
         content: '<p>Write your content here.</p>',
+        pitchId: '',
         textAlign: 'left',
         textColor: '#173c61',
         backgroundColor: '#ffffff',
         maxWidth: 'full',
       },
       fields: [
-        { key: 'content', label: 'Content', control: 'richtext', rows: 8, placeholder: '<p>Write your content here.</p>' },
+        { key: 'content', label: 'Content', control: 'richtext', rows: 8, placeholder: '<p>Write your content here.</p>', contentSource: 'pitch', contentSettingKey: 'pitchId', contentLabel: 'Saved Pitch' },
         { key: 'textAlign', label: 'Text Alignment', control: 'select', options: ['left', 'center', 'right'] },
         { key: 'textColor', label: 'Text Color', control: 'color' },
         { key: 'backgroundColor', label: 'Background Color', control: 'color' },
@@ -2207,6 +2211,53 @@ App.develop = (function () {
     });
   }
 
+  function getDevelopModuleContentSourceOptions(kind) {
+    const normalized = safeText(kind).toLowerCase();
+    if (normalized === 'headline') {
+      return landingPageHeadlines.map((item) => ({
+        value: safeText(item?.id),
+        label: safeText(item?.headline) || safeText(item?.id) || 'Untitled headline',
+        content: safeText(item?.headline, 10000),
+      })).filter((item) => item.value);
+    }
+    if (normalized === 'pitch') {
+      return landingPagePitches.map((item) => ({
+        value: safeText(item?.id),
+        label: safeText(item?.pitch) || safeText(item?.id) || 'Untitled pitch',
+        content: safeText(item?.pitch, 10000),
+      })).filter((item) => item.value);
+    }
+    if (normalized === 'subheading') {
+      return landingPageSubheadings.map((item) => ({
+        value: safeText(item?.id),
+        label: safeText(item?.subheading) || safeText(item?.id) || 'Untitled sub-heading',
+        content: safeText(item?.subheading, 10000),
+      })).filter((item) => item.value);
+    }
+    if (normalized === 'cta') {
+      return landingPageCtas.map((item) => ({
+        value: safeText(item?.id),
+        label: safeText(item?.cta) || safeText(item?.id) || 'Untitled CTA',
+        content: safeText(item?.cta, 10000),
+      })).filter((item) => item.value);
+    }
+    return [];
+  }
+
+  function applyDevelopModuleContentSelection(control, field, selectedOption) {
+    if (!control || !field || !selectedOption) return;
+    const nextContent = safeText(selectedOption.content, 20000);
+    if (field.control === 'richtext') {
+      control.innerHTML = nextContent
+        ? `<p>${escapeHtml(nextContent).replace(/\n/g, '<br />')}</p>`
+        : '<p></p>';
+      return;
+    }
+    if ('value' in control) {
+      control.value = nextContent;
+    }
+  }
+
   function populateDevelopModuleTypeOptions() {
     const select = byId('developModulesTypeSelect');
     if (!select) return;
@@ -2242,6 +2293,38 @@ App.develop = (function () {
         : definition.defaults?.[field.key];
 
       let control = null;
+      const contentSettingKey = safeText(field.contentSettingKey) || `${field.key}SourceId`;
+      if (field.contentSource) {
+        const pickerWrap = document.createElement('label');
+        pickerWrap.className = 'stack-form';
+        const pickerLabel = document.createElement('span');
+        pickerLabel.textContent = safeText(field.contentLabel) || 'Saved Content';
+        pickerWrap.appendChild(pickerLabel);
+        const picker = document.createElement('select');
+        picker.id = `${prefix}_${field.key}_source`;
+        picker.setAttribute('data-module-field-source-key', contentSettingKey);
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = 'None';
+        picker.appendChild(empty);
+        const contentOptions = getDevelopModuleContentSourceOptions(field.contentSource);
+        contentOptions.forEach((item) => {
+          const option = document.createElement('option');
+          option.value = item.value;
+          option.textContent = item.label;
+          picker.appendChild(option);
+        });
+        picker.value = safeText(settings?.[contentSettingKey]);
+        picker.addEventListener('change', () => {
+          const selectedOption = contentOptions.find((item) => item.value === safeText(picker.value));
+          if (selectedOption && control) {
+            applyDevelopModuleContentSelection(control, field, selectedOption);
+          }
+        });
+        pickerWrap.appendChild(picker);
+        host.appendChild(pickerWrap);
+      }
+
       if (field.control === 'textarea') {
         control = document.createElement('textarea');
         control.rows = Number(field.rows) || 3;
@@ -2368,6 +2451,11 @@ App.develop = (function () {
     definition.fields.forEach((field) => {
       const input = byId(`${prefix}_${field.key}`);
       if (!input) return;
+      if (field.contentSource) {
+        const contentSettingKey = safeText(field.contentSettingKey) || `${field.key}SourceId`;
+        const sourceInput = byId(`${prefix}_${field.key}_source`);
+        settings[contentSettingKey] = safeText(sourceInput?.value);
+      }
       if (field.control === 'checkbox') {
         settings[field.key] = Boolean(input.checked);
       } else if (field.control === 'richtext') {
@@ -2400,10 +2488,10 @@ App.develop = (function () {
     const type = safeText(module?.moduleType);
     const settings = module?.settings || {};
     if (type === 'header') {
-      return `${safeText(settings.headingLevel) || 'H1'}: ${safeText(settings.text) || 'No text set'}`;
+      return `${safeText(settings.headingLevel) || 'H1'}: ${safeText(settings.text) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'No text set'}`;
     }
     if (type === 'form') {
-      return `${safeText(settings.title) || 'Form'} · ${safeText(getSavedFormName(settings.formId)) || 'No form linked'}`;
+      return `${safeText(settings.title) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'Form'} · ${safeText(getSavedFormName(settings.formId)) || 'No form linked'}`;
     }
     if (type === 'image') {
       return `${safeText(settings.altText) || 'Image'} · ${safeText(settings.aspectRatio) || 'auto'} · ${safeText(settings.maxWidth)}%`;
@@ -2412,10 +2500,10 @@ App.develop = (function () {
       return `${safeText(settings.videoUrl) ? 'Video linked' : 'No video set'} · ${safeText(settings.aspectRatio) || '16:9'}`;
     }
     if (type === 'table') {
-      return `${safeText(settings.caption) || 'Table'} · ${safeText(settings.columnsCount) || 0} cols · ${safeText(settings.rowsCount) || 0} rows`;
+      return `${safeText(settings.caption) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'Table'} · ${safeText(settings.columnsCount) || 0} cols · ${safeText(settings.rowsCount) || 0} rows`;
     }
     if (type === 'textarea') {
-      return `${safeText(settings.content, 120).replace(/<[^>]+>/g, ' ') || 'No content set'} · ${safeText(settings.maxWidth) || 'full'}`;
+      return `${safeText(settings.content, 120).replace(/<[^>]+>/g, ' ') || getDevelopModuleContentSourceOptions('pitch').find((item) => item.value === safeText(settings.pitchId))?.label || 'No content set'} · ${safeText(settings.maxWidth) || 'full'}`;
     }
     return safeText(module?.name) || '-';
   }
