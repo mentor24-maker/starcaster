@@ -2949,7 +2949,7 @@ th {
   justify-items: center;
   min-height: 78px;
   padding: 0.7rem;
-  border: 1px solid rgba(15, 79, 143, 0.16);
+  border: 1px solid #444;
   border-radius: 12px;
   background: #f7fbff;
   cursor: grab;
@@ -2977,7 +2977,7 @@ th {
 .develop-layout-toolbar-icon span,
 .develop-layout-picker-icon span {
   border-radius: 5px;
-  border: 1px solid rgba(15, 79, 143, 0.24);
+  border: 1px solid #444;
   background: rgba(15, 79, 143, 0.18);
   min-height: 30px;
 }
