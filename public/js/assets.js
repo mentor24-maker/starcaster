@@ -2,7 +2,7 @@ window.App = window.App || {};
 
 App.assets = (function () {
   const { state, els, api, notify } = App;
-  const MAX_UPLOAD_BYTES = 7 * 1024 * 1024;
+  const LEGACY_UPLOAD_MAX_BYTES = 7 * 1024 * 1024;
   let vercelBlobClientPromise = null;
   let editingAssetId = null;
   let selectedAssetIds = new Set();
@@ -693,12 +693,11 @@ App.assets = (function () {
 
   async function uploadFileToDrive(file, options) {
     if (!file) throw new Error('Choose a file to upload');
-    if (file.size > MAX_UPLOAD_BYTES) {
-      throw new Error('Upload limit is 7MB per file in this version');
-    }
-
     const assetType = String(options?.assetType || '').trim();
     if (!assetType) throw new Error('Asset Type is required');
+    if (assetType !== 'Video' && file.size > LEGACY_UPLOAD_MAX_BYTES) {
+      throw new Error('Upload limit is 7MB per file for this asset type in this version');
+    }
 
     const fileBuffer = await file.arrayBuffer();
     const payload = {
