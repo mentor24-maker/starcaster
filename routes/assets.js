@@ -14,6 +14,7 @@ const {
   fetchDriveFileMedia,
 } = require('../lib/googleDrive');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
+const { isConfigured: isBlobConfigured, handleClientUpload } = require('../lib/blobStorage');
 
 const ASSET_TYPES = new Set(['Image', 'Video', 'Audio', 'Lead Magnet', 'File']);
 const ASSETS_PATH_RE = /^\/api\/assets\/?$/;
@@ -185,6 +186,59 @@ async function handle(req, res, pathname, method) {
       { asset: rowToAsset(created), drive: upload.data },
       { asset: rowToAsset(created), drive: upload.data }
     ), true;
+  }
+
+  if (pathname === '/api/assets/blob-upload' && requestMethod === 'POST') {
+    if (!isBlobConfigured()) {
+      return sendErr(
+        res,
+        400,
+        'Vercel Blob is not configured for direct uploads.',
+        { code: 'ASSET_STORAGE_NOT_CONFIGURED' }
+      ), true;
+    }
+    const body = await parseJsonBody(req);
+    const result = await handleClientUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+        let payload = {};
+        if (clientPayload && typeof clientPayload === 'object') {
+          payload = clientPayload;
+        } else if (typeof clientPayload === 'string') {
+          try {
+            payload = JSON.parse(clientPayload);
+          } catch (_) {
+            payload = {};
+          }
+        }
+        const assetType = canonicalAssetType(payload.assetType || '');
+        const category = String(payload.category || '').trim();
+        const fileName = String(payload.fileName || 'upload.bin').trim() || 'upload.bin';
+        const allowedContentTypes = assetType === 'Video'
+          ? ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime']
+          : ['application/octet-stream'];
+        return {
+          allowedContentTypes,
+          addRandomSuffix: true,
+          pathname: `APP/Assets/${encodeURIComponent(assetType || 'File')}/${encodeURIComponent(category || 'Uploads')}/${encodeURIComponent(fileName)}`,
+          tokenPayload: JSON.stringify({
+            assetType,
+            category,
+            assetName: String(payload.assetName || '').trim(),
+            tags: Array.isArray(payload.tags) ? payload.tags : [],
+            projectId: scope.projectId,
+            userId: scope.userId,
+          }),
+        };
+      },
+      onUploadCompleted: async () => {},
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    res.statusCode = result.status || 200;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify(result.data));
+    return true;
   }
 
   if (pathname === '/api/asset-categories' && requestMethod === 'GET') {

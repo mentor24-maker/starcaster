@@ -3,6 +3,7 @@ window.App = window.App || {};
 App.assets = (function () {
   const { state, els, api, notify } = App;
   const MAX_UPLOAD_BYTES = 7 * 1024 * 1024;
+  let vercelBlobClientPromise = null;
   let editingAssetId = null;
   let selectedAssetIds = new Set();
   let bulkDraft = {
@@ -683,6 +684,13 @@ App.assets = (function () {
     return btoa(binary);
   }
 
+  async function getVercelBlobClient() {
+    if (!vercelBlobClientPromise) {
+      vercelBlobClientPromise = import('https://esm.sh/@vercel/blob/client?bundle');
+    }
+    return vercelBlobClientPromise;
+  }
+
   async function uploadFileToDrive(file, options) {
     if (!file) throw new Error('Choose a file to upload');
     if (file.size > MAX_UPLOAD_BYTES) {
@@ -708,6 +716,40 @@ App.assets = (function () {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async function uploadFileToBlobClient(file, options) {
+    if (!file) throw new Error('Choose a file to upload');
+    const assetType = String(options?.assetType || '').trim();
+    if (!assetType) throw new Error('Asset Type is required');
+    const assetName = String(options?.assetName || '').trim() || file.name;
+    const category = String(options?.category || '').trim();
+    const tags = Array.isArray(options?.tags) ? options.tags : [];
+    const { upload } = await getVercelBlobClient();
+    const blob = await upload(file.name, file, {
+      access: 'public',
+      handleUploadUrl: '/api/assets/blob-upload',
+      multipart: true,
+      clientPayload: JSON.stringify({
+        fileName: file.name,
+        assetType,
+        assetName,
+        category,
+        tags,
+      }),
+    });
+    const created = await api('/api/assets', {
+      method: 'POST',
+      body: JSON.stringify({
+        assetName,
+        assetType,
+        category,
+        location: String(blob?.url || '').trim(),
+        tags,
+        size: Number(file.size || 0) || 0,
+      }),
+    });
+    return created?.asset || created?.data || null;
   }
 
   async function refresh() {
@@ -886,14 +928,23 @@ App.assets = (function () {
           .filter(Boolean);
 
         try {
-          await uploadFileToDrive(file, {
-            assetType,
-            assetName,
-            category: String(els.assetUploadCategory?.value || '').trim(),
-            tags,
-          });
+          if (assetType === 'Video') {
+            await uploadFileToBlobClient(file, {
+              assetType,
+              assetName,
+              category: String(els.assetUploadCategory?.value || '').trim(),
+              tags,
+            });
+          } else {
+            await uploadFileToDrive(file, {
+              assetType,
+              assetName,
+              category: String(els.assetUploadCategory?.value || '').trim(),
+              tags,
+            });
+          }
 
-          notify('Asset uploaded to Google Drive');
+          notify(assetType === 'Video' ? 'Video uploaded' : 'Asset uploaded to Google Drive');
           els.assetUploadForm.reset();
           prefillUploadFormsFromActiveFilters();
           await refresh();
@@ -917,15 +968,24 @@ App.assets = (function () {
 
         try {
           for (const file of files) {
-            await uploadFileToDrive(file, {
-              assetType,
-              assetName: file.name,
-              category,
-              tags: [],
-            });
+            if (assetType === 'Video') {
+              await uploadFileToBlobClient(file, {
+                assetType,
+                assetName: file.name,
+                category,
+                tags: [],
+              });
+            } else {
+              await uploadFileToDrive(file, {
+                assetType,
+                assetName: file.name,
+                category,
+                tags: [],
+              });
+            }
           }
 
-          notify(`${files.length} asset${files.length === 1 ? '' : 's'} uploaded to Google Drive`);
+          notify(`${files.length} ${assetType === 'Video' ? 'video' : 'asset'}${files.length === 1 ? '' : 's'} uploaded`);
           els.assetMultiUploadForm.reset();
           prefillUploadFormsFromActiveFilters();
           await refresh();
