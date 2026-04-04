@@ -3183,7 +3183,7 @@ th {
   position: relative;
   display: grid;
   gap: 0.8rem;
-  padding: 1.35rem 1rem 1rem;
+  padding: 20px;
   border: 1px solid #777;
   border-radius: 14px;
   background: #d7e1ea;
@@ -3259,7 +3259,7 @@ th {
   display: grid;
   min-height: 190px;
   border: 1px solid #999;
-  border-radius: 18px;
+  border-radius: 14px;
   background: #c8d8e8;
   position: relative;
   place-items: center;
