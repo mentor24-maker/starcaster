@@ -7588,24 +7588,94 @@ App.develop = (function () {
       }).join('');
       return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">
         ${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}
-        <div class="develop-modular-page-columns">${columnMarkup}</div>
+        <div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columnMarkup}</div>
       </section>`;
     }).join('');
     return `<div class="develop-template-canvas develop-modular-page-preview">${markup}</div>`;
   }
 
   function openModularPageTemplatePreviewModal(template) {
-    if (!template || !App.components || typeof App.components.Modal !== 'function') return;
-    const body = document.createElement('div');
-    body.innerHTML = buildModularPageTemplatePreviewMarkup(template);
-    const modal = App.components.Modal({
-      title: `${safeText(template.name) || 'Modular Page Template'} Preview`,
-      body,
-      actions: [{ label: 'Close', onClick: () => modal.close() }],
-      dialogClass: 'develop-email-template-modal',
-      bodyClass: 'develop-email-template-modal-body',
-    });
-    modal.open();
+    if (!template) return;
+    const previewWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!previewWindow) {
+      notify('Could not open preview tab. Please allow pop-ups for this site.', true);
+      return;
+    }
+    const headMarkup = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((node) => node.outerHTML)
+      .join('\n');
+    const title = safeText(template.name) || 'Modular Page Template Preview';
+    const pageMarkup = buildModularPageTemplatePreviewMarkup(template);
+    previewWindow.document.open();
+    previewWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    ${headMarkup}
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #eff6fc 0%, #dfeaf6 100%);
+        color: #173c61;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .develop-preview-page {
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .develop-preview-page__shell {
+        max-width: 1440px;
+        margin: 0 auto;
+      }
+      .develop-preview-page__bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 18px;
+      }
+      .develop-preview-page__title {
+        margin: 0;
+        font-size: 1.4rem;
+        font-weight: 800;
+      }
+      .develop-preview-page__hint {
+        margin: 0.35rem 0 0;
+        color: #587592;
+      }
+      .develop-preview-page__close {
+        border: 1px solid rgba(15, 79, 143, 0.16);
+        background: #ffffff;
+        color: #173c61;
+        border-radius: 999px;
+        padding: 0.75rem 1rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .develop-preview-page .develop-template-canvas {
+        min-height: calc(100vh - 120px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="develop-preview-page">
+      <div class="develop-preview-page__shell">
+        <div class="develop-preview-page__bar">
+          <div>
+            <h1 class="develop-preview-page__title">${escapeHtml(title)}</h1>
+            <p class="develop-preview-page__hint">Full-page modular template preview</p>
+          </div>
+          <button type="button" class="develop-preview-page__close" onclick="window.close()">Close Preview</button>
+        </div>
+        ${pageMarkup}
+      </div>
+    </div>
+  </body>
+</html>`);
+    previewWindow.document.close();
   }
 
   function renderFormTemplateLibrary() {
