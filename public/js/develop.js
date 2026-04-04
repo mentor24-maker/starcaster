@@ -7218,11 +7218,13 @@ App.develop = (function () {
         columnDropZone.className = 'develop-page-template-row-cell';
         columnDropZone.dataset.column = columnId;
         columnDropZone.dataset.sectionIndex = String(sectionIndex);
-        const cellModules = section.modules.filter((module) => safeText(module.column) === columnId);
+        const cellModules = section.modules
+          .map((module, originalIndex) => ({ module, originalIndex }))
+          .filter((entry) => safeText(entry.module?.column) === columnId);
         const stack = document.createElement('div');
         stack.className = 'develop-page-template-row-cell-stack';
         if (cellModules.length) {
-          cellModules.forEach((module, moduleIndex) => {
+          cellModules.forEach(({ module, originalIndex }) => {
             const pill = document.createElement('button');
             pill.type = 'button';
             pill.className = 'develop-page-template-module-pill';
@@ -7237,7 +7239,7 @@ App.develop = (function () {
             pill.addEventListener('click', (event) => {
               event.preventDefault();
               event.stopPropagation();
-              openModularPageModuleEditor(sectionIndex, moduleIndex);
+              openModularPageModuleEditor(sectionIndex, originalIndex);
             });
             stack.appendChild(pill);
           });
