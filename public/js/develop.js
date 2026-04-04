@@ -1094,6 +1094,8 @@ App.develop = (function () {
     const uploadHandler = typeof options.uploadHandler === 'function'
       ? options.uploadHandler
       : ((file) => uploadThemeAssetFile(file, selectId));
+    const extraDialogClass = safeText(options.dialogClass);
+    const backdropClass = safeText(options.backdropClass);
     const body = document.createElement('div');
     body.className = 'develop-theme-picker-body';
     const toolbar = document.createElement('div');
@@ -1367,8 +1369,11 @@ App.develop = (function () {
     modal = App.components.Modal({
       title: `Choose ${config.title}`,
       body,
-      dialogClass: 'develop-theme-picker-modal',
+      dialogClass: ['develop-theme-picker-modal', extraDialogClass].filter(Boolean).join(' '),
     });
+    if (backdropClass && modal?.el) {
+      modal.el.classList.add(backdropClass);
+    }
     renderGrid();
     modal.open();
     return modal;
@@ -2493,6 +2498,8 @@ App.develop = (function () {
           event.preventDefault();
           event.stopPropagation();
           const modal = openImageAssetPicker(pickerConfig, {
+            dialogClass: 'develop-module-image-picker-modal',
+            backdropClass: 'develop-module-image-picker-backdrop',
             getValue: () => safeText(control.value),
             setValue: (nextValue) => {
               control.value = safeText(nextValue);

@@ -3360,12 +3360,14 @@ th {
 }
 
 .develop-module-editor-modal__dialog {
-  position: relative;
+  position: absolute;
   z-index: 1;
-  width: min(920px, calc(100vw - 2.4rem));
+  left: 1.2rem;
+  bottom: 1.2rem;
+  width: min(860px, calc(100vw - 2.4rem));
   max-height: calc(100vh - 2.4rem);
   overflow: auto;
-  margin: 1.2rem auto;
+  margin: 0;
   padding: 1rem;
   border: 1px solid rgba(15, 79, 143, 0.16);
   border-radius: 18px;
@@ -4892,6 +4894,26 @@ th {
 .c-modal__dialog.develop-theme-picker-modal {
   width: min(1880px, 98vw);
   max-width: min(1880px, 98vw);
+}
+
+.c-modal__backdrop.develop-module-image-picker-backdrop {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 1rem;
+  background: transparent;
+  z-index: 10040;
+  pointer-events: none;
+}
+
+.c-modal__backdrop.develop-module-image-picker-backdrop .c-modal__dialog {
+  pointer-events: auto;
+}
+
+.c-modal__dialog.develop-theme-picker-modal.develop-module-image-picker-modal {
+  width: min(1120px, calc(100vw - 2.4rem));
+  max-width: min(1120px, calc(100vw - 2.4rem));
+  max-height: calc(100vh - 2.4rem);
+  box-shadow: 0 24px 64px rgba(15, 55, 90, 0.28);
 }
 
 .c-modal__dialog.develop-theme-picker-modal .c-modal__body {
