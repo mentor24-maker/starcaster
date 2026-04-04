@@ -4424,6 +4424,18 @@ App.develop = (function () {
           const moduleKey = `modularModule::${section.id}::${module.id}`;
           const content = buildModularPageModuleContent(resolvedRecord, module);
           const titleText = safeText(module.settings?.title || module.text || content?.title || '');
+          const headerText = safeText(
+            module.settings?.text
+            || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(module.settings?.headlineId))?.content
+            || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(module.settings?.headlineId))?.label
+            || content
+            || titleText
+            || baseTemplate.headline
+          );
+          const textBlockHtml = safeText(
+            module.settings?.content,
+            50000
+          ) || '';
           if (module.type === 'form') {
             const formFields = Array.isArray(content?.form?.fields) && content.form.fields.length
               ? content.form.fields
@@ -4437,8 +4449,25 @@ App.develop = (function () {
               : (content?.assetUrl ? `<img src="${escapeHtml(content.assetUrl)}" alt="${escapeHtml(content.assetName || 'Image')}" />` : '');
             return `<div${editable('develop-template-image-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${imageMarkup || escapeHtml(content?.assetName || 'Image')}</div>`;
           }
+          if (module.type === 'header') {
+            const headingLevel = safeText(module.settings?.headingLevel).toLowerCase();
+            const tag = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(headingLevel) ? headingLevel : 'h2';
+            const inlineStyle = [
+              module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
+              module.settings?.align ? `text-align:${safeText(module.settings.align)};` : '',
+            ].join('');
+            return `<${tag}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${inlineStyle ? ` style="${inlineStyle}"` : ''}>${escapeHtml(headerText || 'Heading')}</${tag}>`;
+          }
           if (module.type === 'headline') return `<h3${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.headline)}</h3>`;
           if (module.type === 'subheading') return `<h4${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</h4>`;
+          if (module.type === 'textarea') {
+            const inlineStyle = [
+              module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
+              module.settings?.backgroundColor ? `background:${safeText(module.settings.backgroundColor)};padding:0.5rem 0.75rem;border-radius:12px;` : '',
+              module.settings?.textAlign ? `text-align:${safeText(module.settings.textAlign)};` : '',
+            ].join('');
+            return `<div${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${inlineStyle ? ` style="${inlineStyle}"` : ''}>${textBlockHtml || '<p>No text set</p>'}</div>`;
+          }
           if (module.type === 'pitch' || module.type === 'text') return `<p${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</p>`;
           if (module.type === 'cta') return `<div class="develop-template-cta-row"><button type="button"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Call To Action')}</button></div>`;
           if (module.type === 'eyebrow') return `<div${editable('develop-template-eyebrow')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.eyebrow)}</div>`;
@@ -8012,7 +8041,7 @@ App.develop = (function () {
   function openModularPageTemplatePreviewModal(template) {
     if (!template) return;
     const title = safeText(template.name) || 'Modular Page Template Preview';
-    const pageMarkup = buildModularPageTemplatePreviewMarkup(template);
+    const pageMarkup = buildModularLandingPageMarkup(template);
     const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
