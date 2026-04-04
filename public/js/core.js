@@ -710,29 +710,29 @@ App.setKeyValueRows = function setKeyValueRows(tbodyEl, entries) {
 };
 
 App.ACTION_ICONS = {
-  view: '<path d="M2 8s2.7-4.5 6-4.5S14 8 14 8s-2.7 4.5-6 4.5S2 8 2 8Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
-  edit: '<path d="M3.2 12.8 11.5 4.5a1.6 1.6 0 1 1 2.3 2.3L5.5 15.1 2.5 15.5l.7-2.7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m10.7 5.3 2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  delete: '<path d="M3.5 4.5h9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 4.5V3.6c0-.6.5-1.1 1.1-1.1h1.8c.6 0 1.1.5 1.1 1.1v.9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5.5v6.1c0 .9.7 1.6 1.6 1.6h2.8c.9 0 1.6-.7 1.6-1.6V5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 7.4v3.8M9 7.4v3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  trash: '<path d="M3.5 4.5h9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 4.5V3.6c0-.6.5-1.1 1.1-1.1h1.8c.6 0 1.1.5 1.1 1.1v.9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5.5v6.1c0 .9.7 1.6 1.6 1.6h2.8c.9 0 1.6-.7 1.6-1.6V5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 7.4v3.8M9 7.4v3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  load: '<path d="M8 2.5v7.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="m5.4 7.9 2.6 2.6 2.6-2.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.2 13h9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  run: '<path d="M5 4.3v7.4l6-3.7-6-3.7Z" fill="currentColor"/>',
-  status: '<circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 5.2v3.1l2 1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
-  preview: '<path d="M2.5 4h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 7h6M5 9.3h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  approve: '<path d="m4.1 8.2 2.1 2.1 5.7-5.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-  publish: '<path d="M3 8h8.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="m8.9 4.7 3.1 3.3-3.1 3.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  contact: '<circle cx="8" cy="5.2" r="2.1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.6 12.3c.8-1.9 2.4-2.9 4.4-2.9s3.6 1 4.4 2.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  comments: '<path d="M3.2 4.3h9.6a.8.8 0 0 1 .8.8v5.3a.8.8 0 0 1-.8.8H7.1l-2.8 2v-2H3.2a.8.8 0 0 1-.8-.8V5.1a.8.8 0 0 1 .8-.8Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.2 7h5.6M5.2 8.9h3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  clone: '<path d="M5.5 5.5V4.1c0-.9.7-1.6 1.6-1.6h4.3c.9 0 1.6.7 1.6 1.6v4.3c0 .9-.7 1.6-1.6 1.6h-1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><rect x="3" y="5.5" width="7.8" height="7.8" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/>',
-  copy: '<rect x="5.2" y="2.5" width="7.3" height="10.2" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 5.3v7.2c0 .8.7 1.5 1.5 1.5h5.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  settings: '<circle cx="8" cy="8" r="1.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.7v1.2M8 12.1v1.2M12.1 8h1.2M2.7 8h1.2M11.7 4.3l-.9.9M5.2 10.8l-.9.9M11.7 11.7l-.9-.9M5.2 5.2l-.9-.9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
-  plus: '<path d="M8 3.2v9.6M3.2 8h9.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  view: '<path d="M3 12s3.6-6 9-6 9 6 9 6-3.6 6-9 6-9-6-9-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  edit: '<path d="M12 20h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  delete: '<path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  trash: '<path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  load: '<path d="M12 3v12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 21h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  run: '<path d="M8 5v14l11-7-11-7Z" fill="currentColor"/>',
+  status: '<path d="M12 7v5l3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  preview: '<path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 9h10M7 13h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  approve: '<path d="m5 12 4 4L19 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  publish: '<path d="M5 12h13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m13 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  contact: '<path d="M8 7a4 4 0 1 0 8 0 4 4 0 0 0-8 0" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  comments: '<path d="M8 10h8M8 14h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 19l-2 2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  clone: '<path d="M9 9a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V9Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  copy: '<path d="M8 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M16 6V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  settings: '<path d="M10.3 4.3a2 2 0 0 1 3.4 0l.2.3a2 2 0 0 0 2.1.8l.4-.1a2 2 0 0 1 2.4 2.4l-.1.4a2 2 0 0 0 .8 2.1l.3.2a2 2 0 0 1 0 3.4l-.3.2a2 2 0 0 0-.8 2.1l.1.4a2 2 0 0 1-2.4 2.4l-.4-.1a2 2 0 0 0-2.1.8l-.2.3a2 2 0 0 1-3.4 0l-.2-.3a2 2 0 0 0-2.1-.8l-.4.1a2 2 0 0 1-2.4-2.4l.1-.4a2 2 0 0 0-.8-2.1l-.3-.2a2 2 0 0 1 0-3.4l.3-.2a2 2 0 0 0 .8-2.1l-.1-.4a2 2 0 0 1 2.4-2.4l.4.1a2 2 0 0 0 2.1-.8l.2-.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
 };
 
 App.makeInlineIcon = function makeInlineIcon(iconKey, extraClass = '') {
   const wrap = document.createElement('span');
   wrap.className = `icon-btn-glyph${extraClass ? ` ${extraClass}` : ''}`.trim();
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
   svg.innerHTML = App.ACTION_ICONS[iconKey] || App.ACTION_ICONS.view;
   wrap.appendChild(svg);
@@ -765,5 +765,5 @@ App.makeIconButton = function makeIconButton(iconKey, label, onClick, options = 
 App.iconButtonMarkup = function iconButtonMarkup(iconKey, label, className = '') {
   const classes = `tiny-btn icon-btn ${className}`.trim();
   const svg = App.ACTION_ICONS[iconKey] || App.ACTION_ICONS.view;
-  return `<button type="button" class="${classes}" title="${label}" aria-label="${label}"><span class="icon-btn-glyph"><svg viewBox="0 0 16 16" aria-hidden="true">${svg}</svg></span></button>`;
+  return `<button type="button" class="${classes}" title="${label}" aria-label="${label}"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${svg}</svg></span></button>`;
 };
