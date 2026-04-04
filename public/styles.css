@@ -2941,6 +2941,11 @@ th {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  margin: 0 0 0.9rem;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  background: #4f6f90;
 }
 
 .develop-layout-tile {
