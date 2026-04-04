@@ -6529,6 +6529,13 @@ App.develop = (function () {
     setPageTemplateEditorVisible(true);
   }
 
+  function ensureModularPageTemplateDraft() {
+    if (modularPageTemplateDraft) return;
+    modularPageTemplateDraft = buildEmptyLandingRecord('Modular Page Template', selectedTemplateId || LANDING_TEMPLATES[0].id);
+    modularPageTemplateDraft.templateKind = 'modular';
+    modularPageTemplateDraft.layoutSections = [];
+  }
+
   function reorderModularPageSections(fromIndex, toIndex) {
     if (!modularPageTemplateDraft) return;
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
@@ -7374,12 +7381,15 @@ App.develop = (function () {
     renderFormTemplateRecordsTable();
     renderEmailTemplateTables();
     renderPageTemplateRecordsTable();
+    ensureModularPageTemplateDraft();
+    syncPageTemplateEditorInputs();
+    renderModularPageTemplateEditor();
     setEmailTemplateEditorVisible(false);
     setCollapsibleSectionExpanded('developTemplateEditorToggle', 'developTemplateEditorBody', false);
     setCollapsibleSectionExpanded('developFormsSectionToggle', 'developFormsSectionBody', false);
     setCollapsibleSectionExpanded('developEmailSectionToggle', 'developEmailSectionBody', false);
-    setCollapsibleSectionExpanded('developPagesSectionToggle', 'developPagesSectionBody', true);
     setCollapsibleSectionExpanded('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', true);
+    setPageTemplateEditorVisible(true);
     renderLandingPageThankYouPage();
     renderThumbnailSourceAssetOptions();
     renderFormTemplateLibrary();
@@ -7693,7 +7703,6 @@ App.develop = (function () {
     bindCollapsibleSection('developModulesLibraryToggle', 'developModulesLibraryBody', { defaultExpanded: true });
     bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
-    bindCollapsibleSection('developPagesSectionToggle', 'developPagesSectionBody', { defaultExpanded: true });
 
     updateDevelopModuleTypeFields();
 
