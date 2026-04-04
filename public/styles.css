@@ -3188,7 +3188,7 @@ th {
   border: 1px solid #777;
   border-radius: 14px;
   background: #d7e1ea;
-  overflow: hidden;
+  overflow: visible;
   align-items: stretch;
 }
 
@@ -3259,6 +3259,8 @@ th {
   border-radius: 999px;
   background: #0b82d4;
   box-shadow: 0 0 0 2px rgba(11, 130, 212, 0.12);
+  z-index: 8;
+  pointer-events: none;
 }
 
 .develop-page-template-workspace-row.is-drop-before::before {
