@@ -7472,30 +7472,55 @@ App.develop = (function () {
         settingsBtn.className = 'develop-page-template-cell-settings';
         settingsBtn.innerHTML = '<span aria-hidden="true">⚙</span>';
         settingsBtn.title = 'Container settings';
+        const gearBaseSize = 16;
+        const gearMaxScale = 5;
+        const gearActiveRadius = 100;
+        let gearCurrentScale = 1;
+        let gearTargetScale = 1;
+        let gearScaleFrame = null;
+        const applyGearScale = () => {
+          settingsBtn.style.setProperty('--develop-gear-scale', gearCurrentScale.toFixed(3));
+        };
+        const animateGearScale = () => {
+          const delta = gearTargetScale - gearCurrentScale;
+          if (Math.abs(delta) < 0.01) {
+            gearCurrentScale = gearTargetScale;
+            applyGearScale();
+            gearScaleFrame = null;
+            return;
+          }
+          gearCurrentScale += delta * 0.18;
+          applyGearScale();
+          gearScaleFrame = window.requestAnimationFrame(animateGearScale);
+        };
+        const setGearTargetScale = (nextScale) => {
+          gearTargetScale = Math.max(1, Math.min(gearMaxScale, Number(nextScale) || 1));
+          if (gearScaleFrame) return;
+          gearScaleFrame = window.requestAnimationFrame(animateGearScale);
+        };
         const resetSettingsBtnScale = () => {
-          settingsBtn.style.setProperty('--develop-gear-scale', '1');
+          setGearTargetScale(1);
         };
         const updateSettingsBtnScale = (clientX, clientY) => {
-          const rect = settingsBtn.getBoundingClientRect();
-          const centerX = rect.left + (rect.width / 2);
-          const centerY = rect.top + (rect.height / 2);
+          const parentRect = columnDropZone.getBoundingClientRect();
+          const centerX = parentRect.left + settingsBtn.offsetLeft + (gearBaseSize / 2);
+          const centerY = parentRect.top + settingsBtn.offsetTop + (gearBaseSize / 2);
           const distance = Math.hypot(clientX - centerX, clientY - centerY);
-          const activeRadius = 100;
-          const maxScale = 3.125;
-          if (distance >= activeRadius) {
+          if (distance >= gearActiveRadius) {
             resetSettingsBtnScale();
             return;
           }
-          const strength = 1 - (distance / activeRadius);
-          const scale = 1 + ((maxScale - 1) * strength);
-          settingsBtn.style.setProperty('--develop-gear-scale', scale.toFixed(3));
+          const strength = 1 - (distance / gearActiveRadius);
+          const easedStrength = strength * strength * (3 - (2 * strength));
+          const scale = 1 + ((gearMaxScale - 1) * easedStrength);
+          setGearTargetScale(scale);
         };
         columnDropZone.addEventListener('mousemove', (event) => {
           updateSettingsBtnScale(event.clientX, event.clientY);
         });
         columnDropZone.addEventListener('mouseleave', resetSettingsBtnScale);
         settingsBtn.addEventListener('focus', () => {
-          settingsBtn.style.setProperty('--develop-gear-scale', '3.125');
+          setGearTargetScale(gearMaxScale);
         });
         settingsBtn.addEventListener('blur', resetSettingsBtnScale);
         settingsBtn.addEventListener('click', async (event) => {
