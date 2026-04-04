@@ -1903,6 +1903,13 @@ App.develop = (function () {
     };
   }
 
+  function getUnifiedModularPageTemplateSelectOptions() {
+    return getUnifiedModularPageTemplates().all.map((template) => ({
+      value: String(template.id),
+      label: `${template.isSystemTemplate ? 'Starter' : 'Template'}: ${safeText(template.name) || 'Untitled Template'}`,
+    }));
+  }
+
   function getTemplateById(templateId) {
     const saved = getSavedPageTemplateById(templateId);
     if (saved) return saved;
@@ -7060,9 +7067,9 @@ App.develop = (function () {
     if (baseTemplateSelect) {
       setSelectOptions(
         baseTemplateSelect,
-        LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
-        'Base Template',
-        safeText(modularPageTemplateDraft?.templateId) || selectedTemplateId
+        getUnifiedModularPageTemplateSelectOptions(),
+        'Choose Template',
+        safeText(modularPageEditorSourceTemplateId) || safeText(modularPageTemplateDraft?.templateId) || selectedTemplateId
       );
     }
     if (title) title.textContent = modularPageEditorMode === 'page' ? 'Page: Modular' : 'Page Template: Modular';
@@ -9158,7 +9165,15 @@ App.develop = (function () {
     if (pageTemplateEditorBaseTemplateSelect) {
       pageTemplateEditorBaseTemplateSelect.addEventListener('change', () => {
         if (!modularPageTemplateDraft) return;
-        modularPageTemplateDraft.templateId = safeText(pageTemplateEditorBaseTemplateSelect.value);
+        const selectedId = safeText(pageTemplateEditorBaseTemplateSelect.value);
+        const selectedTemplate = getTemplateById(selectedId);
+        if (!selectedTemplate) return;
+        modularPageEditorSourceTemplateId = selectedId;
+        modularPageTemplateDraft.templateId = safeText(selectedTemplate.templateId || selectedTemplate.id);
+        modularPageTemplateDraft.layoutSections = normalizePageTemplateLayoutSections(selectedTemplate.layoutSections).length
+          ? normalizePageTemplateLayoutSections(selectedTemplate.layoutSections)
+          : createDefaultModularPageSections();
+        renderModularPageTemplateEditor();
       });
     }
 
