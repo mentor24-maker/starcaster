@@ -8705,6 +8705,9 @@ App.develop = (function () {
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
     renderSavedAgentsTable();
+    if (safeText(state.activePage) === 'developLandingPagesPage' && modularPageEditorMode !== 'page') {
+      App.setActivePage('developManageLandingPagesPage');
+    }
   }
 
   // ---------------------------------------------------------------------------
