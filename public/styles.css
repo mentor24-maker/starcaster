@@ -3173,23 +3173,20 @@ th {
 .develop-page-template-cell-settings {
   position: absolute;
   inset: 0.7rem 0.7rem auto auto;
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
   padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(15, 79, 143, 0.16);
   background: rgba(255, 255, 255, 0.96);
   color: #173c61;
-  font-size: 0.65rem;
+  font-size: 0.9rem;
   display: inline-grid;
   place-items: center;
   box-shadow: 0 8px 20px rgba(15, 79, 143, 0.12);
   z-index: 2;
-  transform: scale(var(--develop-gear-scale, 1));
-  transform-origin: center;
   transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
-  will-change: transform;
 }
 
 .develop-page-template-cell-settings:hover,

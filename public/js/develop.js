@@ -331,6 +331,8 @@ App.develop = (function () {
   let activeModularPageModulePicker = null;
   let activeModularPageModuleEditor = null;
   let activeModularContainerEditor = null;
+  let modularPageEditorMode = 'template';
+  let modularPageEditorSourceTemplateId = '';
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -5196,9 +5198,11 @@ App.develop = (function () {
   }
 
   function openCreateLandingPage() {
-    resetLandingPageForm();
-    loadLandingPageBuilderOptions().catch(() => {});
-    App.setActivePage('developLandingPagesPage');
+    loadLandingPageBuilderOptions()
+      .catch(() => {})
+      .finally(() => {
+        openCreateLandingPageTemplatePicker();
+      });
   }
 
   async function openCreateLandingTemplate() {
@@ -5228,6 +5232,54 @@ App.develop = (function () {
       templateId: safeText(baseTemplate?.id) || selectedTemplateId,
       layoutSections: createDefaultModularPageSections(),
     });
+  }
+
+  function openCreateLandingPageTemplatePicker() {
+    const modularTemplates = savedPageTemplates.filter((item) => normalizePageTemplateKind(item.templateKind) === 'modular');
+    if (!App.components || typeof App.components.Modal !== 'function') {
+      notify('Template picker is unavailable right now.', true);
+      return;
+    }
+    const body = document.createElement('div');
+    body.className = 'develop-module-picker-grid';
+    if (!modularTemplates.length) {
+      body.innerHTML = '<div class="develop-template-records-empty">No modular page templates yet.</div>';
+    } else {
+      modularTemplates.forEach((template) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'develop-module-picker-card';
+        button.innerHTML = `
+          <span class="develop-module-picker-icon">Pg</span>
+          <span class="develop-module-picker-label">${escapeHtml(safeText(template.name) || 'Untitled Template')}</span>
+          <span class="develop-module-picker-description">${escapeHtml(getLandingPageTemplateName(template.templateId) || 'Base Template')}</span>
+        `;
+        button.addEventListener('click', () => {
+          const pageName = `${safeText(template.name) || 'Modular'} Page`;
+          openModularPageTemplateEditor({
+            ...template,
+            id: '',
+            name: pageName,
+            templateId: safeText(template.templateId),
+            layoutSections: normalizePageTemplateLayoutSections(template.layoutSections),
+          }, {
+            mode: 'page',
+            sourceTemplateId: safeText(template.id),
+            targetPage: 'developTemplatesPage',
+          });
+          modal.close();
+        });
+        body.appendChild(button);
+      });
+    }
+    const modal = App.components.Modal({
+      title: 'Choose Page Template',
+      body,
+      actions: [{ label: 'Close', onClick: () => modal.close() }],
+      dialogClass: 'develop-email-template-modal',
+      bodyClass: 'develop-email-template-modal-body',
+    });
+    modal.open();
   }
 
   function openEditLandingPage(record) {
@@ -5622,7 +5674,15 @@ App.develop = (function () {
         openLandingPagePreview(item);
       });
       const editBtn = App.makeIconButton('edit', 'Edit Page', () => {
-        openLandingPageVisualEditor(item);
+        if (normalizePageTemplateKind(item.templateKind) === 'modular' && normalizePageTemplateLayoutSections(item.layoutSections).length) {
+          openModularPageTemplateEditor(item, {
+            mode: 'page',
+            sourceTemplateId: safeText(item.templateId),
+            targetPage: 'developTemplatesPage',
+          });
+        } else {
+          openLandingPageVisualEditor(item);
+        }
       }, { marginLeft: '10px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Page', async () => {
         if (!window.confirm(`Delete page "${safeText(item.name) || id}"?`)) return;
@@ -6718,6 +6778,11 @@ App.develop = (function () {
     const idInput = byId('developPageTemplateEditorIdInput');
     const nameInput = byId('developPageTemplateEditorNameInput');
     const baseTemplateSelect = byId('developPageTemplateEditorBaseTemplateSelect');
+    const title = byId('developPageTemplateEditorTitle');
+    const meta = byId('developPageTemplateEditorMeta');
+    const saveTop = byId('developPageTemplateEditorSaveBtnTop');
+    const saveBottom = byId('developPageTemplateEditorSaveBtnBottom');
+    const closeTop = byId('developPageTemplateEditorCloseBtnTop');
     if (idInput) idInput.value = safeText(modularPageTemplateDraft?.id);
     if (nameInput) nameInput.value = safeText(modularPageTemplateDraft?.name, 255);
     if (baseTemplateSelect) {
@@ -6728,15 +6793,26 @@ App.develop = (function () {
         safeText(modularPageTemplateDraft?.templateId) || selectedTemplateId
       );
     }
+    if (title) title.textContent = modularPageEditorMode === 'page' ? 'Page: Modular' : 'Page Template: Modular';
+    if (meta) {
+      meta.textContent = modularPageEditorMode === 'page'
+        ? 'Choose a template, then configure the modules for this page and save it as a page.'
+        : 'Build landing-page templates as ordered sections with configurable layouts and module slots.';
+    }
+    if (saveTop) saveTop.textContent = modularPageEditorMode === 'page' ? 'Save Page' : 'Save Modular Template';
+    if (saveBottom) saveBottom.textContent = modularPageEditorMode === 'page' ? 'Save Page' : 'Save Modular Template';
+    if (closeTop) closeTop.textContent = modularPageEditorMode === 'page' ? 'Back To Pages' : 'Close';
   }
 
-  function openModularPageTemplateEditor(template) {
+  function openModularPageTemplateEditor(template, options = {}) {
     const source = template && typeof template === 'object' ? template : {};
+    modularPageEditorMode = safeText(options.mode) === 'page' ? 'page' : 'template';
+    modularPageEditorSourceTemplateId = safeText(options.sourceTemplateId || source.templateId || source.id);
     const next = applyLandingPageDefaultSelections({
       id: safeText(source.id),
-      name: safeText(source.name, 255) || 'Modular Page Template',
+      name: safeText(source.name, 255) || (modularPageEditorMode === 'page' ? 'Modular Page' : 'Modular Page Template'),
       templateKind: 'modular',
-      templateId: safeText(source.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id,
+      templateId: safeText(options.templateId || source.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id,
       primaryColor: safeText(source.primaryColor),
       backgroundColor: safeText(source.backgroundColor),
       accentColor: safeText(source.accentColor),
@@ -6770,6 +6846,9 @@ App.develop = (function () {
     modularPageTemplateDraft = next;
     syncPageTemplateEditorInputs();
     renderModularPageTemplateEditor();
+    if (safeText(options.targetPage)) {
+      App.setActivePage(safeText(options.targetPage));
+    }
     setPageTemplateEditorVisible(true);
   }
 
@@ -7472,57 +7551,6 @@ App.develop = (function () {
         settingsBtn.className = 'develop-page-template-cell-settings';
         settingsBtn.innerHTML = '<span aria-hidden="true">⚙</span>';
         settingsBtn.title = 'Container settings';
-        const gearBaseSize = 16;
-        const gearMaxScale = 5;
-        const gearActiveRadius = 100;
-        let gearCurrentScale = 1;
-        let gearTargetScale = 1;
-        let gearScaleFrame = null;
-        const applyGearScale = () => {
-          settingsBtn.style.setProperty('--develop-gear-scale', gearCurrentScale.toFixed(3));
-        };
-        const animateGearScale = () => {
-          const delta = gearTargetScale - gearCurrentScale;
-          if (Math.abs(delta) < 0.01) {
-            gearCurrentScale = gearTargetScale;
-            applyGearScale();
-            gearScaleFrame = null;
-            return;
-          }
-          gearCurrentScale += delta * 0.18;
-          applyGearScale();
-          gearScaleFrame = window.requestAnimationFrame(animateGearScale);
-        };
-        const setGearTargetScale = (nextScale) => {
-          gearTargetScale = Math.max(1, Math.min(gearMaxScale, Number(nextScale) || 1));
-          if (gearScaleFrame) return;
-          gearScaleFrame = window.requestAnimationFrame(animateGearScale);
-        };
-        const resetSettingsBtnScale = () => {
-          setGearTargetScale(1);
-        };
-        const updateSettingsBtnScale = (clientX, clientY) => {
-          const parentRect = columnDropZone.getBoundingClientRect();
-          const centerX = parentRect.left + settingsBtn.offsetLeft + (gearBaseSize / 2);
-          const centerY = parentRect.top + settingsBtn.offsetTop + (gearBaseSize / 2);
-          const distance = Math.hypot(clientX - centerX, clientY - centerY);
-          if (distance >= gearActiveRadius) {
-            resetSettingsBtnScale();
-            return;
-          }
-          const strength = 1 - (distance / gearActiveRadius);
-          const easedStrength = strength * strength * (3 - (2 * strength));
-          const scale = 1 + ((gearMaxScale - 1) * easedStrength);
-          setGearTargetScale(scale);
-        };
-        columnDropZone.addEventListener('mousemove', (event) => {
-          updateSettingsBtnScale(event.clientX, event.clientY);
-        });
-        columnDropZone.addEventListener('mouseleave', resetSettingsBtnScale);
-        settingsBtn.addEventListener('focus', () => {
-          setGearTargetScale(gearMaxScale);
-        });
-        settingsBtn.addEventListener('blur', resetSettingsBtnScale);
         settingsBtn.addEventListener('click', async (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -7602,6 +7630,14 @@ App.develop = (function () {
       bodyPitchId: '',
       logoWideId: '',
       logoSquareId: '',
+    };
+  }
+
+  function buildModularLandingPagePayload() {
+    const basePayload = buildModularPageTemplatePayload();
+    return {
+      ...basePayload,
+      templateId: modularPageEditorSourceTemplateId || basePayload.templateId,
     };
   }
 
@@ -8856,6 +8892,9 @@ App.develop = (function () {
     if (pageTemplateEditorCloseBtnTop) {
       pageTemplateEditorCloseBtnTop.addEventListener('click', () => {
         setPageTemplateEditorVisible(false);
+        if (modularPageEditorMode === 'page') {
+          App.setActivePage('developManageLandingPagesPage');
+        }
       });
     }
 
@@ -8934,16 +8973,22 @@ App.develop = (function () {
     const bindSaveModularPageTemplateButton = (button) => {
       if (!button) return;
       button.addEventListener('click', async () => {
-        const payload = buildModularPageTemplatePayload();
+        const payload = modularPageEditorMode === 'page'
+          ? buildModularLandingPagePayload()
+          : buildModularPageTemplatePayload();
         if (!payload.name) {
-          notify('Template name is required', true);
+          notify(modularPageEditorMode === 'page' ? 'Page name is required' : 'Template name is required', true);
           return;
         }
         try {
           const hasId = Boolean(safeText(payload.id));
-          const endpoint = hasId
-            ? `/api/develop/page-templates/${encodeURIComponent(payload.id)}`
-            : '/api/develop/page-templates';
+          const endpoint = modularPageEditorMode === 'page'
+            ? (hasId
+              ? `/api/develop/landing-pages/${encodeURIComponent(payload.id)}`
+              : '/api/develop/landing-pages')
+            : (hasId
+              ? `/api/develop/page-templates/${encodeURIComponent(payload.id)}`
+              : '/api/develop/page-templates');
           const method = hasId ? 'PATCH' : 'POST';
           const result = await api(endpoint, { method, body: JSON.stringify(payload) });
           modularPageTemplateDraft = result?.pageTemplate || result?.data || payload;
@@ -8951,9 +8996,13 @@ App.develop = (function () {
           syncPageTemplateEditorInputs();
           renderModularPageTemplateEditor();
           setPageTemplateEditorVisible(true);
-          notify(hasId ? 'Modular page template updated' : 'Modular page template created');
+          notify(
+            modularPageEditorMode === 'page'
+              ? (hasId ? 'Page updated' : 'Page created')
+              : (hasId ? 'Modular page template updated' : 'Modular page template created')
+          );
         } catch (err) {
-          notify(err.message || 'Could not save modular page template', true);
+          notify(err.message || (modularPageEditorMode === 'page' ? 'Could not save page' : 'Could not save modular page template'), true);
         }
       });
     };
