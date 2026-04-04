@@ -3185,6 +3185,10 @@ th {
   place-items: center;
   box-shadow: 0 8px 20px rgba(15, 79, 143, 0.12);
   z-index: 2;
+  transform: scale(var(--develop-gear-scale, 1));
+  transform-origin: center;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  will-change: transform;
 }
 
 .develop-page-template-cell-settings:hover,
