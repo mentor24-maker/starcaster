@@ -7151,6 +7151,11 @@ App.develop = (function () {
     const saveTop = byId('developPageTemplateEditorSaveBtnTop');
     const saveBottom = byId('developPageTemplateEditorSaveBtnBottom');
     const closeTop = byId('developPageTemplateEditorCloseBtnTop');
+    const topActions = byId('developPageTemplateEditorTopActions');
+    const bottomActions = byId('developPageTemplateEditorBottomActions');
+    const pageHeaderPreviewBtn = byId('developLandingPageHeaderPreviewBtn');
+    const pageHeaderSaveBtn = byId('developLandingPageHeaderSaveBtn');
+    const pageHeaderBackBtn = byId('developLandingPageHeaderBackBtn');
     if (idInput) idInput.value = safeText(modularPageTemplateDraft?.id);
     if (nameInput) nameInput.value = safeText(modularPageTemplateDraft?.name, 255);
     if (baseTemplateSelect) {
@@ -7174,6 +7179,11 @@ App.develop = (function () {
     if (saveTop) saveTop.textContent = modularPageEditorMode === 'page' ? 'Save Page' : 'Save Modular Template';
     if (saveBottom) saveBottom.textContent = modularPageEditorMode === 'page' ? 'Save Page' : 'Save Modular Template';
     if (closeTop) closeTop.textContent = modularPageEditorMode === 'page' ? 'Back To Pages' : 'Close';
+    if (topActions) topActions.classList.toggle('hidden', modularPageEditorMode === 'page');
+    if (bottomActions) bottomActions.classList.toggle('hidden', modularPageEditorMode === 'page');
+    if (pageHeaderPreviewBtn) pageHeaderPreviewBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
+    if (pageHeaderSaveBtn) pageHeaderSaveBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
+    if (pageHeaderBackBtn) pageHeaderBackBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
   }
 
   function openModularPageTemplateEditor(template, options = {}) {
@@ -9392,6 +9402,9 @@ App.develop = (function () {
     const previewBackBtn = byId('developLandingPagePreviewBackBtn');
     const thankYouBackBtn = byId('developLandingThankYouBackBtn');
     const saveSelectorDefaultsBtn = byId('developLandingSaveSelectorDefaultsBtn');
+    const pageHeaderPreviewBtn = byId('developLandingPageHeaderPreviewBtn');
+    const pageHeaderSaveBtn = byId('developLandingPageHeaderSaveBtn');
+    const pageHeaderBackBtn = byId('developLandingPageHeaderBackBtn');
     const pageTemplateEditorNameInput = byId('developPageTemplateEditorNameInput');
     const pageTemplateEditorBaseTemplateSelect = byId('developPageTemplateEditorBaseTemplateSelect');
     const pageTemplateEditorCloseBtnTop = byId('developPageTemplateEditorCloseBtnTop');
@@ -9454,6 +9467,24 @@ App.develop = (function () {
           return;
         }
         openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+      });
+    }
+
+    if (pageHeaderPreviewBtn) {
+      pageHeaderPreviewBtn.addEventListener('click', () => {
+        if (!modularPageTemplateDraft) {
+          notify('Open a modular template first', true);
+          return;
+        }
+        openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+      });
+    }
+
+    if (pageHeaderBackBtn) {
+      pageHeaderBackBtn.addEventListener('click', () => {
+        setPageTemplateEditorVisible(false);
+        syncModularPageEditorPlacement();
+        App.setActivePage('developManageLandingPagesPage');
       });
     }
 
@@ -9547,6 +9578,7 @@ App.develop = (function () {
     };
     bindSaveModularPageTemplateButton(byId('developPageTemplateEditorSaveBtnTop'));
     bindSaveModularPageTemplateButton(byId('developPageTemplateEditorSaveBtnBottom'));
+    bindSaveModularPageTemplateButton(pageHeaderSaveBtn);
 
     if (visualModeBtn) {
       visualModeBtn.addEventListener('click', () => {
