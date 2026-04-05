@@ -9220,12 +9220,222 @@ App.develop = (function () {
         font-weight: 700;
         cursor: pointer;
       }
+      .develop-preview-page__controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 18px;
+        padding: 14px 16px;
+        border: 1px solid rgba(15, 79, 143, 0.14);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.74);
+        box-shadow: 0 12px 28px rgba(15, 55, 90, 0.08);
+      }
+      .develop-preview-page__control-label {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #587592;
+      }
+      .develop-preview-device-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.7rem;
+      }
+      .develop-preview-device-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        border: 1px solid rgba(15, 79, 143, 0.16);
+        background: #ffffff;
+        color: #173c61;
+        border-radius: 999px;
+        padding: 0.6rem 0.9rem;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(15, 55, 90, 0.06);
+        transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, color 140ms ease, border-color 140ms ease;
+      }
+      .develop-preview-device-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 22px rgba(15, 55, 90, 0.1);
+      }
+      .develop-preview-device-btn.is-active {
+        background: #173c61;
+        border-color: #173c61;
+        color: #f7fbff;
+      }
+      .develop-preview-device-btn svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .develop-preview-stage {
+        min-height: calc(100vh - 214px);
+        display: grid;
+        place-items: start center;
+        padding: 10px 0 32px;
+      }
+      .develop-preview-device-wrap {
+        width: 100%;
+        display: grid;
+        justify-items: center;
+      }
+      .develop-preview-device-shell {
+        --device-width: min(100%, 1280px);
+        --device-ratio: 0.625;
+        width: var(--device-width);
+        max-width: 100%;
+        transition: width 180ms ease;
+      }
+      .develop-preview-device-shell[data-device="mobile-portrait"] {
+        --device-width: min(100%, 430px);
+        --device-ratio: 2.08;
+      }
+      .develop-preview-device-shell[data-device="mobile-landscape"] {
+        --device-width: min(100%, 780px);
+        --device-ratio: 0.52;
+      }
+      .develop-preview-device-shell[data-device="tablet"] {
+        --device-width: min(100%, 980px);
+        --device-ratio: 1.35;
+      }
+      .develop-preview-device-shell[data-device="desktop"] {
+        --device-width: min(100%, 1380px);
+        --device-ratio: 0.72;
+      }
+      .develop-preview-device-shell[data-device="full"] {
+        --device-width: min(100%, 1480px);
+        --device-ratio: auto;
+      }
+      .develop-preview-device-frame {
+        position: relative;
+        padding: 16px;
+        border-radius: 34px;
+        background:
+          linear-gradient(145deg, rgba(22, 31, 44, 0.92) 0%, rgba(66, 74, 88, 0.96) 100%);
+        box-shadow:
+          0 26px 56px rgba(6, 20, 34, 0.24),
+          inset 0 2px 0 rgba(255, 255, 255, 0.16),
+          inset 0 -18px 28px rgba(0, 0, 0, 0.18);
+      }
+      .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-frame,
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-frame {
+        padding: 18px 18px 30px;
+        border-radius: 26px;
+      }
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-frame {
+        background: transparent;
+        box-shadow: none;
+        padding: 0;
+      }
+      .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-frame::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: -22px;
+        transform: translateX(-50%);
+        width: 26%;
+        height: 14px;
+        border-radius: 0 0 18px 18px;
+        background: linear-gradient(180deg, rgba(78, 86, 102, 0.98), rgba(28, 36, 48, 0.98));
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+      }
+      .develop-preview-device-shell[data-device="mobile-portrait"] .develop-preview-device-frame::before,
+      .develop-preview-device-shell[data-device="mobile-landscape"] .develop-preview-device-frame::before,
+      .develop-preview-device-shell[data-device="tablet"] .develop-preview-device-frame::before {
+        content: "";
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 24%;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(14, 17, 21, 0.92);
+      }
+      .develop-preview-device-screen {
+        position: relative;
+        overflow: hidden;
+        background: #eef5fb;
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      }
+      .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-screen,
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-screen {
+        border-radius: 16px;
+      }
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-screen {
+        border: none;
+        box-shadow: none;
+      }
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-screen::before,
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-screen::after {
+        display: none;
+      }
+      .develop-preview-device-shell[data-device="mobile-landscape"] .develop-preview-device-screen::before,
+      .develop-preview-device-shell[data-device="tablet"] .develop-preview-device-screen::before,
+      .develop-preview-device-shell[data-device="mobile-portrait"] .develop-preview-device-screen::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      }
+      .develop-preview-device-shell[data-device="mobile-portrait"] .develop-preview-device-screen {
+        aspect-ratio: 9 / 19;
+      }
+      .develop-preview-device-shell[data-device="mobile-landscape"] .develop-preview-device-screen {
+        aspect-ratio: 19 / 9;
+      }
+      .develop-preview-device-shell[data-device="tablet"] .develop-preview-device-screen {
+        aspect-ratio: 10 / 13;
+      }
+      .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-screen {
+        aspect-ratio: 16 / 10;
+      }
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-screen {
+        aspect-ratio: auto;
+      }
+      .develop-preview-device-scroll {
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background: linear-gradient(180deg, #eff6fc 0%, #dfeaf6 100%);
+      }
+      .develop-preview-device-shell[data-device="full"] .develop-preview-device-scroll {
+        min-height: calc(100vh - 220px);
+      }
+      .develop-preview-page__viewport {
+        width: 100%;
+        min-height: 100%;
+      }
       .develop-template-canvas {
         min-height: calc(100vh - 120px);
         border-radius: 18px;
         padding: 24px;
         background: rgba(255, 255, 255, 0.84);
         box-shadow: 0 16px 40px rgba(15, 55, 90, 0.12);
+      }
+      .develop-preview-device-shell[data-device="mobile-portrait"] .develop-template-canvas,
+      .develop-preview-device-shell[data-device="mobile-landscape"] .develop-template-canvas,
+      .develop-preview-device-shell[data-device="tablet"] .develop-template-canvas,
+      .develop-preview-device-shell[data-device="desktop"] .develop-template-canvas {
+        min-height: 100%;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .develop-preview-device-shell[data-device="full"] .develop-template-canvas {
+        min-height: calc(100vh - 220px);
       }
       .develop-modular-page-preview {
         display: grid;
@@ -9348,6 +9558,10 @@ App.develop = (function () {
           flex-direction: column;
           align-items: flex-start;
         }
+        .develop-preview-page__controls {
+          flex-direction: column;
+          align-items: stretch;
+        }
         .develop-modular-page-columns {
           grid-template-columns: 1fr !important;
         }
@@ -9364,9 +9578,68 @@ App.develop = (function () {
           </div>
           <button type="button" class="develop-preview-page__close" onclick="window.close()">Close Preview</button>
         </div>
-        ${pageMarkup}
+        <div class="develop-preview-page__controls">
+          <div>
+            <p class="develop-preview-page__control-label">Preview Mode</p>
+            <div class="develop-preview-device-bar" role="tablist" aria-label="Preview device modes">
+              <button type="button" class="develop-preview-device-btn is-active" data-device="mobile-portrait" role="tab" aria-selected="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path></svg>
+                <span>Mobile</span>
+              </button>
+              <button type="button" class="develop-preview-device-btn" data-device="mobile-landscape" role="tab" aria-selected="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="10" rx="2.5"></rect><path d="M18.5 11v2"></path></svg>
+                <span>Landscape</span>
+              </button>
+              <button type="button" class="develop-preview-device-btn" data-device="tablet" role="tab" aria-selected="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="2.5" width="13" height="19" rx="2.4"></rect><path d="M11 18.5h2"></path></svg>
+                <span>Tablet</span>
+              </button>
+              <button type="button" class="develop-preview-device-btn" data-device="desktop" role="tab" aria-selected="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.8"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
+                <span>Desktop</span>
+              </button>
+              <button type="button" class="develop-preview-device-btn" data-device="full" role="tab" aria-selected="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4"></path><path d="M16 4h4v4"></path><path d="M8 20H4v-4"></path><path d="M16 20h4v-4"></path></svg>
+                <span>Full</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="develop-preview-stage">
+          <div class="develop-preview-device-wrap">
+            <div class="develop-preview-device-shell" data-device="mobile-portrait" id="developPreviewDeviceShell">
+              <div class="develop-preview-device-frame">
+                <div class="develop-preview-device-screen">
+                  <div class="develop-preview-device-scroll">
+                    <div class="develop-preview-page__viewport">
+                      ${pageMarkup}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
+    <script>
+      (function () {
+        const shell = document.getElementById('developPreviewDeviceShell');
+        const buttons = Array.from(document.querySelectorAll('.develop-preview-device-btn'));
+        if (!shell || !buttons.length) return;
+        buttons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const device = button.getAttribute('data-device') || 'mobile-portrait';
+            shell.setAttribute('data-device', device);
+            buttons.forEach((candidate) => {
+              const active = candidate === button;
+              candidate.classList.toggle('is-active', active);
+              candidate.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+          });
+        });
+      }());
+    </script>
   </body>
 </html>`;
     const blob = new Blob([html], { type: 'text/html' });
