@@ -4957,7 +4957,9 @@ App.develop = (function () {
   function buildModularPageLayoutIconMarkup(layout, baseClass = 'develop-layout-picker-icon') {
     const meta = getModularPageLayoutMeta(layout);
     const iconClass = `${baseClass} ${baseClass}--${safeText(meta.value)}`;
-    const cells = meta.columns.map(() => '<span></span>').join('');
+    const cells = meta.columns
+      .map((column) => `<span style="flex:${Math.max(1, Number(column.span) || 1)} 1 0;"></span>`)
+      .join('');
     return `<span class="${iconClass}">${cells}</span>`;
   }
 
