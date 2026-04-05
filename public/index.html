@@ -5307,15 +5307,21 @@
             </button>
           </div>
           <div id="developModulesEditorBody" class="develop-template-section-body">
-            <form id="developModulesForm" class="stack-form">
+            <form id="developModulesForm" class="stack-form develop-modules-studio-form">
               <input id="developModulesIdInput" type="hidden" />
-              <div class="grid-form">
-                <input id="developModulesNameInput" type="text" placeholder="Module name" />
-                <select id="developModulesTypeSelect"></select>
+              <div class="develop-modules-studio-intro">
+                <label class="develop-modules-studio-row">
+                  <span>Module Name</span>
+                  <input id="developModulesNameInput" type="text" placeholder="Module name" />
+                </label>
+                <label class="develop-modules-studio-row">
+                  <span>Module Type</span>
+                  <select id="developModulesTypeSelect"></select>
+                </label>
               </div>
               <div id="developModulesTypeHelp" class="meta"></div>
               <div id="developModulesSettingsFields" class="grid-form"></div>
-              <div class="page-heading-actions" style="justify-content:flex-start;">
+              <div class="page-heading-actions develop-modules-studio-actions" style="justify-content:flex-start;">
                 <button type="submit">Save Module</button>
                 <button id="developModulesResetBtn" type="button">Reset</button>
               </div>
