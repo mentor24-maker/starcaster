@@ -4957,12 +4957,24 @@ App.develop = (function () {
   function buildModularPageLayoutIconMarkup(layout, baseClass = 'develop-layout-picker-icon') {
     const meta = getModularPageLayoutMeta(layout);
     const iconClass = `${baseClass} ${baseClass}--${safeText(meta.value)}`;
-    const cells = meta.columns
-      .map((column) => `<span style="display:block; flex:${Math.max(1, Number(column.span) || 1)} 1 0; min-width:0; min-height:36px; border-radius:6px; border:1px solid #444; background:rgba(15, 79, 143, 0.18);"></span>`)
-      .join('');
     if (baseClass === 'develop-layout-picker-icon') {
-      return `<span class="${iconClass}" style="display:flex; flex-direction:row; align-items:stretch; justify-content:stretch; gap:0.42rem; width:88%; min-height:36px; margin:0 auto;">${cells}</span>`;
+      const width = 240;
+      const height = 44;
+      const paddingX = 8;
+      const gap = 8;
+      const totalFlex = meta.columns.reduce((sum, column) => sum + Math.max(1, Number(column.span) || 1), 0);
+      const usableWidth = width - (paddingX * 2) - (gap * Math.max(0, meta.columns.length - 1));
+      let currentX = paddingX;
+      const rects = meta.columns.map((column) => {
+        const flex = Math.max(1, Number(column.span) || 1);
+        const rectWidth = (usableWidth * flex) / totalFlex;
+        const rect = `<rect x="${currentX}" y="4" width="${rectWidth}" height="36" rx="6" ry="6" fill="rgba(15, 79, 143, 0.18)" stroke="#444" stroke-width="1"></rect>`;
+        currentX += rectWidth + gap;
+        return rect;
+      }).join('');
+      return `<span class="${iconClass}" style="display:block; width:88%; height:44px; margin:0 auto;"><svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">${rects}</svg></span>`;
     }
+    const cells = meta.columns.map(() => '<span></span>').join('');
     return `<span class="${iconClass}">${cells}</span>`;
   }
 
