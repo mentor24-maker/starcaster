@@ -4691,28 +4691,25 @@ th {
 }
 
 .develop-modules-studio-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: flex-start;
-  flex-wrap: nowrap;
   margin-left: calc(var(--modules-label-col) + var(--modules-row-gap));
-  gap: 0.75rem;
-  width: auto;
-  max-width: max-content;
+  width: min(760px, 100%);
+  max-width: 760px;
 }
 
 .develop-modules-studio-actions button {
-  width: auto;
+  width: 100%;
   min-width: 0;
   flex: 0 0 auto;
   white-space: nowrap;
 }
 
 .develop-modules-studio-actions button[type="submit"] {
-  min-width: 0;
-  width: auto;
-  padding-left: 100px;
-  padding-right: 100px;
+  width: 100%;
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
 }
 
 @media (max-width: 900px) {
