@@ -184,6 +184,37 @@ App.develop = (function () {
       ],
     },
     {
+      value: 'button',
+      label: 'Button',
+      description: 'A clickable CTA button with label, link, style, sizing, and alignment controls.',
+      starterName: 'Button',
+      defaults: {
+        label: 'Learn More',
+        ctaId: '',
+        linkUrl: '',
+        style: 'solid',
+        size: 'md',
+        align: 'left',
+        backgroundColor: '#0b82d4',
+        textColor: '#ffffff',
+        borderRadius: 14,
+        fullWidth: false,
+        openInNewTab: false,
+      },
+      fields: [
+        { key: 'label', label: 'Label', control: 'text', placeholder: 'Button label', contentSource: 'cta', contentSettingKey: 'ctaId', contentLabel: 'Saved CTA' },
+        { key: 'linkUrl', label: 'Link URL', control: 'text', placeholder: 'https://...' },
+        { key: 'style', label: 'Style', control: 'select', options: ['solid', 'outline', 'ghost', 'link'] },
+        { key: 'size', label: 'Size', control: 'select', options: ['sm', 'md', 'lg'] },
+        { key: 'align', label: 'Alignment', control: 'select', options: ['left', 'center', 'right'] },
+        { key: 'backgroundColor', label: 'Background Color', control: 'color' },
+        { key: 'textColor', label: 'Text Color', control: 'color' },
+        { key: 'borderRadius', label: 'Border Radius', control: 'number', min: 0, max: 40, step: 1 },
+        { key: 'fullWidth', label: 'Full Width', control: 'checkbox' },
+        { key: 'openInNewTab', label: 'Open In New Tab', control: 'checkbox' },
+      ],
+    },
+    {
       value: 'form',
       label: 'Form',
       description: 'Embed or style a lead-capture form module with form selection and CTA settings.',
@@ -335,6 +366,7 @@ App.develop = (function () {
   let draggedNewPageSectionLayout = '';
   let draggedNewPageSectionLayoutClearTimer = null;
   let activePageLayoutPointerDrag = null;
+  let suppressLayoutTileClickUntil = 0;
   let activePageModulePointerDrag = null;
   let activePlacedPageModulePointerDrag = null;
   let activeModularPageModulePicker = null;
@@ -3473,6 +3505,10 @@ App.develop = (function () {
     if (type === 'form') {
       return `${safeText(settings.title) || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(settings.headlineId))?.label || 'Form'} · ${safeText(getSavedFormName(settings.formId)) || 'No form linked'}`;
     }
+    if (type === 'button') {
+      const ctaLabel = getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(settings.ctaId))?.label || '';
+      return `${safeText(settings.label) || ctaLabel || 'Button'} · ${safeText(settings.style) || 'solid'} · ${safeText(settings.linkUrl) || 'No link set'}`;
+    }
     if (type === 'image') {
       const imageAsset = getAssetById(settings.imageAssetId);
       const imageLabel = imageAsset
@@ -5037,6 +5073,8 @@ App.develop = (function () {
 
   function getModularModuleIcon(type) {
     switch (safeText(type)) {
+      case 'button':
+        return 'Btn';
       case 'eyebrow':
         return 'Ey';
       case 'headline':
@@ -5260,6 +5298,24 @@ App.develop = (function () {
       const form = savedForms.find((item) => String(item?.id) === linkedId);
       return { title: safeText(form?.heading) || 'Form', submitLabel: safeText(form?.submitLabel) || 'Submit Form', form };
     }
+    if (type === 'button') {
+      const ctaText = safeText(module?.settings?.label)
+        || getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(module?.settings?.ctaId))?.content
+        || getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(module?.settings?.ctaId))?.label
+        || 'Learn More';
+      return {
+        label: ctaText,
+        linkUrl: safeText(module?.settings?.linkUrl),
+        style: safeText(module?.settings?.style) || 'solid',
+        size: safeText(module?.settings?.size) || 'md',
+        align: safeText(module?.settings?.align) || 'left',
+        backgroundColor: safeText(module?.settings?.backgroundColor) || '#0b82d4',
+        textColor: safeText(module?.settings?.textColor) || '#ffffff',
+        borderRadius: Number(module?.settings?.borderRadius) || 14,
+        fullWidth: Boolean(module?.settings?.fullWidth),
+        openInNewTab: Boolean(module?.settings?.openInNewTab),
+      };
+    }
     if (type === 'image' || type === 'logo-wide' || type === 'logo-square') {
       const settingsAssetId = safeText(module?.settings?.imageAssetId);
       const resolvedAssetId = settingsAssetId || assetId;
@@ -5364,6 +5420,32 @@ App.develop = (function () {
               : [{ key: 'first_name', label: 'First Name', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'email', required: true }];
             const runtimeFieldMarkup = formFields.map((field, fieldIndex) => `<input name="${safeText(field?.key) || `field_${fieldIndex}`}" type="${safeText(field?.type) || 'text'}" placeholder="${safeText(field?.label) || 'Field'}${field?.required ? ' *' : ''}"${field?.required ? ' required' : ''}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} />`).join('');
             return `<aside${editable('develop-template-form-card')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}><h3>${escapeHtml(content?.title || titleText || 'Form')}</h3>${runtimeFieldMarkup}<button type="button">${escapeHtml(content?.submitLabel || 'Submit Form')}</button></aside>`;
+          }
+          if (module.type === 'button') {
+            const sizeMap = {
+              sm: 'padding:0.55rem 1rem;font-size:0.92rem;',
+              md: 'padding:0.8rem 1.35rem;font-size:1rem;',
+              lg: 'padding:1rem 1.7rem;font-size:1.08rem;',
+            };
+            const align = ['left', 'center', 'right'].includes(safeText(content?.align)) ? safeText(content.align) : 'left';
+            const styleMode = safeText(content?.style) || 'solid';
+            const backgroundColor = safeText(content?.backgroundColor) || '#0b82d4';
+            const textColor = safeText(content?.textColor) || '#ffffff';
+            const radius = Number(content?.borderRadius) || 14;
+            let buttonStyle = `${sizeMap[safeText(content?.size)] || sizeMap.md}border-radius:${radius}px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;`;
+            if (styleMode === 'outline') {
+              buttonStyle += `background:transparent;color:${textColor};border:2px solid ${backgroundColor};`;
+            } else if (styleMode === 'ghost') {
+              buttonStyle += `background:rgba(11,130,212,0.08);color:${backgroundColor};border:1px solid transparent;`;
+            } else if (styleMode === 'link') {
+              buttonStyle += `background:transparent;color:${backgroundColor};border:none;padding-left:0;padding-right:0;border-radius:0;`;
+            } else {
+              buttonStyle += `background:${backgroundColor};color:${textColor};border:1px solid ${backgroundColor};`;
+            }
+            if (content?.fullWidth) buttonStyle += 'width:100%;';
+            const href = safeText(content?.linkUrl) || '#';
+            const targetAttrs = content?.openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+            return `<div class="develop-template-button-row" style="text-align:${align};"><a href="${escapeHtml(href)}"${targetAttrs}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} style="${buttonStyle}">${escapeHtml(content?.label || 'Learn More')}</a></div>`;
           }
           if (module.type === 'image' || module.type === 'logo-wide' || module.type === 'logo-square') {
             const imageMarkup = content?.assetId
@@ -8251,6 +8333,7 @@ App.develop = (function () {
     } else {
       clearModularPageWorkspaceIndicators();
     }
+    suppressLayoutTileClickUntil = Date.now() + 300;
     activePageLayoutPointerDrag = null;
   }
 
@@ -10979,6 +11062,7 @@ App.develop = (function () {
           workspace?.classList.remove('is-drag-over');
         });
         tile.addEventListener('click', () => {
+          if (Date.now() < suppressLayoutTileClickUntil) return;
           if (!modularPageTemplateDraft) {
             modularPageTemplateDraft = buildEmptyLandingRecord('Modular Page Template', selectedTemplateId || LANDING_TEMPLATES[0].id);
             modularPageTemplateDraft.templateKind = 'modular';
