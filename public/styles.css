@@ -4560,6 +4560,12 @@ th {
   align-items: center;
 }
 
+.develop-modules-studio-row > :not(span) {
+  width: min(760px, 100%);
+  max-width: 760px;
+  justify-self: start;
+}
+
 .develop-modules-studio-row > span {
   font-weight: 700;
   color: #1f2f44;
@@ -4607,6 +4613,8 @@ th {
 
 #developModulesForm input[type="color"] {
   min-height: 46px;
+  width: min(220px, 100%);
+  max-width: 220px;
 }
 
 #developModulesForm .develop-richtext-toolbar {
@@ -4621,6 +4629,17 @@ th {
 #developModulesForm .develop-inline-asset-preview {
   border-color: #999;
   background: #f7fbff;
+}
+
+#developModulesForm .develop-richtext-editor,
+#developModulesForm textarea {
+  max-width: 760px;
+}
+
+#developModulesForm .develop-inline-asset-nav,
+#developModulesForm .develop-inline-asset-preview,
+#developModulesForm .develop-inline-asset-status {
+  max-width: 760px;
 }
 
 #developModulesForm .develop-inline-asset-nav button,
