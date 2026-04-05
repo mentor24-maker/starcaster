@@ -2943,6 +2943,9 @@ App.develop = (function () {
     definition.fields.forEach((field) => {
       const wrap = document.createElement('label');
       wrap.className = field.control === 'textarea' ? 'stack-form' : 'stack-form';
+      if (prefix === 'developModuleField') {
+        wrap.classList.add('develop-modules-studio-row');
+      }
       const label = document.createElement('span');
       label.textContent = field.label;
       wrap.appendChild(label);
@@ -2956,6 +2959,9 @@ App.develop = (function () {
       if (field.contentSource) {
         const pickerWrap = document.createElement('label');
         pickerWrap.className = 'stack-form';
+        if (prefix === 'developModuleField') {
+          pickerWrap.classList.add('develop-modules-studio-row');
+        }
         const pickerLabel = document.createElement('span');
         pickerLabel.textContent = safeText(field.contentLabel) || 'Saved Content';
         pickerWrap.appendChild(pickerLabel);

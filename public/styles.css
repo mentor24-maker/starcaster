@@ -4542,6 +4542,120 @@ th {
   object-fit: contain;
 }
 
+.develop-modules-studio-form {
+  --modules-label-col: 190px;
+  --modules-row-gap: 0.9rem;
+  gap: 0.9rem;
+}
+
+.develop-modules-studio-intro {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.develop-modules-studio-row {
+  display: grid;
+  grid-template-columns: var(--modules-label-col) minmax(0, 1fr);
+  gap: var(--modules-row-gap);
+  align-items: center;
+}
+
+.develop-modules-studio-row > span {
+  font-weight: 700;
+  color: #1f2f44;
+  justify-self: end;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.develop-modules-studio-row:has(textarea),
+.develop-modules-studio-row:has(.develop-richtext-editor),
+.develop-modules-studio-row:has(.develop-inline-asset-preview) {
+  align-items: start;
+}
+
+.develop-modules-studio-row:has(textarea) > span,
+.develop-modules-studio-row:has(.develop-richtext-editor) > span,
+.develop-modules-studio-row:has(.develop-inline-asset-preview) > span {
+  padding-top: 0.75rem;
+}
+
+#developModulesTypeHelp {
+  margin-left: calc(var(--modules-label-col) + var(--modules-row-gap));
+  color: #365271;
+}
+
+#developModulesSettingsFields {
+  display: grid;
+  gap: 0.7rem;
+}
+
+#developModulesForm input[type="text"],
+#developModulesForm input[type="number"],
+#developModulesForm input[type="url"],
+#developModulesForm input[type="color"],
+#developModulesForm select,
+#developModulesForm textarea,
+#developModulesForm .develop-richtext-editor,
+#developModulesForm .develop-inline-asset-status,
+#developModulesForm .develop-inline-asset-preview {
+  border: 1px solid #444;
+  background: #fff;
+  box-shadow: none;
+}
+
+#developModulesForm input[type="color"] {
+  min-height: 46px;
+}
+
+#developModulesForm .develop-richtext-toolbar {
+  margin-bottom: 0.35rem;
+}
+
+#developModulesForm .develop-inline-asset-status {
+  border-style: solid;
+  color: #243b55;
+}
+
+#developModulesForm .develop-inline-asset-preview {
+  border-color: #999;
+  background: #f7fbff;
+}
+
+#developModulesForm .develop-inline-asset-nav button,
+#developModulesForm .develop-richtext-tool {
+  border: 1px solid #444;
+}
+
+.develop-modules-studio-actions {
+  margin-left: calc(var(--modules-label-col) + var(--modules-row-gap));
+  gap: 0.75rem;
+}
+
+.develop-modules-studio-actions button[type="submit"] {
+  min-width: 0;
+  width: auto;
+  padding-left: 100px;
+  padding-right: 100px;
+}
+
+@media (max-width: 900px) {
+  .develop-modules-studio-row {
+    grid-template-columns: 1fr;
+  }
+
+  .develop-modules-studio-row > span {
+    justify-self: start;
+    text-align: left;
+    padding-top: 0;
+  }
+
+  #developModulesTypeHelp,
+  .develop-modules-studio-actions {
+    margin-left: 0;
+  }
+}
+
 .develop-visual-editor-panel-wrap {
   margin-top: 1rem;
   padding: 1rem;
