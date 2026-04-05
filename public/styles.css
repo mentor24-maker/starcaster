@@ -3014,15 +3014,15 @@ th {
 }
 
 .develop-row-layout-picker .develop-layout-picker-icon {
-  width: 72%;
+  width: 82%;
   max-width: none;
   min-height: 30px;
-  grid-auto-flow: column;
   align-items: center;
-  justify-content: center;
+  justify-content: stretch;
 }
 
 .develop-row-layout-picker .develop-layout-picker-icon span {
+  width: 100%;
   min-height: 30px;
 }
 
