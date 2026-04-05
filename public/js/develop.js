@@ -9192,8 +9192,7 @@ App.develop = (function () {
         padding: 24px;
       }
       .develop-preview-page__shell {
-        max-width: 1440px;
-        margin: 0 auto;
+        width: 100%;
       }
       .develop-preview-page__bar {
         display: flex;
