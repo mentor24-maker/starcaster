@@ -9183,7 +9183,7 @@ App.develop = (function () {
       body {
         margin: 0;
         min-height: 100vh;
-        background: linear-gradient(180deg, #eff6fc 0%, #dfeaf6 100%);
+        background: #f5f8fb;
         color: #173c61;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -9233,7 +9233,7 @@ App.develop = (function () {
       .develop-preview-page__controls {
         display: flex;
         align-items: center;
-        gap: 0.8rem;
+        gap: 0.6rem;
         flex-wrap: wrap;
         justify-content: flex-end;
       }
@@ -9248,19 +9248,20 @@ App.develop = (function () {
       .develop-preview-device-bar {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.7rem;
+        gap: 0.5rem;
       }
       .develop-preview-device-btn {
         display: inline-flex;
         align-items: center;
-        gap: 0.55rem;
+        gap: 0.45rem;
         border: 1px solid rgba(15, 79, 143, 0.16);
         background: #ffffff;
         color: #173c61;
         border-radius: 999px;
-        padding: 0.6rem 0.9rem;
+        padding: 0.48rem 0.74rem;
         font: inherit;
         font-weight: 700;
+        font-size: 0.92rem;
         cursor: pointer;
         box-shadow: 0 8px 18px rgba(15, 55, 90, 0.06);
         transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, color 140ms ease, border-color 140ms ease;
@@ -9275,8 +9276,8 @@ App.develop = (function () {
         color: #f7fbff;
       }
       .develop-preview-device-btn svg {
-        width: 18px;
-        height: 18px;
+        width: 16px;
+        height: 16px;
         stroke: currentColor;
         fill: none;
         stroke-width: 1.8;
@@ -9415,7 +9416,7 @@ App.develop = (function () {
         width: 100%;
         height: 100%;
         overflow: auto;
-        background: linear-gradient(180deg, #eff6fc 0%, #dfeaf6 100%);
+        background: #ffffff;
       }
       .develop-preview-device-shell[data-device="full"] .develop-preview-device-scroll {
         min-height: calc(100vh - 220px);
@@ -9426,10 +9427,10 @@ App.develop = (function () {
       }
       .develop-template-canvas {
         min-height: calc(100vh - 120px);
-        border-radius: 18px;
-        padding: 24px;
-        background: rgba(255, 255, 255, 0.84);
-        box-shadow: 0 16px 40px rgba(15, 55, 90, 0.12);
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+        box-shadow: none;
       }
       .develop-preview-device-shell[data-device="mobile-portrait"] .develop-template-canvas,
       .develop-preview-device-shell[data-device="mobile-landscape"] .develop-template-canvas,
@@ -9447,10 +9448,10 @@ App.develop = (function () {
         gap: 1rem;
       }
       .develop-modular-page-section {
-        border: 1px solid rgba(15, 79, 143, 0.16);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.82);
-        padding: 1rem;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        padding: 0;
       }
       .develop-modular-page-columns {
         display: grid;
@@ -9466,7 +9467,7 @@ App.develop = (function () {
         place-items: center;
         border: 2px dashed rgba(15, 79, 143, 0.18);
         border-radius: 12px;
-        background: rgba(240, 248, 255, 0.58);
+        background: rgba(240, 248, 255, 0.32);
         color: #587592;
         font-weight: 700;
         text-align: center;
