@@ -193,19 +193,19 @@ App.develop = (function () {
         ctaId: '',
         linkUrl: '',
         style: 'solid',
-        size: 'md',
+        size: 'medium',
         align: 'left',
         backgroundColor: '#0b82d4',
         textColor: '#ffffff',
-        borderRadius: 14,
+        borderRadius: 20,
         fullWidth: false,
         openInNewTab: false,
       },
       fields: [
-        { key: 'label', label: 'Label', control: 'text', placeholder: 'Button label', contentSource: 'cta', contentSettingKey: 'ctaId', contentLabel: 'Saved CTA' },
+        { key: 'label', label: 'Label', control: 'text', placeholder: 'Button label', contentSource: 'cta', contentSettingKey: 'ctaId', contentLabel: 'Incentive' },
         { key: 'linkUrl', label: 'Link URL', control: 'text', placeholder: 'https://...' },
         { key: 'style', label: 'Style', control: 'select', options: ['solid', 'outline', 'ghost', 'link'] },
-        { key: 'size', label: 'Size', control: 'select', options: ['sm', 'md', 'lg'] },
+        { key: 'size', label: 'Size', control: 'select', options: ['small', 'medium', 'large'] },
         { key: 'align', label: 'Alignment', control: 'select', options: ['left', 'center', 'right'] },
         { key: 'backgroundColor', label: 'Background Color', control: 'color' },
         { key: 'textColor', label: 'Text Color', control: 'color' },
@@ -5429,16 +5429,16 @@ App.develop = (function () {
           }
           if (module.type === 'button') {
             const sizeMap = {
-              sm: 'padding:0.55rem 1rem;font-size:0.92rem;',
-              md: 'padding:0.8rem 1.35rem;font-size:1rem;',
-              lg: 'padding:1rem 1.7rem;font-size:1.08rem;',
+              small: 'padding:0.55rem 1rem;font-size:0.92rem;',
+              medium: 'padding:0.8rem 1.35rem;font-size:1rem;',
+              large: 'padding:1rem 1.7rem;font-size:1.08rem;',
             };
             const align = ['left', 'center', 'right'].includes(safeText(content?.align)) ? safeText(content.align) : 'left';
             const styleMode = safeText(content?.style) || 'solid';
             const backgroundColor = safeText(content?.backgroundColor) || '#0b82d4';
             const textColor = safeText(content?.textColor) || '#ffffff';
             const radius = Number(content?.borderRadius) || 14;
-            let buttonStyle = `${sizeMap[safeText(content?.size)] || sizeMap.md}border-radius:${radius}px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;`;
+            let buttonStyle = `${sizeMap[safeText(content?.size)] || sizeMap.medium}border-radius:${radius}px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;`;
             if (styleMode === 'outline') {
               buttonStyle += `background:transparent;color:${textColor};border:2px solid ${backgroundColor};`;
             } else if (styleMode === 'ghost') {
