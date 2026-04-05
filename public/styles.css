@@ -3013,6 +3013,18 @@ th {
   padding: 0.35rem;
 }
 
+.develop-row-layout-picker .develop-layout-picker-icon {
+  max-width: 112px;
+  min-height: 30px;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.develop-row-layout-picker .develop-layout-picker-icon span {
+  min-height: 30px;
+}
+
 .develop-layout-tile-ghost {
   position: fixed;
   z-index: 10000;
