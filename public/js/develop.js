@@ -726,6 +726,60 @@ App.develop = (function () {
     return text;
   }
 
+  function isDirectVideoMediaUrl(url) {
+    const text = safeText(url);
+    if (!text) return false;
+    if (text.startsWith('/api/assets/drive-file/')) return true;
+    if (text.includes('.public.blob.vercel-storage.com/')) return true;
+    return /(\.mp4|\.webm|\.ogg|\.mov|\.m4v)(\?|#|$)/i.test(text);
+  }
+
+  function getEmbeddableVideoUrl(url) {
+    const text = safeText(url);
+    if (!text) return '';
+    try {
+      const parsed = new URL(text, window.location.origin);
+      const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+      if (host === 'youtube.com' || host === 'm.youtube.com') {
+        const id = parsed.searchParams.get('v');
+        return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+      }
+      if (host === 'youtu.be') {
+        const id = parsed.pathname.replace(/^\/+/, '').split('/')[0];
+        return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+      }
+      if (host === 'youtube-nocookie.com') {
+        return text;
+      }
+      if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        const id = parts.pop();
+        return id ? `https://player.vimeo.com/video/${encodeURIComponent(id)}` : '';
+      }
+    } catch {
+      return '';
+    }
+    return '';
+  }
+
+  function buildResponsiveVideoMarkup(content, options = {}) {
+    const assetUrl = safeText(content?.assetUrl);
+    const posterAttr = content?.posterUrl ? ` poster="${escapeHtml(content.posterUrl)}"` : '';
+    const autoplayAttr = content?.autoplay ? ' autoplay' : '';
+    const mutedAttr = content?.muted ? ' muted' : '';
+    const controlsAttr = content?.controls ? ' controls' : '';
+    const className = safeText(options.className);
+    const classAttr = className ? ` class="${escapeHtml(className)}"` : '';
+    const embedUrl = getEmbeddableVideoUrl(assetUrl);
+    if (embedUrl) {
+      return `<iframe${classAttr} src="${escapeHtml(embedUrl)}" title="${escapeHtml(content?.assetName || 'Video')}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+    }
+    if (isDirectVideoMediaUrl(assetUrl)) {
+      return `<video${classAttr} src="${escapeHtml(assetUrl)}"${posterAttr}${autoplayAttr}${mutedAttr}${controlsAttr}></video>`;
+    }
+    return `<div class="develop-template-empty-slot">${escapeHtml(content?.assetName || 'No video selected')}</div>`;
+  }
+
   function getAssetsByType(assetType) {
     return (Array.isArray(state.assets) ? state.assets : []).filter(
       (asset) => safeText(asset?.assetType) === safeText(assetType)
@@ -5235,13 +5289,7 @@ App.develop = (function () {
               const height = Number(heightPart) || 9;
               styleBits.push(`aspect-ratio:${width}/${height};`);
             }
-            const posterAttr = content?.posterUrl ? ` poster="${escapeHtml(content.posterUrl)}"` : '';
-            const autoplayAttr = content?.autoplay ? ' autoplay' : '';
-            const mutedAttr = content?.muted ? ' muted' : '';
-            const controlsAttr = content?.controls ? ' controls' : '';
-            const videoMarkup = content?.assetUrl
-              ? `<video src="${escapeHtml(content.assetUrl)}"${posterAttr}${autoplayAttr}${mutedAttr}${controlsAttr}></video>`
-              : `<div class="develop-template-empty-slot">${escapeHtml(content?.assetName || 'No video selected')}</div>`;
+            const videoMarkup = buildResponsiveVideoMarkup(content);
             return `<div${editable('develop-template-video-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${styleBits.length ? ` style="${styleBits.join(' ')}"` : ''}>${videoMarkup}</div>`;
           }
           if (module.type === 'table') {
@@ -5267,7 +5315,7 @@ App.develop = (function () {
                 } else if (cell.cellType === 'video') {
                   const videoUrl = cell.videoAssetId ? getLandingPageAssetUrl(cell.videoAssetId) : '';
                   cellInner = videoUrl
-                    ? `<video src="${escapeHtml(videoUrl)}" controls></video>`
+                    ? buildResponsiveVideoMarkup({ assetUrl: videoUrl, assetName: 'Video', controls: true }, { className: 'develop-table-video' })
                     : '<div class="develop-template-empty-slot">No video</div>';
                 }
                 const cellStyle = `padding:${Number(content?.cellPadding) || 14}px;border:${Number(content?.borderThickness) || 1}px solid ${escapeHtml(safeText(content?.borderColor) || '#d6e6f5')};`;
