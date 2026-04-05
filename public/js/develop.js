@@ -9202,6 +9202,16 @@ App.develop = (function () {
         gap: 1rem;
         margin-bottom: 18px;
       }
+      .develop-preview-page__bar-main {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .develop-preview-page__bar-copy {
+        min-width: 0;
+      }
       .develop-preview-page__title {
         margin: 0;
         font-size: 1.4rem;
@@ -9223,17 +9233,12 @@ App.develop = (function () {
       .develop-preview-page__controls {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: 18px;
-        padding: 14px 16px;
-        border: 1px solid rgba(15, 79, 143, 0.14);
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.74);
-        box-shadow: 0 12px 28px rgba(15, 55, 90, 0.08);
+        gap: 0.8rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
       }
       .develop-preview-page__control-label {
-        margin: 0;
+        margin: 0 0 0.35rem;
         font-size: 0.78rem;
         font-weight: 800;
         letter-spacing: 0.08em;
@@ -9558,9 +9563,14 @@ App.develop = (function () {
           flex-direction: column;
           align-items: flex-start;
         }
-        .develop-preview-page__controls {
+        .develop-preview-page__bar-main {
+          width: 100%;
           flex-direction: column;
-          align-items: stretch;
+          align-items: flex-start;
+        }
+        .develop-preview-page__controls {
+          width: 100%;
+          justify-content: flex-start;
         }
         .develop-modular-page-columns {
           grid-template-columns: 1fr !important;
@@ -9572,38 +9582,40 @@ App.develop = (function () {
     <div class="develop-preview-page">
       <div class="develop-preview-page__shell">
         <div class="develop-preview-page__bar">
-          <div>
-            <h1 class="develop-preview-page__title">${escapeHtml(title)}</h1>
-            <p class="develop-preview-page__hint">Full-page modular template preview</p>
-          </div>
-          <button type="button" class="develop-preview-page__close" onclick="window.close()">Close Preview</button>
-        </div>
-        <div class="develop-preview-page__controls">
-          <div>
-            <p class="develop-preview-page__control-label">Preview Mode</p>
-            <div class="develop-preview-device-bar" role="tablist" aria-label="Preview device modes">
-              <button type="button" class="develop-preview-device-btn is-active" data-device="mobile-portrait" role="tab" aria-selected="true">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path></svg>
-                <span>Mobile</span>
-              </button>
-              <button type="button" class="develop-preview-device-btn" data-device="mobile-landscape" role="tab" aria-selected="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="10" rx="2.5"></rect><path d="M18.5 11v2"></path></svg>
-                <span>Landscape</span>
-              </button>
-              <button type="button" class="develop-preview-device-btn" data-device="tablet" role="tab" aria-selected="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="2.5" width="13" height="19" rx="2.4"></rect><path d="M11 18.5h2"></path></svg>
-                <span>Tablet</span>
-              </button>
-              <button type="button" class="develop-preview-device-btn" data-device="desktop" role="tab" aria-selected="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.8"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
-                <span>Desktop</span>
-              </button>
-              <button type="button" class="develop-preview-device-btn" data-device="full" role="tab" aria-selected="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4"></path><path d="M16 4h4v4"></path><path d="M8 20H4v-4"></path><path d="M16 20h4v-4"></path></svg>
-                <span>Full</span>
-              </button>
+          <div class="develop-preview-page__bar-main">
+            <div class="develop-preview-page__bar-copy">
+              <h1 class="develop-preview-page__title">${escapeHtml(title)}</h1>
+              <p class="develop-preview-page__hint">Full-page modular template preview</p>
+            </div>
+            <div class="develop-preview-page__controls">
+              <div>
+                <p class="develop-preview-page__control-label">Preview Mode</p>
+                <div class="develop-preview-device-bar" role="tablist" aria-label="Preview device modes">
+                  <button type="button" class="develop-preview-device-btn is-active" data-device="mobile-portrait" role="tab" aria-selected="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path></svg>
+                    <span>Mobile</span>
+                  </button>
+                  <button type="button" class="develop-preview-device-btn" data-device="mobile-landscape" role="tab" aria-selected="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="10" rx="2.5"></rect><path d="M18.5 11v2"></path></svg>
+                    <span>Landscape</span>
+                  </button>
+                  <button type="button" class="develop-preview-device-btn" data-device="tablet" role="tab" aria-selected="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="2.5" width="13" height="19" rx="2.4"></rect><path d="M11 18.5h2"></path></svg>
+                    <span>Tablet</span>
+                  </button>
+                  <button type="button" class="develop-preview-device-btn" data-device="desktop" role="tab" aria-selected="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.8"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
+                    <span>Desktop</span>
+                  </button>
+                  <button type="button" class="develop-preview-device-btn" data-device="full" role="tab" aria-selected="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4"></path><path d="M16 4h4v4"></path><path d="M8 20H4v-4"></path><path d="M16 20h4v-4"></path></svg>
+                    <span>Full</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+          <button type="button" class="develop-preview-page__close" onclick="window.close()">Close Preview</button>
         </div>
         <div class="develop-preview-stage">
           <div class="develop-preview-device-wrap">
