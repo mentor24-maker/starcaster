@@ -3011,14 +3011,16 @@ th {
 .develop-row-layout-picker__tile {
   min-height: 66px;
   padding: 0.35rem;
+  justify-items: stretch;
 }
 
 .develop-row-layout-picker .develop-layout-picker-icon {
-  width: 88%;
+  width: 100%;
   max-width: none;
   min-height: 36px;
   align-items: center;
   justify-content: stretch;
+  justify-self: stretch;
 }
 
 .develop-row-layout-picker .develop-layout-picker-icon span {
