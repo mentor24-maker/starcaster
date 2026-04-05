@@ -4954,6 +4954,62 @@ App.develop = (function () {
       .join('');
   }
 
+  function getModularPageLayoutColumnIds(layout) {
+    return getModularPageLayoutMeta(layout).columns.map((column) => safeText(column.id) || 'col1');
+  }
+
+  function remapSectionToLayout(section, nextLayout) {
+    const normalizedNextLayout = getModularPageLayoutMeta(nextLayout).value;
+    const currentColumnIds = getModularPageLayoutColumnIds(section.layout);
+    const nextColumnIds = getModularPageLayoutColumnIds(normalizedNextLayout);
+    const moduleBuckets = currentColumnIds.map((columnId) => section.modules.filter((module) => safeText(module.column) === columnId));
+    const settingsBuckets = currentColumnIds.map((columnId) => ({ ...getSectionContainerSettings(section, columnId) }));
+
+    while (moduleBuckets.length > nextColumnIds.length) {
+      let removableIndex = -1;
+      for (let index = moduleBuckets.length - 1; index >= 0; index -= 1) {
+        if (!moduleBuckets[index].length) {
+          removableIndex = index;
+          break;
+        }
+      }
+      if (removableIndex === -1) {
+        const sourceIndex = moduleBuckets.length - 1;
+        const targetIndex = Math.max(0, sourceIndex - 1);
+        moduleBuckets[targetIndex].push(...moduleBuckets[sourceIndex]);
+        removableIndex = sourceIndex;
+      }
+      moduleBuckets.splice(removableIndex, 1);
+      settingsBuckets.splice(removableIndex, 1);
+    }
+
+    while (moduleBuckets.length < nextColumnIds.length) {
+      moduleBuckets.push([]);
+      settingsBuckets.push(createDefaultContainerSettings());
+    }
+
+    const nextModules = [];
+    const nextContainerSettings = {};
+    nextColumnIds.forEach((columnId, index) => {
+      moduleBuckets[index].forEach((module) => {
+        nextModules.push({
+          ...module,
+          column: columnId,
+        });
+      });
+      nextContainerSettings[columnId] = settingsBuckets[index]
+        ? { ...settingsBuckets[index] }
+        : createDefaultContainerSettings();
+    });
+
+    return {
+      ...section,
+      layout: normalizedNextLayout,
+      containerSettings: nextContainerSettings,
+      modules: nextModules,
+    };
+  }
+
   function getModularModuleIcon(type) {
     switch (safeText(type)) {
       case 'eyebrow':
@@ -8434,6 +8490,7 @@ App.develop = (function () {
     const section = sections[sectionIndex];
     if (!section) return;
     const settings = { ...getSectionRowSettings(section) };
+    const activeLayout = getModularPageLayoutMeta(section.layout).value;
     closeModularRowEditor();
     const panel = document.createElement('div');
     panel.className = 'develop-module-editor-modal';
@@ -8448,6 +8505,16 @@ App.develop = (function () {
           <button type="button" class="develop-module-editor-modal__close">Close</button>
         </div>
         <div class="develop-module-editor-modal__body">
+          <div class="stack-form" style="margin-bottom:1rem;">
+            <span>Layout</span>
+            <div id="developRowLayoutPicker" class="develop-row-layout-picker">
+              ${MODULAR_PAGE_LAYOUT_OPTIONS.map((option) => `
+                <button type="button" class="develop-layout-tile develop-row-layout-picker__tile${safeText(option.value) === activeLayout ? ' is-selected' : ''}" data-row-layout-option="${escapeHtml(safeText(option.value))}" title="Use ${escapeHtml(safeText(option.value))} layout" aria-label="Use ${escapeHtml(safeText(option.value))} layout">
+                  <span class="develop-layout-picker-icon develop-layout-picker-icon--${escapeHtml(safeText(option.value))}">${getModularPageLayoutVisual(option.value)}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
           <div class="grid-form">
             <label class="stack-form">
               <span>Margin</span>
@@ -8481,6 +8548,7 @@ App.develop = (function () {
     panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
     panel.querySelector('.develop-module-editor-modal__close')?.addEventListener('click', close);
     panel.querySelector('#developRowSettingsCancelBtn')?.addEventListener('click', close);
+    let selectedLayout = activeLayout;
     const updatePreview = () => {
       const preview = panel.querySelector('#developRowEditorPreviewBox');
       if (!preview) return;
@@ -8491,10 +8559,22 @@ App.develop = (function () {
       };
       Object.assign(preview.style, buildRowStyle(previewSettings));
     };
+    panel.querySelectorAll('[data-row-layout-option]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedLayout = safeText(button.getAttribute('data-row-layout-option')) || activeLayout;
+        panel.querySelectorAll('[data-row-layout-option]').forEach((node) => {
+          node.classList.toggle('is-selected', node === button);
+        });
+      });
+    });
     panel.querySelector('#developRowSettingsResetBtn')?.addEventListener('click', () => {
       panel.querySelector('#developRowMarginInput').value = '';
       panel.querySelector('#developRowPaddingInput').value = '';
       panel.querySelector('#developRowBackgroundColorInput').value = '#dbe4ec';
+      selectedLayout = activeLayout;
+      panel.querySelectorAll('[data-row-layout-option]').forEach((node) => {
+        node.classList.toggle('is-selected', safeText(node.getAttribute('data-row-layout-option')) === activeLayout);
+      });
       updatePreview();
     });
     ['#developRowMarginInput', '#developRowPaddingInput', '#developRowBackgroundColorInput'].forEach((selector) => {
@@ -8505,13 +8585,15 @@ App.develop = (function () {
     updatePreview();
     panel.querySelector('#developRowSettingsSaveBtn')?.addEventListener('click', () => {
       const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
-      const nextSection = nextSections[sectionIndex];
+      let nextSection = nextSections[sectionIndex];
       if (!nextSection) return;
+      nextSection = remapSectionToLayout(nextSection, selectedLayout);
       nextSection.rowSettings = {
         margin: safeText(panel.querySelector('#developRowMarginInput')?.value),
         padding: safeText(panel.querySelector('#developRowPaddingInput')?.value),
         backgroundColor: safeText(panel.querySelector('#developRowBackgroundColorInput')?.value),
       };
+      nextSections[sectionIndex] = nextSection;
       modularPageTemplateDraft.layoutSections = nextSections;
       closeModularRowEditor();
       renderModularPageTemplateEditor();
