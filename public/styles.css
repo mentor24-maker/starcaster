@@ -4588,6 +4588,7 @@ th {
 #developModulesSettingsFields {
   display: grid;
   gap: 0.7rem;
+  grid-template-columns: 1fr;
 }
 
 #developModulesForm input[type="text"],
