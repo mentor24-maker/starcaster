@@ -8416,6 +8416,28 @@ App.develop = (function () {
     activeModularPageModuleEditor = null;
   }
 
+  function saveActiveModularPageModuleEditor() {
+    const editor = activeModularPageModuleEditor;
+    if (!editor || !modularPageTemplateDraft) return false;
+    const { panel, sectionIndex, moduleIndex } = editor;
+    const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const nextSection = nextSections[sectionIndex];
+    const nextModule = nextSection?.modules?.[moduleIndex];
+    if (!nextModule) return false;
+    nextModule.name = safeText(panel.querySelector('#developPageModuleEditorNameInput')?.value, 255);
+    nextModule.settings = getDevelopModuleSettingsFromHost(nextModule.type, { prefix: 'developPageModuleEditorField' });
+    if (nextModule.type === 'image' || nextModule.type === 'logo-wide' || nextModule.type === 'logo-square') {
+      nextModule.assetId = safeText(nextModule.settings?.imageAssetId || nextModule.assetId);
+    }
+    if (nextModule.type === 'video') {
+      nextModule.assetId = safeText(nextModule.settings?.videoAssetId || nextModule.assetId);
+    }
+    modularPageTemplateDraft.layoutSections = nextSections;
+    closeModularPageModuleEditor();
+    renderModularPageTemplateEditor();
+    return true;
+  }
+
   function openModularPageModuleEditor(sectionIndex, moduleIndex) {
     if (!modularPageTemplateDraft) return;
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
@@ -8478,18 +8500,7 @@ App.develop = (function () {
       renderModularPageTemplateEditor();
     });
     panel.querySelector('#developPageModuleEditorSaveBtn')?.addEventListener('click', () => {
-      const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
-      const nextSection = nextSections[sectionIndex];
-      const nextModule = nextSection?.modules?.[moduleIndex];
-      if (!nextModule) return;
-      nextModule.name = safeText(panel.querySelector('#developPageModuleEditorNameInput')?.value, 255);
-      nextModule.settings = getDevelopModuleSettingsFromHost(nextModule.type, { prefix: 'developPageModuleEditorField' });
-      if (nextModule.type === 'image' || nextModule.type === 'logo-wide' || nextModule.type === 'logo-square') {
-        nextModule.assetId = safeText(nextModule.settings?.imageAssetId || nextModule.assetId);
-      }
-      modularPageTemplateDraft.layoutSections = nextSections;
-      closeModularPageModuleEditor();
-      renderModularPageTemplateEditor();
+      saveActiveModularPageModuleEditor();
     });
     activeModularPageModuleEditor = { panel, sectionIndex, moduleIndex };
   }
@@ -8501,11 +8512,64 @@ App.develop = (function () {
     activeModularContainerEditor = null;
   }
 
+  function saveActiveModularContainerEditor() {
+    const editor = activeModularContainerEditor;
+    if (!editor || !modularPageTemplateDraft) return false;
+    const { panel, sectionIndex, columnId } = editor;
+    const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    const nextSection = nextSections[sectionIndex];
+    if (!nextSection) return false;
+    nextSection.containerSettings = nextSection.containerSettings || {};
+    nextSection.containerSettings[columnId] = {
+      margin: safeText(panel.querySelector('#developContainerMarginInput')?.value),
+      padding: safeText(panel.querySelector('#developContainerPaddingInput')?.value),
+      backgroundColor: safeText(panel.querySelector('#developContainerBackgroundColorInput')?.value),
+      backgroundImageId: safeText(panel.querySelector('#developContainerBackgroundImageInput')?.value),
+      borderColor: safeText(panel.querySelector('#developContainerBorderColorInput')?.value),
+      borderThickness: safeText(panel.querySelector('#developContainerBorderThicknessInput')?.value),
+      borderRadius: safeText(panel.querySelector('#developContainerBorderRadiusInput')?.value),
+    };
+    modularPageTemplateDraft.layoutSections = nextSections;
+    closeModularContainerEditor();
+    renderModularPageTemplateEditor();
+    return true;
+  }
+
   function closeModularRowEditor() {
     const editor = activeModularRowEditor;
     if (!editor) return;
     editor.panel.remove();
     activeModularRowEditor = null;
+  }
+
+  function saveActiveModularRowEditor() {
+    const editor = activeModularRowEditor;
+    if (!editor || !modularPageTemplateDraft) return false;
+    const { panel, sectionIndex } = editor;
+    const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
+    let nextSection = nextSections[sectionIndex];
+    if (!nextSection) return false;
+    const selectedButton = panel.querySelector('[data-row-layout-option].is-selected');
+    const selectedLayout = safeText(selectedButton?.getAttribute('data-row-layout-option')) || getModularPageLayoutMeta(nextSection.layout).value;
+    nextSection = remapSectionToLayout(nextSection, selectedLayout);
+    nextSection.rowSettings = {
+      margin: safeText(panel.querySelector('#developRowMarginInput')?.value),
+      padding: safeText(panel.querySelector('#developRowPaddingInput')?.value),
+      backgroundColor: safeText(panel.querySelector('#developRowBackgroundColorInput')?.value),
+    };
+    nextSections[sectionIndex] = nextSection;
+    modularPageTemplateDraft.layoutSections = nextSections;
+    closeModularRowEditor();
+    renderModularPageTemplateEditor();
+    return true;
+  }
+
+  function flushActiveModularEditors() {
+    let changed = false;
+    if (activeModularPageModuleEditor) changed = saveActiveModularPageModuleEditor() || changed;
+    if (activeModularContainerEditor) changed = saveActiveModularContainerEditor() || changed;
+    if (activeModularRowEditor) changed = saveActiveModularRowEditor() || changed;
+    return changed;
   }
 
   function openModularRowEditor(sectionIndex) {
@@ -8608,19 +8672,7 @@ App.develop = (function () {
     });
     updatePreview();
     panel.querySelector('#developRowSettingsSaveBtn')?.addEventListener('click', () => {
-      const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
-      let nextSection = nextSections[sectionIndex];
-      if (!nextSection) return;
-      nextSection = remapSectionToLayout(nextSection, selectedLayout);
-      nextSection.rowSettings = {
-        margin: safeText(panel.querySelector('#developRowMarginInput')?.value),
-        padding: safeText(panel.querySelector('#developRowPaddingInput')?.value),
-        backgroundColor: safeText(panel.querySelector('#developRowBackgroundColorInput')?.value),
-      };
-      nextSections[sectionIndex] = nextSection;
-      modularPageTemplateDraft.layoutSections = nextSections;
-      closeModularRowEditor();
-      renderModularPageTemplateEditor();
+      saveActiveModularRowEditor();
     });
     activeModularRowEditor = { panel, sectionIndex };
   }
@@ -8743,22 +8795,7 @@ App.develop = (function () {
     });
     updatePreview();
     panel.querySelector('#developContainerSettingsSaveBtn')?.addEventListener('click', () => {
-      const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
-      const nextSection = nextSections[sectionIndex];
-      if (!nextSection) return;
-      nextSection.containerSettings = nextSection.containerSettings || {};
-      nextSection.containerSettings[columnId] = {
-        margin: safeText(panel.querySelector('#developContainerMarginInput')?.value),
-        padding: safeText(panel.querySelector('#developContainerPaddingInput')?.value),
-        backgroundColor: safeText(panel.querySelector('#developContainerBackgroundColorInput')?.value),
-        backgroundImageId: safeText(panel.querySelector('#developContainerBackgroundImageInput')?.value),
-        borderColor: safeText(panel.querySelector('#developContainerBorderColorInput')?.value),
-        borderThickness: safeText(panel.querySelector('#developContainerBorderThicknessInput')?.value),
-        borderRadius: safeText(panel.querySelector('#developContainerBorderRadiusInput')?.value),
-      };
-      modularPageTemplateDraft.layoutSections = nextSections;
-      closeModularContainerEditor();
-      renderModularPageTemplateEditor();
+      saveActiveModularContainerEditor();
     });
     activeModularContainerEditor = { panel, sectionIndex, columnId };
   }
@@ -10703,6 +10740,7 @@ App.develop = (function () {
           notify('Open a modular template first', true);
           return;
         }
+        flushActiveModularEditors();
         openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
       });
     }
@@ -10713,6 +10751,7 @@ App.develop = (function () {
           notify('Open a modular template first', true);
           return;
         }
+        flushActiveModularEditors();
         openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
       });
     }
@@ -10731,6 +10770,7 @@ App.develop = (function () {
           notify('Open a modular template first', true);
           return;
         }
+        flushActiveModularEditors();
         openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
       });
     }
@@ -10798,6 +10838,7 @@ App.develop = (function () {
     const bindSaveModularPageTemplateButton = (button) => {
       if (!button) return;
       button.addEventListener('click', async () => {
+        flushActiveModularEditors();
         const payload = modularPageEditorMode === 'page'
           ? buildModularLandingPagePayload()
           : buildModularPageTemplatePayload();
