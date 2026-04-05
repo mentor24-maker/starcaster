@@ -3811,6 +3811,32 @@ th {
   color: #7b92aa;
 }
 
+.develop-richtext-editor p:first-child,
+.develop-richtext-editor h2:first-child,
+.develop-richtext-editor h3:first-child,
+.develop-richtext-editor ul:first-child,
+.develop-richtext-editor ol:first-child {
+  margin-top: 0;
+}
+
+.develop-richtext-editor p:last-child,
+.develop-richtext-editor h2:last-child,
+.develop-richtext-editor h3:last-child,
+.develop-richtext-editor ul:last-child,
+.develop-richtext-editor ol:last-child {
+  margin-bottom: 0;
+}
+
+.develop-richtext-editor ul,
+.develop-richtext-editor ol {
+  padding-left: 1.35rem;
+}
+
+.develop-richtext-editor a {
+  color: #0f4f8f;
+  text-decoration: underline;
+}
+
 .develop-page-template-module-card {
   display: grid;
   grid-template-columns: 1fr auto;

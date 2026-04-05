@@ -20,6 +20,11 @@
     "dotenv": "^17.3.1"
   },
   "dependencies": {
+    "@tiptap/core": "^3.22.2",
+    "@tiptap/extension-link": "^3.22.2",
+    "@tiptap/extension-text-align": "^3.22.2",
+    "@tiptap/extension-underline": "^3.22.2",
+    "@tiptap/starter-kit": "^3.22.2",
     "@vercel/blob": "^1.1.1",
     "playwright": "^1.58.2"
   }
