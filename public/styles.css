@@ -3419,10 +3419,16 @@ th {
   flex-wrap: wrap;
   gap: 0.55rem;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
   min-height: 100%;
   padding: 0.5rem 2.8rem 0.5rem 0.5rem;
+}
+
+.develop-page-template-row-cell-stack.is-drop-append {
+  outline: 3px dashed rgba(11, 130, 212, 0.35);
+  outline-offset: 6px;
+  border-radius: 18px;
 }
 
 .develop-page-template-cell-add {
@@ -3474,6 +3480,31 @@ th {
   font-weight: 700;
   cursor: pointer;
   text-align: left;
+}
+
+.develop-page-template-module-pill.is-dragging {
+  opacity: 0.4;
+}
+
+.develop-page-template-module-pill.is-drop-before::before,
+.develop-page-template-module-pill.is-drop-after::after {
+  content: '';
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  height: 4px;
+  border-radius: 999px;
+  background: #0b82d4;
+  box-shadow: 0 0 0 2px rgba(11, 130, 212, 0.12);
+  pointer-events: none;
+}
+
+.develop-page-template-module-pill.is-drop-before::before {
+  top: -8px;
+}
+
+.develop-page-template-module-pill.is-drop-after::after {
+  bottom: -8px;
 }
 
 .develop-page-template-module-pill:focus-visible {

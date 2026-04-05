@@ -336,6 +336,7 @@ App.develop = (function () {
   let draggedNewPageSectionLayoutClearTimer = null;
   let activePageLayoutPointerDrag = null;
   let activePageModulePointerDrag = null;
+  let activePlacedPageModulePointerDrag = null;
   let activeModularPageModulePicker = null;
   let activeModularPageModuleEditor = null;
   let activeModularContainerEditor = null;
@@ -8268,6 +8269,135 @@ App.develop = (function () {
     });
   }
 
+  function clearPlacedModuleReorderIndicators() {
+    const host = byId('developPageTemplateEditorSections');
+    if (!host) return;
+    host.querySelectorAll('.develop-page-template-module-pill').forEach((node) => {
+      node.classList.remove('is-drop-before', 'is-drop-after', 'is-dragging');
+    });
+    host.querySelectorAll('.develop-page-template-row-cell-stack').forEach((node) => {
+      node.classList.remove('is-drop-append');
+    });
+  }
+
+  function getPlacedModuleDropTarget(clientX, clientY, drag) {
+    const host = byId('developPageTemplateEditorSections');
+    if (!host || !drag) return null;
+    const target = document.elementFromPoint(clientX, clientY);
+    if (!target) return null;
+    const stack = target.closest('.develop-page-template-row-cell-stack');
+    if (!stack || !host.contains(stack)) return null;
+    const sectionIndex = Number(stack.dataset.sectionIndex);
+    const column = safeText(stack.dataset.column) || 'col1';
+    if (sectionIndex !== drag.sectionIndex || column !== drag.column) return null;
+    const pill = target.closest('.develop-page-template-module-pill');
+    if (!pill || !stack.contains(pill)) {
+      return {
+        type: 'append',
+        stack,
+        sectionIndex,
+        column,
+      };
+    }
+    const moduleIndex = Number(pill.dataset.moduleIndex);
+    if (Number.isNaN(moduleIndex) || moduleIndex === drag.moduleIndex) {
+      return null;
+    }
+    const rect = pill.getBoundingClientRect();
+    const before = clientY < rect.top + (rect.height / 2);
+    return {
+      type: 'module',
+      element: pill,
+      before,
+      sectionIndex,
+      column,
+      moduleIndex,
+    };
+  }
+
+  function updatePlacedModuleReorderIndicators(clientX, clientY, drag) {
+    clearPlacedModuleReorderIndicators();
+    const dropTarget = getPlacedModuleDropTarget(clientX, clientY, drag);
+    if (!dropTarget) return null;
+    if (dropTarget.type === 'append') {
+      dropTarget.stack.classList.add('is-drop-append');
+    } else if (dropTarget.element) {
+      dropTarget.element.classList.add(dropTarget.before ? 'is-drop-before' : 'is-drop-after');
+    }
+    return dropTarget;
+  }
+
+  function endPlacedPageModulePointerDrag(commit = false) {
+    const drag = activePlacedPageModulePointerDrag;
+    if (!drag) return;
+    window.removeEventListener('pointermove', drag.onPointerMove);
+    window.removeEventListener('pointerup', drag.onPointerUp);
+    window.removeEventListener('pointercancel', drag.onPointerUp);
+    document.body.classList.remove('develop-layout-dragging');
+    document.body.style.cursor = '';
+    drag.ghost.remove();
+    clearPlacedModuleReorderIndicators();
+    if (commit && drag.dropTarget) {
+      if (drag.dropTarget.type === 'append') {
+        moveModularPageModule({
+          fromSectionIndex: drag.sectionIndex,
+          fromModuleIndex: drag.moduleIndex,
+          toSectionIndex: drag.sectionIndex,
+          toColumn: drag.column,
+          append: true,
+        });
+      } else {
+        moveModularPageModule({
+          fromSectionIndex: drag.sectionIndex,
+          fromModuleIndex: drag.moduleIndex,
+          toSectionIndex: drag.sectionIndex,
+          toModuleIndex: drag.dropTarget.before ? drag.dropTarget.moduleIndex : drag.dropTarget.moduleIndex + 1,
+          toColumn: drag.column,
+        });
+      }
+      renderModularPageTemplateEditor();
+    }
+    activePlacedPageModulePointerDrag = null;
+  }
+
+  function startPlacedPageModulePointerDrag(pill, details, startEvent) {
+    if (!pill || !details) return;
+    endPlacedPageModulePointerDrag(false);
+    const ghost = pill.cloneNode(true);
+    ghost.classList.add('develop-layout-tile-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(ghost);
+    const positionGhost = (x, y) => {
+      ghost.style.left = `${x + 14}px`;
+      ghost.style.top = `${y + 14}px`;
+    };
+    positionGhost(startEvent.clientX, startEvent.clientY);
+    document.body.classList.add('develop-layout-dragging');
+    document.body.style.cursor = 'grabbing';
+    pill.classList.add('is-dragging');
+    const drag = {
+      pill,
+      ghost,
+      sectionIndex: details.sectionIndex,
+      moduleIndex: details.moduleIndex,
+      column: details.column,
+      dropTarget: null,
+      onPointerMove: null,
+      onPointerUp: null,
+    };
+    drag.onPointerMove = (event) => {
+      positionGhost(event.clientX, event.clientY);
+      drag.dropTarget = updatePlacedModuleReorderIndicators(event.clientX, event.clientY, drag);
+    };
+    drag.onPointerUp = () => {
+      endPlacedPageModulePointerDrag(Boolean(drag.dropTarget));
+    };
+    activePlacedPageModulePointerDrag = drag;
+    window.addEventListener('pointermove', drag.onPointerMove);
+    window.addEventListener('pointerup', drag.onPointerUp);
+    window.addEventListener('pointercancel', drag.onPointerUp);
+  }
+
   function getModularPageModuleCellDropTarget(clientX, clientY) {
     const host = byId('developPageTemplateEditorSections');
     if (!host) return null;
@@ -9034,6 +9164,8 @@ App.develop = (function () {
           .filter((entry) => safeText(entry.module?.column) === columnId);
         const stack = document.createElement('div');
         stack.className = 'develop-page-template-row-cell-stack';
+        stack.dataset.sectionIndex = String(sectionIndex);
+        stack.dataset.column = columnId;
         const settingsBtn = document.createElement('button');
         settingsBtn.type = 'button';
         settingsBtn.className = 'develop-page-template-cell-settings';
@@ -9050,6 +9182,9 @@ App.develop = (function () {
             pill.className = 'develop-page-template-module-pill';
             pill.setAttribute('role', 'button');
             pill.setAttribute('tabindex', '0');
+            pill.dataset.sectionIndex = String(sectionIndex);
+            pill.dataset.column = columnId;
+            pill.dataset.moduleIndex = String(originalIndex);
             pill.innerHTML = `
               <span class="develop-page-template-module-pill-icon">${escapeHtml(getModularModuleIcon(module.type))}</span>
               <span class="develop-page-template-module-pill-copy">
@@ -9066,6 +9201,21 @@ App.develop = (function () {
               event.preventDefault();
               event.stopPropagation();
               openModularPageModuleEditor(sectionIndex, originalIndex);
+            });
+            pill.addEventListener('pointerdown', (event) => {
+              if (event.pointerType === 'mouse' && event.button !== 0) return;
+              const interactiveChild = event.target instanceof Element
+                ? event.target.closest('.develop-page-template-module-pill-action')
+                : null;
+              if (interactiveChild) return;
+              if (event.pointerType !== 'mouse') return;
+              event.preventDefault();
+              event.stopPropagation();
+              startPlacedPageModulePointerDrag(pill, {
+                sectionIndex,
+                moduleIndex: originalIndex,
+                column: columnId,
+              }, event);
             });
             pill.addEventListener('keydown', (event) => {
               if (event.key !== 'Enter' && event.key !== ' ') return;
