@@ -499,6 +499,49 @@ button {
   background: var(--field-bg);
 }
 
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 84px;
+  min-width: 84px;
+  height: 46px;
+  padding: 4px;
+  border: 1px solid #444;
+  border-radius: 12px;
+  cursor: pointer;
+  background:
+    linear-gradient(#fff, #fff) 8px 8px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 14px 8px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 20px 8px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 8px 14px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 14px 14px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 20px 14px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 8px 20px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 14px 20px / 4px 4px no-repeat,
+    linear-gradient(#fff, #fff) 20px 20px / 4px 4px no-repeat,
+    linear-gradient(135deg, #ef4444 0%, #f59e0b 25%, #eab308 40%, #22c55e 55%, #0ea5e9 72%, #8b5cf6 86%, #ec4899 100%);
+  background-color: #d7e5f5;
+  background-repeat: no-repeat;
+  box-shadow: none;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+}
+
+input[type="color"]::-moz-color-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+}
+
 .develop-landing-page-editing input.develop-field-complete,
 .develop-landing-page-editing textarea.develop-field-complete,
 .develop-landing-page-editing select.develop-field-complete {
@@ -4613,8 +4656,8 @@ th {
 
 #developModulesForm input[type="color"] {
   min-height: 46px;
-  width: min(220px, 100%);
-  max-width: 220px;
+  width: 84px;
+  max-width: 84px;
 }
 
 #developModulesForm .develop-richtext-toolbar {
