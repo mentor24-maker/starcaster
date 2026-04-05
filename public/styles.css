@@ -3028,6 +3028,20 @@ th {
   height: 44px;
 }
 
+.develop-layout-toolbar .develop-layout-toolbar-icon {
+  display: block;
+  width: 88%;
+  max-width: none;
+  min-height: 44px;
+  margin: 0 auto;
+}
+
+.develop-layout-toolbar .develop-layout-toolbar-icon svg {
+  display: block;
+  width: 100%;
+  height: 44px;
+}
+
 .develop-layout-tile-ghost {
   position: fixed;
   z-index: 10000;

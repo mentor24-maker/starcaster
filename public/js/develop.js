@@ -4957,7 +4957,7 @@ App.develop = (function () {
   function buildModularPageLayoutIconMarkup(layout, baseClass = 'develop-layout-picker-icon') {
     const meta = getModularPageLayoutMeta(layout);
     const iconClass = `${baseClass} ${baseClass}--${safeText(meta.value)}`;
-    if (baseClass === 'develop-layout-picker-icon') {
+    if (baseClass === 'develop-layout-picker-icon' || baseClass === 'develop-layout-toolbar-icon') {
       const width = 240;
       const height = 44;
       const paddingX = 8;
@@ -10425,6 +10425,14 @@ App.develop = (function () {
           return;
         }
         openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+      });
+    }
+
+    if (pageTemplateEditorToolbar) {
+      pageTemplateEditorToolbar.querySelectorAll('[data-section-layout]').forEach((tile) => {
+        const layout = safeText(tile.getAttribute('data-section-layout'));
+        if (!layout) return;
+        tile.innerHTML = buildModularPageLayoutIconMarkup(layout, 'develop-layout-toolbar-icon');
       });
     }
 
