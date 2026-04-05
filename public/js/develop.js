@@ -468,6 +468,10 @@ App.develop = (function () {
       .replace(/'/g, '&#39;');
   }
 
+  function safeHtml(value) {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -3358,7 +3362,7 @@ App.develop = (function () {
         editor.setAttribute('data-module-field-key', field.key);
         editor.setAttribute('data-module-field-control', field.control);
         editor.setAttribute('data-placeholder', field.placeholder || '');
-        editor.innerHTML = safeText(value, 20000) || '<p></p>';
+        editor.innerHTML = safeHtml(value) || '<p></p>';
 
         [
           { label: 'B', command: 'bold' },
@@ -3394,6 +3398,16 @@ App.develop = (function () {
 
         wrap.appendChild(toolbar);
         wrap.appendChild(editor);
+        if (App.richText && typeof App.richText.createRichTextEditor === 'function') {
+          App.richText.createRichTextEditor({
+            element: editor,
+            toolbar,
+            content: safeHtml(value),
+            placeholder: field.placeholder || '',
+          }).catch((err) => {
+            console.warn('TipTap editor failed to initialize; using fallback editor instead.', err);
+          });
+        }
         host.appendChild(wrap);
         return;
       } else if (field.control === 'select') {
@@ -3477,7 +3491,9 @@ App.develop = (function () {
       if (field.control === 'checkbox') {
         settings[field.key] = Boolean(input.checked);
       } else if (field.control === 'richtext') {
-        settings[field.key] = String(input.innerHTML || '').trim();
+        settings[field.key] = App.richText && typeof App.richText.getHtml === 'function'
+          ? App.richText.getHtml(input)
+          : String(input.innerHTML || '').trim();
       } else if (field.control === 'number') {
         const raw = safeText(input.value);
         settings[field.key] = raw ? Number(raw) : '';
