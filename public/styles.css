@@ -3014,16 +3014,20 @@ th {
 }
 
 .develop-row-layout-picker .develop-layout-picker-icon {
-  width: 82%;
+  width: 88%;
   max-width: none;
-  min-height: 30px;
+  min-height: 36px;
   align-items: center;
   justify-content: stretch;
 }
 
 .develop-row-layout-picker .develop-layout-picker-icon span {
-  width: 100%;
-  min-height: 30px;
+  display: block;
+  width: auto;
+  min-width: 0;
+  min-height: 36px;
+  justify-self: stretch;
+  align-self: stretch;
 }
 
 .develop-layout-tile-ghost {
