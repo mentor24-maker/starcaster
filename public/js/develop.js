@@ -9390,15 +9390,22 @@ App.develop = (function () {
         padding: 24px 24px 0;
       }
       .develop-preview-page__bar-main {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
         align-items: center;
         gap: 1rem;
         flex: 1 1 auto;
         min-width: 0;
       }
+      .develop-preview-page__bar-main::after {
+        content: "";
+        display: block;
+        min-width: 0;
+      }
       .develop-preview-page__bar-copy {
         min-width: 0;
         margin-right: 1.1rem;
+        grid-column: 1;
       }
       .develop-preview-page__title {
         margin: 0;
@@ -9423,7 +9430,8 @@ App.develop = (function () {
         align-items: center;
         gap: 0.6rem;
         flex-wrap: wrap;
-        justify-content: flex-end;
+        justify-content: center;
+        grid-column: 2;
       }
       .develop-preview-page__control-label {
         margin: 0 0 0.35rem;
@@ -9753,8 +9761,12 @@ App.develop = (function () {
         }
         .develop-preview-page__bar-main {
           width: 100%;
+          display: flex;
           flex-direction: column;
           align-items: flex-start;
+        }
+        .develop-preview-page__bar-main::after {
+          display: none;
         }
         .develop-preview-page__controls {
           width: 100%;
@@ -9767,7 +9779,7 @@ App.develop = (function () {
     </style>
   </head>
   <body>
-    <div class="develop-preview-page" data-device-mode="mobile-portrait" id="developPreviewPageRoot">
+    <div class="develop-preview-page" data-device-mode="desktop" id="developPreviewPageRoot">
       <div class="develop-preview-page__shell">
         <div class="develop-preview-page__bar">
           <div class="develop-preview-page__bar-main">
@@ -9779,7 +9791,11 @@ App.develop = (function () {
               <div>
                 <p class="develop-preview-page__control-label">Preview Mode</p>
                 <div class="develop-preview-device-bar" role="tablist" aria-label="Preview device modes">
-                  <button type="button" class="develop-preview-device-btn is-active" data-device="mobile-portrait" role="tab" aria-selected="true">
+                  <button type="button" class="develop-preview-device-btn is-active" data-device="desktop" role="tab" aria-selected="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.8"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
+                    <span>Desktop</span>
+                  </button>
+                  <button type="button" class="develop-preview-device-btn" data-device="mobile-portrait" role="tab" aria-selected="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path></svg>
                     <span>Mobile</span>
                   </button>
@@ -9790,10 +9806,6 @@ App.develop = (function () {
                   <button type="button" class="develop-preview-device-btn" data-device="tablet" role="tab" aria-selected="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="2.5" width="13" height="19" rx="2.4"></rect><path d="M11 18.5h2"></path></svg>
                     <span>Tablet</span>
-                  </button>
-                  <button type="button" class="develop-preview-device-btn" data-device="desktop" role="tab" aria-selected="false">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.8"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
-                    <span>Desktop</span>
                   </button>
                   <button type="button" class="develop-preview-device-btn" data-device="full" role="tab" aria-selected="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4"></path><path d="M16 4h4v4"></path><path d="M8 20H4v-4"></path><path d="M16 20h4v-4"></path></svg>
@@ -9807,7 +9819,7 @@ App.develop = (function () {
         </div>
         <div class="develop-preview-stage">
           <div class="develop-preview-device-wrap">
-            <div class="develop-preview-device-shell" data-device="mobile-portrait" id="developPreviewDeviceShell">
+            <div class="develop-preview-device-shell" data-device="desktop" id="developPreviewDeviceShell">
               <div class="develop-preview-device-frame">
                 <div class="develop-preview-device-screen">
                   <div class="develop-preview-device-scroll">
