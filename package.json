@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "build:richtext": "node scripts/build_richtext_bundle.mjs",
     "import:contacts-csv:dry-run": "node scripts/import_contacts_csv_to_supabase.js",
     "import:contacts-csv:apply": "node scripts/import_contacts_csv_to_supabase.js --apply",
     "backfill:assets-drive-meta:dry-run": "node scripts/backfill_asset_metadata_from_drive.js",
@@ -17,7 +18,8 @@
     "check:vercel-cutover": "node scripts/vercel_cutover_check.js"
   },
   "devDependencies": {
-    "dotenv": "^17.3.1"
+    "dotenv": "^17.3.1",
+    "esbuild": "^0.28.0"
   },
   "dependencies": {
     "@tiptap/core": "^3.22.2",
