@@ -744,6 +744,12 @@ App.develop = (function () {
         const id = parsed.searchParams.get('v');
         return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
       }
+      if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        if (parts[0] === 'embed' && parts[1]) return `https://www.youtube.com/embed/${encodeURIComponent(parts[1])}`;
+        if (parts[0] === 'shorts' && parts[1]) return `https://www.youtube.com/embed/${encodeURIComponent(parts[1])}`;
+        if (parts[0] === 'live' && parts[1]) return `https://www.youtube.com/embed/${encodeURIComponent(parts[1])}`;
+      }
       if (host === 'youtu.be') {
         const id = parsed.pathname.replace(/^\/+/, '').split('/')[0];
         return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
@@ -4540,11 +4546,14 @@ App.develop = (function () {
     if (!asset) return [];
     const location = safeText(asset.location);
     const driveId = extractDriveId(location);
+    const assetType = safeText(asset.assetType);
     const urls = [];
-    if (driveId && safeText(asset.assetType) === 'Image') {
+    if (driveId && (assetType === 'Image' || assetType === 'Video')) {
       urls.push(`/api/assets/drive-file/${encodeURIComponent(driveId)}`);
-      urls.push(`https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveId)}`);
-      urls.push(`https://drive.google.com/thumbnail?id=${encodeURIComponent(driveId)}&sz=w2400`);
+      if (assetType === 'Image') {
+        urls.push(`https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveId)}`);
+        urls.push(`https://drive.google.com/thumbnail?id=${encodeURIComponent(driveId)}&sz=w2400`);
+      }
     }
     const direct = toDirectAssetUrl(location);
     if (direct) urls.push(direct);
@@ -9188,7 +9197,8 @@ App.develop = (function () {
         font: inherit;
         background: #ffffff;
       }
-      .develop-template-image-slot {
+      .develop-template-image-slot,
+      .develop-template-video-slot {
         min-height: 140px;
         display: grid;
         place-items: center;
@@ -9208,6 +9218,18 @@ App.develop = (function () {
         height: auto;
         object-fit: contain;
         display: block;
+      }
+      .develop-template-video-slot {
+        padding: 0.35rem;
+      }
+      .develop-template-video-slot video,
+      .develop-template-video-slot iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        border: 0;
+        object-fit: contain;
       }
       .meta {
         color: #587592;
