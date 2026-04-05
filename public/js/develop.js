@@ -9376,7 +9376,7 @@ App.develop = (function () {
       }
       .develop-preview-page {
         min-height: 100vh;
-        padding: 24px;
+        padding: 0;
       }
       .develop-preview-page__shell {
         width: 100%;
@@ -9387,6 +9387,7 @@ App.develop = (function () {
         justify-content: space-between;
         gap: 1rem;
         margin-bottom: 18px;
+        padding: 24px 24px 0;
       }
       .develop-preview-page__bar-main {
         display: flex;
@@ -9745,10 +9746,8 @@ App.develop = (function () {
         color: #587592;
       }
       @media (max-width: 900px) {
-        .develop-preview-page {
-          padding: 16px;
-        }
         .develop-preview-page__bar {
+          padding: 16px 16px 0;
           flex-direction: column;
           align-items: flex-start;
         }
