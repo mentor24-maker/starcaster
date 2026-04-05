@@ -4954,6 +4954,13 @@ App.develop = (function () {
       .join('');
   }
 
+  function buildModularPageLayoutIconMarkup(layout, baseClass = 'develop-layout-picker-icon') {
+    const meta = getModularPageLayoutMeta(layout);
+    const iconClass = `${baseClass} ${baseClass}--${safeText(meta.value)}`;
+    const cells = meta.columns.map(() => '<span></span>').join('');
+    return `<span class="${iconClass}">${cells}</span>`;
+  }
+
   function getModularPageLayoutColumnIds(layout) {
     return getModularPageLayoutMeta(layout).columns.map((column) => safeText(column.id) || 'col1');
   }
@@ -8510,7 +8517,7 @@ App.develop = (function () {
             <div id="developRowLayoutPicker" class="develop-row-layout-picker">
               ${MODULAR_PAGE_LAYOUT_OPTIONS.map((option) => `
                 <button type="button" class="develop-layout-tile develop-row-layout-picker__tile${safeText(option.value) === activeLayout ? ' is-selected' : ''}" data-row-layout-option="${escapeHtml(safeText(option.value))}" title="Use ${escapeHtml(safeText(option.value))} layout" aria-label="Use ${escapeHtml(safeText(option.value))} layout">
-                  <span class="develop-layout-picker-icon develop-layout-picker-icon--${escapeHtml(safeText(option.value))}">${getModularPageLayoutVisual(option.value)}</span>
+                  ${buildModularPageLayoutIconMarkup(option.value, 'develop-layout-picker-icon')}
                 </button>
               `).join('')}
             </div>
