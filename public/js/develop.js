@@ -4958,8 +4958,11 @@ App.develop = (function () {
     const meta = getModularPageLayoutMeta(layout);
     const iconClass = `${baseClass} ${baseClass}--${safeText(meta.value)}`;
     const cells = meta.columns
-      .map((column) => `<span style="flex:${Math.max(1, Number(column.span) || 1)} 1 0;"></span>`)
+      .map((column) => `<span style="display:block; flex:${Math.max(1, Number(column.span) || 1)} 1 0; min-width:0; min-height:36px; border-radius:6px; border:1px solid #444; background:rgba(15, 79, 143, 0.18);"></span>`)
       .join('');
+    if (baseClass === 'develop-layout-picker-icon') {
+      return `<span class="${iconClass}" style="display:flex; flex-direction:row; align-items:stretch; justify-content:stretch; gap:0.42rem; width:88%; min-height:36px; margin:0 auto;">${cells}</span>`;
+    }
     return `<span class="${iconClass}">${cells}</span>`;
   }
 
