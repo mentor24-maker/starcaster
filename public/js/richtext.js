@@ -1,29 +1,16 @@
 window.App = window.App || {};
 
 App.richText = (function () {
-  let tiptapModulesPromise = null;
-
   function safeHtml(value) {
     return typeof value === 'string' ? value : '';
   }
 
   function loadTipTapModules() {
-    if (!tiptapModulesPromise) {
-      tiptapModulesPromise = Promise.all([
-        import('https://esm.sh/@tiptap/core@3.22.2?bundle'),
-        import('https://esm.sh/@tiptap/starter-kit@3.22.2?bundle'),
-        import('https://esm.sh/@tiptap/extension-underline@3.22.2?bundle'),
-        import('https://esm.sh/@tiptap/extension-link@3.22.2?bundle'),
-        import('https://esm.sh/@tiptap/extension-text-align@3.22.2?bundle'),
-      ]).then(([coreModule, starterKitModule, underlineModule, linkModule, textAlignModule]) => ({
-        Editor: coreModule.Editor,
-        StarterKit: starterKitModule.default,
-        Underline: underlineModule.default,
-        Link: linkModule.default,
-        TextAlign: textAlignModule.default,
-      }));
+    const bundle = window.TipTapBundle;
+    if (!bundle || typeof bundle !== 'object') {
+      return Promise.reject(new Error('TipTap vendor bundle is not available on window.TipTapBundle'));
     }
-    return tiptapModulesPromise;
+    return Promise.resolve(bundle);
   }
 
   function makeToolbarButton(label, title, command) {
