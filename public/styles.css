@@ -4648,8 +4648,21 @@ th {
 }
 
 .develop-modules-studio-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
   margin-left: calc(var(--modules-label-col) + var(--modules-row-gap));
   gap: 0.75rem;
+  width: auto;
+  max-width: max-content;
+}
+
+.develop-modules-studio-actions button {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .develop-modules-studio-actions button[type="submit"] {
