@@ -9211,6 +9211,7 @@ App.develop = (function () {
       }
       .develop-preview-page__bar-copy {
         min-width: 0;
+        margin-right: 1.1rem;
       }
       .develop-preview-page__title {
         margin: 0;
@@ -9290,6 +9291,11 @@ App.develop = (function () {
         place-items: start center;
         padding: 10px 0 32px;
       }
+      .develop-preview-page[data-device-mode="desktop"] .develop-preview-stage,
+      .develop-preview-page[data-device-mode="full"] .develop-preview-stage {
+        border-top: 6px solid #173c61;
+        padding-top: 18px;
+      }
       .develop-preview-device-wrap {
         width: 100%;
         display: grid;
@@ -9315,11 +9321,11 @@ App.develop = (function () {
         --device-ratio: 1.35;
       }
       .develop-preview-device-shell[data-device="desktop"] {
-        --device-width: min(100%, 1380px);
+        --device-width: 100%;
         --device-ratio: 0.72;
       }
       .develop-preview-device-shell[data-device="full"] {
-        --device-width: min(100%, 1480px);
+        --device-width: 100%;
         --device-ratio: auto;
       }
       .develop-preview-device-frame {
@@ -9335,8 +9341,10 @@ App.develop = (function () {
       }
       .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-frame,
       .develop-preview-device-shell[data-device="full"] .develop-preview-device-frame {
-        padding: 18px 18px 30px;
-        border-radius: 26px;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
       }
       .develop-preview-device-shell[data-device="full"] .develop-preview-device-frame {
         background: transparent;
@@ -9344,16 +9352,7 @@ App.develop = (function () {
         padding: 0;
       }
       .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-frame::after {
-        content: "";
-        position: absolute;
-        left: 50%;
-        bottom: -22px;
-        transform: translateX(-50%);
-        width: 26%;
-        height: 14px;
-        border-radius: 0 0 18px 18px;
-        background: linear-gradient(180deg, rgba(78, 86, 102, 0.98), rgba(28, 36, 48, 0.98));
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+        display: none;
       }
       .develop-preview-device-shell[data-device="mobile-portrait"] .develop-preview-device-frame::before,
       .develop-preview-device-shell[data-device="mobile-landscape"] .develop-preview-device-frame::before,
@@ -9378,9 +9377,13 @@ App.develop = (function () {
       }
       .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-screen,
       .develop-preview-device-shell[data-device="full"] .develop-preview-device-screen {
-        border-radius: 16px;
+        border-radius: 0;
       }
       .develop-preview-device-shell[data-device="full"] .develop-preview-device-screen {
+        border: none;
+        box-shadow: none;
+      }
+      .develop-preview-device-shell[data-device="desktop"] .develop-preview-device-screen {
         border: none;
         box-shadow: none;
       }
@@ -9522,27 +9525,26 @@ App.develop = (function () {
       .develop-template-image-slot,
       .develop-template-video-slot {
         min-height: 140px;
-        display: grid;
-        place-items: center;
-        border-radius: 14px;
-        border: 1px solid rgba(15, 79, 143, 0.12);
-        background: rgba(240, 248, 255, 0.72);
+        display: block;
+        border-radius: 0;
+        border: none;
+        background: transparent;
         color: #35516c;
         font-weight: 700;
-        padding: 1rem;
+        padding: 0;
         text-align: center;
         overflow: hidden;
       }
       .develop-template-image-slot img {
-        max-width: 100%;
-        max-height: 320px;
-        width: auto;
-        height: auto;
-        object-fit: contain;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: none;
+        object-fit: cover;
         display: block;
       }
       .develop-template-video-slot {
-        padding: 0.35rem;
+        aspect-ratio: 16 / 9;
       }
       .develop-template-video-slot video,
       .develop-template-video-slot iframe {
@@ -9551,7 +9553,7 @@ App.develop = (function () {
         height: 100%;
         max-width: 100%;
         border: 0;
-        object-fit: contain;
+        object-fit: cover;
       }
       .meta {
         color: #587592;
@@ -9580,7 +9582,7 @@ App.develop = (function () {
     </style>
   </head>
   <body>
-    <div class="develop-preview-page">
+    <div class="develop-preview-page" data-device-mode="mobile-portrait" id="developPreviewPageRoot">
       <div class="develop-preview-page__shell">
         <div class="develop-preview-page__bar">
           <div class="develop-preview-page__bar-main">
@@ -9637,12 +9639,14 @@ App.develop = (function () {
     </div>
     <script>
       (function () {
+        const root = document.getElementById('developPreviewPageRoot');
         const shell = document.getElementById('developPreviewDeviceShell');
         const buttons = Array.from(document.querySelectorAll('.develop-preview-device-btn'));
-        if (!shell || !buttons.length) return;
+        if (!root || !shell || !buttons.length) return;
         buttons.forEach((button) => {
           button.addEventListener('click', () => {
             const device = button.getAttribute('data-device') || 'mobile-portrait';
+            root.setAttribute('data-device-mode', device);
             shell.setAttribute('data-device', device);
             buttons.forEach((candidate) => {
               const active = candidate === button;
