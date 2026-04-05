@@ -3014,7 +3014,8 @@ th {
 }
 
 .develop-row-layout-picker .develop-layout-picker-icon {
-  max-width: 112px;
+  width: 72%;
+  max-width: none;
   min-height: 30px;
   grid-auto-flow: column;
   align-items: center;
