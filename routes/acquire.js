@@ -69,6 +69,7 @@ const {
   createResearchRun,
   listResearchRuns,
   getResearchRun,
+  deleteResearchRun,
 } = require('../lib/harvest/YoutubeCommentsStore');
 const {
   listYoutubeVideos,
@@ -1760,6 +1761,20 @@ async function handle(req, res, pathname, method) {
     const result = await getResearchRun(id);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
+  }
+
+  // DELETE /api/acquire/youtube-research-runs/:id
+  if (youtubeResearchRunMatch && method === 'DELETE') {
+    const id = decodeURIComponent(youtubeResearchRunMatch[1]);
+    const result = await deleteResearchRun(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    logActivity({
+      action: 'acquire.youtube_research_deleted',
+      entityType: 'acquire',
+      entityId: id,
+      summary: `YouTube research run deleted: ${id}`
+    });
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   // GET /api/acquire/youtube-miner-runs
