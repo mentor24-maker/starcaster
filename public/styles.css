@@ -8567,7 +8567,9 @@ th {
   justify-content: center;
   align-items: center;
   gap: 0.8rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow-x: auto;
 }
 
 .table-sort-btn {
