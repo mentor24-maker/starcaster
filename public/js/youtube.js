@@ -202,6 +202,13 @@ App.youtube = (function () {
     return Array.from(new Set(tokens)).join(', ');
   }
 
+  function isYoutubeVideoBannedFromTags(value) {
+    return parseSimpleTagList(value).some(function(item) {
+      var lower = safeText(item).toLowerCase();
+      return lower === 'banned' || lower.indexOf('ban_reason:') === 0;
+    });
+  }
+
   function extractYoutubeVideoId(value) {
     var raw = safeText(value);
     if (!raw) return '';
@@ -2057,6 +2064,7 @@ App.youtube = (function () {
   function buildRepositoryRows() {
     if (Array.isArray(state.acquireYoutubeVideos) && state.acquireYoutubeVideos.length) {
       return state.acquireYoutubeVideos
+        .filter(function(run) { return !isYoutubeVideoBannedFromTags(run && run.tags); })
         .map(hydrateRepositoryRow)
         .sort(function(a, b) {
           return String(b && (b.updated_at || b.created_at) || '').localeCompare(String(a && (a.updated_at || a.created_at) || ''));
@@ -2134,7 +2142,9 @@ App.youtube = (function () {
       });
     });
 
-    return rows.sort(function(a, b) {
+    return rows.filter(function(run) {
+      return !isYoutubeVideoBannedFromTags(run && run.tags);
+    }).sort(function(a, b) {
       return String(b && b.created_at || '').localeCompare(String(a && a.created_at || ''));
     });
   }
@@ -3880,6 +3890,9 @@ App.youtube = (function () {
       };
     }).filter(function(item) {
       return item.video_url;
+    }).filter(function(item) {
+      var repositoryRun = findRepositoryRunByVideoUrl(item.video_url);
+      return !isYoutubeVideoBannedFromTags(repositoryRun && repositoryRun.tags);
     });
     var sortKey = safeText(youtubeResearchTableSort.key) || 'view_count';
     var sortDir = youtubeResearchTableSort.dir === 'asc' ? 'asc' : 'desc';
@@ -3991,6 +4004,8 @@ App.youtube = (function () {
       commentsTd.textContent = formatInteger(row.comment_count);
 
       var actionsTd = document.createElement('td');
+      var repositoryRun = findRepositoryRunByVideoUrl(videoUrl);
+      var isInRepository = Boolean(repositoryRun && safeText(repositoryRun.video_record_id));
       var repoBtn = App.makeIconButton('archive', 'Add To Repository', function() {
         addYoutubeResearchTargetsToRepository([videoUrl]).catch(function(err) {
           notify(err.message, true);
@@ -4002,6 +4017,11 @@ App.youtube = (function () {
         });
       }, { danger: true, marginLeft: '8px' });
       repoBtn.style.marginLeft = '0';
+      if (isInRepository) {
+        repoBtn.style.background = '#1f8f4e';
+        repoBtn.style.borderColor = '#1f8f4e';
+        repoBtn.style.color = '#fff';
+      }
       actionsTd.appendChild(repoBtn);
       actionsTd.appendChild(banBtn);
 
@@ -4167,6 +4187,7 @@ App.youtube = (function () {
       + '<option value=\"\">Select reason</option>'
       + '<option value=\"corporate\">Corporate</option>'
       + '<option value=\"personal\">Personal</option>'
+      + '<option value=\"low_volume\">Low Volume</option>'
       + '<option value=\"not_serious\">Not Serious</option>';
     if (runs.length === 1) select.value = extractYoutubeBanReasonFromTags(runs[0].tags);
     row.appendChild(label);
