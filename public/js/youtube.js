@@ -3404,9 +3404,6 @@ App.youtube = (function () {
 
   function setupYoutubeMinerCollapsibles() {
     var orderedTargetIds = [
-      'youtubeMinerResponseContextBody',
-      'youtubeMinerCategoriesBody',
-      'youtubeMinerGuidelinesBody',
       'youtubeResearchBody',
       'youtubeMinerRepositoryBody',
       'youtubeMinerTrainingBody',
