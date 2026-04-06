@@ -59,6 +59,7 @@ App.youtube = (function () {
   var youtubeResearchLastResult = null;
   var youtubeResearchMessagingCache = null;
   var youtubeMinerTargetHistory = [];
+  var selectedCommentRowIds = new Set();
   // Comment run data is still fetched to support "View Comments" behavior
   // (even though we no longer render the comment runs history table on this page).
 
@@ -188,6 +189,16 @@ App.youtube = (function () {
 
   function feedbackKeyForRow(row) {
     return YT_MINER_FEEDBACK_KEY_PREFIX + [safeText(row && row.video_id), safeText(row && row.id)].join(':');
+  }
+
+  function getCommentSelectionKey(row) {
+    return [
+      safeText(row && row.video_id),
+      safeText(row && row.video_url),
+      safeText(row && row.id),
+      safeText(row && row.author_channel_id),
+      safeText(row && row.author),
+    ].join('::');
   }
 
   function readFeedback(row) {
@@ -2916,6 +2927,116 @@ App.youtube = (function () {
     modal.open();
   }
 
+  function getFilteredYoutubeCommentRows(activeResult) {
+    var result = activeResult && typeof activeResult === 'object' ? activeResult : (youtubeMinerLastResult || {});
+    var comments = toArray(result && result.comments).slice(0, 200);
+    var topicInput = document.getElementById('youtubeMinerContentTopicFilter');
+    var attributesInput = document.getElementById('youtubeMinerContentAttributesFilter');
+    var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
+    var authorInput = document.getElementById('youtubeMinerContentAuthorFilter');
+    var commentInput = document.getElementById('youtubeMinerContentCommentFilter');
+    var topicFilter = safeText(topicInput && topicInput.value);
+    var attributesFilter = safeText(attributesInput && attributesInput.value).toLowerCase();
+    var approachFilter = safeText(approachInput && approachInput.value);
+    var authorFilter = safeText(authorInput && authorInput.value).toLowerCase();
+    var commentFilter = safeText(commentInput && commentInput.value).toLowerCase();
+
+    return comments.filter(function(row) {
+      var rowFeedback = readFeedback(row);
+      if (rowFeedback && rowFeedback.ignored) return false;
+      var rowTopic = safeText(row && row.category);
+      var rowAttributes = toArray(row && (row.attributes || row.attribute_names)).join(' ').toLowerCase();
+      var rowApproach = safeText(row && (row.approach || row.approach_name));
+      var rowAuthor = safeText(row && row.author).toLowerCase();
+      var rowComment = safeText(row && row.text).toLowerCase();
+      if (topicFilter && rowTopic !== topicFilter) return false;
+      if (attributesFilter && rowAttributes.indexOf(attributesFilter) === -1) return false;
+      if (approachFilter && rowApproach !== approachFilter) return false;
+      if (authorFilter && rowAuthor.indexOf(authorFilter) === -1) return false;
+      if (commentFilter && rowComment.indexOf(commentFilter) === -1) return false;
+      return true;
+    });
+  }
+
+  function pruneSelectedYoutubeCommentRows(activeResult) {
+    var validIds = new Set(getFilteredYoutubeCommentRows(activeResult).map(getCommentSelectionKey).filter(Boolean));
+    Array.from(selectedCommentRowIds).forEach(function(id) {
+      if (!validIds.has(id)) selectedCommentRowIds.delete(id);
+    });
+  }
+
+  function syncYoutubeCommentBulkSelectionUi(activeResult) {
+    var selectAll = document.getElementById('youtubeCommentMinerSelectAllVisible');
+    var addContactBtn = document.getElementById('youtubeCommentMinerAddContactBtn');
+    var visibleRows = getFilteredYoutubeCommentRows(activeResult);
+    var visibleIds = visibleRows.map(getCommentSelectionKey).filter(Boolean);
+    var selectedVisible = visibleIds.filter(function(id) { return selectedCommentRowIds.has(id); });
+    if (selectAll) {
+      selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+      selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
+    }
+    if (addContactBtn) {
+      addContactBtn.disabled = visibleRows.filter(function(row) {
+        return selectedCommentRowIds.has(getCommentSelectionKey(row))
+          && (safeText(row && row.author_channel_url) || safeText(row && row.author_channel_id) || safeText(row && row.author));
+      }).length === 0;
+    }
+  }
+
+  async function addContactsFromSelectedYoutubeComments() {
+    var selectedRows = getFilteredYoutubeCommentRows(youtubeMinerLastResult || {}).filter(function(row) {
+      return selectedCommentRowIds.has(getCommentSelectionKey(row));
+    });
+    var deduped = [];
+    var seen = new Set();
+    selectedRows.forEach(function(row) {
+      var authorName = safeText(row && row.author);
+      var authorChannelId = safeText(row && row.author_channel_id);
+      var authorUrl = safeText(row && row.author_channel_url)
+        || (authorChannelId ? ('https://www.youtube.com/channel/' + encodeURIComponent(authorChannelId)) : '')
+        || (authorName && authorName.charAt(0) === '@' ? ('https://www.youtube.com/' + authorName) : '');
+      var key = safeText(authorChannelId || authorUrl || authorName).toLowerCase();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      deduped.push({
+        row: row,
+        authorName: authorName,
+        authorUrl: authorUrl,
+      });
+    });
+    if (!deduped.length) {
+      notify('No checked comment authors are available to add as contacts.', true);
+      return;
+    }
+    var results = await Promise.all(deduped.map(function(item) {
+      var row = item.row;
+      var payload = {
+        contactType: 'prospect',
+        company: item.authorName,
+        youtube: item.authorUrl,
+        source: 'acquire.youtube.comments',
+        status: 'captured',
+        tags: [safeText(row && row.category)].filter(Boolean),
+        notes: [
+          'Captured from YouTube comment author.',
+          safeText(row && row.video_title) ? ('Video: ' + safeText(row && row.video_title)) : '',
+          safeText(row && row.text) ? ('Comment: ' + safeText(row && row.text)) : '',
+        ].filter(Boolean).join('\n'),
+      };
+      return api('/api/contacts', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }).then(function() {
+        return { ok: true };
+      }).catch(function(err) {
+        return { ok: false, error: err };
+      });
+    }));
+    var created = results.filter(function(item) { return item.ok; }).length;
+    var failed = results.filter(function(item) { return !item.ok; }).length;
+    notify('Add Contact complete: ' + created + ' created, ' + failed + ' failed');
+  }
+
   function renderYoutubeCommentMinerResult(result) {
     if (result && typeof result === 'object') {
       youtubeMinerLastResult = result;
@@ -2929,62 +3050,51 @@ App.youtube = (function () {
 
     var stats = activeResult && activeResult.stats ? activeResult.stats : {};
     var comments = toArray(activeResult && activeResult.comments).slice(0, 200);
-    var contentSearchInput = document.getElementById('youtubeMinerContentSearch');
-    var contentCategoryInput = document.getElementById('youtubeMinerContentCategoryFilter');
-    var contentSortInput = document.getElementById('youtubeMinerContentSort');
-    var contentReviewedInput = document.getElementById('youtubeMinerContentReviewedFilter');
-    var searchQuery = safeText(contentSearchInput && contentSearchInput.value).toLowerCase();
-    var categoryFilter = safeText(contentCategoryInput && contentCategoryInput.value);
-    var sortBy = safeText(contentSortInput && contentSortInput.value) || 'score_desc';
-    var reviewedFilter = safeText(contentReviewedInput && contentReviewedInput.value).toLowerCase();
+    var topicInput = document.getElementById('youtubeMinerContentTopicFilter');
+    var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
 
-    if (contentCategoryInput) {
+    if (topicInput) {
       var categories = Array.from(new Set(comments.map(function(row) {
         return safeText(row && row.category);
       }).filter(Boolean))).sort(function(a, b) {
         return a.localeCompare(b);
       });
-      var previousValue = contentCategoryInput.value;
-      contentCategoryInput.innerHTML = '<option value="">All categories</option>';
+      var previousValue = topicInput.value;
+      topicInput.innerHTML = '<option value="">All Topics</option>';
       categories.forEach(function(cat) {
         var option = document.createElement('option');
         option.value = cat;
         option.textContent = cat;
-        contentCategoryInput.appendChild(option);
+        topicInput.appendChild(option);
       });
       if (previousValue && categories.indexOf(previousValue) !== -1) {
-        contentCategoryInput.value = previousValue;
+        topicInput.value = previousValue;
+      }
+    }
+    if (approachInput) {
+      var approaches = Array.from(new Set(comments.map(function(row) {
+        return safeText(row && (row.approach || row.approach_name));
+      }).filter(Boolean))).sort(function(a, b) {
+        return a.localeCompare(b);
+      });
+      var previousApproach = approachInput.value;
+      approachInput.innerHTML = '<option value="">All Approaches</option>';
+      approaches.forEach(function(approach) {
+        var option = document.createElement('option');
+        option.value = approach;
+        option.textContent = approach;
+        approachInput.appendChild(option);
+      });
+      if (previousApproach && approaches.indexOf(previousApproach) !== -1) {
+        approachInput.value = previousApproach;
       }
     }
 
-    comments = comments.filter(function(row) {
-      var rowFeedback = readFeedback(row);
-      if (rowFeedback && rowFeedback.ignored) return false;
-      var isReviewed = feedbackHasReview(rowFeedback);
-      var rowCategory = safeText(row && row.category);
-      if (categoryFilter && rowCategory !== categoryFilter) return false;
-      if (reviewedFilter === 'reviewed' && !isReviewed) return false;
-      if (reviewedFilter === 'unreviewed' && isReviewed) return false;
-      if (!searchQuery) return true;
-      var haystack = [
-        safeText(row && row.text),
-        safeText(row && row.author),
-        safeText(row && row.video_title),
-        safeText(row && row.video_id),
-        toArray(row && (row.hashtags || row.tags)).join(' '),
-        toArray(row && (row.attributes || row.attribute_names)).join(' '),
-        safeText(row && (row.approach || row.approach_name)),
-        toArray(row && row.why).join(' '),
-      ].join(' ').toLowerCase();
-      return haystack.indexOf(searchQuery) !== -1;
-    });
-
+    comments = getFilteredYoutubeCommentRows(activeResult);
+    pruneSelectedYoutubeCommentRows(activeResult);
     comments.sort(function(a, b) {
       var scoreA = Number(a && a.score || 0) || 0;
       var scoreB = Number(b && b.score || 0) || 0;
-      if (sortBy === 'score_asc') return scoreA - scoreB;
-      if (sortBy === 'category_asc') return safeText(a && a.category).localeCompare(safeText(b && b.category));
-      if (sortBy === 'author_asc') return safeText(a && a.author).localeCompare(safeText(b && b.author));
       return scoreB - scoreA;
     });
 
@@ -3027,20 +3137,35 @@ App.youtube = (function () {
     if (!comments.length) {
       var emptyTr = document.createElement('tr');
       var emptyTd = document.createElement('td');
-      emptyTd.colSpan = 11;
+      emptyTd.colSpan = 12;
       emptyTd.textContent = 'No filtered comments found for current settings.';
       emptyTr.appendChild(emptyTd);
       tableEl.appendChild(emptyTr);
+      syncYoutubeCommentBulkSelectionUi(activeResult);
       return;
     }
 
     comments.forEach(function(row) {
       var tr = document.createElement('tr');
+      var selectionKey = getCommentSelectionKey(row);
       var feedback = readFeedback(row);
       var isReviewedRow = feedbackHasReview(feedback);
       var isIgnoredRow = Boolean(feedback && feedback.ignored);
       if (isReviewedRow) tr.classList.add('youtube-miner-row-reviewed');
       if (isIgnoredRow) tr.classList.add('youtube-miner-row-ignored');
+
+      var selectTd = document.createElement('td');
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selectedCommentRowIds.has(selectionKey);
+      checkbox.disabled = !selectionKey;
+      checkbox.setAttribute('aria-label', 'Select comment by ' + (safeText(row && row.author) || 'author'));
+      checkbox.addEventListener('change', function() {
+        if (checkbox.checked) selectedCommentRowIds.add(selectionKey);
+        else selectedCommentRowIds.delete(selectionKey);
+        syncYoutubeCommentBulkSelectionUi(activeResult);
+      });
+      selectTd.appendChild(checkbox);
 
       var scoreTd = document.createElement('td');
       var scoreBtn = document.createElement('button');
@@ -3437,6 +3562,7 @@ App.youtube = (function () {
           + (feedback.approaches.length ? (' | ' + feedback.approaches.join(', ')) : ''))
         : (isReviewedRow ? 'Reviewed' : '-');
 
+      tr.appendChild(selectTd);
       tr.appendChild(scoreTd);
       tr.appendChild(categoryTd);
       tr.appendChild(attributesTd);
@@ -3450,6 +3576,7 @@ App.youtube = (function () {
       tr.appendChild(feedbackTd);
       tableEl.appendChild(tr);
     });
+    syncYoutubeCommentBulkSelectionUi(activeResult);
 
   }
 
@@ -4683,10 +4810,13 @@ App.youtube = (function () {
       });
     }
 
-    var youtubeMinerContentSearch = document.getElementById('youtubeMinerContentSearch');
-    var youtubeMinerContentCategoryFilter = document.getElementById('youtubeMinerContentCategoryFilter');
-    var youtubeMinerContentSort = document.getElementById('youtubeMinerContentSort');
-    var youtubeMinerContentReviewedFilter = document.getElementById('youtubeMinerContentReviewedFilter');
+    var youtubeMinerContentTopicFilter = document.getElementById('youtubeMinerContentTopicFilter');
+    var youtubeMinerContentAttributesFilter = document.getElementById('youtubeMinerContentAttributesFilter');
+    var youtubeMinerContentApproachFilter = document.getElementById('youtubeMinerContentApproachFilter');
+    var youtubeMinerContentAuthorFilter = document.getElementById('youtubeMinerContentAuthorFilter');
+    var youtubeMinerContentCommentFilter = document.getElementById('youtubeMinerContentCommentFilter');
+    var youtubeCommentMinerSelectAllVisible = document.getElementById('youtubeCommentMinerSelectAllVisible');
+    var youtubeCommentMinerAddContactBtn = document.getElementById('youtubeCommentMinerAddContactBtn');
     var youtubeMinerResponseContext = document.getElementById('youtubeMinerResponseContext');
     var youtubeMinerGuidelines = document.getElementById('youtubeMinerGuidelines');
     youtubeMinerCategoryConfig = applyRecommendedRows('category', loadYoutubeMinerCategoryConfig());
@@ -4816,24 +4946,47 @@ App.youtube = (function () {
     } else if (activeVideoSnapshot && activeVideoSnapshot.video_url) {
       syncActiveVideoFromUrl(activeVideoSnapshot.video_url, activeVideoSnapshot);
     }
-    if (youtubeMinerContentSearch) {
-      youtubeMinerContentSearch.addEventListener('input', function() {
+    if (youtubeMinerContentTopicFilter) {
+      youtubeMinerContentTopicFilter.addEventListener('change', function() {
         renderYoutubeCommentMinerResult();
       });
     }
-    if (youtubeMinerContentCategoryFilter) {
-      youtubeMinerContentCategoryFilter.addEventListener('change', function() {
+    if (youtubeMinerContentAttributesFilter) {
+      youtubeMinerContentAttributesFilter.addEventListener('input', function() {
         renderYoutubeCommentMinerResult();
       });
     }
-    if (youtubeMinerContentSort) {
-      youtubeMinerContentSort.addEventListener('change', function() {
+    if (youtubeMinerContentApproachFilter) {
+      youtubeMinerContentApproachFilter.addEventListener('change', function() {
         renderYoutubeCommentMinerResult();
       });
     }
-    if (youtubeMinerContentReviewedFilter) {
-      youtubeMinerContentReviewedFilter.addEventListener('change', function() {
+    if (youtubeMinerContentAuthorFilter) {
+      youtubeMinerContentAuthorFilter.addEventListener('input', function() {
         renderYoutubeCommentMinerResult();
+      });
+    }
+    if (youtubeMinerContentCommentFilter) {
+      youtubeMinerContentCommentFilter.addEventListener('input', function() {
+        renderYoutubeCommentMinerResult();
+      });
+    }
+    if (youtubeCommentMinerSelectAllVisible) {
+      youtubeCommentMinerSelectAllVisible.addEventListener('change', function() {
+        getFilteredYoutubeCommentRows(youtubeMinerLastResult || {}).forEach(function(row) {
+          var key = getCommentSelectionKey(row);
+          if (!key) return;
+          if (youtubeCommentMinerSelectAllVisible.checked) selectedCommentRowIds.add(key);
+          else selectedCommentRowIds.delete(key);
+        });
+        renderYoutubeCommentMinerResult();
+      });
+    }
+    if (youtubeCommentMinerAddContactBtn) {
+      youtubeCommentMinerAddContactBtn.addEventListener('click', function() {
+        addContactsFromSelectedYoutubeComments().catch(function(err) {
+          notify(err.message || 'Could not add selected comment authors to contacts', true);
+        });
       });
     }
     document.addEventListener('click', function(event) {
