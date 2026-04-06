@@ -2995,7 +2995,14 @@ App.youtube = (function () {
     var raw = safeText(value);
     var max = Math.max(1, Number(limit) || 100);
     if (!raw || raw.length <= max) return raw;
-    return raw.slice(0, max).trimEnd() + '...';
+    var clipped = raw.slice(0, max + 1);
+    var lastSpace = clipped.lastIndexOf(' ');
+    if (lastSpace >= Math.floor(max * 0.65)) {
+      clipped = clipped.slice(0, lastSpace);
+    } else {
+      clipped = clipped.slice(0, max);
+    }
+    return clipped.trimEnd() + '...';
   }
 
   function buildYoutubeCommentFeedbackControl(row, feedback) {
@@ -3527,7 +3534,7 @@ App.youtube = (function () {
       var commentText = document.createElement('div');
       var fullCommentText = safeText(row && row.text) || '-';
       commentText.className = 'youtube-miner-comment-text is-truncated';
-      commentText.innerHTML = highlightFilterMatch(truncateText(fullCommentText, 100) || '-', commentFilterQuery);
+      commentText.innerHTML = highlightFilterMatch(truncateText(fullCommentText, 200) || '-', commentFilterQuery);
       commentText.title = fullCommentText;
       commentTd.appendChild(commentText);
 
