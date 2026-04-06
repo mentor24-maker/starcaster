@@ -1604,6 +1604,9 @@
                         </select>
                       </th>
                       <th>
+                        <input id="youtubeRunsHashtagsFilter" placeholder="Hashtags" />
+                      </th>
+                      <th>
                         <select id="youtubeRunsTranscriptFilter">
                           <option value="">All</option>
                           <option value="found">Found</option>
@@ -1611,11 +1614,13 @@
                           <option value="failed">Failed</option>
                         </select>
                       </th>
-                      <th>
-                        <button id="youtubeRunsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button>
-                        <button id="youtubeRunsAugmentBtn" type="button" class="tiny-btn" disabled>Augment Selected</button>
-                        <button id="youtubeRunsDiagnoseBtn" type="button" class="tiny-btn" disabled>Diagnose Selected</button>
-                        <button id="youtubeRunsDeleteBtn" type="button" class="tiny-btn" disabled>Delete Selected</button>
+                      <th class="youtube-repository-bulk-actions-cell">
+                        <div class="youtube-repository-bulk-actions">
+                          <button id="youtubeRunsBulkEditBtn" type="button" disabled>Edit Selected</button>
+                          <button id="youtubeRunsAugmentBtn" type="button" disabled>Augment Selected</button>
+                          <button id="youtubeRunsDiagnoseBtn" type="button" disabled>Diagnose Selected</button>
+                          <button id="youtubeRunsDeleteBtn" type="button" disabled>Delete Selected</button>
+                        </div>
                       </th>
                     </tr>
                     <tr>
