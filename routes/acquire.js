@@ -401,6 +401,39 @@ async function searchYoutubeVideosByPhrase(phrase, apiKey, perPhrase = 4) {
   }));
 }
 
+async function hydrateYoutubeVideoStats(items, apiKey) {
+  const rows = Array.isArray(items) ? items : [];
+  const ids = rows.map((item) => safeText(item && item.video_id)).filter(Boolean);
+  if (!rows.length || !ids.length || !apiKey) return rows;
+  const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+  statsUrl.searchParams.set('part', 'statistics');
+  statsUrl.searchParams.set('id', ids.join(','));
+  statsUrl.searchParams.set('key', apiKey);
+  try {
+    const response = await fetch(statsUrl.toString(), {
+      headers: { accept: 'application/json', 'user-agent': 'APH-YoutubeResearch/1.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = await response.json();
+    if (!response.ok) return rows;
+    const statsById = new Map(
+      (Array.isArray(body?.items) ? body.items : []).map((item) => {
+        return [
+          safeText(item?.id),
+          {
+            view_count: Number(item?.statistics?.viewCount || 0) || 0,
+            like_count: Number(item?.statistics?.likeCount || 0) || 0,
+            comment_count: Number(item?.statistics?.commentCount || 0) || 0,
+          },
+        ];
+      })
+    );
+    return rows.map((item) => Object.assign({}, item, statsById.get(safeText(item && item.video_id)) || {}));
+  } catch (_) {
+    return rows;
+  }
+}
+
 function maybeParseJson(value) {
   if (typeof value !== 'string') return null;
   const text = value.trim();
@@ -1796,7 +1829,23 @@ async function handle(req, res, pathname, method) {
     const id = decodeURIComponent(youtubeResearchRunMatch[1]);
     const result = await getResearchRun(id);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    return sendOk(res, 200, result.data, { run: result.data }), true;
+    const run = result.data || {};
+    const research = run?.result?.research || {};
+    const candidateItems = Array.isArray(research?.distilled_target_items) ? research.distilled_target_items : [];
+    const needsHydration = candidateItems.some((item) => {
+      return safeText(item?.video_id)
+        && !safeText(item?.view_count)
+        && !safeText(item?.like_count)
+        && !safeText(item?.comment_count);
+    });
+    if (needsHydration) {
+      const apiKey = resolveYoutubeApiKey();
+      const hydratedItems = await hydrateYoutubeVideoStats(candidateItems, apiKey);
+      if (run.result && run.result.research) {
+        run.result.research.distilled_target_items = hydratedItems;
+      }
+    }
+    return sendOk(res, 200, run, { run }), true;
   }
 
   // DELETE /api/acquire/youtube-research-runs/:id
