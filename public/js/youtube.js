@@ -3985,7 +3985,17 @@ App.youtube = (function () {
           notify(err.message, true);
         });
       });
+      var banBtn = document.createElement('button');
+      banBtn.type = 'button';
+      banBtn.textContent = 'Ban';
+      banBtn.style.marginLeft = '8px';
+      banBtn.addEventListener('click', function() {
+        banYoutubeResearchCandidate(row).catch(function(err) {
+          notify(err.message, true);
+        });
+      });
       actionsTd.appendChild(repoBtn);
+      actionsTd.appendChild(banBtn);
 
       tr.appendChild(selectTd);
       tr.appendChild(titleTd);
@@ -4045,6 +4055,34 @@ App.youtube = (function () {
     await refreshYoutubeRuns();
     renderYoutubeResearchRunsTable();
     notify('Added ' + urls.length + ' research candidate' + (urls.length === 1 ? '' : 's') + ' to Repository');
+  }
+
+  function findRepositoryRunByVideoUrl(videoUrl) {
+    var url = safeText(videoUrl);
+    if (!url) return null;
+    return toArray(state.acquireYoutubeDetails).find(function(run) {
+      return safeText(run && run.video_url) === url;
+    }) || toArray(state.acquireYoutubeVideos).find(function(run) {
+      return safeText(run && run.video_url) === url;
+    }) || null;
+  }
+
+  async function banYoutubeResearchCandidate(row) {
+    var videoUrl = safeText(row && row.video_url);
+    if (!videoUrl) {
+      notify('Video URL is required to ban this research candidate.', true);
+      return;
+    }
+    var repositoryRun = findRepositoryRunByVideoUrl(videoUrl);
+    if (!repositoryRun || !safeText(repositoryRun.video_record_id)) {
+      await addYoutubeResearchTargetsToRepository([videoUrl]);
+      repositoryRun = findRepositoryRunByVideoUrl(videoUrl);
+    }
+    if (!repositoryRun || !safeText(repositoryRun.video_record_id)) {
+      notify('Could not save this candidate to the repository for banning.', true);
+      return;
+    }
+    openYoutubeBanVideoModal(repositoryRun);
   }
 
   async function deleteYoutubeResearchRun(runId) {
