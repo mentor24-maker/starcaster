@@ -2958,6 +2958,26 @@ App.youtube = (function () {
     });
   }
 
+  function highlightFilterMatch(text, query) {
+    var rawText = String(text || '');
+    var needle = safeText(query);
+    if (!needle) return escapeHtml(rawText);
+    var lowerHaystack = rawText.toLowerCase();
+    var lowerNeedle = needle.toLowerCase();
+    var start = 0;
+    var html = '';
+    var index = lowerHaystack.indexOf(lowerNeedle, start);
+    if (index === -1) return escapeHtml(rawText);
+    while (index !== -1) {
+      html += escapeHtml(rawText.slice(start, index));
+      html += '<mark class="youtube-comment-highlight">' + escapeHtml(rawText.slice(index, index + needle.length)) + '</mark>';
+      start = index + needle.length;
+      index = lowerHaystack.indexOf(lowerNeedle, start);
+    }
+    html += escapeHtml(rawText.slice(start));
+    return html;
+  }
+
   function pruneSelectedYoutubeCommentRows(activeResult) {
     var validIds = new Set(getFilteredYoutubeCommentRows(activeResult).map(getCommentSelectionKey).filter(Boolean));
     Array.from(selectedCommentRowIds).forEach(function(id) {
@@ -3052,6 +3072,8 @@ App.youtube = (function () {
     var comments = toArray(activeResult && activeResult.comments).slice(0, 200);
     var topicInput = document.getElementById('youtubeMinerContentTopicFilter');
     var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
+    var commentFilterInput = document.getElementById('youtubeMinerContentCommentFilter');
+    var commentFilterQuery = safeText(commentFilterInput && commentFilterInput.value);
 
     if (topicInput) {
       var categories = Array.from(new Set(comments.map(function(row) {
@@ -3242,7 +3264,7 @@ App.youtube = (function () {
 
       var commentText = document.createElement('div');
       commentText.className = 'youtube-miner-comment-text';
-      commentText.textContent = safeText(row && row.text) || '-';
+      commentText.innerHTML = highlightFilterMatch(safeText(row && row.text) || '-', commentFilterQuery);
       commentCell.appendChild(commentText);
 
       var feedbackWrap = document.createElement('div');
