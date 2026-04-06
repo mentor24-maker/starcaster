@@ -8461,7 +8461,7 @@ th {
 
 .youtube-comment-filter-grid {
   display: grid;
-  grid-template-columns: 42px minmax(200px, 1.4fr) minmax(160px, 0.8fr) minmax(150px, 0.7fr) minmax(260px, 2fr) minmax(170px, 0.8fr) minmax(180px, 1fr);
+  grid-template-columns: 42px minmax(180px, 1.25fr) minmax(150px, 0.8fr) minmax(150px, 0.7fr) minmax(200px, 1fr) minmax(170px, 0.8fr) minmax(160px, 0.9fr) minmax(180px, 1.1fr);
   gap: 0.75rem;
   align-items: center;
 }
@@ -8522,7 +8522,10 @@ th {
 }
 
 .youtube-comment-bulk-actions > button:disabled {
-  opacity: 0.45;
+  opacity: 1;
+  background: #000 !important;
+  border-color: #000 !important;
+  color: #fff !important;
   cursor: not-allowed;
 }
 
@@ -8552,6 +8555,28 @@ th {
 .youtube-miner-comment-text {
   min-width: 0;
   white-space: pre-wrap;
+}
+
+.youtube-miner-comment-text.is-truncated {
+  max-width: 220px;
+}
+
+.youtube-miner-why-cell,
+.youtube-miner-reply-cell {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.youtube-miner-inline-action {
+  width: auto;
+  justify-self: start;
+  background: #000;
+  border-color: #000;
+  color: #fff;
+  border-radius: 12px;
+  padding: 0.45rem 0.8rem;
+  white-space: nowrap;
 }
 
 .youtube-comment-highlight {
