@@ -85,6 +85,11 @@ App.youtube = (function () {
     return parsed.toLocaleString();
   }
 
+  function formatInteger(value) {
+    var num = Number(value || 0) || 0;
+    return num.toLocaleString();
+  }
+
   function extractYoutubeVideoId(value) {
     var raw = safeText(value);
     if (!raw) return '';
@@ -3741,6 +3746,9 @@ App.youtube = (function () {
         channel_name: safeText(item && item.channel_name),
         phrase: safeText(item && item.phrase),
         published_at: safeText(item && item.published_at),
+        view_count: Number(item && item.view_count || 0) || 0,
+        like_count: Number(item && item.like_count || 0) || 0,
+        comment_count: Number(item && item.comment_count || 0) || 0,
       };
     }).filter(function(item) {
       return item.video_url;
@@ -3775,7 +3783,7 @@ App.youtube = (function () {
     if (!rows.length) {
       var emptyTr = document.createElement('tr');
       var emptyTd = document.createElement('td');
-      emptyTd.colSpan = 6;
+      emptyTd.colSpan = 7;
       emptyTd.textContent = 'No research candidates yet.';
       emptyTr.appendChild(emptyTd);
       tbody.appendChild(emptyTr);
@@ -3810,11 +3818,14 @@ App.youtube = (function () {
       var channelTd = document.createElement('td');
       channelTd.textContent = safeText(row.channel_name) || '-';
 
-      var phraseTd = document.createElement('td');
-      phraseTd.textContent = safeText(row.phrase) || '-';
+      var viewsTd = document.createElement('td');
+      viewsTd.textContent = formatInteger(row.view_count);
 
-      var publishedTd = document.createElement('td');
-      publishedTd.textContent = formatDateTime(row.published_at);
+      var likesTd = document.createElement('td');
+      likesTd.textContent = formatInteger(row.like_count);
+
+      var commentsTd = document.createElement('td');
+      commentsTd.textContent = formatInteger(row.comment_count);
 
       var actionsTd = document.createElement('td');
       var repoBtn = document.createElement('button');
@@ -3830,8 +3841,9 @@ App.youtube = (function () {
       tr.appendChild(selectTd);
       tr.appendChild(titleTd);
       tr.appendChild(channelTd);
-      tr.appendChild(phraseTd);
-      tr.appendChild(publishedTd);
+      tr.appendChild(viewsTd);
+      tr.appendChild(likesTd);
+      tr.appendChild(commentsTd);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
