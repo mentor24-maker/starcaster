@@ -8561,7 +8561,7 @@ th {
   max-width: 220px;
 }
 
-.youtube-miner-why-cell,
+.youtube-miner-feedback-cell,
 .youtube-miner-reply-cell {
   display: grid;
   gap: 0.45rem;
@@ -8577,6 +8577,11 @@ th {
   border-radius: 12px;
   padding: 0.45rem 0.8rem;
   white-space: nowrap;
+}
+
+.youtube-miner-reply-text {
+  max-width: 260px;
+  white-space: pre-wrap;
 }
 
 .youtube-comment-highlight {
