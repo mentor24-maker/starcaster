@@ -2930,36 +2930,36 @@ App.youtube = (function () {
   function getFilteredYoutubeCommentRows(activeResult) {
     var result = activeResult && typeof activeResult === 'object' ? activeResult : (youtubeMinerLastResult || {});
     var comments = toArray(result && result.comments).slice(0, 200);
+    var videoInput = document.getElementById('youtubeMinerContentVideoFilter');
     var topicInput = document.getElementById('youtubeMinerContentTopicFilter');
     var attributesInput = document.getElementById('youtubeMinerContentAttributesFilter');
     var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
     var authorInput = document.getElementById('youtubeMinerContentAuthorFilter');
     var commentInput = document.getElementById('youtubeMinerContentCommentFilter');
-    var topicFilters = Array.prototype.slice.call(topicInput && topicInput.selectedOptions || [])
-      .map(function(option) { return safeText(option && option.value); })
-      .filter(Boolean);
+    var videoFilter = safeText(videoInput && videoInput.value).toLowerCase();
+    var topicFilter = safeText(topicInput && topicInput.value);
     var attributesFilter = safeText(attributesInput && attributesInput.value).toLowerCase();
-    var approachFilters = Array.prototype.slice.call(approachInput && approachInput.selectedOptions || [])
-      .map(function(option) { return safeText(option && option.value); })
-      .filter(Boolean);
+    var approachFilter = safeText(approachInput && approachInput.value);
     var authorFilter = safeText(authorInput && authorInput.value).toLowerCase();
     var commentFilter = safeText(commentInput && commentInput.value).toLowerCase();
 
     return comments.filter(function(row) {
       var rowFeedback = readFeedback(row);
       if (rowFeedback && rowFeedback.ignored) return false;
-      var rowTopics = rowFeedback && rowFeedback.categories.length
-        ? rowFeedback.categories
-        : [safeText(row && row.category)].filter(Boolean);
+      var rowVideo = safeText(row && row.video_title).toLowerCase();
+      var rowTopic = rowFeedback && rowFeedback.categories.length
+        ? safeText(rowFeedback.categories[0])
+        : safeText(row && row.category);
       var rowAttributes = toArray(row && (row.attributes || row.attribute_names)).join(' ').toLowerCase();
-      var rowApproaches = rowFeedback && rowFeedback.approaches.length
-        ? rowFeedback.approaches
-        : [safeText(row && (row.approach || row.approach_name))].filter(Boolean);
+      var rowApproach = rowFeedback && rowFeedback.approaches.length
+        ? safeText(rowFeedback.approaches[0])
+        : safeText(row && (row.approach || row.approach_name));
       var rowAuthor = safeText(row && row.author).toLowerCase();
       var rowComment = safeText(row && row.text).toLowerCase();
-      if (topicFilters.length && !rowTopics.some(function(value) { return topicFilters.indexOf(value) !== -1; })) return false;
+      if (videoFilter && rowVideo.indexOf(videoFilter) === -1) return false;
+      if (topicFilter && rowTopic !== topicFilter) return false;
       if (attributesFilter && rowAttributes.indexOf(attributesFilter) === -1) return false;
-      if (approachFilters.length && !rowApproaches.some(function(value) { return approachFilters.indexOf(value) !== -1; })) return false;
+      if (approachFilter && rowApproach !== approachFilter) return false;
       if (authorFilter && rowAuthor.indexOf(authorFilter) === -1) return false;
       if (commentFilter && rowComment.indexOf(commentFilter) === -1) return false;
       return true;
@@ -3022,14 +3022,10 @@ App.youtube = (function () {
   function bulkUpdateSelectedYoutubeComments() {
     var topicInput = document.getElementById('youtubeMinerContentTopicFilter');
     var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
-    var selectedTopics = Array.prototype.slice.call(topicInput && topicInput.selectedOptions || [])
-      .map(function(option) { return safeText(option && option.value); })
-      .filter(Boolean);
-    var selectedApproaches = Array.prototype.slice.call(approachInput && approachInput.selectedOptions || [])
-      .map(function(option) { return safeText(option && option.value); })
-      .filter(Boolean);
-    if (!selectedTopics.length && !selectedApproaches.length) {
-      notify('Select at least one Topic or Approach in the filters before using Edit Selected.', true);
+    var selectedTopic = safeText(topicInput && topicInput.value);
+    var selectedApproach = safeText(approachInput && approachInput.value);
+    if (!selectedTopic && !selectedApproach) {
+      notify('Select a Topic or Approach filter before using Edit Selected.', true);
       return;
     }
     var selectedRows = getFilteredYoutubeCommentRows(youtubeMinerLastResult || {}).filter(function(row) {
@@ -3041,10 +3037,10 @@ App.youtube = (function () {
     }
     selectedRows.forEach(function(row) {
       var patch = {};
-      if (selectedTopics.length) patch.categories = selectedTopics.slice();
-      if (selectedApproaches.length) {
-        patch.approaches = selectedApproaches.slice();
-        patch.response_type = selectedApproaches[0];
+      if (selectedTopic) patch.categories = [selectedTopic];
+      if (selectedApproach) {
+        patch.approaches = [selectedApproach];
+        patch.response_type = selectedApproach;
       }
       saveFeedback(row, patch);
     });
@@ -3153,15 +3149,13 @@ App.youtube = (function () {
       }).filter(Boolean))).sort(function(a, b) {
         return a.localeCompare(b);
       });
-      var previousValues = Array.prototype.slice.call(topicInput.selectedOptions || [])
-        .map(function(option) { return safeText(option && option.value); })
-        .filter(Boolean);
-      topicInput.innerHTML = '';
+      var previousValue = safeText(topicInput.value);
+      topicInput.innerHTML = '<option value="">All Topics</option>';
       categories.forEach(function(cat) {
         var option = document.createElement('option');
         option.value = cat;
         option.textContent = cat;
-        option.selected = previousValues.indexOf(cat) !== -1;
+        option.selected = previousValue === cat;
         topicInput.appendChild(option);
       });
     }
@@ -3171,15 +3165,13 @@ App.youtube = (function () {
       }).filter(Boolean))).sort(function(a, b) {
         return a.localeCompare(b);
       });
-      var previousApproaches = Array.prototype.slice.call(approachInput.selectedOptions || [])
-        .map(function(option) { return safeText(option && option.value); })
-        .filter(Boolean);
-      approachInput.innerHTML = '';
+      var previousApproach = safeText(approachInput.value);
+      approachInput.innerHTML = '<option value="">All Approaches</option>';
       approaches.forEach(function(approach) {
         var option = document.createElement('option');
         option.value = approach;
         option.textContent = approach;
-        option.selected = previousApproaches.indexOf(approach) !== -1;
+        option.selected = previousApproach === approach;
         approachInput.appendChild(option);
       });
     }
@@ -3231,7 +3223,7 @@ App.youtube = (function () {
     if (!comments.length) {
       var emptyTr = document.createElement('tr');
       var emptyTd = document.createElement('td');
-      emptyTd.colSpan = 12;
+      emptyTd.colSpan = 7;
       emptyTd.textContent = 'No filtered comments found for current settings.';
       emptyTr.appendChild(emptyTd);
       tableEl.appendChild(emptyTr);
@@ -3261,39 +3253,25 @@ App.youtube = (function () {
       });
       selectTd.appendChild(checkbox);
 
-      var scoreTd = document.createElement('td');
-      var scoreBtn = document.createElement('button');
-      scoreBtn.type = 'button';
-      scoreBtn.className = 'youtube-miner-score-btn';
-      scoreBtn.textContent = String(Number(row && row.score || 0) || 0);
-      scoreBtn.title = 'Show score breakdown';
-      scoreBtn.addEventListener('click', function() {
-        openScoreBreakdownModal(row);
-      });
-      scoreTd.appendChild(scoreBtn);
-
-      var categoryTd = document.createElement('td');
-      var categoryValues = feedback.categories.length
-        ? feedback.categories
-        : [safeText(row && row.category)].filter(Boolean);
-      var categoryName = categoryValues.join(', ') || '-';
-      var valueRank = Number(row && row.category_value_rank || 0) || 0;
-      categoryTd.textContent = valueRank > 0 ? (categoryName + ' (' + valueRank + ')') : categoryName;
-
-      var attributesTd = document.createElement('td');
-      attributesTd.textContent = toArray(row && (row.attributes || row.attribute_names)).join(', ') || '-';
-
-      var approachTd = document.createElement('td');
-      var approachValues = feedback.approaches.length
-        ? feedback.approaches
-        : [safeText(row && (row.approach || row.approach_name))].filter(Boolean);
-      approachTd.textContent = approachValues.join(', ') || '-';
-
-      var whyTd = document.createElement('td');
-      whyTd.textContent = toArray(row && row.why).join(' | ') || '-';
-
-      var tagsTd = document.createElement('td');
-      tagsTd.textContent = toArray(row && (row.hashtags || row.tags)).join(', ') || '-';
+      var videoTd = document.createElement('td');
+      var videoTitle = safeText(row && row.video_title) || safeText(row && row.video_id) || '-';
+      var videoUrl = safeText(row && row.video_url);
+      if (videoUrl) {
+        var link = document.createElement('a');
+        link.href = videoUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = videoTitle;
+        link.addEventListener('click', function() {
+          syncActiveVideoFromUrl(videoUrl, {
+            title: videoTitle,
+            channel_name: safeText(row && row.channel_name),
+          });
+        });
+        videoTd.appendChild(link);
+      } else {
+        videoTd.textContent = videoTitle;
+      }
 
       var authorTd = document.createElement('td');
       var authorName = safeText(row && row.author) || '-';
@@ -3316,364 +3294,21 @@ App.youtube = (function () {
         authorTd.textContent = authorName;
       }
 
-      var videoTd = document.createElement('td');
-      var videoTitle = safeText(row && row.video_title) || safeText(row && row.video_id) || '-';
-      var videoUrl = safeText(row && row.video_url);
-      if (videoUrl) {
-        var link = document.createElement('a');
-        link.href = videoUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = videoTitle;
-        link.addEventListener('click', function() {
-          syncActiveVideoFromUrl(videoUrl, {
-            title: videoTitle,
-            channel_name: safeText(row && row.channel_name),
-          });
-        });
-        videoTd.appendChild(link);
-      } else {
-        videoTd.textContent = videoTitle;
-      }
+      var topicTd = document.createElement('td');
+      topicTd.textContent = (feedback.categories.length ? feedback.categories[0] : safeText(row && row.category)) || '-';
 
       var commentTd = document.createElement('td');
-      var commentCell = document.createElement('div');
-      commentCell.className = 'youtube-miner-comment-cell';
-
       var commentText = document.createElement('div');
       commentText.className = 'youtube-miner-comment-text';
       commentText.innerHTML = highlightFilterMatch(safeText(row && row.text) || '-', commentFilterQuery);
-      commentCell.appendChild(commentText);
-
-      var feedbackWrap = document.createElement('div');
-      feedbackWrap.className = 'youtube-miner-feedback-wrap';
-
-      var feedbackBtn = document.createElement('button');
-      feedbackBtn.type = 'button';
-      feedbackBtn.className = 'youtube-miner-feedback-icon';
-      feedbackBtn.title = 'Training feedback';
-      feedbackBtn.textContent = '\u270E';
-      if (isReviewedRow) feedbackBtn.classList.add('has-feedback');
-
-      var feedbackPop = document.createElement('div');
-      feedbackPop.className = 'youtube-miner-feedback-pop hidden';
-
-      function placeFeedbackPopup() {
-        if (feedbackPop.classList.contains('hidden')) return;
-        // Reset so we can measure natural size.
-        feedbackPop.style.left = '16px';
-        feedbackPop.style.top = '16px';
-        feedbackPop.style.maxHeight = 'calc(100vh - 24px)';
-        feedbackPop.style.width = 'min(960px, 88vw)';
-
-        var anchorRect = feedbackWrap.getBoundingClientRect();
-        var popRect = feedbackPop.getBoundingClientRect();
-        var margin = 10;
-
-        // Prefer left of anchor.
-        var left = anchorRect.left - popRect.width - 12;
-        if (left < margin) {
-          // If not enough room on left, place right of anchor.
-          left = anchorRect.right + 12;
-        }
-        if (left + popRect.width > window.innerWidth - margin) {
-          left = Math.max(margin, window.innerWidth - popRect.width - margin);
-        }
-
-        var top = anchorRect.top - 8;
-        var maxTop = Math.max(margin, window.innerHeight - popRect.height - margin);
-        if (top > maxTop) top = maxTop;
-        if (top < margin) top = margin;
-
-        feedbackPop.style.left = Math.round(left) + 'px';
-        feedbackPop.style.top = Math.round(top) + 'px';
-      }
-
-      var feedbackHeading = document.createElement('h4');
-      feedbackHeading.textContent = 'Training Feedback';
-      feedbackPop.appendChild(feedbackHeading);
-
-      var qualityRow = document.createElement('div');
-      qualityRow.className = 'form-row';
-      var qualityLabel = document.createElement('label');
-      qualityLabel.textContent = 'Quality (1-5)';
-      var qualityInput = document.createElement('select');
-      qualityInput.innerHTML = '<option value="0">0 (unset)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>';
-      qualityInput.value = String(feedback.quality || 0);
-      qualityRow.appendChild(qualityLabel);
-      qualityRow.appendChild(qualityInput);
-      feedbackPop.appendChild(qualityRow);
-
-      var catRow = document.createElement('div');
-      catRow.className = 'form-row youtube-miner-feedback-factor-row';
-      var catLabel = document.createElement('label');
-      catLabel.textContent = 'Category (multi-select)';
-      var catInput = document.createElement('select');
-      catInput.multiple = true;
-      catInput.size = 5;
-      var categoryNames = youtubeMinerCategoryConfig.map(function(item) {
-        return safeText(item && item.name);
-      }).filter(Boolean);
-      categoryNames.forEach(function(name) {
-        var option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        option.selected = feedback.categories.indexOf(name) !== -1;
-        catInput.appendChild(option);
-      });
-      var catExplain = document.createElement('input');
-      catExplain.type = 'text';
-      catExplain.placeholder = 'Explain';
-      catExplain.value = safeText(feedback.category_explain);
-      catRow.appendChild(catLabel);
-      catRow.appendChild(catInput);
-      catRow.appendChild(catExplain);
-      feedbackPop.appendChild(catRow);
-
-      var attrRow = document.createElement('div');
-      attrRow.className = 'form-row youtube-miner-feedback-factor-row';
-      var attrLabel = document.createElement('label');
-      attrLabel.textContent = 'Attributes (multi-select)';
-      var attrInput = document.createElement('select');
-      attrInput.multiple = true;
-      attrInput.size = 5;
-      var attributeNames = youtubeMinerAttributeConfig.map(function(item) {
-        return safeText(item && item.name);
-      }).filter(Boolean);
-      attributeNames.forEach(function(name) {
-        var option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        option.selected = feedback.attributes.indexOf(name) !== -1;
-        attrInput.appendChild(option);
-      });
-      var attrExplain = document.createElement('input');
-      attrExplain.type = 'text';
-      attrExplain.placeholder = 'Explain';
-      attrExplain.value = safeText(feedback.attributes_explain);
-      attrRow.appendChild(attrLabel);
-      attrRow.appendChild(attrInput);
-      attrRow.appendChild(attrExplain);
-      feedbackPop.appendChild(attrRow);
-
-      var approachRow = document.createElement('div');
-      approachRow.className = 'form-row youtube-miner-feedback-factor-row';
-      var approachLabel = document.createElement('label');
-      approachLabel.textContent = 'Approach (multi-select)';
-      var approachInput = document.createElement('select');
-      approachInput.multiple = true;
-      approachInput.size = 5;
-      var approachNames = youtubeMinerApproachConfig.map(function(item) {
-        return safeText(item && item.name);
-      }).filter(Boolean);
-      approachNames.forEach(function(name) {
-        var option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        option.selected = feedback.approaches.indexOf(name) !== -1;
-        approachInput.appendChild(option);
-      });
-      var approachExplain = document.createElement('input');
-      approachExplain.type = 'text';
-      approachExplain.placeholder = 'Explain';
-      approachExplain.value = safeText(feedback.approaches_explain);
-      approachRow.appendChild(approachLabel);
-      approachRow.appendChild(approachInput);
-      approachRow.appendChild(approachExplain);
-      feedbackPop.appendChild(approachRow);
-
-      var noteRow = document.createElement('div');
-      noteRow.className = 'form-row';
-      var noteLabel = document.createElement('label');
-      noteLabel.textContent = 'What do you like about this comment?';
-      var noteInput = document.createElement('textarea');
-      noteInput.rows = 8;
-      noteInput.placeholder = 'Explain what makes this comment valuable, what signals matter, and what reply style would fit.';
-      noteInput.value = feedback.note || '';
-      noteRow.appendChild(noteLabel);
-      noteRow.appendChild(noteInput);
-      feedbackPop.appendChild(noteRow);
-
-      var suggestedRow = document.createElement('div');
-      suggestedRow.className = 'form-row';
-      var suggestedLabel = document.createElement('label');
-      suggestedLabel.textContent = 'Suggested Response';
-      var suggestedInput = document.createElement('textarea');
-      suggestedInput.rows = 4;
-      suggestedInput.placeholder = 'Optional: write the exact style or sample response you would want here.';
-      suggestedInput.value = feedback.suggested_response || '';
-      suggestedRow.appendChild(suggestedLabel);
-      suggestedRow.appendChild(suggestedInput);
-      feedbackPop.appendChild(suggestedRow);
-
-      var actionRow = document.createElement('div');
-      actionRow.className = 'youtube-miner-feedback-actions';
-      var closeBtn = document.createElement('button');
-      closeBtn.type = 'button';
-      closeBtn.textContent = 'Close';
-      var saveBtn = document.createElement('button');
-      saveBtn.type = 'button';
-      saveBtn.textContent = 'Save Feedback';
-      actionRow.appendChild(closeBtn);
-      actionRow.appendChild(saveBtn);
-      feedbackPop.appendChild(actionRow);
-
-      feedbackBtn.addEventListener('click', function() {
-        var isHidden = feedbackPop.classList.contains('hidden');
-        document.querySelectorAll('.youtube-miner-feedback-pop').forEach(function(node) {
-          if (node !== feedbackPop) node.classList.add('hidden');
-        });
-        feedbackPop.classList.toggle('hidden', !isHidden);
-        if (isHidden) {
-          placeFeedbackPopup();
-        }
-      });
-      closeBtn.addEventListener('click', function() {
-        feedbackPop.classList.add('hidden');
-      });
-      saveBtn.addEventListener('click', function() {
-        var selectedCategories = Array.prototype.slice.call(catInput.options || [])
-          .filter(function(option) { return option.selected; })
-          .map(function(option) { return safeText(option.value); })
-          .filter(Boolean);
-        var selectedAttributes = Array.prototype.slice.call(attrInput.options || [])
-          .filter(function(option) { return option.selected; })
-          .map(function(option) { return safeText(option.value); })
-          .filter(Boolean);
-        var selectedApproaches = Array.prototype.slice.call(approachInput.options || [])
-          .filter(function(option) { return option.selected; })
-          .map(function(option) { return safeText(option.value); })
-          .filter(Boolean);
-        saveFeedback(row, {
-          quality: Number(qualityInput.value || 0),
-          categories: selectedCategories,
-          category_explain: catExplain.value,
-          attributes: selectedAttributes,
-          attributes_explain: attrExplain.value,
-          approaches: selectedApproaches,
-          approaches_explain: approachExplain.value,
-          note: noteInput.value,
-          response_type: selectedApproaches[0] || '',
-          suggested_response: suggestedInput.value,
-        });
-        var updated = readFeedback(row);
-        var nowReviewed = feedbackHasReview(updated);
-        feedbackBtn.classList.toggle('has-feedback', nowReviewed);
-        tr.classList.toggle('youtube-miner-row-reviewed', nowReviewed);
-        feedbackTd.textContent = updated.quality > 0
-          ? ('Q' + String(updated.quality)
-            + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : '')
-            + (updated.approaches.length ? (' | ' + updated.approaches.join(', ')) : ''))
-          : (nowReviewed ? 'Reviewed' : '-');
-        feedbackPop.classList.add('hidden');
-        notify('Training feedback saved');
-      });
-
-      feedbackWrap.appendChild(feedbackBtn);
-      feedbackWrap.appendChild(feedbackPop);
-      commentCell.appendChild(feedbackWrap);
-      commentTd.appendChild(commentCell);
-
-      var draftTd = document.createElement('td');
-      var draftWrap = document.createElement('div');
-      draftWrap.className = 'youtube-miner-draft-wrap';
-      var draftText = document.createElement('div');
-      draftText.textContent = safeText(row && row.reply_draft) || '-';
-      var provideRepliesBtn = document.createElement('button');
-      provideRepliesBtn.type = 'button';
-      provideRepliesBtn.className = 'tiny-btn youtube-miner-provide-replies-btn';
-      provideRepliesBtn.textContent = 'Provide Replies';
-      var ignoreBtn = document.createElement('button');
-      ignoreBtn.type = 'button';
-      ignoreBtn.className = 'tiny-btn youtube-miner-ignore-btn';
-      function updateProvideRepliesBtnState() {
-        var currentFeedback = readFeedback(row);
-        ignoreBtn.textContent = 'Ignore';
-        ignoreBtn.classList.remove('is-ignored');
-        tr.classList.remove('youtube-miner-row-ignored');
-        var hasSubmittedRepliesForm = toArray(currentFeedback && currentFeedback.offer_feedback).some(function(item) {
-          return Boolean(
-            item
-            && (
-              item.selected === true
-              || Number(item.rating || 0) > 0
-              || safeText(item.why)
-              || safeText(item.response)
-            )
-          );
-        });
-        provideRepliesBtn.classList.toggle('is-ready', hasSubmittedRepliesForm);
-        provideRepliesBtn.classList.toggle('is-pending', !hasSubmittedRepliesForm);
-        provideRepliesBtn.textContent = hasSubmittedRepliesForm ? 'Replies Provided' : 'Provide Replies';
-      }
-      updateProvideRepliesBtnState();
-      ignoreBtn.addEventListener('click', function() {
-        var currentFeedback = readFeedback(row);
-        if (Boolean(currentFeedback && currentFeedback.ignored)) {
-          notify('Comment already ignored');
-          return;
-        }
-        var nextApproaches = toArray(currentFeedback && currentFeedback.approaches);
-        if (nextApproaches.indexOf('ignore') === -1) nextApproaches.push('ignore');
-        saveFeedback(row, {
-          ignored: true,
-          approaches: nextApproaches,
-          response_type: 'ignore',
-        });
-        var updated = readFeedback(row);
-        var nowReviewed = feedbackHasReview(updated);
-        feedbackBtn.classList.toggle('has-feedback', nowReviewed);
-        tr.classList.toggle('youtube-miner-row-reviewed', nowReviewed);
-        feedbackTd.textContent = updated.quality > 0
-          ? ('Q' + String(updated.quality)
-            + (updated.categories.length ? (' | ' + updated.categories.join(', ')) : '')
-            + (updated.approaches.length ? (' | ' + updated.approaches.join(', ')) : ''))
-          : (nowReviewed ? 'Reviewed' : '-');
-        notify('Comment marked ignore');
-        renderYoutubeCommentMinerResult(youtubeMinerLastResult || {});
-      });
-      provideRepliesBtn.addEventListener('click', async function() {
-        try {
-          await openProvideRepliesModal(row, readFeedback(row), function(selectedReply, selectedOfferFeedback) {
-            row.reply_draft = selectedReply;
-            draftText.textContent = selectedReply;
-            saveFeedback(row, {
-              suggested_response: selectedReply,
-              offer_feedback: selectedOfferFeedback,
-            });
-            updateProvideRepliesBtnState();
-            notify('Reply selected');
-          });
-        } catch (err) {
-          var detail = safeText(err && err.message) || 'Could not open reply generator';
-          console.error('YouTube Provide Replies AI generation failed', { error: err, row: row });
-          notify('AI reply generation failed: ' + detail, true);
-        }
-      });
-      draftWrap.appendChild(draftText);
-      draftWrap.appendChild(provideRepliesBtn);
-      draftWrap.appendChild(ignoreBtn);
-      draftTd.appendChild(draftWrap);
-
-      var feedbackTd = document.createElement('td');
-      feedbackTd.textContent = feedback.quality > 0
-        ? ('Q' + String(feedback.quality)
-          + (feedback.categories.length ? (' | ' + feedback.categories.join(', ')) : '')
-          + (feedback.approaches.length ? (' | ' + feedback.approaches.join(', ')) : ''))
-        : (isReviewedRow ? 'Reviewed' : '-');
-
+      commentTd.appendChild(commentText);
       tr.appendChild(selectTd);
-      tr.appendChild(scoreTd);
-      tr.appendChild(categoryTd);
-      tr.appendChild(attributesTd);
-      tr.appendChild(approachTd);
-      tr.appendChild(whyTd);
-      tr.appendChild(tagsTd);
-      tr.appendChild(authorTd);
       tr.appendChild(videoTd);
+      tr.appendChild(authorTd);
+      tr.appendChild(topicTd);
       tr.appendChild(commentTd);
-      tr.appendChild(draftTd);
-      tr.appendChild(feedbackTd);
+      tr.appendChild(document.createElement('td')).textContent = (feedback.approaches.length ? feedback.approaches[0] : safeText(row && (row.approach || row.approach_name))) || '-';
+      tr.appendChild(document.createElement('td')).textContent = toArray(row && (row.attributes || row.attribute_names)).join(', ') || '-';
       tableEl.appendChild(tr);
     });
     syncYoutubeCommentBulkSelectionUi(activeResult);
@@ -4910,6 +4545,7 @@ App.youtube = (function () {
       });
     }
 
+    var youtubeMinerContentVideoFilter = document.getElementById('youtubeMinerContentVideoFilter');
     var youtubeMinerContentTopicFilter = document.getElementById('youtubeMinerContentTopicFilter');
     var youtubeMinerContentAttributesFilter = document.getElementById('youtubeMinerContentAttributesFilter');
     var youtubeMinerContentApproachFilter = document.getElementById('youtubeMinerContentApproachFilter');
@@ -5047,6 +4683,11 @@ App.youtube = (function () {
       renderYoutubeCommentMinerResult(restoredMinerResult);
     } else if (activeVideoSnapshot && activeVideoSnapshot.video_url) {
       syncActiveVideoFromUrl(activeVideoSnapshot.video_url, activeVideoSnapshot);
+    }
+    if (youtubeMinerContentVideoFilter) {
+      youtubeMinerContentVideoFilter.addEventListener('input', function() {
+        renderYoutubeCommentMinerResult();
+      });
     }
     if (youtubeMinerContentTopicFilter) {
       youtubeMinerContentTopicFilter.addEventListener('change', function() {

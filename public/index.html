@@ -1760,28 +1760,8 @@
               <div class="table-wrap">
                 <table>
                   <thead>
-                    <tr class="youtube-comment-filter-row">
-                      <th>
-                        <input id="youtubeCommentMinerSelectAllVisible" type="checkbox" aria-label="Select all visible comments" />
-                      </th>
-                      <th></th>
-                      <th>
-                        <select id="youtubeMinerContentTopicFilter" multiple size="4">
-                          <option value="">All Topics</option>
-                        </select>
-                      </th>
-                      <th><input id="youtubeMinerContentAttributesFilter" type="text" placeholder="Attributes" /></th>
-                      <th>
-                        <select id="youtubeMinerContentApproachFilter" multiple size="4">
-                          <option value="">All Approaches</option>
-                        </select>
-                      </th>
-                      <th></th>
-                      <th></th>
-                      <th><input id="youtubeMinerContentAuthorFilter" type="text" placeholder="Author" /></th>
-                      <th></th>
-                      <th><input id="youtubeMinerContentCommentFilter" type="text" placeholder="Comment" /></th>
-                      <th colspan="2" class="youtube-comment-bulk-actions-cell">
+                    <tr>
+                      <th colspan="7" class="youtube-comment-bulk-actions-row">
                         <div class="youtube-comment-bulk-actions">
                           <button id="youtubeCommentMinerEditSelectedBtn" type="button" disabled>Edit Selected</button>
                           <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled>Delete Selected</button>
@@ -1789,19 +1769,39 @@
                         </div>
                       </th>
                     </tr>
+                    <tr class="youtube-comment-filter-row">
+                      <th>
+                        <input id="youtubeCommentMinerSelectAllVisible" type="checkbox" aria-label="Select all visible comments" />
+                      </th>
+                      <th>
+                        <input id="youtubeMinerContentVideoFilter" type="text" placeholder="Video" />
+                      </th>
+                      <th>
+                        <input id="youtubeMinerContentAuthorFilter" type="text" placeholder="Author" />
+                      </th>
+                      <th>
+                        <select id="youtubeMinerContentTopicFilter">
+                          <option value="">All Topics</option>
+                        </select>
+                      </th>
+                      <th>
+                        <input id="youtubeMinerContentCommentFilter" type="text" placeholder="Comment" />
+                      </th>
+                      <th>
+                        <select id="youtubeMinerContentApproachFilter">
+                          <option value="">All Approaches</option>
+                        </select>
+                      </th>
+                      <th><input id="youtubeMinerContentAttributesFilter" type="text" placeholder="Attributes" /></th>
+                    </tr>
                     <tr>
                       <th></th>
-                      <th>Score</th>
-                      <th>Topic</th>
-                      <th>Attributes</th>
-                      <th>Approach</th>
-                      <th>Why Surfaced</th>
-                      <th>Hashtags</th>
-                      <th>Author</th>
                       <th>Video</th>
+                      <th>Author</th>
+                      <th>Topic</th>
                       <th>Comment</th>
-                      <th>Reply Draft</th>
-                      <th>Feedback</th>
+                      <th>Approach</th>
+                      <th>Attributes</th>
                     </tr>
                   </thead>
                   <tbody id="youtubeCommentMinerTable"></tbody>
