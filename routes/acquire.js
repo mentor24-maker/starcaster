@@ -124,6 +124,83 @@ function splitTagList(value) {
     .map((item) => (item.startsWith('#') ? item : `#${item}`));
 }
 
+function parseTextTagTokens(value) {
+  return String(value || '')
+    .split(/[,\n]/g)
+    .map((item) => safeText(item).toLowerCase())
+    .filter(Boolean);
+}
+
+function normalizedTitleKey(value) {
+  return safeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function titleTokenSet(value) {
+  return new Set(
+    normalizedTitleKey(value)
+      .split(/\s+/g)
+      .filter((token) => token.length >= 4)
+  );
+}
+
+function overlapCount(leftSet, rightSet) {
+  let count = 0;
+  leftSet.forEach((item) => {
+    if (rightSet.has(item)) count += 1;
+  });
+  return count;
+}
+
+function extractYoutubeBanReason(tags) {
+  const tokens = parseTextTagTokens(tags);
+  const reasonToken = tokens.find((token) => token.startsWith('ban_reason:'));
+  return reasonToken ? safeText(reasonToken.split(':')[1]) : '';
+}
+
+function isYoutubeVideoBanned(tags) {
+  const tokens = parseTextTagTokens(tags);
+  return tokens.includes('banned') || tokens.some((token) => token.startsWith('ban_reason:'));
+}
+
+async function listYoutubeBanProfiles(limit = 1000) {
+  const res = await listYoutubeVideos(limit);
+  if (!res.ok) return [];
+  return toArray(res.data)
+    .filter((row) => isYoutubeVideoBanned(row?.tags))
+    .map((row) => ({
+      video_id: safeText(row?.video_id),
+      video_url: safeText(row?.video_url),
+      channel_name: safeText(row?.channel_name).toLowerCase(),
+      title_key: normalizedTitleKey(row?.title),
+      title_tokens: titleTokenSet(row?.title),
+      reason: extractYoutubeBanReason(row?.tags),
+    }));
+}
+
+function isResearchCandidateExcluded(candidate, banProfiles) {
+  const videoId = safeText(candidate?.video_id);
+  const videoUrl = safeText(candidate?.video_url);
+  const channelName = safeText(candidate?.channel_name).toLowerCase();
+  const titleKey = normalizedTitleKey(candidate?.title || candidate?.video_title);
+  const titleTokens = titleTokenSet(candidate?.title || candidate?.video_title);
+  return toArray(banProfiles).some((profile) => {
+    if (videoId && profile.video_id && profile.video_id === videoId) return true;
+    if (videoUrl && profile.video_url && profile.video_url === videoUrl) return true;
+    if (titleKey && profile.title_key && profile.title_key === titleKey) return true;
+    const sharedTokens = overlapCount(titleTokens, profile.title_tokens);
+    if (channelName && profile.channel_name && channelName === profile.channel_name) {
+      if (profile.reason === 'corporate' || profile.reason === 'personal') return true;
+      if (sharedTokens >= 2) return true;
+    }
+    if (profile.reason === 'not_serious' && sharedTokens >= 3) return true;
+    return false;
+  });
+}
+
 function hasYoutubeVideoDetails(video) {
   if (!video) return false;
   return Boolean(
@@ -1729,9 +1806,12 @@ async function handle(req, res, pathname, method) {
       }
     }
 
+    const banProfiles = await listYoutubeBanProfiles(1000);
+    const filteredDiscovered = discovered.filter((hit) => !isResearchCandidateExcluded(hit, banProfiles));
+
     const dedupedVideos = [];
     const seenVideoIds = new Set();
-    for (const hit of discovered) {
+    for (const hit of filteredDiscovered) {
       const videoId = safeText(hit.video_id);
       if (!videoId || seenVideoIds.has(videoId)) continue;
       seenVideoIds.add(videoId);
@@ -1746,6 +1826,7 @@ async function handle(req, res, pathname, method) {
     const researchInput = {
       phrase_count: phrases.length,
       discovered_target_count: discovered.length,
+      excluded_target_count: Math.max(0, discovered.length - filteredDiscovered.length),
       distilled_target_count: dedupedVideos.length,
       phrases,
       discovered_targets: discovered.map((item) => item.video_url).filter(Boolean),
@@ -1773,8 +1854,9 @@ async function handle(req, res, pathname, method) {
         phrase_sources: phraseSources,
         phrases,
         discovered_count: discovered.length,
+        excluded_count: Math.max(0, discovered.length - filteredDiscovered.length),
         distilled_count: dedupedVideos.length,
-        discovered: discovered.slice(0, 500),
+        discovered: filteredDiscovered.slice(0, 500),
         distilled_targets: dedupedVideos.map((item) => item.video_url).filter(Boolean),
         distilled_target_items: dedupedVideos.map((item) => ({
           video_url: safeText(item?.video_url),
@@ -1791,6 +1873,7 @@ async function handle(req, res, pathname, method) {
       stats: {
         phrase_count: phrases.length,
         discovered_target_count: discovered.length,
+        excluded_target_count: Math.max(0, discovered.length - filteredDiscovered.length),
         distilled_target_count: dedupedVideos.length,
       },
       warnings: warnings.slice(0, 300),
@@ -1808,6 +1891,7 @@ async function handle(req, res, pathname, method) {
         run_id: runId || null,
         phrase_count: phrases.length,
         discovered_target_count: discovered.length,
+        excluded_target_count: Math.max(0, discovered.length - filteredDiscovered.length),
         distilled_target_count: dedupedVideos.length,
       },
     });

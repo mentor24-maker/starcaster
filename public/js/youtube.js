@@ -90,6 +90,33 @@ App.youtube = (function () {
     return num.toLocaleString();
   }
 
+  function parseSimpleTagList(value) {
+    return String(value || '')
+      .split(/[,\n]/g)
+      .map(function(item) { return safeText(item); })
+      .filter(Boolean);
+  }
+
+  function extractYoutubeBanReasonFromTags(value) {
+    var token = parseSimpleTagList(value).find(function(item) {
+      return safeText(item).toLowerCase().indexOf('ban_reason:') === 0;
+    });
+    return token ? safeText(token.split(':')[1]) : '';
+  }
+
+  function buildYoutubeBanTags(existingTags, reason) {
+    var tokens = parseSimpleTagList(existingTags).filter(function(item) {
+      var lower = safeText(item).toLowerCase();
+      return lower !== 'banned' && lower.indexOf('ban_reason:') !== 0;
+    });
+    var nextReason = safeText(reason).toLowerCase();
+    if (nextReason) {
+      tokens.push('banned');
+      tokens.push('ban_reason:' + nextReason);
+    }
+    return Array.from(new Set(tokens)).join(', ');
+  }
+
   function extractYoutubeVideoId(value) {
     var raw = safeText(value);
     if (!raw) return '';
@@ -3729,6 +3756,7 @@ App.youtube = (function () {
           'Research run complete.',
           'Phrases: ' + String(Number(research.phrases?.length || stats.phrase_count || 0) || 0),
           'Discovered targets: ' + String(Number(research.discovered_count || stats.discovered_target_count || 0) || 0),
+          'Excluded: ' + String(Number(research.excluded_count || stats.excluded_target_count || 0) || 0),
           'Candidate videos: ' + String(Number(research.distilled_count || stats.distilled_target_count || 0) || 0),
         ].join(' | ');
       }
@@ -3906,6 +3934,67 @@ App.youtube = (function () {
     notify('Research run deleted (' + id + ')');
   }
 
+  function openYoutubeBanVideoModal(run) {
+    if (!run || !safeText(run.video_record_id)) {
+      notify('This video must be in the repository before it can be banned.', true);
+      return;
+    }
+    if (!App.components || !App.components.Modal) {
+      notify('Ban modal is unavailable', true);
+      return;
+    }
+    var body = document.createElement('div');
+    body.className = 'stack-form';
+    var intro = document.createElement('p');
+    intro.textContent = 'Choose why this video should be excluded from future research results.';
+    body.appendChild(intro);
+
+    var row = document.createElement('div');
+    row.className = 'form-row';
+    var label = document.createElement('label');
+    label.textContent = 'Ban Reason';
+    var select = document.createElement('select');
+    select.innerHTML = ''
+      + '<option value=\"\">Select reason</option>'
+      + '<option value=\"corporate\">Corporate</option>'
+      + '<option value=\"personal\">Personal</option>'
+      + '<option value=\"not_serious\">Not Serious</option>';
+    select.value = extractYoutubeBanReasonFromTags(run.tags);
+    row.appendChild(label);
+    row.appendChild(select);
+    body.appendChild(row);
+
+    var modal = App.components.Modal({
+      title: 'Ban Video',
+      body: body,
+      actions: [
+        { label: 'Cancel', onClick: function() { modal.close(); } },
+        {
+          label: 'Save Ban',
+          primary: true,
+          onClick: function() {
+            var reason = safeText(select.value);
+            if (!reason) {
+              notify('Choose a ban reason first.', true);
+              return;
+            }
+            api('/api/acquire/youtube-videos/' + encodeURIComponent(run.video_record_id), {
+              method: 'PATCH',
+              body: JSON.stringify({ tags: buildYoutubeBanTags(run.tags, reason) }),
+            }).then(function() {
+              modal.close();
+              notify('Video banned for future research');
+              return Promise.all([refreshYoutubeVideos(200), refreshYoutubeRuns(20)]);
+            }).catch(function(err) {
+              notify(err.message, true);
+            });
+          }
+        }
+      ],
+    });
+    modal.open();
+  }
+
   function renderYoutubeRunsTable() {
     if (!els.youtubeRunsTable) return;
     els.youtubeRunsTable.innerHTML = '';
@@ -4009,6 +4098,7 @@ App.youtube = (function () {
           'Copy URL': 'copy',
           'View': 'view',
           'Edit': 'edit',
+          'Ban': 'delete',
           'Add Contact': 'contact',
           'View Comments': 'comments',
           'Acquire Comments': 'comments',
@@ -4016,7 +4106,7 @@ App.youtube = (function () {
         };
         return App.makeIconButton(iconMap[label] || 'view', label, fn, {
           primary: label === 'View Comments',
-          danger: label === 'Delete'
+          danger: label === 'Delete' || label === 'Ban'
         });
       }
 
@@ -4070,6 +4160,7 @@ App.youtube = (function () {
         notify('Loaded analyzed video');
       });
       var editBtn         = mkBtn('Edit',            function() { openEditRun(resolvedDetailRunId).catch(function(e) { notify(e.message, true); }); });
+      var banBtn          = mkBtn('Ban',             function() { openYoutubeBanVideoModal(run); });
       var addBtn          = mkBtn('Add Contact',      function() { addContactFromRun(resolvedDetailRunId).catch(function(e) { notify(e.message, true); }); });
       
       var commentMatch = findCommentRunForVideoUrl(run.video_url) || (run.comment_run_id ? { run_id: run.comment_run_id, video_url: run.video_url, title: run.title, channel_name: run.channel_name, comment_count: run.comment_count } : null);
@@ -4093,11 +4184,12 @@ App.youtube = (function () {
       }
 
       editBtn.style.marginLeft = '8px';
+      banBtn.style.marginLeft = '8px';
       viewBtn.style.marginLeft = '8px';
       addBtn.style.marginLeft = '8px';
       commentsBtn.style.marginLeft = '8px';
       delBtn.style.marginLeft = '8px';
-      actionsTd.appendChild(copyBtn); actionsTd.appendChild(viewBtn); actionsTd.appendChild(editBtn); actionsTd.appendChild(addBtn);
+      actionsTd.appendChild(copyBtn); actionsTd.appendChild(viewBtn); actionsTd.appendChild(editBtn); actionsTd.appendChild(banBtn); actionsTd.appendChild(addBtn);
       actionsTd.appendChild(commentsBtn);
       actionsTd.appendChild(delBtn);
       els.youtubeRunsTable.appendChild(tr);
