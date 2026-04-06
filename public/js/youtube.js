@@ -1840,6 +1840,14 @@ App.youtube = (function () {
       || safeText(run && run.video_url);
   }
 
+  function findCommentRunForVideoUrl(videoUrl) {
+    var url = String(videoUrl || '').trim();
+    if (!url) return null;
+    return (state.acquireYoutubeComments || []).find(function(r) {
+      return String(r.video_url || '').trim() === url;
+    }) || null;
+  }
+
   function getSelectedYoutubeRows() {
     return getFilteredYoutubeRuns().filter(function(run) {
       return selectedRunIds.has(getRepositorySelectionKey(run));
@@ -1851,21 +1859,28 @@ App.youtube = (function () {
     var bulkBtn = document.getElementById('youtubeRunsBulkEditBtn');
     var augmentBtn = document.getElementById('youtubeRunsAugmentBtn');
     var diagnoseBtn = document.getElementById('youtubeRunsDiagnoseBtn');
+    var deleteBtn = document.getElementById('youtubeRunsDeleteBtn');
     var visibleIds = getFilteredYoutubeRuns().map(function(run) { return getRepositorySelectionKey(run); }).filter(Boolean);
     var selectedVisible = visibleIds.filter(function(runId) { return selectedRunIds.has(runId); });
+    var selectedRows = getSelectedYoutubeRows();
 
     if (selectAll) {
       selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
       selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
     }
     if (bulkBtn) {
-      bulkBtn.disabled = getSelectedYoutubeRows().filter(function(run) { return safeText(run && run.detail_run_id); }).length === 0;
+      bulkBtn.disabled = selectedRows.filter(function(run) { return safeText(run && run.detail_run_id); }).length === 0;
     }
     if (augmentBtn) {
-      augmentBtn.disabled = getSelectedYoutubeRows().filter(function(run) { return safeText(run && run.video_url); }).length === 0;
+      augmentBtn.disabled = selectedRows.filter(function(run) { return safeText(run && run.video_url); }).length === 0;
     }
     if (diagnoseBtn) {
-      diagnoseBtn.disabled = getSelectedYoutubeRows().filter(function(run) { return safeText(run && run.video_url); }).length === 0;
+      diagnoseBtn.disabled = selectedRows.filter(function(run) { return safeText(run && run.video_url); }).length === 0;
+    }
+    if (deleteBtn) {
+      deleteBtn.disabled = selectedRows.filter(function(run) {
+        return safeText(run && run.comment_run_id) || findCommentRunForVideoUrl(run && run.video_url);
+      }).length === 0;
     }
   }
 
@@ -3509,9 +3524,19 @@ App.youtube = (function () {
     }
     runs.forEach(function(run) {
       var tr = document.createElement('tr');
+      var primaryTargetUrl = safeText(Array.isArray(run.target_preview) ? run.target_preview[0] : '');
 
       var runIdTd = document.createElement('td');
-      runIdTd.textContent = safeText(run.run_id) || '-';
+      if (primaryTargetUrl) {
+        var runLink = document.createElement('a');
+        runLink.href = primaryTargetUrl;
+        runLink.target = '_blank';
+        runLink.rel = 'noopener noreferrer';
+        runLink.textContent = safeText(run.run_id) || '-';
+        runIdTd.appendChild(runLink);
+      } else {
+        runIdTd.textContent = safeText(run.run_id) || '-';
+      }
 
       var createdTd = document.createElement('td');
       createdTd.textContent = run.created_at ? new Date(run.created_at).toLocaleString() : '-';
@@ -3529,12 +3554,18 @@ App.youtube = (function () {
       filteredTd.textContent = String(Number(run.total_comments_filtered || 0) || 0);
 
       var actionsTd = document.createElement('td');
-      var viewBtn = App.makeIconButton('view', 'View research result', function() {
-        loadYoutubeResearchRun(run.run_id).catch(function(err) {
+      var viewBtn = App.makeIconButton('view', 'Open target video', function() {
+        if (!primaryTargetUrl) return notify('No target video is stored for this research run.', true);
+        window.open(primaryTargetUrl, '_blank', 'noopener');
+      });
+      var deleteBtn = App.makeIconButton('delete', 'Delete research run', function() {
+        if (!confirm('Delete research run ' + safeText(run.run_id) + '?')) return;
+        deleteYoutubeResearchRun(run.run_id).catch(function(err) {
           notify(err.message, true);
         });
-      });
+      }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(viewBtn);
+      actionsTd.appendChild(deleteBtn);
 
       tr.appendChild(runIdTd);
       tr.appendChild(createdTd);
@@ -3575,6 +3606,14 @@ App.youtube = (function () {
     if (contentEl && typeof contentEl.scrollIntoView === 'function') {
       contentEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  async function deleteYoutubeResearchRun(runId) {
+    var id = safeText(runId);
+    if (!id) throw new Error('Research run id is required');
+    await api('/api/acquire/youtube-research-runs/' + encodeURIComponent(id), { method: 'DELETE' });
+    await refreshYoutubeResearchRuns(30);
+    notify('Research run deleted (' + id + ')');
   }
 
   function renderYoutubeRunsTable() {
@@ -3716,14 +3755,6 @@ App.youtube = (function () {
         });
       }
       
-      function findCommentRunForVideoUrl(videoUrl) {
-        var url = String(videoUrl || '').trim();
-        if (!url) return null;
-        return (state.acquireYoutubeComments || []).find(function(r) {
-          return String(r.video_url || '').trim() === url;
-        }) || null;
-      }
-
       var copyBtn         = mkBtn('Copy URL',        function() {
         copyTextToClipboard(run.video_url)
           .then(function() { notify('Video URL copied'); })
@@ -4074,6 +4105,40 @@ App.youtube = (function () {
     notify('Comment run deleted (' + id + ')');
   }
 
+  function bulkDeleteSelectedCommentRuns() {
+    var selectedRows = getSelectedYoutubeRows();
+    var runIds = [];
+    var seen = new Set();
+    selectedRows.forEach(function(run) {
+      var commentMatch = findCommentRunForVideoUrl(run && run.video_url)
+        || (run && run.comment_run_id ? { run_id: run.comment_run_id } : null);
+      var runId = safeText(commentMatch && commentMatch.run_id) || safeText(run && run.comment_run_id);
+      if (!runId) return;
+      if (seen.has(runId)) return;
+      seen.add(runId);
+      runIds.push(runId);
+    });
+    if (!runIds.length) {
+      notify('No comment runs are available to delete for the checked videos.', true);
+      return Promise.resolve();
+    }
+    if (!confirm('Delete ' + runIds.length + ' selected comment run' + (runIds.length === 1 ? '' : 's') + '?')) {
+      return Promise.resolve();
+    }
+    return Promise.all(runIds.map(function(runId) {
+      return api('/api/acquire/youtube-comment-runs/' + encodeURIComponent(runId), { method: 'DELETE' })
+        .then(function() { return { ok: true, runId: runId }; })
+        .catch(function(err) { return { ok: false, runId: runId, error: err }; });
+    })).then(function(results) {
+      var deleted = results.filter(function(item) { return item.ok; }).length;
+      var failed = results.filter(function(item) { return !item.ok; }).length;
+      return refreshCommentRuns().then(function() {
+        renderYoutubeRunsTable();
+        notify('Delete selected complete: ' + deleted + ' deleted, ' + failed + ' failed');
+      });
+    });
+  }
+
   async function addContactFromRun(runId) {
     var res = await api('/api/acquire/youtube-runs/' + encodeURIComponent(runId) + '/add-contact', {
       method: 'POST', body: JSON.stringify({}),
@@ -4225,6 +4290,7 @@ App.youtube = (function () {
     var bulkEditBtn = document.getElementById('youtubeRunsBulkEditBtn');
     var augmentBtn = document.getElementById('youtubeRunsAugmentBtn');
     var diagnoseBtn = document.getElementById('youtubeRunsDiagnoseBtn');
+    var deleteBtn = document.getElementById('youtubeRunsDeleteBtn');
     var backFromEditRunBtn = document.getElementById('backFromEditYoutubeRunBtn');
     var backFromBulkEditBtn = document.getElementById('backFromBulkEditYoutubeRunsBtn');
     var youtubeRunEditForm = document.getElementById('youtubeRunEditForm');
@@ -4289,6 +4355,13 @@ App.youtube = (function () {
     if (diagnoseBtn) {
       diagnoseBtn.addEventListener('click', function() {
         diagnoseSelectedYoutubeVideos();
+      });
+    }
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function() {
+        bulkDeleteSelectedCommentRuns().catch(function(err) {
+          notify(err.message || 'Could not delete selected comment runs', true);
+        });
       });
     }
     if (backFromEditRunBtn) {
