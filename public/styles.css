@@ -8545,6 +8545,31 @@ th {
   border-color: #2aa7fa;
 }
 
+.youtube-research-bulk-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 0.6rem 0;
+}
+
+.youtube-research-checkall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.youtube-research-bulk-actions {
+  grid-column: 2 / 3;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
 .table-sort-btn {
   width: auto;
   min-width: 0;
@@ -8564,6 +8589,10 @@ th {
 
 .numeric-col {
   text-align: right;
+}
+
+#youtubeResearchRunsTable td:last-child {
+  white-space: nowrap;
 }
 
 .youtube-research-hover-preview {
