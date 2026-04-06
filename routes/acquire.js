@@ -75,6 +75,7 @@ const {
   listYoutubeVideos,
   getYoutubeVideo,
   updateYoutubeVideo,
+  deleteYoutubeVideo,
 } = require('../lib/harvest/YoutubeVideosStore');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const {
@@ -1701,6 +1702,12 @@ async function handle(req, res, pathname, method) {
       phrases,
       discovered_targets: discovered.map((item) => item.video_url).filter(Boolean),
       distilled_targets: dedupedVideos.map((item) => item.video_url).filter(Boolean),
+      distilled_target_items: dedupedVideos.map((item) => ({
+        video_url: safeText(item?.video_url),
+        video_id: safeText(item?.video_id),
+        title: firstNonEmpty(item?.title, item?.video_title),
+        channel_name: safeText(item?.channel_name),
+      })).filter((item) => item.video_url),
       raw_input: {
         include_messaging: includeMessaging,
         manual_phrases_text: String(body?.manual_phrases_text || body?.manual_phrases || '').trim(),
@@ -1712,22 +1719,28 @@ async function handle(req, res, pathname, method) {
         messaging_hashtag: messagingHashtag,
       },
     };
-    const saveRes = await createResearchRun(researchInput, mined.data || {});
-    const runId = saveRes?.ok ? safeText(saveRes?.data?.run_id) : '';
-
     const resultPayload = {
       ...(mined.data || {}),
       research: {
-        run_id: runId,
+        run_id: '',
         phrase_sources: phraseSources,
         phrases,
         discovered_count: discovered.length,
         distilled_count: dedupedVideos.length,
         discovered: discovered.slice(0, 500),
         distilled_targets: dedupedVideos.map((item) => item.video_url).filter(Boolean),
+        distilled_target_items: dedupedVideos.map((item) => ({
+          video_url: safeText(item?.video_url),
+          video_id: safeText(item?.video_id),
+          title: firstNonEmpty(item?.title, item?.video_title),
+          channel_name: safeText(item?.channel_name),
+        })).filter((item) => item.video_url),
       },
       warnings: [...toArray(mined.data?.warnings), ...warnings].slice(0, 300),
     };
+    const saveRes = await createResearchRun(researchInput, resultPayload);
+    const runId = saveRes?.ok ? safeText(saveRes?.data?.run_id) : '';
+    resultPayload.research.run_id = runId;
 
     logActivity({
       action: 'acquire.youtube_research',
@@ -2044,6 +2057,14 @@ async function handle(req, res, pathname, method) {
       await updateYoutubeHarvestRun(result.data.detail_run_id, patch).catch(() => null);
     }
 
+    return sendOk(res, 200, result.data, { video: result.data }), true;
+  }
+
+  // DELETE /api/acquire/youtube-videos/:id
+  if (youtubeVideoMatch && method === 'DELETE') {
+    const id = decodeURIComponent(youtubeVideoMatch[1]);
+    const result = await deleteYoutubeVideo(id);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { video: result.data }), true;
   }
 

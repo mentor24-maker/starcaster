@@ -7,7 +7,7 @@ window.App = window.App || {};
 App.youtube = (function () {
   const { state, els, api, notify, setPreview } = App;
   const runFilters = {
-    from: '', to: '', title: '', channel: '', category: '', transcript: '',
+    from: '', to: '', title: '', channel: '', category: '', tags: '', transcript: '',
   };
   const categoryTableState = {
     sort: {
@@ -1854,6 +1854,18 @@ App.youtube = (function () {
     });
   }
 
+  function getRepositoryDeleteTargets(run) {
+    var detailRunId = safeText(run && run.detail_run_id);
+    var commentMatch = findCommentRunForVideoUrl(run && run.video_url)
+      || (run && run.comment_run_id ? { run_id: run.comment_run_id } : null);
+    var commentRunId = safeText(commentMatch && commentMatch.run_id) || safeText(run && run.comment_run_id);
+    return {
+      videoRecordId: safeText(run && run.video_record_id),
+      detailRunId: detailRunId,
+      commentRunId: commentRunId,
+    };
+  }
+
   function syncBulkSelectionUi() {
     var selectAll = document.getElementById('youtubeRunsSelectAllVisible');
     var bulkBtn = document.getElementById('youtubeRunsBulkEditBtn');
@@ -1879,7 +1891,8 @@ App.youtube = (function () {
     }
     if (deleteBtn) {
       deleteBtn.disabled = selectedRows.filter(function(run) {
-        return safeText(run && run.comment_run_id) || findCommentRunForVideoUrl(run && run.video_url);
+        var targets = getRepositoryDeleteTargets(run);
+        return targets.videoRecordId || targets.detailRunId || targets.commentRunId;
       }).length === 0;
     }
   }
@@ -2252,6 +2265,34 @@ App.youtube = (function () {
       if (fromForm) return fromForm;
     }
     return '';
+  }
+
+  function getPrimaryResearchRunVideo(run, result) {
+    var request = run && run.request && typeof run.request === 'object' ? run.request : {};
+    var research = result && result.research && typeof result.research === 'object' ? result.research : {};
+    var requestItems = Array.isArray(request.distilled_target_items) ? request.distilled_target_items : [];
+    var researchItems = Array.isArray(research.distilled_target_items) ? research.distilled_target_items : [];
+    var primaryItem = requestItems[0] || researchItems[0] || null;
+    var primaryUrl = safeText(primaryItem && primaryItem.video_url)
+      || safeText(run && run.primary_video_url)
+      || safeText(Array.isArray(request.distilled_targets) ? request.distilled_targets[0] : '')
+      || safeText(Array.isArray(research.distilled_targets) ? research.distilled_targets[0] : '');
+    var primaryTitle = safeText(primaryItem && (primaryItem.title || primaryItem.video_title))
+      || safeText(run && run.primary_video_title);
+    var primaryChannel = safeText(primaryItem && primaryItem.channel_name);
+    if (!primaryTitle && primaryUrl && Array.isArray(result && result.comments)) {
+      var matchingComment = result.comments.find(function(item) {
+        return safeText(item && item.video_url) === primaryUrl;
+      });
+      primaryTitle = safeText(matchingComment && matchingComment.video_title);
+      primaryChannel = primaryChannel || safeText(matchingComment && matchingComment.channel_name);
+    }
+    return {
+      video_url: primaryUrl,
+      video_id: extractYoutubeVideoId(primaryUrl),
+      title: primaryTitle,
+      channel_name: primaryChannel,
+    };
   }
 
   function setCommentSubmitStatus(text, isError) {
@@ -3595,8 +3636,15 @@ App.youtube = (function () {
     var run = res.run || null;
     var result = run && run.result ? run.result : null;
     if (!result) throw new Error('Research run has no result payload.');
+    var primaryVideo = getPrimaryResearchRunVideo(run, result);
     setYoutubeMinerMode('training');
     setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', true);
+    state.youtubeAcquireResult = null;
+    currentDetailsRun = primaryVideo && primaryVideo.video_url ? primaryVideo : null;
+    if (currentDetailsRun) rememberActiveVideo(currentDetailsRun);
+    if (primaryVideo && primaryVideo.video_url) {
+      syncActiveVideoFromUrl(primaryVideo.video_url, primaryVideo);
+    }
     renderYoutubeResearchResult(result);
     renderYoutubeCommentMinerResult(result);
     var comments = toArray(result && result.comments);
@@ -3857,17 +3905,20 @@ App.youtube = (function () {
     var channel    = String(runFilters.channel    || '').trim().toLowerCase();
     var category   = String(runFilters.category   || '').trim().toLowerCase();
     var transcript = String(runFilters.transcript || '').trim().toLowerCase();
+    var tags = String(runFilters.tags || '').trim().toLowerCase();
     return rows.filter(function(run) {
       var runDate       = toLocalDateKey(run.created_at);
       var runTitle      = String(run.title || '').toLowerCase();
       var runChannel    = String(run.channel_name || '').toLowerCase();
       var runCategory   = String(run.category || '').toLowerCase();
+      var runTags       = String(run.tags || run.hashtags || '').toLowerCase();
       var runTranscript = String(run.transcript_status || 'unavailable').toLowerCase();
       if (from && runDate && runDate < from)           return false;
       if (to   && runDate && runDate > to)             return false;
       if (title      && runTitle.indexOf(title) < 0)  return false;
       if (channel    && runChannel.indexOf(channel) < 0) return false;
       if (category   && runCategory !== category)     return false;
+      if (tags       && runTags.indexOf(tags) < 0)    return false;
       if (transcript && runTranscript !== transcript)  return false;
       return true;
     });
@@ -4108,34 +4159,72 @@ App.youtube = (function () {
     notify('Comment run deleted (' + id + ')');
   }
 
-  function bulkDeleteSelectedCommentRuns() {
+  function bulkDeleteSelectedRepositoryRows() {
     var selectedRows = getSelectedYoutubeRows();
-    var runIds = [];
-    var seen = new Set();
+    var videoRecordIds = [];
+    var detailRunIds = [];
+    var commentRunIds = [];
+    var seenVideoRecords = new Set();
+    var seenDetailRuns = new Set();
+    var seenCommentRuns = new Set();
     selectedRows.forEach(function(run) {
-      var commentMatch = findCommentRunForVideoUrl(run && run.video_url)
-        || (run && run.comment_run_id ? { run_id: run.comment_run_id } : null);
-      var runId = safeText(commentMatch && commentMatch.run_id) || safeText(run && run.comment_run_id);
-      if (!runId) return;
-      if (seen.has(runId)) return;
-      seen.add(runId);
-      runIds.push(runId);
+      var targets = getRepositoryDeleteTargets(run);
+      if (targets.videoRecordId && !seenVideoRecords.has(targets.videoRecordId)) {
+        seenVideoRecords.add(targets.videoRecordId);
+        videoRecordIds.push(targets.videoRecordId);
+      }
+      if (targets.detailRunId && !seenDetailRuns.has(targets.detailRunId)) {
+        seenDetailRuns.add(targets.detailRunId);
+        detailRunIds.push(targets.detailRunId);
+      }
+      if (targets.commentRunId && !seenCommentRuns.has(targets.commentRunId)) {
+        seenCommentRuns.add(targets.commentRunId);
+        commentRunIds.push(targets.commentRunId);
+      }
     });
-    if (!runIds.length) {
-      notify('No comment runs are available to delete for the checked videos.', true);
+    var totalTargets = videoRecordIds.length + detailRunIds.length + commentRunIds.length;
+    if (!totalTargets) {
+      notify('No repository rows are available to delete for the checked videos.', true);
       return Promise.resolve();
     }
-    if (!confirm('Delete ' + runIds.length + ' selected comment run' + (runIds.length === 1 ? '' : 's') + '?')) {
+    if (!confirm('Delete ' + selectedRows.length + ' selected repository row' + (selectedRows.length === 1 ? '' : 's') + '?')) {
       return Promise.resolve();
     }
-    return Promise.all(runIds.map(function(runId) {
-      return api('/api/acquire/youtube-comment-runs/' + encodeURIComponent(runId), { method: 'DELETE' })
-        .then(function() { return { ok: true, runId: runId }; })
-        .catch(function(err) { return { ok: false, runId: runId, error: err }; });
-    })).then(function(results) {
+    var requests = [];
+    var selectedKeys = selectedRows.map(function(run) { return getRepositorySelectionKey(run); }).filter(Boolean);
+    videoRecordIds.forEach(function(videoRecordId) {
+      requests.push(
+        api('/api/acquire/youtube-videos/' + encodeURIComponent(videoRecordId), { method: 'DELETE' })
+          .then(function() { return { ok: true, kind: 'video', id: videoRecordId }; })
+          .catch(function(err) { return { ok: false, kind: 'video', id: videoRecordId, error: err }; })
+      );
+    });
+    detailRunIds.forEach(function(runId) {
+      requests.push(
+        api('/api/acquire/youtube-runs/' + encodeURIComponent(runId), { method: 'DELETE' })
+          .then(function() { return { ok: true, kind: 'detail', id: runId }; })
+          .catch(function(err) { return { ok: false, kind: 'detail', id: runId, error: err }; })
+      );
+    });
+    commentRunIds.forEach(function(runId) {
+      requests.push(
+        api('/api/acquire/youtube-comment-runs/' + encodeURIComponent(runId), { method: 'DELETE' })
+          .then(function() { return { ok: true, kind: 'comment', id: runId }; })
+          .catch(function(err) { return { ok: false, kind: 'comment', id: runId, error: err }; })
+      );
+    });
+    return Promise.all(requests).then(function(results) {
       var deleted = results.filter(function(item) { return item.ok; }).length;
       var failed = results.filter(function(item) { return !item.ok; }).length;
-      return refreshCommentRuns().then(function() {
+      return Promise.all([
+        refreshYoutubeVideos(200),
+        refreshYoutubeRuns(20),
+        refreshCommentRuns(20),
+        refreshYoutubeMinerRuns(10),
+      ]).then(function() {
+        selectedKeys.forEach(function(key) {
+          if (key) selectedRunIds.delete(key);
+        });
         renderYoutubeRunsTable();
         notify('Delete selected complete: ' + deleted + ' deleted, ' + failed + ' failed');
       });
@@ -4362,8 +4451,8 @@ App.youtube = (function () {
     }
     if (deleteBtn) {
       deleteBtn.addEventListener('click', function() {
-        bulkDeleteSelectedCommentRuns().catch(function(err) {
-          notify(err.message || 'Could not delete selected comment runs', true);
+        bulkDeleteSelectedRepositoryRows().catch(function(err) {
+          notify(err.message || 'Could not delete selected repository rows', true);
         });
       });
     }
@@ -4890,6 +4979,7 @@ App.youtube = (function () {
     bindFilter('youtubeRunsTitleFilter',      runFilters,        'title',      renderYoutubeRunsTable);
     bindFilter('youtubeRunsChannelFilter',    runFilters,        'channel',    renderYoutubeRunsTable);
     bindFilter('youtubeRunsCategoryFilter',   runFilters,        'category',   renderYoutubeRunsTable);
+    bindFilter('youtubeRunsHashtagsFilter',   runFilters,        'tags',       renderYoutubeRunsTable);
     bindFilter('youtubeRunsTranscriptFilter', runFilters,        'transcript', renderYoutubeRunsTable);
     renderCategoryControls();
     renderYoutubeCategoriesTable();

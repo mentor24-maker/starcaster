@@ -6211,16 +6211,43 @@ th {
   color: #ffffff;
 }
 
-#youtubeMinerRepositoryBody .contacts-filter-row .tiny-btn {
+#youtubeMinerRepositoryBody .contacts-filter-row th {
+  vertical-align: top;
+}
+
+.youtube-repository-bulk-actions-cell {
+  min-width: 560px;
+}
+
+.youtube-repository-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: nowrap;
+  width: max-content;
+  margin-left: auto;
+}
+
+#youtubeMinerRepositoryBody .youtube-repository-bulk-actions > button {
+  width: auto;
   background: #000;
   border-color: #000;
   color: #fff;
+  border-radius: 15px;
+  padding: 0.55rem 1rem;
+  white-space: nowrap;
 }
 
-#youtubeMinerRepositoryBody .contacts-filter-row .tiny-btn:hover,
-#youtubeMinerRepositoryBody .contacts-filter-row .tiny-btn:focus-visible {
+#youtubeMinerRepositoryBody .youtube-repository-bulk-actions > button:hover,
+#youtubeMinerRepositoryBody .youtube-repository-bulk-actions > button:focus-visible {
   background: #020202;
   border-color: #2aa7fa;
+}
+
+#youtubeMinerRepositoryBody .youtube-repository-bulk-actions > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .section-toolbar {
