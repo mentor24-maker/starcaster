@@ -2941,13 +2941,11 @@ App.youtube = (function () {
     var comments = toArray(result && result.comments).slice(0, 200);
     var videoInput = document.getElementById('youtubeMinerContentVideoFilter');
     var topicInput = document.getElementById('youtubeMinerContentTopicFilter');
-    var attributesInput = document.getElementById('youtubeMinerContentAttributesFilter');
     var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
     var authorInput = document.getElementById('youtubeMinerContentAuthorFilter');
     var commentInput = document.getElementById('youtubeMinerContentCommentFilter');
     var videoFilter = safeText(videoInput && videoInput.value).toLowerCase();
     var topicFilter = safeText(topicInput && topicInput.value);
-    var attributesFilter = safeText(attributesInput && attributesInput.value).toLowerCase();
     var approachFilter = safeText(approachInput && approachInput.value);
     var authorFilter = safeText(authorInput && authorInput.value).toLowerCase();
     var commentFilter = safeText(commentInput && commentInput.value).toLowerCase();
@@ -2959,7 +2957,6 @@ App.youtube = (function () {
       var rowTopic = rowFeedback && rowFeedback.categories.length
         ? safeText(rowFeedback.categories[0])
         : safeText(row && row.category);
-      var rowAttributes = toArray(row && (row.attributes || row.attribute_names)).join(' ').toLowerCase();
       var rowApproach = rowFeedback && rowFeedback.approaches.length
         ? safeText(rowFeedback.approaches[0])
         : safeText(row && (row.approach || row.approach_name));
@@ -2967,7 +2964,6 @@ App.youtube = (function () {
       var rowComment = safeText(row && row.text).toLowerCase();
       if (videoFilter && rowVideo.indexOf(videoFilter) === -1) return false;
       if (topicFilter && rowTopic !== topicFilter) return false;
-      if (attributesFilter && rowAttributes.indexOf(attributesFilter) === -1) return false;
       if (approachFilter && rowApproach !== approachFilter) return false;
       if (authorFilter && rowAuthor.indexOf(authorFilter) === -1) return false;
       if (commentFilter && rowComment.indexOf(commentFilter) === -1) return false;
@@ -2993,6 +2989,13 @@ App.youtube = (function () {
     }
     html += escapeHtml(rawText.slice(start));
     return html;
+  }
+
+  function truncateText(value, limit) {
+    var raw = safeText(value);
+    var max = Math.max(1, Number(limit) || 100);
+    if (!raw || raw.length <= max) return raw;
+    return raw.slice(0, max).trimEnd() + '...';
   }
 
   function pruneSelectedYoutubeCommentRows(activeResult) {
@@ -3232,7 +3235,7 @@ App.youtube = (function () {
     if (!comments.length) {
       var emptyTr = document.createElement('tr');
       var emptyTd = document.createElement('td');
-      emptyTd.colSpan = 7;
+      emptyTd.colSpan = 8;
       emptyTd.textContent = 'No filtered comments found for current settings.';
       emptyTr.appendChild(emptyTd);
       tableEl.appendChild(emptyTr);
@@ -3308,16 +3311,58 @@ App.youtube = (function () {
 
       var commentTd = document.createElement('td');
       var commentText = document.createElement('div');
-      commentText.className = 'youtube-miner-comment-text';
-      commentText.innerHTML = highlightFilterMatch(safeText(row && row.text) || '-', commentFilterQuery);
+      var fullCommentText = safeText(row && row.text) || '-';
+      commentText.className = 'youtube-miner-comment-text is-truncated';
+      commentText.innerHTML = highlightFilterMatch(truncateText(fullCommentText, 100) || '-', commentFilterQuery);
+      commentText.title = fullCommentText;
       commentTd.appendChild(commentText);
+
+      var whyTd = document.createElement('td');
+      var whyWrap = document.createElement('div');
+      whyWrap.className = 'youtube-miner-why-cell';
+      var whyText = document.createElement('div');
+      var whyBits = []
+        .concat(toArray(row && row.why))
+        .concat([
+          safeText(feedback && feedback.category_explain),
+          safeText(feedback && feedback.attributes_explain),
+          safeText(feedback && feedback.approaches_explain),
+          safeText(feedback && feedback.note),
+        ])
+        .filter(Boolean);
+      whyText.textContent = whyBits.join(' | ') || '-';
+      whyWrap.appendChild(whyText);
+      whyTd.appendChild(whyWrap);
+
+      var replyTd = document.createElement('td');
+      var replyWrap = document.createElement('div');
+      replyWrap.className = 'youtube-miner-reply-cell';
+      var replyText = document.createElement('div');
+      replyText.textContent = safeText(feedback && feedback.suggested_response) || '-';
+      replyWrap.appendChild(replyText);
+      var replyBtn = document.createElement('button');
+      replyBtn.type = 'button';
+      replyBtn.className = 'youtube-miner-inline-action';
+      replyBtn.textContent = 'Provide Replies';
+      replyBtn.addEventListener('click', function() {
+        openProvideRepliesModal(row, feedback, function(selected, offerFeedback) {
+          saveFeedback(row, {
+            suggested_response: selected,
+            offer_feedback: offerFeedback,
+          });
+          renderYoutubeCommentMinerResult();
+        });
+      });
+      replyWrap.appendChild(replyBtn);
+      replyTd.appendChild(replyWrap);
       tr.appendChild(selectTd);
       tr.appendChild(videoTd);
       tr.appendChild(authorTd);
       tr.appendChild(topicTd);
       tr.appendChild(commentTd);
       tr.appendChild(document.createElement('td')).textContent = (feedback.approaches.length ? feedback.approaches[0] : safeText(row && (row.approach || row.approach_name))) || '-';
-      tr.appendChild(document.createElement('td')).textContent = toArray(row && (row.attributes || row.attribute_names)).join(', ') || '-';
+      tr.appendChild(whyTd);
+      tr.appendChild(replyTd);
       tableEl.appendChild(tr);
     });
     syncYoutubeCommentBulkSelectionUi(activeResult);
