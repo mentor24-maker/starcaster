@@ -8463,6 +8463,10 @@ th {
   box-sizing: border-box;
 }
 
+.youtube-comment-filter-row select[multiple] {
+  min-height: 112px;
+}
+
 .youtube-comment-filter-row th:first-child,
 #youtubeCommentMinerTable td:first-child {
   width: 42px;

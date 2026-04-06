@@ -2935,23 +2935,31 @@ App.youtube = (function () {
     var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
     var authorInput = document.getElementById('youtubeMinerContentAuthorFilter');
     var commentInput = document.getElementById('youtubeMinerContentCommentFilter');
-    var topicFilter = safeText(topicInput && topicInput.value);
+    var topicFilters = Array.prototype.slice.call(topicInput && topicInput.selectedOptions || [])
+      .map(function(option) { return safeText(option && option.value); })
+      .filter(Boolean);
     var attributesFilter = safeText(attributesInput && attributesInput.value).toLowerCase();
-    var approachFilter = safeText(approachInput && approachInput.value);
+    var approachFilters = Array.prototype.slice.call(approachInput && approachInput.selectedOptions || [])
+      .map(function(option) { return safeText(option && option.value); })
+      .filter(Boolean);
     var authorFilter = safeText(authorInput && authorInput.value).toLowerCase();
     var commentFilter = safeText(commentInput && commentInput.value).toLowerCase();
 
     return comments.filter(function(row) {
       var rowFeedback = readFeedback(row);
       if (rowFeedback && rowFeedback.ignored) return false;
-      var rowTopic = safeText(row && row.category);
+      var rowTopics = rowFeedback && rowFeedback.categories.length
+        ? rowFeedback.categories
+        : [safeText(row && row.category)].filter(Boolean);
       var rowAttributes = toArray(row && (row.attributes || row.attribute_names)).join(' ').toLowerCase();
-      var rowApproach = safeText(row && (row.approach || row.approach_name));
+      var rowApproaches = rowFeedback && rowFeedback.approaches.length
+        ? rowFeedback.approaches
+        : [safeText(row && (row.approach || row.approach_name))].filter(Boolean);
       var rowAuthor = safeText(row && row.author).toLowerCase();
       var rowComment = safeText(row && row.text).toLowerCase();
-      if (topicFilter && rowTopic !== topicFilter) return false;
+      if (topicFilters.length && !rowTopics.some(function(value) { return topicFilters.indexOf(value) !== -1; })) return false;
       if (attributesFilter && rowAttributes.indexOf(attributesFilter) === -1) return false;
-      if (approachFilter && rowApproach !== approachFilter) return false;
+      if (approachFilters.length && !rowApproaches.some(function(value) { return approachFilters.indexOf(value) !== -1; })) return false;
       if (authorFilter && rowAuthor.indexOf(authorFilter) === -1) return false;
       if (commentFilter && rowComment.indexOf(commentFilter) === -1) return false;
       return true;
@@ -2987,6 +2995,8 @@ App.youtube = (function () {
 
   function syncYoutubeCommentBulkSelectionUi(activeResult) {
     var selectAll = document.getElementById('youtubeCommentMinerSelectAllVisible');
+    var editBtn = document.getElementById('youtubeCommentMinerEditSelectedBtn');
+    var deleteBtn = document.getElementById('youtubeCommentMinerDeleteSelectedBtn');
     var addContactBtn = document.getElementById('youtubeCommentMinerAddContactBtn');
     var visibleRows = getFilteredYoutubeCommentRows(activeResult);
     var visibleIds = visibleRows.map(getCommentSelectionKey).filter(Boolean);
@@ -2995,12 +3005,74 @@ App.youtube = (function () {
       selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
       selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
     }
+    if (editBtn) {
+      editBtn.disabled = selectedVisible.length === 0;
+    }
+    if (deleteBtn) {
+      deleteBtn.disabled = selectedVisible.length === 0;
+    }
     if (addContactBtn) {
       addContactBtn.disabled = visibleRows.filter(function(row) {
         return selectedCommentRowIds.has(getCommentSelectionKey(row))
           && (safeText(row && row.author_channel_url) || safeText(row && row.author_channel_id) || safeText(row && row.author));
       }).length === 0;
     }
+  }
+
+  function bulkUpdateSelectedYoutubeComments() {
+    var topicInput = document.getElementById('youtubeMinerContentTopicFilter');
+    var approachInput = document.getElementById('youtubeMinerContentApproachFilter');
+    var selectedTopics = Array.prototype.slice.call(topicInput && topicInput.selectedOptions || [])
+      .map(function(option) { return safeText(option && option.value); })
+      .filter(Boolean);
+    var selectedApproaches = Array.prototype.slice.call(approachInput && approachInput.selectedOptions || [])
+      .map(function(option) { return safeText(option && option.value); })
+      .filter(Boolean);
+    if (!selectedTopics.length && !selectedApproaches.length) {
+      notify('Select at least one Topic or Approach in the filters before using Edit Selected.', true);
+      return;
+    }
+    var selectedRows = getFilteredYoutubeCommentRows(youtubeMinerLastResult || {}).filter(function(row) {
+      return selectedCommentRowIds.has(getCommentSelectionKey(row));
+    });
+    if (!selectedRows.length) {
+      notify('No checked comment rows are available to edit.', true);
+      return;
+    }
+    selectedRows.forEach(function(row) {
+      var patch = {};
+      if (selectedTopics.length) patch.categories = selectedTopics.slice();
+      if (selectedApproaches.length) {
+        patch.approaches = selectedApproaches.slice();
+        patch.response_type = selectedApproaches[0];
+      }
+      saveFeedback(row, patch);
+    });
+    notify('Updated ' + selectedRows.length + ' checked comment row' + (selectedRows.length === 1 ? '' : 's'));
+    renderYoutubeCommentMinerResult();
+  }
+
+  function bulkDeleteSelectedYoutubeComments() {
+    var selectedRows = getFilteredYoutubeCommentRows(youtubeMinerLastResult || {}).filter(function(row) {
+      return selectedCommentRowIds.has(getCommentSelectionKey(row));
+    });
+    if (!selectedRows.length) {
+      notify('No checked comment rows are available to delete.', true);
+      return;
+    }
+    selectedRows.forEach(function(row) {
+      var currentFeedback = readFeedback(row);
+      var nextApproaches = toArray(currentFeedback && currentFeedback.approaches);
+      if (nextApproaches.indexOf('ignore') === -1) nextApproaches.push('ignore');
+      saveFeedback(row, {
+        ignored: true,
+        approaches: nextApproaches,
+        response_type: 'ignore',
+      });
+      selectedCommentRowIds.delete(getCommentSelectionKey(row));
+    });
+    notify('Deleted ' + selectedRows.length + ' checked comment row' + (selectedRows.length === 1 ? '' : 's'));
+    renderYoutubeCommentMinerResult();
   }
 
   async function addContactsFromSelectedYoutubeComments() {
@@ -3081,17 +3153,17 @@ App.youtube = (function () {
       }).filter(Boolean))).sort(function(a, b) {
         return a.localeCompare(b);
       });
-      var previousValue = topicInput.value;
-      topicInput.innerHTML = '<option value="">All Topics</option>';
+      var previousValues = Array.prototype.slice.call(topicInput.selectedOptions || [])
+        .map(function(option) { return safeText(option && option.value); })
+        .filter(Boolean);
+      topicInput.innerHTML = '';
       categories.forEach(function(cat) {
         var option = document.createElement('option');
         option.value = cat;
         option.textContent = cat;
+        option.selected = previousValues.indexOf(cat) !== -1;
         topicInput.appendChild(option);
       });
-      if (previousValue && categories.indexOf(previousValue) !== -1) {
-        topicInput.value = previousValue;
-      }
     }
     if (approachInput) {
       var approaches = Array.from(new Set(comments.map(function(row) {
@@ -3099,17 +3171,17 @@ App.youtube = (function () {
       }).filter(Boolean))).sort(function(a, b) {
         return a.localeCompare(b);
       });
-      var previousApproach = approachInput.value;
-      approachInput.innerHTML = '<option value="">All Approaches</option>';
+      var previousApproaches = Array.prototype.slice.call(approachInput.selectedOptions || [])
+        .map(function(option) { return safeText(option && option.value); })
+        .filter(Boolean);
+      approachInput.innerHTML = '';
       approaches.forEach(function(approach) {
         var option = document.createElement('option');
         option.value = approach;
         option.textContent = approach;
+        option.selected = previousApproaches.indexOf(approach) !== -1;
         approachInput.appendChild(option);
       });
-      if (previousApproach && approaches.indexOf(previousApproach) !== -1) {
-        approachInput.value = previousApproach;
-      }
     }
 
     comments = getFilteredYoutubeCommentRows(activeResult);
@@ -3201,7 +3273,10 @@ App.youtube = (function () {
       scoreTd.appendChild(scoreBtn);
 
       var categoryTd = document.createElement('td');
-      var categoryName = safeText(row && row.category) || '-';
+      var categoryValues = feedback.categories.length
+        ? feedback.categories
+        : [safeText(row && row.category)].filter(Boolean);
+      var categoryName = categoryValues.join(', ') || '-';
       var valueRank = Number(row && row.category_value_rank || 0) || 0;
       categoryTd.textContent = valueRank > 0 ? (categoryName + ' (' + valueRank + ')') : categoryName;
 
@@ -3209,7 +3284,10 @@ App.youtube = (function () {
       attributesTd.textContent = toArray(row && (row.attributes || row.attribute_names)).join(', ') || '-';
 
       var approachTd = document.createElement('td');
-      approachTd.textContent = safeText(row && (row.approach || row.approach_name)) || '-';
+      var approachValues = feedback.approaches.length
+        ? feedback.approaches
+        : [safeText(row && (row.approach || row.approach_name))].filter(Boolean);
+      approachTd.textContent = approachValues.join(', ') || '-';
 
       var whyTd = document.createElement('td');
       whyTd.textContent = toArray(row && row.why).join(' | ') || '-';
@@ -4838,6 +4916,8 @@ App.youtube = (function () {
     var youtubeMinerContentAuthorFilter = document.getElementById('youtubeMinerContentAuthorFilter');
     var youtubeMinerContentCommentFilter = document.getElementById('youtubeMinerContentCommentFilter');
     var youtubeCommentMinerSelectAllVisible = document.getElementById('youtubeCommentMinerSelectAllVisible');
+    var youtubeCommentMinerEditSelectedBtn = document.getElementById('youtubeCommentMinerEditSelectedBtn');
+    var youtubeCommentMinerDeleteSelectedBtn = document.getElementById('youtubeCommentMinerDeleteSelectedBtn');
     var youtubeCommentMinerAddContactBtn = document.getElementById('youtubeCommentMinerAddContactBtn');
     var youtubeMinerResponseContext = document.getElementById('youtubeMinerResponseContext');
     var youtubeMinerGuidelines = document.getElementById('youtubeMinerGuidelines');
@@ -5002,6 +5082,16 @@ App.youtube = (function () {
           else selectedCommentRowIds.delete(key);
         });
         renderYoutubeCommentMinerResult();
+      });
+    }
+    if (youtubeCommentMinerEditSelectedBtn) {
+      youtubeCommentMinerEditSelectedBtn.addEventListener('click', function() {
+        bulkUpdateSelectedYoutubeComments();
+      });
+    }
+    if (youtubeCommentMinerDeleteSelectedBtn) {
+      youtubeCommentMinerDeleteSelectedBtn.addEventListener('click', function() {
+        bulkDeleteSelectedYoutubeComments();
       });
     }
     if (youtubeCommentMinerAddContactBtn) {
