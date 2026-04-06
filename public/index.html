@@ -1493,18 +1493,24 @@
 
           <section class="youtube-miner-collapsible is-open">
             <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeResearchBody" aria-expanded="true">
-              <span>Research</span>
+              <span>1. Research</span>
               <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
             </button>
             <div id="youtubeResearchBody" class="youtube-miner-collapsible-body">
               <p>Research starts from messaging phrases (articles, tweets, hashtags) and manual terms, discovers top YouTube targets, then distills prospects for Targeting.</p>
               <form id="youtubeResearchForm" class="stack-form labeled-form">
+                <div class="form-row checkbox-row youtube-research-checkbox-row">
+                  <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
+                </div>
+                <div class="form-row checkbox-row youtube-research-checkbox-row">
+                  <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
+                </div>
                 <div class="grid-form" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start;">
                   <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
                     <div class="form-row">
-                      <label for="youtubeResearchMessagingCategory">Messaging Category</label>
+                      <label for="youtubeResearchMessagingCategory">Topic</label>
                       <select id="youtubeResearchMessagingCategory" name="messaging_category">
-                        <option value="">All Categories</option>
+                        <option value="">All Topics</option>
                       </select>
                     </div>
                     <div class="form-row">
@@ -1512,12 +1518,6 @@
                       <select id="youtubeResearchHashtagSelect" name="messaging_hashtag">
                         <option value="">All Hashtags</option>
                       </select>
-                    </div>
-                    <div class="form-row checkbox-row">
-                      <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
-                    </div>
-                    <div class="form-row checkbox-row">
-                      <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
                     </div>
                     <div class="form-row">
                       <label for="youtubeResearchMaxPhrases">Max Phrases</label>
@@ -1537,8 +1537,8 @@
                     </div>
                   </div>
                   <div class="form-row">
-                    <label for="youtubeResearchManualPhrases">Search Phrases</label>
-                    <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="One phrase per line"></textarea>
+                    <label for="youtubeResearchManualPhrases">Keywords</label>
+                    <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="Select a topic to populate related keywords"></textarea>
                   </div>
                 </div>
                 <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
@@ -1571,7 +1571,7 @@
 
           <section class="youtube-miner-collapsible is-open">
             <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerRepositoryBody" aria-expanded="true">
-              <span>Repository</span>
+              <span>2. Repository</span>
               <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
             </button>
             <div id="youtubeMinerRepositoryBody" class="youtube-miner-collapsible-body">
@@ -1638,7 +1638,7 @@
 
           <section class="youtube-miner-collapsible is-open">
             <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerTrainingBody" aria-expanded="true">
-              <span>Targeting</span>
+              <span>3. Targeting</span>
               <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
             </button>
             <div id="youtubeMinerTrainingBody" class="youtube-miner-collapsible-body">
@@ -1696,7 +1696,7 @@
 
           <section class="youtube-miner-collapsible is-open">
             <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerContentBody" aria-expanded="true">
-              <span>Content</span>
+              <span>4. Content</span>
               <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
             </button>
               <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">

@@ -8227,6 +8227,24 @@ th {
   grid-column: 1 / -1;
 }
 
+#youtubeResearchForm .youtube-research-checkbox-row {
+  display: block;
+  grid-template-columns: 1fr;
+  margin-bottom: 0.2rem;
+}
+
+#youtubeResearchForm .youtube-research-checkbox-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+}
+
+#youtubeResearchForm .youtube-research-checkbox-row input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
 #youtubeMinerTargets {
   min-height: 110px;
   max-height: 130px;
