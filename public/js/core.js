@@ -726,6 +726,8 @@ App.ACTION_ICONS = {
   copy: '<path d="M8 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M16 6V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   settings: '<path d="M10.3 4.3a2 2 0 0 1 3.4 0l.2.3a2 2 0 0 0 2.1.8l.4-.1a2 2 0 0 1 2.4 2.4l-.1.4a2 2 0 0 0 .8 2.1l.3.2a2 2 0 0 1 0 3.4l-.3.2a2 2 0 0 0-.8 2.1l.1.4a2 2 0 0 1-2.4 2.4l-.4-.1a2 2 0 0 0-2.1.8l-.2.3a2 2 0 0 1-3.4 0l-.2-.3a2 2 0 0 0-2.1-.8l-.4.1a2 2 0 0 1-2.4-2.4l.1-.4a2 2 0 0 0-.8-2.1l-.3-.2a2 2 0 0 1 0-3.4l.3-.2a2 2 0 0 0 .8-2.1l-.1-.4a2 2 0 0 1 2.4-2.4l.4.1a2 2 0 0 0 2.1-.8l.2-.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
   plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  archive: '<path d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 7V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  ban: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 16.5 16.5 7.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
 };
 
 App.makeInlineIcon = function makeInlineIcon(iconKey, extraClass = '') {

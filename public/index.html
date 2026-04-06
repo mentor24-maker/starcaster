@@ -1546,16 +1546,23 @@
                 <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
               </form>
               <div id="youtubeResearchSummary" class="muted">No research run yet.</div>
-              <div class="page-heading-actions" style="justify-content:flex-end; margin: 0 0 0.6rem 0;">
-                <button type="button" id="youtubeResearchRefreshBtn">Refresh Research Runs</button>
-                <button type="button" id="youtubeResearchAddToRepositoryBtn" disabled>Add Selected To Repository</button>
-                <button type="button" id="youtubeResearchSendToTargetingBtn" disabled>Send Selected To Targeting</button>
+              <div class="youtube-research-bulk-bar">
+                <label class="youtube-research-checkall">
+                  <input id="youtubeResearchSelectAllVisible" type="checkbox" aria-label="Select all visible research candidates" />
+                  <span>Check All</span>
+                </label>
+                <div class="youtube-research-bulk-actions">
+                  <button type="button" id="youtubeResearchRefreshBtn">Refresh Research Runs</button>
+                  <button type="button" id="youtubeResearchAddToRepositoryBtn" disabled>Add Selected To Repository</button>
+                  <button type="button" id="youtubeResearchBanSelectedBtn" disabled>Ban From Repository</button>
+                  <button type="button" id="youtubeResearchSendToTargetingBtn" disabled>Send Selected To Targeting</button>
+                </div>
               </div>
               <div class="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th><input id="youtubeResearchSelectAllVisible" type="checkbox" aria-label="Select all visible research candidates" /></th>
+                      <th></th>
                       <th><button type="button" id="youtubeResearchSortTitleBtn" class="table-sort-btn">Video Title</button></th>
                       <th><button type="button" id="youtubeResearchSortChannelBtn" class="table-sort-btn">Channel</button></th>
                       <th class="numeric-col"><button type="button" id="youtubeResearchSortViewsBtn" class="table-sort-btn numeric-col">Views</button></th>
