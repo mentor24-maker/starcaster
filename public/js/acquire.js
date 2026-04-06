@@ -25,6 +25,18 @@ App.acquire = (function () {
     'Low Volume',
     'AI Slop',
   ];
+  const DEFAULT_ACQUIRE_WEBSITE_DEFAULTS = {
+    acquireSocial: true,
+    acquireKeywords: true,
+    acquireHashtags: true,
+    acquireImages: true,
+    acquirePages: true,
+    acquirePeerSites: false,
+    maxPages: 10,
+    peerSitesLimit: 20,
+    imagesLimit: 20,
+    snippetLength: 600,
+  };
   const DIRECT_ACQUIRE_KEYWORD_REASON_OPTIONS = [
     ['', 'No Exclusion'],
     ['brand', 'Brand'],
@@ -72,10 +84,12 @@ App.acquire = (function () {
       )));
       return {
         youtubeBanReasons: merged,
+        websiteDefaults: Object.assign({}, DEFAULT_ACQUIRE_WEBSITE_DEFAULTS, parsed?.websiteDefaults || {}),
       };
     } catch (_) {
       return {
         youtubeBanReasons: DEFAULT_ACQUIRE_YOUTUBE_BAN_REASONS.slice(),
+        websiteDefaults: Object.assign({}, DEFAULT_ACQUIRE_WEBSITE_DEFAULTS),
       };
     }
   }
@@ -88,6 +102,7 @@ App.acquire = (function () {
         .map((item) => normalizeAcquireSettingLabel(item))
         .filter(Boolean)
     ));
+    settings.websiteDefaults = Object.assign({}, DEFAULT_ACQUIRE_WEBSITE_DEFAULTS, settings.websiteDefaults || {});
     try {
       window.localStorage.setItem(ACQUIRE_SETTINGS_KEY, JSON.stringify(settings));
     } catch (_) {
@@ -100,7 +115,12 @@ App.acquire = (function () {
     return readAcquireSettings().youtubeBanReasons.slice();
   }
 
+  function getAcquireWebsiteDefaults() {
+    return Object.assign({}, DEFAULT_ACQUIRE_WEBSITE_DEFAULTS, readAcquireSettings().websiteDefaults || {});
+  }
+
   App.getAcquireYoutubeBanReasons = getAcquireYoutubeBanReasons;
+  App.getAcquireWebsiteDefaults = getAcquireWebsiteDefaults;
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -365,8 +385,63 @@ App.acquire = (function () {
     });
   }
 
+  function renderAcquireWebsiteDefaults() {
+    const defaults = getAcquireWebsiteDefaults();
+    const checkboxMap = {
+      acquireSettingsAcquireSocial: defaults.acquireSocial,
+      acquireSettingsAcquireKeywords: defaults.acquireKeywords,
+      acquireSettingsAcquireHashtags: defaults.acquireHashtags,
+      acquireSettingsAcquireImages: defaults.acquireImages,
+      acquireSettingsAcquirePages: defaults.acquirePages,
+      acquireSettingsAcquirePeerSites: defaults.acquirePeerSites,
+    };
+    Object.keys(checkboxMap).forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.checked = checkboxMap[id] === true;
+    });
+    const valueMap = {
+      acquireSettingsMaxPages: String(defaults.maxPages || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.maxPages),
+      acquireSettingsPeerSitesLimit: String(defaults.peerSitesLimit || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.peerSitesLimit),
+      acquireSettingsImagesLimit: String(defaults.imagesLimit || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.imagesLimit),
+      acquireSettingsSnippetLength: String(defaults.snippetLength || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.snippetLength),
+    };
+    Object.keys(valueMap).forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = valueMap[id];
+    });
+  }
+
+  function applyAcquireWebsiteDefaultsToForm() {
+    const form = els.directAcquireForm;
+    if (!form) return;
+    const defaults = getAcquireWebsiteDefaults();
+    const checkboxFields = {
+      acquire_social: defaults.acquireSocial,
+      acquire_keywords: defaults.acquireKeywords,
+      acquire_hashtags: defaults.acquireHashtags,
+      acquire_images: defaults.acquireImages,
+      acquire_pages: defaults.acquirePages,
+      acquire_peer_sites: defaults.acquirePeerSites,
+    };
+    Object.keys(checkboxFields).forEach((name) => {
+      const input = form.querySelector('[name="' + name + '"]');
+      if (input) input.checked = checkboxFields[name] === true;
+    });
+    const valueFields = {
+      max_pages: String(defaults.maxPages || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.maxPages),
+      peer_sites_limit: String(defaults.peerSitesLimit || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.peerSitesLimit),
+      images_limit: String(defaults.imagesLimit || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.imagesLimit),
+      body_snippet_chars: String(defaults.snippetLength || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.snippetLength),
+    };
+    Object.keys(valueFields).forEach((name) => {
+      const input = form.querySelector('[name="' + name + '"]');
+      if (input) input.value = valueFields[name];
+    });
+  }
+
   function renderAcquireSettingsPage() {
     renderAcquireYoutubeBanReasons();
+    renderAcquireWebsiteDefaults();
     renderSectionSettingsNav('acquireSettingsPage');
   }
 
@@ -2986,7 +3061,31 @@ App.acquire = (function () {
         notify('Ban reason added');
       });
     }
+    const acquireWebsiteDefaultsForm = document.getElementById('acquireWebsiteDefaultsForm');
+    if (acquireWebsiteDefaultsForm && !acquireWebsiteDefaultsForm.dataset.bound) {
+      acquireWebsiteDefaultsForm.dataset.bound = 'true';
+      acquireWebsiteDefaultsForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const nextDefaults = {
+          acquireSocial: Boolean(document.getElementById('acquireSettingsAcquireSocial')?.checked),
+          acquireKeywords: Boolean(document.getElementById('acquireSettingsAcquireKeywords')?.checked),
+          acquireHashtags: Boolean(document.getElementById('acquireSettingsAcquireHashtags')?.checked),
+          acquireImages: Boolean(document.getElementById('acquireSettingsAcquireImages')?.checked),
+          acquirePages: Boolean(document.getElementById('acquireSettingsAcquirePages')?.checked),
+          acquirePeerSites: Boolean(document.getElementById('acquireSettingsAcquirePeerSites')?.checked),
+          maxPages: Number(document.getElementById('acquireSettingsMaxPages')?.value || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.maxPages) || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.maxPages,
+          peerSitesLimit: Number(document.getElementById('acquireSettingsPeerSitesLimit')?.value || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.peerSitesLimit) || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.peerSitesLimit,
+          imagesLimit: Number(document.getElementById('acquireSettingsImagesLimit')?.value || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.imagesLimit) || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.imagesLimit,
+          snippetLength: Number(document.getElementById('acquireSettingsSnippetLength')?.value || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.snippetLength) || DEFAULT_ACQUIRE_WEBSITE_DEFAULTS.snippetLength,
+        };
+        writeAcquireSettings({ websiteDefaults: nextDefaults });
+        renderAcquireSettingsPage();
+        applyAcquireWebsiteDefaultsToForm();
+        notify('Website defaults saved');
+      });
+    }
     renderAcquireSettingsPage();
+    applyAcquireWebsiteDefaultsToForm();
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
