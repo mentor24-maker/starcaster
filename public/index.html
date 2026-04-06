@@ -1497,7 +1497,7 @@
               <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
             </button>
             <div id="youtubeResearchBody" class="youtube-miner-collapsible-body">
-              <p>Research starts from messaging phrases (articles, tweets, hashtags) and manual terms, discovers top YouTube targets, then distills prospects for Targeting.</p>
+              <p>Research builds a candidate list of YouTube videos from your topics, hashtags, and keywords. Review those candidates here, then explicitly add the right ones to Repository or send them into Targeting.</p>
               <form id="youtubeResearchForm" class="stack-form labeled-form">
                 <div class="form-row checkbox-row youtube-research-checkbox-row">
                   <label><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" checked /> Use Messaging seeds (articles, tweets, hashtags)</label>
@@ -1548,23 +1548,23 @@
               <div id="youtubeResearchSummary" class="muted">No research run yet.</div>
               <div class="page-heading-actions" style="justify-content:flex-end; margin: 0 0 0.6rem 0;">
                 <button type="button" id="youtubeResearchRefreshBtn">Refresh Research Runs</button>
-                <button type="button" id="youtubeResearchSendToTargetingBtn">Send Distilled Targets to Targeting</button>
+                <button type="button" id="youtubeResearchAddToRepositoryBtn" disabled>Add Selected To Repository</button>
+                <button type="button" id="youtubeResearchSendToTargetingBtn" disabled>Send Selected To Targeting</button>
               </div>
               <div class="table-wrap">
                 <table>
                   <thead>
                     <tr>
+                      <th><input id="youtubeResearchSelectAllVisible" type="checkbox" aria-label="Select all visible research candidates" /></th>
                       <th>Video Title</th>
-                      <th>Created</th>
-                      <th>Phrases</th>
-                      <th>Discovered</th>
-                      <th>Distilled</th>
-                      <th>Filtered Comments</th>
+                      <th>Channel</th>
+                      <th>Phrase</th>
+                      <th>Published</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="youtubeResearchRunsTable">
-                    <tr><td colspan="7">No research runs yet.</td></tr>
+                    <tr><td colspan="6">No research candidates yet.</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1761,38 +1761,40 @@
                 <table>
                   <thead>
                     <tr>
-                      <th colspan="7" class="youtube-comment-bulk-actions-row">
-                        <div class="youtube-comment-bulk-actions">
-                          <button id="youtubeCommentMinerEditSelectedBtn" type="button" disabled>Edit Selected</button>
-                          <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled>Delete Selected</button>
-                          <button id="youtubeCommentMinerAddContactBtn" type="button" disabled>Add Contact</button>
+                      <th colspan="7" class="youtube-comment-filter-row">
+                        <div class="youtube-comment-filter-grid">
+                          <div></div>
+                          <div><input id="youtubeMinerContentVideoFilter" type="text" placeholder="Video" /></div>
+                          <div><input id="youtubeMinerContentAuthorFilter" type="text" placeholder="Author" /></div>
+                          <div>
+                            <select id="youtubeMinerContentTopicFilter">
+                              <option value="">All Topics</option>
+                            </select>
+                          </div>
+                          <div><input id="youtubeMinerContentCommentFilter" type="text" placeholder="Comment" /></div>
+                          <div>
+                            <select id="youtubeMinerContentApproachFilter">
+                              <option value="">All Approaches</option>
+                            </select>
+                          </div>
+                          <div><input id="youtubeMinerContentAttributesFilter" type="text" placeholder="Attributes" /></div>
                         </div>
                       </th>
                     </tr>
-                    <tr class="youtube-comment-filter-row">
-                      <th>
-                        <input id="youtubeCommentMinerSelectAllVisible" type="checkbox" aria-label="Select all visible comments" />
+                    <tr>
+                      <th colspan="7" class="youtube-comment-bulk-actions-row">
+                        <div class="youtube-comment-bulk-controls">
+                          <div class="youtube-comment-bulk-checkall">
+                            <input id="youtubeCommentMinerSelectAllVisible" type="checkbox" aria-label="Select all visible comments" />
+                          </div>
+                          <div class="youtube-comment-bulk-actions">
+                          <button id="youtubeCommentMinerEditSelectedBtn" type="button" disabled>Edit Selected</button>
+                          <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled>Delete Selected</button>
+                          <button id="youtubeCommentMinerAddContactBtn" type="button" disabled>Add Contact</button>
+                          </div>
+                          <div></div>
+                        </div>
                       </th>
-                      <th>
-                        <input id="youtubeMinerContentVideoFilter" type="text" placeholder="Video" />
-                      </th>
-                      <th>
-                        <input id="youtubeMinerContentAuthorFilter" type="text" placeholder="Author" />
-                      </th>
-                      <th>
-                        <select id="youtubeMinerContentTopicFilter">
-                          <option value="">All Topics</option>
-                        </select>
-                      </th>
-                      <th>
-                        <input id="youtubeMinerContentCommentFilter" type="text" placeholder="Comment" />
-                      </th>
-                      <th>
-                        <select id="youtubeMinerContentApproachFilter">
-                          <option value="">All Approaches</option>
-                        </select>
-                      </th>
-                      <th><input id="youtubeMinerContentAttributesFilter" type="text" placeholder="Attributes" /></th>
                     </tr>
                     <tr>
                       <th></th>
