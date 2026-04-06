@@ -226,6 +226,18 @@ App.youtube = (function () {
     return '';
   }
 
+  function makeYoutubeVideoRecordId(videoId, videoUrl) {
+    var stableId = safeText(videoId) || extractYoutubeVideoId(videoUrl);
+    if (stableId) return 'ytvideo_' + stableId;
+    var url = safeText(videoUrl);
+    if (!url) return '';
+    try {
+      return 'ytvideo_url_' + btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '').slice(0, 48);
+    } catch (_) {
+      return '';
+    }
+  }
+
   function escapeHtml(value) {
     return String(value || '')
       .replace(/&/g, '&amp;')
@@ -4056,11 +4068,18 @@ App.youtube = (function () {
   function findRepositoryRunByVideoUrl(videoUrl) {
     var url = safeText(videoUrl);
     if (!url) return null;
-    return toArray(state.acquireYoutubeDetails).find(function(run) {
+    var match = toArray(state.acquireYoutubeVideos).find(function(run) {
       return safeText(run && run.video_url) === url;
-    }) || toArray(state.acquireYoutubeVideos).find(function(run) {
+    }) || toArray(state.acquireYoutubeDetails).find(function(run) {
       return safeText(run && run.video_url) === url;
     }) || null;
+    if (!match) return null;
+    if (!safeText(match.video_record_id)) {
+      match = Object.assign({}, match, {
+        video_record_id: makeYoutubeVideoRecordId(match.video_id, match.video_url),
+      });
+    }
+    return match;
   }
 
   async function banYoutubeResearchCandidate(row) {
@@ -4075,8 +4094,14 @@ App.youtube = (function () {
       repositoryRun = findRepositoryRunByVideoUrl(videoUrl);
     }
     if (!repositoryRun || !safeText(repositoryRun.video_record_id)) {
-      notify('Could not save this candidate to the repository for banning.', true);
-      return;
+      repositoryRun = {
+        video_record_id: makeYoutubeVideoRecordId(row && row.video_id, videoUrl),
+        video_url: videoUrl,
+        video_id: safeText(row && row.video_id),
+        title: safeText(row && row.title),
+        channel_name: safeText(row && row.channel_name),
+        tags: '',
+      };
     }
     openYoutubeBanVideoModal(repositoryRun);
   }
