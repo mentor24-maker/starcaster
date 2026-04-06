@@ -352,13 +352,53 @@ async function searchYoutubeVideosByPhrase(phrase, apiKey, perPhrase = 4) {
     throw err;
   }
   const items = Array.isArray(body?.items) ? body.items : [];
-  return items.map((item) => ({
+  const baseItems = items.map((item) => ({
     video_id: safeText(item?.id?.videoId),
     video_url: safeText(item?.id?.videoId) ? `https://www.youtube.com/watch?v=${safeText(item?.id?.videoId)}` : '',
     title: safeText(item?.snippet?.title),
     channel_name: safeText(item?.snippet?.channelTitle),
     published_at: safeText(item?.snippet?.publishedAt),
   })).filter((item) => item.video_id && item.video_url);
+  const ids = baseItems.map((item) => item.video_id).filter(Boolean);
+  if (!ids.length) return baseItems;
+
+  const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+  statsUrl.searchParams.set('part', 'statistics');
+  statsUrl.searchParams.set('id', ids.join(','));
+  statsUrl.searchParams.set('key', apiKey);
+  try {
+    const statsResponse = await fetch(statsUrl.toString(), {
+      headers: { accept: 'application/json', 'user-agent': 'APH-YoutubeResearch/1.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    const statsBody = await statsResponse.json();
+    if (statsResponse.ok) {
+      const statsById = new Map(
+        (Array.isArray(statsBody?.items) ? statsBody.items : []).map((item) => {
+          return [
+            safeText(item?.id),
+            {
+              view_count: Number(item?.statistics?.viewCount || 0) || 0,
+              like_count: Number(item?.statistics?.likeCount || 0) || 0,
+              comment_count: Number(item?.statistics?.commentCount || 0) || 0,
+            },
+          ];
+        })
+      );
+      return baseItems.map((item) => Object.assign({}, item, statsById.get(item.video_id) || {
+        view_count: 0,
+        like_count: 0,
+        comment_count: 0,
+      }));
+    }
+  } catch (_) {
+    // Fall back to snippet-only results when statistics lookup fails.
+  }
+  return baseItems.map((item) => Object.assign({}, item, {
+    view_count: 0,
+    like_count: 0,
+    comment_count: 0,
+  }));
 }
 
 function maybeParseJson(value) {
@@ -1710,6 +1750,9 @@ async function handle(req, res, pathname, method) {
           channel_name: safeText(item?.channel_name),
           phrase: safeText(item?.phrase),
           published_at: safeText(item?.published_at),
+          view_count: Number(item?.view_count || 0) || 0,
+          like_count: Number(item?.like_count || 0) || 0,
+          comment_count: Number(item?.comment_count || 0) || 0,
         })).filter((item) => item.video_url),
       },
       stats: {
