@@ -2406,13 +2406,14 @@ App.youtube = (function () {
     }
     const video = result.video || {};
     const owner = result.channel_owner || {};
-    rememberActiveVideo({
+    currentDetailsRun = Object.assign({}, currentDetailsRun || {}, {
       video_url: video.url || (currentDetailsRun && currentDetailsRun.video_url) || '',
       video_id: video.id || '',
       title: video.title || (currentDetailsRun && currentDetailsRun.title) || '',
       channel_name: owner.name || (currentDetailsRun && currentDetailsRun.channel_name) || '',
       channel_url: owner.profile_url || (currentDetailsRun && currentDetailsRun.channel_url) || '',
     });
+    rememberActiveVideo(currentDetailsRun);
     setDetailsField('youtubeDescriptionText', video.description, '-');
     setDetailsField('youtubeHashtagsText', formatHashtags(video.hashtags), '-');
     renderVideoTitleLink(video, owner, currentDetailsRun || {});
@@ -3524,7 +3525,8 @@ App.youtube = (function () {
     }
     runs.forEach(function(run) {
       var tr = document.createElement('tr');
-      var primaryTargetUrl = safeText(Array.isArray(run.target_preview) ? run.target_preview[0] : '');
+      var primaryTargetUrl = safeText(run.primary_video_url) || safeText(Array.isArray(run.target_preview) ? run.target_preview[0] : '');
+      var primaryVideoTitle = safeText(run.primary_video_title) || primaryTargetUrl || safeText(run.run_id) || '-';
 
       var runIdTd = document.createElement('td');
       if (primaryTargetUrl) {
@@ -3532,10 +3534,10 @@ App.youtube = (function () {
         runLink.href = primaryTargetUrl;
         runLink.target = '_blank';
         runLink.rel = 'noopener noreferrer';
-        runLink.textContent = safeText(run.run_id) || '-';
+        runLink.textContent = primaryVideoTitle;
         runIdTd.appendChild(runLink);
       } else {
-        runIdTd.textContent = safeText(run.run_id) || '-';
+        runIdTd.textContent = primaryVideoTitle;
       }
 
       var createdTd = document.createElement('td');
@@ -3554,9 +3556,10 @@ App.youtube = (function () {
       filteredTd.textContent = String(Number(run.total_comments_filtered || 0) || 0);
 
       var actionsTd = document.createElement('td');
-      var viewBtn = App.makeIconButton('view', 'Open target video', function() {
-        if (!primaryTargetUrl) return notify('No target video is stored for this research run.', true);
-        window.open(primaryTargetUrl, '_blank', 'noopener');
+      var viewBtn = App.makeIconButton('view', 'Load research result into Content', function() {
+        loadYoutubeResearchRun(run.run_id).catch(function(err) {
+          notify(err.message, true);
+        });
       });
       var deleteBtn = App.makeIconButton('delete', 'Delete research run', function() {
         if (!confirm('Delete research run ' + safeText(run.run_id) + '?')) return;
