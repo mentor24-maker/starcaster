@@ -1710,35 +1710,6 @@
               <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
               <div class="youtube-content-top-row">
                 <div class="youtube-content-filters-panel">
-                  <div class="youtube-miner-content-controls">
-                    <div class="form-row">
-                      <label for="youtubeMinerContentSearch">Filter</label>
-                      <input id="youtubeMinerContentSearch" type="text" placeholder="Search comment, author, hashtags, video..." />
-                    </div>
-                    <div class="form-row">
-                      <label for="youtubeMinerContentCategoryFilter">Category</label>
-                      <select id="youtubeMinerContentCategoryFilter">
-                        <option value="">All categories</option>
-                      </select>
-                    </div>
-                    <div class="form-row">
-                      <label for="youtubeMinerContentSort">Sort</label>
-                      <select id="youtubeMinerContentSort">
-                        <option value="score_desc" selected>Score (high to low)</option>
-                        <option value="score_asc">Score (low to high)</option>
-                        <option value="category_asc">Category (A-Z)</option>
-                        <option value="author_asc">Author (A-Z)</option>
-                      </select>
-                    </div>
-                    <div class="form-row">
-                      <label for="youtubeMinerContentReviewedFilter">Reviewed</label>
-                      <select id="youtubeMinerContentReviewedFilter">
-                        <option value="" selected>All</option>
-                        <option value="reviewed">Reviewed only</option>
-                        <option value="unreviewed">Unreviewed only</option>
-                      </select>
-                    </div>
-                  </div>
                   <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
                 </div>
 
@@ -1789,9 +1760,37 @@
               <div class="table-wrap">
                 <table>
                   <thead>
+                    <tr class="youtube-comment-filter-row">
+                      <th>
+                        <input id="youtubeCommentMinerSelectAllVisible" type="checkbox" aria-label="Select all visible comments" />
+                      </th>
+                      <th></th>
+                      <th>
+                        <select id="youtubeMinerContentTopicFilter">
+                          <option value="">All Topics</option>
+                        </select>
+                      </th>
+                      <th><input id="youtubeMinerContentAttributesFilter" type="text" placeholder="Attributes" /></th>
+                      <th>
+                        <select id="youtubeMinerContentApproachFilter">
+                          <option value="">All Approaches</option>
+                        </select>
+                      </th>
+                      <th></th>
+                      <th></th>
+                      <th><input id="youtubeMinerContentAuthorFilter" type="text" placeholder="Author" /></th>
+                      <th></th>
+                      <th><input id="youtubeMinerContentCommentFilter" type="text" placeholder="Comment" /></th>
+                      <th colspan="2" class="youtube-comment-bulk-actions-cell">
+                        <div class="youtube-comment-bulk-actions">
+                          <button id="youtubeCommentMinerAddContactBtn" type="button" disabled>Add Contact</button>
+                        </div>
+                      </th>
+                    </tr>
                     <tr>
+                      <th></th>
                       <th>Score</th>
-                      <th>Category</th>
+                      <th>Topic</th>
                       <th>Attributes</th>
                       <th>Approach</th>
                       <th>Why Surfaced</th>

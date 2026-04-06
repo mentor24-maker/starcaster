@@ -8452,22 +8452,54 @@ th {
   text-decoration: underline;
 }
 
-.youtube-miner-content-controls {
-  display: grid;
-  grid-template-columns: minmax(260px, 2fr) minmax(180px, 1fr) minmax(230px, 1fr);
-  gap: 12px;
-  align-items: end;
-  margin-bottom: 10px;
+.youtube-comment-filter-row th {
+  vertical-align: top;
 }
 
-.youtube-miner-content-controls .form-row {
-  margin-bottom: 0;
+.youtube-comment-filter-row input,
+.youtube-comment-filter-row select {
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.youtube-miner-content-controls label {
-  display: block;
-  margin-bottom: 4px;
-  font-weight: 600;
+.youtube-comment-filter-row th:first-child,
+#youtubeCommentMinerTable td:first-child {
+  width: 42px;
+  text-align: center;
+}
+
+.youtube-comment-bulk-actions-cell {
+  min-width: 220px;
+}
+
+.youtube-comment-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.45rem;
+  width: max-content;
+  margin-left: auto;
+}
+
+.youtube-comment-bulk-actions > button {
+  width: auto;
+  background: #000;
+  border-color: #000;
+  color: #fff;
+  border-radius: 15px;
+  padding: 0.55rem 1rem;
+  white-space: nowrap;
+}
+
+.youtube-comment-bulk-actions > button:hover,
+.youtube-comment-bulk-actions > button:focus-visible {
+  background: #020202;
+  border-color: #2aa7fa;
+}
+
+.youtube-comment-bulk-actions > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .youtube-miner-comment-cell {
