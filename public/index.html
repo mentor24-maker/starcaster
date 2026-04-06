@@ -1766,13 +1766,13 @@
                       </th>
                       <th></th>
                       <th>
-                        <select id="youtubeMinerContentTopicFilter">
+                        <select id="youtubeMinerContentTopicFilter" multiple size="4">
                           <option value="">All Topics</option>
                         </select>
                       </th>
                       <th><input id="youtubeMinerContentAttributesFilter" type="text" placeholder="Attributes" /></th>
                       <th>
-                        <select id="youtubeMinerContentApproachFilter">
+                        <select id="youtubeMinerContentApproachFilter" multiple size="4">
                           <option value="">All Approaches</option>
                         </select>
                       </th>
@@ -1783,6 +1783,8 @@
                       <th><input id="youtubeMinerContentCommentFilter" type="text" placeholder="Comment" /></th>
                       <th colspan="2" class="youtube-comment-bulk-actions-cell">
                         <div class="youtube-comment-bulk-actions">
+                          <button id="youtubeCommentMinerEditSelectedBtn" type="button" disabled>Edit Selected</button>
+                          <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled>Delete Selected</button>
                           <button id="youtubeCommentMinerAddContactBtn" type="button" disabled>Add Contact</button>
                         </div>
                       </th>
