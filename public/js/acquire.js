@@ -17,6 +17,14 @@ App.acquire = (function () {
   const DIRECT_ACQUIRE_KEYWORD_EXCLUSIONS_KEY = 'alphire:direct-acquire:keyword-exclusions:v1';
   const DIRECT_ACQUIRE_KEYWORD_REASONS_KEY = 'alphire:direct-acquire:keyword-exclusion-reasons:v1';
   const DIRECT_ACQUIRE_KEYWORD_TOPICS_KEY = 'alphire:direct-acquire:keyword-topics:v1';
+  const ACQUIRE_SETTINGS_KEY = 'alphire:acquire:settings:v1';
+  const DEFAULT_ACQUIRE_YOUTUBE_BAN_REASONS = [
+    'Corporate',
+    'Personal',
+    'Not Serious',
+    'Low Volume',
+    'AI Slop',
+  ];
   const DIRECT_ACQUIRE_KEYWORD_REASON_OPTIONS = [
     ['', 'No Exclusion'],
     ['brand', 'Brand'],
@@ -36,6 +44,63 @@ App.acquire = (function () {
   let directAcquireWebsitePeers = [];
   let directAcquireWebsitePeerEditingId = '';
   const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
+  const SECTION_SETTINGS_LINKS = [
+    { label: 'Acquire Settings', pageId: 'acquireSettingsPage' },
+    { label: 'Contacts Settings', pageId: 'contactsSettingsPage' },
+    { label: 'Channels Settings', pageId: 'channelsSettingsPage' },
+    { label: 'Messaging Settings', pageId: 'messagingSettingsPage' },
+    { label: 'Assets Settings', pageId: 'assetsSettingsPage' },
+    { label: 'Builder Settings', pageId: 'builderSettingsPage' },
+    { label: 'Campaigns Settings', pageId: 'campaignSettingsPage' },
+    { label: 'Promote Settings', pageId: 'promoteSettingsPage' },
+    { label: 'Engage Settings', pageId: 'engageSettingsPage' },
+    { label: 'Observe Settings', pageId: 'observeSettingsPage' },
+    { label: 'Training Settings', pageId: 'trainingSettingsPage' },
+  ];
+
+  function normalizeAcquireSettingLabel(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function readAcquireSettings() {
+    try {
+      const raw = window.localStorage.getItem(ACQUIRE_SETTINGS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const reasons = Array.isArray(parsed?.youtubeBanReasons) ? parsed.youtubeBanReasons : [];
+      const merged = Array.from(new Set(DEFAULT_ACQUIRE_YOUTUBE_BAN_REASONS.concat(
+        reasons.map((item) => normalizeAcquireSettingLabel(item)).filter(Boolean)
+      )));
+      return {
+        youtubeBanReasons: merged,
+      };
+    } catch (_) {
+      return {
+        youtubeBanReasons: DEFAULT_ACQUIRE_YOUTUBE_BAN_REASONS.slice(),
+      };
+    }
+  }
+
+  function writeAcquireSettings(nextSettings) {
+    const current = readAcquireSettings();
+    const settings = Object.assign({}, current, nextSettings || {});
+    settings.youtubeBanReasons = Array.from(new Set(
+      (Array.isArray(settings.youtubeBanReasons) ? settings.youtubeBanReasons : [])
+        .map((item) => normalizeAcquireSettingLabel(item))
+        .filter(Boolean)
+    ));
+    try {
+      window.localStorage.setItem(ACQUIRE_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (_) {
+      // ignore local storage failures
+    }
+    return settings;
+  }
+
+  function getAcquireYoutubeBanReasons() {
+    return readAcquireSettings().youtubeBanReasons.slice();
+  }
+
+  App.getAcquireYoutubeBanReasons = getAcquireYoutubeBanReasons;
 
   function normalizeDirectAcquireKeyword(value) {
     return String(value || '')
@@ -242,6 +307,67 @@ App.acquire = (function () {
     if (wrap) {
       setTimeout(() => wrap.classList.add('hidden'), ok ? 900 : 1800);
     }
+  }
+
+  function renderSectionSettingsNav(activePageId) {
+    const wrap = document.getElementById('sectionSettingsNavList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    SECTION_SETTINGS_LINKS.forEach((item) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = item.label;
+      button.className = 'section-settings-nav-btn' + (item.pageId === activePageId ? ' is-active' : '');
+      button.disabled = item.pageId === activePageId;
+      button.addEventListener('click', function () {
+        const target = String(item.pageId || '').trim();
+        const page = document.getElementById(target);
+        if (page && page.classList.contains('app-page')) {
+          App.setActivePage(target);
+        } else {
+          notify(item.label + ' is not set up yet.');
+        }
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderAcquireYoutubeBanReasons() {
+    const tbody = document.getElementById('acquireYoutubeBanReasonsTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const reasons = getAcquireYoutubeBanReasons();
+    if (!reasons.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 2;
+      td.textContent = 'No ban reasons configured.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    reasons.forEach((reason) => {
+      const tr = document.createElement('tr');
+      const reasonTd = document.createElement('td');
+      reasonTd.textContent = reason;
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'action-icons-cell';
+      const deleteBtn = App.makeIconButton('delete', 'Delete Ban Reason', function () {
+        const next = getAcquireYoutubeBanReasons().filter((item) => item !== reason);
+        writeAcquireSettings({ youtubeBanReasons: next });
+        renderAcquireYoutubeBanReasons();
+        notify('Ban reason deleted');
+      }, { danger: true });
+      actionsTd.appendChild(deleteBtn);
+      tr.appendChild(reasonTd);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderAcquireSettingsPage() {
+    renderAcquireYoutubeBanReasons();
+    renderSectionSettingsNav('acquireSettingsPage');
   }
 
   function sanitizeImageNameFromUrl(url, index) {
@@ -2821,6 +2947,46 @@ App.acquire = (function () {
 
   function init() {
     setDirectAcquireResultsVisible(false);
+    const acquirePageActions = document.getElementById('acquirePageActions');
+    if (acquirePageActions && !acquirePageActions.dataset.bound) {
+      acquirePageActions.dataset.bound = 'true';
+      acquirePageActions.innerHTML = '';
+      const settingsBtn = App.makeIconButton('settings', 'Acquire Settings', function () {
+        App.setActivePage('acquireSettingsPage');
+      });
+      settingsBtn.classList.add('section-settings-gear-btn');
+      acquirePageActions.appendChild(settingsBtn);
+    }
+    const acquireSettingsBackBtn = document.getElementById('acquireSettingsBackBtn');
+    if (acquireSettingsBackBtn && !acquireSettingsBackBtn.dataset.bound) {
+      acquireSettingsBackBtn.dataset.bound = 'true';
+      acquireSettingsBackBtn.addEventListener('click', function () {
+        App.setActivePage('acquirePage');
+      });
+    }
+    const acquireYoutubeBanReasonForm = document.getElementById('acquireYoutubeBanReasonForm');
+    if (acquireYoutubeBanReasonForm && !acquireYoutubeBanReasonForm.dataset.bound) {
+      acquireYoutubeBanReasonForm.dataset.bound = 'true';
+      acquireYoutubeBanReasonForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const input = document.getElementById('acquireYoutubeBanReasonInput');
+        const value = normalizeAcquireSettingLabel(input && input.value);
+        if (!value) {
+          notify('Enter a ban reason first.', true);
+          return;
+        }
+        const current = getAcquireYoutubeBanReasons();
+        if (current.some((item) => item.toLowerCase() === value.toLowerCase())) {
+          notify('That ban reason already exists.', true);
+          return;
+        }
+        writeAcquireSettings({ youtubeBanReasons: current.concat(value) });
+        if (input) input.value = '';
+        renderAcquireSettingsPage();
+        notify('Ban reason added');
+      });
+    }
+    renderAcquireSettingsPage();
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
@@ -3532,7 +3698,13 @@ App.acquire = (function () {
   }
 
   return {
-    manifest: { id: 'acquire', label: 'Acquire', pageId: 'acquirePage' },
-    init, refreshHarvestJobs, refreshDirectHarvestRuns, refreshXHarvestRuns, refreshRedditHarvestRuns, renderHarvestJobsTable
+    manifest: { id: 'acquire', label: 'Acquire', pageId: 'acquirePage', pagePrefixes: ['acquireSettingsPage'] },
+    init,
+    onPageActivated(targetPageId) {
+      if (targetPageId === 'acquireSettingsPage') {
+        renderAcquireSettingsPage();
+      }
+    },
+    refreshHarvestJobs, refreshDirectHarvestRuns, refreshXHarvestRuns, refreshRedditHarvestRuns, renderHarvestJobsTable
   };
 })();

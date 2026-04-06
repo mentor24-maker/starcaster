@@ -437,6 +437,19 @@ h2 {
   box-sizing: border-box;
 }
 
+.section-settings-gear-btn {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+
+.section-settings-gear-btn:hover,
+.section-settings-gear-btn:focus-visible {
+  background: #111;
+  border-color: #2aa7fa;
+  color: #fff;
+}
+
 .page-heading-actions {
   display: flex;
   align-items: center;
@@ -450,6 +463,46 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.section-settings-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.8fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.section-settings-main,
+.section-settings-nav {
+  min-width: 0;
+}
+
+.section-settings-nav-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.section-settings-nav-btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.section-settings-nav-btn.is-active,
+.section-settings-nav-btn:disabled {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+  opacity: 1;
+  cursor: default;
+}
+
+@media (max-width: 960px) {
+  .section-settings-shell {
+    grid-template-columns: 1fr;
+  }
 }
 
 .acquire-workbench-layout {
