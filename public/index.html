@@ -1525,6 +1525,75 @@
                 </table>
               </div>
             </section>
+            <section class="card" style="margin-top: 1rem;">
+              <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+                <h3 style="margin:0;">Website Search Defaults</h3>
+              </div>
+              <p class="meta">Admin-level default settings for the Advanced controls on Acquire: Web.</p>
+              <form id="acquireWebsiteDefaultsForm" class="labeled-form" style="margin-top: 1rem;">
+                <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem;">
+                  <div class="stack-form" style="margin:0;">
+                    <div class="form-row checkbox-row">
+                      <label><input id="acquireSettingsAcquireSocial" type="checkbox" /> Acquire Social</label>
+                    </div>
+                    <div class="form-row checkbox-row">
+                      <label><input id="acquireSettingsAcquireKeywords" type="checkbox" /> Keywords</label>
+                    </div>
+                    <div class="form-row checkbox-row">
+                      <label><input id="acquireSettingsAcquireHashtags" type="checkbox" /> Hashtags</label>
+                    </div>
+                    <div class="form-row checkbox-row">
+                      <label><input id="acquireSettingsAcquireImages" type="checkbox" /> Images</label>
+                    </div>
+                    <div class="form-row checkbox-row">
+                      <label><input id="acquireSettingsAcquirePages" type="checkbox" /> Website Pages</label>
+                    </div>
+                    <div class="form-row checkbox-row">
+                      <label><input id="acquireSettingsAcquirePeerSites" type="checkbox" /> Peer Sites</label>
+                    </div>
+                  </div>
+                  <div class="stack-form" style="margin:0;">
+                    <div class="form-row">
+                      <label for="acquireSettingsMaxPages">Pages to Harvest</label>
+                      <select id="acquireSettingsMaxPages">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="acquireSettingsPeerSitesLimit">Peer Sites to Harvest</label>
+                      <select id="acquireSettingsPeerSitesLimit">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="acquireSettingsImagesLimit">Images to Harvest</label>
+                      <select id="acquireSettingsImagesLimit">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="acquireSettingsSnippetLength">Snippet Length</label>
+                      <input id="acquireSettingsSnippetLength" type="number" min="100" max="5000" step="50" />
+                    </div>
+                  </div>
+                </div>
+                <div class="page-heading-actions" style="justify-content:center; margin-top: 0.75rem;">
+                  <button type="submit">Save Website Defaults</button>
+                </div>
+              </form>
+            </section>
           </div>
           <aside class="section-settings-nav">
             <section class="card">
