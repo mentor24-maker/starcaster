@@ -2998,6 +2998,124 @@ App.youtube = (function () {
     return raw.slice(0, max).trimEnd() + '...';
   }
 
+  function buildYoutubeCommentFeedbackControl(row, feedback) {
+    var wrap = document.createElement('div');
+    wrap.className = 'youtube-miner-feedback-wrap';
+
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'youtube-miner-feedback-icon' + (feedbackHasReview(feedback) ? ' has-feedback' : '');
+    button.textContent = feedbackHasReview(feedback) ? '✓' : '!';
+    button.title = feedbackHasReview(feedback) ? 'Feedback saved' : 'Add feedback';
+    wrap.appendChild(button);
+
+    var pop = document.createElement('div');
+    pop.className = 'youtube-miner-feedback-pop hidden';
+
+    var heading = document.createElement('h4');
+    heading.textContent = 'Comment Feedback';
+    pop.appendChild(heading);
+
+    var topicRow = document.createElement('div');
+    topicRow.className = 'form-row';
+    var topicLabel = document.createElement('label');
+    topicLabel.textContent = 'Topic';
+    var topicSelect = document.createElement('select');
+    topicSelect.innerHTML = '<option value="">Select Topic</option>';
+    categoryOptions().forEach(function(topic) {
+      var option = document.createElement('option');
+      option.value = topic;
+      option.textContent = topic;
+      option.selected = feedback.categories.indexOf(topic) >= 0;
+      topicSelect.appendChild(option);
+    });
+    topicRow.appendChild(topicLabel);
+    topicRow.appendChild(topicSelect);
+    pop.appendChild(topicRow);
+
+    var approachRow = document.createElement('div');
+    approachRow.className = 'form-row';
+    var approachLabel = document.createElement('label');
+    approachLabel.textContent = 'Approach';
+    var approachSelect = document.createElement('select');
+    approachSelect.innerHTML = '<option value="">Select Approach</option>';
+    Array.from(new Set(
+      youtubeMinerApproachConfig.map(function(item) { return safeText(item && item.label); })
+        .concat(toArray(youtubeMinerLastResult && youtubeMinerLastResult.comments).map(function(item) {
+          return safeText(item && (item.approach || item.approach_name));
+        }))
+        .filter(Boolean)
+    )).sort(function(a, b) { return a.localeCompare(b); }).forEach(function(approach) {
+      var option = document.createElement('option');
+      option.value = approach;
+      option.textContent = approach;
+      option.selected = feedback.approaches.indexOf(approach) >= 0;
+      approachSelect.appendChild(option);
+    });
+    approachRow.appendChild(approachLabel);
+    approachRow.appendChild(approachSelect);
+    pop.appendChild(approachRow);
+
+    var qualityRow = document.createElement('div');
+    qualityRow.className = 'form-row';
+    var qualityLabel = document.createElement('label');
+    qualityLabel.textContent = 'Quality';
+    var qualitySelect = document.createElement('select');
+    qualitySelect.innerHTML = ''
+      + '<option value="0">Unrated</option>'
+      + '<option value="1">1</option>'
+      + '<option value="2">2</option>'
+      + '<option value="3">3</option>'
+      + '<option value="4">4</option>'
+      + '<option value="5">5</option>';
+    qualitySelect.value = String(Math.max(0, Math.min(Number(feedback.quality) || 0, 5)));
+    qualityRow.appendChild(qualityLabel);
+    qualityRow.appendChild(qualitySelect);
+    pop.appendChild(qualityRow);
+
+    var noteRow = document.createElement('div');
+    noteRow.className = 'form-row';
+    var noteLabel = document.createElement('label');
+    noteLabel.textContent = 'Notes';
+    var noteInput = document.createElement('textarea');
+    noteInput.rows = 4;
+    noteInput.value = safeText(feedback.note);
+    noteRow.appendChild(noteLabel);
+    noteRow.appendChild(noteInput);
+    pop.appendChild(noteRow);
+
+    var saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'youtube-miner-inline-action';
+    saveBtn.textContent = 'Save Feedback';
+    saveBtn.addEventListener('click', function() {
+      var nextTopic = safeText(topicSelect.value);
+      var nextApproach = safeText(approachSelect.value);
+      saveFeedback(row, {
+        quality: Number(qualitySelect.value || 0) || 0,
+        categories: nextTopic ? [nextTopic] : [],
+        approaches: nextApproach ? [nextApproach] : [],
+        response_type: nextApproach,
+        note: safeText(noteInput.value),
+      });
+      pop.classList.add('hidden');
+      renderYoutubeCommentMinerResult();
+    });
+    pop.appendChild(saveBtn);
+
+    button.addEventListener('click', function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      document.querySelectorAll('.youtube-miner-feedback-pop').forEach(function(node) {
+        if (node !== pop) node.classList.add('hidden');
+      });
+      pop.classList.toggle('hidden');
+    });
+
+    wrap.appendChild(pop);
+    return wrap;
+  }
+
   function pruneSelectedYoutubeCommentRows(activeResult) {
     var validIds = new Set(getFilteredYoutubeCommentRows(activeResult).map(getCommentSelectionKey).filter(Boolean));
     Array.from(selectedCommentRowIds).forEach(function(id) {
@@ -3317,28 +3435,20 @@ App.youtube = (function () {
       commentText.title = fullCommentText;
       commentTd.appendChild(commentText);
 
-      var whyTd = document.createElement('td');
-      var whyWrap = document.createElement('div');
-      whyWrap.className = 'youtube-miner-why-cell';
-      var whyText = document.createElement('div');
-      var whyBits = []
-        .concat(toArray(row && row.why))
-        .concat([
-          safeText(feedback && feedback.category_explain),
-          safeText(feedback && feedback.attributes_explain),
-          safeText(feedback && feedback.approaches_explain),
-          safeText(feedback && feedback.note),
-        ])
-        .filter(Boolean);
-      whyText.textContent = whyBits.join(' | ') || '-';
-      whyWrap.appendChild(whyText);
-      whyTd.appendChild(whyWrap);
+      var feedbackTd = document.createElement('td');
+      var feedbackWrap = document.createElement('div');
+      feedbackWrap.className = 'youtube-miner-feedback-cell';
+      feedbackWrap.appendChild(buildYoutubeCommentFeedbackControl(row, feedback));
+      feedbackTd.appendChild(feedbackWrap);
 
       var replyTd = document.createElement('td');
       var replyWrap = document.createElement('div');
       replyWrap.className = 'youtube-miner-reply-cell';
       var replyText = document.createElement('div');
-      replyText.textContent = safeText(feedback && feedback.suggested_response) || '-';
+      var fullReplyText = safeText(feedback && feedback.suggested_response) || '-';
+      replyText.className = 'youtube-miner-reply-text';
+      replyText.textContent = truncateText(fullReplyText, 100) || '-';
+      replyText.title = fullReplyText;
       replyWrap.appendChild(replyText);
       var replyBtn = document.createElement('button');
       replyBtn.type = 'button';
@@ -3361,7 +3471,7 @@ App.youtube = (function () {
       tr.appendChild(topicTd);
       tr.appendChild(commentTd);
       tr.appendChild(document.createElement('td')).textContent = (feedback.approaches.length ? feedback.approaches[0] : safeText(row && (row.approach || row.approach_name))) || '-';
-      tr.appendChild(whyTd);
+      tr.appendChild(feedbackTd);
       tr.appendChild(replyTd);
       tableEl.appendChild(tr);
     });
@@ -4666,7 +4776,6 @@ App.youtube = (function () {
 
     var youtubeMinerContentVideoFilter = document.getElementById('youtubeMinerContentVideoFilter');
     var youtubeMinerContentTopicFilter = document.getElementById('youtubeMinerContentTopicFilter');
-    var youtubeMinerContentAttributesFilter = document.getElementById('youtubeMinerContentAttributesFilter');
     var youtubeMinerContentApproachFilter = document.getElementById('youtubeMinerContentApproachFilter');
     var youtubeMinerContentAuthorFilter = document.getElementById('youtubeMinerContentAuthorFilter');
     var youtubeMinerContentCommentFilter = document.getElementById('youtubeMinerContentCommentFilter');
@@ -4810,11 +4919,6 @@ App.youtube = (function () {
     }
     if (youtubeMinerContentTopicFilter) {
       youtubeMinerContentTopicFilter.addEventListener('change', function() {
-        renderYoutubeCommentMinerResult();
-      });
-    }
-    if (youtubeMinerContentAttributesFilter) {
-      youtubeMinerContentAttributesFilter.addEventListener('input', function() {
         renderYoutubeCommentMinerResult();
       });
     }
