@@ -59,6 +59,11 @@ App.youtube = (function () {
   var youtubeResearchLastResult = null;
   var youtubeResearchMessagingCache = null;
   var selectedResearchTargetUrls = new Set();
+  var youtubeResearchTableSort = {
+    key: 'view_count',
+    dir: 'desc',
+  };
+  var youtubeResearchHoverPreviewEl = null;
   var youtubeMinerTargetHistory = [];
   var selectedCommentRowIds = new Set();
   // Comment run data is still fetched to support "View Comments" behavior
@@ -88,6 +93,86 @@ App.youtube = (function () {
   function formatInteger(value) {
     var num = Number(value || 0) || 0;
     return num.toLocaleString();
+  }
+
+  function compareTextSort(left, right) {
+    return safeText(left).localeCompare(safeText(right), undefined, { sensitivity: 'base' });
+  }
+
+  function truncateWords(value, maxLength) {
+    var text = safeText(value);
+    var limit = Math.max(0, Number(maxLength) || 0);
+    if (!text || !limit || text.length <= limit) return text;
+    var slice = text.slice(0, limit + 1);
+    var lastSpace = slice.lastIndexOf(' ');
+    var cutoff = lastSpace >= Math.floor(limit * 0.6) ? lastSpace : limit;
+    return safeText(text.slice(0, cutoff)) + '...';
+  }
+
+  function getYoutubeResearchSortValue(row, key) {
+    if (!row || !key) return '';
+    if (key === 'view_count' || key === 'like_count' || key === 'comment_count') {
+      return Number(row[key] || 0) || 0;
+    }
+    return safeText(row[key]);
+  }
+
+  function ensureYoutubeResearchHoverPreview() {
+    if (youtubeResearchHoverPreviewEl && document.body.contains(youtubeResearchHoverPreviewEl)) {
+      return youtubeResearchHoverPreviewEl;
+    }
+    var el = document.createElement('div');
+    el.className = 'youtube-research-hover-preview hidden';
+    document.body.appendChild(el);
+    youtubeResearchHoverPreviewEl = el;
+    return el;
+  }
+
+  function hideYoutubeResearchHoverPreview() {
+    var el = ensureYoutubeResearchHoverPreview();
+    el.classList.add('hidden');
+    el.innerHTML = '';
+  }
+
+  function positionYoutubeResearchHoverPreview(clientX, clientY) {
+    var el = ensureYoutubeResearchHoverPreview();
+    if (el.classList.contains('hidden')) return;
+    var offset = 18;
+    var width = el.offsetWidth || 360;
+    var height = el.offsetHeight || 220;
+    var left = clientX + offset;
+    var top = clientY + offset;
+    if (left + width > window.innerWidth - 12) left = Math.max(12, clientX - width - offset);
+    if (top + height > window.innerHeight - 12) top = Math.max(12, clientY - height - offset);
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+  }
+
+  function showYoutubeResearchHoverPreview(row, event) {
+    var el = ensureYoutubeResearchHoverPreview();
+    var thumbnailUrl = safeText(row && row.thumbnail_url);
+    var description = safeText(row && row.description) || 'No description available.';
+    var title = safeText(row && row.title) || safeText(row && row.video_url) || 'Video preview';
+    el.innerHTML = '';
+    var card = document.createElement('div');
+    card.className = 'youtube-research-hover-preview-card';
+    if (thumbnailUrl) {
+      var img = document.createElement('img');
+      img.src = thumbnailUrl;
+      img.alt = title;
+      card.appendChild(img);
+    }
+    var titleEl = document.createElement('div');
+    titleEl.className = 'youtube-research-hover-preview-title';
+    titleEl.textContent = title;
+    card.appendChild(titleEl);
+    var descriptionEl = document.createElement('div');
+    descriptionEl.className = 'youtube-research-hover-preview-description';
+    descriptionEl.textContent = truncateWords(description, 320) || 'No description available.';
+    card.appendChild(descriptionEl);
+    el.appendChild(card);
+    el.classList.remove('hidden');
+    positionYoutubeResearchHoverPreview(event.clientX, event.clientY);
   }
 
   function parseSimpleTagList(value) {
@@ -3766,12 +3851,15 @@ App.youtube = (function () {
 
   function getYoutubeResearchCandidateRows() {
     var research = youtubeResearchLastResult && youtubeResearchLastResult.research ? youtubeResearchLastResult.research : {};
-    return toArray(research.distilled_target_items).map(function(item) {
+    var rows = toArray(research.distilled_target_items).map(function(item) {
       return {
         video_url: safeText(item && item.video_url),
         video_id: safeText(item && item.video_id),
         title: safeText(item && item.title),
         channel_name: safeText(item && item.channel_name),
+        channel_url: safeText(item && item.channel_url),
+        description: safeText(item && item.description),
+        thumbnail_url: safeText(item && item.thumbnail_url),
         phrase: safeText(item && item.phrase),
         published_at: safeText(item && item.published_at),
         view_count: Number(item && item.view_count || 0) || 0,
@@ -3781,6 +3869,16 @@ App.youtube = (function () {
     }).filter(function(item) {
       return item.video_url;
     });
+    var sortKey = safeText(youtubeResearchTableSort.key) || 'view_count';
+    var sortDir = youtubeResearchTableSort.dir === 'asc' ? 'asc' : 'desc';
+    rows.sort(function(left, right) {
+      var a = getYoutubeResearchSortValue(left, sortKey);
+      var b = getYoutubeResearchSortValue(right, sortKey);
+      var result = (typeof a === 'number' && typeof b === 'number') ? (a - b) : compareTextSort(a, b);
+      if (result === 0) result = compareTextSort(left.title, right.title);
+      return sortDir === 'asc' ? result : -result;
+    });
+    return rows;
   }
 
   function syncYoutubeResearchBulkSelectionUi() {
@@ -3841,18 +3939,41 @@ App.youtube = (function () {
       titleLink.target = '_blank';
       titleLink.rel = 'noopener noreferrer';
       titleLink.textContent = safeText(row.title) || videoUrl || '-';
+      titleLink.addEventListener('mouseenter', function(event) {
+        showYoutubeResearchHoverPreview(row, event);
+      });
+      titleLink.addEventListener('mousemove', function(event) {
+        positionYoutubeResearchHoverPreview(event.clientX, event.clientY);
+      });
+      titleLink.addEventListener('mouseleave', function() {
+        hideYoutubeResearchHoverPreview();
+      });
       titleTd.appendChild(titleLink);
 
       var channelTd = document.createElement('td');
-      channelTd.textContent = safeText(row.channel_name) || '-';
+      var channelName = safeText(row.channel_name) || '-';
+      var channelUrl = safeText(row.channel_url);
+      if (channelUrl) {
+        var channelLink = document.createElement('a');
+        channelLink.href = channelUrl;
+        channelLink.target = '_blank';
+        channelLink.rel = 'noopener noreferrer';
+        channelLink.textContent = channelName;
+        channelTd.appendChild(channelLink);
+      } else {
+        channelTd.textContent = channelName;
+      }
 
       var viewsTd = document.createElement('td');
+      viewsTd.className = 'numeric-col';
       viewsTd.textContent = formatInteger(row.view_count);
 
       var likesTd = document.createElement('td');
+      likesTd.className = 'numeric-col';
       likesTd.textContent = formatInteger(row.like_count);
 
       var commentsTd = document.createElement('td');
+      commentsTd.className = 'numeric-col';
       commentsTd.textContent = formatInteger(row.comment_count);
 
       var actionsTd = document.createElement('td');
@@ -4963,6 +5084,28 @@ App.youtube = (function () {
         renderYoutubeResearchRunsTable();
       });
     }
+    [
+      ['youtubeResearchSortTitleBtn', 'title'],
+      ['youtubeResearchSortChannelBtn', 'channel_name'],
+      ['youtubeResearchSortViewsBtn', 'view_count'],
+      ['youtubeResearchSortLikesBtn', 'like_count'],
+      ['youtubeResearchSortCommentsBtn', 'comment_count'],
+    ].forEach(function(entry) {
+      var sortBtn = document.getElementById(entry[0]);
+      if (!sortBtn) return;
+      sortBtn.addEventListener('click', function() {
+        var key = entry[1];
+        if (youtubeResearchTableSort.key === key) {
+          youtubeResearchTableSort.dir = youtubeResearchTableSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          youtubeResearchTableSort.key = key;
+          youtubeResearchTableSort.dir = key === 'title' || key === 'channel_name' ? 'asc' : 'desc';
+        }
+        renderYoutubeResearchRunsTable();
+      });
+    });
+    document.addEventListener('scroll', hideYoutubeResearchHoverPreview, true);
+    document.addEventListener('pointerdown', hideYoutubeResearchHoverPreview, true);
     if (youtubeMinerTargetHistoryAddBtn) {
       youtubeMinerTargetHistoryAddBtn.addEventListener('click', function() {
         addSelectedTargetHistoryToTextarea();
