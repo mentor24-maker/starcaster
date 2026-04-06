@@ -884,6 +884,10 @@ App.youtube = (function () {
     return Array.from(new Set(tags)).slice(0, 200);
   }
 
+  function getYoutubeResearchTopicValue(record) {
+    return safeText(record && (record.topic || record.category));
+  }
+
   async function loadYoutubeResearchMessagingCache() {
     if (youtubeResearchMessagingCache) return youtubeResearchMessagingCache;
     var requests = [
@@ -899,7 +903,9 @@ App.youtube = (function () {
     var articles = [];
     var posts = [];
     var tweets = [];
-    if (results[0].status === 'fulfilled') categories = toArray(results[0].value?.categories);
+    if (results[0].status === 'fulfilled') {
+      categories = toArray(results[0].value?.topics || results[0].value?.categories || results[0].value?.data || results[0].value);
+    }
     if (results[1].status === 'fulfilled') hashtags = toArray(results[1].value?.hashtags);
     if (results[2].status === 'fulfilled') articles = toArray(results[2].value?.articles);
     if (results[3].status === 'fulfilled') posts = toArray(results[3].value?.posts);
@@ -916,12 +922,12 @@ App.youtube = (function () {
     var select = document.getElementById('youtubeResearchMessagingCategory');
     if (!select) return;
     var current = safeText(selectedCategory || select.value);
-    select.innerHTML = '<option value="">All Categories</option>';
+    select.innerHTML = '<option value="">All Topics</option>';
     var rows = toArray(categories).slice().sort(function(a, b) {
-      return safeText(a && a.category).localeCompare(safeText(b && b.category));
+      return getYoutubeResearchTopicValue(a).localeCompare(getYoutubeResearchTopicValue(b));
     });
     rows.forEach(function(row) {
-      var name = safeText(row && row.category);
+      var name = getYoutubeResearchTopicValue(row);
       if (!name) return;
       var opt = document.createElement('option');
       opt.value = name;
@@ -938,7 +944,7 @@ App.youtube = (function () {
     var cat = safeText(category).toLowerCase();
     var tags = [];
     toArray(records).forEach(function(record) {
-      var recCategory = safeText(record && record.category).toLowerCase();
+      var recCategory = getYoutubeResearchTopicValue(record).toLowerCase();
       if (cat && recCategory !== cat) return;
       tags = tags.concat(collectTagsFromRecord(record));
     });
@@ -957,24 +963,34 @@ App.youtube = (function () {
     var cap = Math.max(1, Math.min(Number(limit) || 10, 20));
     var cat = safeText(category).toLowerCase();
     var hash = safeText(hashtag).toLowerCase();
-    var scores = {};
+    if (!cat) return [];
+    var phrases = [];
+    var seen = new Set();
+
+    var pushPhrase = function(value) {
+      var phrase = safeText(value).replace(/^#/, '').replace(/[_-]+/g, ' ').trim();
+      var key = phrase.toLowerCase();
+      if (!phrase || seen.has(key)) return;
+      seen.add(key);
+      phrases.push(phrase);
+    };
+
+    pushPhrase(category);
+    if (hash) pushPhrase(hash);
 
     toArray(records).forEach(function(record) {
-      var recCategory = safeText(record && record.category).toLowerCase();
+      var recCategory = getYoutubeResearchTopicValue(record).toLowerCase();
       if (cat && recCategory !== cat) return;
       var tags = collectTagsFromRecord(record);
-      if (hash && !tags.includes(hash)) return;
-      tags.forEach(function(tag) {
-        if (!tag) return;
-        scores[tag] = Number(scores[tag] || 0) + 1;
+      var filteredTags = hash
+        ? tags.filter(function(tag) { return tag === hash; })
+        : tags;
+      filteredTags.forEach(function(tag) {
+        pushPhrase(tag);
       });
     });
 
-    return Object.keys(scores)
-      .sort(function(a, b) { return Number(scores[b] || 0) - Number(scores[a] || 0); })
-      .map(phraseFromTag)
-      .filter(Boolean)
-      .slice(0, cap);
+    return phrases.slice(0, cap);
   }
 
   async function refreshYoutubeResearchCategoryHashtagHints() {
@@ -987,15 +1003,13 @@ App.youtube = (function () {
     var selectedCategory = safeText(categorySelect.value);
     var selectedHashtag = safeText(hashtagSelect.value).toLowerCase();
     populateYoutubeResearchCategoryOptions(cache.categories, selectedCategory);
-    populateYoutubeResearchHashtagOptions(cache.records, selectedCategory, selectedHashtag);
+    populateYoutubeResearchHashtagOptions(cache.hashtags, selectedCategory, selectedHashtag);
 
     // Re-resolve after options are rebuilt.
     selectedCategory = safeText(categorySelect.value);
     selectedHashtag = safeText(hashtagSelect.value).toLowerCase();
-    var suggestions = buildYoutubeResearchSuggestedPhrases(cache.records, selectedCategory, selectedHashtag, 10);
-    if (suggestions.length) {
-      phrasesArea.value = suggestions.join('\n');
-    }
+    var suggestions = buildYoutubeResearchSuggestedPhrases(cache.hashtags.length ? cache.hashtags : cache.records, selectedCategory, selectedHashtag, 10);
+    phrasesArea.value = suggestions.join('\n');
   }
 
   async function loadPersistedYoutubeMinerResponseContext() {
@@ -3741,6 +3755,7 @@ App.youtube = (function () {
       var addBtn          = mkBtn('Add Contact',      function() { addContactFromRun(resolvedDetailRunId).catch(function(e) { notify(e.message, true); }); });
       
       var commentMatch = findCommentRunForVideoUrl(run.video_url) || (run.comment_run_id ? { run_id: run.comment_run_id, video_url: run.video_url, title: run.title, channel_name: run.channel_name, comment_count: run.comment_count } : null);
+      var commentRunId = safeText(commentMatch && commentMatch.run_id) || safeText(run.comment_run_id);
       var commentsBtn = mkBtn('View Comments', function() {
         if (!commentMatch) return notify('No comment run found for this video.', true);
         App.youtubeComments.openForRun(commentMatch);
@@ -3749,8 +3764,9 @@ App.youtube = (function () {
         commentsBtn.classList.add('tiny-btn-blue');
       }
       var delBtn          = mkBtn('Delete',           function() {
-        if (!confirm('Delete analyzed comment run ' + (run.comment_run_id || run.repository_run_id) + '?')) return;
-        deleteCommentRun(run.comment_run_id).catch(function(e) { notify(e.message, true); });
+        if (!commentRunId) return notify('No comment run is available to delete for this video.', true);
+        if (!confirm('Delete analyzed comment run ' + commentRunId + '?')) return;
+        deleteCommentRun(commentRunId).catch(function(e) { notify(e.message, true); });
       });
 
       if (!resolvedDetailRunId) {
@@ -4054,9 +4070,11 @@ App.youtube = (function () {
   }
 
   async function deleteCommentRun(runId) {
-    await api('/api/acquire/youtube-comment-runs/' + encodeURIComponent(runId), { method: 'DELETE' });
+    var id = safeText(runId);
+    if (!id) throw new Error('Comment run id is required');
+    await api('/api/acquire/youtube-comment-runs/' + encodeURIComponent(id), { method: 'DELETE' });
     await refreshCommentRuns();
-    notify('Comment run deleted (' + runId + ')');
+    notify('Comment run deleted (' + id + ')');
   }
 
   async function addContactFromRun(runId) {
