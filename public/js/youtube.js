@@ -202,6 +202,30 @@ App.youtube = (function () {
     return Array.from(new Set(tokens)).join(', ');
   }
 
+  function slugifyYoutubeBanReasonLabel(label) {
+    return safeText(label)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  function getYoutubeBanReasonOptions() {
+    var defaults = ['Corporate', 'Personal', 'Not Serious', 'Low Volume', 'AI Slop'];
+    var fromSettings = typeof App.getAcquireYoutubeBanReasons === 'function'
+      ? App.getAcquireYoutubeBanReasons()
+      : defaults;
+    var labels = Array.from(new Set(toArray(fromSettings).map(function(item) {
+      return safeText(item);
+    }).filter(Boolean)));
+    if (!labels.length) labels = defaults.slice();
+    return labels.map(function(label) {
+      return {
+        value: slugifyYoutubeBanReasonLabel(label),
+        label: label,
+      };
+    });
+  }
+
   function isYoutubeVideoBannedFromTags(value) {
     return parseSimpleTagList(value).some(function(item) {
       var lower = safeText(item).toLowerCase();
@@ -4183,12 +4207,13 @@ App.youtube = (function () {
     var label = document.createElement('label');
     label.textContent = 'Ban Reason';
     var select = document.createElement('select');
-    select.innerHTML = ''
-      + '<option value=\"\">Select reason</option>'
-      + '<option value=\"corporate\">Corporate</option>'
-      + '<option value=\"personal\">Personal</option>'
-      + '<option value=\"low_volume\">Low Volume</option>'
-      + '<option value=\"not_serious\">Not Serious</option>';
+    select.innerHTML = '<option value=\"\">Select reason</option>';
+    getYoutubeBanReasonOptions().forEach(function(optionData) {
+      var option = document.createElement('option');
+      option.value = optionData.value;
+      option.textContent = optionData.label;
+      select.appendChild(option);
+    });
     if (runs.length === 1) select.value = extractYoutubeBanReasonFromTags(runs[0].tags);
     row.appendChild(label);
     row.appendChild(select);
