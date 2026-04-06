@@ -1588,7 +1588,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, ai.data, ai.data), true;
   }
 
-  // POST /api/acquire/youtube-research — build targets from messaging + phrases, then mine/distill
+  // POST /api/acquire/youtube-research — build candidate YouTube targets from messaging + phrases
   if (pathname === '/api/acquire/youtube-research' && method === 'POST') {
     if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
 
@@ -1670,31 +1670,6 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'No YouTube targets discovered from research phrases.', { details: warnings }), true;
     }
 
-    const minerPayload = {
-      targets: dedupedVideos.map((item) => item.video_url),
-      videos_per_channel: Number(body?.videos_per_channel || 5) || 5,
-      max_comments_per_video: Number(body?.max_comments_per_video || 100) || 100,
-      include_replies: body?.include_replies === true,
-      sort_by: String(body?.sort_by || 'relevance'),
-      min_score: Number(body?.min_score || 3) || 3,
-      exclude_noise: body?.exclude_noise !== false,
-      include_phrases_text: String(body?.include_phrases_text || '').trim(),
-      exclude_phrases_text: String(body?.exclude_phrases_text || '').trim(),
-      category_config: body?.category_config || [],
-      attribute_config: body?.attribute_config || [],
-      approach_config: body?.approach_config || [],
-      response_context: String(body?.response_context || '').trim(),
-      response_guidelines: String(body?.response_guidelines || '').trim(),
-      training_feedback: Array.isArray(body?.training_feedback) ? body.training_feedback : [],
-    };
-
-    const mined = await runYoutubeCommentMiner(minerPayload);
-    if (!mined.ok) {
-      return sendErr(res, mined.status || 500, mined.error || 'YouTube research miner failed', {
-        details: Array.isArray(mined?.data?.warnings) ? mined.data.warnings : warnings,
-      }), true;
-    }
-
     const researchInput = {
       phrase_count: phrases.length,
       discovered_target_count: discovered.length,
@@ -1720,7 +1695,6 @@ async function handle(req, res, pathname, method) {
       },
     };
     const resultPayload = {
-      ...(mined.data || {}),
       research: {
         run_id: '',
         phrase_sources: phraseSources,
@@ -1734,9 +1708,16 @@ async function handle(req, res, pathname, method) {
           video_id: safeText(item?.video_id),
           title: firstNonEmpty(item?.title, item?.video_title),
           channel_name: safeText(item?.channel_name),
+          phrase: safeText(item?.phrase),
+          published_at: safeText(item?.published_at),
         })).filter((item) => item.video_url),
       },
-      warnings: [...toArray(mined.data?.warnings), ...warnings].slice(0, 300),
+      stats: {
+        phrase_count: phrases.length,
+        discovered_target_count: discovered.length,
+        distilled_target_count: dedupedVideos.length,
+      },
+      warnings: warnings.slice(0, 300),
     };
     const saveRes = await createResearchRun(researchInput, resultPayload);
     const runId = saveRes?.ok ? safeText(saveRes?.data?.run_id) : '';
@@ -1752,7 +1733,6 @@ async function handle(req, res, pathname, method) {
         phrase_count: phrases.length,
         discovered_target_count: discovered.length,
         distilled_target_count: dedupedVideos.length,
-        filtered_comments: Number(resultPayload?.stats?.total_comments_filtered || 0) || 0,
       },
     });
 
