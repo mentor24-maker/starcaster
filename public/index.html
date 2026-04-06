@@ -1506,7 +1506,7 @@
                   <label><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked /> Include transcript in targeting handoff</label>
                 </div>
                 <div class="grid-form" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start;">
-                  <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
+                  <div class="stack-form" style="margin:0;">
                     <div class="form-row">
                       <label for="youtubeResearchMessagingCategory">Topic</label>
                       <select id="youtubeResearchMessagingCategory" name="messaging_category">
@@ -1519,6 +1519,12 @@
                         <option value="">All Hashtags</option>
                       </select>
                     </div>
+                    <div class="form-row">
+                      <label for="youtubeResearchManualPhrases">Keywords</label>
+                      <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="Select a topic to populate related keywords"></textarea>
+                    </div>
+                  </div>
+                  <div class="stack-form" style="margin:0;">
                     <div class="form-row">
                       <label for="youtubeResearchMaxPhrases">Max Phrases</label>
                       <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
@@ -1535,10 +1541,6 @@
                       <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
                       <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
                     </div>
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeResearchManualPhrases">Keywords</label>
-                    <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="10" placeholder="Select a topic to populate related keywords"></textarea>
                   </div>
                 </div>
                 <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
@@ -1613,6 +1615,7 @@
                         <button id="youtubeRunsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button>
                         <button id="youtubeRunsAugmentBtn" type="button" class="tiny-btn" disabled>Augment Selected</button>
                         <button id="youtubeRunsDiagnoseBtn" type="button" class="tiny-btn" disabled>Diagnose Selected</button>
+                        <button id="youtubeRunsDeleteBtn" type="button" class="tiny-btn" disabled>Delete Selected</button>
                       </th>
                     </tr>
                     <tr>
