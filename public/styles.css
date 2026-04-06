@@ -8545,6 +8545,71 @@ th {
   border-color: #2aa7fa;
 }
 
+.table-sort-btn {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 0;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+
+.table-sort-btn.numeric-col {
+  text-align: right;
+}
+
+.numeric-col {
+  text-align: right;
+}
+
+.youtube-research-hover-preview {
+  position: fixed;
+  z-index: 3000;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.youtube-research-hover-preview.hidden {
+  display: none;
+}
+
+.youtube-research-hover-preview-card {
+  background: #fff;
+  border: 1px solid #111;
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.youtube-research-hover-preview-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #d9e6f5;
+}
+
+.youtube-research-hover-preview-title,
+.youtube-research-hover-preview-description {
+  padding: 0.8rem 1rem;
+}
+
+.youtube-research-hover-preview-title {
+  font-weight: 700;
+  padding-bottom: 0.2rem;
+}
+
+.youtube-research-hover-preview-description {
+  padding-top: 0;
+  color: #243f63;
+  white-space: pre-wrap;
+}
+
 .youtube-miner-comment-cell {
   display: flex;
   flex-direction: column;
