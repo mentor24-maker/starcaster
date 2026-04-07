@@ -8695,3 +8695,27 @@ th {
   border-color: #80bdff;
   box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
+
+/* Contacts Settings Gear Icon */
+button.section-settings-gear-btn {
+  background-color: var(--color-black, #1a202c);
+  color: var(--color-white, #ffffff);
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: background-color 0.15s ease;
+}
+button.section-settings-gear-btn:hover {
+  background-color: #2d3748;
+}
+button.section-settings-gear-btn svg {
+  stroke: currentColor;
+  width: 18px;
+  height: 18px;
+}

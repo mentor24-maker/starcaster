@@ -240,32 +240,9 @@
           </div>
         </section>
 
-        <div class="table-wrap">
+        <div class="table-wrap contacts-table-wrap">
           <table>
-            <thead>
-              <tr class="contacts-filter-row">
-                <th class="contacts-go-cell"><input id="contactsCheckAll" type="checkbox" title="Select all filtered contacts" /></th>
-                <th><input id="contactsSearchFirstName" placeholder="First" /></th>
-                <th><input id="contactsSearchLastName" placeholder="Last" /></th>
-                <th><input id="contactsSearchCompany" placeholder="Company" /></th>
-                <th><input id="contactsSearchEmail" placeholder="Email" /></th>
-                <th><input id="contactsSearchWebsite" placeholder="Website" /></th>
-                <th><input id="contactsSearchYoutube" placeholder="Youtube" /></th>
-                <th><input id="contactsSearchInstagram" placeholder="Instagram" /></th>
-                <th class="contacts-go-cell"><button id="contactsFiltersGoBtn" type="button">Go</button></th>
-              </tr>
-              <tr>
-                <th></th>
-                <th>First Name</th>
-                <th>Last Name</th>
-                <th>Company</th>
-                <th>Email</th>
-                <th>Website</th>
-                <th>Youtube</th>
-                <th>Instagram</th>
-                <th class="contacts-actions-heading">Actions</th>
-              </tr>
-            </thead>
+            <thead id="contactsTableHead"></thead>
             <tbody id="contactsTable"></tbody>
           </table>
         </div>
@@ -277,6 +254,38 @@
           </div>
         </form>
 
+      </section>
+
+      <section id="contactsSettingsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contacts: Settings</h2>
+          <div class="page-heading-actions">
+            <button type="button" id="contactsSettingsBackBtn">Return to Contacts</button>
+          </div>
+        </div>
+        <p>Manage section-level settings for Contacts, including how the main CRUD table is shown by default.</p>
+        <div class="section-settings-shell">
+          <div class="section-settings-main">
+            <section class="card">
+              <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+                <h3 style="margin:0;">Default Columns</h3>
+              </div>
+              <p class="meta">Choose which fields show by default on the main Contacts table.</p>
+              <form id="contactsDefaultColumnsForm" class="stack-form" style="margin-top: 1rem;">
+                <div id="contactsDefaultColumnsGrid" class="contacts-settings-columns-grid"></div>
+                <div class="page-heading-actions" style="justify-content:center; margin-top: 0.75rem;">
+                  <button type="submit">Save Default Columns</button>
+                </div>
+              </form>
+            </section>
+          </div>
+          <aside class="section-settings-nav">
+            <section class="card">
+              <h3 style="margin-top:0;">Section Settings</h3>
+              <div id="contactsSectionSettingsNavList" class="section-settings-nav-list"></div>
+            </section>
+          </aside>
+        </div>
       </section>
 
       <section id="contactsPeerSitesPage" class="app-page hidden">

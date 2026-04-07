@@ -55,6 +55,36 @@ App.contacts = (function () {
   ];
 
   const SOCIAL_FIELD_KEYS = new Set(SOCIAL_FILTER_FIELDS.map((field) => field.key));
+  const CONTACT_SETTINGS_KEY = 'alphire:contacts:settings:v1';
+  const CONTACTS_DEFAULT_VISIBLE_COLUMNS = ['first_name', 'last_name', 'company', 'email', 'website', 'youtube', 'instagram'];
+  const CONTACTS_TABLE_COLUMNS = [
+    { key: 'first_name', label: 'First Name', filterPlaceholder: 'First' },
+    { key: 'last_name', label: 'Last Name', filterPlaceholder: 'Last' },
+    { key: 'company', label: 'Company', filterPlaceholder: 'Company' },
+    { key: 'email', label: 'Email', filterPlaceholder: 'Email' },
+    { key: 'website', label: 'Website', filterPlaceholder: 'Website' },
+    { key: 'youtube', label: 'Youtube', filterPlaceholder: 'Youtube' },
+    { key: 'instagram', label: 'Instagram', filterPlaceholder: 'Instagram' },
+    { key: 'phone', label: 'Phone', filterPlaceholder: 'Phone' },
+    { key: 'city', label: 'City', filterPlaceholder: 'City' },
+    { key: 'country', label: 'Country', filterPlaceholder: 'Country' },
+    { key: 'tags', label: 'Tags', filterPlaceholder: 'Tags' },
+    { key: 'source', label: 'Source', filterPlaceholder: 'Source' },
+    { key: 'status', label: 'Status', filterPlaceholder: 'Status' },
+  ];
+  const SECTION_SETTINGS_LINKS = [
+    { label: 'Acquire Settings', pageId: 'acquireSettingsPage' },
+    { label: 'Contacts Settings', pageId: 'contactsSettingsPage' },
+    { label: 'Channels Settings', pageId: 'channelsSettingsPage' },
+    { label: 'Messaging Settings', pageId: 'messagingSettingsPage' },
+    { label: 'Assets Settings', pageId: 'assetsSettingsPage' },
+    { label: 'Builder Settings', pageId: 'builderSettingsPage' },
+    { label: 'Campaigns Settings', pageId: 'campaignSettingsPage' },
+    { label: 'Promote Settings', pageId: 'promoteSettingsPage' },
+    { label: 'Engage Settings', pageId: 'engageSettingsPage' },
+    { label: 'Observe Settings', pageId: 'observeSettingsPage' },
+    { label: 'Training Settings', pageId: 'trainingSettingsPage' },
+  ];
   const CONTACT_EDITABLE_FIELDS = [
     'first_name', 'last_name', 'company', 'email', 'phone', 'city', 'country',
     'website', 'youtube', 'instagram', 'tiktok', 'facebook', 'x', 'bluesky',
@@ -79,6 +109,40 @@ App.contacts = (function () {
   ];
   const ENGAGEMENT_BUCKET_OPTIONS = ['0', '1', '2-5', '6-10', '10+'];
   let exploreFormTemplateOptions = [];
+
+  function readContactsSettings() {
+    try {
+      const raw = window.localStorage.getItem(CONTACT_SETTINGS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const visibleColumns = Array.isArray(parsed?.defaultVisibleColumns) ? parsed.defaultVisibleColumns : CONTACTS_DEFAULT_VISIBLE_COLUMNS;
+      return {
+        defaultVisibleColumns: visibleColumns.filter((key) => CONTACTS_TABLE_COLUMNS.some((col) => col.key === key)),
+      };
+    } catch (_) {
+      return { defaultVisibleColumns: CONTACTS_DEFAULT_VISIBLE_COLUMNS.slice() };
+    }
+  }
+
+  function writeContactsSettings(nextSettings) {
+    const current = readContactsSettings();
+    const settings = Object.assign({}, current, nextSettings || {});
+    const validKeys = new Set(CONTACTS_TABLE_COLUMNS.map((col) => col.key));
+    settings.defaultVisibleColumns = Array.from(new Set((Array.isArray(settings.defaultVisibleColumns) ? settings.defaultVisibleColumns : [])
+      .map((key) => String(key || '').trim())
+      .filter((key) => validKeys.has(key))));
+    if (!settings.defaultVisibleColumns.length) settings.defaultVisibleColumns = CONTACTS_DEFAULT_VISIBLE_COLUMNS.slice();
+    try {
+      window.localStorage.setItem(CONTACT_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (_) {
+    }
+    return settings;
+  }
+
+  function getVisibleContactsColumns() {
+    return CONTACTS_TABLE_COLUMNS.filter((column) => {
+      return readContactsSettings().defaultVisibleColumns.includes(column.key);
+    });
+  }
 
   function isEngagementField(key) {
     return String(key || '').startsWith('engagement_');
@@ -1990,16 +2054,18 @@ App.contacts = (function () {
   // ---------------------------------------------------------------------------
 
   function renderContacts() {
+    renderContactsTableHead();
     if (els.contactsTable) {
       els.contactsTable.innerHTML = '';
+      const visibleColumns = getVisibleContactsColumns();
       state.contacts
         .filter((contact) => contactPassesContactFilters(contact, state.contactsFilters))
         .forEach((contact) => {
           const tr = document.createElement('tr');
           tr.appendChild(document.createElement('td'));
-          ['first_name', 'last_name', 'company', 'email', 'website', 'youtube', 'instagram'].forEach((key) => {
+          visibleColumns.forEach((column) => {
             const td = document.createElement('td');
-            appendContactCell(td, key, contactValue(contact, key));
+            appendContactCell(td, column.key, contactValue(contact, column.key));
             tr.appendChild(td);
           });
           const actionsTd = document.createElement('td');
@@ -2019,6 +2085,107 @@ App.contacts = (function () {
 
     renderExploreContactFilters();
     renderExploreContactsResults();
+  }
+
+  function renderContactsSettingsNav(activePageId) {
+    const wrap = document.getElementById('contactsSectionSettingsNavList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    SECTION_SETTINGS_LINKS.forEach((item) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = item.label;
+      button.className = 'section-settings-nav-btn' + (item.pageId === activePageId ? ' is-active' : '');
+      button.disabled = item.pageId === activePageId;
+      button.addEventListener('click', function () {
+        const target = String(item.pageId || '').trim();
+        const page = document.getElementById(target);
+        if (page && page.classList.contains('app-page')) {
+          App.setActivePage(target);
+        } else {
+          notify(item.label + ' is not set up yet.');
+        }
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderContactsDefaultColumnsSettings() {
+    const wrap = document.getElementById('contactsDefaultColumnsGrid');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const visible = new Set(readContactsSettings().defaultVisibleColumns);
+    CONTACTS_TABLE_COLUMNS.forEach((column) => {
+      const label = document.createElement('label');
+      label.className = 'checkbox-row';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = column.key;
+      checkbox.checked = visible.has(column.key);
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(column.label));
+      wrap.appendChild(label);
+    });
+  }
+
+  function renderContactsSettingsPage() {
+    renderContactsDefaultColumnsSettings();
+    renderContactsSettingsNav('contactsSettingsPage');
+  }
+
+  function renderContactsTableHead() {
+    const thead = document.getElementById('contactsTableHead');
+    if (!thead) return;
+    const visibleColumns = getVisibleContactsColumns();
+    thead.innerHTML = '';
+
+    const filterRow = document.createElement('tr');
+    filterRow.className = 'contacts-filter-row';
+    const checkTh = document.createElement('th');
+    checkTh.className = 'contacts-go-cell';
+    const checkAll = document.createElement('input');
+    checkAll.id = 'contactsCheckAll';
+    checkAll.type = 'checkbox';
+    checkAll.title = 'Select all filtered contacts';
+    checkTh.appendChild(checkAll);
+    filterRow.appendChild(checkTh);
+
+    visibleColumns.forEach((column) => {
+      const th = document.createElement('th');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = column.filterPlaceholder;
+      input.value = String(state.contactsFilters[column.key] || '');
+      input.addEventListener('input', () => {
+        state.contactsFilters[column.key] = String(input.value || '').trim().toLowerCase();
+        renderContacts();
+      });
+      th.appendChild(input);
+      filterRow.appendChild(th);
+    });
+
+    const goTh = document.createElement('th');
+    goTh.className = 'contacts-go-cell';
+    const goBtn = document.createElement('button');
+    goBtn.type = 'button';
+    goBtn.textContent = 'Go';
+    goBtn.addEventListener('click', () => renderContacts());
+    goTh.appendChild(goBtn);
+    filterRow.appendChild(goTh);
+    thead.appendChild(filterRow);
+
+    const headerRow = document.createElement('tr');
+    headerRow.appendChild(document.createElement('th'));
+    visibleColumns.forEach((column) => {
+      const th = document.createElement('th');
+      th.textContent = column.label;
+      headerRow.appendChild(th);
+    });
+    const actionsTh = document.createElement('th');
+    actionsTh.className = 'contacts-actions-heading';
+    actionsTh.textContent = 'Actions';
+    headerRow.appendChild(actionsTh);
+    thead.appendChild(headerRow);
   }
 
   async function loadExploreReferenceOptions() {
@@ -2190,6 +2357,27 @@ App.contacts = (function () {
       markerBtn.classList.add('section-settings-gear-btn');
       contactsActionRow.appendChild(markerBtn);
     }
+
+    const contactsSettingsBackBtn = document.getElementById('contactsSettingsBackBtn');
+    if (contactsSettingsBackBtn && !contactsSettingsBackBtn.dataset.bound) {
+      contactsSettingsBackBtn.dataset.bound = 'true';
+      contactsSettingsBackBtn.addEventListener('click', () => App.setActivePage('contactsPage'));
+    }
+    const contactsDefaultColumnsForm = document.getElementById('contactsDefaultColumnsForm');
+    if (contactsDefaultColumnsForm && !contactsDefaultColumnsForm.dataset.bound) {
+      contactsDefaultColumnsForm.dataset.bound = 'true';
+      contactsDefaultColumnsForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const checked = Array.from(document.querySelectorAll('#contactsDefaultColumnsGrid input[type="checkbox"]:checked'))
+          .map((input) => String(input.value || '').trim())
+          .filter(Boolean);
+        writeContactsSettings({ defaultVisibleColumns: checked });
+        renderContactsSettingsPage();
+        renderContacts();
+        notify('Contacts default columns saved');
+      });
+    }
+    renderContactsSettingsPage();
 
     loadExploreReferenceOptions().then(() => renderContacts()).catch(() => {});
 
@@ -2518,10 +2706,13 @@ App.contacts = (function () {
   }
 
   return {
-    manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage', pagePrefixes: ['contacts'] },
+    manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage', pagePrefixes: ['contacts', 'contactsSettingsPage'] },
     init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment,
     openContactsPage, openPeerSitesPage, openViewPage, openEditPage, openClonePage,
-    onPageActivated() {
+    onPageActivated(targetPageId) {
+      if (targetPageId === 'contactsSettingsPage') {
+        renderContactsSettingsPage();
+      }
       if (String(state.activePage || '') === 'contactsPeerSitesPage') {
         refreshWebsitePeers().catch((err) => notify(err.message, true));
       }
