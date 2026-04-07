@@ -8652,3 +8652,46 @@ th {
   color: #50627a;
   font-size: 0.95rem;
 }
+
+/* TipTap Toolbar Overrides */
+.develop-richtext-tool {
+  width: auto;
+  display: inline-block;
+  padding: 6px 10px;
+  margin: 0 4px 4px 0;
+  background-color: #f1f3f5;
+  color: #333;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  min-height: auto;
+  line-height: normal;
+  box-shadow: none;
+  min-width: 0;
+}
+
+.develop-richtext-tool:hover {
+  background-color: #e9ecef;
+  border-color: #ced4da;
+  box-shadow: none;
+  transform: none;
+}
+
+.develop-richtext-editor.ProseMirror {
+  min-height: 150px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: 12px;
+  background: white;
+  color: black;
+  margin-top: 8px;
+}
+
+.develop-richtext-editor.ProseMirror:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
