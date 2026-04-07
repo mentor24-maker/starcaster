@@ -8703,12 +8703,14 @@ button.section-settings-gear-btn {
   justify-content: center;
   width: auto;
   min-width: 0 !important;
-  padding: 0.55rem 0.65rem !important; /* Inherit exactly the Y-padding of normal buttons */
+  padding: 0 0.65rem !important; /* Allow stretch to handle vertical height */
+  align-self: stretch !important; /* perfectly stretch to the height of sibling text buttons */
+  border: 2px solid #00BFFF !important; /* Bright blue border as requested */
 }
 button.section-settings-gear-btn svg {
   stroke: currentColor;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   margin: 0;
   display: block;
 }
