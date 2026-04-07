@@ -8698,23 +8698,17 @@ th {
 
 /* Contacts Settings Gear Icon */
 button.section-settings-gear-btn {
-  background-color: var(--color-black, #1a202c);
-  color: var(--color-white, #ffffff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.55rem 0.65rem;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  transition: background-color 0.15s ease;
-}
-button.section-settings-gear-btn:hover {
-  background-color: #2d3748;
+  width: auto;
+  min-width: 0 !important;
+  padding: 0.55rem 0.65rem !important; /* Inherit exactly the Y-padding of normal buttons */
 }
 button.section-settings-gear-btn svg {
   stroke: currentColor;
   width: 20px;
   height: 20px;
+  margin: 0;
+  display: block;
 }

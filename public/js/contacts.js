@@ -2354,7 +2354,7 @@ App.contacts = (function () {
       const markerBtn = App.makeIconButton('settings', 'Settings', () => {
         App.setActivePage('contactsSettingsPage');
       });
-      markerBtn.classList.add('section-settings-gear-btn');
+      markerBtn.className = 'section-settings-gear-btn';
       contactsActionRow.appendChild(markerBtn);
     }
 
