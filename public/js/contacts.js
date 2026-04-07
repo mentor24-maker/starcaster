@@ -2180,6 +2180,17 @@ App.contacts = (function () {
 
   function init() {
     ensureExploreFilterState();
+
+    const contactsActionRow = document.querySelector('#contactsPage .page-heading-actions');
+    if (contactsActionRow && !contactsActionRow.dataset.markerBound) {
+      contactsActionRow.dataset.markerBound = 'true';
+      const markerBtn = App.makeIconButton('settings', 'Settings', () => {
+        App.setActivePage('settingsPage');
+      });
+      markerBtn.classList.add('section-settings-gear-btn');
+      contactsActionRow.appendChild(markerBtn);
+    }
+
     loadExploreReferenceOptions().then(() => renderContacts()).catch(() => {});
 
     // Contact form
