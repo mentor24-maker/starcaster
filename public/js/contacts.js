@@ -2352,7 +2352,7 @@ App.contacts = (function () {
     if (contactsActionRow && !contactsActionRow.dataset.markerBound) {
       contactsActionRow.dataset.markerBound = 'true';
       const markerBtn = App.makeIconButton('settings', 'Settings', () => {
-        App.setActivePage('settingsPage');
+        App.setActivePage('contactsSettingsPage');
       });
       markerBtn.classList.add('section-settings-gear-btn');
       contactsActionRow.appendChild(markerBtn);
