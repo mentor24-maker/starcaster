@@ -433,6 +433,8 @@ h2 {
 
 .page-heading-row button {
   width: auto;
+  min-height: 42px;
+  box-sizing: border-box;
 }
 
 .page-heading-actions {
@@ -440,6 +442,14 @@ h2 {
   align-items: center;
   gap: 0.45rem;
   flex-wrap: nowrap;
+}
+
+.page-heading-actions button {
+  height: 42px;
+  line-height: normal;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .acquire-workbench-layout {
@@ -8698,14 +8708,13 @@ th {
 
 /* Contacts Settings Gear Icon */
 button.section-settings-gear-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: auto;
+  width: 42px !important;
+  height: 42px !important;
   min-width: 0 !important;
-  padding: 0 0.65rem !important; /* Allow stretch to handle vertical height */
-  align-self: stretch !important; /* perfectly stretch to the height of sibling text buttons */
-  border: 2px solid #00BFFF !important; /* Bright blue border as requested */
+  padding: 0 !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important; /* match standard button radius */
+  align-self: center !important;
 }
 button.section-settings-gear-btn svg {
   stroke: currentColor;
