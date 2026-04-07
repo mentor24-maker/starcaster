@@ -8700,11 +8700,10 @@ th {
 button.section-settings-gear-btn {
   background-color: var(--color-black, #1a202c);
   color: var(--color-white, #ffffff);
-  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0.75rem;
+  padding: 0.55rem 0.65rem;
   border-radius: 4px;
   border: none;
   cursor: pointer;
@@ -8716,6 +8715,6 @@ button.section-settings-gear-btn:hover {
 }
 button.section-settings-gear-btn svg {
   stroke: currentColor;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
