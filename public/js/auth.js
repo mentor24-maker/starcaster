@@ -260,7 +260,9 @@ App.auth.init = function init(bootMainApp) {
         App.auth._setMessage('');
       });
     })
-    .catch(() => {
+    .catch((e) => {
+      console.error('Core Boot Error:', e);
+      App.notify('Boot Error: ' + (e?.message || e), true);
       App.auth.user = null;
       App.auth._showLanding('login');
       App.auth._setMessage('');
