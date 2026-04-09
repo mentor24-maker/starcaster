@@ -214,4 +214,3 @@ async function handleRequest(req, res) {
 }
 
 module.exports = { handleRequest, logRegistry, ROUTE_MODULES };
-const ping = require('./ping');
