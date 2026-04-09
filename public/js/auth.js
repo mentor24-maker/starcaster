@@ -249,8 +249,10 @@ App.auth.init = function init(bootMainApp) {
     });
   }
 
-  App.auth._showLanding('login');
-  App.auth._setMessage('Checking session...');
+  // Delay showing the login screen until we definitively know auth failed.
+  // This prevents the login screen from brutally flashing on every page reload.
+  // App.auth._showLanding('login');
+  // App.auth._setMessage('Checking session...');
   App.auth._me()
     .then((user) => {
       App.auth.user = user;
