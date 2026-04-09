@@ -127,7 +127,7 @@ async function handle(req, res, pathname, method) {
         }
     }
 
-    return sendJson(res, 200, report), true;
+    return sendOk(res, 200, report, report), true;
   }
 
   if (pathname === '/api/auth/logout' && method === 'POST') {
