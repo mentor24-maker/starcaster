@@ -322,7 +322,7 @@ App.roger.submitChat = async function() {
         bubble.innerHTML = 'Response pending... (Auto-retrying in background)';
       }
     }
-    alert("Agent encountered an issue: " + (err.message || err) + "\\n\\nThe system will continue to ping the API in the background until a response is ready. You can continue working.");
+    App.notify("Agent encountered an issue: " + (err.message || err) + " - The system will continue to ping the API in the background until a response is ready. You can continue working.", true);
     // Begin background retry loop
     const sessionId = rogerState.activeSessionId;
     setTimeout(() => App.roger.pollRetry(sessionId), 10000);
