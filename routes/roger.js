@@ -78,8 +78,11 @@ async function handle(req, res, pathname, requestMethod) {
       return sendErr(res, 502, `${respondingAgent} API failed: ${geminiRes.error}`), true;
     }
 
-    // 4. Save Agent response to DB
-    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: geminiRes.text });
+    // 4. Clean Agent response to prevent prefix bleeding
+    let cleanText = geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '');
+
+    // 5. Save Agent response to DB
+    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: cleanText });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
 
     return sendOk(res, 201, {
@@ -124,7 +127,10 @@ async function handle(req, res, pathname, requestMethod) {
       return sendErr(res, 502, `${respondingAgent} API failed: ${geminiRes.error}`), true;
     }
 
-    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: geminiRes.text });
+    // Clean Agent response to prevent prefix bleeding
+    let cleanText = geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '');
+
+    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: cleanText });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
 
     return sendOk(res, 201, {
