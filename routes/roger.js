@@ -68,14 +68,18 @@ async function handle(req, res, pathname, requestMethod) {
       };
     });
 
-    // 3. Ask Roger via Gemini API
-    const geminiRes = await consultRoger(messages);
+    // Determine target agent based on mention in the human's latest prompt
+    const isForAntigravity = content.toLowerCase().includes('@antigravity');
+    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
+
+    // 3. Ask Agent via Gemini API
+    const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
     if (!geminiRes.ok) {
-      return sendErr(res, 502, `Roger API failed: ${geminiRes.error}`), true;
+      return sendErr(res, 502, `${respondingAgent} API failed: ${geminiRes.error}`), true;
     }
 
-    // 4. Save Roger response to DB
-    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'roger', content: geminiRes.text });
+    // 4. Save Agent response to DB
+    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: geminiRes.text });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
 
     return sendOk(res, 201, {
