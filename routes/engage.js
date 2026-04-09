@@ -28,12 +28,12 @@ const {
   isDue: isYoutubeAgentDue,
   totalPostsLimit: youtubeAgentTotalPostsLimit,
 } = require('../lib/youtubeCommentAgentScheduler');
-const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
+const { runYoutubeHarvest } = require('../lib/acquire/YoutubeDetailsRun');
 const {
   buildYoutubeCommentSuggestionInput,
   generateYoutubeCommentSuggestions
-} = require('../lib/harvest/YoutubeCommentSuggestions');
-const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
+} = require('../lib/acquire/YoutubeCommentSuggestions');
+const { postYoutubeComment } = require('../lib/acquire/YoutubeCommentPost');
 const { getAccessToken, config: getGoogleDriveConfig } = require('../lib/googleDrive');
 const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram'];
 

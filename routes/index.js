@@ -40,6 +40,7 @@ const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
 const develop     = require('./develop');
+const observe     = require('./observe');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -56,6 +57,7 @@ const ROUTE_MODULES = [
   develop,
   messaging,
   activityLog,
+  observe,
   config,
 ];
 

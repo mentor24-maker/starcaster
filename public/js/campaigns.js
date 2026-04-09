@@ -241,8 +241,14 @@ App.campaigns = (function () {
   function setFieldVisible(id, visible) {
     const el = byId(id);
     if (!el) return;
-    const container = el.closest('.form-row') || el;
-    container.style.display = visible ? '' : 'none';
+    const container = el.closest('.form-row');
+    if (container) {
+      container.style.display = visible ? '' : 'none';
+    } else {
+      el.style.display = visible ? '' : 'none';
+      const label = document.querySelector(`label[for="${id}"]`);
+      if (label) label.style.display = visible ? '' : 'none';
+    }
   }
 
   function channelProfile(channel) {
@@ -675,10 +681,20 @@ App.campaigns = (function () {
       currentValues.primaryVideoId
     );
 
+    const pageOptions = builderLandingPages.map((page) => ({ value: page.id, label: `Builder: ${safeText(page.name) || page.id}` }));
+    const externalSites = ['isitas.org', 'isitism.org', 'isitgame.org', 'itcoin.isitas.org'];
+    externalSites.forEach(site => {
+      pageOptions.push({ value: site, label: `Site: ${site}` });
+    });
+    channels.forEach(channel => {
+      const name = channelLabel(channel) || channel.id;
+      pageOptions.push({ value: `social_${channel.id}`, label: `Social: ${name}` });
+    });
+
     setSelectOptions(
       byId('campaignLandingPageSelect'),
-      builderLandingPages.map((page) => ({ value: page.id, label: safeText(page.name) || `Page ${page.id}` })),
-      builderLandingPages.length ? 'Page' : 'Page (create in Builder > Pages)',
+      pageOptions,
+      'Page / Destination',
       currentValues.landingPageId
     );
 
@@ -925,6 +941,22 @@ App.campaigns = (function () {
     }
   }
 
+  function updateCampaignFieldGlows() {
+    const content = byId('campaignContentConditional');
+    if (!content) return;
+    const fields = content.querySelectorAll('select, input');
+    fields.forEach(el => {
+      if (el.tagName === 'BUTTON' || el.type === 'hidden') return;
+      if (el.value && el.value.trim() !== '') {
+        el.classList.add('populated-glow');
+        el.classList.remove('empty-glow');
+      } else {
+        el.classList.add('empty-glow');
+        el.classList.remove('populated-glow');
+      }
+    });
+  }
+
   function populateCampaignForm(campaign, cloneMode = false) {
     const form = byId('campaignForm');
     if (!form || !campaign) return;
@@ -964,6 +996,7 @@ App.campaigns = (function () {
     applyCampaignChannelProfile(config.channelId);
     setCampaignFormMode(!cloneMode);
     ensureCampaignFormVisible();
+    updateCampaignFieldGlows();
   }
 
   async function openCampaignEditor(campaign) {
@@ -989,6 +1022,11 @@ App.campaigns = (function () {
     const rulesChannelSelect = byId('campaignRulesChannelSelect');
     const rulesSaveBtn = byId('campaignRulesSaveBtn');
     const rulesResetBtn = byId('campaignRulesResetBtn');
+
+    const contentArea = byId('campaignContentConditional');
+    if (contentArea) {
+      contentArea.addEventListener('change', updateCampaignFieldGlows);
+    }
 
     if (rulesToggleBtn) {
       rulesToggleBtn.addEventListener('click', async () => {

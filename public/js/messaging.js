@@ -356,14 +356,14 @@ App.messaging = (function () {
     const categoryNames = currentMessagingTopics
       .map((item) => String(item?.topic || item?.category || '').trim())
       .filter(Boolean);
-    const uniqueNames = Array.from(new Set(categoryNames)).sort((a, b) => a.localeCompare(b));
+    const uniqueNames = Array.from(new Set(categoryNames)).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
     const selectList = [
       document.getElementById('messagingHeadlineCategorySelect'),
       document.getElementById('messagingHeadlinesBulkCategorySelect'),
-      document.getElementById('messagingHeadlineEditCategorySelect'),
-      document.getElementById('messagingHeadlinesBulkEditCategorySelect'),
-      document.getElementById('messagingHeadlinesCategoryFilter'),
+      document.getElementById('messagingHeadlineEditTopicSelect'),
+      document.getElementById('messagingHeadlinesBulkEditTopicSelect'),
+      document.getElementById('messagingHeadlinesTopicFilter'),
       document.getElementById('messagingSubheadingCategorySelect'),
       document.getElementById('messagingSubheadingsBulkCategorySelect'),
       document.getElementById('messagingSubheadingEditCategorySelect'),
@@ -376,25 +376,25 @@ App.messaging = (function () {
       document.getElementById('messagingTaglinesCategoryFilter'),
       document.getElementById('messagingPitchCategorySelect'),
       document.getElementById('messagingPitchesBulkCategorySelect'),
-      document.getElementById('messagingPitchEditCategorySelect'),
-      document.getElementById('messagingPitchesBulkEditCategorySelect'),
-      document.getElementById('messagingPitchesCategoryFilter'),
+      document.getElementById('messagingPitchEditTopicSelect'),
+      document.getElementById('messagingPitchesBulkEditTopicSelect'),
+      document.getElementById('messagingPitchesTopicFilter'),
     ];
     document.querySelectorAll('select[id^="messaging"][name="topic"]').forEach((select) => {
       selectList.push(select);
     });
-    document.querySelectorAll('[data-messaging-category-select="true"]').forEach((select) => {
+    document.querySelectorAll('[data-messaging-topic-select="true"]').forEach((select) => {
       selectList.push(select);
     });
 
     selectList.forEach((select) => {
       if (!select) return;
       const currentValue = String(select.value || '');
-      const isFilter = select.id === 'messagingHeadlinesCategoryFilter'
+      const isFilter = select.id === 'messagingHeadlinesTopicFilter'
         || select.id === 'messagingSubheadingsCategoryFilter'
         || select.id === 'messagingTaglinesCategoryFilter'
-        || select.id === 'messagingPitchesCategoryFilter'
-        || select.dataset.messagingCategoryRole === 'filter';
+        || select.id === 'messagingPitchesTopicFilter'
+        || select.dataset.messagingTopicRole === 'filter';
       select.innerHTML = '';
       const placeholder = document.createElement('option');
       placeholder.value = '';
@@ -414,7 +414,7 @@ App.messaging = (function () {
 
   function getSimpleContentIds(config) {
     return {
-      categoryBtnId: `openMessagingCategoriesFrom${config.pageStem.replace(/^messaging/, '')}Btn`,
+      categoryBtnId: `openMessagingTopicsFrom${config.pageStem.replace(/^messaging/, '')}Btn`,
       toggleBtnId: `${config.pageStem}LibraryToggleFormBtn`,
       createWrapId: `${config.pageStem}LibraryCreateWrap`,
       formId: `messaging${config.itemStem}LibraryForm`,
@@ -474,7 +474,7 @@ App.messaging = (function () {
               <form id="${ids.creatorFormId}" class="stack-form labeled-form" style="max-width: none;">
                 <div class="form-row">
                   <label for="${ids.creatorTopicId}"><strong>Topic:</strong></label>
-                  <select id="${ids.creatorTopicId}" name="topic" data-messaging-category-select="true">
+                  <select id="${ids.creatorTopicId}" name="topic" data-messaging-topic-select="true">
                     <option value="">No Topic</option>
                   </select>
                 </div>
@@ -540,7 +540,7 @@ App.messaging = (function () {
             <h3>Edit ${config.singularLabel}</h3>
             <button id="${ids.cancelEditBtnId}" type="button">Cancel Edit</button>
           </div>
-          <select id="${ids.editCategorySelectId}" name="topic" data-messaging-category-select="true">
+          <select id="${ids.editCategorySelectId}" name="topic" data-messaging-topic-select="true">
             <option value="">No Topic</option>
           </select>
           <textarea name="${config.field}" rows="${config.rows}" placeholder="${config.inputPlaceholder}" required></textarea>
@@ -563,7 +563,7 @@ App.messaging = (function () {
                 <th><input id="${ids.selectAllId}" type="checkbox" aria-label="Select all visible ${config.pluralLower}" /></th>
                 <th><input id="${ids.textFilterId}" placeholder="Filter ${config.singularLower}" /></th>
                 <th>
-                  <select id="${ids.categoryFilterId}" data-messaging-category-select="true" data-messaging-category-role="filter">
+                  <select id="${ids.categoryFilterId}" data-messaging-topic-select="true" data-messaging-topic-role="filter">
                     <option value="">All Topics</option>
                   </select>
                 </th>
@@ -606,7 +606,7 @@ App.messaging = (function () {
         <form id="${ids.bulkEditFormId}" class="stack-form labeled-form">
           <div class="stack-form">
             <label for="${ids.bulkEditCategorySelectId}">Topic</label>
-            <select id="${ids.bulkEditCategorySelectId}" name="topic" data-messaging-category-select="true">
+            <select id="${ids.bulkEditCategorySelectId}" name="topic" data-messaging-topic-select="true">
               <option value="">No Topic</option>
             </select>
           </div>
@@ -1268,7 +1268,7 @@ App.messaging = (function () {
     notify(selectedIndexes.length === 1 ? 'Tweet saved' : `${selectedIndexes.length} tweets saved`);
     form.reset();
     clearTweetSuggestions();
-    renderMessagingCategorySelects();
+    renderMessagingTopicSelects();
     renderImageOptions(document.getElementById('messagingTweetImageSelect'));
     const workspace = document.getElementById('messagingTweetsWorkspace');
     const toggleBtn = document.getElementById('messagingTweetsToggleFormBtn');
@@ -2140,7 +2140,7 @@ App.messaging = (function () {
   function syncHeadlineSortLabels() {
     const config = [
       ['messagingHeadlinesSortHeadlineBtn', 'headline', 'Headline'],
-      ['messagingHeadlinesSortCategoryBtn', 'category', 'Topic'],
+      ['messagingHeadlinesSortTopicBtn', 'category', 'Topic'],
       ['messagingHeadlinesSortCreatedBtn', 'created_at', 'Created'],
       ['messagingHeadlinesSortUpdatedBtn', 'updated_at', 'Updated'],
     ];
@@ -2686,7 +2686,7 @@ App.messaging = (function () {
   function syncPitchSortLabels() {
     const config = [
       ['messagingPitchesSortTextBtn', 'pitch', 'Pitch'],
-      ['messagingPitchesSortCategoryBtn', 'category', 'Format'],
+      ['messagingPitchesSortTopicBtn', 'category', 'Format'],
       ['messagingPitchesSortCreatedBtn', 'created_at', 'Created'],
       ['messagingPitchesSortUpdatedBtn', 'updated_at', 'Updated'],
     ];
@@ -2826,15 +2826,15 @@ App.messaging = (function () {
     if (clearBtn) clearBtn.disabled = false;
   }
 
-  function applyMessagingCategoryFilterToTarget(targetPageId, category) {
+  function applyMessagingTopicFilterToTarget(targetPageId, category) {
     const normalizedCategory = String(category || '').trim();
     if (!normalizedCategory) return;
 
     const pageToFilterId = {
-      messagingHeadlinesPage: 'messagingHeadlinesCategoryFilter',
+      messagingHeadlinesPage: 'messagingHeadlinesTopicFilter',
       messagingSubheadingsPage: 'messagingSubheadingsCategoryFilter',
       messagingTaglinesPage: 'messagingTaglinesCategoryFilter',
-      messagingPitchesPage: 'messagingPitchesCategoryFilter',
+      messagingPitchesPage: 'messagingPitchesTopicFilter',
     }[targetPageId];
 
     if (pageToFilterId) {
@@ -2875,12 +2875,12 @@ App.messaging = (function () {
   function openTopicsPage() {
     setTopicsCreateVisible(false);
     clearMessagingTopicSuggestions();
-    App.setActivePage('messagingCategoriesPage');
-    refreshMessagingCategories().catch(function (err) {
+    App.setActivePage('messagingTopicsPage');
+    refreshMessagingTopics().catch(function (err) {
       notify(`Could not load messaging topics: ${err.message}`, true);
     });
     window.setTimeout(function () {
-      refreshMessagingCategories().catch(function () {});
+      refreshMessagingTopics().catch(function () {});
     }, 250);
     return false;
   }
@@ -3056,7 +3056,7 @@ App.messaging = (function () {
       existing.add(key);
       created += 1;
     }
-    await refreshMessagingCategories();
+    await refreshMessagingTopics();
     notify(
       created
         ? `Saved ${created} topic${created === 1 ? '' : 's'}${skipped ? ` (${skipped} already existed)` : ''}`
@@ -3066,10 +3066,10 @@ App.messaging = (function () {
   }
 
   function openTopicsCreate() {
-    const form = document.getElementById('messagingCategoryForm');
+    const form = document.getElementById('messagingTopicForm');
     if (form) form.reset();
     setTopicsCreateVisible(true);
-    App.setActivePage('messagingCategoriesPage');
+    App.setActivePage('messagingTopicsPage');
     const panel = document.getElementById('messagingTopicCreatePanel');
     if (panel && typeof panel.scrollIntoView === 'function') {
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3136,14 +3136,14 @@ App.messaging = (function () {
   function openContentTarget(targetPageId) {
     const target = String(targetPageId || '').trim();
     if (!target) return;
-    applyMessagingCategoryFilterToTarget(target, activeMessagingContentCategory);
+    applyMessagingTopicFilterToTarget(target, activeMessagingContentCategory);
     App.setActivePage(target);
   }
 
   async function openCreateContent() {
     App.setActivePage('messagingCreateContentPage');
     await refreshMessagingFormats().catch(function () {});
-    await refreshMessagingCategories();
+    await refreshMessagingTopics();
     await refreshMessagingPrompts().catch(function () {});
     await loadThumbnailOptions();
     renderCreateContentFormatOptions();
@@ -5172,8 +5172,8 @@ App.messaging = (function () {
     return currentMessagingFormats;
   }
 
-  function renderMessagingCategoriesMap(categories) {
-    const container = document.getElementById('messagingCategoriesMap');
+  function renderMessagingTopicsMap(categories) {
+    const container = document.getElementById('messagingTopicsMap');
     if (!container) return;
     container.innerHTML = '';
     container.style.gridTemplateColumns = '';
@@ -5553,7 +5553,7 @@ App.messaging = (function () {
     if (categoriesBtn) {
       categoriesBtn.addEventListener('click', async function () {
         try {
-          await refreshMessagingCategories();
+          await refreshMessagingTopics();
         } catch (_) {}
         App.setActivePage('messagingManageCategoriesPage');
       });
@@ -5884,7 +5884,7 @@ App.messaging = (function () {
     return Promise.all(simpleContentConfigs.map((config) => refreshSimpleContent(config)));
   }
 
-  function getSortedMessagingCategories() {
+  function getSortedMessagingTopics() {
     const rows = Array.isArray(currentMessagingTopics) ? currentMessagingTopics.slice() : [];
     rows.sort(function (a, b) {
       const left = String(a?.category || '').toLowerCase();
@@ -5896,23 +5896,23 @@ App.messaging = (function () {
     return rows;
   }
 
-  function openMessagingCategoryEditForm(item) {
-    const form = document.getElementById('messagingCategoryEditForm');
-    const idInput = document.getElementById('messagingCategoryEditId');
+  function openMessagingTopicEditForm(item) {
+    const form = document.getElementById('messagingTopicEditForm');
+    const idInput = document.getElementById('messagingTopicEditId');
     if (!form || !idInput || !item) return;
     form.reset();
     idInput.value = String(item.id || '');
     if (form.elements.topic) {
       form.elements.topic.value = String(item.topic || item.category || '');
     }
-    App.setActivePage('editMessagingCategoryPage');
+    App.setActivePage('editMessagingTopicPage');
   }
 
-  function renderMessagingCategoriesTable(categories) {
-    const tbody = document.getElementById('messagingCategoriesTable');
-    const sortBtn = document.getElementById('messagingCategoriesSortBtn');
+  function renderMessagingTopicsTable(categories) {
+    const tbody = document.getElementById('messagingTopicsTable');
+    const sortBtn = document.getElementById('messagingTopicsSortBtn');
     currentMessagingTopics = Array.isArray(categories) ? categories.slice() : [];
-    renderMessagingCategoriesMap(currentMessagingTopics);
+    renderMessagingTopicsMap(currentMessagingTopics);
     syncHeadlineCategorySelects();
     if (!tbody) return;
     tbody.innerHTML = '';
@@ -5920,7 +5920,7 @@ App.messaging = (function () {
       sortBtn.textContent = `Topic${messagingTopicTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
     }
 
-    const rows = getSortedMessagingCategories();
+    const rows = getSortedMessagingTopics();
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
@@ -5940,14 +5940,14 @@ App.messaging = (function () {
       const actionsTd = document.createElement('td');
       actionsTd.className = 'messaging-topics-actions-cell';
       const editBtn = App.makeIconButton('edit', 'Edit Topic', function () {
-        openMessagingCategoryEditForm(item);
+        openMessagingTopicEditForm(item);
       });
       const deleteBtn = App.makeIconButton('delete', 'Delete Topic', async function () {
         if (!confirm(`Delete messaging topic "${String(item.topic || item.category || '').trim()}"?`)) return;
         try {
           await api(`/api/messaging/topics/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
           notify('Messaging topic deleted');
-          await refreshMessagingCategories();
+          await refreshMessagingTopics();
         } catch (err) {
           notify(err.message, true);
         }
@@ -5960,7 +5960,7 @@ App.messaging = (function () {
     });
   }
 
-  async function refreshMessagingCategories() {
+  async function refreshMessagingTopics() {
     try {
       const res = await api('/api/messaging/topics?limit=5000');
       const categories = Array.isArray(res?.topics)
@@ -5972,15 +5972,19 @@ App.messaging = (function () {
           : Array.isArray(res)
             ? res
             : [];
-      renderMessagingCategoriesTable(categories);
+      console.log('[DEBUG] Fetched messaging topics:', categories.length);
+      renderMessagingTopicsTable(categories);
+      console.log('[DEBUG] Dispatching messaging:topicsUpdated event');
+      document.dispatchEvent(new CustomEvent('messaging:topicsUpdated', { detail: { count: categories.length } }));
     } catch (err) {
+      console.error('[DEBUG] Failed to fetch topics:', err);
       notify(`Could not load messaging topics: ${err.message}`, true);
     }
   }
 
   async function submitTopicCreate(event) {
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
-    const form = document.getElementById('messagingCategoryForm');
+    const form = document.getElementById('messagingTopicForm');
     if (!form) return false;
     const formData = new FormData(form);
     const topic = String(formData.get('topic') || formData.get('category') || '').trim();
@@ -5995,9 +5999,9 @@ App.messaging = (function () {
       });
       notify('Messaging topic saved');
       form.reset();
-      await refreshMessagingCategories();
+      await refreshMessagingTopics();
       setTopicsCreateVisible(true);
-      App.setActivePage('messagingCategoriesPage');
+      App.setActivePage('messagingTopicsPage');
     } catch (err) {
       notify(err.message, true);
     }
@@ -6006,7 +6010,7 @@ App.messaging = (function () {
 
   async function submitTopicEdit(event) {
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
-    const form = document.getElementById('messagingCategoryEditForm');
+    const form = document.getElementById('messagingTopicEditForm');
     if (!form) return false;
     const formData = new FormData(form);
     const id = Number(formData.get('id') || 0) || 0;
@@ -6026,7 +6030,7 @@ App.messaging = (function () {
       });
       notify('Messaging topic updated');
       form.reset();
-      await refreshMessagingCategories();
+      await refreshMessagingTopics();
       openTopicsPage();
     } catch (err) {
       notify(err.message, true);
@@ -6418,7 +6422,7 @@ async function saveTweetFromForm(form) {
     const headlinesBulkEditForm = document.getElementById('messagingHeadlinesBulkEditForm');
     const headlinesBackFromBulkEditBtn = document.getElementById('messagingHeadlinesBackFromBulkEditBtn');
     const headlineFilterInput = document.getElementById('messagingHeadlinesHeadlineFilter');
-    const headlineCategoryFilter = document.getElementById('messagingHeadlinesCategoryFilter');
+    const headlineCategoryFilter = document.getElementById('messagingHeadlinesTopicFilter');
     const headlineFormatFilter = document.getElementById('messagingHeadlinesFormatFilter');
     const headlineBulkEditSummary = document.getElementById('messagingHeadlinesBulkEditSummary');
     const subheadingsCreateWrap = document.getElementById('messagingSubheadingsCreateWrap');
@@ -6434,7 +6438,7 @@ async function saveTweetFromForm(form) {
     const subheadingFilterInput = document.getElementById('messagingSubheadingsTextFilter');
     const subheadingCategoryFilter = document.getElementById('messagingSubheadingsCategoryFilter');
     const subheadingBulkEditSummary = document.getElementById('messagingSubheadingsBulkEditSummary');
-    const openMessagingCategoriesFromSubheadingsBtn = document.getElementById('openMessagingCategoriesFromSubheadingsBtn');
+    const openMessagingTopicsFromSubheadingsBtn = document.getElementById('openMessagingTopicsFromSubheadingsBtn');
     const taglinesCreateWrap = document.getElementById('messagingTaglinesCreateWrap');
     const taglinesToggleBtn = document.getElementById('messagingTaglinesToggleFormBtn');
     const taglineForm = document.getElementById('messagingTaglineForm');
@@ -6448,7 +6452,7 @@ async function saveTweetFromForm(form) {
     const taglineFilterInput = document.getElementById('messagingTaglinesTextFilter');
     const taglineCategoryFilter = document.getElementById('messagingTaglinesCategoryFilter');
     const taglineBulkEditSummary = document.getElementById('messagingTaglinesBulkEditSummary');
-    const openMessagingCategoriesFromTaglinesBtn = document.getElementById('openMessagingCategoriesFromTaglinesBtn');
+    const openMessagingTopicsFromTaglinesBtn = document.getElementById('openMessagingTopicsFromTaglinesBtn');
     const pitchesCreateWrap = document.getElementById('messagingPitchesCreateWrap');
     const pitchesToggleBtn = document.getElementById('messagingPitchesToggleFormBtn');
     const pitchForm = document.getElementById('messagingPitchForm');
@@ -6460,9 +6464,9 @@ async function saveTweetFromForm(form) {
     const pitchesBulkEditForm = document.getElementById('messagingPitchesBulkEditForm');
     const pitchesBackFromBulkEditBtn = document.getElementById('messagingPitchesBackFromBulkEditBtn');
     const pitchFilterInput = document.getElementById('messagingPitchesTextFilter');
-    const pitchCategoryFilter = document.getElementById('messagingPitchesCategoryFilter');
+    const pitchCategoryFilter = document.getElementById('messagingPitchesTopicFilter');
     const pitchBulkEditSummary = document.getElementById('messagingPitchesBulkEditSummary');
-    const openMessagingCategoriesFromPitchesBtn = document.getElementById('openMessagingCategoriesFromPitchesBtn');
+    const openMessagingTopicsFromPitchesBtn = document.getElementById('openMessagingTopicsFromPitchesBtn');
     const form = document.getElementById('messagingArticlesForm');
     const editForm = document.getElementById('messagingArticlesEditForm');
     const cancelEditBtn = document.getElementById('messagingArticlesCancelEditBtn');
@@ -6494,14 +6498,14 @@ async function saveTweetFromForm(form) {
     const tweetBulkQuality = document.getElementById('messagingTweetsBulkQuality');
     const hashtagsForm = document.getElementById('messagingHashtagsForm');
     const hashtagsToggleBtn = document.getElementById('messagingHashtagsToggleFormBtn');
-    const openMessagingCategoriesBtn = document.getElementById('openMessagingCategoriesPageBtn');
-    const openCreateMessagingCategoryBtn = document.getElementById('openCreateMessagingCategoryPageBtn');
-    const backToMessagingCategoriesBtn = document.getElementById('backToMessagingCategoriesBtn');
-    const backFromMessagingCategoryEditBtn = document.getElementById('backFromEditMessagingCategoryBtn');
+    const openMessagingTopicsBtn = document.getElementById('openMessagingTopicsPageBtn');
+    const openCreateMessagingTopicBtn = document.getElementById('openCreateMessagingTopicPageBtn');
+    const backToMessagingTopicsBtn = document.getElementById('backToMessagingTopicsBtn');
+    const backFromMessagingTopicEditBtn = document.getElementById('backFromEditMessagingTopicBtn');
     const contentClearFilterBtn = document.getElementById('messagingContentClearFilterBtn');
-    const messagingCategoryForm = document.getElementById('messagingCategoryForm');
-    const messagingCategoryEditForm = document.getElementById('messagingCategoryEditForm');
-    const messagingCategorySortBtn = document.getElementById('messagingCategoriesSortBtn');
+    const messagingTopicForm = document.getElementById('messagingTopicForm');
+    const messagingTopicEditForm = document.getElementById('messagingTopicEditForm');
+    const messagingTopicSortBtn = document.getElementById('messagingTopicsSortBtn');
 
     if (messagingContentTextFilter) {
       messagingContentTextFilter.addEventListener('input', function () {
@@ -6660,10 +6664,10 @@ async function saveTweetFromForm(form) {
       });
     }
 
-    if (openMessagingCategoriesFromSubheadingsBtn) {
-      openMessagingCategoriesFromSubheadingsBtn.addEventListener('click', async function () {
+    if (openMessagingTopicsFromSubheadingsBtn) {
+      openMessagingTopicsFromSubheadingsBtn.addEventListener('click', async function () {
         try {
-          await refreshMessagingCategories();
+          await refreshMessagingTopics();
         } catch (_) {}
         App.setActivePage('messagingManageCategoriesPage');
       });
@@ -6742,10 +6746,10 @@ async function saveTweetFromForm(form) {
       });
     }
 
-    if (openMessagingCategoriesFromTaglinesBtn) {
-      openMessagingCategoriesFromTaglinesBtn.addEventListener('click', async function () {
+    if (openMessagingTopicsFromTaglinesBtn) {
+      openMessagingTopicsFromTaglinesBtn.addEventListener('click', async function () {
         try {
-          await refreshMessagingCategories();
+          await refreshMessagingTopics();
         } catch (_) {}
         App.setActivePage('messagingManageCategoriesPage');
       });
@@ -6761,10 +6765,10 @@ async function saveTweetFromForm(form) {
       });
     }
 
-    if (openMessagingCategoriesFromPitchesBtn) {
-      openMessagingCategoriesFromPitchesBtn.addEventListener('click', async function () {
+    if (openMessagingTopicsFromPitchesBtn) {
+      openMessagingTopicsFromPitchesBtn.addEventListener('click', async function () {
         try {
-          await refreshMessagingCategories();
+          await refreshMessagingTopics();
         } catch (_) {}
         App.setActivePage('messagingManageCategoriesPage');
       });
@@ -7322,7 +7326,7 @@ async function saveTweetFromForm(form) {
           headlineBulkEditSummary.textContent = `${selectedHeadlineIds.size} headline${selectedHeadlineIds.size === 1 ? '' : 's'} selected.`;
         }
         syncHeadlineCategorySelects();
-        const bulkSelect = document.getElementById('messagingHeadlinesBulkEditCategorySelect');
+        const bulkSelect = document.getElementById('messagingHeadlinesBulkEditTopicSelect');
         if (bulkSelect) bulkSelect.value = '';
         App.setActivePage('messagingHeadlinesBulkEditPage');
       });
@@ -7370,7 +7374,7 @@ async function saveTweetFromForm(form) {
           pitchBulkEditSummary.textContent = `${selectedPitchIds.size} pitch${selectedPitchIds.size === 1 ? '' : 'es'} selected.`;
         }
         syncHeadlineCategorySelects();
-        const bulkSelect = document.getElementById('messagingPitchesBulkEditCategorySelect');
+        const bulkSelect = document.getElementById('messagingPitchesBulkEditTopicSelect');
         if (bulkSelect) bulkSelect.value = '';
         App.setActivePage('messagingPitchesBulkEditPage');
       });
@@ -7588,7 +7592,7 @@ async function saveTweetFromForm(form) {
 
     [
       ['messagingHeadlinesSortHeadlineBtn', 'headline'],
-      ['messagingHeadlinesSortCategoryBtn', 'category'],
+      ['messagingHeadlinesSortTopicBtn', 'category'],
       ['messagingHeadlinesSortCreatedBtn', 'created_at'],
       ['messagingHeadlinesSortUpdatedBtn', 'updated_at'],
     ].forEach(function ([id, key]) {
@@ -7645,7 +7649,7 @@ async function saveTweetFromForm(form) {
 
     [
       ['messagingPitchesSortTextBtn', 'pitch'],
-      ['messagingPitchesSortCategoryBtn', 'category'],
+      ['messagingPitchesSortTopicBtn', 'category'],
       ['messagingPitchesSortCreatedBtn', 'created_at'],
       ['messagingPitchesSortUpdatedBtn', 'updated_at'],
     ].forEach(function ([id, key]) {
@@ -7662,26 +7666,26 @@ async function saveTweetFromForm(form) {
       });
     });
 
-    if (openMessagingCategoriesBtn) {
-      openMessagingCategoriesBtn.addEventListener('click', function () {
+    if (openMessagingTopicsBtn) {
+      openMessagingTopicsBtn.addEventListener('click', function () {
         openTopicsPage();
       });
     }
 
-    if (openCreateMessagingCategoryBtn) {
-      openCreateMessagingCategoryBtn.addEventListener('click', function () {
+    if (openCreateMessagingTopicBtn) {
+      openCreateMessagingTopicBtn.addEventListener('click', function () {
         openTopicsCreate();
       });
     }
 
-    if (backToMessagingCategoriesBtn) {
-      backToMessagingCategoriesBtn.addEventListener('click', function () {
+    if (backToMessagingTopicsBtn) {
+      backToMessagingTopicsBtn.addEventListener('click', function () {
         openTopicsPage();
       });
     }
 
-    if (backFromMessagingCategoryEditBtn) {
-      backFromMessagingCategoryEditBtn.addEventListener('click', function () {
+    if (backFromMessagingTopicEditBtn) {
+      backFromMessagingTopicEditBtn.addEventListener('click', function () {
         openTopicsPage();
       });
     }
@@ -7692,10 +7696,10 @@ async function saveTweetFromForm(form) {
       });
     }
 
-    if (messagingCategorySortBtn) {
-      messagingCategorySortBtn.addEventListener('click', function () {
+    if (messagingTopicSortBtn) {
+      messagingTopicSortBtn.addEventListener('click', function () {
         messagingTopicTableState.dir = messagingTopicTableState.dir === 'asc' ? 'desc' : 'asc';
-        renderMessagingCategoriesTable(currentMessagingTopics);
+        renderMessagingTopicsTable(currentMessagingTopics);
       });
     }
 
@@ -8108,7 +8112,7 @@ async function saveTweetFromForm(form) {
           const promptIdInput = document.getElementById('messagingTweetPromptId');
           if (promptIdInput) promptIdInput.value = '';
           clearTweetSuggestions();
-          renderMessagingCategorySelects();
+          renderMessagingTopicSelects();
           renderImageOptions(document.getElementById('messagingTweetImageSelect'));
           renderTweetSavedPromptOptions();
           if (tweetToggleBtn) tweetToggleBtn.textContent = 'Add Tweet';
@@ -8230,6 +8234,15 @@ async function saveTweetFromForm(form) {
   return {
     manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingContentPage', pagePrefixes: ['messaging'] },
     init,
+    refreshTopics: refreshMessagingTopics,
+    getTopics: function() { 
+      var raw = Array.isArray(currentMessagingTopics) ? currentMessagingTopics.slice() : [];
+      return raw.sort(function(a, b) { 
+        var aStr = String(a.topic || a.category || '').toLowerCase();
+        var bStr = String(b.topic || b.category || '').toLowerCase();
+        return aStr.localeCompare(bStr);
+      }); 
+    },
     openCategoriesLanding,
     openTopicsLanding,
     openTopicsPage,
@@ -8249,14 +8262,14 @@ async function saveTweetFromForm(form) {
     submitTagEdit,
     refresh: function () {
       return loadThumbnailOptions().then(function () {
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
         });
       });
     },
     onPageActivated: function () {
       return loadThumbnailOptions().then(function () {
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingCategories(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
         });
       });

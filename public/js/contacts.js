@@ -48,16 +48,25 @@ App.contacts = (function () {
     { key: 'engagement_meetings', label: 'Meetings', options: ['Placeholder Meeting'] },
   ];
 
+  const COMMENTS_FILTER_FIELDS = [
+    { key: 'comments_campaign', label: 'Campaign' },
+    { key: 'comments_topic', label: 'Topic' },
+    { key: 'comments_score', label: 'Score' },
+  ];
+
   const EXPLORE_CONTACT_FIELDS = [
     ...CONTACT_DETAIL_FILTER_FIELDS,
     ...SOCIAL_FILTER_FIELDS,
     ...ENGAGEMENT_FILTER_FIELDS,
+    ...COMMENTS_FILTER_FIELDS,
   ];
 
   const SOCIAL_FIELD_KEYS = new Set(SOCIAL_FILTER_FIELDS.map((field) => field.key));
-  const CONTACT_SETTINGS_KEY = 'alphire:contacts:settings:v1';
+  const CONTACT_SETTINGS_KEY = 'alphire:contacts:settings:v3';
   const CONTACTS_DEFAULT_VISIBLE_COLUMNS = ['first_name', 'last_name', 'company', 'email', 'website', 'youtube', 'instagram'];
   const CONTACTS_TABLE_COLUMNS = [
+    { key: 'created_at', label: 'Create Date', filterPlaceholder: 'Create Date' },
+    { key: 'updated_at', label: 'Modified Date', filterPlaceholder: 'Modified Date' },
     { key: 'first_name', label: 'First Name', filterPlaceholder: 'First' },
     { key: 'last_name', label: 'Last Name', filterPlaceholder: 'Last' },
     { key: 'company', label: 'Company', filterPlaceholder: 'Company' },
@@ -69,8 +78,14 @@ App.contacts = (function () {
     { key: 'city', label: 'City', filterPlaceholder: 'City' },
     { key: 'country', label: 'Country', filterPlaceholder: 'Country' },
     { key: 'tags', label: 'Tags', filterPlaceholder: 'Tags' },
+    { key: 'contact_type', label: 'Contact Type', filterPlaceholder: 'Type' },
     { key: 'source', label: 'Source', filterPlaceholder: 'Source' },
     { key: 'status', label: 'Status', filterPlaceholder: 'Status' },
+    { key: 'owner', label: 'Owner', filterPlaceholder: 'Owner' },
+    { key: 'comments_campaign', label: 'Campaign', filterPlaceholder: 'Campaign' },
+    { key: 'comments_topic', label: 'Topic', filterPlaceholder: 'Topic' },
+    { key: 'comments_score', label: 'Score', filterPlaceholder: 'Score' },
+    { key: 'comments_text', label: 'Comment', filterPlaceholder: 'Comment excerpt' },
   ];
   const SECTION_SETTINGS_LINKS = [
     { label: 'Acquire Settings', pageId: 'acquireSettingsPage' },
@@ -146,6 +161,10 @@ App.contacts = (function () {
 
   function isEngagementField(key) {
     return String(key || '').startsWith('engagement_');
+  }
+
+  function isCommentField(key) {
+    return String(key || '').startsWith('comments_');
   }
 
   function slugifyEngagementToken(value) {
@@ -559,6 +578,11 @@ App.contacts = (function () {
   }
 
   function appendContactCell(td, key, value) {
+    if (key === 'created_at' || key === 'updated_at' || String(key).includes('date')) {
+      const dt = new Date(value);
+      td.textContent = isNaN(dt.getTime()) ? (value || '-') : dt.toLocaleDateString();
+      return;
+    }
     if (key === 'website') {
       const text = String(value || '').trim();
       const href = text
@@ -1430,8 +1454,35 @@ App.contacts = (function () {
   }
 
   function contactPassesContactFilters(contact, filters) {
-    return App.CONTACT_COLUMN_KEYS.every((key) => {
-      const needle = String(filters[key] || '').toLowerCase();
+    return Object.keys(filters).every((key) => {
+      const filterVal = filters[key];
+      if (typeof filterVal === 'boolean') {
+        const cv = contactValue(contact, key);
+        return filterVal ? Boolean(cv && String(cv).trim()) : true;
+      }
+      if (filterVal && typeof filterVal === 'object' && !Array.isArray(filterVal)) {
+        const cv = contactValue(contact, key);
+        if (!cv) return false;
+        const cvTime = new Date(cv).getTime();
+        if (isNaN(cvTime)) return false;
+        if (filterVal.from) {
+          const start = new Date(filterVal.from);
+          start.setHours(0, 0, 0, 0);
+          if (cvTime < start.getTime()) return false;
+        }
+        if (filterVal.to) {
+          const end = new Date(filterVal.to);
+          end.setHours(23, 59, 59, 999);
+          if (cvTime > end.getTime()) return false;
+        }
+        return true;
+      }
+      if (Array.isArray(filterVal)) {
+        if (!filterVal.length) return true;
+        const cv = contactValue(contact, key).toLowerCase();
+        return filterVal.some(n => cv.includes(String(n).toLowerCase()));
+      }
+      const needle = String(filterVal || '').toLowerCase();
       if (!needle) return true;
       return contactValue(contact, key).toLowerCase().includes(needle);
     });
@@ -1613,85 +1664,237 @@ App.contacts = (function () {
     if (!els.exploreContactsFilters) return;
     els.exploreContactsFilters.innerHTML = '';
 
-    const groups = [
-      { heading: 'Contact Details', fields: CONTACT_DETAIL_FILTER_FIELDS },
-      { heading: 'Social Accounts', fields: SOCIAL_FILTER_FIELDS },
-      { heading: 'Engagement', fields: ENGAGEMENT_FILTER_FIELDS },
+    const columnsData = [
+      [{ heading: 'Contact Details', fields: CONTACT_DETAIL_FILTER_FIELDS }],
+      [{ heading: 'Social Accounts', fields: SOCIAL_FILTER_FIELDS }],
+      [
+        { heading: 'Engagement', fields: ENGAGEMENT_FILTER_FIELDS },
+        { heading: 'Comments', fields: COMMENTS_FILTER_FIELDS }
+      ]
     ];
 
     const grid = document.createElement('div');
     grid.className = 'explore-filters-grid';
 
-    groups.forEach((group) => {
+    columnsData.forEach((colGroups) => {
       const column = document.createElement('section');
       column.className = 'explore-filter-column';
 
-      const heading = document.createElement('h4');
-      heading.textContent = group.heading;
-      column.appendChild(heading);
+      colGroups.forEach((group) => {
+        const heading = document.createElement('h4');
+        heading.textContent = group.heading;
+        if (group.heading === 'Comments') {
+          heading.style.marginTop = '1.5rem';
+        }
+        column.appendChild(heading);
 
-      group.fields.forEach(({ key, label }) => {
-      const row = document.createElement('div');
-      row.className = 'form-row';
-      row.style.display = 'grid';
-      row.style.gridTemplateColumns = '160px minmax(0, 1fr)';
-      row.style.alignItems = 'center';
-      row.style.columnGap = '0.75rem';
+        group.fields.forEach(({ key, label }) => {
+          const row = document.createElement('div');
+          row.className = 'form-row';
+          row.style.display = 'grid';
+          row.style.gridTemplateColumns = '160px minmax(0, 1fr)';
+          row.style.alignItems = 'center';
+          row.style.columnGap = '0.75rem';
 
-      const labelEl = document.createElement('label');
-      labelEl.textContent = label;
-      labelEl.style.fontWeight = '700';
-      labelEl.style.margin = '0';
-      row.appendChild(labelEl);
+          const labelEl = document.createElement('label');
+          labelEl.textContent = label;
+          labelEl.style.fontWeight = '700';
+          labelEl.style.margin = '0';
+          row.appendChild(labelEl);
 
-      const controls = document.createElement('div');
-      controls.className = 'grid-form';
-      controls.style.gridTemplateColumns = 'minmax(180px, 220px) minmax(0, 1fr)';
+          const controls = document.createElement('div');
+          controls.className = 'grid-form';
+          controls.style.gridTemplateColumns = 'minmax(180px, 220px) minmax(0, 1fr)';
 
-      if (isEngagementField(key)) {
-        const fieldConfig = ENGAGEMENT_FILTER_FIELDS.find((field) => field.key === key) || { options: [] };
-        const metricSelect = document.createElement('select');
-        const metricPlaceholder = document.createElement('option');
-        metricPlaceholder.value = '';
-        metricPlaceholder.textContent = key === 'engagement_forms' ? 'Select Form' : (key === 'engagement_meetings' ? 'Select Meeting' : 'Select Metric');
-        metricSelect.appendChild(metricPlaceholder);
-        const metricOptions = key === 'engagement_forms'
-          ? (exploreFormTemplateOptions.length ? exploreFormTemplateOptions : ['No Saved Forms'])
-          : fieldConfig.options;
-        metricOptions.forEach((metric) => {
-          const option = document.createElement('option');
-          option.value = String(metric || '').trim();
-          option.textContent = String(metric || '').trim();
-          metricSelect.appendChild(option);
-        });
-        metricSelect.value = state.segmentContactsFilters[key].mode;
-        controls.appendChild(metricSelect);
+          if (isEngagementField(key)) {
+            const fieldConfig = ENGAGEMENT_FILTER_FIELDS.find((field) => field.key === key) || { options: [] };
+            const metricSelect = document.createElement('select');
+            const metricPlaceholder = document.createElement('option');
+            metricPlaceholder.value = '';
+            metricPlaceholder.textContent = key === 'engagement_forms' ? 'Select Form' : (key === 'engagement_meetings' ? 'Select Meeting' : 'Select Metric');
+            metricSelect.appendChild(metricPlaceholder);
+            const metricOptions = key === 'engagement_forms'
+              ? (exploreFormTemplateOptions.length ? exploreFormTemplateOptions : ['No Saved Forms'])
+              : fieldConfig.options;
+            metricOptions.forEach((metric) => {
+              const option = document.createElement('option');
+              option.value = String(metric || '').trim();
+              option.textContent = String(metric || '').trim();
+              metricSelect.appendChild(option);
+            });
+            metricSelect.value = state.segmentContactsFilters[key].mode;
+            controls.appendChild(metricSelect);
 
-        const bucketSelect = document.createElement('select');
-        const bucketPlaceholder = document.createElement('option');
-        bucketPlaceholder.value = '';
-        bucketPlaceholder.textContent = 'Select Bucket';
-        bucketSelect.appendChild(bucketPlaceholder);
-        ENGAGEMENT_BUCKET_OPTIONS.forEach((bucket) => {
-          const option = document.createElement('option');
-          option.value = bucket;
-          option.textContent = bucket;
-          bucketSelect.appendChild(option);
-        });
-        bucketSelect.value = state.segmentContactsFilters[key].value;
-        controls.appendChild(bucketSelect);
+            const bucketSelect = document.createElement('select');
+            const bucketPlaceholder = document.createElement('option');
+            bucketPlaceholder.value = '';
+            bucketPlaceholder.textContent = 'Select Bucket';
+            bucketSelect.appendChild(bucketPlaceholder);
+            ENGAGEMENT_BUCKET_OPTIONS.forEach((bucket) => {
+              const option = document.createElement('option');
+              option.value = bucket;
+              option.textContent = bucket;
+              bucketSelect.appendChild(option);
+            });
+            bucketSelect.value = state.segmentContactsFilters[key].value;
+            controls.appendChild(bucketSelect);
 
-        metricSelect.addEventListener('change', () => {
-          state.segmentContactsFilters[key].mode = String(metricSelect.value || '');
-          exploreContactsApplied = false;
-          renderContacts();
-        });
-        bucketSelect.addEventListener('change', () => {
-          state.segmentContactsFilters[key].value = String(bucketSelect.value || '');
-          exploreContactsApplied = false;
-          renderContacts();
-        });
-      } else {
+            metricSelect.addEventListener('change', () => {
+              state.segmentContactsFilters[key].mode = String(metricSelect.value || '');
+              exploreContactsApplied = false;
+              renderContacts();
+            });
+            bucketSelect.addEventListener('change', () => {
+              state.segmentContactsFilters[key].value = String(bucketSelect.value || '');
+              exploreContactsApplied = false;
+              renderContacts();
+            });
+          } else if (isCommentField(key)) {
+            const select = document.createElement('select');
+            let modes = [];
+            if (key === 'comments_score') {
+              modes = [
+                { value: 'equals', label: 'Equals' },
+                { value: 'greater_than', label: 'Greater Than' },
+                { value: 'less_than', label: 'Less Than' }
+              ];
+            } else {
+              modes = [
+                { value: 'equals', label: 'Is Equal To' },
+                { value: 'contains', label: 'Contains' },
+                { value: 'starts_with', label: 'Starts with' },
+                { value: 'ends_with', label: 'Ends with' },
+                { value: 'is_empty', label: 'Is Empty' },
+                { value: 'is_known', label: 'Is Known' }
+              ];
+            }
+            
+            modes.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m.value;
+              opt.textContent = m.label;
+              select.appendChild(opt);
+            });
+            
+            if (!modes.some(m => m.value === state.segmentContactsFilters[key].mode)) {
+              state.segmentContactsFilters[key].mode = modes[0].value;
+            }
+            select.value = state.segmentContactsFilters[key].mode;
+            controls.appendChild(select);
+            
+            const inputContainer = document.createElement('div');
+            controls.appendChild(inputContainer);
+
+            function renderCommentValueInput() {
+              inputContainer.innerHTML = '';
+              const mode = select.value;
+              const needsValue = !['is_empty', 'is_known'].includes(mode);
+              if (!needsValue) {
+                 state.segmentContactsFilters[key].value = '';
+                 return;
+              }
+              
+              if (key === 'comments_score') {
+                const valSel = document.createElement('select');
+                valSel.style.width = '100%';
+                for (let i = 1; i <= 5; i++) {
+                  const opt = document.createElement('option');
+                  opt.value = String(i);
+                  opt.textContent = String(i);
+                  valSel.appendChild(opt);
+                }
+                if (!state.segmentContactsFilters[key].value) state.segmentContactsFilters[key].value = '1';
+                valSel.value = state.segmentContactsFilters[key].value;
+                valSel.addEventListener('change', () => {
+                  state.segmentContactsFilters[key].value = valSel.value;
+                  exploreContactsApplied = false;
+                  renderContacts();
+                });
+                inputContainer.appendChild(valSel);
+              } else if (mode === 'equals' && key === 'comments_campaign') {
+                 const valSel = document.createElement('select');
+                 valSel.style.width = '100%';
+                 const loadOpt = document.createElement('option');
+                 loadOpt.value = state.segmentContactsFilters[key].value || '';
+                 loadOpt.textContent = 'Loading campaigns...';
+                 valSel.appendChild(loadOpt);
+                 
+                 api('/api/campaigns').then(res => {
+                    valSel.innerHTML = '';
+                    const emptyOpt = document.createElement('option');
+                    emptyOpt.value = '';
+                    emptyOpt.textContent = '-- Select Campaign --';
+                    valSel.appendChild(emptyOpt);
+                    const camps = Array.isArray(res?.campaigns) ? res.campaigns : [];
+                    camps.forEach(c => {
+                      const opt = document.createElement('option');
+                      opt.value = c.id;
+                      opt.textContent = c.name || c.id;
+                      valSel.appendChild(opt);
+                    });
+                    valSel.value = state.segmentContactsFilters[key].value;
+                 }).catch(() => { valSel.innerHTML = '<option value="">Error compiling choices</option>'; });
+                 
+                 valSel.addEventListener('change', () => {
+                   state.segmentContactsFilters[key].value = valSel.value;
+                   exploreContactsApplied = false;
+                   renderContacts();
+                 });
+                 inputContainer.appendChild(valSel);
+              } else if (mode === 'equals' && key === 'comments_topic') {
+                 const valSel = document.createElement('select');
+                 valSel.style.width = '100%';
+                 const loadOpt = document.createElement('option');
+                 loadOpt.value = state.segmentContactsFilters[key].value || '';
+                 loadOpt.textContent = 'Loading topics...';
+                 valSel.appendChild(loadOpt);
+                 
+                 api('/api/acquire/youtube-topics').then(res => {
+                    valSel.innerHTML = '';
+                    const emptyOpt = document.createElement('option');
+                    emptyOpt.value = '';
+                    emptyOpt.textContent = '-- Select Topic --';
+                    valSel.appendChild(emptyOpt);
+                    const tps = Array.isArray(res?.topics) ? res.topics : [];
+                    tps.forEach(t => {
+                      const opt = document.createElement('option');
+                      opt.value = t.topic;
+                      opt.textContent = t.topic || t.id;
+                      valSel.appendChild(opt);
+                    });
+                    valSel.value = state.segmentContactsFilters[key].value;
+                 }).catch(() => { valSel.innerHTML = '<option value="">Error compiling choices</option>'; });
+                 
+                 valSel.addEventListener('change', () => {
+                   state.segmentContactsFilters[key].value = valSel.value;
+                   exploreContactsApplied = false;
+                   renderContacts();
+                 });
+                 inputContainer.appendChild(valSel);
+              } else {
+                 const input = document.createElement('input');
+                 input.type = 'text';
+                 input.placeholder = label + ' filter';
+                 input.value = state.segmentContactsFilters[key].value;
+                 input.addEventListener('input', () => {
+                   state.segmentContactsFilters[key].value = input.value;
+                   exploreContactsApplied = false;
+                   renderContacts();
+                 });
+                 inputContainer.appendChild(input);
+              }
+            }
+            
+            renderCommentValueInput();
+            
+            select.addEventListener('change', () => {
+              state.segmentContactsFilters[key].mode = select.value;
+              state.segmentContactsFilters[key].value = '';
+              renderCommentValueInput();
+              exploreContactsApplied = false;
+              renderContacts();
+            });
+          } else {
         const select = document.createElement('select');
         EXPLORE_FILTER_MODES.forEach((mode) => {
           const option = document.createElement('option');
@@ -1747,10 +1950,11 @@ App.contacts = (function () {
           exploreContactsApplied = false;
           renderContacts();
         });
-      }
+          }
 
-      row.appendChild(controls);
-      column.appendChild(row);
+          row.appendChild(controls);
+          column.appendChild(row);
+        });
       });
 
       grid.appendChild(column);
@@ -1816,7 +2020,6 @@ App.contacts = (function () {
       });
       tray.addEventListener('dragover', (event) => {
         event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
       });
       tray.addEventListener('drop', (event) => {
         event.preventDefault();
@@ -1847,7 +2050,7 @@ App.contacts = (function () {
         pill.textContent = `${clause.id}: ${columnLabel(clause.key)} ${operatorLabelForName({ operator: clause.mode })} ${ruleDetailForTray({ operator: clause.mode, value: clause.value })}`.trim();
         pill.addEventListener('dragstart', (event) => {
           event.dataTransfer.setData('text/plain', JSON.stringify({ source: 'clause', token: clause.id }));
-          event.dataTransfer.effectAllowed = 'copy';
+          event.dataTransfer.effectAllowed = 'all';
         });
         pill.addEventListener('click', () => {
           appendLogicToken(clause.id);
@@ -1873,7 +2076,7 @@ App.contacts = (function () {
       pill.textContent = token;
       pill.addEventListener('dragstart', (event) => {
         event.dataTransfer.setData('text/plain', JSON.stringify({ source: 'operator', token }));
-        event.dataTransfer.effectAllowed = 'copy';
+        event.dataTransfer.effectAllowed = 'all';
       });
       pill.addEventListener('click', () => {
         appendLogicToken(token);
@@ -1901,8 +2104,23 @@ App.contacts = (function () {
         if (sourceIndex < insertIndex) insertIndex -= 1;
       }
       const bounded = Math.max(0, Math.min(insertIndex, next.length));
-      next.splice(bounded, 0, token);
-      state.segmentContactsLogicSelectedIndex = bounded;
+      
+      let tokensToInsert = [token];
+      const validIds = new Set(clauses.map((clause) => String(clause.id).toUpperCase()));
+      if (validIds.has(token)) {
+        if (bounded > 0 && (validIds.has(next[bounded - 1]) || next[bounded - 1] === ')')) {
+          tokensToInsert = ['AND', token];
+        } else if (bounded < next.length && (validIds.has(next[bounded]) || next[bounded] === '(')) {
+          tokensToInsert = [token, 'AND'];
+        }
+      } else if (token === '(' && bounded > 0 && validIds.has(next[bounded - 1])) {
+        tokensToInsert = ['AND', '('];
+      } else if (token === ')' && bounded < next.length && validIds.has(next[bounded])) {
+        tokensToInsert = [')', 'AND'];
+      }
+      
+      next.splice(bounded, 0, ...tokensToInsert);
+      state.segmentContactsLogicSelectedIndex = bounded + tokensToInsert.length - 1;
       commitLogicTokens(next);
     }
 
@@ -1937,7 +2155,6 @@ App.contacts = (function () {
       slot.addEventListener('dragover', (event) => {
         event.preventDefault();
         event.stopPropagation();
-        event.dataTransfer.dropEffect = 'move';
         slot.style.borderColor = '#2b6cb0';
         slot.style.background = '#dbeafe';
       });
@@ -1994,7 +2211,6 @@ App.contacts = (function () {
     });
     expressionRow.addEventListener('dragover', (event) => {
       event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
     });
     expressionRow.addEventListener('drop', (event) => {
       event.preventDefault();
@@ -2017,7 +2233,7 @@ App.contacts = (function () {
         chip.textContent = token;
         chip.addEventListener('dragstart', (event) => {
           event.dataTransfer.setData('text/plain', JSON.stringify({ source: 'expression', token, index }));
-          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.effectAllowed = 'all';
         });
         expressionRow.appendChild(chip);
       });
@@ -2044,6 +2260,18 @@ App.contacts = (function () {
       : `Expression error: ${previewEval.error}`;
     logicSection.appendChild(logicPreview);
 
+    const applyBtnWrap = document.createElement('div');
+    applyBtnWrap.className = 'form-submit-row';
+    applyBtnWrap.style.marginTop = '1rem';
+    
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.textContent = 'Apply Filters & Preview Segment';
+    applyBtn.addEventListener('click', applyExploreFilters);
+    applyBtnWrap.appendChild(applyBtn);
+
+    logicSection.appendChild(applyBtnWrap);
+
     grid.appendChild(logicSection);
 
     els.exploreContactsFilters.appendChild(grid);
@@ -2058,11 +2286,30 @@ App.contacts = (function () {
     if (els.contactsTable) {
       els.contactsTable.innerHTML = '';
       const visibleColumns = getVisibleContactsColumns();
-      state.contacts
-        .filter((contact) => contactPassesContactFilters(contact, state.contactsFilters))
-        .forEach((contact) => {
+      let filteredContacts = state.contacts.filter((contact) => contactPassesContactFilters(contact, state.contactsFilters));
+
+      if (state.contactsSortColumn) {
+        filteredContacts.sort((a, b) => {
+          let valA = contactValue(a, state.contactsSortColumn);
+          let valB = contactValue(b, state.contactsSortColumn);
+          valA = valA != null ? String(valA).toLowerCase() : '';
+          valB = valB != null ? String(valB).toLowerCase() : '';
+          if (valA < valB) return state.contactsSortDirection === 'asc' ? -1 : 1;
+          if (valA > valB) return state.contactsSortDirection === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+
+      filteredContacts.forEach((contact) => {
           const tr = document.createElement('tr');
-          tr.appendChild(document.createElement('td'));
+          const checkTd = document.createElement('td');
+          const rowCheck = document.createElement('input');
+          rowCheck.type = 'checkbox';
+          rowCheck.className = 'contact-row-check';
+          rowCheck.value = contact.id;
+          checkTd.appendChild(rowCheck);
+          tr.appendChild(checkTd);
+          
           visibleColumns.forEach((column) => {
             const td = document.createElement('td');
             appendContactCell(td, column.key, contactValue(contact, column.key));
@@ -2131,6 +2378,111 @@ App.contacts = (function () {
   function renderContactsSettingsPage() {
     renderContactsDefaultColumnsSettings();
     renderContactsSettingsNav('contactsSettingsPage');
+    
+    // Auto-load reference options the first time it opens
+    const catSelect = document.getElementById('contactsOptionCategorySelect');
+    if (catSelect) {
+      loadContactReferenceOptions(catSelect.value);
+    }
+  }
+
+  async function loadContactReferenceOptions(category) {
+    try {
+      const res = await api(`/api/settings/contacts/${category}?active=false`);
+      state.availableReferenceOptions[category] = res.options || [];
+      renderContactReferenceOptions(category);
+    } catch (err) {
+      notify(`Failed to load ${category}: ${err.message}`, true);
+    }
+  }
+
+  function renderContactReferenceOptions(category) {
+    const tbody = document.getElementById('contactsOptionsTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const items = state.availableReferenceOptions[category] || [];
+    
+    if (items.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="5" class="meta" style="text-align:center;">No options found.</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    items.forEach(item => {
+      const tr = document.createElement('tr');
+      
+      const keyTd = document.createElement('td');
+      keyTd.textContent = item.key || item.name || item.id || '';
+      
+      const labelTd = document.createElement('td');
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.value = item.label || item.name || item.key || '';
+      labelInput.style.width = '100%';
+      labelTd.appendChild(labelInput);
+
+      const orderTd = document.createElement('td');
+      const orderInput = document.createElement('input');
+      orderInput.type = 'number';
+      orderInput.value = item.sort_order || 0;
+      orderInput.style.width = '60px';
+      orderTd.appendChild(orderInput);
+
+      const activeTd = document.createElement('td');
+      const activeInput = document.createElement('input');
+      activeInput.type = 'checkbox';
+      activeInput.checked = !!item.is_active;
+      activeTd.appendChild(activeInput);
+
+      const actionTd = document.createElement('td');
+      actionTd.className = 'contacts-actions-cell';
+      
+      const saveChanges = async () => {
+        try {
+          if (!item.id) return; // Wait until record has a DB ID
+          await api(`/api/settings/contacts/${category}/${item.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              label: labelInput.value,
+              sort_order: parseInt(orderInput.value, 10),
+              is_active: activeInput.checked
+            })
+          });
+          notify('Option autosaved', false, 1500);
+          loadContactReferenceOptions(category);
+        } catch (err) {
+          notify(`Autosave failed: ${err.message}`, true);
+        }
+      };
+
+      // Auto-save on change
+      labelInput.addEventListener('change', saveChanges);
+      orderInput.addEventListener('change', saveChanges);
+      activeInput.addEventListener('change', saveChanges);
+      
+      const delBtn = App.makeIconButton('delete', 'Delete Option', async () => {
+        if (!confirm('Are you sure you want to delete this option?')) return;
+        try {
+          if (item.id) {
+            await api(`/api/settings/contacts/${category}/${item.id}`, { method: 'DELETE' });
+          }
+          notify('Option deleted');
+          loadContactReferenceOptions(category);
+        } catch (err) {
+          notify(`Delete failed: ${err.message}`, true);
+        }
+      }, { danger: true });
+      
+      actionTd.appendChild(delBtn);
+
+      tr.appendChild(keyTd);
+      tr.appendChild(labelTd);
+      tr.appendChild(orderTd);
+      tr.appendChild(activeTd);
+      tr.appendChild(actionTd);
+      tbody.appendChild(tr);
+    });
   }
 
   function renderContactsTableHead() {
@@ -2152,15 +2504,145 @@ App.contacts = (function () {
 
     visibleColumns.forEach((column) => {
       const th = document.createElement('th');
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = column.filterPlaceholder;
-      input.value = String(state.contactsFilters[column.key] || '');
-      input.addEventListener('input', () => {
-        state.contactsFilters[column.key] = String(input.value || '').trim().toLowerCase();
-        renderContacts();
-      });
-      th.appendChild(input);
+      const isRefOption = ['status', 'contact_type', 'source'].includes(column.key);
+      const isSelectFilter = column.key === 'comments_campaign' || column.key === 'comments_topic' || isRefOption;
+      const isSocialFilter = ['youtube', 'instagram', 'tiktok', 'facebook', 'x', 'bluesky', 'patreon', 'linkedin', 'substack', 'medium'].includes(column.key);
+
+      if (isSocialFilter) {
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.alignItems = 'center';
+        container.style.justifyContent = 'center';
+        container.style.gap = '6px';
+        container.style.cursor = 'pointer';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.title = `Has ${column.label}`;
+        checkbox.id = `filterCheckbox_${column.key}`;
+        checkbox.checked = !!state.contactsFilters[column.key];
+        
+        const label = document.createElement('label');
+        label.textContent = `Has ${column.label}`;
+        label.htmlFor = checkbox.id;
+        label.style.marginBottom = '0';
+        label.style.fontWeight = 'normal';
+        label.style.fontSize = '0.85em';
+        label.style.cursor = 'pointer';
+        label.style.whiteSpace = 'nowrap';
+        
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            state.contactsFilters[column.key] = true;
+          } else {
+            delete state.contactsFilters[column.key];
+          }
+          renderContacts();
+        });
+        
+        container.appendChild(checkbox);
+        container.appendChild(label);
+        th.appendChild(container);
+      } else if (isSelectFilter) {
+        const select = document.createElement('select');
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = column.filterPlaceholder;
+        select.appendChild(defaultOption);
+
+        let optionsData = [];
+        if (column.key === 'comments_campaign') {
+          optionsData = (state.availableCampaigns || []).map((c) => ({ value: c.id, label: c.name }));
+        } else if (column.key === 'comments_topic') {
+          optionsData = (state.availableTopics || []).map((t) => ({ 
+              value: typeof t === 'object' ? (t.topic || t.name || '') : t, 
+              label: typeof t === 'object' ? (t.topic || t.name || '') : t 
+            }));
+        } else if (column.key === 'status') {
+          optionsData = (state.availableReferenceOptions.statuses || []).map((opt) => ({ value: opt.key, label: opt.label }));
+        } else if (column.key === 'contact_type') {
+          optionsData = (state.availableReferenceOptions.types || []).map((opt) => ({ value: opt.key, label: opt.label }));
+        } else if (column.key === 'source') {
+          optionsData = (state.availableReferenceOptions.sources || []).map((opt) => ({ value: opt.key, label: opt.label }));
+        }
+
+
+        optionsData.forEach(opt => {
+          if (!opt.value) return;
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.label;
+          const currentFilter = state.contactsFilters[column.key];
+          if (String(currentFilter) === String(opt.value)) {
+            option.selected = true;
+          }
+          select.appendChild(option);
+        });
+
+        select.addEventListener('change', () => {
+          const val = select.value;
+          if (!val) {
+            delete state.contactsFilters[column.key];
+          } else {
+            state.contactsFilters[column.key] = val;
+          }
+          renderContacts();
+        });
+        th.appendChild(select);
+      } else {
+        const isDateField = column.key === 'created_at' || column.key === 'updated_at' || column.key.includes('date');
+        if (isDateField) {
+          const container = document.createElement('div');
+          container.style.display = 'flex';
+          container.style.flexDirection = 'column';
+          container.style.gap = '4px';
+          const filterState = state.contactsFilters[column.key] || { from: '', to: '' };
+          
+          const fromInput = document.createElement('input');
+          fromInput.type = 'date';
+          fromInput.title = 'From: ' + column.label;
+          fromInput.value = filterState.from || '';
+
+          const toInput = document.createElement('input');
+          toInput.type = 'date';
+          toInput.title = 'To: ' + column.label;
+          toInput.value = filterState.to || '';
+
+          const updateDateRange = () => {
+            const f = fromInput.value;
+            const t = toInput.value;
+            if (!f && !t) {
+              delete state.contactsFilters[column.key];
+            } else {
+              state.contactsFilters[column.key] = { from: f, to: t };
+            }
+            renderContacts();
+          };
+
+          fromInput.addEventListener('change', updateDateRange);
+          toInput.addEventListener('change', updateDateRange);
+
+          container.appendChild(fromInput);
+          container.appendChild(toInput);
+          th.appendChild(container);
+        } else {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.placeholder = column.filterPlaceholder;
+          const currentVal = state.contactsFilters[column.key];
+          input.value = (currentVal && typeof currentVal !== 'object') ? String(currentVal) : '';
+          input.addEventListener('input', () => {
+            const val = String(input.value || '').trim().toLowerCase();
+            if (!val) {
+              delete state.contactsFilters[column.key];
+            } else {
+              state.contactsFilters[column.key] = val;
+            }
+            renderContacts();
+          });
+          th.appendChild(input);
+        }
+      }
       filterRow.appendChild(th);
     });
 
@@ -2179,6 +2661,22 @@ App.contacts = (function () {
     visibleColumns.forEach((column) => {
       const th = document.createElement('th');
       th.textContent = column.label;
+      th.style.cursor = 'pointer';
+      th.title = `Sort by ${column.label}`;
+      
+      if (state.contactsSortColumn === column.key) {
+        th.textContent += state.contactsSortDirection === 'asc' ? ' ↑' : ' ↓';
+      }
+      
+      th.addEventListener('click', () => {
+        if (state.contactsSortColumn === column.key) {
+          state.contactsSortDirection = state.contactsSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.contactsSortColumn = column.key;
+          state.contactsSortDirection = 'asc';
+        }
+        renderContacts();
+      });
       headerRow.appendChild(th);
     });
     const actionsTh = document.createElement('th');
@@ -2190,14 +2688,29 @@ App.contacts = (function () {
 
   async function loadExploreReferenceOptions() {
     try {
-      const result = await api('/api/develop/forms');
-      const rows = Array.isArray(result.forms) ? result.forms : (Array.isArray(result.data) ? result.data : []);
+      const [formsRes, campRes, topicRes, statusesRes, typesRes, sourcesRes] = await Promise.all([
+        api('/api/develop/forms').catch(() => ({ forms: [] })),
+        api('/api/campaigns').catch(() => ({ campaigns: [] })),
+        api('/api/acquire/youtube-topics').catch(() => ({ topics: [] })),
+        api('/api/settings/contacts/statuses?active=true').catch(() => ({ options: [] })),
+        api('/api/settings/contacts/types?active=true').catch(() => ({ options: [] })),
+        api('/api/settings/contacts/sources?active=true').catch(() => ({ options: [] }))
+      ]);
+      const rows = Array.isArray(formsRes?.forms) ? formsRes.forms : (Array.isArray(formsRes?.data) ? formsRes.data : []);
       exploreFormTemplateOptions = rows
         .map((row) => String(row?.name || '').trim())
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b));
+        
+      state.availableCampaigns = Array.isArray(campRes?.campaigns) ? campRes.campaigns : [];
+      state.availableTopics = Array.isArray(topicRes?.topics) ? topicRes.topics : [];
+      state.availableReferenceOptions.statuses = statusesRes?.options || [];
+      state.availableReferenceOptions.types = typesRes?.options || [];
+      state.availableReferenceOptions.sources = sourcesRes?.options || [];
     } catch (_) {
       exploreFormTemplateOptions = [];
+      state.availableCampaigns = [];
+      state.availableTopics = [];
     }
   }
 
@@ -2377,6 +2890,44 @@ App.contacts = (function () {
         notify('Contacts default columns saved');
       });
     }
+    
+    // Reference Options Select
+    const contactsOptionCategorySelect = document.getElementById('contactsOptionCategorySelect');
+    if (contactsOptionCategorySelect && !contactsOptionCategorySelect.dataset.bound) {
+      contactsOptionCategorySelect.dataset.bound = 'true';
+      contactsOptionCategorySelect.addEventListener('change', (e) => {
+        loadContactReferenceOptions(e.target.value);
+      });
+    }
+
+    // Add Reference Option Form
+    const addContactOptionForm = document.getElementById('addContactOptionForm');
+    if (addContactOptionForm && !addContactOptionForm.dataset.bound) {
+      addContactOptionForm.dataset.bound = 'true';
+      addContactOptionForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const category = contactsOptionCategorySelect ? contactsOptionCategorySelect.value : 'statuses';
+        const formData = new FormData(addContactOptionForm);
+        const payload = {
+          key: formData.get('key'),
+          label: formData.get('label'),
+          sort_order: parseInt(formData.get('sort_order') || 0, 10),
+          is_active: true
+        };
+        try {
+          await api(`/api/settings/contacts/${category}`, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+          notify('Option added successfully');
+          addContactOptionForm.reset();
+          loadContactReferenceOptions(category);
+        } catch (err) {
+          notify(`Add option failed: ${err.message}`, true);
+        }
+      });
+    }
+
     renderContactsSettingsPage();
 
     loadExploreReferenceOptions().then(() => renderContacts()).catch(() => {});
