@@ -2402,6 +2402,17 @@ App.contacts = (function () {
     tbody.innerHTML = '';
     const items = state.availableReferenceOptions[category] || [];
     
+    // Dynamically update the table headers based on category
+    const dynamicHeading = document.getElementById('settingsOptionsDynamicLabelHeading');
+    const dynamicTitle = document.getElementById('addContactOptionLabelTitle');
+    let titleText = 'Segment Type';
+    if (category === 'statuses') titleText = 'Status Name';
+    else if (category === 'types') titleText = 'Contact Type Name';
+    else if (category === 'sources') titleText = 'Source Name';
+    
+    if (dynamicHeading) dynamicHeading.textContent = titleText;
+    if (dynamicTitle) dynamicTitle.textContent = titleText;
+
     if (items.length === 0) {
       const tr = document.createElement('tr');
       tr.innerHTML = `<td colspan="5" class="meta" style="text-align:center;">No options found.</td>`;
@@ -2476,8 +2487,8 @@ App.contacts = (function () {
       
       actionTd.appendChild(delBtn);
 
-      tr.appendChild(keyTd);
       tr.appendChild(labelTd);
+      tr.appendChild(keyTd);
       tr.appendChild(orderTd);
       tr.appendChild(activeTd);
       tr.appendChild(actionTd);

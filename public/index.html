@@ -269,14 +269,12 @@
             <button type="button" id="contactsSettingsBackBtn">Return to Contacts</button>
           </div>
         </div>
-        <p>Manage section-level settings for Contacts, including how the main CRUD table is shown by default.</p>
-        <div class="section-settings-shell" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start;">
+        <div class="section-settings-shell" style="display: grid; grid-template-columns: 25% 1fr 25%; gap: 1rem; align-items: start;">
           <div class="section-settings-main">
             <section class="card">
               <div class="page-heading-row" style="margin-bottom: 0.75rem;">
                 <h3 style="margin:0;">Default Columns</h3>
               </div>
-              <p class="meta">Choose which fields show by default on the main Contacts table.</p>
               <form id="contactsDefaultColumnsForm" class="standard-form-grid" style="margin-top: 1rem;">
                 <div id="contactsDefaultColumnsGrid" class="contacts-settings-columns-grid"></div>
                 <div></div>
@@ -291,13 +289,12 @@
           <div class="section-settings-main">
             <section class="card">
               <div class="page-heading-row" style="margin-bottom: 0.75rem;">
-                <h3 style="margin:0;">Reference Options</h3>
+                <h3 style="margin:0;">Settings Options</h3>
               </div>
-              <p class="meta">Manage the options for Status, Contact Type, Source, and Segment Types.</p>
               
               <div class="form-row" style="margin-top: 1rem;">
                 <label>
-                  <span>Category</span>
+                  <span>Setting</span>
                   <select id="contactsOptionCategorySelect">
                     <option value="statuses">Statuses</option>
                     <option value="types">Contact Types</option>
@@ -311,8 +308,8 @@
                 <table>
                   <thead>
                     <tr>
+                      <th id="settingsOptionsDynamicLabelHeading" style="min-width: 200px;">Segment Type</th>
                       <th>Key</th>
-                      <th>Label</th>
                       <th>Order</th>
                       <th>Active</th>
                       <th>Actions</th>
@@ -325,11 +322,11 @@
               <form id="addContactOptionForm" class="standard-form-grid" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
                 <h4 class="standard-form-grid-full" style="margin-bottom: 0.25rem;">Add New Option</h4>
 
+                <label id="addContactOptionLabelTitle">Segment Type Name</label>
+                <input type="text" name="label" required placeholder="e.g. Display Name">
+
                 <label>Key</label>
                 <input type="text" name="key" required placeholder="e.g. key_name" pattern="[a-z0-9_]+">
-
-                <label>Label</label>
-                <input type="text" name="label" required placeholder="e.g. Display Name">
 
                 <label>Order</label>
                 <input type="number" name="sort_order" value="0" required>
