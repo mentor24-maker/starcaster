@@ -659,10 +659,8 @@ App.parseCsv = function parseCsv(text) {
     }
     if (ch === '"') { inQuotes = true; i++; continue; }
     if (ch === ',') { row.push(cell); cell = ''; i++; continue; }
-    if (ch === '\r' && next === '
-') { row.push(cell); rows.push(row); row = []; cell = ''; i += 2; continue; }
-    if (ch === '
-' || ch === '\r') { row.push(cell); rows.push(row); row = []; cell = ''; i++; continue; }
+    if (ch === '\r' && next === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; i += 2; continue; }
+    if (ch === '\n' || ch === '\r') { row.push(cell); rows.push(row); row = []; cell = ''; i++; continue; }
     cell += ch; i++;
   }
   row.push(cell);
