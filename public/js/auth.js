@@ -113,7 +113,6 @@ App.auth._syncProjectContext = async function _syncProjectContext() {
 
 App.auth.handleUnauthorized = function handleUnauthorized() {
   App.auth.user = null;
-  localStorage.removeItem('app_session');
   App.auth._showLanding('login');
   App.auth._setMessage('');
 };
@@ -127,10 +126,7 @@ App.auth._login = async function _login(payload) {
     method: 'POST',
     body: JSON.stringify(body),
   });
-  if (res && res.token) {
-    localStorage.setItem('app_session', res.token);
-  }
-  return res.user || res.data?.user || null;
+    return res.user || res.data?.user || null;
 };
 
 App.auth._register = async function _register(payload) {
@@ -143,10 +139,7 @@ App.auth._register = async function _register(payload) {
     method: 'POST',
     body: JSON.stringify(body),
   });
-  if (res && res.token) {
-    localStorage.setItem('app_session', res.token);
-  }
-  return res.user || res.data?.user || null;
+    return res.user || res.data?.user || null;
 };
 
 App.auth._me = async function _me() {
@@ -155,7 +148,6 @@ App.auth._me = async function _me() {
 };
 
 App.auth._logout = async function _logout() {
-  localStorage.removeItem('app_session');
   await App.api('/api/auth/logout', { method: 'POST' });
 };
 
@@ -262,7 +254,9 @@ App.auth.init = function init(bootMainApp) {
         App.auth._setMessage('');
       });
     })
-    .catch(() => {
+    .catch((e) => {
+      console.error('Core Boot Error:', e);
+      if (e?.message !== 'Not authenticated') App.notify('Boot Error: ' + (e?.message || e), true);
       App.auth.user = null;
       App.auth._showLanding('login');
       App.auth._setMessage('');
