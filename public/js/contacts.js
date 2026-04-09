@@ -1630,9 +1630,7 @@ App.contacts = (function () {
     thead.appendChild(tr);
 
     tbody.innerHTML = '';
-    if (els.createSegmentInlineForm) {
-      els.createSegmentInlineForm.classList.toggle('hidden', !exploreContactsApplied);
-    }
+    tbody.innerHTML = '';
     if (els.exploreContactsCount) {
       els.exploreContactsCount.textContent = 'Record Count: 0';
     }
@@ -3216,38 +3214,7 @@ App.contacts = (function () {
         App.setActivePage('segmentsPage');
       });
     }
-    if (els.createSegmentInlineForm) {
-      els.createSegmentInlineForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const rules = activeExploreFilterRules();
-        if (!rules.length) {
-          notify('Apply at least one Explore Contacts filter before creating a segment', true);
-          return;
-        }
-        const name = String(els.createSegmentInlineName?.value || '').trim();
-        if (!name) return;
-        try {
-          const createdRes = await api('/api/segments', {
-            method: 'POST',
-            body: JSON.stringify({ name, rules, definition: exploreFilterDefinition() }),
-          });
-          const createdId = createdRes?.segment?.id || createdRes?.data?.id || '';
-          notify(`Segment created: ${name}`);
-          if (els.createSegmentInlineForm) els.createSegmentInlineForm.reset();
-          lastSuggestedSegmentName = '';
-          await App.refresh();
-          if (createdId && typeof App.segments?.openSegment === 'function') {
-            App.segments.openSegment(createdId);
-          } else {
-            App.setActivePage('segmentsPage');
-          }
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
-
-    // Search filters
+    // createSegmentInlineForm logic removed - handled natively by Segment Editor    // Search filters
     const bindFilter = (el, key, bucket) => {
       if (!el) return;
       el.addEventListener('input', () => {
@@ -3270,10 +3237,15 @@ App.contacts = (function () {
   return {
     manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage', pagePrefixes: ['contacts', 'contactsSettingsPage'] },
     init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment,
+    activeExploreFilterRules, exploreFilterDefinition,
     openContactsPage, openPeerSitesPage, openViewPage, openEditPage, openClonePage,
     onPageActivated(targetPageId) {
       if (targetPageId === 'contactsSettingsPage') {
         renderContactsSettingsPage();
+      }
+      if (targetPageId === 'contactsExplorePage' && els.exploreContactsFilters && els.segmentsLeadFilters) {
+        // Transplant the filter builder back from Segment Editor if it was moved
+        els.segmentsLeadFilters.parentNode.insertBefore(els.exploreContactsFilters, els.segmentsLeadFilters);
       }
       if (String(state.activePage || '') === 'contactsPeerSitesPage') {
         refreshWebsitePeers().catch((err) => notify(err.message, true));

@@ -99,15 +99,17 @@ const CONTACT_IMPORT_SCHEMA = {
 };
 
 const SEGMENT_CREATE_SCHEMA = {
-  name:       { type: 'string', required: true,  minLength: 1, maxLength: 200 },
-  rules:      { type: 'array',  required: false, default: [] },
-  definition: { type: 'object', required: false },
+  name:         { type: 'string', required: true,  minLength: 1, maxLength: 200 },
+  rules:        { type: 'array',  required: false, default: [] },
+  definition:   { type: 'object', required: false },
+  segment_type: { type: 'string', required: false, default: 'email_list' }
 };
 
 const SEGMENT_UPDATE_SCHEMA = {
-  name:       { type: 'string', required: false, minLength: 1, maxLength: 200 },
-  rules:      { type: 'array',  required: false },
-  definition: { type: 'object', required: false },
+  name:         { type: 'string', required: false, minLength: 1, maxLength: 200 },
+  rules:        { type: 'array',  required: false },
+  definition:   { type: 'object', required: false },
+  segment_type: { type: 'string', required: false }
 };
 
 const CAMPAIGN_CREATE_SCHEMA = {
@@ -621,6 +623,7 @@ async function handleSegments(req, res, pathname, method) {
     const result = await createSegment({
       id: nextId('segment'), name: v.data.name,
       rules: cleanSegmentRules(v.data.rules), definition: v.data.definition ?? null,
+      segment_type: v.data.segment_type || 'email_list'
     }, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
@@ -639,6 +642,7 @@ async function handleSegments(req, res, pathname, method) {
     if (v.data.name       !== undefined) patch.name       = v.data.name;
     if (v.data.rules      !== undefined) patch.rules      = cleanSegmentRules(v.data.rules);
     if (v.data.definition !== undefined) patch.definition = v.data.definition ?? null;
+    if (v.data.segment_type !== undefined) patch.segment_type = v.data.segment_type;
     const result = await updateSegment(id, patch, requestScope(req));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
