@@ -1,0 +1,31 @@
+{
+  "users": [
+    {
+      "id": "usr_1775706441745_x2ixxu",
+      "email": "mentor@mentor.com",
+      "name": "Mentor",
+      "passwordHash": "5a5af734762a15ec0f59045ec3a7846f:6563487a1f6d1ddcb46645de38dcb0b6734ea39f159c75fe2c51718ed64bc1d130fd14755ec55ea30600cb80e8f1ecd79e8635e668c89ef3eb54f861f3f8fb00",
+      "role": "user",
+      "createdAt": "2026-04-09T03:47:21.745Z",
+      "updatedAt": "2026-04-09T03:47:21.745Z"
+    },
+    {
+      "id": "usr_1775689779671_rtccum",
+      "email": "admin@example.com",
+      "name": "Admin",
+      "passwordHash": "930e0597a19fa037fc5fee69663e6058:00870a5fbc0068cf805be61989b09a84ddd1a931661b4e09f450aa3496a0ef2de28764041e48a631e9e61e12ee2839bdb6dabbe6499a6600b51b834521b50dcb",
+      "role": "user",
+      "createdAt": "2026-04-08T23:09:39.671Z",
+      "updatedAt": "2026-04-08T23:09:39.671Z"
+    },
+    {
+      "id": "usr_1775686623037_webd6d",
+      "email": "test@example.com",
+      "name": "Test User",
+      "passwordHash": "11acc9f90a508d09a4c603879f1624d5:80d060fb8ff644341d4fa06066de7fd00efabb812f5c7c90b90431d9d3ce2156e33d6cf133ee90ccce9863163d4828869d372ed35a915a7946ec0802ac5eb651",
+      "role": "owner",
+      "createdAt": "2026-04-08T22:17:03.037Z",
+      "updatedAt": "2026-04-08T22:17:03.037Z"
+    }
+  ]
+}
