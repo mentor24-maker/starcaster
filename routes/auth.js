@@ -69,7 +69,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/auth/me' && method === 'GET') {
     const token = readSessionToken(req);
     const user = await getUserFromSessionToken(token);
-    if (!user) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    if (!user || user.error) return sendErr(res, 401, 'Not authenticated: ' + (user ? JSON.stringify(user) : 'null'), { code: 'AUTH_REQUIRED' }), true;
     return sendOk(res, 200, { user }, { user }), true;
   }
 
