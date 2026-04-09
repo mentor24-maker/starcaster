@@ -86,8 +86,7 @@ async function handle(req, res, pathname, method) {
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
     setSessionCookie(res, session.data.token, req);
-    const payload = { user: created.data, token: session.data.token };
-    return sendOk(res, 201, payload, payload), true;
+    return sendOk(res, 201, { user: created.data }, { user: created.data }), true;
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {
@@ -102,8 +101,7 @@ async function handle(req, res, pathname, method) {
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
     setSessionCookie(res, session.data.token, req);
-    const payload = { user: matched.data, token: session.data.token };
-    return sendOk(res, 200, payload, payload), true;
+    return sendOk(res, 200, { user: matched.data }, { user: matched.data }), true;
   }
 
   
