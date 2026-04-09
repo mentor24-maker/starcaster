@@ -157,7 +157,7 @@ App.roger.loadHistory = async function(sessionId) {
       return;
     }
     
-    const chats = res.data?.chats || [];
+    const chats = res.chats || res.data || [];
     if (chats.length === 0) {
       rogerElements.log.innerHTML = '<div class="empty-state">No discussion history found for this session. Say hello to Roger Thorson!</div>';
     } else {
