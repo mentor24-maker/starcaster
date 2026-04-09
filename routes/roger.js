@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
-const { listRogerChats, createRogerChat } = require('../lib/rogerChatsStore');
+const { listRogerChats, createRogerChat, listRogerSessions, createRogerSession } = require('../lib/rogerChatsStore');
 const { consultRoger } = require('../lib/rogerClient');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 
@@ -15,25 +15,44 @@ async function handle(req, res, pathname, requestMethod) {
   const scope = await resolveCurrentProject(req);
   const projectId = scope?.projectId || null;
 
+  if (pathname === '/api/develop/roger/sessions' && requestMethod === 'GET') {
+    const result = await listRogerSessions(projectId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { sessions: result.data }, { total: result.data.length }), true;
+  }
+
+  if (pathname === '/api/develop/roger/sessions' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await createRogerSession({ project_id: projectId, name: body?.name });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, result.data, { session: result.data }), true;
+  }
+
   if (pathname === '/api/develop/roger/history' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
+    const sessionId = Number(urlObj.searchParams.get('sessionId') || 0);
+    if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
+    
     const limit = Number(urlObj.searchParams.get('limit') || 100);
-    const result = await listRogerChats(projectId, limit);
+    const result = await listRogerChats(sessionId, projectId, limit);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { chats: result.data }, { total: result.data.length }), true;
   }
 
   if (pathname === '/api/develop/roger/chat' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
+    const sessionId = Number(body?.sessionId || 0);
+    if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
+    
     const content = String(body?.content || '').trim();
     if (!content) return sendErr(res, 400, 'Content is required', { code: 'VALIDATION_ERROR' }), true;
 
     // 1. Save user message to DB
-    const userSaveRes = await createRogerChat({ project_id: projectId, role: 'user', content });
+    const userSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'user', content });
     if (!userSaveRes.ok) return sendErr(res, userSaveRes.status || 500, userSaveRes.error), true;
     
     // 2. Fetch history to provide context to Gemini
-    const historyRes = await listRogerChats(projectId, 30);
+    const historyRes = await listRogerChats(sessionId, projectId, 30);
     const history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
 
     // Map DB rows to Gemini parts array
@@ -51,7 +70,7 @@ async function handle(req, res, pathname, requestMethod) {
     }
 
     // 4. Save Roger response to DB
-    const rogerSaveRes = await createRogerChat({ project_id: projectId, role: 'roger', content: geminiRes.text });
+    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'roger', content: geminiRes.text });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
 
     return sendOk(res, 201, {

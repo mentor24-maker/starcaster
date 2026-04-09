@@ -3,16 +3,27 @@
 window.App = window.App || {};
 App.roger = {};
 
+const rogerState = {
+  activeSessionId: null,
+  sessions: []
+};
+
 const rogerElements = {
   log: null,
   form: null,
-  input: null
+  input: null,
+  sessionList: null,
+  newSessionBtn: null,
+  activeSessionTitle: null
 };
 
 App.roger.init = function() {
   rogerElements.log = document.getElementById('rogerChatLog');
   rogerElements.form = document.getElementById('rogerChatForm');
   rogerElements.input = document.getElementById('rogerChatInput');
+  rogerElements.sessionList = document.getElementById('rogerSessionList');
+  rogerElements.newSessionBtn = document.getElementById('rogerNewSessionBtn');
+  rogerElements.activeSessionTitle = document.getElementById('rogerActiveSessionTitle');
 
   if (rogerElements.form) {
     rogerElements.form.addEventListener('submit', async (e) => {
@@ -28,22 +39,117 @@ App.roger.init = function() {
     });
   }
 
-  // Bind the page transition specifically
+  if (rogerElements.newSessionBtn) {
+    rogerElements.newSessionBtn.addEventListener('click', () => {
+      App.roger.createNewSession('New Discussion');
+    });
+  }
+
   const originalSetActivePage = App.setActivePage;
   App.setActivePage = function(pageId) {
     originalSetActivePage.apply(App, arguments);
     if (pageId === 'askRogerPage') {
-      App.roger.loadHistory();
+      App.roger.loadSessions();
     }
   };
 };
 
-App.roger.loadHistory = async function() {
-  if (!rogerElements.log) return;
+App.roger.loadSessions = async function() {
+  if (!rogerElements.sessionList) return;
+  try {
+    rogerElements.sessionList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    const res = await App.api('/api/develop/roger/sessions');
+    rogerElements.sessionList.innerHTML = '';
+    
+    if (res.error) {
+      rogerElements.sessionList.innerHTML = `<li class="error-msg">Failed to load</li>`;
+      return;
+    }
+    
+    rogerState.sessions = res.data?.sessions || [];
+    
+    if (rogerState.sessions.length === 0) {
+      // First boot, create a default session implicitly
+      await App.roger.createNewSession('Global Project Scope');
+      return;
+    }
+
+    rogerState.sessions.forEach(session => App.roger.appendSessionNode(session));
+    
+    // Auto-select latest session if none is active
+    if (!rogerState.activeSessionId && rogerState.sessions.length > 0) {
+      App.roger.selectSession(rogerState.sessions[0].id);
+    } else if (rogerState.activeSessionId) {
+      App.roger.selectSession(rogerState.activeSessionId);
+    }
+  } catch (err) {
+    rogerElements.sessionList.innerHTML = `<li class="error-msg">Error.</li>`;
+  }
+};
+
+App.roger.createNewSession = async function(name = 'New Discussion') {
+  try {
+    const res = await App.api('/api/develop/roger/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+    if (res.data?.session) {
+      rogerState.sessions.unshift(res.data.session);
+      // Re-render
+      rogerElements.sessionList.innerHTML = '';
+      rogerState.sessions.forEach(s => App.roger.appendSessionNode(s));
+      App.roger.selectSession(res.data.session.id);
+    }
+  } catch (e) {
+    alert("Could not create session: " + e.message);
+  }
+};
+
+App.roger.appendSessionNode = function(session) {
+  if (!rogerElements.sessionList) return;
+  const li = document.createElement('li');
+  li.className = 'roger-session-item';
+  li.dataset.sessionId = session.id;
+  li.textContent = `[#${session.id}] ${session.name}`;
+  if (session.id === rogerState.activeSessionId) {
+    li.classList.add('active');
+  }
+  
+  li.addEventListener('click', () => {
+    App.roger.selectSession(session.id);
+  });
+  
+  rogerElements.sessionList.appendChild(li);
+};
+
+App.roger.selectSession = function(sessionId) {
+  rogerState.activeSessionId = sessionId;
+  
+  // Highlight UI
+  if (rogerElements.sessionList) {
+    const items = rogerElements.sessionList.querySelectorAll('.roger-session-item');
+    items.forEach(el => {
+      if (Number(el.dataset.sessionId) === sessionId) el.classList.add('active');
+      else el.classList.remove('active');
+    });
+  }
+  
+  const activeSessionData = rogerState.sessions.find(s => s.id === sessionId);
+  if (activeSessionData && rogerElements.activeSessionTitle) {
+    rogerElements.activeSessionTitle.textContent = `[#${activeSessionData.id}] ${activeSessionData.name}`;
+  }
+  
+  App.roger.loadHistory(sessionId);
+};
+
+App.roger.loadHistory = async function(sessionId) {
+  if (!rogerElements.log || !sessionId) return;
   try {
     rogerElements.log.innerHTML = '<div class="loading-spinner">Loading chat history...</div>';
-    const res = await App.api('/api/develop/roger/history');
+    rogerElements.input.disabled = true;
+    const res = await App.api(`/api/develop/roger/history?sessionId=${sessionId}`);
     rogerElements.log.innerHTML = '';
+    rogerElements.input.disabled = false;
     
     if (res.error) {
       rogerElements.log.innerHTML = `<div class="error-msg">Could not load chats: ${res.error.message || res.error}</div>`;
@@ -52,40 +158,32 @@ App.roger.loadHistory = async function() {
     
     const chats = res.data?.chats || [];
     if (chats.length === 0) {
-      rogerElements.log.innerHTML = '<div class="empty-state">No discussion history found. Say hello to Roger Thorson!</div>';
+      rogerElements.log.innerHTML = '<div class="empty-state">No discussion history found for this session. Say hello to Roger Thorson!</div>';
     } else {
       chats.forEach(chat => App.roger.appendChatNode(chat));
       App.roger.scrollToBottom();
     }
   } catch (err) {
     rogerElements.log.innerHTML = `<div class="error-msg">Failed to load history.</div>`;
+    rogerElements.input.disabled = false;
   }
 };
 
 App.roger.formatMarkdown = function(text) {
   if (!text) return '';
-  // Basic markdown parsing for the UI (Bold, Italics, Lists, Codeblocks)
   let html = String(text);
-  
-  // Code Fences
   html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-  // Inline Code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  // Bold
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  // Italic
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
-  // Line Breaks
   html = html.replace(/\n/g, '<br/>');
-
   return html;
 };
 
 App.roger.appendChatNode = function(chat) {
   if (!rogerElements.log) return;
-  // Remove empty states if present
   if (rogerElements.log.querySelector('.empty-state')) {
     rogerElements.log.innerHTML = '';
   }
@@ -100,7 +198,7 @@ App.roger.appendChatNode = function(chat) {
   } else if (chat.role === 'roger') {
     avatar.style.backgroundImage = 'url("/images/roger.svg")';
   } else if (chat.role === 'antigravity') {
-    avatar.style.backgroundImage = 'url("/images/antigravity.svg")';
+    avatar.style.backgroundImage = 'url("/images/antigravity.png")'; // Fix the ext from svg to png
   }
 
   const contentCol = document.createElement('div');
@@ -127,7 +225,6 @@ App.roger.appendChatNode = function(chat) {
 
   bubble.appendChild(header);
   bubble.appendChild(content);
-  
   contentCol.appendChild(bubble);
   
   if (chat.role === 'user') {
@@ -148,9 +245,8 @@ App.roger.scrollToBottom = function() {
 };
 
 App.roger.submitChat = async function() {
-  if (!rogerElements.input) return;
-  const text = rogerElements.input.value.trim();
-  if (!text) return;
+  const text = rogerElements.input?.value.trim();
+  if (!text || !rogerState.activeSessionId) return;
 
   rogerElements.input.value = '';
   rogerElements.input.disabled = true;
@@ -163,14 +259,19 @@ App.roger.submitChat = async function() {
   const loadingWrapper = document.createElement('div');
   loadingWrapper.className = 'roger-chat-bubble-wrapper roger';
   loadingWrapper.id = 'rogerLoadingBubble';
-  loadingWrapper.innerHTML = `<div class="roger-chat-bubble roger loading">Roger is analyzing...</div>`;
+  loadingWrapper.innerHTML = `
+    <div class="roger-chat-avatar roger" style="background-image: url('/images/roger.svg');"></div>
+    <div class="roger-chat-content-col">
+      <div class="roger-chat-bubble roger loading">Roger is analyzing...</div>
+    </div>
+  `;
   rogerElements.log.appendChild(loadingWrapper);
   App.roger.scrollToBottom();
 
   try {
     const res = await App.api('/api/develop/roger/chat', {
       method: 'POST',
-      body: JSON.stringify({ content: text })
+      body: JSON.stringify({ sessionId: rogerState.activeSessionId, content: text })
     });
     
     const loadingNode = document.getElementById('rogerLoadingBubble');
@@ -179,7 +280,6 @@ App.roger.submitChat = async function() {
     if (res.error) {
       alert("Roger Failed to Respond: " + (res.error.message || res.error));
     } else if (res.data?.rogerChat) {
-      // Re-load the specific roger response perfectly
       App.roger.appendChatNode(res.data.rogerChat);
       App.roger.scrollToBottom();
     }
@@ -193,7 +293,6 @@ App.roger.submitChat = async function() {
   }
 };
 
-// Auto-init on script load
 document.addEventListener('DOMContentLoaded', () => {
   App.roger.init();
 });
