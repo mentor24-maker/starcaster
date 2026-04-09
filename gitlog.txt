@@ -1,0 +1,29 @@
+commit 86d964562e91177ad691bf633d1079306b4270cf
+Author: mentor2024 <mentorofaio@gmail.com>
+Date:   Tue Apr 7 00:56:21 2026 -0600
+
+    Fix gear icon height
+
+commit bba09330f68bdfbc912db614562a60aa4192eba0
+Author: mentor2024 <mentorofaio@gmail.com>
+Date:   Tue Apr 7 00:39:35 2026 -0600
+
+    Restore configurable columns and gear styling
+
+commit a3402997e2f83ded0d1031feb193ebb59cf312d8
+Author: mentor2024 <mentorofaio@gmail.com>
+Date:   Tue Apr 7 00:06:12 2026 -0600
+
+    Restore contactsPage, add gear icon linked to settingsPage
+
+commit fd00bb52bddfb8ed1a3d9335ebfc118a987067bb
+Author: mentor2024 <mentorofaio@gmail.com>
+Date:   Mon Apr 6 23:44:42 2026 -0600
+
+    Fix builder rich text toolbar styling
+
+commit 97985d7ea1c176fe4b1e6bb2615c28b794392166
+Author: mentor2024 <mentorofaio@gmail.com>
+Date:   Sun Apr 5 14:21:07 2026 -0600
+
+    Bundle TipTap locally for builder rich text editor
