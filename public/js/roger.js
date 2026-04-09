@@ -245,6 +245,34 @@ App.roger.scrollToBottom = function() {
   }
 };
 
+App.roger.pollRetry = async function(sessionId) {
+  // If the user switched sessions or the node is gone, stop polling
+  const loadingNode = document.getElementById('rogerLoadingBubble');
+  if (!loadingNode || rogerState.activeSessionId !== sessionId) return;
+
+  try {
+    const res = await App.api('/api/develop/roger/retry', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId })
+    });
+    
+    const chatData = res.rogerChat || res.data?.rogerChat;
+    if (chatData) {
+      if (document.getElementById('rogerLoadingBubble')) {
+        document.getElementById('rogerLoadingBubble').remove();
+      }
+      App.roger.appendChatNode(chatData);
+      App.roger.scrollToBottom();
+      return; 
+    }
+  } catch (err) {
+    // If it still fails, queue another retry if we are still on the same session
+    if (document.getElementById('rogerLoadingBubble') && rogerState.activeSessionId === sessionId) {
+      setTimeout(() => App.roger.pollRetry(sessionId), 10000);
+    }
+  }
+};
+
 App.roger.submitChat = async function() {
   const text = rogerElements.input?.value.trim();
   if (!text || !rogerState.activeSessionId) return;
@@ -279,15 +307,25 @@ App.roger.submitChat = async function() {
     if (loadingNode) loadingNode.remove();
 
     if (res.error) {
-      alert("Roger Failed to Respond: " + (res.error.message || res.error));
-    } else if (res.data?.rogerChat) {
-      App.roger.appendChatNode(res.data.rogerChat);
+      alert("Agent Failed to Respond: " + (res.error.message || res.error));
+    } else if (res.data?.rogerChat || res.rogerChat) {
+      const chatNode = res.rogerChat || res.data.rogerChat;
+      App.roger.appendChatNode(chatNode);
       App.roger.scrollToBottom();
     }
   } catch (err) {
     const loadingNode = document.getElementById('rogerLoadingBubble');
-    if (loadingNode) loadingNode.remove();
-    alert("Roger encountered an issue: " + (err.message || err));
+    if (loadingNode) {
+      const bubble = loadingNode.querySelector('.roger-chat-bubble');
+      if (bubble) {
+        bubble.className = 'roger-chat-bubble roger pending';
+        bubble.innerHTML = 'Response pending... (Auto-retrying in background)';
+      }
+    }
+    alert("Agent encountered an issue: " + (err.message || err) + "\\n\\nThe system will continue to ping the API in the background until a response is ready. You can continue working.");
+    // Begin background retry loop
+    const sessionId = rogerState.activeSessionId;
+    setTimeout(() => App.roger.pollRetry(sessionId), 10000);
   } finally {
     rogerElements.input.disabled = false;
     rogerElements.input.focus();
