@@ -1,0 +1,592 @@
+{
+  "users": {
+    "usr_1775686623037_webd6d": {
+      "categories": [],
+      "attributes": [
+        {
+          "id": "attr_mnqlyv7f_e3vah",
+          "name": "motivated",
+          "rationale": "Ready to act now. Prioritize with specific, low-friction next steps.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "growth_openness",
+            "purchase_intent",
+            "identity_shift"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_jjv97",
+          "name": "self_involved",
+          "rationale": "Status-centered framing. Keep engagement brief unless stronger intent appears.",
+          "value_rank": 2,
+          "match_hashtags": [
+            "social_handle"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_9rpxw",
+          "name": "negative_outlook",
+          "rationale": "Pessimistic tone. Acknowledge first, then gently reframe toward agency.",
+          "value_rank": 2,
+          "match_hashtags": [
+            "pain_point",
+            "trust_risk"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_lpdxs",
+          "name": "fan",
+          "rationale": "High affinity and goodwill. Useful for rapport and lightweight engagement.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "positive_signal"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_2sm30",
+          "name": "introvert",
+          "rationale": "Reflective communication style. Prefer thoughtful prompts over hard push.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "question",
+            "growth_openness"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        }
+      ],
+      "approaches": [
+        {
+          "id": "approach_mnqlyv7g_wekgk",
+          "name": "ignore",
+          "rationale": "Skip low-signal/noise comments to conserve effort for actionable conversations.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "noise"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_mb7xu",
+          "name": "encourage",
+          "rationale": "Affirm momentum and reinforce identity shift. Best for growth-oriented or positive comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "growth_openness",
+            "positive_signal",
+            "identity_shift"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_bazon",
+          "name": "intrigue",
+          "rationale": "Use curiosity/open loops to continue conversation when intent is emerging but not explicit.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "solution_seeking"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_k2dga",
+          "name": "inquire",
+          "rationale": "Lead with a clarifying question to diagnose context before advising. Best for pain/question comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "question",
+            "pain_point"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_3j7mm",
+          "name": "direct_cta",
+          "rationale": "Offer one concrete next step when intent is explicit and friction is low.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "purchase_intent"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        }
+      ],
+      "rulesGuides": [
+        {
+          "id": "ruleguide_mnqlyv8j_01",
+          "type": "rule",
+          "text": "Never reuse the exact same reply text across comments",
+          "enabled": true,
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqlyv8j_02",
+          "type": "rule",
+          "text": "Usually anchor response to the specific comment text",
+          "enabled": true,
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqlyv8j_03",
+          "type": "rule",
+          "text": "Don't ask pointless follow up questions as if we are working on a project together",
+          "enabled": true,
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqlyv8j_04",
+          "type": "rule",
+          "text": "Avoid generic coaching templates",
+          "enabled": true,
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqlyv8j_05",
+          "type": "rule",
+          "text": "Tie the comment into the reference video if it works",
+          "enabled": true,
+          "sort_order": 4,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqlyv8j_06",
+          "type": "rule",
+          "text": "Don't shoehorn in keywords - every statement should be coherent",
+          "enabled": true,
+          "sort_order": 5,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqlyv8j_07",
+          "type": "rule",
+          "text": "Refer it to ISITAS, the ISIT Construct, OR the ISIT Game, as appropriate",
+          "enabled": true,
+          "sort_order": 6,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqlyv8j_08",
+          "type": "rule",
+          "text": "Capitalize sentences. (except for every now and then to simulate human error)",
+          "enabled": true,
+          "sort_order": 7,
+          "updated_at": ""
+        }
+      ],
+      "settings": {
+        "explicit_isitas_percent": 50,
+        "subtle_shared_framing_percent": 40,
+        "generic_context_percent": 10,
+        "updated_at": ""
+      }
+    },
+    "usr_1775689779671_rtccum": {
+      "categories": [],
+      "attributes": [
+        {
+          "id": "attr_mnqlyv7f_e3vah",
+          "name": "motivated",
+          "rationale": "Ready to act now. Prioritize with specific, low-friction next steps.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "growth_openness",
+            "purchase_intent",
+            "identity_shift"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_jjv97",
+          "name": "self_involved",
+          "rationale": "Status-centered framing. Keep engagement brief unless stronger intent appears.",
+          "value_rank": 2,
+          "match_hashtags": [
+            "social_handle"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_9rpxw",
+          "name": "negative_outlook",
+          "rationale": "Pessimistic tone. Acknowledge first, then gently reframe toward agency.",
+          "value_rank": 2,
+          "match_hashtags": [
+            "pain_point",
+            "trust_risk"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_lpdxs",
+          "name": "fan",
+          "rationale": "High affinity and goodwill. Useful for rapport and lightweight engagement.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "positive_signal"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_2sm30",
+          "name": "introvert",
+          "rationale": "Reflective communication style. Prefer thoughtful prompts over hard push.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "question",
+            "growth_openness"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        }
+      ],
+      "approaches": [
+        {
+          "id": "approach_mnqlyv7g_wekgk",
+          "name": "ignore",
+          "rationale": "Skip low-signal/noise comments to conserve effort for actionable conversations.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "noise"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_mb7xu",
+          "name": "encourage",
+          "rationale": "Affirm momentum and reinforce identity shift. Best for growth-oriented or positive comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "growth_openness",
+            "positive_signal",
+            "identity_shift"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_bazon",
+          "name": "intrigue",
+          "rationale": "Use curiosity/open loops to continue conversation when intent is emerging but not explicit.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "solution_seeking"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_k2dga",
+          "name": "inquire",
+          "rationale": "Lead with a clarifying question to diagnose context before advising. Best for pain/question comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "question",
+            "pain_point"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_3j7mm",
+          "name": "direct_cta",
+          "rationale": "Offer one concrete next step when intent is explicit and friction is low.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "purchase_intent"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        }
+      ],
+      "rulesGuides": [
+        {
+          "id": "ruleguide_mnqogecc_01",
+          "type": "rule",
+          "text": "Never reuse the exact same reply text across comments",
+          "enabled": true,
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqogecc_02",
+          "type": "rule",
+          "text": "Usually anchor response to the specific comment text",
+          "enabled": true,
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqogecc_03",
+          "type": "rule",
+          "text": "Don't ask pointless follow up questions as if we are working on a project together",
+          "enabled": true,
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqogecc_04",
+          "type": "rule",
+          "text": "Avoid generic coaching templates",
+          "enabled": true,
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqogecc_05",
+          "type": "rule",
+          "text": "Tie the comment into the reference video if it works",
+          "enabled": true,
+          "sort_order": 4,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqogecc_06",
+          "type": "rule",
+          "text": "Don't shoehorn in keywords - every statement should be coherent",
+          "enabled": true,
+          "sort_order": 5,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqogecc_07",
+          "type": "rule",
+          "text": "Refer it to ISITAS, the ISIT Construct, OR the ISIT Game, as appropriate",
+          "enabled": true,
+          "sort_order": 6,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqogecc_08",
+          "type": "rule",
+          "text": "Capitalize sentences. (except for every now and then to simulate human error)",
+          "enabled": true,
+          "sort_order": 7,
+          "updated_at": ""
+        }
+      ],
+      "settings": {
+        "explicit_isitas_percent": 50,
+        "subtle_shared_framing_percent": 40,
+        "generic_context_percent": 10,
+        "updated_at": "2026-04-08T23:35:14.350Z"
+      }
+    },
+    "usr_1775706441745_x2ixxu": {
+      "categories": [],
+      "attributes": [
+        {
+          "id": "attr_mnqlyv7f_e3vah",
+          "name": "motivated",
+          "rationale": "Ready to act now. Prioritize with specific, low-friction next steps.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "growth_openness",
+            "purchase_intent",
+            "identity_shift"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_jjv97",
+          "name": "self_involved",
+          "rationale": "Status-centered framing. Keep engagement brief unless stronger intent appears.",
+          "value_rank": 2,
+          "match_hashtags": [
+            "social_handle"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_9rpxw",
+          "name": "negative_outlook",
+          "rationale": "Pessimistic tone. Acknowledge first, then gently reframe toward agency.",
+          "value_rank": 2,
+          "match_hashtags": [
+            "pain_point",
+            "trust_risk"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_lpdxs",
+          "name": "fan",
+          "rationale": "High affinity and goodwill. Useful for rapport and lightweight engagement.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "positive_signal"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mnqlyv7f_2sm30",
+          "name": "introvert",
+          "rationale": "Reflective communication style. Prefer thoughtful prompts over hard push.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "question",
+            "growth_openness"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        }
+      ],
+      "approaches": [
+        {
+          "id": "approach_mnqlyv7g_wekgk",
+          "name": "ignore",
+          "rationale": "Skip low-signal/noise comments to conserve effort for actionable conversations.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "noise"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_mb7xu",
+          "name": "encourage",
+          "rationale": "Affirm momentum and reinforce identity shift. Best for growth-oriented or positive comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "growth_openness",
+            "positive_signal",
+            "identity_shift"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_bazon",
+          "name": "intrigue",
+          "rationale": "Use curiosity/open loops to continue conversation when intent is emerging but not explicit.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "solution_seeking"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_k2dga",
+          "name": "inquire",
+          "rationale": "Lead with a clarifying question to diagnose context before advising. Best for pain/question comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "question",
+            "pain_point"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mnqlyv7g_3j7mm",
+          "name": "direct_cta",
+          "rationale": "Offer one concrete next step when intent is explicit and friction is low.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "purchase_intent"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        }
+      ],
+      "rulesGuides": [
+        {
+          "id": "ruleguide_mnqxs0jt_01",
+          "type": "rule",
+          "text": "Never reuse the exact same reply text across comments",
+          "enabled": true,
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqxs0jt_02",
+          "type": "rule",
+          "text": "Usually anchor response to the specific comment text",
+          "enabled": true,
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqxs0jt_03",
+          "type": "rule",
+          "text": "Don't ask pointless follow up questions as if we are working on a project together",
+          "enabled": true,
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqxs0jt_04",
+          "type": "rule",
+          "text": "Avoid generic coaching templates",
+          "enabled": true,
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqxs0jt_05",
+          "type": "rule",
+          "text": "Tie the comment into the reference video if it works",
+          "enabled": true,
+          "sort_order": 4,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqxs0jt_06",
+          "type": "rule",
+          "text": "Don't shoehorn in keywords - every statement should be coherent",
+          "enabled": true,
+          "sort_order": 5,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqxs0jt_07",
+          "type": "rule",
+          "text": "Refer it to ISITAS, the ISIT Construct, OR the ISIT Game, as appropriate",
+          "enabled": true,
+          "sort_order": 6,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mnqxs0jt_08",
+          "type": "rule",
+          "text": "Capitalize sentences. (except for every now and then to simulate human error)",
+          "enabled": true,
+          "sort_order": 7,
+          "updated_at": ""
+        }
+      ],
+      "settings": {
+        "explicit_isitas_percent": 50,
+        "subtle_shared_framing_percent": 40,
+        "generic_context_percent": 10,
+        "updated_at": ""
+      }
+    }
+  }
+}
