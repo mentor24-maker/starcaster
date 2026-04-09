@@ -164,7 +164,7 @@ App.roger.submitChat = async function() {
   } catch (err) {
     const loadingNode = document.getElementById('rogerLoadingBubble');
     if (loadingNode) loadingNode.remove();
-    alert("Network error communicating with Roger.");
+    alert("Roger encountered an issue: " + (err.message || err));
   } finally {
     rogerElements.input.disabled = false;
     rogerElements.input.focus();
