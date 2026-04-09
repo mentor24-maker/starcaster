@@ -20,6 +20,8 @@ const SESSION_COOKIE_NAME = 'app_session';
 const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
 
 function isSecureRequest(req) {
+  const host = String(req.headers.host || '');
+  if (host.includes('localhost') || host.includes('127.0.0.1')) return false;
   const proto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
   if (proto.includes('https')) return true;
   return process.env.NODE_ENV === 'production';
