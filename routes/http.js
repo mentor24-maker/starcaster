@@ -22,6 +22,11 @@ function setCors(res) {
 
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
+    if (req.body !== undefined) {
+      if (typeof req.body === 'object') return resolve(req.body);
+      try { return resolve(JSON.parse(req.body)); } catch { return resolve({}); }
+    }
+    
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
