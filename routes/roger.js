@@ -57,11 +57,16 @@ async function handle(req, res, pathname, requestMethod) {
 
     // Map DB rows to Gemini parts array
     // Antigravity (the system agent) or the developer can be mapped appropriately.
-    // We treat everything that isn't 'model' or 'assistant' as 'user' for Gemini.
-    const messages = history.map(row => ({
-      role: row.role === 'model' || row.role === 'roger' ? 'model' : 'user',
-      text: row.content
-    }));
+    const messages = history.map(row => {
+      let prefix = '';
+      if (row.role === 'user') prefix = '[From Human]: ';
+      if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
+      
+      return {
+        role: row.role === 'model' || row.role === 'roger' ? 'model' : 'user',
+        text: prefix + row.content
+      };
+    });
 
     // 3. Ask Roger via Gemini API
     const geminiRes = await consultRoger(messages);

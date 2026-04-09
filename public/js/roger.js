@@ -66,7 +66,7 @@ App.roger.loadSessions = async function() {
       return;
     }
     
-    rogerState.sessions = res.data?.sessions || [];
+    rogerState.sessions = res.sessions || res.data || [];
     
     if (rogerState.sessions.length === 0) {
       // First boot, create a default session implicitly
@@ -93,12 +93,13 @@ App.roger.createNewSession = async function(name = 'New Discussion') {
       method: 'POST',
       body: JSON.stringify({ name })
     });
-    if (res.data?.session) {
-      rogerState.sessions.unshift(res.data.session);
+    const sessionData = res.session || res.data;
+    if (sessionData) {
+      rogerState.sessions.unshift(sessionData);
       // Re-render
       rogerElements.sessionList.innerHTML = '';
       rogerState.sessions.forEach(s => App.roger.appendSessionNode(s));
-      App.roger.selectSession(res.data.session.id);
+      App.roger.selectSession(sessionData.id);
     }
   } catch (e) {
     alert("Could not create session: " + e.message);
