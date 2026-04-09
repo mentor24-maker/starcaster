@@ -122,15 +122,6 @@ async function handle(req, res, pathname, method) {
             const q = 'select=*&token=eq.' + encodeURIComponent(report.tokenValue) + '&limit=1';
             const sRes = await sbQuery({ method: 'GET', table: require('../lib/authStore').AUTH_SESSIONS_TABLE, query: q });
             report.sessionDbResponse = sRes;
-            const userId = sRes.data && sRes.data[0] ? sRes.data[0].user_id : null;
-            if (userId) {
-                const uq = 'select=*&id=eq.' + encodeURIComponent(userId) + '&limit=1';
-                try {
-                   report.userDbResponse = await sbQuery({ method: 'GET', table: require('../lib/authStore').AUTH_USERS_TABLE, query: uq });
-                } catch (e) {
-                   report.userDbResponseError = e.message;
-                }
-            }
         } catch (e) {
             report.sessionDbResponseError = e.message;
         }
