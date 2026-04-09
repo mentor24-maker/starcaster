@@ -197,7 +197,7 @@ App.roger.appendChatNode = function(chat) {
   if (chat.role === 'user') {
     avatar.style.backgroundImage = 'url("/images/mentor.png")';
   } else if (chat.role === 'roger') {
-    avatar.style.backgroundImage = 'url("/images/roger.svg")';
+    avatar.style.backgroundImage = 'url("/images/roger.png")';
   } else if (chat.role === 'antigravity') {
     avatar.style.backgroundImage = 'url("/images/antigravity.png")'; // Fix the ext from svg to png
   }
@@ -261,7 +261,7 @@ App.roger.submitChat = async function() {
   loadingWrapper.className = 'roger-chat-bubble-wrapper roger';
   loadingWrapper.id = 'rogerLoadingBubble';
   loadingWrapper.innerHTML = `
-    <div class="roger-chat-avatar roger" style="background-image: url('/images/roger.svg');"></div>
+    <div class="roger-chat-avatar roger" style="background-image: url('/images/roger.png');"></div>
     <div class="roger-chat-content-col">
       <div class="roger-chat-bubble roger loading">Roger is analyzing...</div>
     </div>
