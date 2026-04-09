@@ -213,8 +213,8 @@ App.roger.appendChatNode = function(chat) {
   
   let author = 'Unknown';
   if (chat.role === 'user') author = 'You';
-  if (chat.role === 'roger') author = 'Roger Thorson';
-  if (chat.role === 'antigravity') author = 'Antigravity';
+  if (chat.role === 'roger') author = '@RogerThorson';
+  if (chat.role === 'antigravity') author = '@antigravity';
 
   const dateStr = chat.created_at ? new Date(chat.created_at).toLocaleString() : new Date().toLocaleString();
   
@@ -245,8 +245,30 @@ App.roger.scrollToBottom = function() {
   }
 };
 
-App.roger.pollRetry = async function(sessionId) {
-  // If the user switched sessions or the node is gone, stop polling
+App.roger.startRetryCountdown = function(sessionId, attemptNumber = 1) {
+  let secondsLeft = 10;
+  
+  const tick = () => {
+    const loadingNode = document.getElementById('rogerLoadingBubble');
+    if (!loadingNode || rogerState.activeSessionId !== sessionId) return;
+
+    const bubble = loadingNode.querySelector('.roger-chat-bubble');
+    if (bubble) {
+      if (secondsLeft > 0) {
+        bubble.innerHTML = `Response pending... (Attempt #${attemptNumber} failed. Retrying in ${secondsLeft}s)`;
+        secondsLeft--;
+        setTimeout(tick, 1000);
+      } else {
+        bubble.innerHTML = `Response pending... (Pinging API... Attempt #${attemptNumber + 1})`;
+        App.roger.pollRetry(sessionId, attemptNumber + 1);
+      }
+    }
+  };
+  
+  tick();
+};
+
+App.roger.pollRetry = async function(sessionId, attemptNumber = 1) {
   const loadingNode = document.getElementById('rogerLoadingBubble');
   if (!loadingNode || rogerState.activeSessionId !== sessionId) return;
 
@@ -266,9 +288,8 @@ App.roger.pollRetry = async function(sessionId) {
       return; 
     }
   } catch (err) {
-    // If it still fails, queue another retry if we are still on the same session
     if (document.getElementById('rogerLoadingBubble') && rogerState.activeSessionId === sessionId) {
-      setTimeout(() => App.roger.pollRetry(sessionId), 10000);
+      App.roger.startRetryCountdown(sessionId, attemptNumber);
     }
   }
 };
@@ -319,13 +340,13 @@ App.roger.submitChat = async function() {
       const bubble = loadingNode.querySelector('.roger-chat-bubble');
       if (bubble) {
         bubble.className = 'roger-chat-bubble roger pending';
-        bubble.innerHTML = 'Response pending... (Auto-retrying in background)';
       }
     }
     App.notify("Agent encountered an issue: " + (err.message || err) + " - The system will continue to ping the API in the background until a response is ready. You can continue working.", true);
+    
     // Begin background retry loop
     const sessionId = rogerState.activeSessionId;
-    setTimeout(() => App.roger.pollRetry(sessionId), 10000);
+    App.roger.startRetryCountdown(sessionId, 1);
   } finally {
     rogerElements.input.disabled = false;
     rogerElements.input.focus();
