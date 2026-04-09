@@ -534,7 +534,6 @@
             </table>
           </div>
         </section>
-      </section>
 
       <section id="contactsPersonasPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -866,6 +865,7 @@
         <div class="page-heading-row">
           <h2>Segments</h2>
           <div class="page-heading-actions">
+            <button id="createSegmentBtn" type="button" class="primary-btn">Create Segment</button>
             <button id="returnToSegmentsBtn" type="button" class="hidden">Close Preview</button>
           </div>
         </div>
@@ -886,6 +886,65 @@
             </table>
           </div>
         </section>
+      </section>
+
+      <section id="segmentEditorPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="segmentEditorHeading">Create Segment</h2>
+          <div class="page-heading-actions">
+            <button id="cancelSegmentEditBtn" type="button">Cancel</button>
+            <button id="saveSegmentEditBtn" type="button" class="primary-btn">Save Segment</button>
+          </div>
+        </div>
+        <p>Define an audience boundary by configuring parameters specific to the segment type.</p>
+        
+        <form id="segmentEditorForm" class="standard-form-grid" style="margin-top: 1rem; max-width: 800px;">
+          <h3 class="standard-form-grid-full">Segment Details</h3>
+          
+          <label>Segment Name</label>
+          <input type="text" id="segmentEditorName" name="name" required placeholder="e.g. VIP Newsletter List" />
+
+          <label>Segment Type</label>
+          <select id="segmentEditorType" name="segment_type" required>
+            <option value="">-- Choose Type --</option>
+            <!-- Populated from state.availableReferenceOptions.segment_types -->
+          </select>
+        </form>
+
+        <hr style="margin: 2rem 0; border: 0; border-top: 1px solid var(--border-color);" />
+
+        <!-- EMAIL LIST SPECIFIC BUILDER (Previously Contacts Explore) -->
+        <div id="segmentBuilder_email_list" class="segment-builder-view hidden">
+          <h3 style="margin-top:0;">Contact Filter Rules</h3>
+          <p class="meta">Define rules to filter standard CRM contacts into this list.</p>
+          <div id="segmentEditorContactRulesContainer" class="explore-filters-shell">
+             <!-- Contact rules builder goes here (migrated from Contacts Explore) -->
+          </div>
+        </div>
+
+        <!-- YOUTUBE COMMENTS SPECIFIC BUILDER -->
+        <div id="segmentBuilder_youtube_comments" class="segment-builder-view hidden">
+          <h3 style="margin-top:0;">YouTube Target Parameters</h3>
+          <p class="meta">Configure endpoints based on YouTube activity data.</p>
+          <form class="standard-form-grid" id="segmentEditorYoutubeRulesForm" style="max-width: 800px;">
+            <label>Campaign Origin</label>
+            <select id="segmentEditorYtCampaign">
+              <option value="">Any Campaign</option>
+            </select>
+
+            <label>Topic Dimension</label>
+            <select id="segmentEditorYtTopic">
+              <option value="">Any Topic</option>
+            </select>
+
+            <label>Minimum Score</label>
+            <input type="number" id="segmentEditorYtScore" placeholder="e.g. 50" min="0" max="100" />
+            
+            <label>Keyword Contains</label>
+            <input type="text" id="segmentEditorYtKeyword" placeholder="e.g. AI alignment" />
+          </form>
+        </div>
+
       </section>
 
       <section id="campaignsPage" class="app-page hidden">
@@ -2086,7 +2145,6 @@
             ></textarea>
           </div>
         </section>
-      </section>
 
       <section id="trainingCategoriesPage" class="app-page hidden training-page">
         <div class="page-heading-row">
@@ -2122,7 +2180,6 @@
             </div>
           </div>
         </section>
-      </section>
 
       <section id="trainingAttributesPage" class="app-page hidden training-page">
         <div class="page-heading-row">
@@ -2158,7 +2215,6 @@
             </div>
           </div>
         </section>
-      </section>
 
       <section id="trainingApproachesPage" class="app-page hidden training-page">
         <div class="page-heading-row">
@@ -2194,7 +2250,6 @@
             </div>
           </div>
         </section>
-      </section>
 
       <section id="trainingRulesGuidesPage" class="app-page hidden training-page">
         <div class="page-heading-row">
@@ -2263,7 +2318,6 @@
             ></textarea>
           </div>
         </section>
-      </section>
 
       <section id="askIzzyPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -2276,7 +2330,6 @@
             <button type="button" onclick="App.setActivePage('docsPage')">Open Docs</button>
           </div>
         </section>
-      </section>
 
       <section id="editYoutubeRunPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -5690,7 +5743,6 @@
             </div>
           </div>
         </section>
-      </section>
 
       <section id="developThemesPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -6365,7 +6417,6 @@
             </table>
           </div>
         </section>
-      </section>
 
       <section id="developTemplatesPage" class="app-page hidden">
         <div class="page-heading-row">
