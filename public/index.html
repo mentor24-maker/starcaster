@@ -183,7 +183,7 @@
         </li>
         <li class="menu-item menu-item-right has-submenu docs-menu-anchor">
           <a href="#" class="menu-link" data-page="docsPage">Help</a>
-          <div class="submenu">
+          <div class="submenu" data-submenu="help">
             <a href="#" class="menu-link submenu-link" data-page="askIzzyPage">Ask Izzy</a>
             <a href="#" class="menu-link submenu-link" data-page="docsPage">Docs</a>
             <a href="#" class="menu-link submenu-link" data-page="docsAcquirePage">Acquire</a>
@@ -196,6 +196,12 @@
             <a href="#" class="menu-link submenu-link" data-page="docsEngagePage">Engage</a>
             <a href="#" class="menu-link submenu-link" data-page="docsObservePage">Observe</a>
             <a href="#" class="menu-link submenu-link" data-page="docsSettingsPage">Settings</a>
+          </div>
+        </li>
+        <li class="menu-item menu-item-right has-submenu">
+          <a href="#" class="menu-link" data-page="askRogerPage">Dev</a>
+          <div class="submenu">
+            <a href="#" class="menu-link submenu-link" data-page="askRogerPage">Ask Roger</a>
           </div>
         </li>
       </ul>
@@ -2325,6 +2331,22 @@
         </section>
 
       </section>
+      <section id="askRogerPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Ask Roger</h2>
+        </div>
+        <p>The "Ask Roger" Tri-Agent Discussion Board logic analyzer.</p>
+        
+        <div class="roger-chat-container">
+          <div id="rogerChatLog" class="roger-chat-log"></div>
+          
+          <form id="rogerChatForm" class="roger-chat-input-area">
+            <textarea id="rogerChatInput" placeholder="Message Roger Thorson..."></textarea>
+            <button type="submit" class="primary-btn">Send</button>
+          </form>
+        </div>
+      </section>
+
       <section id="askIzzyPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Ask Izzy</h2>
@@ -8112,6 +8134,7 @@
     <script src="/js/develop.js"></script>
     <script src="/js/activityLog.js"></script>
     <script src="/js/observe.js"></script>
+    <script src="/js/roger.js"></script>
     <script src="/js/assets.js"></script>
     <script src="/js/assetCategories.js"></script>
     <script src="/js/channels.js"></script>
