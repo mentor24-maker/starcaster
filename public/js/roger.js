@@ -93,6 +93,19 @@ App.roger.appendChatNode = function(chat) {
   const wrapper = document.createElement('div');
   wrapper.className = `roger-chat-bubble-wrapper ${chat.role}`;
   
+  const avatar = document.createElement('div');
+  avatar.className = `roger-chat-avatar ${chat.role}`;
+  if (chat.role === 'user') {
+    avatar.style.backgroundImage = 'url("/images/mentor.png")';
+  } else if (chat.role === 'roger') {
+    avatar.style.backgroundImage = 'url("/images/roger.svg")';
+  } else if (chat.role === 'antigravity') {
+    avatar.style.backgroundImage = 'url("/images/antigravity.svg")';
+  }
+
+  const contentCol = document.createElement('div');
+  contentCol.className = 'roger-chat-content-col';
+  
   const bubble = document.createElement('div');
   bubble.className = `roger-chat-bubble ${chat.role}`;
 
@@ -114,7 +127,16 @@ App.roger.appendChatNode = function(chat) {
 
   bubble.appendChild(header);
   bubble.appendChild(content);
-  wrapper.appendChild(bubble);
+  
+  contentCol.appendChild(bubble);
+  
+  if (chat.role === 'user') {
+    wrapper.appendChild(contentCol);
+    wrapper.appendChild(avatar);
+  } else {
+    wrapper.appendChild(avatar);
+    wrapper.appendChild(contentCol);
+  }
   
   rogerElements.log.appendChild(wrapper);
 };
