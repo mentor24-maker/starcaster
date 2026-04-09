@@ -88,6 +88,50 @@ async function handle(req, res, pathname, requestMethod) {
     }), true;
   }
 
+  if (pathname === '/api/develop/roger/retry' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const sessionId = Number(body?.sessionId || 0);
+    if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const historyRes = await listRogerChats(sessionId, projectId, 30);
+    const history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
+
+    if (history.length === 0) {
+      return sendErr(res, 400, 'No history found to retry', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const lastMessage = history[history.length - 1];
+    if (lastMessage.role !== 'user') {
+      return sendErr(res, 400, 'Last message is not from user, nothing to retry.', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const messages = history.map(row => {
+      let prefix = '';
+      if (row.role === 'user') prefix = '[From Human]: ';
+      if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
+      
+      return {
+        role: row.role === 'model' || row.role === 'roger' ? 'model' : 'user',
+        text: prefix + row.content
+      };
+    });
+
+    const isForAntigravity = lastMessage.content.toLowerCase().includes('@antigravity');
+    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
+
+    const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
+    if (!geminiRes.ok) {
+      return sendErr(res, 502, `${respondingAgent} API failed: ${geminiRes.error}`), true;
+    }
+
+    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: geminiRes.text });
+    if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
+
+    return sendOk(res, 201, {
+      rogerChat: rogerSaveRes.data
+    }), true;
+  }
+
   return false;
 }
 
