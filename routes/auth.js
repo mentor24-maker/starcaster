@@ -38,12 +38,14 @@ function readSessionToken(req) {
 }
 
 function setSessionCookie(res, token, req) {
+  const expiresDate = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000).toUTCString();
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(String(token || ''))}`,
     `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
+    `Expires=${expiresDate}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    'SameSite=Lax'
   ];
   if (isSecureRequest(req)) parts.push('Secure');
   res.setHeader('Set-Cookie', parts.join('; '));
