@@ -97,7 +97,7 @@ App.state = {
   redditHarvestCurrentRun: null,
   youtubeAcquireResult: null,
   acquireYoutubeDetails: [],
-  acquireYoutubeCategories: [],
+  acquireYoutubeTopics: [],
   acquireYoutubeComments: [],
   databaseTables: [],
   promoFields: [],
@@ -114,6 +114,7 @@ App.state = {
   csvHeaders: [],
   csvRows: [],
   csvMappings: [],
+  availableReferenceOptions: { statuses: [], types: [], sources: [] },
   contactsFilters: {
     first_name: '', last_name: '', company: '', email: '',
     website: '', youtube: '', instagram: ''
@@ -585,7 +586,11 @@ App.api = async function api(path, options = {}) {
     if (res.status === 401 && App.auth && typeof App.auth.handleUnauthorized === 'function') {
       App.auth.handleUnauthorized();
     }
-    throw new Error(String(text).trim());
+    const jsErr = new Error(String(text).trim());
+    if (typeof err === 'object' && err !== null && err.details) {
+      jsErr.details = err.details;
+    }
+    throw jsErr;
   }
 
   return body;

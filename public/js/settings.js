@@ -1260,8 +1260,8 @@ App.settings = (function () {
       if (els.dbContactsTable)           els.dbContactsTable.value           = values.contacts_table || '';
       if (els.dbPromoLeadsTable)         els.dbPromoLeadsTable.value         = values.promo_leads_table || '';
       if (els.dbPromoLeadFieldsTable)    els.dbPromoLeadFieldsTable.value    = values.promo_lead_fields_table || '';
-      if (els.dbHarvestYoutubeDetailsTable)  els.dbHarvestYoutubeDetailsTable.value  = values.harvest_youtube_details_table || '';
-      if (els.dbHarvestYoutubeCommentsTable) els.dbHarvestYoutubeCommentsTable.value = values.harvest_youtube_comments_table || '';
+      if (els.dbAcquireYoutubeDetailsTable)  els.dbAcquireYoutubeDetailsTable.value  = values.acquire_youtube_details_table || '';
+      if (els.dbAcquireYoutubeCommentsTable) els.dbAcquireYoutubeCommentsTable.value = values.acquire_youtube_comments_table || '';
     } catch (err) {
       notify(`Could not load database connection settings: ${err.message}`, true);
     }
@@ -1473,8 +1473,8 @@ App.settings = (function () {
           contacts_table: String(formData.get('contacts_table') || '').trim(),
           promo_leads_table: String(formData.get('promo_leads_table') || '').trim(),
           promo_lead_fields_table: String(formData.get('promo_lead_fields_table') || '').trim(),
-          harvest_youtube_details_table: String(formData.get('harvest_youtube_details_table') || '').trim(),
-          harvest_youtube_comments_table: String(formData.get('harvest_youtube_comments_table') || '').trim(),
+          acquire_youtube_details_table: String(formData.get('acquire_youtube_details_table') || '').trim(),
+          acquire_youtube_comments_table: String(formData.get('acquire_youtube_comments_table') || '').trim(),
         };
         try {
           await api('/api/settings/apis', {

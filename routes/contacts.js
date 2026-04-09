@@ -83,6 +83,7 @@ const CONTACT_CREATE_SCHEMA = {
   source:      { type: 'string', required: false, maxLength: 200, default: '' },
   status:      { type: 'string', required: false, maxLength: 100, default: '' },
   notes:       { type: 'string', required: false, default: '' },
+  customFields:{ type: 'object', required: false, default: {} },
 };
 
 const CONTACT_UPDATE_SCHEMA = { ...CONTACT_CREATE_SCHEMA };

@@ -25,29 +25,29 @@ const {
   deleteWebsitePeer,
   upsertWebsitePeersFromRun,
 } = require('../lib/websitePeersStore');
-const { runYoutubeHarvest } = require('../lib/harvest/YoutubeDetailsRun');
-const { runXHarvest } = require('../lib/harvest/XHarvestRun');
-const { runRedditHarvest } = require('../lib/harvest/RedditHarvestRun');
+const { runYoutubeHarvest } = require('../lib/acquire/YoutubeDetailsRun');
+const { runXHarvest } = require('../lib/acquire/XAcquireRun');
+const { runRedditHarvest } = require('../lib/acquire/RedditAcquireRun');
 const {
   createXHarvestRun,
   listXHarvestRuns,
   getXHarvestRun,
   deleteXHarvestRun,
-} = require('../lib/harvest/XHarvestStore');
+} = require('../lib/acquire/XAcquireStore');
 const {
   createRedditHarvestRun,
   listRedditHarvestRuns,
   getRedditHarvestRun,
   deleteRedditHarvestRun,
-} = require('../lib/harvest/RedditHarvestStore');
-const { runYoutubeCommentHarvest } = require('../lib/harvest/YoutubeCommentsRun');
-const { runYoutubeCommentMiner } = require('../lib/harvest/YoutubeCommentMiner');
-const { resolveYoutubeApiKey } = require('../lib/harvest/youtubeApiKey');
-const { postYoutubeComment } = require('../lib/harvest/YoutubeCommentPost');
+} = require('../lib/acquire/RedditAcquireStore');
+const { runYoutubeCommentHarvest } = require('../lib/acquire/YoutubeCommentsRun');
+const { runYoutubeCommentMiner } = require('../lib/acquire/YoutubeCommentMiner');
+const { resolveYoutubeApiKey } = require('../lib/acquire/youtubeApiKey');
+const { postYoutubeComment } = require('../lib/acquire/YoutubeCommentPost');
 const {
   buildYoutubeCommentSuggestionInput,
   generateYoutubeCommentSuggestions
-} = require('../lib/harvest/YoutubeCommentSuggestions');
+} = require('../lib/acquire/YoutubeCommentSuggestions');
 const {
   createYoutubeHarvestRun,
   listYoutubeHarvestRuns,
@@ -55,8 +55,8 @@ const {
   updateYoutubeHarvestRun,
   deleteYoutubeHarvestRun,
   runSummary
-} = require('../lib/harvest/YoutubeDetailsStore');
-const { captureYoutubeContact } = require('../lib/harvest/YoutubeContactCapture');
+} = require('../lib/acquire/YoutubeDetailsStore');
+const { captureYoutubeContact } = require('../lib/acquire/YoutubeContactCapture');
 const {
   createCommentRun,
   listCommentRuns,
@@ -70,22 +70,22 @@ const {
   listResearchRuns,
   getResearchRun,
   deleteResearchRun,
-} = require('../lib/harvest/YoutubeCommentsStore');
+} = require('../lib/acquire/YoutubeCommentsStore');
 const {
   listYoutubeVideos,
   getYoutubeVideo,
   updateYoutubeVideo,
   deleteYoutubeVideo,
-} = require('../lib/harvest/YoutubeVideosStore');
+} = require('../lib/acquire/YoutubeVideosStore');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const {
-  listYoutubeCategories,
-  createYoutubeCategory,
-  getYoutubeCategoryById,
-  updateYoutubeCategory,
-  deleteYoutubeCategory,
-  rowToYoutubeCategory,
-} = require('../lib/harvest/YoutubeCategoriesStore');
+  listYoutubeTopics,
+  createYoutubeTopic,
+  getYoutubeTopicById,
+  updateYoutubeTopic,
+  deleteYoutubeTopic,
+  rowToYoutubeTopic,
+} = require('../lib/acquire/YoutubeTopicsStore');
 const { logActivity } = require('../lib/activityLog');
 const { getProviderValues } = require('../lib/apiSettings');
 
@@ -414,7 +414,7 @@ async function searchYoutubeVideosByPhrase(phrase, apiKey, perPhrase = 4) {
   url.searchParams.set('part', 'snippet');
   url.searchParams.set('type', 'video');
   url.searchParams.set('order', 'relevance');
-  url.searchParams.set('maxResults', String(Math.max(1, Math.min(Number(perPhrase) || 4, 10))));
+  url.searchParams.set('maxResults', String(Math.max(1, Math.min(Number(perPhrase) || 4, 50))));
   url.searchParams.set('q', safeText(phrase));
   url.searchParams.set('key', apiKey);
   const response = await fetch(url.toString(), {
@@ -1568,58 +1568,58 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, result.data), true;
   }
 
-  if (pathname === '/api/acquire/youtube-categories' && method === 'GET') {
-    const result = await listYoutubeCategories();
+  if (pathname === '/api/acquire/youtube-topics' && method === 'GET') {
+    const result = await listYoutubeTopics();
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    const categories = (Array.isArray(result.data) ? result.data : []).map(rowToYoutubeCategory);
-    return sendOk(res, 200, categories, { categories }, { total: categories.length }), true;
+    const topics = (Array.isArray(result.data) ? result.data : []).map(rowToYoutubeTopic);
+    return sendOk(res, 200, topics, { topics }, { total: topics.length }), true;
   }
 
-  if (pathname === '/api/acquire/youtube-categories' && method === 'POST') {
+  if (pathname === '/api/acquire/youtube-topics' && method === 'POST') {
     const body = await parseJsonBody(req);
-    const category = String(body?.category || '').trim();
-    if (!category) {
-      return sendErr(res, 400, 'category is required', { code: 'VALIDATION_ERROR' }), true;
+    const topic = String(body?.topic || '').trim();
+    if (!topic) {
+      return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await createYoutubeCategory({ category });
+    const result = await createYoutubeTopic({ topic });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
-    return sendOk(res, 201, rowToYoutubeCategory(created), { category: rowToYoutubeCategory(created) }), true;
+    return sendOk(res, 201, rowToYoutubeTopic(created), { topic: rowToYoutubeTopic(created) }), true;
   }
 
-  const youtubeCategoryIdMatch = pathname.match(/^\/api\/acquire\/youtube-categories\/(\d+)\/?$/);
-  if (youtubeCategoryIdMatch && method === 'GET') {
-    const categoryId = Number(youtubeCategoryIdMatch[1]);
-    const result = await getYoutubeCategoryById(categoryId);
+  const youtubeTopicIdMatch = pathname.match(/^\/api\/acquire\/youtube-topics\/(\d+)\/?$/);
+  if (youtubeTopicIdMatch && method === 'GET') {
+    const topicId = Number(youtubeTopicIdMatch[1]);
+    const result = await getYoutubeTopicById(topicId);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const row = Array.isArray(result.data) ? result.data[0] : result.data;
-    if (!row) return sendErr(res, 404, 'Category not found', { code: 'NOT_FOUND' }), true;
-    return sendOk(res, 200, rowToYoutubeCategory(row), { category: rowToYoutubeCategory(row) }), true;
+    if (!row) return sendErr(res, 404, 'Topic not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToYoutubeTopic(row), { topic: rowToYoutubeTopic(row) }), true;
   }
 
-  if (youtubeCategoryIdMatch && method === 'PATCH') {
-    const categoryId = Number(youtubeCategoryIdMatch[1]);
+  if (youtubeTopicIdMatch && method === 'PATCH') {
+    const topicId = Number(youtubeTopicIdMatch[1]);
     const body = await parseJsonBody(req);
-    const category = String(body?.category || '').trim();
-    if (!category) {
-      return sendErr(res, 400, 'category is required', { code: 'VALIDATION_ERROR' }), true;
+    const topic = String(body?.topic || '').trim();
+    if (!topic) {
+      return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateYoutubeCategory(categoryId, { category });
+    const result = await updateYoutubeTopic(topicId, { topic });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
-    if (!updated) return sendErr(res, 404, 'Category not found', { code: 'NOT_FOUND' }), true;
-    return sendOk(res, 200, rowToYoutubeCategory(updated), { category: rowToYoutubeCategory(updated) }), true;
+    if (!updated) return sendErr(res, 404, 'Topic not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToYoutubeTopic(updated), { topic: rowToYoutubeTopic(updated) }), true;
   }
 
-  if (youtubeCategoryIdMatch && method === 'DELETE') {
-    const categoryId = Number(youtubeCategoryIdMatch[1]);
-    const result = await deleteYoutubeCategory(categoryId);
+  if (youtubeTopicIdMatch && method === 'DELETE') {
+    const topicId = Number(youtubeTopicIdMatch[1]);
+    const result = await deleteYoutubeTopic(topicId);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
-    if (!deleted) return sendErr(res, 404, 'Category not found', { code: 'NOT_FOUND' }), true;
-    return sendOk(res, 200, rowToYoutubeCategory(deleted), { category: rowToYoutubeCategory(deleted) }), true;
+    if (!deleted) return sendErr(res, 404, 'Topic not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToYoutubeTopic(deleted), { topic: rowToYoutubeTopic(deleted) }), true;
   }
 
   // POST /api/acquire/youtube-comments — ⚡ RATE LIMITED (hits YouTube Data API)
@@ -1709,6 +1709,32 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { run_id: runId, result: mined.data }, { run_id: runId, result: mined.data }), true;
   }
 
+  // POST /api/acquire/youtube-comments/assign (Assign individual comments to a campaign)
+  if (pathname === '/api/acquire/youtube-comments/assign' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const commentsToAssign = Array.isArray(body.comments) ? body.comments : [];
+    const campaignId = safeText(body.campaignId);
+    
+    if (!commentsToAssign.length) {
+      return sendErr(res, 400, 'comments array is required'), true;
+    }
+    
+    const { assignCommentsToCampaign } = require('../lib/acquire/YoutubeCommentsStore');
+    const assignRes = await assignCommentsToCampaign(commentsToAssign, campaignId);
+    if (!assignRes.ok) {
+      return sendErr(res, assignRes.status || 500, assignRes.error || 'Failed to assign comments to campaign'), true;
+    }
+    
+    logActivity({
+      action: 'acquire.youtube_comments_assigned',
+      entityType: 'campaign',
+      entityId: campaignId || null,
+      summary: `Assigned ${commentsToAssign.length} YouTube comments to campaign`,
+    });
+    
+    return sendOk(res, 200, { assigned: commentsToAssign.length }, { assigned: commentsToAssign.length }), true;
+  }
+
   // POST /api/acquire/youtube-reply-offers — generate 3 tailored reply offers for one comment
   if (pathname === '/api/acquire/youtube-reply-offers' && method === 'POST') {
     if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
@@ -1753,7 +1779,7 @@ async function handle(req, res, pathname, method) {
     const messagingCategory = safeText(body?.messaging_category || '').toLowerCase();
     const messagingHashtag = safeText(body?.messaging_hashtag || '').toLowerCase();
     const maxPhrases = Math.max(1, Math.min(Number(body?.max_phrases || 25) || 25, 120));
-    const videosPerPhrase = Math.max(1, Math.min(Number(body?.videos_per_phrase || 3) || 3, 10));
+    let videosPerPhrase = Math.max(1, Math.min(Number(body?.videos_per_phrase || 3) || 3, 50));
     const distilledTargetLimit = Math.max(1, Math.min(Number(body?.distilled_target_limit || 30) || 30, 200));
 
     let messagingPhrases = [];
@@ -1790,6 +1816,13 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'No research phrases available. Add manual phrases or enable messaging sources.'), true;
     }
 
+    if (phrases.length > 0) {
+      const neededPerPhrase = Math.ceil(distilledTargetLimit / phrases.length) * 2;
+      if (neededPerPhrase > videosPerPhrase) {
+        videosPerPhrase = Math.min(neededPerPhrase, 50);
+      }
+    }
+
     const discovered = [];
     const warnings = [];
     for (const phrase of phrases) {
@@ -1820,6 +1853,11 @@ async function handle(req, res, pathname, method) {
     }
 
     if (!dedupedVideos.length) {
+      if (discovered.length === 0 && warnings.length === 0) {
+        warnings.push(`Search completed but YouTube returned 0 videos for: ${phrases.join(', ')}`);
+      } else if (discovered.length > 0) {
+        warnings.push(`YouTube returned ${discovered.length} videos, but all were excluded by your active Ban set.`);
+      }
       return sendErr(res, 400, 'No YouTube targets discovered from research phrases.', { details: warnings }), true;
     }
 
@@ -2054,6 +2092,13 @@ async function handle(req, res, pathname, method) {
     const delayMs = Math.max(0, Math.min(Number(body?.delay_ms || 0) || 0, 5000));
     const force = body?.force === true;
     const requestedUrls = uniqueYoutubeUrls(body?.video_urls);
+    const bodyItems = Array.isArray(body?.items) ? body.items : [];
+    const itemsByUrl = new Map();
+    bodyItems.forEach(item => {
+      if (item && item.video_url) {
+        itemsByUrl.set(safeText(item.video_url), item);
+      }
+    });
 
     let targets = requestedUrls;
     if (!targets.length) {
@@ -2109,8 +2154,11 @@ async function handle(req, res, pathname, method) {
       }
 
       try {
+        const providedMetadata = itemsByUrl.get(videoUrl) || {};
         const harvestInput = {
           video_url: videoUrl,
+          title: safeText(providedMetadata.title || existing?.title),
+          channel_name: safeText(providedMetadata.channel_name || existing?.channel_name),
           category: safeText(existing?.category),
           tags: safeText(existing?.tags),
         };
@@ -2205,8 +2253,10 @@ async function handle(req, res, pathname, method) {
     const id = decodeURIComponent(youtubeVideoMatch[1]);
     const body = await parseJsonBody(req);
     const patch = {};
-    if (body?.category != null) patch.category = safeText(body.category);
+    if (body?.category != null) patch.topic = safeText(body.category);
+    if (body?.topic != null) patch.topic = safeText(body.topic);
     if (body?.tags != null) patch.tags = safeText(body.tags);
+    if (body?.title != null) patch.title = safeText(body.title);
     if (!Object.keys(patch).length) {
       return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
     }
@@ -2298,8 +2348,10 @@ async function handle(req, res, pathname, method) {
 
     const body = await parseJsonBody(req);
     const patch = {};
-    if (body?.category != null) patch.category = String(body.category || '').trim();
+    if (body?.category != null) patch.topic = String(body.category || '').trim();
+    if (body?.topic != null) patch.topic = String(body.topic || '').trim();
     if (body?.tags != null) patch.tags = String(body.tags || '').trim();
+    if (body?.title != null) patch.title = String(body.title || '').trim();
     if (!Object.keys(patch).length) {
       return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
     }
