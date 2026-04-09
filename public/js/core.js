@@ -549,8 +549,6 @@ App.api = async function api(path, options = {}) {
   const baseHeaders = { 'Content-Type': 'application/json' };
   if (projectId) baseHeaders['X-Project-ID'] = projectId;
   
-  const token = localStorage.getItem('app_session');
-  if (token) baseHeaders['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(path, {
     headers: { ...baseHeaders, ...(options.headers || {}) },
