@@ -5617,7 +5617,7 @@ App.youtube = (function () {
           });
           var result = res.result || {};
           renderYoutubeCommentMinerResult(result);
-          refreshYoutubeMinerTargetHistory(700).catch(function() {});
+
           notify('YouTube Comment Miner complete (' + String(Number(result?.stats?.total_comments_filtered || 0) || 0) + ' filtered comments)');
         } catch (err) {
           notify(err.message, true);
@@ -5767,7 +5767,7 @@ App.youtube = (function () {
     refreshYoutubeResearchTopicHashtagHints().catch(function(err) {
       notify(err.message || 'Could not load messaging topics/hashtags for research', true);
     });
-    refreshYoutubeMinerTargetHistory(700).catch(function() {});
+
     var restoredResearch = loadYoutubeResearchLastResult();
     if (restoredResearch) {
       renderYoutubeResearchResult(restoredResearch);
