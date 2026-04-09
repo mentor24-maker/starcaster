@@ -30,7 +30,8 @@ const {
   addAttempt: addConnectionOpsAttempt,
 } = require('../lib/connectionOpsStore');
 const {
-  hasSupabaseConfig, listDatabaseTables, createDatabaseField
+  hasSupabaseConfig, listDatabaseTables, createDatabaseField,
+  listContactOptions, createContactOption, updateContactOption, deleteContactOption
 } = require("../lib/ContactsStore");
 const { logActivity } = require('../lib/activityLog');
 const {
@@ -263,6 +264,34 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, result.data), true;
   }
 
+  const contactOptionsMatch = pathname.match(/^\/api\/settings\/contacts\/(types|statuses|sources|segment_types)$/);
+  if (contactOptionsMatch && method === 'GET') {
+    const result = await listContactOptions(contactOptionsMatch[1], { activeOnly: req.url.includes('active=true') });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, { options: result.data || [] }, { options: result.data || [] }), true;
+  }
+
+  if (contactOptionsMatch && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await createContactOption(contactOptionsMatch[1], body);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, result.data, result.data), true;
+  }
+
+  const contactOptionIdMatch = pathname.match(/^\/api\/settings\/contacts\/(types|statuses|sources|segment_types)\/([^/]+)$/);
+  if (contactOptionIdMatch && method === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const result = await updateContactOption(contactOptionIdMatch[1], contactOptionIdMatch[2], body);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (contactOptionIdMatch && method === 'DELETE') {
+    const result = await deleteContactOption(contactOptionIdMatch[1], contactOptionIdMatch[2]);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
   // GET /api/settings/database/tables
   if (pathname === '/api/settings/database/tables' && method === 'GET') {
     const result = await listDatabaseTables();
@@ -372,7 +401,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, result.data), true;
   }
 
-  const trainingItemsMatch = pathname.match(/^\/api\/settings\/training\/(categories|attributes|approaches)$/);
+  const trainingItemsMatch = pathname.match(/^\/api\/settings\/training\/(topics|categories|attributes|approaches)$/);
   if (trainingItemsMatch && method === 'GET') {
     const kind = trainingItemsMatch[1];
     const result = await listTrainingItems(kind, req.authUser?.id || req.authUser?.email || '');
