@@ -7326,7 +7326,8 @@ th {
   box-shadow: var(--c-shadow-md);
   font-size: 13px;
   font-weight: 500;
-  max-width: 380px;
+  width: 380px;
+  max-width: calc(100vw - 48px);
   pointer-events: all;
   opacity: 0;
   transform: translateY(8px);
