@@ -9455,9 +9455,9 @@ button.section-settings-gear-btn svg {
 }
 
 .roger-chat-bubble.roger {
-  background-color: #f0f7ff; /* Soft tech blue */
-  border: 1px solid #cce4ff;
-  color: #0b3d70;
+  background-color: #f3f4f6; /* Light grey */
+  border: 1px solid #e5e7eb;
+  color: #1e3a8a; /* Dark blue text */
   border-top-left-radius: 4px;
 }
 
@@ -9497,9 +9497,16 @@ button.section-settings-gear-btn svg {
   border-radius: 3px;
 }
 
-.roger-chat-content pre code {
+.roger-chat-bubble.antigravity .roger-chat-content code {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.roger-chat-content pre code,
+.roger-chat-bubble.antigravity .roger-chat-content pre code {
   background: transparent;
   padding: 0;
+  color: inherit;
 }
 
 .roger-chat-input-area {
