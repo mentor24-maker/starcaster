@@ -105,7 +105,11 @@ async function handle(req, res, pathname, requestMethod) {
 
     const lastMessage = history[history.length - 1];
     if (lastMessage.role !== 'user') {
-      return sendErr(res, 400, 'Last message is not from user, nothing to retry.', { code: 'VALIDATION_ERROR' }), true;
+      // Background process completed successfully but client connection originally dropped.
+      // Return the generated agent message to terminate the client's retry loop.
+      return sendOk(res, 200, {
+        rogerChat: lastMessage
+      }), true;
     }
 
     const messages = history.map(row => {
