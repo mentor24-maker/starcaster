@@ -299,7 +299,10 @@ App.roger.formatMarkdown = function(text) {
   let html = String(text);
 
   // Replace code blocks and inject a Save button
-  html = html.replace(/```(?:[a-z0-9]*)?\n([\s\S]*?)```/gi, (match, codeBlock) => {
+  html = html.replace(/```(?:[a-z0-9]*)?\n([\s\S]*?)```/gi, (match, rawCodeBlock) => {
+    // Clean any leading Markdown quotes if the agent responded inside a blockquote
+    const codeBlock = rawCodeBlock.replace(/^>\s?/gm, '');
+    
     let filename = 'code.txt';
     const lines = codeBlock.split('\n');
     for (const line of lines) {
