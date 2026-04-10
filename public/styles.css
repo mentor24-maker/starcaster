@@ -9625,3 +9625,51 @@ button.section-settings-gear-btn svg {
   50% { border-color: rgba(245, 158, 11, 1); }
   100% { border-color: rgba(245, 158, 11, 0.4); }
 }
+
+/* Roger Chat Attachments */
+.roger-chat-input-area {
+  flex-direction: column;
+  align-items: stretch;
+}
+.roger-chat-attachment-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-hover);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-light);
+}
+.roger-chat-attachment-preview.hidden {
+  display: none;
+}
+.attachment-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--accent);
+  font-weight: 500;
+}
+.attachment-clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0 4px;
+}
+.attachment-clear-btn:hover {
+  color: var(--text-primary);
+}
+.roger-chat-attachment img {
+  border: 1px solid var(--border-light);
+  background: var(--bg-body);
+  transition: opacity 0.2s;
+}
+.roger-chat-attachment img:hover {
+  opacity: 0.9;
+}
