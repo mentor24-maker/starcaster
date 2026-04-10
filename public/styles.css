@@ -9335,6 +9335,7 @@ button.section-settings-gear-btn svg {
   border: 1px solid var(--border-light);
   overflow: hidden;
   margin-top: 1rem;
+  min-width: 0;
 }
 
 .roger-sessions-sidebar {
@@ -9380,6 +9381,7 @@ button.section-settings-gear-btn svg {
   display: flex;
   flex-direction: column;
   background: var(--bg-card);
+  min-width: 0;
 }
 
 .roger-chat-main-header {
@@ -9428,6 +9430,7 @@ button.section-settings-gear-btn svg {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
 }
 
 .roger-chat-bubble-wrapper {
@@ -9695,3 +9698,4 @@ button.section-settings-gear-btn svg {
 .roger-chat-input-row {
   align-items: center;
 }
+.roger-chat-content { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
