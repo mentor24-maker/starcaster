@@ -160,3 +160,14 @@ Apply the `.hanging-details` class to the parent `<details>` element.
 1. The text inside the `<summary>` block will sit at X:0 inside the wrapper.
 2. The disclosure triangle effectively renders at X:-1rem, meaning it physically hangs offline in the margin whitespace to the left.
 3. Your parent container must have sufficient padding or padding-left on the row so that the leftward-hanging triangle isn't clipped by the viewport edge.
+
+## 6. Icon Buttons
+When creating small, icon-only utility buttons (e.g., Save, Copy, Delete), they must be contained in a strictly square container that shrinks to the physical size of the icon. 
+
+**Key Requirements:**
+1. Do not include text labels inside the button element if it is meant to be a compact action icon.
+2. Ensure the `width` and `height` are explicitly set identically (e.g., `28px`). 
+3. Apply `display: inline-flex; align-items: center; justify-content: center;` to properly center the SVG inside.
+4. Use `!important` on the `width`, `height`, and `min-width: 0` if the button sits inside a layout that globally forces buttons to `100%` width (like `.standard-form-grid`).
+5. If overlaying onto content (like top-right aligned inside code blocks), use `position: absolute` with exact pixel offsets.
+

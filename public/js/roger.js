@@ -321,13 +321,12 @@ App.roger.formatMarkdown = function(text) {
       .replace(/>/g, '&gt;');
 
     return `<div class="code-block-wrapper" style="position:relative; margin: 0.5rem 0;">
-      <button class="roger-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" style="position:absolute; top:8px; right:8px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:4px; z-index:10; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'" onclick="App.roger.saveCodeBlock(this)">
+      <button class="roger-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" onclick="App.roger.saveCodeBlock(this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
           <polyline points="17 21 17 13 7 13 7 21"></polyline>
           <polyline points="7 3 7 8 15 8"></polyline>
         </svg>
-        Save
       </button>
       <pre style="margin:0;"><code>${escapedCode}</code></pre>
     </div>`;
