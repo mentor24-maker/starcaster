@@ -321,13 +321,21 @@ App.roger.formatMarkdown = function(text) {
       .replace(/>/g, '&gt;');
 
     return `<div class="code-block-wrapper" style="position:relative; margin: 0.5rem 0;">
-      <button class="roger-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" onclick="App.roger.saveCodeBlock(this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-          <polyline points="17 21 17 13 7 13 7 21"></polyline>
-          <polyline points="7 3 7 8 15 8"></polyline>
-        </svg>
-      </button>
+      <div class="roger-code-actions">
+        <button class="roger-copy-btn" title="Copy Code" data-content="${encoded}" onclick="App.roger.copyCodeBlock(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+          </svg>
+        </button>
+        <button class="roger-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" onclick="App.roger.saveCodeBlock(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+        </button>
+      </div>
       <pre style="margin:0;"><code>${escapedCode}</code></pre>
     </div>`;
   });
@@ -362,6 +370,28 @@ App.roger.formatMarkdown = function(text) {
     }
   }
   return tokens.join('');
+};
+
+App.roger.copyCodeBlock = async function(btn) {
+  const encoded = btn.getAttribute('data-content');
+  if (!encoded) return;
+  
+  try {
+    const rawCodeBlock = decodeURIComponent(escape(atob(encoded)));
+    await navigator.clipboard.writeText(rawCodeBlock);
+    
+    // Provide a visual checkmark feedback
+    const svg = btn.querySelector('svg');
+    if (svg) {
+      const originalHTML = svg.innerHTML;
+      svg.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
+      setTimeout(() => {
+        svg.innerHTML = originalHTML;
+      }, 2000);
+    }
+  } catch(e) {
+    console.error("Failed to decode and copy code block:", e);
+  }
 };
 
 App.roger.saveCodeBlock = function(btn) {

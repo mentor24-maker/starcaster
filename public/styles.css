@@ -9547,10 +9547,17 @@ button.section-settings-gear-btn svg {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.roger-code-save-btn {
+.roger-code-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+}
+
+.roger-code-save-btn,
+.roger-code-actions .roger-copy-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: #a0a0a0;
@@ -9564,10 +9571,10 @@ button.section-settings-gear-btn svg {
   align-items: center;
   justify-content: center;
   transition: opacity 0.2s, background 0.2s;
-  z-index: 10;
 }
 
-.roger-code-save-btn:hover {
+.roger-code-save-btn:hover,
+.roger-code-actions .roger-copy-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
