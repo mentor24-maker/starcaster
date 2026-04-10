@@ -4,6 +4,7 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { listRogerChats, createRogerChat, listRogerSessions, createRogerSession, updateRogerSession } = require('../lib/rogerChatsStore');
 const { consultRoger } = require('../lib/rogerClient');
 const { resolveCurrentProject } = require('../lib/projectsStore');
+const { uploadAssetToBlob } = require('../lib/blobStorage');
 
 const manifest = {
   id: 'develop-roger',
@@ -58,8 +59,32 @@ async function handle(req, res, pathname, requestMethod) {
     const content = String(body?.content || '').trim();
     if (!content) return sendErr(res, 400, 'Content is required', { code: 'VALIDATION_ERROR' }), true;
 
+    const attachmentBase64 = String(body?.attachmentBase64 || '').trim();
+    const attachmentMime = String(body?.attachmentMime || '').trim();
+    const attachmentName = String(body?.attachmentName || '').trim();
+
+    let attachmentUrl = null;
+    if (attachmentBase64) {
+      const uploadRes = await uploadAssetToBlob({
+        assetType: 'RogerChatAttachment',
+        category: `Session_${sessionId}`,
+        fileName: attachmentName || 'attachment',
+        mimeType: attachmentMime || 'application/octet-stream',
+        fileBase64: attachmentBase64
+      });
+      if (uploadRes.ok && uploadRes.data && uploadRes.data.location) {
+        attachmentUrl = uploadRes.data.location;
+      }
+    }
+
     // 1. Save user message to DB
-    const userSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'user', content });
+    const chatOptions = { session_id: sessionId, project_id: projectId, role: 'user', content };
+    if (attachmentUrl) {
+      chatOptions.attachment_url = attachmentUrl;
+      chatOptions.attachment_mime = attachmentMime;
+      chatOptions.attachment_name = attachmentName;
+    }
+    const userSaveRes = await createRogerChat(chatOptions);
     if (!userSaveRes.ok) return sendErr(res, userSaveRes.status || 500, userSaveRes.error), true;
     
     // 2. Fetch history to provide context to Gemini
@@ -77,9 +102,19 @@ async function handle(req, res, pathname, requestMethod) {
       if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
       if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
       
+      let inlineData = undefined;
+      if (row.id === userSaveRes.data?.id && attachmentBase64 && attachmentMime.startsWith('image/')) {
+        inlineData = {
+          mimeType: attachmentMime,
+          data: attachmentBase64.replace(/^data:image\/[a-z]+;base64,/, '')
+        };
+      }
+
       return {
         role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
-        text: prefix + row.content
+        text: prefix + row.content,
+        // The inlineData key will only be added to the payload if the variable is defined
+        ...(inlineData && { inlineData })
       };
     });
 

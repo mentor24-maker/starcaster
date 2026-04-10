@@ -2359,8 +2359,16 @@
             <div id="rogerChatLog" class="roger-chat-log"></div>
             
             <form id="rogerChatForm" class="roger-chat-input-area">
-              <textarea id="rogerChatInput" placeholder="Message Roger Thorson..."></textarea>
-              <button type="submit" class="primary-btn">Send</button>
+              <div id="rogerChatAttachmentPreview" class="roger-chat-attachment-preview hidden">
+                <span id="rogerChatAttachmentName" class="attachment-name"></span>
+                <button type="button" id="rogerChatAttachmentClearBtn" class="attachment-clear-btn">&times;</button>
+              </div>
+              <div class="roger-chat-input-row" style="display: flex; gap: 8px; width: 100%;">
+                <button type="button" id="rogerFileTriggerBtn" class="secondary-btn" title="Attach file" aria-label="Attach file">📎</button>
+                <input type="file" id="rogerChatFile" class="hidden" accept="image/*" />
+                <textarea id="rogerChatInput" placeholder="Message Roger Thorson..."></textarea>
+                <button type="submit" class="primary-btn">Send</button>
+              </div>
             </form>
           </div>
         </div>

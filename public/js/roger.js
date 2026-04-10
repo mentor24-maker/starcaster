@@ -5,7 +5,8 @@ App.roger = {};
 
 const rogerState = {
   activeSessionId: null,
-  sessions: []
+  sessions: [],
+  stagedFile: null
 };
 
 const rogerElements = {
@@ -14,7 +15,12 @@ const rogerElements = {
   input: null,
   sessionList: null,
   newSessionBtn: null,
-  activeSessionTitle: null
+  activeSessionTitle: null,
+  fileInput: null,
+  fileBtn: null,
+  previewWrap: null,
+  previewName: null,
+  previewClearBtn: null
 };
 
 App.roger.init = function() {
@@ -24,6 +30,48 @@ App.roger.init = function() {
   rogerElements.sessionList = document.getElementById('rogerSessionList');
   rogerElements.newSessionBtn = document.getElementById('rogerNewSessionBtn');
   rogerElements.activeSessionTitle = document.getElementById('rogerActiveSessionTitle');
+
+  rogerElements.fileInput = document.getElementById('rogerChatFile');
+  rogerElements.fileBtn = document.getElementById('rogerFileTriggerBtn');
+  rogerElements.previewWrap = document.getElementById('rogerChatAttachmentPreview');
+  rogerElements.previewName = document.getElementById('rogerChatAttachmentName');
+  rogerElements.previewClearBtn = document.getElementById('rogerChatAttachmentClearBtn');
+
+  if (rogerElements.fileBtn) {
+    rogerElements.fileBtn.addEventListener('click', () => {
+      if (rogerElements.fileInput) rogerElements.fileInput.click();
+    });
+  }
+
+  if (rogerElements.previewClearBtn) {
+    rogerElements.previewClearBtn.addEventListener('click', () => {
+      App.roger.clearStagedFile();
+    });
+  }
+
+  if (rogerElements.fileInput) {
+    rogerElements.fileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File too large. Max 5MB.");
+        e.target.value = '';
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        rogerState.stagedFile = {
+          name: file.name,
+          mime: file.type,
+          base64: evt.target.result
+        };
+        if (rogerElements.previewName) rogerElements.previewName.textContent = file.name;
+        if (rogerElements.previewWrap) rogerElements.previewWrap.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   if (rogerElements.form) {
     rogerElements.form.addEventListener('submit', async (e) => {
@@ -310,6 +358,13 @@ App.roger.appendChatNode = function(chat) {
   content.className = 'roger-chat-content';
   content.innerHTML = App.roger.formatMarkdown(chat.content);
 
+  if (chat.attachment_url) {
+    const attachWrap = document.createElement('div');
+    attachWrap.className = 'roger-chat-attachment';
+    attachWrap.innerHTML = `<a href="${chat.attachment_url}" target="_blank"><img src="${chat.attachment_url}" style="max-width:100%; border-radius:4px; margin-top:8px; display:block;" alt="Attached" /></a>`;
+    content.appendChild(attachWrap);
+  }
+
   bubble.appendChild(header);
   bubble.appendChild(content);
   contentCol.appendChild(bubble);
@@ -396,15 +451,31 @@ App.roger.pollRetry = async function(sessionId, bubbleId, attemptNumber = 1) {
   }
 };
 
+App.roger.clearStagedFile = function() {
+  rogerState.stagedFile = null;
+  if (rogerElements.fileInput) rogerElements.fileInput.value = '';
+  if (rogerElements.previewWrap) rogerElements.previewWrap.classList.add('hidden');
+  if (rogerElements.previewName) rogerElements.previewName.textContent = '';
+};
+
 App.roger.submitChat = async function() {
   const text = rogerElements.input?.value.trim();
   if (!text || !rogerState.activeSessionId) return;
 
+  const staged = rogerState.stagedFile;
+
   rogerElements.input.value = '';
   rogerElements.input.disabled = true;
+  if (rogerElements.fileBtn) rogerElements.fileBtn.disabled = true;
+  App.roger.clearStagedFile();
 
   // Optimistically append user node
-  const tempUserChat = { role: 'user', content: text, created_at: new Date().toISOString() };
+  const tempUserChat = { 
+    role: 'user', 
+    content: text, 
+    created_at: new Date().toISOString(),
+    attachment_url: staged ? staged.base64 : null // Optimistic visual render
+  };
   App.roger.appendChatNode(tempUserChat);
   App.roger.scrollToBottom();
 
@@ -422,9 +493,19 @@ App.roger.submitChat = async function() {
   App.roger.scrollToBottom();
 
   try {
+    const payload = { 
+      sessionId: rogerState.activeSessionId, 
+      content: text 
+    };
+    if (staged) {
+      payload.attachmentBase64 = staged.base64;
+      payload.attachmentMime = staged.mime;
+      payload.attachmentName = staged.name;
+    }
+
     const res = await App.api('/api/develop/roger/chat', {
       method: 'POST',
-      body: JSON.stringify({ sessionId: rogerState.activeSessionId, content: text })
+      body: JSON.stringify(payload)
     });
     
     const loadingNode = document.getElementById(bubbleId);
@@ -452,6 +533,7 @@ App.roger.submitChat = async function() {
     App.roger.startRetryCountdown(sessionId, bubbleId, 1);
   } finally {
     rogerElements.input.disabled = false;
+    if (rogerElements.fileBtn) rogerElements.fileBtn.disabled = false;
     rogerElements.input.focus();
   }
 };
