@@ -9509,19 +9509,31 @@ button.section-settings-gear-btn svg {
   font-weight: 600;
 }
 
+.roger-copy-btn-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
 .roger-copy-btn {
   background: transparent;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: inherit;
   opacity: 0.5;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.2s, background 0.2s;
   pointer-events: auto;
+}
+
+.roger-chat-bubble.user .roger-copy-btn {
+  border-color: rgba(0, 0, 0, 0.2);
 }
 
 .roger-copy-btn:hover {
