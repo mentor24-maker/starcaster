@@ -295,8 +295,8 @@ App.roger.appendChatNode = function(chat) {
   
   const copyBtnId = `copyChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
   header.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-      <div><strong>${author}</strong> <span class="chat-time">${dateStr}</span></div>
+    <div><strong>${author}</strong> <span class="chat-time">${dateStr}</span></div>
+    <div class="roger-copy-btn-container">
       <button id="${copyBtnId}" class="roger-copy-btn" title="Copy Message">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
