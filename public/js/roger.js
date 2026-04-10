@@ -286,6 +286,7 @@ App.roger.loadHistory = async function(sessionId) {
     } else {
       chats.forEach(chat => App.roger.appendChatNode(chat));
       App.roger.scrollToBottom();
+      App.roger.generateGlossary();
     }
   } catch (err) {
     rogerElements.log.innerHTML = `<div class="error-msg">Failed to load history.</div>`;
@@ -511,6 +512,10 @@ App.roger.appendChatNode = function(chat) {
       } catch (err) {}
     });
   }
+
+  // Trigger dynamic glossary sync
+  if (App.roger.glossaryTimeout) clearTimeout(App.roger.glossaryTimeout);
+  App.roger.glossaryTimeout = setTimeout(App.roger.generateGlossary, 600);
 };
 
 App.roger.scrollToBottom = function() {
@@ -658,6 +663,9 @@ document.addEventListener('DOMContentLoaded', () => {
   App.roger.init();
 });
 
+App.roger.searchHits = [];
+App.roger.currentSearchIndex = -1;
+
 App.roger.applySearchHighlights = function(term) {
   const log = document.getElementById('rogerChatLog');
   if (!log) return;
@@ -670,7 +678,8 @@ App.roger.applySearchHighlights = function(term) {
     parent.normalize();
   });
 
-  let matchCount = 0;
+  App.roger.searchHits = [];
+  App.roger.currentSearchIndex = -1;
   const countSpan = document.getElementById('rogerSearchCount');
 
   if (!term || !term.trim()) {
@@ -703,8 +712,8 @@ App.roger.applySearchHighlights = function(term) {
         mark.className = 'roger-search-match';
         mark.textContent = match[0];
         fragment.appendChild(mark);
+        App.roger.searchHits.push(mark);
         lastIndex = regex.lastIndex;
-        matchCount++;
       }
       if (lastIndex < text.length) {
         fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
@@ -714,15 +723,69 @@ App.roger.applySearchHighlights = function(term) {
     }
   });
 
+  const hitCount = App.roger.searchHits.length;
   if (countSpan) {
-    countSpan.textContent = `${matchCount} match${matchCount !== 1 ? 'es' : ''}`;
+    countSpan.textContent = `${hitCount} match${hitCount !== 1 ? 'es' : ''}`;
   }
+  
+  // Automatically focus the first hit if any exist
+  if (hitCount > 0) {
+    App.roger.focusSearchHit(0);
+  }
+};
+
+App.roger.focusSearchHit = function(index) {
+  if (App.roger.searchHits.length === 0) return;
+  
+  if (App.roger.currentSearchIndex >= 0 && App.roger.currentSearchIndex < App.roger.searchHits.length) {
+    App.roger.searchHits[App.roger.currentSearchIndex].classList.remove('active-match');
+  }
+  
+  App.roger.currentSearchIndex = index % App.roger.searchHits.length;
+  if (App.roger.currentSearchIndex < 0) {
+    App.roger.currentSearchIndex += App.roger.searchHits.length;
+  }
+  
+  const targetMark = App.roger.searchHits[App.roger.currentSearchIndex];
+  targetMark.classList.add('active-match');
+  targetMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+const rogerStopWords = new Set(['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', "don't", 'should', "should've", 'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't"]);
+
+App.roger.generateGlossary = function() {
+  const log = document.getElementById('rogerChatLog');
+  const select = document.getElementById('rogerGlossarySelect');
+  if (!log || !select) return;
+
+  const rawText = log.innerText || log.textContent;
+  const words = rawText.match(/\b[a-zA-Z]{4,}\b/g) || [];
+  
+  const frequency = {};
+  words.forEach(w => {
+    const lower = w.toLowerCase();
+    if (!rogerStopWords.has(lower)) {
+      frequency[lower] = (frequency[lower] || 0) + 1;
+    }
+  });
+
+  const uniqueTerms = Object.keys(frequency).sort((a, b) => frequency[b] - frequency[a]);
+  const topTerms = uniqueTerms.slice(0, 40).sort();
+
+  select.innerHTML = '<option value="">Glossary...</option>';
+  topTerms.forEach(term => {
+    const opt = document.createElement('option');
+    opt.value = term;
+    opt.textContent = term;
+    select.appendChild(opt);
+  });
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   const toggleBtn = document.getElementById('rogerToggleCollapseBtn');
   const searchInput = document.getElementById('rogerSearchInput');
   const log = document.getElementById('rogerChatLog');
+  const glossarySelect = document.getElementById('rogerGlossarySelect');
 
   if (toggleBtn && log) {
     toggleBtn.addEventListener('click', (e) => {
@@ -733,13 +796,32 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (searchInput) {
-    // Debounce search input
     let searchTimeout;
     searchInput.addEventListener('input', (e) => {
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
         App.roger.applySearchHighlights(e.target.value);
       }, 300);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        if (App.roger.searchHits.length > 0) {
+          const step = e.shiftKey ? -1 : 1;
+          App.roger.focusSearchHit(App.roger.currentSearchIndex + step);
+        }
+      }
+    });
+  }
+
+  if (glossarySelect && searchInput) {
+    glossarySelect.addEventListener('change', (e) => {
+      const term = e.target.value;
+      if (term) {
+        searchInput.value = term;
+        App.roger.applySearchHighlights(term);
+      }
     });
   }
 });
