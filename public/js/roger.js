@@ -296,14 +296,95 @@ App.roger.loadHistory = async function(sessionId) {
 App.roger.formatMarkdown = function(text) {
   if (!text) return '';
   let html = String(text);
-  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+  // Replace code blocks and inject a Save button
+  html = html.replace(/```(?:[a-z0-9]*)?\n([\s\S]*?)```/gi, (match, codeBlock) => {
+    let filename = 'code.txt';
+    const lines = codeBlock.split('\n');
+    for (const line of lines) {
+      const matchFile = line.match(/\/\/\s*FILE:\s*([^\s]+)/i) || line.match(/\/\/\s*TARGET FILE:\s*([^\s]+)/i);
+      if (matchFile) {
+        filename = matchFile[1].trim();
+        break;
+      }
+    }
+    
+    // Fallback if the user wrote "Code for index.js:" right before it?
+    // Let's just rely on the "// FILE: index.js" convention since Roger does it.
+    
+    // Base64 encode the content safely
+    const encoded = btoa(unescape(encodeURIComponent(codeBlock)));
+    
+    const escapedCode = codeBlock
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    return `<div class="code-block-wrapper" style="position:relative; margin: 0.5rem 0;">
+      <button class="roger-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" style="position:absolute; top:8px; right:8px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:4px; z-index:10; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'" onclick="App.roger.saveCodeBlock(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+        Save
+      </button>
+      <pre style="margin:0;"><code>${escapedCode}</code></pre>
+    </div>`;
+  });
+
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
-  html = html.replace(/\n/g, '<br/>');
+  
+  // Need to be careful not to replace newlines inside the generated HTML from our code blocks
+  // A simple <br/> replacement outside of our <pre> wrapper:
+  // But since we just returned HTML strings, doing a global \n will mess up the pre content.
+  // Wait! The previous implementation just did \n blindly!
+  // To protect our newly added `<pre>` blocks, let's just do it directly.
+  
   return html;
+};
+
+// Because the original formatMarkdown did a blind \n -> <br/> at the END, it broke <pre> formatting!
+// Let's patch `\n` to `<br/>` but ONLY outside of <pre> or <div class="code-block-wrapper">
+const _originalFormat = App.roger.formatMarkdown;
+App.roger.formatMarkdown = function(text) {
+  let html = _originalFormat(text);
+  // Actually, wait, replacing \n globally is bad for HTML readability anyway.
+  // Instead of replacing newlines globally, I'll do a custom split-and-replace so we don't break our pre.
+  
+  const tokens = html.split(/(<div class="code-block-wrapper"[\s\S]*?<\/div>)/i);
+  for (let i = 0; i < tokens.length; i++) {
+    if (!tokens[i].startsWith('<div class="code-block-wrapper"')) {
+      tokens[i] = tokens[i].replace(/\n/g, '<br/>');
+    }
+  }
+  return tokens.join('');
+};
+
+App.roger.saveCodeBlock = function(btn) {
+  const filename = btn.getAttribute('data-filename') || 'code.txt';
+  const encoded = btn.getAttribute('data-content');
+  if (!encoded) return;
+  
+  try {
+    const rawCodeBlock = decodeURIComponent(escape(atob(encoded)));
+    const blob = new Blob([rawCodeBlock], { type: 'text/javascript' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    console.error("Failed to decode and save file:", e);
+    alert("Could not save the file.");
+  }
 };
 
 App.roger.appendChatNode = function(chat) {
