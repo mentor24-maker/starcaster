@@ -296,13 +296,33 @@ App.roger.loadHistory = async function(sessionId) {
 
 App.roger.formatMarkdown = function(text) {
   if (!text) return '';
-  let html = String(text);
+  
+  // 1. Extract code blocks and replace with placeholders
+  let chunks = [];
+  let html = String(text).replace(/```(?:[a-z0-9]*)?\n([\s\S]*?)```/gi, (match, rawCodeBlock) => {
+    let unescapedCodeBlock = rawCodeBlock.replace(/^>\s?/gm, '');
+    let index = chunks.length;
+    chunks.push(unescapedCodeBlock);
+    return `__CODEBLOCK_${index}__`;
+  });
 
-  // Replace code blocks and inject a Save button
-  html = html.replace(/```(?:[a-z0-9]*)?\n([\s\S]*?)```/gi, (match, rawCodeBlock) => {
-    // Clean any leading Markdown quotes if the agent responded inside a blockquote
-    const codeBlock = rawCodeBlock.replace(/^>\s?/gm, '');
-    
+  // 2. Escape all remaining text globally (user text outside codeblocks)
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 3. Process markdown formatting for bold, emphasis, inline code, and block quotes
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+  html = html.replace(/^&gt;\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+  
+  // 4. Replace linebreaks outside of blocks
+  html = html.replace(/\n/g, '<br/>');
+
+  // 5. Restore code blocks, but now we format them properly with our UI wrapper
+  html = html.replace(/__CODEBLOCK_(\d+)__/g, (match, i) => {
+    const codeBlock = chunks[parseInt(i)];
     let filename = 'code.txt';
     const lines = codeBlock.split('\n');
     for (const line of lines) {
@@ -312,13 +332,7 @@ App.roger.formatMarkdown = function(text) {
         break;
       }
     }
-    
-    // Fallback if the user wrote "Code for index.js:" right before it?
-    // Let's just rely on the "// FILE: index.js" convention since Roger does it.
-    
-    // Base64 encode the content safely
     const encoded = btoa(unescape(encodeURIComponent(codeBlock)));
-    
     const escapedCode = codeBlock
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -344,36 +358,7 @@ App.roger.formatMarkdown = function(text) {
     </div>`;
   });
 
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
-  
-  // Need to be careful not to replace newlines inside the generated HTML from our code blocks
-  // A simple <br/> replacement outside of our <pre> wrapper:
-  // But since we just returned HTML strings, doing a global \n will mess up the pre content.
-  // Wait! The previous implementation just did \n blindly!
-  // To protect our newly added `<pre>` blocks, let's just do it directly.
-  
   return html;
-};
-
-// Because the original formatMarkdown did a blind \n -> <br/> at the END, it broke <pre> formatting!
-// Let's patch `\n` to `<br/>` but ONLY outside of <pre> or <div class="code-block-wrapper">
-const _originalFormat = App.roger.formatMarkdown;
-App.roger.formatMarkdown = function(text) {
-  let html = _originalFormat(text);
-  // Actually, wait, replacing \n globally is bad for HTML readability anyway.
-  // Instead of replacing newlines globally, I'll do a custom split-and-replace so we don't break our pre.
-  
-  const tokens = html.split(/(<div class="code-block-wrapper"[\s\S]*?<\/div>)/i);
-  for (let i = 0; i < tokens.length; i++) {
-    if (!tokens[i].startsWith('<div class="code-block-wrapper"')) {
-      tokens[i] = tokens[i].replace(/\n/g, '<br/>');
-    }
-  }
-  return tokens.join('');
 };
 
 App.roger.copyCodeBlock = async function(btn) {
