@@ -9433,6 +9433,7 @@ button.section-settings-gear-btn svg {
 .roger-chat-bubble-wrapper {
   display: flex;
   width: 100%;
+  min-width: 0;
   gap: 1rem;
 }
 
@@ -9464,10 +9465,12 @@ button.section-settings-gear-btn svg {
   display: flex;
   flex-direction: column;
   max-width: 80%;
+  min-width: 0;
 }
 
 .roger-chat-bubble {
   width: 100%;
+  min-width: 0;
   padding: 1rem 1.25rem;
   border-radius: var(--radius-md);
   font-size: 0.95rem;
