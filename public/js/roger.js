@@ -41,7 +41,54 @@ App.roger.init = function() {
 
   if (rogerElements.newSessionBtn) {
     rogerElements.newSessionBtn.addEventListener('click', () => {
-      App.roger.createNewSession('New Discussion');
+      const today = new Date().toISOString().split('T')[0];
+      App.roger.createNewSession(`${today}_New_Discussion`);
+    });
+  }
+
+  if (rogerElements.activeSessionTitle) {
+    rogerElements.activeSessionTitle.addEventListener('click', () => {
+      const titleEl = rogerElements.activeSessionTitle;
+      if (titleEl.classList.contains('editing')) return;
+      
+      const session = rogerState.sessions.find(s => s.id === rogerState.activeSessionId);
+      if (!session) return;
+      
+      const currentName = session.name;
+      titleEl.innerHTML = `<input type="text" class="session-title-edit" value="${currentName}" />`;
+      titleEl.classList.add('editing');
+      
+      const input = titleEl.querySelector('input');
+      input.focus();
+      
+      const commit = async () => {
+        const newName = input.value.trim() || currentName;
+        titleEl.classList.remove('editing');
+        titleEl.textContent = `[#${session.id}] ${newName}`;
+        
+        if (newName !== currentName) {
+          session.name = newName;
+          const li = rogerElements.sessionList.querySelector(`[data-session-id="${session.id}"]`);
+          if (li) li.textContent = `[#${session.id}] ${newName}`;
+          
+          try {
+            await App.api('/api/develop/roger/sessions', {
+              method: 'PATCH',
+              body: JSON.stringify({ sessionId: session.id, name: newName })
+            });
+          } catch(err) {
+            App.notify("Failed to rename session: " + err, true);
+          }
+        }
+      };
+      
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          input.blur();
+        }
+      });
     });
   }
 
@@ -70,7 +117,8 @@ App.roger.loadSessions = async function() {
     
     if (rogerState.sessions.length === 0) {
       // First boot, create a default session implicitly
-      await App.roger.createNewSession('Global Project Scope');
+      const today = new Date().toISOString().split('T')[0];
+      await App.roger.createNewSession(`${today}_New_Discussion`);
       return;
     }
 
