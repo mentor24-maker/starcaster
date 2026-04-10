@@ -64,12 +64,12 @@ App.roger.init = function() {
       const commit = async () => {
         const newName = input.value.trim() || currentName;
         titleEl.classList.remove('editing');
-        titleEl.textContent = `[#${session.id}] ${newName}`;
+        titleEl.textContent = newName;
         
         if (newName !== currentName) {
           session.name = newName;
           const li = rogerElements.sessionList.querySelector(`[data-session-id="${session.id}"]`);
-          if (li) li.textContent = `[#${session.id}] ${newName}`;
+          if (li) li.textContent = newName;
           
           try {
             await App.api('/api/develop/roger/sessions', {
@@ -159,7 +159,7 @@ App.roger.appendSessionNode = function(session) {
   const li = document.createElement('li');
   li.className = 'roger-session-item';
   li.dataset.sessionId = session.id;
-  li.textContent = `[#${session.id}] ${session.name}`;
+  li.textContent = session.name;
   if (session.id === rogerState.activeSessionId) {
     li.classList.add('active');
   }
@@ -185,7 +185,7 @@ App.roger.selectSession = function(sessionId) {
   
   const activeSessionData = rogerState.sessions.find(s => s.id === sessionId);
   if (activeSessionData && rogerElements.activeSessionTitle) {
-    rogerElements.activeSessionTitle.textContent = `[#${activeSessionData.id}] ${activeSessionData.name}`;
+    rogerElements.activeSessionTitle.textContent = activeSessionData.name;
   }
   
   App.roger.loadHistory(sessionId);
