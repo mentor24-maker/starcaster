@@ -9724,3 +9724,59 @@ button.section-settings-gear-btn svg {
   align-items: center;
 }
 .roger-chat-content { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
+
+/* Ask Roger Feature Extensions */
+.roger-search-match {
+  background-color: #ffeb3b;
+  color: #000;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #ff9800;
+}
+
+.roger-chat-summary {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+/* Global Collapsed Mode */
+.roger-chat-log.roger-collapsed-mode .roger-chat-content-col {
+  max-width: 100%;
+}
+
+.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-content,
+.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-attachment,
+.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-header {
+  display: none !important;
+}
+
+.roger-chat-log.roger-collapsed-mode .roger-chat-bubble-wrapper:not(.expanded) {
+  gap: 0.5rem;
+}
+
+.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) {
+  padding: 0.5rem 1rem;
+}
+
+.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-summary {
+  display: block;
+}
+
+.roger-chat-bubble .roger-chat-summary {
+  display: none; /* hidden normally */
+}
+
+.roger-chat-bubble .roger-chat-summary:hover {
+  opacity: 0.8;
+}
+
+.roger-expand-link {
+  color: #2563eb;
+  text-decoration: underline;
+  margin-left: 0.5rem;
+  font-weight: 500;
+}
+

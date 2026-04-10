@@ -445,6 +445,12 @@ App.roger.appendChatNode = function(chat) {
     content.appendChild(attachWrap);
   }
 
+  const plainTextSummary = (chat.content || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').substring(0, 80).trim() + '...';
+  const summaryNode = document.createElement('div');
+  summaryNode.className = 'roger-chat-summary';
+  summaryNode.innerHTML = `<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <a href="#" class="roger-expand-link" onclick="event.preventDefault(); this.closest('.roger-chat-bubble-wrapper').classList.toggle('expanded');">Expand</a>`;
+
+  bubble.appendChild(summaryNode);
   bubble.appendChild(header);
   bubble.appendChild(content);
   contentCol.appendChild(bubble);
@@ -620,4 +626,90 @@ App.roger.submitChat = async function() {
 
 document.addEventListener('DOMContentLoaded', () => {
   App.roger.init();
+});
+
+App.roger.applySearchHighlights = function(term) {
+  const log = document.getElementById('rogerChatLog');
+  if (!log) return;
+  
+  // 1. Clear existing highlights
+  const existingMatches = log.querySelectorAll('mark.roger-search-match');
+  existingMatches.forEach(mark => {
+    const parent = mark.parentNode;
+    parent.replaceChild(document.createTextNode(mark.textContent), mark);
+    parent.normalize();
+  });
+
+  let matchCount = 0;
+  const countSpan = document.getElementById('rogerSearchCount');
+
+  if (!term || !term.trim()) {
+    if (countSpan) countSpan.textContent = '';
+    return;
+  }
+
+  const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
+
+  // 2. Highlight text nodes safely
+  const walker = document.createTreeWalker(log, NodeFilter.SHOW_TEXT, null, false);
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+  textNodes.forEach(node => {
+    if (node.parentNode && (node.parentNode.nodeName === 'MARK' || node.parentNode.nodeName === 'SCRIPT')) return;
+    
+    const text = node.nodeValue;
+    if (text.match(regex)) {
+      const fragment = document.createDocumentFragment();
+      let lastIndex = 0;
+      let match;
+      regex.lastIndex = 0;
+      
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+        }
+        const mark = document.createElement('mark');
+        mark.className = 'roger-search-match';
+        mark.textContent = match[0];
+        fragment.appendChild(mark);
+        lastIndex = regex.lastIndex;
+        matchCount++;
+      }
+      if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+      }
+      
+      node.parentNode.replaceChild(fragment, node);
+    }
+  });
+
+  if (countSpan) {
+    countSpan.textContent = `${matchCount} match${matchCount !== 1 ? 'es' : ''}`;
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const toggleBtn = document.getElementById('rogerToggleCollapseBtn');
+  const searchInput = document.getElementById('rogerSearchInput');
+  const log = document.getElementById('rogerChatLog');
+
+  if (toggleBtn && log) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const isCollapsed = log.classList.toggle('roger-collapsed-mode');
+      toggleBtn.textContent = isCollapsed ? 'Expand' : 'Collapse';
+    });
+  }
+
+  if (searchInput) {
+    // Debounce search input
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        App.roger.applySearchHighlights(e.target.value);
+      }, 300);
+    });
+  }
 });
