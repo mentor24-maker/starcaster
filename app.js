@@ -1,92 +1,140 @@
-/**
- * app.js — Application entry point and module orchestrator.
- *
- * ── Adding a new feature module ───────────────────────────────────────────
- *   1. Create public/js/myModule.js following the window.App namespace pattern.
- *      Its returned object must include a `manifest` property:
- *        manifest: { id: 'myModule', label: 'My Module', pageId: 'myModulePage' }
- *      It should expose an `init()` function and optionally a `refresh()` function.
- *   2. Add one <script> tag for it in index.html (before app.js).
- *   3. Register it in App.manifests below — one line.
- *   That's it. app.js auto-calls init() and refresh() for every registered module.
- * ──────────────────────────────────────────────────────────────────────────
- */
-
-// ---------------------------------------------------------------------------
-// Module registry — every feature module is listed once here.
-// Order determines init() call order. app.js does the rest automatically.
-// ---------------------------------------------------------------------------
-
-App.manifests = [
-  App.contacts,
-  App.contactPersonas,
-  App.segments,
-  App.campaigns,
-  App.promoLeads,
-  App.settings,
-  App.acquire,
-  App.youtube,
-  App.develop
-];
-
-// ---------------------------------------------------------------------------
-// Global refresh — calls refresh() on any module that exposes it,
-// plus fetches shared state (contacts, segments, campaigns).
-// ---------------------------------------------------------------------------
-
-App.refresh = async function refresh() {
-  const { state, api, notify } = App;
-
-  const [contacts, segments, campaigns] = await Promise.all([
-    api('/api/contacts'),
-    api('/api/segments'),
-    api('/api/campaigns')
-  ]);
-
-  state.contacts  = contacts.contacts   || [];
-  state.segments  = segments.segments   || [];
-  state.campaigns = campaigns.campaigns || [];
-
-  // Render modules that depend on shared state
-  App.segments.renderSegments();
-  App.campaigns.renderCampaigns();
-
-  // Call refresh() on any registered module that exposes it
-  for (const mod of App.manifests) {
-    if (typeof mod.refresh === 'function') {
-      try {
-        await mod.refresh();
-      } catch (err) {
-        const label = mod.manifest?.label || mod.manifest?.id || 'module';
-        notify(`${label} refresh failed: ${err.message}`, true);
-      }
-    }
-  }
-};
-
-// ---------------------------------------------------------------------------
-// Navigation
-// ---------------------------------------------------------------------------
-
-if (App.els.topNav) {
-  App.els.topNav.addEventListener('click', (event) => {
-    const link = event.target.closest('.menu-link[data-page]');
-    if (!link) return;
-    event.preventDefault();
-    App.setActivePage(link.dataset.page);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Boot — init all registered modules, then start
-// ---------------------------------------------------------------------------
-
-for (const mod of App.manifests) {
-  if (typeof mod.init === 'function') {
-    mod.init();
-  }
-}
-
-App.setActivePage('contactsPage');
-App.youtube.renderYoutubeAcquireResult();
-App.refresh().catch((err) => App.notify(err.message, true));
+> // [IPC TRANSMISSION LOG]
+> // SOURCE: RogerThorson
+> // TARGET: Mentor
+> // FILE: index.js
+>
+> import React, { useState, useEffect } from 'react';
+> import ReactDOM from 'react-dom';
+> import ActiveCampaignsList from './components/campaigns/ActiveCampaignsList';
+>
+> // Main application component
+> function App() {
+>   const [currentPage, setCurrentPage] = useState('home');
+>
+>   useEffect(() => {
+>     const handleHashChange = () => {
+>       const hash = window.location.hash.replace('#page=', '');
+>       setCurrentPage(hash || 'home');
+>     };
+>
+>     window.addEventListener('hashchange', handleHashChange);
+>     handleHashChange(); // Initial page load
+>
+>     return () => {
+>       window.removeEventListener('hashchange', handleHashChange);
+>     };
+>   }, []);
+>
+>   const renderPage = () => {
+>     switch (currentPage) {
+>       case 'home':
+>         return <HomePage />;
+>       case 'campaignsPage':
+>         // The new, data-driven component is now rendered for this page.
+>         return <ActiveCampaignsList />;
+>       // Add other cases for different pages
+>       default:
+>         return <HomePage />;
+>     }
+>   };
+>
+>   return (
+>     <div>
+>       <nav>
+>         {/ Navigation links can be added here /}
+>       </nav>
+>       <main>
+>         {renderPage()}
+>       </main>
+>     </div>
+>   );
+> }
+>
+> // Placeholder for HomePage component
+> function HomePage() {
+>   return <h1>Welcome to the Dashboard</h1>;
+> }
+>
+> /
+>   ========================================================================
+>   ARCHIVED: Legacy Campaigns CRUD Table
+>   ========================================================================
+>   The following component was the original implementation for the
+>   campaigns page. It has been superseded by the data-driven
+>   ActiveCampaignsList component as of [CURRENT_DATE]. This code
+>   is preserved here within comments for historical reference before
+>   its eventual removal.
+>   ========================================================================
+>
+> function CampaignsPage() {
+>   const [campaigns, setCampaigns] = useState([]);
+>   const [newCampaignName, setNewCampaignName] = useState('');
+>
+>   useEffect(() => {
+>     // Mock fetching campaigns
+>     setCampaigns([
+>       { id: 1, name: 'Q2 Promo' },
+>       { id: 2, name: 'Summer Sale' },
+>     ]);
+>   }, []);
+>
+>   const handleAddCampaign = () => {
+>     if (newCampaignName.trim() !== '') {
+>       const newCampaign = {
+>         id: campaigns.length + 1,
+>         name: newCampaignName,
+>       };
+>       setCampaigns([...campaigns, newCampaign]);
+>       setNewCampaignName('');
+>     }
+>   };
+>
+>   const handleDeleteCampaign = (id) => {
+>     setCampaigns(campaigns.filter((c) => c.id !== id));
+>   };
+>
+>   return (
+>     <div>
+>       <h2>Saved Campaigns</h2>
+>       <input
+>         type="text"
+>         value={newCampaignName}
+>         onChange={(e) => setNewCampaignName(e.target.value)}
+>         placeholder="New campaign name"
+>       />
+>       <button onClick={handleAddCampaign}>Add Campaign</button>
+>       <table>
+>         <thead>
+>           <tr>
+>             <th>ID</th>
+>             <th>Name</th>
+>             <th>Actions</th>
+>           </tr>
+>         </thead>
+>         <tbody>
+>           {campaigns.map((campaign) => (
+>             <tr key={campaign.id}>
+>               <td>{campaign.id}</td>
+>               <td>{campaign.name}</td>
+>               <td>
+>                 <button onClick={() => handleDeleteCampaign(campaign.id)}>
+>                   Delete
+>                 </button>
+>               </td>
+>             </tr>
+>           ))}
+>         </tbody>
+>       </table>
+>     </div>
+>   );
+> }
+>
+> */
+>
+> // Render the App to the DOM
+> const root = document.getElementById('root');
+> if (root) {
+>   ReactDOM.render(<App />, root);
+> }
+>
+> 
