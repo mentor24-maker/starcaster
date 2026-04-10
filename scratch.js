@@ -1,5 +1,16 @@
-const { listRogerChats } = require('./lib/rogerChatsStore');
+require('dotenv').config();
+const { sbQuery, tableConfig } = require('./lib/supabase');
 async function run() {
-  const res = await listRogerChats(9, null, 10); // Assume session 9? Wait, let's just query everything?
-  // listRogerChats requires session ID. Let's find latest session first!
+  const query = `select=*&order=id.desc&limit=5`;
+  const res = await sbQuery({
+    method: 'GET',
+    table: tableConfig().rogerChats || 'roger_chats',
+    query,
+  });
+  if (res.ok) {
+    res.data.reverse().forEach(c => console.log(`[${c.role}]: ${c.content}\n`));
+  } else {
+    console.log("error", res);
+  }
 }
+run();

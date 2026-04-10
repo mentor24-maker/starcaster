@@ -2,37 +2,25 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/[...slug].js",
+      "src": "api/**/*.js",
       "use": "@vercel/node"
     },
     {
-      "src": "public/**",
-      "use": "@vercel/static"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "public"
+      }
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/[...slug].js"
-    },
-    {
-      "src": "/$",
-      "dest": "/public/index.html"
+      "dest": "/api/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/public/$1"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0"
-        }
-      ]
+      "dest": "/$1"
     }
   ]
 }
