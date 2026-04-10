@@ -66,22 +66,22 @@ async function handle(req, res, pathname, requestMethod) {
     const historyRes = await listRogerChats(sessionId, projectId, 30);
     const history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
 
+    // Determine target agent based on mention in the human's latest prompt
+    const isForAntigravity = content.toLowerCase().includes('@antigravity');
+    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
+
     // Map DB rows to Gemini parts array
-    // Antigravity (the system agent) or the developer can be mapped appropriately.
     const messages = history.map(row => {
       let prefix = '';
       if (row.role === 'user') prefix = '[From Human]: ';
       if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
+      if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
       
       return {
-        role: row.role === 'model' || row.role === 'roger' ? 'model' : 'user',
+        role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
         text: prefix + row.content
       };
     });
-
-    // Determine target agent based on mention in the human's latest prompt
-    const isForAntigravity = content.toLowerCase().includes('@antigravity');
-    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
 
     // 3. Ask Agent via Gemini API
     const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
@@ -123,19 +123,20 @@ async function handle(req, res, pathname, requestMethod) {
       }), true;
     }
 
+    const isForAntigravity = lastMessage.content.toLowerCase().includes('@antigravity');
+    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
+
     const messages = history.map(row => {
       let prefix = '';
       if (row.role === 'user') prefix = '[From Human]: ';
       if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
+      if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
       
       return {
-        role: row.role === 'model' || row.role === 'roger' ? 'model' : 'user',
+        role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
         text: prefix + row.content
       };
     });
-
-    const isForAntigravity = lastMessage.content.toLowerCase().includes('@antigravity');
-    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
 
     const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
     if (!geminiRes.ok) {
