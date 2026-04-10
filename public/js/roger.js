@@ -478,7 +478,7 @@ App.roger.appendChatNode = function(chat) {
   const plainTextSummary = (chat.content || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').substring(0, 80).trim() + '...';
   const summaryNode = document.createElement('div');
   summaryNode.className = 'roger-chat-summary';
-  summaryNode.innerHTML = `<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <a href="#" class="roger-expand-link" onclick="event.preventDefault(); this.closest('.roger-chat-bubble-wrapper').classList.toggle('expanded');">Expand</a>`;
+  summaryNode.innerHTML = `<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <a href="#" class="roger-expand-link" onclick="event.preventDefault(); this.closest('.roger-chat-bubble').classList.toggle('expanded'); this.closest('.roger-chat-bubble-wrapper').classList.toggle('expanded');">Expand</a>`;
 
   bubble.appendChild(summaryNode);
   bubble.appendChild(header);
