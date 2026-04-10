@@ -103,10 +103,36 @@ async function handleAgentReport(req, res) {
   }
 }
 
+async function handleGetActiveCampaigns(req, res) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { 'Allow': 'GET', 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: `Method ${req.method} Not Allowed` }));
+  }
+
+  const mockCampaigns = [
+    {
+      id: 101,
+      name: "Q4 Holiday Promo",
+      description: "Standard end-of-year discount push targeting returning customers."
+    },
+    {
+      id: 102,
+      name: "Spring Reactivation",
+      description: "Emails targeted to users who have been inactive for over 90 days."
+    }
+  ];
+
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  return res.end(JSON.stringify(mockCampaigns));
+}
+
 const server = http.createServer(async (req, res) => {
   const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   if (urlObj.pathname === '/api/agent/report') {
     return await handleAgentReport(req, res);
+  }
+  if (urlObj.pathname === '/api/campaigns/active') {
+    return await handleGetActiveCampaigns(req, res);
   }
 
   if (req.url.startsWith('/api/')) {
