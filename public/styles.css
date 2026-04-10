@@ -9338,9 +9338,9 @@ button.section-settings-gear-btn svg {
 }
 
 .roger-sessions-sidebar {
-  width: 250px;
+  width: 320px;
   background: var(--bg-body);
-  border-right: 1px solid var(--border-light);
+  border-right: 1px solid #c0c0c0; /* silver vertical line */
   display: flex;
   flex-direction: column;
 }
@@ -9392,6 +9392,33 @@ button.section-settings-gear-btn svg {
   margin: 0;
   font-size: 1.1rem;
   color: var(--text-dark);
+  cursor: pointer;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.roger-chat-main-header h3:hover {
+  opacity: 0.8;
+}
+
+.session-title-edit {
+  font-size: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-dark);
+  width: 100%;
+  max-width: 400px;
+  outline: none;
+}
+
+.session-title-edit:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
 }
 
 .roger-chat-log {
