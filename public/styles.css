@@ -9787,3 +9787,10 @@ button.section-settings-gear-btn svg {
   font-weight: 500;
 }
 
+
+.roger-search-match.active-match {
+  background-color: #ff9800;
+  color: #fff;
+  box-shadow: 0 0 0 2px #e65100;
+}
+
