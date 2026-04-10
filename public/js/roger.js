@@ -260,7 +260,7 @@ App.roger.appendChatNode = function(chat) {
   header.className = 'roger-chat-header';
   
   let author = 'Unknown';
-  if (chat.role === 'user') author = 'You';
+  if (chat.role === 'user') author = 'Mentor';
   if (chat.role === 'roger') author = '@RogerThorson';
   if (chat.role === 'antigravity') author = '@antigravity';
 
