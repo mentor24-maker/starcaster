@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
-const { listRogerChats, createRogerChat, listRogerSessions, createRogerSession } = require('../lib/rogerChatsStore');
+const { listRogerChats, createRogerChat, listRogerSessions, createRogerSession, updateRogerSession } = require('../lib/rogerChatsStore');
 const { consultRoger } = require('../lib/rogerClient');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 
@@ -26,6 +26,17 @@ async function handle(req, res, pathname, requestMethod) {
     const result = await createRogerSession({ project_id: projectId, name: body?.name });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { session: result.data }), true;
+  }
+
+  if (pathname === '/api/develop/roger/sessions' && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const sessionId = Number(body?.sessionId || 0);
+    if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
+
+    // TODO: Verify the session belongs to the current project
+    const result = await updateRogerSession(sessionId, { name: body?.name });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { session: result.data }), true;
   }
 
   if (pathname === '/api/develop/roger/history' && requestMethod === 'GET') {
