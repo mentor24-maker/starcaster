@@ -245,11 +245,11 @@ App.roger.scrollToBottom = function() {
   }
 };
 
-App.roger.startRetryCountdown = function(sessionId, attemptNumber = 1) {
+App.roger.startRetryCountdown = function(sessionId, bubbleId, attemptNumber = 1) {
   let secondsLeft = 10;
   
   const tick = () => {
-    const loadingNode = document.getElementById('rogerLoadingBubble');
+    const loadingNode = document.getElementById(bubbleId);
     if (!loadingNode || rogerState.activeSessionId !== sessionId) return;
 
     const bubble = loadingNode.querySelector('.roger-chat-bubble');
@@ -260,7 +260,7 @@ App.roger.startRetryCountdown = function(sessionId, attemptNumber = 1) {
         setTimeout(tick, 1000);
       } else {
         bubble.innerHTML = `Response pending... (Pinging API... Attempt #${attemptNumber + 1})`;
-        App.roger.pollRetry(sessionId, attemptNumber + 1);
+        App.roger.pollRetry(sessionId, bubbleId, attemptNumber + 1);
       }
     }
   };
@@ -268,8 +268,8 @@ App.roger.startRetryCountdown = function(sessionId, attemptNumber = 1) {
   tick();
 };
 
-App.roger.pollRetry = async function(sessionId, attemptNumber = 1) {
-  const loadingNode = document.getElementById('rogerLoadingBubble');
+App.roger.pollRetry = async function(sessionId, bubbleId, attemptNumber = 1) {
+  const loadingNode = document.getElementById(bubbleId);
   if (!loadingNode || rogerState.activeSessionId !== sessionId) return;
 
   try {
@@ -280,16 +280,15 @@ App.roger.pollRetry = async function(sessionId, attemptNumber = 1) {
     
     const chatData = res.rogerChat || res.data?.rogerChat;
     if (chatData) {
-      if (document.getElementById('rogerLoadingBubble')) {
-        document.getElementById('rogerLoadingBubble').remove();
-      }
+      const node = document.getElementById(bubbleId);
+      if (node) node.remove();
       App.roger.appendChatNode(chatData);
       App.roger.scrollToBottom();
       return; 
     }
   } catch (err) {
-    if (document.getElementById('rogerLoadingBubble') && rogerState.activeSessionId === sessionId) {
-      App.roger.startRetryCountdown(sessionId, attemptNumber);
+    if (document.getElementById(bubbleId) && rogerState.activeSessionId === sessionId) {
+      App.roger.startRetryCountdown(sessionId, bubbleId, attemptNumber);
     }
   }
 };
@@ -306,9 +305,10 @@ App.roger.submitChat = async function() {
   App.roger.appendChatNode(tempUserChat);
   App.roger.scrollToBottom();
 
+  const bubbleId = 'rogerLoadingBubble_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
   const loadingWrapper = document.createElement('div');
   loadingWrapper.className = 'roger-chat-bubble-wrapper roger';
-  loadingWrapper.id = 'rogerLoadingBubble';
+  loadingWrapper.id = bubbleId;
   loadingWrapper.innerHTML = `
     <div class="roger-chat-avatar roger" style="background-image: url('/images/roger.png');"></div>
     <div class="roger-chat-content-col">
@@ -324,7 +324,7 @@ App.roger.submitChat = async function() {
       body: JSON.stringify({ sessionId: rogerState.activeSessionId, content: text })
     });
     
-    const loadingNode = document.getElementById('rogerLoadingBubble');
+    const loadingNode = document.getElementById(bubbleId);
     if (loadingNode) loadingNode.remove();
 
     if (res.error) {
@@ -335,7 +335,7 @@ App.roger.submitChat = async function() {
       App.roger.scrollToBottom();
     }
   } catch (err) {
-    const loadingNode = document.getElementById('rogerLoadingBubble');
+    const loadingNode = document.getElementById(bubbleId);
     if (loadingNode) {
       const bubble = loadingNode.querySelector('.roger-chat-bubble');
       if (bubble) {
@@ -346,7 +346,7 @@ App.roger.submitChat = async function() {
     
     // Begin background retry loop
     const sessionId = rogerState.activeSessionId;
-    App.roger.startRetryCountdown(sessionId, 1);
+    App.roger.startRetryCountdown(sessionId, bubbleId, 1);
   } finally {
     rogerElements.input.disabled = false;
     rogerElements.input.focus();
