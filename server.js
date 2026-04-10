@@ -67,7 +67,48 @@ function serveStatic(req, res) {
 // HTTP server
 // ---------------------------------------------------------------------------
 
+async function handleAgentReport(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { 'Allow': 'POST', 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: `Method ${req.method} Not Allowed` }));
+  }
+
+  try {
+    let bodyData = '';
+    for await (const chunk of req) {
+      bodyData += chunk;
+      if (bodyData.length > 10 * 1024 * 1024) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Payload Too Large' }));
+      }
+    }
+
+    const { filePath, content } = JSON.parse(bodyData);
+
+    if (!filePath || typeof content !== 'string') {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Missing required parameters: filePath or content' }));
+    }
+
+    console.log(`[IPC Engine] Received IPC structural report for: ${filePath}`);
+    console.log(`[IPC Engine] Payload size: ${content.length} characters`);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ status: 'Report received successfully.' }));
+
+  } catch (error) {
+    console.error(`[IPC Engine] Internal server error handling IPC report:`, error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Internal Server Error' }));
+  }
+}
+
 const server = http.createServer(async (req, res) => {
+  const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  if (urlObj.pathname === '/api/agent/report') {
+    return await handleAgentReport(req, res);
+  }
+
   if (req.url.startsWith('/api/')) {
     return handleRequest(req, res);
   }
