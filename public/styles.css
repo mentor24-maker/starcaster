@@ -9673,3 +9673,22 @@ button.section-settings-gear-btn svg {
 .roger-chat-attachment img:hover {
   opacity: 0.9;
 }
+
+.roger-chat-input-row button {
+  width: auto !important;
+  min-width: 0 !important;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+#rogerFileTriggerBtn {
+  padding: 0.55rem 0.8rem;
+  font-size: 1.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roger-chat-input-row {
+  align-items: center;
+}
