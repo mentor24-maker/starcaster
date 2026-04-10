@@ -775,7 +775,7 @@ App.roger.generateGlossary = function() {
   const uniqueTerms = Object.keys(frequency).sort((a, b) => frequency[b] - frequency[a]);
   const topTerms = uniqueTerms.slice(0, 40).sort();
 
-  select.innerHTML = '<option value="">Glossary...</option>';
+  select.innerHTML = '<option value="">Keywords</option>';
   topTerms.forEach(term => {
     const opt = document.createElement('option');
     opt.value = term;
