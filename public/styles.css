@@ -9502,10 +9502,42 @@ button.section-settings-gear-btn svg {
   opacity: 0.8;
   display: flex;
   justify-content: space-between;
+  align-items: center;
 }
 
 .roger-chat-header strong {
   font-weight: 600;
+}
+
+.roger-copy-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s, background 0.2s;
+  pointer-events: auto;
+}
+
+.roger-copy-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.roger-copy-btn.main-copy {
+  margin-left: 10px;
+  width: 28px;
+  height: 28px;
+}
+
+.roger-chat-main-header {
+  display: flex;
+  align-items: center;
 }
 
 .roger-chat-content pre {

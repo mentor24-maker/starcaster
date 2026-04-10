@@ -39,6 +39,33 @@ App.roger.init = function() {
     });
   }
 
+  const rogerCopySessionBtn = document.getElementById('rogerCopySessionBtn');
+  if (rogerCopySessionBtn) {
+    rogerCopySessionBtn.addEventListener('click', async () => {
+      if (!rogerElements.log) return;
+      const nodes = rogerElements.log.querySelectorAll('.roger-chat-bubble');
+      let fullText = '';
+      nodes.forEach(n => {
+        const header = n.querySelector('.roger-chat-header strong');
+        const author = header ? header.textContent : 'Unknown';
+        const content = n.querySelector('.roger-chat-content');
+        let text = content ? content.innerText : '';
+        fullText += `[${author}]:\n${text}\n\n`;
+      });
+      try {
+        await navigator.clipboard.writeText(fullText.trim());
+        const svg = rogerCopySessionBtn.querySelector('svg');
+        if (svg) {
+          const originalHTML = svg.innerHTML;
+          svg.innerHTML = '<polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2"></polyline>';
+          setTimeout(() => {
+            svg.innerHTML = originalHTML;
+          }, 2000);
+        }
+      } catch (err) {}
+    });
+  }
+
   if (rogerElements.newSessionBtn) {
     rogerElements.newSessionBtn.addEventListener('click', () => {
       const today = new Date().toISOString().split('T')[0];
@@ -266,7 +293,18 @@ App.roger.appendChatNode = function(chat) {
 
   const dateStr = chat.created_at ? new Date(chat.created_at).toLocaleString() : new Date().toLocaleString();
   
-  header.innerHTML = `<strong>${author}</strong> <span class="chat-time">${dateStr}</span>`;
+  const copyBtnId = `copyChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
+  header.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+      <div><strong>${author}</strong> <span class="chat-time">${dateStr}</span></div>
+      <button id="${copyBtnId}" class="roger-copy-btn" title="Copy Message">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+        </svg>
+      </button>
+    </div>
+  `;
   
   const content = document.createElement('div');
   content.className = 'roger-chat-content';
@@ -285,6 +323,23 @@ App.roger.appendChatNode = function(chat) {
   }
   
   rogerElements.log.appendChild(wrapper);
+
+  const copyBtn = bubble.querySelector(`#${copyBtnId}`);
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(chat.content || '');
+        const svg = copyBtn.querySelector('svg');
+        if (svg) {
+          const originalHTML = svg.innerHTML;
+          svg.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
+          setTimeout(() => {
+            svg.innerHTML = originalHTML;
+          }, 2000);
+        }
+      } catch (err) {}
+    });
+  }
 };
 
 App.roger.scrollToBottom = function() {
