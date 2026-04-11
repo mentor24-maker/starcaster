@@ -337,12 +337,36 @@ App.roger.loadHistory = async function(sessionId) {
     rogerState.localVersionId = Math.max(rogerState.localVersionId || 0, maxVersion);
 
     if (chats.length === 0) {
-      rogerElements.log.innerHTML = '<div class="empty-state">No discussion history found for this session. Say hello to Roger Thorson!</div>';
     } else {
-      chats.forEach(chat => App.roger.appendChatNode(chat));
+      App.roger.activePendingCommand = null;
+      chats.forEach(chat => {
+        App.roger.appendChatNode(chat);
+        
+        // Track functional command resolutions
+        const p = App.roger.parseTriAgent(chat.content);
+        if (p && p.valid && p.data && p.data.payload) {
+          if (p.data.payload.type === 'COMMAND' && chat.role === 'model') {
+             App.roger.activePendingCommand = {
+               hash: p.data.state.context_checksum,
+               content: p.data.payload.content,
+               version: p.data.state.state_version_id
+             };
+          } else if (p.data.payload.type === 'COMMAND' && chat.role === 'user') {
+             try {
+               const confObj = JSON.parse(p.data.payload.content);
+               if (App.roger.activePendingCommand && confObj.commandhash === App.roger.activePendingCommand.hash) {
+                 App.roger.activePendingCommand = null;
+               }
+             } catch(e) {}
+          }
+        }
+      });
       App.roger.scrollToBottom();
       App.roger.generateGlossary();
     }
+    
+    // Evaluate constraints natively post-load
+    App.roger.renderActiveCommand();
   } catch (err) {
     rogerElements.log.innerHTML = `<div class="error-msg">Failed to load history.</div>`;
     rogerElements.input.disabled = false;
@@ -833,8 +857,42 @@ App.roger.saveChatEdit = async function(chatId, btn) {
      btn.textContent = 'Save Changes';
      return;
   }
+  
+  // Reload history to properly re-sync the DOM
+  App.roger.loadHistory(rogerState.activeSessionId);
+};
 
-  App.roger.loadSession(rogerState.activeSessionId);
+App.roger.renderActiveCommand = function() {
+  const overlay = document.getElementById('rogerPersistentOverlay');
+  const chatForm = document.getElementById('rogerChatForm');
+  if (!overlay || !chatForm) return;
+
+  if (App.roger.activePendingCommand) {
+    const rawContentHTML = App.roger.formatMarkdown(App.roger.activePendingCommand.content);
+    overlay.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="24" height="24">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <strong style="color:var(--accent-warning); letter-spacing: 0.5px;">PENDING PROVISIONAL COMMAND</strong>
+      </div>
+      <div style="font-size:0.9rem; line-height: 1.4; color: var(--text-dark); max-height:150px; overflow-y:auto; border-left:3px solid var(--accent-warning); padding-left:12px; margin-bottom:16px;">
+        ${rawContentHTML}
+      </div>
+      <div style="display:flex; gap:10px; border-top:1px solid #eee; padding-top:16px;">
+        <button class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${App.roger.activePendingCommand.hash}')" style="background:#10b981; border:none; flex:1;">CONFIRM</button>
+        <button class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${App.roger.activePendingCommand.hash}')" style="flex:1; background:rgba(0,0,0,0.05);">DENY</button>
+      </div>
+    `;
+    overlay.classList.remove('hidden');
+    chatForm.classList.add('roger-overlay-active');
+  } else {
+    overlay.innerHTML = '';
+    overlay.classList.add('hidden');
+    chatForm.classList.remove('roger-overlay-active');
+  }
 };
 
 App.roger.removeStagedFile = function(id) {
