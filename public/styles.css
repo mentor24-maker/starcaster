@@ -9482,24 +9482,23 @@ button.section-settings-gear-btn svg {
 }
 
 .roger-chat-bubble.user {
-  background-color: #d1f4e0; /* Match mentor branding, soft green */
+  background-color: #cceeff; /* Light blue */
   color: var(--text-dark);
   border-top-right-radius: 4px;
 }
 
 .roger-chat-bubble.roger {
-  background-color: #f3f4f6; /* Light grey */
-  border: 1px solid #e5e7eb;
+  background-color: #d1f4e0; /* The green previously used for mentor */
+  border: 1px solid #b5e4c8;
   color: #1e3a8a; /* Dark blue text */
   border-top-left-radius: 4px;
 }
 
 .roger-chat-bubble.antigravity {
-  background-color: #1e1e1e; /* Stealthy dark */
-  color: #5ce6cd; /* Neon accent */
-  font-family: monospace;
+  background-color: #fbeea5; /* Pale gold */
+  color: #1a1a1a; /* Dark font */
   border-radius: var(--radius-md);
-  box-shadow: 0 0 10px rgba(92, 230, 205, 0.2);
+  box-shadow: 0 0 10px rgba(251, 238, 165, 0.4);
 }
 
 .roger-chat-header {
@@ -9607,8 +9606,10 @@ button.section-settings-gear-btn svg {
 }
 
 .roger-chat-bubble.antigravity .roger-chat-content code {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(0, 0, 0, 0.06);
+  color: #ab2c2c;
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
 }
 
 .roger-chat-content pre code,
@@ -9782,9 +9783,20 @@ button.section-settings-gear-btn svg {
 
 .roger-expand-link {
   color: #2563eb;
-  text-decoration: underline;
+  text-decoration: none;
   margin-left: 0.5rem;
-  font-weight: 500;
+  font-weight: 700;
+  font-size: 1.2rem;
+  font-family: monospace;
+}
+
+.roger-expand-link::after {
+  content: "[+]";
+}
+
+.roger-chat-bubble.expanded .roger-expand-link::after,
+.roger-chat-bubble-wrapper.expanded .roger-expand-link::after {
+  content: "[-]";
 }
 
 
