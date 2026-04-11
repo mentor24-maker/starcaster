@@ -12,6 +12,19 @@ const manifest = {
   prefixes: ['/api/develop/roger']
 };
 
+function parseTriAgentBackend(rawString) {
+  if (!rawString || typeof rawString !== 'string') return null;
+  const match = rawString.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const potentialJson = match ? match[1] : rawString.trim();
+  try {
+    const data = JSON.parse(potentialJson);
+    if (data && data.state && typeof data.state.state_version_id === 'number') {
+      return data;
+    }
+  } catch(e) {}
+  return null;
+}
+
 async function handle(req, res, pathname, requestMethod) {
   const scope = await resolveCurrentProject(req);
   const projectId = scope?.projectId || null;
@@ -91,8 +104,28 @@ async function handle(req, res, pathname, requestMethod) {
       }
     }
 
-    // 1. Save user message to DB
-    const chatOptions = { session_id: sessionId, project_id: projectId, role: 'user', content };
+    // 1. Fetch history BEFORE saving to assert server-authoritative state version
+    const historyRes = await listRogerChats(sessionId, projectId, 30);
+    const history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
+
+    let maxVersion = 0;
+    history.forEach(chat => {
+      const p = parseTriAgentBackend(chat.content);
+      if (p && p.state && typeof p.state.state_version_id === 'number') {
+        if (p.state.state_version_id > maxVersion) maxVersion = p.state.state_version_id;
+      }
+    });
+
+    // Overwrite the incoming user payload if it is JSON
+    let finalContent = content;
+    const incomingData = parseTriAgentBackend(content);
+    if (incomingData && incomingData.state) {
+      incomingData.state.state_version_id = maxVersion + 1;
+      finalContent = "```json\n" + JSON.stringify(incomingData, null, 2) + "\n```";
+    }
+
+    // 2. Save user message to DB
+    const chatOptions = { session_id: sessionId, project_id: projectId, role: 'user', content: finalContent };
     if (attachmentUrl) {
       chatOptions.attachment_url = attachmentUrl;
       chatOptions.attachment_mime = attachmentMime;
@@ -101,12 +134,11 @@ async function handle(req, res, pathname, requestMethod) {
     const userSaveRes = await createRogerChat(chatOptions);
     if (!userSaveRes.ok) return sendErr(res, userSaveRes.status || 500, userSaveRes.error), true;
     
-    // 2. Fetch history to provide context to Gemini
-    const historyRes = await listRogerChats(sessionId, projectId, 30);
-    const history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
+    // Add the newly saved user record to the working history matrix
+    history.push(userSaveRes.data);
 
     // Determine target agent based on mention in the human's latest prompt
-    const isForAntigravity = content.toLowerCase().includes('@antigravity');
+    const isForAntigravity = finalContent.toLowerCase().includes('@antigravity');
     const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
 
     // Map DB rows to Gemini parts array
@@ -140,6 +172,13 @@ async function handle(req, res, pathname, requestMethod) {
 
     // 4. Clean Agent response to prevent prefix bleeding
     let cleanText = geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '');
+    
+    // Server Authoritative verification for the AI payload
+    const outData = parseTriAgentBackend(cleanText);
+    if (outData && outData.state) {
+      outData.state.state_version_id = maxVersion + 2; 
+      cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
+    }
 
     // 5. Save Agent response to DB
     const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: cleanText });
@@ -194,6 +233,21 @@ async function handle(req, res, pathname, requestMethod) {
 
     // Clean Agent response to prevent prefix bleeding
     let cleanText = geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '');
+
+    let maxVersion = 0;
+    history.forEach(chat => {
+      const p = parseTriAgentBackend(chat.content);
+      if (p && p.state && typeof p.state.state_version_id === 'number') {
+        if (p.state.state_version_id > maxVersion) maxVersion = p.state.state_version_id;
+      }
+    });
+    
+    // Server Authoritative verification for the AI payload
+    const outData = parseTriAgentBackend(cleanText);
+    if (outData && outData.state) {
+      outData.state.state_version_id = maxVersion + 1; 
+      cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
+    }
 
     const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: cleanText });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
