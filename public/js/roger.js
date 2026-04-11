@@ -6,7 +6,7 @@ App.roger = {};
 const rogerState = {
   activeSessionId: null,
   sessions: [],
-  stagedFile: null
+  stagedFiles: []
 };
 
 const rogerElements = {
@@ -18,9 +18,7 @@ const rogerElements = {
   activeSessionTitle: null,
   fileInput: null,
   fileBtn: null,
-  previewWrap: null,
-  previewName: null,
-  previewClearBtn: null
+  attachmentsContainer: null
 };
 
 App.roger.init = function() {
@@ -33,9 +31,7 @@ App.roger.init = function() {
 
   rogerElements.fileInput = document.getElementById('rogerChatFile');
   rogerElements.fileBtn = document.getElementById('rogerFileTriggerBtn');
-  rogerElements.previewWrap = document.getElementById('rogerChatAttachmentPreview');
-  rogerElements.previewName = document.getElementById('rogerChatAttachmentName');
-  rogerElements.previewClearBtn = document.getElementById('rogerChatAttachmentClearBtn');
+  rogerElements.attachmentsContainer = document.getElementById('rogerChatAttachmentsContainer');
 
   if (rogerElements.fileBtn) {
     rogerElements.fileBtn.addEventListener('click', () => {
@@ -59,17 +55,19 @@ App.roger.init = function() {
         return;
       }
       
+      const fileId = Date.now().toString() + Math.random().toString().substring(2, 6);
       const reader = new FileReader();
       reader.onload = (evt) => {
-        rogerState.stagedFile = {
+        rogerState.stagedFiles.push({
+          id: fileId,
           name: file.name,
           mime: file.type,
           base64: evt.target.result
-        };
-        if (rogerElements.previewName) rogerElements.previewName.textContent = file.name;
-        if (rogerElements.previewWrap) rogerElements.previewWrap.classList.remove('hidden');
+        });
+        App.roger.renderStagedFiles();
       };
       reader.readAsDataURL(file);
+      e.target.value = '';
     });
   }
 
@@ -111,6 +109,52 @@ App.roger.init = function() {
           }, 2000);
         }
       } catch (err) {}
+    });
+  }
+
+  const rogerSaveSessionBtn = document.getElementById('rogerSaveSessionBtn');
+  if (rogerSaveSessionBtn) {
+    rogerSaveSessionBtn.addEventListener('click', () => {
+      if (!rogerElements.log) return;
+      let sessionName = 'chat-session';
+      if (rogerElements.activeSessionTitle && rogerElements.activeSessionTitle.textContent !== 'Loading Session...') {
+        sessionName = rogerElements.activeSessionTitle.textContent.trim().replace(/[^a-z0-9_-]/gi, '_');
+      }
+
+      const nodes = rogerElements.log.querySelectorAll('.roger-chat-bubble');
+      let fullText = `# ${rogerElements.activeSessionTitle.textContent}\n\n`;
+      nodes.forEach(n => {
+        const header = n.querySelector('.roger-chat-header strong');
+        const author = header ? header.textContent : 'Unknown';
+        const timeNode = n.querySelector('.chat-time');
+        const timeStr = timeNode ? timeNode.textContent : '';
+        const content = n.querySelector('.roger-chat-content');
+        let text = content ? content.innerText : '';
+        fullText += `### ${author} \`${timeStr}\`\n\n${text}\n\n---\n\n`;
+      });
+      
+      try {
+        const blob = new Blob([fullText.trim()], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${sessionName}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        const svg = rogerSaveSessionBtn.querySelector('svg');
+        if (svg) {
+          const originalHTML = svg.innerHTML;
+          svg.innerHTML = '<polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2"></polyline>';
+          setTimeout(() => {
+            svg.innerHTML = originalHTML;
+          }, 2000);
+        }
+      } catch (err) {
+        App.notify("Failed to save transcript: " + err, true);
+      }
     });
   }
 
@@ -281,6 +325,17 @@ App.roger.loadHistory = async function(sessionId) {
     }
     
     const chats = res.chats || res.data || [];
+    
+    // Sniff historical sync arrays for `OBJ-002.2` compliance
+    let maxVersion = 0;
+    chats.forEach(chat => {
+      const p = App.roger.parseTriAgent(chat.content);
+      if (p && p.valid && p.data && p.data.state && p.data.state.state_version_id) {
+         maxVersion = Math.max(maxVersion, Number(p.data.state.state_version_id));
+      }
+    });
+    rogerState.localVersionId = Math.max(rogerState.localVersionId || 0, maxVersion);
+
     if (chats.length === 0) {
       rogerElements.log.innerHTML = '<div class="empty-state">No discussion history found for this session. Say hello to Roger Thorson!</div>';
     } else {
@@ -440,10 +495,27 @@ App.roger.appendChatNode = function(chat) {
 
   const dateStr = chat.created_at ? new Date(chat.created_at).toLocaleString() : new Date().toLocaleString();
   
+  if (chat.role === 'user' && chat.id) {
+    bubble.dataset.rawContent = encodeURIComponent(chat.content);
+  }
+
+  let editBtnHTML = '';
+  if (chat.role === 'user' && chat.id) {
+    editBtnHTML = `
+      <button class="roger-copy-btn" onclick="App.roger.editChat(${chat.id}, this);" title="Edit Message" style="margin-right: 4px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+      </button>
+    `;
+  }
+
   const copyBtnId = `copyChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
   header.innerHTML = `
     <div><strong>${author}</strong> <span class="chat-time">${dateStr}</span></div>
     <div class="roger-copy-btn-container">
+      ${editBtnHTML}
       <button id="${copyBtnId}" class="roger-copy-btn" title="Copy Message">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
@@ -455,19 +527,112 @@ App.roger.appendChatNode = function(chat) {
   
   const content = document.createElement('div');
   content.className = 'roger-chat-content';
-  content.innerHTML = App.roger.formatMarkdown(chat.content);
+
+  let parsedTriAgent = App.roger.parseTriAgent(chat.content);
+
+  if (parsedTriAgent && !parsedTriAgent.valid) {
+    if (chat.content && chat.content.includes('"state"')) {
+       App.roger.appendChatNode({
+         role: 'roger',
+         content: `**SYSTEM NOTICE / DESYNC EVENT:** TriAgent Schema Validation explicitly failed. ${parsedTriAgent.error}`,
+         created_at: new Date().toISOString()
+       });
+    }
+    parsedTriAgent = null; // Revert to generic markdown handler below
+  } else if (parsedTriAgent) {
+    parsedTriAgent = parsedTriAgent.data;
+  }
+
+  if (parsedTriAgent) {
+    const rawContentHTML = App.roger.formatMarkdown(parsedTriAgent.payload.content);
+    let finalUI = rawContentHTML;
+    
+    // UI/UX Distinction: Mandatory card encapsulation for Auth streams
+    if (parsedTriAgent.payload.type === 'COMMAND' && parsedTriAgent.state.source_agent === '@Roger' || 
+        parsedTriAgent.payload.type === 'QUERY' && parsedTriAgent.state.source_agent === '@Antigravity' && parsedTriAgent.payload.content.includes('Awaiting confirmation')) {
+      finalUI = `
+        <div style="background:rgba(245, 158, 11, 0.1); border: 2px solid var(--accent-warning); padding:1rem; border-radius:var(--radius-md); box-shadow: 0 4px 12px rgba(245,158,11,0.15);">
+          <div style="display:flex; align-items:center; gap: 8px; margin-bottom: 0.75rem; border-bottom:1px solid rgba(245, 158, 11, 0.3); padding-bottom:0.5rem;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-warning)" stroke-width="2" width="24" height="24">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <strong style="color:var(--accent-warning); font-size:1.1rem; letter-spacing: 0.5px;">AUTHORIZATION REQUIRED</strong>
+          </div>
+          <div style="font-size:0.95rem; line-height: 1.5; color: var(--text-dark);">
+            ${rawContentHTML}
+          </div>
+          <div style="display:flex; gap:10px; margin-top:1rem; padding-top:0.75rem; border-top:1px solid rgba(245, 158, 11, 0.3);">
+            <button class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${parsedTriAgent.state.context_checksum}')" style="background:#10b981; border:none; flex:1; padding:0.75rem;">CONFIRM COMMAND</button>
+            <button class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${parsedTriAgent.state.context_checksum}')" style="flex:1; padding:0.75rem; background:rgba(0,0,0,0.05);">DENY COMMAND</button>
+          </div>
+        </div>
+      `;
+    }
+    
+    content.innerHTML = finalUI + `
+      <details style="margin-top:12px; font-size:0.75rem; color:#888; background:rgba(0,0,0,0.02); padding:4px 8px; border-radius:4px;">
+        <summary style="cursor:pointer; user-select:none;">TriAgentState Protocol Wrapper (v${parsedTriAgent.state.state_version_id})</summary>
+        <pre style="margin-top:5px; white-space:pre-wrap; word-break:break-all; tab-size:2;">${JSON.stringify(parsedTriAgent.state, null, 2)}</pre>
+      </details>
+    `;
+    
+    // Rewrite internal chat.content so the summary extractor later on uses human-readable text
+    chat.content = parsedTriAgent.payload.content; 
+  } else {
+    content.innerHTML = App.roger.formatMarkdown(chat.content);
+  }
 
   if (chat.attachment_url) {
     const attachWrap = document.createElement('div');
     attachWrap.className = 'roger-chat-attachment';
-    attachWrap.innerHTML = `<a href="${chat.attachment_url}" target="_blank"><img src="${chat.attachment_url}" style="max-width:100%; border-radius:4px; margin-top:8px; display:block;" alt="Attached" /></a>`;
+    if (chat.attachment_url.includes('image/') || chat.attachment_url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i)) {
+      attachWrap.innerHTML = `<a href="${chat.attachment_url}" target="_blank"><img src="${chat.attachment_url}" style="max-width:100%; border-radius:4px; margin-top:8px; display:block;" alt="Attached" /></a>`;
+    } else {
+      attachWrap.innerHTML = `<a href="${chat.attachment_url}" target="_blank" download="attachment" class="primary-btn" style="display:inline-block; margin-top:8px;">Download File attachment</a>`;
+    }
     content.appendChild(attachWrap);
   }
 
-  const plainTextSummary = (chat.content || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').substring(0, 80).trim() + '...';
+  let rawText = (chat.content || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+  let plainTextSummary = rawText;
+  const sentenceMatches = rawText.match(/.*?[.!?](?:\s|$)/g);
+  if (sentenceMatches && sentenceMatches.length > 0) {
+    plainTextSummary = sentenceMatches.slice(0, 2).join(' ').trim();
+  } else {
+    plainTextSummary = rawText.substring(0, 150) + (rawText.length > 150 ? '...' : '');
+  }
+  
+  if (plainTextSummary.length > 280) {
+    plainTextSummary = plainTextSummary.substring(0, 280).trim() + '...';
+  } else if (plainTextSummary.length < rawText.length) {
+    plainTextSummary += '...';
+  }
+
   const summaryNode = document.createElement('div');
   summaryNode.className = 'roger-chat-summary';
-  summaryNode.innerHTML = `<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <a href="#" class="roger-expand-link" onclick="event.preventDefault(); this.closest('.roger-chat-bubble').classList.toggle('expanded'); this.closest('.roger-chat-bubble-wrapper').classList.toggle('expanded');">Expand</a>`;
+  summaryNode.style.cursor = 'pointer';
+  summaryNode.onclick = function(e) {
+    e.preventDefault();
+    const b = this.closest('.roger-chat-bubble');
+    b.classList.add('expanded');
+    this.closest('.roger-chat-bubble-wrapper').classList.add('expanded');
+  };
+  summaryNode.innerHTML = `<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <span style="color:#2563eb; margin-left:8px; font-family:monospace; font-weight:bold;">[+]</span>`;
+
+  // Make header clickable to collapse
+  header.style.cursor = 'pointer';
+  header.onclick = function(e) {
+    if (e.target.closest('button') || e.target.closest('a')) return; // ignore button clicks
+    e.preventDefault();
+    const b = this.closest('.roger-chat-bubble');
+    b.classList.remove('expanded');
+    this.closest('.roger-chat-bubble-wrapper').classList.remove('expanded');
+  };
+  
+  // Inject the [-] into the header display
+  header.firstElementChild.innerHTML = `<span style="color:#2563eb; margin-right:8px; font-family:monospace; font-weight:bold;">[-]</span>` + header.firstElementChild.innerHTML;
 
   bubble.appendChild(summaryNode);
   bubble.appendChild(header);
@@ -545,6 +710,14 @@ App.roger.pollRetry = async function(sessionId, bubbleId, attemptNumber = 1) {
       body: JSON.stringify({ sessionId })
     });
     
+    if (res.error) {
+      const node = document.getElementById(bubbleId);
+      if (node) {
+        node.querySelector('.roger-chat-bubble').innerHTML = `<div class="error-msg" style="color:#d32f2f; padding:8px;"><strong>Agent Connection Terminated:</strong> ${res.error.message || res.error}</div>`;
+      }
+      return;
+    }
+    
     const chatData = res.rogerChat || res.data?.rogerChat;
     if (chatData) {
       const node = document.getElementById(bubbleId);
@@ -560,28 +733,196 @@ App.roger.pollRetry = async function(sessionId, bubbleId, attemptNumber = 1) {
   }
 };
 
-App.roger.clearStagedFile = function() {
-  rogerState.stagedFile = null;
+App.roger.renderStagedFiles = function() {
+  if (!rogerElements.attachmentsContainer) return;
+  rogerElements.attachmentsContainer.innerHTML = '';
+  if (rogerState.stagedFiles.length === 0) return;
+  
+  rogerState.stagedFiles.forEach(fileObj => {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.gap = '8px';
+    row.style.fontSize = '0.85rem';
+    row.style.color = '#6b7280';
+    
+    row.innerHTML = `
+      <span>Attached:</span>
+      <a href="${fileObj.base64}" download="${fileObj.name}" target="_blank" style="text-decoration:underline; color: var(--accent);">${fileObj.name}</a>
+      <a href="#" title="Remove attachment" style="color: #ef4444; font-size:18px; font-weight:bold; cursor:pointer; text-decoration:none; margin-left:8px;" onclick="event.preventDefault(); App.roger.removeStagedFile('${fileObj.id}');">&times;</a>
+    `;
+    rogerElements.attachmentsContainer.appendChild(row);
+  });
+};
+
+App.roger.parseTriAgent = function(rawText) {
+  if (!rawText) return null;
+  try {
+    let maybeJson = String(rawText).trim();
+    if (maybeJson.startsWith('```json')) maybeJson = maybeJson.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+    else if (maybeJson.startsWith('```')) maybeJson = maybeJson.replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
+    const parsed = JSON.parse(maybeJson);
+    if (parsed && parsed.state && parsed.payload) {
+      if (!parsed.state.state_version_id || !parsed.state.session_id) {
+         return { valid: false, error: 'Malformed TriAgentState JSON Schema detected. Missing core keys.' };
+      }
+      return { valid: true, data: parsed };
+    }
+    return null;
+  } catch (e) {
+    return null; // Not valid JSON, which is fine for generic text
+  }
+};
+
+App.roger.editChat = function(chatId, btn) {
+  const wrapper = btn.closest('.roger-chat-bubble');
+  const contentDiv = wrapper.querySelector('.roger-chat-content');
+  if (!contentDiv) return;
+
+  const rawEncoded = wrapper.dataset.rawContent || '';
+  const rawString = decodeURIComponent(rawEncoded);
+
+  // Unwrap TriAgent if applicable for editing pure text
+  let editableText = rawString;
+  const p = App.roger.parseTriAgent(rawString);
+  if (p && p.valid && p.data.payload) {
+    editableText = p.data.payload.content || '';
+  }
+
+  contentDiv.dataset.originalHtml = contentDiv.innerHTML;
+  
+  contentDiv.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <textarea id="editChatText_${chatId}" style="width:100%; min-height:100px; padding:10px; border-radius:4px; border:1px solid #ccc; background:var(--bg-input); color:var(--text-primary); font-family:inherit;">${editableText}</textarea>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+         <button class="secondary-btn" onclick="const p=this.closest('.roger-chat-content'); p.innerHTML=p.dataset.originalHtml;">Cancel</button>
+         <button class="primary-btn" onclick="App.roger.saveChatEdit(${chatId}, this)">Save Changes</button>
+      </div>
+    </div>
+  `;
+};
+
+App.roger.saveChatEdit = async function(chatId, btn) {
+  const wrapper = btn.closest('.roger-chat-bubble');
+  const textarea = document.getElementById(`editChatText_${chatId}`);
+  if (!textarea) return;
+  const newText = textarea.value.trim();
+
+  const rawEncoded = wrapper.dataset.rawContent || '';
+  const rawString = decodeURIComponent(rawEncoded);
+  let finalPayloadStr = newText;
+
+  const p = App.roger.parseTriAgent(rawString);
+  if (p && p.valid && p.data) {
+     p.data.payload.content = newText;
+     p.data.state.state_version_id = Math.max(Number(p.data.state.state_version_id) + 1, ++rogerState.localVersionId);
+     finalPayloadStr = JSON.stringify(p.data, null, 2);
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  
+  const res = await App.api('/api/develop/roger/chat', {
+    method: 'PATCH',
+    body: JSON.stringify({ chatId: chatId, content: finalPayloadStr })
+  });
+
+  if (res.error) {
+     alert("Failed to edit chat: " + (res.error.message || res.error));
+     btn.disabled = false;
+     btn.textContent = 'Save Changes';
+     return;
+  }
+
+  App.roger.loadSession(rogerState.activeSessionId);
+};
+
+App.roger.removeStagedFile = function(id) {
+  rogerState.stagedFiles = rogerState.stagedFiles.filter(f => f.id !== id);
+  App.roger.renderStagedFiles();
+};
+
+App.roger.clearStagedFiles = function() {
+  rogerState.stagedFiles = [];
   if (rogerElements.fileInput) rogerElements.fileInput.value = '';
-  if (rogerElements.previewWrap) rogerElements.previewWrap.classList.add('hidden');
-  if (rogerElements.previewName) rogerElements.previewName.textContent = '';
+  App.roger.renderStagedFiles();
+};
+
+App.roger.sendProtocolAction = function(actionType, commandHash) {
+  if (!rogerState.activeSessionId) return;
+  const triAgentPayload = JSON.stringify({
+    state: {
+      session_id: rogerState.activeSessionId,
+      state_version_id: ++rogerState.localVersionId,
+      timestamp: new Date().toISOString(),
+      source_agent: '@Human',
+      target_agent: '@Antigravity',
+      active_objective_id: 'ACTIVE-SESSION',
+      context_checksum: 'N/A'
+    },
+    payload: {
+      type: 'COMMAND',
+      content: JSON.stringify({ action: actionType, commandhash: commandHash })
+    }
+  }, null, 2);
+
+  const payload = { 
+    sessionId: rogerState.activeSessionId, 
+    content: triAgentPayload 
+  };
+
+  const tempUserChat = { 
+    role: 'user', 
+    content: triAgentPayload, 
+    created_at: new Date().toISOString(),
+    attachment_url: null
+  };
+  App.roger.appendChatNode(tempUserChat);
+  App.roger.scrollToBottom();
+
+  App.api('/api/develop/roger/chat', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }).then(res => {
+    if (res.data?.rogerChat || res.rogerChat) {
+      App.roger.appendChatNode(res.rogerChat || res.data.rogerChat);
+      App.roger.scrollToBottom();
+    }
+  });
 };
 
 App.roger.submitChat = async function() {
   const text = rogerElements.input?.value.trim();
   if (!text || !rogerState.activeSessionId) return;
 
-  const staged = rogerState.stagedFile;
+  const staged = rogerState.stagedFiles[0] || null;
 
   rogerElements.input.value = '';
   rogerElements.input.disabled = true;
   if (rogerElements.fileBtn) rogerElements.fileBtn.disabled = true;
-  App.roger.clearStagedFile();
+  App.roger.clearStagedFiles();
 
-  // Optimistically append user node
+  rogerState.localVersionId = rogerState.localVersionId || 1;
+  const triAgentPayload = JSON.stringify({
+    state: {
+      session_id: rogerState.activeSessionId,
+      state_version_id: ++rogerState.localVersionId,
+      timestamp: new Date().toISOString(),
+      source_agent: '@Human',
+      target_agent: '@Roger',
+      active_objective_id: 'ACTIVE-SESSION',
+      context_checksum: 'N/A'
+    },
+    payload: {
+      type: 'QUERY',
+      content: text
+    }
+  }, null, 2);
+
+  // Optimistically append user node natively bound to protocol
   const tempUserChat = { 
     role: 'user', 
-    content: text, 
+    content: triAgentPayload, 
     created_at: new Date().toISOString(),
     attachment_url: staged ? staged.base64 : null // Optimistic visual render
   };
@@ -604,7 +945,7 @@ App.roger.submitChat = async function() {
   try {
     const payload = { 
       sessionId: rogerState.activeSessionId, 
-      content: text 
+      content: triAgentPayload 
     };
     if (staged) {
       payload.attachmentBase64 = staged.base64;
@@ -714,6 +1055,21 @@ App.roger.applySearchHighlights = function(term) {
   const hitCount = App.roger.searchHits.length;
   if (countSpan) {
     countSpan.textContent = `${hitCount} match${hitCount !== 1 ? 'es' : ''}`;
+    if (hitCount > 0) {
+      countSpan.style.cursor = 'pointer';
+      countSpan.style.textDecoration = 'underline';
+      countSpan.style.color = '#2563eb';
+      countSpan.title = 'Click to cycle to the next result';
+      countSpan.onclick = function() {
+        App.roger.focusSearchHit(App.roger.currentSearchIndex + 1);
+      };
+    } else {
+      countSpan.style.cursor = 'default';
+      countSpan.style.textDecoration = 'none';
+      countSpan.style.color = 'inherit';
+      countSpan.title = '';
+      countSpan.onclick = null;
+    }
   }
   
   // Automatically focus the first hit if any exist
@@ -735,8 +1091,18 @@ App.roger.focusSearchHit = function(index) {
   }
   
   const targetMark = App.roger.searchHits[App.roger.currentSearchIndex];
+  
+  const bubble = targetMark.closest('.roger-chat-bubble');
+  if (bubble) {
+    bubble.classList.add('expanded');
+    const wrapper = targetMark.closest('.roger-chat-bubble-wrapper');
+    if (wrapper) wrapper.classList.add('expanded');
+  }
+
   targetMark.classList.add('active-match');
-  targetMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => {
+    targetMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 50);
 };
 
 const rogerStopWords = new Set(['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', "don't", 'should', "should've", 'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't"]);
@@ -760,7 +1126,7 @@ App.roger.generateGlossary = function() {
   const uniqueTerms = Object.keys(frequency).sort((a, b) => frequency[b] - frequency[a]);
   const topTerms = uniqueTerms.slice(0, 40).sort();
 
-  select.innerHTML = '<option value="">Keywords</option>';
+  select.innerHTML = '<option value="" disabled selected>Keywords</option>';
   topTerms.forEach(term => {
     const opt = document.createElement('option');
     opt.value = term;
@@ -779,7 +1145,10 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleBtn.addEventListener('click', (e) => {
       e.preventDefault();
       const isCollapsed = log.classList.toggle('roger-collapsed-mode');
-      toggleBtn.textContent = isCollapsed ? 'Expand' : 'Collapse';
+      toggleBtn.textContent = isCollapsed ? 'Expand All' : 'Collapse All';
+      
+      const expandedNodes = log.querySelectorAll('.expanded');
+      expandedNodes.forEach(node => node.classList.remove('expanded'));
     });
   }
 

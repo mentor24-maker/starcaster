@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
-const { listRogerChats, createRogerChat, listRogerSessions, createRogerSession, updateRogerSession } = require('../lib/rogerChatsStore');
+const { listRogerChats, createRogerChat, updateRogerChat, listRogerSessions, createRogerSession, updateRogerSession } = require('../lib/rogerChatsStore');
 const { consultRoger } = require('../lib/rogerClient');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 const { uploadAssetToBlob } = require('../lib/blobStorage');
@@ -49,6 +49,20 @@ async function handle(req, res, pathname, requestMethod) {
     const result = await listRogerChats(sessionId, projectId, limit);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { chats: result.data }, { total: result.data.length }), true;
+  }
+
+  if (pathname === '/api/develop/roger/chat' && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const chatId = Number(body?.chatId || 0);
+    if (!chatId) return sendErr(res, 400, 'chatId is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const content = String(body?.content || '').trim();
+    if (!content) return sendErr(res, 400, 'Content is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const result = await updateRogerChat(chatId, { content });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    
+    return sendOk(res, 200, result.data, { chat: result.data }), true;
   }
 
   if (pathname === '/api/develop/roger/chat' && requestMethod === 'POST') {
