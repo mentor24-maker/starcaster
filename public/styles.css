@@ -9503,11 +9503,22 @@ button.section-settings-gear-btn svg {
 
 .roger-chat-header {
   font-size: 0.8rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.8;
+  padding: 0.5rem 1.25rem;
+  margin: -1rem -1.25rem 0.75rem -1.25rem;
+  background-color: rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.roger-chat-bubble.user .roger-chat-header {
+  border-top-right-radius: 4px;
+}
+
+.roger-chat-bubble.roger .roger-chat-header {
+  border-top-left-radius: 4px;
 }
 
 .roger-chat-header strong {
