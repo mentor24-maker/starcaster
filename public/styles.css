@@ -9482,7 +9482,7 @@ button.section-settings-gear-btn svg {
 }
 
 .roger-chat-bubble.user {
-  background-color: #cceeff; /* Light blue */
+  background-color: #e0f2fe; /* Lighter soft blue */
   color: var(--text-dark);
   border-top-right-radius: 4px;
 }
@@ -9515,6 +9515,8 @@ button.section-settings-gear-btn svg {
 
 .roger-chat-bubble.user .roger-chat-header {
   border-top-right-radius: 4px;
+  background-color: #bae6fd; /* Darker blue */
+  border-bottom: 1px solid #7dd3fc;
 }
 
 .roger-chat-bubble.roger .roger-chat-header {
