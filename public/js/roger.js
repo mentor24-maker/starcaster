@@ -308,6 +308,7 @@ App.roger.selectSession = function(sessionId) {
   }
   
   App.roger.loadHistory(sessionId);
+  App.roger.initStream(sessionId);
 };
 
 App.roger.loadHistory = async function(sessionId) {
@@ -485,13 +486,31 @@ App.roger.saveCodeBlock = function(btn) {
 };
 
 App.roger.appendChatNode = function(chat) {
+  
   if (!rogerElements.log) return;
+  
+  if (chat.content === '[SYSTEM::QUEUED]') {
+    const spinner = document.createElement('div');
+    spinner.className = 'roger-chat-bubble-wrapper ' + chat.role;
+    spinner.id = 'rogerChatNode_' + chat.id;
+    spinner.dataset.status = 'queued';
+    spinner.innerHTML = `
+      <div class="roger-chat-avatar ${chat.role}" style="background-image: url('/images/${chat.role}.png');"></div>
+      <div class="roger-chat-content-col">
+        <div class="roger-chat-bubble ${chat.role} loading">Agent is processing objective...</div>
+      </div>
+    `;
+    rogerElements.log.appendChild(spinner);
+    return;
+  }
+
   if (rogerElements.log.querySelector('.empty-state')) {
     rogerElements.log.innerHTML = '';
   }
 
   const wrapper = document.createElement('div');
   wrapper.className = `roger-chat-bubble-wrapper ${chat.role}`;
+  if (chat.id) wrapper.id = 'rogerChatNode_' + chat.id;
   
   const avatar = document.createElement('div');
   avatar.className = `roger-chat-avatar ${chat.role}`;
@@ -571,9 +590,14 @@ App.roger.appendChatNode = function(chat) {
     const rawContentHTML = App.roger.formatMarkdown(parsedTriAgent.payload.content);
     let finalUI = rawContentHTML;
     
+    // Robust parsing for case-insensitive and safe property access
+    const payloadType = String(parsedTriAgent.payload?.type || '').toUpperCase();
+    const sourceAgent = String(parsedTriAgent.state?.source_agent || '').toUpperCase();
+    const payloadContentString = String(parsedTriAgent.payload?.content || '');
+
     // UI/UX Distinction: Mandatory card encapsulation for Auth streams
-    if (parsedTriAgent.payload.type === 'COMMAND' && parsedTriAgent.state.source_agent === '@Roger' || 
-        parsedTriAgent.payload.type === 'QUERY' && parsedTriAgent.state.source_agent === '@Antigravity' && parsedTriAgent.payload.content.includes('Awaiting confirmation')) {
+    if ( (payloadType === 'COMMAND' && sourceAgent === '@ROGER') || 
+         (payloadType === 'QUERY' && sourceAgent === '@ANTIGRAVITY' && payloadContentString.toLowerCase().includes('awaiting confirmation')) ) {
       finalUI = `
         <div style="background:rgba(245, 158, 11, 0.1); border: 2px solid var(--accent-warning); padding:1rem; border-radius:var(--radius-md); box-shadow: 0 4px 12px rgba(245,158,11,0.15);">
           <div style="display:flex; align-items:center; gap: 8px; margin-bottom: 0.75rem; border-bottom:1px solid rgba(245, 158, 11, 0.3); padding-bottom:0.5rem;">
@@ -588,8 +612,8 @@ App.roger.appendChatNode = function(chat) {
             ${rawContentHTML}
           </div>
           <div style="display:flex; gap:10px; margin-top:1rem; padding-top:0.75rem; border-top:1px solid rgba(245, 158, 11, 0.3);">
-            <button class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${parsedTriAgent.state.context_checksum}')" style="background:#10b981; border:none; flex:1; padding:0.75rem;">CONFIRM COMMAND</button>
-            <button class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${parsedTriAgent.state.context_checksum}')" style="flex:1; padding:0.75rem; background:rgba(0,0,0,0.05);">DENY COMMAND</button>
+            <button type="button" class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${parsedTriAgent.state.context_checksum}', this)" style="background:#10b981; border:none; flex:1; padding:0.75rem;">CONFIRM COMMAND</button>
+            <button type="button" class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${parsedTriAgent.state.context_checksum}', this)" style="flex:1; padding:0.75rem; background:rgba(0,0,0,0.05);">DENY COMMAND</button>
           </div>
         </div>
       `;
@@ -701,61 +725,36 @@ App.roger.scrollToBottom = function() {
   }
 };
 
-App.roger.startRetryCountdown = function(sessionId, bubbleId, attemptNumber = 1) {
-  let secondsLeft = 10;
-  
-  const tick = () => {
-    const loadingNode = document.getElementById(bubbleId);
-    if (!loadingNode || rogerState.activeSessionId !== sessionId) return;
 
-    const bubble = loadingNode.querySelector('.roger-chat-bubble');
-    if (bubble) {
-      if (secondsLeft > 0) {
-        bubble.innerHTML = `Response pending... (Attempt #${attemptNumber} failed. Retrying in ${secondsLeft}s)`;
-        secondsLeft--;
-        setTimeout(tick, 1000);
-      } else {
-        bubble.innerHTML = `Response pending... (Pinging API... Attempt #${attemptNumber + 1})`;
-        App.roger.pollRetry(sessionId, bubbleId, attemptNumber + 1);
+App.roger.initStream = function(sessionId) {
+  if (App.roger.eventSource) App.roger.eventSource.close();
+  App.roger.eventSource = new EventSource('/api/develop/roger/stream?sessionId=' + sessionId);
+  
+  App.roger.eventSource.onmessage = function(e) {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'ping') return;
+      if (data.type === 'sync' && data.chats) {
+        data.chats.forEach(chat => {
+          const existingNode = document.getElementById('rogerChatNode_' + chat.id);
+          if (existingNode) {
+            if (chat.content !== '[SYSTEM::QUEUED]' && existingNode.dataset.status === 'queued') {
+              existingNode.outerHTML = '';
+              App.roger.appendChatNode(chat);
+              App.roger.scrollToBottom();
+            }
+          } else {
+             App.roger.appendChatNode(chat);
+             App.roger.scrollToBottom();
+          }
+        });
       }
+    } catch(err) {
+      console.error('SSE parsing error', err);
     }
   };
-  
-  tick();
 };
 
-App.roger.pollRetry = async function(sessionId, bubbleId, attemptNumber = 1) {
-  const loadingNode = document.getElementById(bubbleId);
-  if (!loadingNode || rogerState.activeSessionId !== sessionId) return;
-
-  try {
-    const res = await App.api('/api/develop/roger/retry', {
-      method: 'POST',
-      body: JSON.stringify({ sessionId })
-    });
-    
-    if (res.error) {
-      const node = document.getElementById(bubbleId);
-      if (node) {
-        node.querySelector('.roger-chat-bubble').innerHTML = `<div class="error-msg" style="color:#d32f2f; padding:8px;"><strong>Agent Connection Terminated:</strong> ${res.error.message || res.error}</div>`;
-      }
-      return;
-    }
-    
-    const chatData = res.rogerChat || res.data?.rogerChat;
-    if (chatData) {
-      const node = document.getElementById(bubbleId);
-      if (node) node.remove();
-      App.roger.appendChatNode(chatData);
-      App.roger.scrollToBottom();
-      return; 
-    }
-  } catch (err) {
-    if (document.getElementById(bubbleId) && rogerState.activeSessionId === sessionId) {
-      App.roger.startRetryCountdown(sessionId, bubbleId, attemptNumber);
-    }
-  }
-};
 
 App.roger.renderStagedFiles = function() {
   if (!rogerElements.attachmentsContainer) return;
@@ -882,8 +881,8 @@ App.roger.renderActiveCommand = function() {
         ${rawContentHTML}
       </div>
       <div style="display:flex; gap:10px; border-top:1px solid #eee; padding-top:16px;">
-        <button class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${App.roger.activePendingCommand.hash}')" style="background:#10b981; border:none; flex:1;">CONFIRM</button>
-        <button class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${App.roger.activePendingCommand.hash}')" style="flex:1; background:rgba(0,0,0,0.05);">DENY</button>
+        <button type="button" class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${App.roger.activePendingCommand.hash}', this)" style="background:#10b981; border:none; flex:1;">CONFIRM</button>
+        <button type="button" class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${App.roger.activePendingCommand.hash}', this)" style="flex:1; background:rgba(0,0,0,0.05);">DENY</button>
       </div>
     `;
     overlay.classList.remove('hidden');
@@ -906,8 +905,17 @@ App.roger.clearStagedFiles = function() {
   App.roger.renderStagedFiles();
 };
 
-App.roger.sendProtocolAction = function(actionType, commandHash) {
+App.roger.sendProtocolAction = function(actionType, commandHash, btnEl) {
   if (!rogerState.activeSessionId) return;
+  
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = actionType === 'CONFIRM' ? 'Confirmed ✓' : 'Denied X';
+    btnEl.style.opacity = '0.7';
+    btnEl.style.cursor = 'not-allowed';
+  }
+
+  rogerState.localVersionId = rogerState.localVersionId || 1;
   const triAgentPayload = JSON.stringify({
     state: {
       session_id: rogerState.activeSessionId,
@@ -929,23 +937,17 @@ App.roger.sendProtocolAction = function(actionType, commandHash) {
     content: triAgentPayload 
   };
 
-  const tempUserChat = { 
-    role: 'user', 
-    content: triAgentPayload, 
-    created_at: new Date().toISOString(),
-    attachment_url: null
-  };
-  App.roger.appendChatNode(tempUserChat);
-  App.roger.scrollToBottom();
-
   App.api('/api/develop/roger/chat', {
     method: 'POST',
     body: JSON.stringify(payload)
   }).then(res => {
-    if (res.data?.rogerChat || res.rogerChat) {
-      App.roger.appendChatNode(res.rogerChat || res.data.rogerChat);
-      App.roger.scrollToBottom();
+    if (res.data?.userChat) {
+      App.roger.appendChatNode(res.data.userChat);
     }
+    if (res.data?.rogerChat) {
+      App.roger.appendChatNode(res.data.rogerChat);
+    }
+    App.roger.scrollToBottom();
   });
 };
 
@@ -977,29 +979,6 @@ App.roger.submitChat = async function() {
     }
   }, null, 2);
 
-  // Optimistically append user node natively bound to protocol
-  const tempUserChat = { 
-    role: 'user', 
-    content: triAgentPayload, 
-    created_at: new Date().toISOString(),
-    attachment_url: staged ? staged.base64 : null // Optimistic visual render
-  };
-  App.roger.appendChatNode(tempUserChat);
-  App.roger.scrollToBottom();
-
-  const bubbleId = 'rogerLoadingBubble_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-  const loadingWrapper = document.createElement('div');
-  loadingWrapper.className = 'roger-chat-bubble-wrapper roger';
-  loadingWrapper.id = bubbleId;
-  loadingWrapper.innerHTML = `
-    <div class="roger-chat-avatar roger" style="background-image: url('/images/roger.png');"></div>
-    <div class="roger-chat-content-col">
-      <div class="roger-chat-bubble roger loading">Roger is analyzing...</div>
-    </div>
-  `;
-  rogerElements.log.appendChild(loadingWrapper);
-  App.roger.scrollToBottom();
-
   try {
     const payload = { 
       sessionId: rogerState.activeSessionId, 
@@ -1016,29 +995,15 @@ App.roger.submitChat = async function() {
       body: JSON.stringify(payload)
     });
     
-    const loadingNode = document.getElementById(bubbleId);
-    if (loadingNode) loadingNode.remove();
-
     if (res.error) {
-      alert("Agent Failed to Respond: " + (res.error.message || res.error));
-    } else if (res.data?.rogerChat || res.rogerChat) {
-      const chatNode = res.rogerChat || res.data.rogerChat;
-      App.roger.appendChatNode(chatNode);
-      App.roger.scrollToBottom();
+      alert("Agent Failed to Receive Message: " + (res.error.message || res.error));
+    } else if (res.data?.userChat) {
+       App.roger.appendChatNode(res.data.userChat);
+       if (res.data.rogerChat) App.roger.appendChatNode(res.data.rogerChat);
+       App.roger.scrollToBottom();
     }
   } catch (err) {
-    const loadingNode = document.getElementById(bubbleId);
-    if (loadingNode) {
-      const bubble = loadingNode.querySelector('.roger-chat-bubble');
-      if (bubble) {
-        bubble.className = 'roger-chat-bubble roger pending';
-      }
-    }
-    App.notify("Agent encountered an issue: " + (err.message || err) + " - The system will continue to ping the API in the background until a response is ready. You can continue working.", true);
-    
-    // Begin background retry loop
-    const sessionId = rogerState.activeSessionId;
-    App.roger.startRetryCountdown(sessionId, bubbleId, 1);
+    App.notify("Fetch issue: " + (err.message || err), true);
   } finally {
     rogerElements.input.disabled = false;
     if (rogerElements.fileBtn) rogerElements.fileBtn.disabled = false;
