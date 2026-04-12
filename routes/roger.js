@@ -141,53 +141,123 @@ async function handle(req, res, pathname, requestMethod) {
     const isForAntigravity = finalContent.toLowerCase().includes('@antigravity');
     const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
 
-    // Map DB rows to Gemini parts array
-    const messages = history.map(row => {
-      let prefix = '';
-      if (row.role === 'user') prefix = '[From Human]: ';
-      if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
-      if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
-      
-      let inlineData = undefined;
-      if (row.id === userSaveRes.data?.id && attachmentBase64 && attachmentMime.startsWith('image/')) {
-        inlineData = {
-          mimeType: attachmentMime,
-          data: attachmentBase64.replace(/^data:image\/[a-z]+;base64,/, '')
-        };
-      }
-
-      return {
-        role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
-        text: prefix + row.content,
-        // The inlineData key will only be added to the payload if the variable is defined
-        ...(inlineData && { inlineData })
-      };
-    });
-
-    // 3. Ask Agent via Gemini API
-    const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
-    if (!geminiRes.ok) {
-      return sendErr(res, 502, `${respondingAgent} API failed: ${geminiRes.error}`), true;
-    }
-
-    // 4. Clean Agent response to prevent prefix bleeding
-    let cleanText = geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '');
-    
-    // Server Authoritative verification for the AI payload
-    const outData = parseTriAgentBackend(cleanText);
-    if (outData && outData.state) {
-      outData.state.state_version_id = maxVersion + 2; 
-      cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
-    }
-
-    // 5. Save Agent response to DB
-    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: cleanText });
+    // Instead of waiting, drop a placeholder response and decouple!
+    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: '[SYSTEM::QUEUED]' });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
 
-    return sendOk(res, 201, {
+    // Fire and forget via internal fetch wrapper
+    const proto = req.headers['x-forwarded-proto'] || 'http';
+    const host = req.headers['host'];
+    const workerUrl = `${proto}://${host}/api/develop/roger/worker`;
+    fetch(workerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': req.headers['authorization'] || ''
+      },
+      body: JSON.stringify({
+        sessionId,
+        projectId,
+        chatId: rogerSaveRes.data.id,
+        respondingAgent
+      })
+    }).catch(e => console.error("Worker fetch failed:", e));
+
+    return sendOk(res, 202, {
       userChat: userSaveRes.data,
       rogerChat: rogerSaveRes.data
     }), true;
+  }
+
+  if (pathname === '/api/develop/roger/worker' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const { sessionId, projectId, chatId, respondingAgent } = body;
+    if (!sessionId || !chatId || !respondingAgent) return sendErr(res, 400, 'Missing worker params'), true;
+
+    sendOk(res, 202, { status: "processing" }); // Acknowledge to drop original requestor safely
+    
+    try {
+      const historyRes = await listRogerChats(sessionId, projectId, 70);
+      let history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
+      let maxVersion = 0;
+      history.forEach(chat => {
+        const p = parseTriAgentBackend(chat.content);
+        if (p && p.state && typeof p.state.state_version_id === 'number') {
+          if (p.state.state_version_id > maxVersion) maxVersion = p.state.state_version_id;
+        }
+      });
+      // Filter out pending states from context to avoid Agent confusion
+      history = history.filter(h => h.id !== chatId && h.content !== '[SYSTEM::QUEUED]');
+      
+      const messages = history.map(row => {
+        let prefix = '';
+        if (row.role === 'user') prefix = '[From Human]: ';
+        if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
+        if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
+        return {
+          role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
+          text: prefix + row.content
+        };
+      });
+
+      const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
+      let cleanText = geminiRes.ok ? geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '') : `**SYSTEM ERROR:** Agent ${respondingAgent} failed to respond -> ${geminiRes.error}`;
+
+      const outData = parseTriAgentBackend(cleanText);
+      if (outData && outData.state) {
+        outData.state.state_version_id = maxVersion + 1; 
+        cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
+      }
+
+      await updateRogerChat(chatId, { content: cleanText });
+    } catch(err) {
+      await updateRogerChat(chatId, { content: `**SYSTEM ERROR EXCEPTION:** Worker thread collapsed randomly -> ${err.message}` });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/develop/roger/stream' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const sessionId = Number(urlObj.searchParams.get('sessionId') || 0);
+
+    if (!sessionId) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'sessionId is required' }));
+      return true;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+
+    res.write(`data: ${JSON.stringify({ type: 'ping' })}\n\n`);
+
+    const interval = setInterval(async () => {
+      try {
+        const historyRes = await listRogerChats(sessionId, projectId, 20); 
+        const history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
+        if (history.length > 0) {
+          const rawHash = JSON.stringify(history.slice(-5));
+          if (res.locals && res.locals.lastHash !== rawHash) {
+             res.write(`data: ${JSON.stringify({ type: 'sync', chats: history })}\n\n`);
+             res.locals = { lastHash: rawHash };
+          } else if (!res.locals) {
+             res.locals = { lastHash: rawHash }; // skip initial payload, wait for deltas
+          }
+        }
+      } catch (err) {
+         console.error('SSE Stream Error:', err);
+      }
+    }, 2500); 
+
+    req.on('close', () => {
+      clearInterval(interval);
+    });
+
+    return true;
   }
 
   if (pathname === '/api/develop/roger/retry' && requestMethod === 'POST') {
