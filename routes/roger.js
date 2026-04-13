@@ -166,7 +166,7 @@ async function handle(req, res, pathname, requestMethod) {
     const body = await parseJsonBody(req);
     let sessionId, projectId, chatId, respondingAgent;
     if (body && body.type === 'INSERT' && body.record) {
-      if (body.record.content !== '[SYSTEM::QUEUED]') return sendOk(res, 200, { ignored: true }), true;
+      if (body.record.status !== 'processing' && body.record.content !== '[SYSTEM::PROCESSING]' && body.record.content !== '[SYSTEM::QUEUED]') return sendOk(res, 200, { ignored: true }), true;
       sessionId = Number(body.record.session_id || 0);
       projectId = body.record.project_id ? Number(body.record.project_id) : null;
       chatId = Number(body.record.id || 0);
