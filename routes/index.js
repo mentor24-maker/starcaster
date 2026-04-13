@@ -132,13 +132,14 @@ async function handleRequest(req, res) {
   const method   = req.method;
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
+  const isWebhookRoute = pathname === '/api/develop/roger/worker';
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);
   req.authUser = authUser || null;
   req.projectContext = null;
 
-  if (!isAuthRoute && !isDebugRoute && !isCronAuthorized && !authUser) {
+  if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !authUser) {
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
 
