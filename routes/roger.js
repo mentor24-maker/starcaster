@@ -12,8 +12,6 @@ const manifest = {
   prefixes: ['/api/develop/roger']
 };
 
-const activeInferenceJobs = new Set();
-
 function parseTriAgentBackend(rawString) {
   if (!rawString || typeof rawString !== 'string') return null;
   const match = rawString.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
@@ -157,6 +155,55 @@ async function handle(req, res, pathname, requestMethod) {
   }
 
   
+  if (pathname === '/api/develop/roger/worker' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const { sessionId, projectId, chatId, respondingAgent } = body;
+    if (!sessionId || !chatId || !respondingAgent) return sendErr(res, 400, 'Missing worker params'), true;
+
+    // Do NOT return response early. The browser holds this open to keep Vercel alive.
+    
+    try {
+      const historyRes = await listRogerChats(sessionId, projectId, 70);
+      let history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
+      let maxVersion = 0;
+      history.forEach(chat => {
+        const p = parseTriAgentBackend(chat.content);
+        if (p && p.state && typeof p.state.state_version_id === 'number') {
+          if (p.state.state_version_id > maxVersion) maxVersion = p.state.state_version_id;
+        }
+      });
+      // Filter out pending states from context to avoid Agent confusion
+      history = history.filter(h => h.id !== chatId && h.content !== '[SYSTEM::QUEUED]');
+      
+      const messages = history.map(row => {
+        let prefix = '';
+        if (row.role === 'user') prefix = '[From Human]: ';
+        if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
+        if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
+        return {
+          role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
+          text: prefix + row.content
+        };
+      });
+
+      const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
+      let cleanText = geminiRes.ok ? geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '') : `**SYSTEM ERROR:** Agent ${respondingAgent} failed to respond -> ${geminiRes.error}`;
+
+      const outData = parseTriAgentBackend(cleanText);
+      if (outData && outData.state) {
+        outData.state.state_version_id = maxVersion + 1; 
+        cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
+      }
+
+      await updateRogerChat(chatId, { content: cleanText });
+    } catch(err) {
+      await updateRogerChat(chatId, { content: `**SYSTEM ERROR EXCEPTION:** Worker thread collapsed randomly -> ${err.message}` });
+    }
+    
+    sendOk(res, 200, { success: true });
+    return true;
+  }
+
   if (pathname === '/api/develop/roger/stream' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const sessionId = Number(urlObj.searchParams.get('sessionId') || 0);
@@ -189,48 +236,7 @@ async function handle(req, res, pathname, requestMethod) {
              res.locals = { lastHash: rawHash }; // skip initial payload, wait for deltas
           }
 
-          // [VERCEL AVOIDANCE PROTOCOL] Trigger inline LLM inference binding
-          const lastChat = history[history.length - 1];
-          if (lastChat.content === '[SYSTEM::QUEUED]' && !activeInferenceJobs.has(lastChat.id)) {
-            activeInferenceJobs.add(lastChat.id);
-            (async () => {
-              try {
-                const isForAntigravity = (history.length > 1 && history[history.length - 2].content.toLowerCase().includes('@antigravity'));
-                const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
-                let maxVersion = 0;
-                history.forEach(chat => {
-                  const p = parseTriAgentBackend(chat.content);
-                  if (p && p.state && typeof p.state.state_version_id === 'number') {
-                    if (p.state.state_version_id > maxVersion) maxVersion = p.state.state_version_id;
-                  }
-                });
-                
-                const processHistory = history.filter(h => h.id !== lastChat.id && h.content !== '[SYSTEM::QUEUED]');
-                const messages = processHistory.map(row => {
-                  let prefix = '';
-                  if (row.role === 'user') prefix = '[From Human]: ';
-                  if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
-                  if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
-                  return {
-                    role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
-                    text: prefix + row.content
-                  };
-                });
-                
-                const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
-                let cleanText = geminiRes.ok ? geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '') : `**SYSTEM ERROR:** Agent ${respondingAgent} failed. ${geminiRes.error}`;
-                
-                const outData = parseTriAgentBackend(cleanText);
-                if (outData && outData.state) {
-                  outData.state.state_version_id = maxVersion + 1; 
-                  cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
-                }
-                await updateRogerChat(lastChat.id, { content: cleanText });
-              } catch(err) {} finally {
-                activeInferenceJobs.delete(lastChat.id);
-              }
-            })();
-          }
+          
         }
       } catch (err) {
          console.error('SSE Stream Error:', err);

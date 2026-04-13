@@ -34,5 +34,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/[...slug].js": {
+      "maxDuration": 300
+    }
+  }
 }
