@@ -193,8 +193,8 @@ async function handle(req, res, pathname, requestMethod) {
           if (p.state.state_version_id > maxVersion) maxVersion = p.state.state_version_id;
         }
       });
-      // Filter out pending states from context to avoid Agent confusion
-      history = history.filter(h => h.id !== chatId && h.content !== '[SYSTEM::QUEUED]');
+      // Filter out pending states from context to avoid Agent confusion and hide SYSTEM ERRORs so models do not hallucinate mirroring them
+      history = history.filter(h => h.id !== chatId && h.content !== '[SYSTEM::QUEUED]' && !h.content.includes('SYSTEM ERROR'));
       
       const messages = history.map(row => {
         let prefix = '';
@@ -251,7 +251,10 @@ async function handle(req, res, pathname, requestMethod) {
     const isForAntigravity = lastMessage.content.toLowerCase().includes('@antigravity');
     const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
 
-    const messages = history.map(row => {
+    let messagesHistory = history;
+    messagesHistory = messagesHistory.filter(h => h.content !== '[SYSTEM::QUEUED]' && !h.content.includes('SYSTEM ERROR'));
+
+    const messages = messagesHistory.map(row => {
       let prefix = '';
       if (row.role === 'user') prefix = '[From Human]: ';
       if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
