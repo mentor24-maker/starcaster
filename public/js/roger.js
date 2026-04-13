@@ -946,6 +946,20 @@ App.roger.sendProtocolAction = function(actionType, commandHash, btnEl) {
     }
     if (res.data?.rogerChat) {
       App.roger.appendChatNode(res.data.rogerChat);
+       if (res.data.rogerChat) {
+         fetch('/api/develop/roger/worker', {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+           },
+           body: JSON.stringify({
+             sessionId: rogerState.activeSessionId,
+             chatId: res.data.rogerChat.id,
+             respondingAgent: triAgentPayload.toLowerCase().includes('@antigravity') ? 'antigravity' : 'roger'
+           })
+         }).catch(e => console.error('Worker fetch error:', e));
+       }
     }
     App.roger.scrollToBottom();
   });
@@ -1001,6 +1015,20 @@ App.roger.submitChat = async function() {
        App.roger.appendChatNode(res.data.userChat);
        if (res.data.rogerChat) App.roger.appendChatNode(res.data.rogerChat);
        App.roger.scrollToBottom();
+       if (res.data.rogerChat) {
+         fetch('/api/develop/roger/worker', {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+           },
+           body: JSON.stringify({
+             sessionId: rogerState.activeSessionId,
+             chatId: res.data.rogerChat.id,
+             respondingAgent: triAgentPayload.toLowerCase().includes('@antigravity') ? 'antigravity' : 'roger'
+           })
+         }).catch(e => console.error('Worker fetch error:', e));
+       }
     }
   } catch (err) {
     App.notify("Fetch issue: " + (err.message || err), true);
