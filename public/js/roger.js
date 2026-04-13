@@ -626,9 +626,24 @@ App.roger.appendChatNode = function(chat) {
       `;
     }
     
+    const versionStr = `v${parsedTriAgent.state.state_version_id}`;
+    header.innerHTML = `
+      <div style="flex: 1; display:flex; align-items:center;"><strong>${author}</strong> <span class="chat-time" style="margin-left: 0.5rem">${dateStr}</span></div>
+      <div style="flex: 1; text-align: center; color: rgba(0,0,0,0.5); font-family: monospace; font-weight: bold; font-size: 0.85rem;">[${versionStr}]</div>
+      <div style="flex: 1; justify-content: flex-end;" class="roger-copy-btn-container">
+        ${editBtnHTML}
+        <button id="${copyBtnId}" class="roger-copy-btn" title="Copy Message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+          </svg>
+        </button>
+      </div>
+    `;
+
     content.innerHTML = finalUI + `
       <details style="margin-top:12px; font-size:0.75rem; color:#888; background:rgba(0,0,0,0.02); padding:4px 8px; border-radius:4px;">
-        <summary style="cursor:pointer; user-select:none;">TriAgentState Protocol Wrapper (v${parsedTriAgent.state.state_version_id})</summary>
+        <summary style="cursor:pointer; user-select:none;">TriAgentState Protocol Wrapper (${versionStr})</summary>
         <pre style="margin-top:5px; white-space:pre-wrap; word-break:break-all; tab-size:2;">${JSON.stringify(parsedTriAgent.state, null, 2)}</pre>
       </details>
     `;
