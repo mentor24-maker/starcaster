@@ -149,8 +149,7 @@ async function handle(req, res, pathname, requestMethod) {
     const isForAntigravity = finalContent.toLowerCase().includes('@antigravity');
     const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
 
-    // Instead of waiting, drop a placeholder response and decouple!
-    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: '[SYSTEM::QUEUED]' });
+    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, status: 'processing', content: '[SYSTEM::PROCESSING]' });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
 
     // Fire and forget via internal fetch wrapper
@@ -193,8 +192,7 @@ async function handle(req, res, pathname, requestMethod) {
           if (p.state.state_version_id > maxVersion) maxVersion = p.state.state_version_id;
         }
       });
-      // Filter out pending states from context to avoid Agent confusion and hide SYSTEM ERRORs so models do not hallucinate mirroring them
-      history = history.filter(h => h.id !== chatId && h.content !== '[SYSTEM::QUEUED]' && !h.content.includes('SYSTEM ERROR'));
+      history = history.filter(h => h.id !== chatId && h.content !== '[SYSTEM::QUEUED]' && h.content !== '[SYSTEM::PROCESSING]' && !h.content.includes('SYSTEM ERROR') && h.status !== 'failed');
       
       const messages = history.map(row => {
         let prefix = '';
@@ -208,7 +206,10 @@ async function handle(req, res, pathname, requestMethod) {
       });
 
       const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
-      let cleanText = geminiRes.ok ? geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '') : `**SYSTEM ERROR:** Agent ${respondingAgent} failed to respond -> ${geminiRes.error}`;
+      if (!geminiRes.ok) {
+        throw new Error(geminiRes.error || "Unknown Inference Engine Exception");
+      }
+      let cleanText = geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '');
 
       const outData = parseTriAgentBackend(cleanText);
       if (outData && outData.state) {
@@ -216,9 +217,9 @@ async function handle(req, res, pathname, requestMethod) {
         cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
       }
 
-      await updateRogerChat(chatId, { content: cleanText });
+      await updateRogerChat(chatId, { content: cleanText, status: 'complete' });
     } catch(err) {
-      await updateRogerChat(chatId, { content: `**SYSTEM ERROR EXCEPTION:** Worker thread collapsed randomly -> ${err.message}` });
+      await updateRogerChat(chatId, { status: 'failed', error_details: err.message, content: 'An error occurred with the AI Inference engine.' });
     }
     
     sendOk(res, 200, { success: true });

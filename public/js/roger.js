@@ -496,11 +496,11 @@ App.roger.appendChatNode = function(chat) {
   
   if (!rogerElements.log) return;
   
-  if (chat.content === '[SYSTEM::QUEUED]') {
+  if (chat.status === 'processing') {
     const spinner = document.createElement('div');
     spinner.className = 'roger-chat-bubble-wrapper ' + chat.role;
     spinner.id = 'rogerChatNode_' + chat.id;
-    spinner.dataset.status = 'queued';
+    spinner.dataset.status = 'processing';
     spinner.innerHTML = `
       <div class="roger-chat-avatar ${chat.role}" style="background-image: url('/images/${chat.role}.png');"></div>
       <div class="roger-chat-content-col">
@@ -534,6 +534,12 @@ App.roger.appendChatNode = function(chat) {
   
   const bubble = document.createElement('div');
   bubble.className = `roger-chat-bubble ${chat.role}`;
+  if (chat.status === 'failed') {
+    bubble.style.border = '2px solid #ef4444';
+    bubble.style.backgroundColor = '#fef2f2';
+    bubble.style.color = '#dc2626';
+    bubble.style.fontWeight = 'bold';
+  }
 
   const header = document.createElement('div');
   header.className = 'roger-chat-header';
@@ -760,13 +766,13 @@ App.roger.initSupabaseRealtime = function(sessionId) {
   App.roger.realtimeChannel = window.supabaseClient.channel('roger_chats_' + sessionId)
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'roger_chats', filter: 'session_id=eq.' + sessionId },
+      { event: '*', schema: 'public', table: 'agent_messages', filter: 'session_id=eq.' + sessionId },
       (payload) => {
         const chat = payload.new;
         if (!chat) return;
         const existingNode = document.getElementById('rogerChatNode_' + chat.id);
         if (existingNode) {
-          if (chat.content !== '[SYSTEM::QUEUED]' && existingNode.dataset.status === 'queued') {
+          if (chat.status !== 'processing' && existingNode.dataset.status === 'processing') {
             existingNode.outerHTML = '';
             App.roger.appendChatNode(chat);
             App.roger.scrollToBottom();
