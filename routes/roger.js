@@ -217,9 +217,15 @@ async function handle(req, res, pathname, requestMethod) {
         cleanText = "```json\n" + JSON.stringify(outData, null, 2) + "\n```";
       }
 
-      await updateRogerChat(chatId, { content: cleanText, status: 'complete' });
+      const uRes = await updateRogerChat(chatId, { content: cleanText, status: 'complete' });
+      if (!uRes.ok) {
+        await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'antigravity', status: 'complete', content: `**SYSTEM ERROR:** Webhook could not update existing row ${chatId}. Reason: \`${JSON.stringify(uRes.error)}\`` });
+      }
     } catch(err) {
-      await updateRogerChat(chatId, { status: 'failed', error_details: err.message, content: 'An error occurred with the AI Inference engine.' });
+      const fRes = await updateRogerChat(chatId, { status: 'failed', error_details: err.message, content: `An error occurred with the AI Inference engine. => ${err.message}` });
+      if (!fRes.ok) {
+        await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'antigravity', status: 'complete', content: `**SYSTEM ERROR:** Webhook caught exception \`${err.message}\` BUT could not update the row. DB Error: \`${JSON.stringify(fRes.error)}\`` });
+      }
     }
     
     sendOk(res, 200, { success: true });
