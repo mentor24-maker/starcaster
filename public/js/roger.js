@@ -1245,4 +1245,36 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  const testBtn = document.getElementById('rogerTestBtn');
+  if (testBtn) {
+    testBtn.addEventListener('click', App.roger.testAiConnection);
+  }
 });
+
+App.roger.testAiConnection = async function() {
+  const btn = document.getElementById('rogerTestBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Testing...';
+  }
+  
+  try {
+    const res = await App.api('/api/develop/roger/test', {
+      method: 'GET'
+    });
+    
+    if (res.error) {
+       App.notify("AI Setup Failed: " + (res.error.message || res.error), true);
+    } else {
+       App.notify("AI Connection OK! " + JSON.stringify(res.data), false);
+    }
+  } catch(e) {
+    App.notify("Request failed: " + e.message, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Test Connection';
+    }
+  }
+};
