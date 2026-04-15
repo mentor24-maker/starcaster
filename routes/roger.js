@@ -18,8 +18,19 @@ function parseTriAgentBackend(rawString) {
   const potentialJson = match ? match[1] : rawString.trim();
   try {
     const data = JSON.parse(potentialJson);
-    if (data && data.state && typeof data.state.state_version_id === 'number') {
-      return data;
+    if (data && data.state) {
+      if (data.state.stateversionid !== undefined && data.state.state_version_id === undefined) {
+        data.state.state_version_id = data.state.stateversionid;
+        delete data.state.stateversionid;
+      }
+      if (data.state.contextchecksum !== undefined && data.state.context_checksum === undefined) {
+        data.state.context_checksum = data.state.contextchecksum;
+        delete data.state.contextchecksum;
+      }
+      if (data.state.state_version_id !== undefined) {
+        data.state.state_version_id = Number(data.state.state_version_id);
+        if (!isNaN(data.state.state_version_id)) return data;
+      }
     }
   } catch(e) {}
   return null;
