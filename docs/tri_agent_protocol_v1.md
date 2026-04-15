@@ -39,7 +39,7 @@ Every transmission between agents MUST conform to the following JSON structure:
 
 1. **State Verification:** Before processing any payload, an agent MUST:
    a. Verify the `contextchecksum` of the payload.
-   b. Verify that the incoming `stateversionid` is greater than its own locally stored version ID.
+   b. Verify that the incoming `state_version_id` is greater than its own locally stored version ID.
    c. If either check fails, the agent MUST disregard the message and issue a SYSTEM_NOTICE of a desynchronization event.
 
 2. **Command Flow:** The "Human-as-Master" bottleneck is removed via the following explicit flow:
@@ -48,7 +48,7 @@ Every transmission between agents MUST conform to the following JSON structure:
    c. **@Human confirms or denies:** @Human replies to @Antigravity with a COMMAND payload. The content will be simple: `{ "action": "CONFIRM", "commandhash": "[hash]" }` or `{ "action": "DENY", "commandhash": "[hash]" }`.
    d. **Execution:** Only upon receiving a CONFIRM command from @Human that matches the pending command hash does @Antigravity execute the provisional directive from @Roger.
 
-3. **State Updates:** Upon successful execution of a command that alters the project state, the executing agent (@Antigravity) is responsible for broadcasting a new message with the `stateversionid` incremented.
+3. **State Updates:** Upon successful execution of a command that alters the project state, the executing agent (@Antigravity) is responsible for broadcasting a new message with the `state_version_id` incremented.
 
 ### Section 5: Error Handling
 - **Desynchronization Event:** Triggered by a failed checksum or version ID check. The agent detecting the error halts all work on the active objective and sends a @Broadcast SYSTEM_NOTICE detailing the error. The system is considered halted until @Human re-establishes a baseline state.
