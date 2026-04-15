@@ -83,6 +83,14 @@ async function handle(req, res, pathname, requestMethod) {
     return sendOk(res, 200, { url, anonKey }), true;
   }
 
+  if (pathname === '/api/develop/roger/test' && requestMethod === 'GET') {
+    const geminiRes = await consultRoger([ { role: 'user', content: 'Ping' } ], { agentRole: 'roger' });
+    if (!geminiRes.ok) {
+       return sendErr(res, 502, `AI Test Failed: ${geminiRes.error}`), true;
+    }
+    return sendOk(res, 200, { status: "Success", message: "AI Engine is responding correctly." }), true;
+  }
+
   if (pathname === '/api/develop/roger/chat' && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const chatId = Number(body?.chatId || 0);
@@ -218,7 +226,34 @@ async function handle(req, res, pathname, requestMethod) {
 
       const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
       if (!geminiRes.ok) {
-        throw new Error(geminiRes.error || "Unknown Inference Engine Exception");
+        const isQuotaErr = geminiRes.error && (geminiRes.error.toLowerCase().includes('quota') || geminiRes.error.toLowerCase().includes('demand'));
+        if (isQuotaErr) {
+          const mockTriAgentStr = JSON.stringify({
+            state: {
+              session_id: sessionId,
+              state_version_id: maxVersion + 1,
+              timestamp: new Date().toISOString(),
+              source_agent: respondingAgent === 'antigravity' ? '@Antigravity' : '@Roger',
+              target_agent: '@Human',
+              active_objective_id: "ACTIVE-SESSION",
+              context_checksum: Math.random().toString(36).substring(2,8)
+            },
+            payload: {
+              type: "QUERY",
+              content: `**API QUOTA EXHAUSTED:** The AI API failed. \n\n*Error: ${geminiRes.error}*\n\nI have automatically generated this placeholder payload so that frontend UI testing and state machine verification can continue uninterrupted.`
+            }
+          }, null, 2);
+          
+          let cleanText = "```json\n" + mockTriAgentStr + "\n```";
+          const uRes = await updateRogerChat(chatId, { content: cleanText, status: 'complete' });
+          if (!uRes.ok) {
+            await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'antigravity', status: 'complete', content: `**SYSTEM ERROR:** Webhook could not update existing row ${chatId}. Reason: \`${JSON.stringify(uRes.error)}\`` });
+          }
+          sendOk(res, 200, { success: true });
+          return true;
+        } else {
+          throw new Error(geminiRes.error || "Unknown Inference Engine Exception");
+        }
       }
       let cleanText = geminiRes.text.replace(/^\[From.*?\]:\s*\n*/i, '');
 
@@ -286,6 +321,36 @@ async function handle(req, res, pathname, requestMethod) {
 
     const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
     if (!geminiRes.ok) {
+      const isQuotaErr = geminiRes.error && (geminiRes.error.toLowerCase().includes('quota') || geminiRes.error.toLowerCase().includes('demand'));
+      if (isQuotaErr) {
+        let maxVersionFallback = 0;
+        history.forEach(chat => {
+          const p = parseTriAgentBackend(chat.content);
+          if (p && p.state && typeof p.state.state_version_id === 'number') {
+            if (p.state.state_version_id > maxVersionFallback) maxVersionFallback = p.state.state_version_id;
+          }
+        });
+        const mockTriAgentStr = JSON.stringify({
+          state: {
+            session_id: sessionId,
+            state_version_id: maxVersionFallback + 1,
+            timestamp: new Date().toISOString(),
+            source_agent: respondingAgent === 'antigravity' ? '@Antigravity' : '@Roger',
+            target_agent: '@Human',
+            active_objective_id: "ACTIVE-SESSION",
+            context_checksum: Math.random().toString(36).substring(2,8)
+          },
+          payload: {
+            type: "QUERY",
+            content: `**RETRIED - API QUOTA EXHAUSTED:** The AI API failed again. \n\n*Error: ${geminiRes.error}*\n\nPlaceholder payload injected so development can continue.`
+          }
+        }, null, 2);
+        
+        let cleanText = "```json\n" + mockTriAgentStr + "\n```";
+        const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: cleanText });
+        if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
+        return sendOk(res, 201, { rogerChat: rogerSaveRes.data }), true;
+      }
       return sendErr(res, 502, `${respondingAgent} API failed: ${geminiRes.error}`), true;
     }
 
