@@ -817,6 +817,14 @@ App.roger.parseTriAgent = function(rawText) {
     else if (maybeJson.startsWith('```')) maybeJson = maybeJson.replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
     const parsed = JSON.parse(maybeJson);
     if (parsed && parsed.state && parsed.payload) {
+      if (parsed.state.stateversionid !== undefined && parsed.state.state_version_id === undefined) {
+        parsed.state.state_version_id = parsed.state.stateversionid;
+        delete parsed.state.stateversionid;
+      }
+      if (parsed.state.contextchecksum !== undefined && parsed.state.context_checksum === undefined) {
+        parsed.state.context_checksum = parsed.state.contextchecksum;
+        delete parsed.state.contextchecksum;
+      }
       if (!parsed.state.state_version_id || !parsed.state.session_id) {
          return { valid: false, error: 'Malformed TriAgentState JSON Schema detected. Missing core keys.' };
       }
