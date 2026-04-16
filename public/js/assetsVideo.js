@@ -131,9 +131,9 @@
     const stars = container.querySelectorAll('.star-btn');
     stars.forEach(star => {
       if (parseInt(star.getAttribute('data-val'), 10) <= val) {
-        star.classList.add('active');
+        star.classList.add('yt-star-golden');
       } else {
-        star.classList.remove('active');
+        star.classList.remove('yt-star-golden');
       }
     });
   }
