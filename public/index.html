@@ -5320,6 +5320,7 @@
         <div class="page-heading-row">
           <h2>Assets</h2>
           <div class="page-heading-actions">
+            <button id="openCreateVideoToolBtn" type="button" class="black-btn hidden" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
             <button id="uploadAssetsBtn" type="button">Add Assets</button>
             <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')">Manage Categories</button>
           </div>
@@ -5613,17 +5614,8 @@
       </section>
 
       <section id="assetsVideoPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Assets: Video</h2>
-          <div class="page-heading-actions">
-            <button id="addVideoBtn" type="button">Add Video</button>
-            <button id="openCreateVideoToolBtn" type="button" class="black-btn" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
-            <button type="button" onclick="App.assets.openAssetsLanding(); return false;">Back To Assets</button>
-          </div>
-        </div>
-        <div id="assetsVideoMainContent">
-          <p>Video module placeholder.</p>
-        </div>
+        <h2>Assets: Video</h2>
+        <p>Video module placeholder.</p>
       </section>
 
       <section id="assetsCreateVideoToolPage" class="app-page hidden">
