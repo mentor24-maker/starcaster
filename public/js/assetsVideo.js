@@ -49,7 +49,12 @@
     try {
       if (!App.ui) return;
       if (App.ui.ensureMessagingTopicsLoaded) {
-        await App.ui.ensureMessagingTopicsLoaded();
+        let topics = await App.ui.ensureMessagingTopicsLoaded();
+        if (!topics || topics.length === 0) {
+          // Wait briefly for auth to serialize if it just loaded
+          await new Promise(r => setTimeout(r, 600));
+          await App.ui.ensureMessagingTopicsLoaded();
+        }
       }
       if (App.ui.populateTopicsDropdown) {
         await App.ui.populateTopicsDropdown(UI.topic(), 'Any', '');
@@ -212,7 +217,7 @@
       container.innerHTML = `<div class="viewer-placeholder"><p>Video Cannot be Embedded. Click Title above to view externally.</p></div>`;
     }
 
-    resetFeedbackForm();
+    hydrateFeedbackForm(activeVideo);
   }
 
   function updateThumbnailHighlights() {
@@ -244,6 +249,49 @@
     if (summary) {
       summary.textContent = 'No Topics Selected';
       summary.style.color = 'var(--subtext)';
+    }
+  }
+
+  function hydrateFeedbackForm(activeVideo) {
+    if (!activeVideo) {
+      resetFeedbackForm();
+      return;
+    }
+    
+    const sContainer = UI.scoreContainer();
+    const scoreVal = parseInt(activeVideo.score, 10) || 0;
+    if (sContainer) {
+      sContainer.setAttribute('data-score', scoreVal.toString());
+      updateStarsUI(scoreVal);
+    }
+    
+    if (UI.positive()) UI.positive().value = activeVideo.positive_feedback || '';
+    if (UI.negative()) UI.negative().value = activeVideo.negative_feedback || '';
+    
+    const parseNote = (val, key) => {
+      try {
+        if (!val) return '';
+        const arr = typeof val === 'string' ? JSON.parse(val) : val;
+        if (Array.isArray(arr) && arr.length > 0) return arr[0][key] || arr[0].note || arr[0].timestamps || '';
+        return '';
+      } catch (e) {
+        return '';
+      }
+    };
+    
+    if (UI.visuals()) UI.visuals().value = parseNote(activeVideo.visuals_liked, 'note');
+    if (UI.clips()) UI.clips().value = parseNote(activeVideo.specific_clips, 'timestamps');
+    
+    const summary = UI.topicSummary();
+    if (summary) {
+      const topicStr = String(activeVideo.topic || '').trim();
+      if (topicStr === '') {
+        summary.textContent = 'No Topics Selected';
+        summary.style.color = 'var(--subtext)';
+      } else {
+        summary.textContent = topicStr;
+        summary.style.color = 'inherit';
+      }
     }
   }
 
