@@ -413,7 +413,7 @@ async function handle(req, res, pathname, method) {
     try {
       const curTable = tableConfig().assetsVideoCuration;
       if (curTable) {
-        const curRes = await sbQuery({ method: 'GET', table: curTable, limit: 2000, query: 'select=*,order=created_at.asc' });
+        const curRes = await sbQuery({ method: 'GET', table: curTable, query: 'select=*,order=created_at.desc&limit=3000' });
         if (curRes && Array.isArray(curRes.data)) {
           curRes.data.forEach(r => {
             const v = filteredMap.get(r.video_id) || {
@@ -464,6 +464,9 @@ async function handle(req, res, pathname, method) {
     if (!query && !tagsSearch && !topic) {
       filtered = filtered.filter(v => !v.score || v.score === 0);
     }
+    
+    // Globally expunge 1-star discarded records from all curation feeds
+    filtered = filtered.filter(v => parseInt(v.score) !== 1);
 
     filtered.sort((a, b) => (b.comment_count || 0) - (a.comment_count || 0));
     
