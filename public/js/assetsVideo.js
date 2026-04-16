@@ -7,7 +7,9 @@
 (function() {
   const state = {
     videos: [],
-    currentIndex: -1
+    currentIndex: -1,
+    selectedTags: new Set(),
+    tagsPopupOpen: false
   };
 
   const UI = {
@@ -19,7 +21,8 @@
     // Filters
     search: () => document.getElementById('videoCurationSearch'),
     topic: () => document.getElementById('videoCurationTopic'),
-    tags: () => document.getElementById('videoCurationTags'),
+    tagsBtn: () => document.getElementById('videoCurationTagsBtn'),
+    tagsPopup: () => document.getElementById('videoCurationTagsPopup'),
     
     // Feedback Form
     score: () => document.getElementById('videoFeedbackScore'),
@@ -31,33 +34,113 @@
   function openCreateVideoTool() {
     App.setActivePage('assetsCreateVideoToolPage');
     loadTopicDropdowns();
+    loadTagsGrid();
   }
 
   function closeCreateVideoTool() {
-    // Stop playing video if active
     const container = UI.playerContainer();
     if (container) {
       container.innerHTML = '<div class="viewer-placeholder"><p>Session closed</p></div>';
     }
-    App.setActivePage('assetsVideoPage');
+    state.tagsPopupOpen = false;
+    UI.tagsPopup()?.classList.add('hidden');
+    App.setActivePage('assetsPage');
   }
 
-  function loadTopicDropdowns() {
-    // Populate the topic dropdowns from existing App.assets if needed
-    // Assuming a standard fetch or shared variable is available.
-    // For now, these remain as defined in the HTML or dynamically bound here if needed.
+  async function loadTopicDropdowns() {
+    try {
+      const res = await App.core.apiGet('/messaging/topics');
+      const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : [];
+      const topicSelect = UI.topic();
+      const assignSelect = UI.assignTopic();
+      
+      const optionsHtml = '<option value="">Any</option>' + topics.map(t => {
+        const val = t.topic || t.category;
+        return `<option value="${val}">${val}</option>`;
+      }).join('');
+
+      if (topicSelect) topicSelect.innerHTML = optionsHtml;
+      if (assignSelect) assignSelect.innerHTML = '<option value="">None</option>' + topics.map(t => {
+        const val = t.topic || t.category;
+        return `<option value="${val}">${val}</option>`;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load topics:', err);
+    }
   }
+
+  async function loadTagsGrid() {
+    try {
+      const res = await App.core.apiGet('/messaging/tags');
+      const tags = Array.isArray(res?.tags) ? res.tags : Array.isArray(res?.data) ? res.data : [];
+      
+      const popup = UI.tagsPopup();
+      if (!popup) return;
+      
+      popup.innerHTML = '';
+      tags.forEach(t => {
+        const val = typeof t === 'string' ? t : t.tag || t.name;
+        if (!val) return;
+        
+        const label = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = val;
+        cb.checked = state.selectedTags.has(val);
+        cb.onchange = (e) => {
+          if (e.target.checked) state.selectedTags.add(val);
+          else state.selectedTags.delete(val);
+          
+          const btn = UI.tagsBtn();
+          if (btn) btn.innerText = `${state.selectedTags.size} Selected`;
+        };
+        
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(val));
+        popup.appendChild(label);
+      });
+    } catch (err) {
+      console.error('Failed to load tags:', err);
+    }
+  }
+
+  function toggleTagsPopup() {
+    const popup = UI.tagsPopup();
+    if (!popup) return;
+    
+    state.tagsPopupOpen = !state.tagsPopupOpen;
+    popup.classList.toggle('hidden', !state.tagsPopupOpen);
+  }
+
+  // Close tags popup if clicking outside
+  document.addEventListener('click', (e) => {
+    const popup = UI.tagsPopup();
+    const btn = UI.tagsBtn();
+    if (!popup || !btn) return;
+    
+    if (state.tagsPopupOpen && !popup.contains(e.target) && !btn.contains(e.target)) {
+      state.tagsPopupOpen = false;
+      popup.classList.add('hidden');
+    }
+  });
 
   async function applyFilters() {
-    const query = UI.search().value.trim();
-    const topic = UI.topic().value;
-    const tags = UI.tags().value;
+    state.tagsPopupOpen = false;
+    UI.tagsPopup()?.classList.add('hidden');
+
+    const query = UI.search()?.value.trim() || '';
+    const topic = UI.topic()?.value || '';
+    const tags = Array.from(state.selectedTags).join(',');
     
-    // Show loading
     UI.playerContainer().innerHTML = '<div class="viewer-placeholder"><p>Curating results...</p></div>';
     
     try {
-      const res = await App.core.apiGet(`/assets/video/search?q=${encodeURIComponent(query)}&topic=${encodeURIComponent(topic)}&tags=${encodeURIComponent(tags)}`);
+      const qs = new URLSearchParams({
+        q: query,
+        topic: topic,
+        tags: tags
+      });
+      const res = await App.core.apiGet(`/assets/video/search?${qs.toString()}`);
       
       if (!res.success) {
         throw new Error(res.error || 'Failed to fetch curated videos');
@@ -108,7 +191,6 @@
     UI.title().innerText = activeVideo.title || 'Untitled';
     UI.channel().innerText = activeVideo.channel_name || 'Unknown Channel';
     
-    // Embed YouTube iframe
     const container = UI.playerContainer();
     if (activeVideo.video_id) {
       container.innerHTML = `<iframe 
@@ -187,7 +269,6 @@
     }
   }
 
-  // Export module interface
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -195,7 +276,8 @@
     applyFilters,
     prevVideo,
     nextVideo,
-    saveFeedback
+    saveFeedback,
+    toggleTagsPopup
   };
 
 })();
