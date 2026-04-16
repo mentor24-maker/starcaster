@@ -202,7 +202,7 @@
     const container = UI.playerContainer();
     if (activeVideo.video_id) {
       container.innerHTML = `<iframe 
-        src="https://www.youtube.com/embed/${activeVideo.video_id}?autoplay=1&enablejsapi=1" 
+        src="https://www.youtube-nocookie.com/embed/${activeVideo.video_id}?autoplay=1&enablejsapi=1" 
         allow="autoplay; encrypted-media" 
         allowfullscreen>
       </iframe>`;

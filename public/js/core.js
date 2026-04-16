@@ -489,6 +489,12 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
   document.querySelectorAll('.app-page').forEach((page) => {
     page.classList.toggle('hidden', page.id !== target);
   });
+  
+  // Clean up any YouTube iframes that are now hidden to stop background audio bleed
+  document.querySelectorAll('.app-page.hidden iframe[src*="youtube"]').forEach((iframe) => {
+    iframe.src = '';
+  });
+
   document.querySelectorAll('.menu-link[data-page]').forEach((link) => {
     link.classList.toggle('active', link.dataset.page === target);
   });
