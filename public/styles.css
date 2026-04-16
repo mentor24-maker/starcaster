@@ -9914,7 +9914,10 @@ button.section-settings-gear-btn svg {
 }
 
 .viewer-main-screen {
-  flex: 1;
+  flex: none;
+  width: 640px;
+  max-width: 100%;
+  margin: 0 auto;
   background: #000;
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -9924,6 +9927,35 @@ button.section-settings-gear-btn svg {
   position: relative;
   aspect-ratio: 16 / 9;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  resize: horizontal;
+}
+
+.video-curation-tags-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #ccc);
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.1));
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  z-index: 1000;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  min-width: 500px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.video-curation-tags-popup label {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  color: var(--text-dark, #333);
+  margin: 0;
 }
 
 .viewer-main-screen iframe {
