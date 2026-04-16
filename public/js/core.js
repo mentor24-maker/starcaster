@@ -786,13 +786,16 @@ App.ui.ensureMessagingTopicsLoaded = async function() {
   }
   try {
     const res = await App.api('/api/messaging/topics?limit=5000');
+    if (res && res.error) throw new Error(typeof res.error === 'string' ? res.error : res.error.message);
     const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
     const flatTopics = topics
       .map(item => String(item?.topic || item?.category || '').trim())
       .filter(Boolean)
       .filter((value, index, arr) => arr.indexOf(value) === index)
       .sort((a, b) => a.localeCompare(b));
-    App.state.cachedTopics = flatTopics;
+    if (flatTopics.length > 0) {
+      App.state.cachedTopics = flatTopics;
+    }
     return flatTopics;
   } catch (err) {
     console.error('Failed to pre-fetch cached topics:', err);
