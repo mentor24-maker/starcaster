@@ -5644,77 +5644,89 @@
             </div>
           </div>
 
-          <!-- PART 2: Video Viewer -->
-          <div class="video-curation-viewer-arena">
-            <div class="viewer-carousel-container">
-              <button type="button" class="carousel-nav-btn left-nav" onclick="App.assetsVideo.prevVideo()">
-                &#9664;
-              </button>
+          <div class="video-curation-split-layout">
+            <!-- PART 2: Video Viewer -->
+            <div class="video-curation-viewer-arena">
+              <div class="viewer-carousel-container">
+                <button type="button" class="carousel-nav-btn left-nav" onclick="App.assetsVideo.prevVideo()">
+                  &#9664;
+                </button>
+                
+                <div class="viewer-main-screen" id="videoCurationPlayerContainer">
+                  <div class="viewer-placeholder">
+                    <p>Apply filters to fetch videos</p>
+                  </div>
+                </div>
+                
+                <button type="button" class="carousel-nav-btn right-nav" onclick="App.assetsVideo.nextVideo()">
+                  &#9654;
+                </button>
+              </div>
               
-              <div class="viewer-main-screen" id="videoCurationPlayerContainer">
-                <div class="viewer-placeholder">
-                  <p>Apply filters to fetch videos</p>
+              <div class="video-metadata-bar">
+                <h3 id="videoCurationTitle">No Video Selected</h3>
+                <p id="videoCurationChannel" class="meta-channel"></p>
+              </div>
+
+              <!-- Thumbnail Gallery -->
+              <div class="video-curation-thumbnail-strip" id="videoCurationThumbnails">
+                <!-- Thumbnails dynamically rendered here -->
+              </div>
+            </div>
+
+            <!-- PART 3: Creator (Feedback Area) -->
+            <div class="video-curation-feedback-tools standard-form-grid">
+              <div class="form-group full-width">
+                <h3>Training Feedback & Notes</h3>
+              </div>
+              
+              <div class="form-group full-width">
+                <label>Overall Quality Score</label>
+                <div id="videoFeedbackStarsContainer" class="star-rating" data-score="0">
+                  <span class="star-btn" data-val="1">★</span>
+                  <span class="star-btn" data-val="2">★</span>
+                  <span class="star-btn" data-val="3">★</span>
+                  <span class="star-btn" data-val="4">★</span>
+                  <span class="star-btn" data-val="5">★</span>
                 </div>
               </div>
-              
-              <button type="button" class="carousel-nav-btn right-nav" onclick="App.assetsVideo.nextVideo()">
-                &#9654;
-              </button>
-            </div>
-            
-            <div class="video-metadata-bar">
-              <h3 id="videoCurationTitle">No Video Selected</h3>
-              <p id="videoCurationChannel" class="meta-channel"></p>
-            </div>
 
-            <!-- Thumbnail Gallery -->
-            <div class="video-curation-thumbnail-strip" id="videoCurationThumbnails">
-              <!-- Thumbnails dynamically rendered here -->
-            </div>
-          </div>
-
-          <!-- PART 3: Creator (Feedback Area) -->
-          <div class="video-curation-feedback-tools standard-form-grid">
-            <div class="form-group full-width">
-              <h3>Training Feedback & Notes</h3>
-            </div>
-            
-            <div class="form-group">
-              <label for="videoFeedbackScore">Overall Quality Score</label>
-              <div class="score-selector">
-                <select id="videoFeedbackScore">
-                  <option value="0">Unrated</option>
-                  <option value="1">1 - Poor</option>
-                  <option value="2">2 - Needs Work</option>
-                  <option value="3">3 - Acceptable</option>
-                  <option value="4">4 - Good</option>
-                  <option value="5">5 - Excellent</option>
-                </select>
+              <div class="form-group full-width">
+                <label>Topics</label>
+                <button type="button" class="white-btn" onclick="App.assetsVideo.openTopicModal()">Select Topics</button>
+                <p id="videoFeedbackTopicSummary" style="font-size: 0.85rem; margin-top: 0.25rem; color: var(--subtext);">No Topics Selected</p>
               </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="videoFeedbackTopic">Assign to Topic (Folder)</label>
-              <select id="videoFeedbackTopic">
-                <option value="">None</option>
-              </select>
-            </div>
 
-            <div class="form-group full-width">
-              <label for="videoFeedbackVisuals">Visuals We Like / Notes</label>
-              <textarea id="videoFeedbackVisuals" rows="3"></textarea>
-            </div>
+              <div class="form-group full-width">
+                <label for="videoFeedbackPositive">Positive Feedback</label>
+                <textarea id="videoFeedbackPositive" rows="3"></textarea>
+              </div>
 
-            <div class="form-group full-width">
-              <label for="videoFeedbackClips">Specific Clips (Timestamps)</label>
-              <textarea id="videoFeedbackClips" rows="2"></textarea>
-            </div>
+              <div class="form-group full-width">
+                <label for="videoFeedbackNegative">Negative Feedback</label>
+                <textarea id="videoFeedbackNegative" rows="3"></textarea>
+              </div>
 
-            <div class="form-group full-width" style="text-align: right;">
-              <button type="button" class="black-btn" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
+              <div class="form-group full-width" style="text-align: right;">
+                <button type="button" class="black-btn" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
+              </div>
             </div>
           </div>
         </div>
+
+        <!-- Topic Selection Modal -->
+        <div id="videoCurationTopicModal" class="modal-overlay hidden">
+          <div class="modal-content standard-form-grid">
+            <div class="form-group full-width">
+              <h3>Select Topics</h3>
+            </div>
+            <div class="form-group full-width" id="videoCurationTopicCheckboxes" style="max-height: 40vh; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius);">
+              <!-- Checkboxes dynamically rendered here -->
+            </div>
+            <div class="form-group full-width" style="text-align: right;">
+              <button type="button" class="black-btn" onclick="App.assetsVideo.closeTopicModal()">Done</button>
+            </div>
+          </div>
       </section>
 
       <section id="assetsMusicPage" class="app-page hidden">

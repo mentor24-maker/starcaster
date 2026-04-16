@@ -10038,3 +10038,35 @@ button.section-settings-gear-btn svg {
   font-weight: bold;
   color: var(--primary-color);
 }
+
+/* --- Video Curation layout --- */
+.video-curation-split-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.star-rating {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  cursor: pointer;
+  font-size: 1.5rem;
+}
+.star-btn {
+  color: var(--border);
+  transition: color 0.2s;
+  user-select: none;
+}
+.star-btn:hover,
+.star-btn.active {
+  color: #ffc107;
+}
+
+@media (max-width: 900px) {
+  .video-curation-split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
