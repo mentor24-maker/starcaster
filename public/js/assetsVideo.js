@@ -21,15 +21,18 @@
     topic: () => document.getElementById('videoCurationTopic'),
     
     // Feedback Form
-    score: () => document.getElementById('videoFeedbackScore'),
-    visuals: () => document.getElementById('videoFeedbackVisuals'),
-    clips: () => document.getElementById('videoFeedbackClips'),
-    assignTopic: () => document.getElementById('videoFeedbackTopic')
+    scoreContainer: () => document.getElementById('videoFeedbackStarsContainer'),
+    positive: () => document.getElementById('videoFeedbackPositive'),
+    negative: () => document.getElementById('videoFeedbackNegative'),
+    topicModal: () => document.getElementById('videoCurationTopicModal'),
+    topicCheckboxes: () => document.getElementById('videoCurationTopicCheckboxes'),
+    topicSummary: () => document.getElementById('videoFeedbackTopicSummary')
   };
 
   function openCreateVideoTool() {
     App.setActivePage('assetsCreateVideoToolPage');
     loadTopicDropdowns();
+    initStars();
   }
 
   function closeCreateVideoTool() {
@@ -44,11 +47,93 @@
     try {
       if (!App.ui || !App.ui.populateTopicsDropdown) return;
       await App.ui.populateTopicsDropdown(UI.topic(), 'Any', '');
-      await App.ui.populateTopicsDropdown(UI.assignTopic(), 'None', '');
+      if (App.ui.ensureMessagingTopicsLoaded) {
+        await App.ui.ensureMessagingTopicsLoaded();
+      }
     } catch (err) {
       console.error('Failed to load topics:', err);
-      App.notify('Error fetching topics for dropdowns', true);
     }
+  }
+
+  async function openTopicModal() {
+    const modal = UI.topicModal();
+    const container = UI.topicCheckboxes();
+    if (!modal || !container) return;
+    
+    await loadTopicDropdowns();
+    const topics = App.state?.cachedTopics || [];
+    
+    const selectedText = UI.topicSummary()?.textContent || '';
+    const selected = new Set(selectedText === 'No Topics Selected' ? [] : selectedText.split(', '));
+    
+    container.innerHTML = '';
+    topics.forEach(topic => {
+      const lbl = document.createElement('label');
+      lbl.style.display = 'flex';
+      lbl.style.gap = '0.5rem';
+      lbl.style.alignItems = 'center';
+      
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = topic;
+      cb.className = 'video-curation-topic-cb';
+      if (selected.has(topic)) cb.checked = true;
+      
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(topic));
+      container.appendChild(lbl);
+    });
+    
+    modal.classList.remove('hidden');
+  }
+
+  function closeTopicModal() {
+    const modal = UI.topicModal();
+    const container = UI.topicCheckboxes();
+    if (!modal || !container) return;
+    
+    const checkboxes = container.querySelectorAll('.video-curation-topic-cb:checked');
+    const selected = Array.from(checkboxes).map(cb => cb.value);
+    
+    const summary = UI.topicSummary();
+    if (summary) {
+      if (selected.length === 0) {
+        summary.textContent = 'No Topics Selected';
+        summary.style.color = 'var(--subtext)';
+      } else {
+        summary.textContent = selected.join(', ');
+        summary.style.color = 'inherit';
+      }
+    }
+    
+    modal.classList.add('hidden');
+  }
+
+  function initStars() {
+    const container = UI.scoreContainer();
+    if (!container) return;
+    
+    const stars = container.querySelectorAll('.star-btn');
+    stars.forEach(star => {
+      star.onclick = () => {
+        const val = parseInt(star.getAttribute('data-val'), 10);
+        container.setAttribute('data-score', val);
+        updateStarsUI(val);
+      };
+    });
+  }
+
+  function updateStarsUI(val) {
+    const container = UI.scoreContainer();
+    if (!container) return;
+    const stars = container.querySelectorAll('.star-btn');
+    stars.forEach(star => {
+      if (parseInt(star.getAttribute('data-val'), 10) <= val) {
+        star.classList.add('active');
+      } else {
+        star.classList.remove('active');
+      }
+    });
   }
 
   async function applyFilters() {
@@ -62,10 +147,8 @@
         q: query,
         topic: topic
       });
-      // Use the standard App.api handler
       const res = await App.api(`/api/assets/video/search?${qs.toString()}`);
       
-      // Handle the payload shape correctly (App.api unwraps JSON automatically, but may not have "success" flag if it just returns the object directly).
       const rows = res.data || res.videos || res || [];
       state.videos = Array.isArray(rows) ? rows : [];
       state.currentIndex = state.videos.length > 0 ? 0 : -1;
@@ -122,7 +205,7 @@
         allowfullscreen>
       </iframe>`;
     } else {
-      container.innerHTML = `<div class="viewer-placeholder"><p>Missing Video ID</p></div>`;
+      container.innerHTML = `<div class="viewer-placeholder"><p>Video Cannot be Embedded. Click Title above to view externally.</p></div>`;
     }
 
     resetFeedbackForm();
@@ -143,10 +226,19 @@
   }
 
   function resetFeedbackForm() {
-    if (UI.score()) UI.score().value = '0';
-    if (UI.visuals()) UI.visuals().value = '';
-    if (UI.clips()) UI.clips().value = '';
-    if (UI.assignTopic()) UI.assignTopic().value = '';
+    const sContainer = UI.scoreContainer();
+    if (sContainer) {
+      sContainer.setAttribute('data-score', '0');
+      updateStarsUI(0);
+    }
+    if (UI.positive()) UI.positive().value = '';
+    if (UI.negative()) UI.negative().value = '';
+    
+    const summary = UI.topicSummary();
+    if (summary) {
+      summary.textContent = 'No Topics Selected';
+      summary.style.color = 'var(--subtext)';
+    }
   }
 
   function prevVideo() {
@@ -169,15 +261,22 @@
 
     const activeVideo = state.videos[state.currentIndex];
     
+    const scoreVal = parseInt(UI.scoreContainer()?.getAttribute('data-score') || '0', 10);
+    const posText = UI.positive()?.value.trim() || '';
+    const negText = UI.negative()?.value.trim() || '';
+    
+    const selectedText = UI.topicSummary()?.textContent || '';
+    const assignedTopic = (selectedText === 'No Topics Selected') ? '' : selectedText;
+    
     const payload = {
       video_id: activeVideo.video_id,
       video_url: activeVideo.video_url,
       title: activeVideo.title,
       thumbnail_url: activeVideo.thumbnail_url,
-      score: parseInt(UI.score().value, 10) || 0,
-      topic: UI.assignTopic().value,
-      visuals_liked: JSON.stringify([{ note: UI.visuals().value }]),
-      specific_clips: JSON.stringify([{ timestamps: UI.clips().value }])
+      score: scoreVal,
+      topic: assignedTopic, // We map the comma separated string to topic for now as it's a string column.
+      visuals_liked: JSON.stringify([{ note: posText }]),
+      specific_clips: JSON.stringify([{ timestamps: negText }])
     };
 
     try {
@@ -201,7 +300,9 @@
     applyFilters,
     prevVideo,
     nextVideo,
-    saveFeedback
+    saveFeedback,
+    openTopicModal,
+    closeTopicModal
   };
 
 })();
