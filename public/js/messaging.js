@@ -3196,44 +3196,12 @@ App.messaging = (function () {
     if (currentValue && formats.includes(currentValue)) select.value = currentValue;
   }
 
-  async function ensureMessagingTopicsLoaded() {
-    if (Array.isArray(currentMessagingTopics) && currentMessagingTopics.length) return currentMessagingTopics;
-    try {
-      const res = await api('/api/messaging/topics?limit=5000');
-      const topics = Array.isArray(res?.topics)
-        ? res.topics
-        : Array.isArray(res?.categories)
-          ? res.categories
-        : Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-            ? res
-            : [];
-      currentMessagingTopics = topics.slice();
-      return currentMessagingTopics;
-    } catch {
-      return Array.isArray(currentMessagingTopics) ? currentMessagingTopics : [];
-    }
-  }
+
 
   async function renderCreateContentTopicOptions() {
-    const select = document.getElementById('messagingCreateContentTopic');
-    if (!select) return;
-    const currentValue = String(select.value || '').trim();
-    const source = await ensureMessagingTopicsLoaded();
-    const topics = source
-      .map((item) => String(item?.topic || item?.category || '').trim())
-      .filter(Boolean)
-      .filter((value, index, arr) => arr.indexOf(value) === index)
-      .sort((a, b) => a.localeCompare(b));
-    select.innerHTML = '<option value="">No Topic</option>';
-    topics.forEach((topic) => {
-      const option = document.createElement('option');
-      option.value = topic;
-      option.textContent = topic;
-      select.appendChild(option);
-    });
-    if (currentValue && topics.includes(currentValue)) select.value = currentValue;
+    if (App.ui && App.ui.populateTopicsDropdown) {
+      await App.ui.populateTopicsDropdown('messagingCreateContentTopic', 'No Topic', '');
+    }
   }
 
   async function refreshMessagingPrompts() {

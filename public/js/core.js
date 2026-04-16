@@ -777,3 +777,47 @@ App.iconButtonMarkup = function iconButtonMarkup(iconKey, label, className = '')
   const svg = App.ACTION_ICONS[iconKey] || App.ACTION_ICONS.view;
   return `<button type="button" class="${classes}" title="${label}" aria-label="${label}"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${svg}</svg></span></button>`;
 };
+
+App.ui = App.ui || {};
+
+App.ui.ensureMessagingTopicsLoaded = async function() {
+  if (Array.isArray(App.state.cachedTopics) && App.state.cachedTopics.length) {
+    return App.state.cachedTopics;
+  }
+  try {
+    const res = await App.api('/api/messaging/topics?limit=5000');
+    const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+    const flatTopics = topics
+      .map(item => String(item?.topic || item?.category || '').trim())
+      .filter(Boolean)
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+      .sort((a, b) => a.localeCompare(b));
+    App.state.cachedTopics = flatTopics;
+    return flatTopics;
+  } catch (err) {
+    console.error('Failed to pre-fetch cached topics:', err);
+    return Array.isArray(App.state.cachedTopics) ? App.state.cachedTopics : [];
+  }
+};
+
+App.ui.populateTopicsDropdown = async function(selectId, defaultLabel = 'Select Topic', defaultOptionValue = '') {
+  const select = typeof selectId === 'string' ? document.getElementById(selectId) : selectId;
+  if (!select) return;
+  const currentValue = String(select.value || '').trim();
+  const topics = await App.ui.ensureMessagingTopicsLoaded();
+  
+  select.options.length = 0;
+  if (defaultLabel !== null && defaultLabel !== false) {
+    select.add(new Option(defaultLabel, defaultOptionValue));
+  }
+  
+  topics.forEach(topic => {
+    select.add(new Option(topic, topic));
+  });
+  
+  if (currentValue && (currentValue === defaultOptionValue || topics.includes(currentValue))) {
+    select.value = currentValue;
+  } else if (!currentValue && defaultLabel !== null && defaultLabel !== false) {
+    select.value = defaultOptionValue;
+  }
+};

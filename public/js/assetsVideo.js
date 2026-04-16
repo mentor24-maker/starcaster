@@ -42,35 +42,9 @@
 
   async function loadTopicDropdowns() {
     try {
-      console.log('Fetching topics for dropdowns...');
-      const res = await App.api('/api/messaging/topics');
-      console.log('Topics fetch response:', res);
-      
-      const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : [];
-      console.log('Parsed topics array:', topics);
-      
-      const topicSelect = UI.topic();
-      const assignSelect = UI.assignTopic();
-      
-      // Empty and populate Topics Select
-      if (topicSelect) {
-        topicSelect.innerHTML = '';
-        topicSelect.add(new Option('Any', ''));
-        topics.forEach(t => {
-          const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
-          topicSelect.add(new Option(val, val));
-        });
-      }
-
-      // Empty and populate Assign Select
-      if (assignSelect) {
-        assignSelect.innerHTML = '';
-        assignSelect.add(new Option('None', ''));
-        topics.forEach(t => {
-          const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
-          assignSelect.add(new Option(val, val));
-        });
-      }
+      if (!App.ui || !App.ui.populateTopicsDropdown) return;
+      await App.ui.populateTopicsDropdown(UI.topic(), 'Any', '');
+      await App.ui.populateTopicsDropdown(UI.assignTopic(), 'None', '');
     } catch (err) {
       console.error('Failed to load topics:', err);
       App.notify('Error fetching topics for dropdowns', true);
