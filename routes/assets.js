@@ -17,6 +17,7 @@ const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../
 const { isConfigured: isBlobConfigured, handleClientUpload } = require('../lib/blobStorage');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const { listYoutubeVideos } = require('../lib/acquire/YoutubeVideosStore');
+const { getIntegrationStoreKey } = require('../lib/integrationStore');
 
 const ASSET_TYPES = new Set(['Image', 'Video', 'Audio', 'Lead Magnet', 'File']);
 const ASSETS_PATH_RE = /^\/api\/assets\/?$/;
@@ -338,36 +339,98 @@ async function handle(req, res, pathname, method) {
   }
 
   // --- Video Curation Features ---
+  async function searchYoutubeNatively(q, tags, limit = 50) {
+    const { getIntegrationStoreKey } = require('../lib/integrationStore');
+    const storeKey = await getIntegrationStoreKey('youtube', 'api_key');
+    const apiKey = String(process.env.YOUTUBE_API_KEY || '').trim() || storeKey;
+    if (!apiKey) {
+      console.warn('YouTube API key not found for live search.');
+      return [];
+    }
+    const searchStr = [q, tags].filter(Boolean).join(' ');
+    if (!searchStr) return [];
+    
+    const url = new URL('https://www.googleapis.com/youtube/v3/search');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('type', 'video');
+    url.searchParams.set('order', 'relevance');
+    url.searchParams.set('maxResults', String(limit));
+    url.searchParams.set('q', searchStr);
+    url.searchParams.set('key', apiKey);
+    
+    try {
+      const response = await fetch(url.toString(), {
+        headers: { accept: 'application/json', 'user-agent': 'APH-AssetsVideoSearch/1.0' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) return [];
+      const body = await response.json();
+      const items = Array.isArray(body?.items) ? body.items : [];
+      return items.map((item) => ({
+        video_id: String(item?.id?.videoId || ''),
+        video_url: item?.id?.videoId ? `https://www.youtube.com/watch?v=${item?.id?.videoId}` : '',
+        title: String(item?.snippet?.title || ''),
+        channel_name: String(item?.snippet?.channelTitle || ''),
+        published_at: String(item?.snippet?.publishedAt || ''),
+        thumbnail_url: String(item?.snippet?.thumbnails?.medium?.url || item?.snippet?.thumbnails?.default?.url || ''),
+        description: String(item?.snippet?.description || '')
+      })).filter(v => v.video_id);
+    } catch (e) {
+      console.warn('Failed to query Youtube natively:', e.message);
+      return [];
+    }
+  }
+
   if (pathname === '/api/assets/video/search' && requestMethod === 'GET') {
     const urlObj = new URL(req.url, 'http://localhost');
     const query = String(urlObj.searchParams.get('q') || '').toLowerCase().trim();
     const topic = String(urlObj.searchParams.get('topic') || '').toLowerCase().trim();
     const tagsSearch = String(urlObj.searchParams.get('tags') || '').toLowerCase().trim();
-    
-    // Using listYoutubeVideos which synthesizes all aggregated mined data!
-    let vidsRes = await listYoutubeVideos(400); 
-    if (!vidsRes.ok) return sendErr(res, vidsRes.status || 500, vidsRes.error), true;
-    
-    let filtered = Array.isArray(vidsRes.data) ? vidsRes.data : [];
+    const liveSearchStr = [query, tagsSearch].filter(Boolean).join(' ');
 
+    let filteredMap = new Map();
+    let liveIds = new Set();
+
+    // 1. Live Fetch
+    if (liveSearchStr) {
+      const liveVids = await searchYoutubeNatively(query, tagsSearch, 50);
+      liveVids.forEach(v => {
+        liveIds.add(v.video_id);
+        filteredMap.set(v.video_id, v);
+      });
+    }
+
+    // 2. Base Fetch
+    let vidsRes = await listYoutubeVideos(400); 
+    if (vidsRes.ok && Array.isArray(vidsRes.data)) {
+      vidsRes.data.forEach(v => {
+        if (!filteredMap.has(v.video_id)) {
+          filteredMap.set(v.video_id, v);
+        }
+      });
+    }
+    
+    // 3. Hydrate
     try {
       const curTable = tableConfig().assetsVideoCuration;
       if (curTable) {
         const curRes = await sbQuery({ method: 'GET', table: curTable, limit: 2000, query: 'select=*,order=created_at.asc' });
         if (curRes && Array.isArray(curRes.data)) {
-          const map = new Map();
-          curRes.data.forEach(r => map.set(r.video_id, r));
-          filtered.forEach(v => {
-            const match = map.get(v.video_id);
-            if (match) {
-              v.score = match.score;
-              v.positive_feedback = match.positive_feedback;
-              v.negative_feedback = match.negative_feedback;
-              v.visuals_liked = match.visuals_liked;
-              v.specific_clips = match.specific_clips;
-              // If it already had a curated topic, overwrite it so they see it
-              if (match.topic) v.topic = match.topic;
-            }
+          curRes.data.forEach(r => {
+            const v = filteredMap.get(r.video_id) || {
+              video_id: r.video_id,
+              video_url: r.video_url,
+              title: r.title,
+              thumbnail_url: r.thumbnail_url,
+            };
+            v.score = r.score;
+            v.positive_feedback = r.positive_feedback;
+            v.negative_feedback = r.negative_feedback;
+            v.visuals_liked = r.visuals_liked;
+            v.specific_clips = r.specific_clips;
+            if (r.topic) v.topic = r.topic;
+            
+            filteredMap.set(v.video_id, v);
           });
         }
       }
@@ -375,8 +438,12 @@ async function handle(req, res, pathname, method) {
       console.warn('Failed blending curated states into search feed:', err);
     }
     
+    let filtered = Array.from(filteredMap.values());
+    
+    // 4. Local Filtering
     if (query) {
       filtered = filtered.filter(v => 
+        liveIds.has(v.video_id) || 
         (v.title && v.title.toLowerCase().includes(query)) || 
         (v.channel_name && v.channel_name.toLowerCase().includes(query)) ||
         (v.description && v.description.toLowerCase().includes(query))
@@ -388,17 +455,17 @@ async function handle(req, res, pathname, method) {
     if (tagsSearch) {
       const tgArr = tagsSearch.split(',').map(t => t.trim()).filter(Boolean);
       filtered = filtered.filter(v => {
+        if (liveIds.has(v.video_id)) return true;
         const vTags = String(v.tags || '').toLowerCase();
         const vHash = String(v.hashtags || '').toLowerCase();
         return tgArr.some(t => vTags.includes(t) || vHash.includes(t));
       });
     }
     
-    if (!query && !tagsSearch) {
+    if (!query && !tagsSearch && !topic) {
       filtered = filtered.filter(v => !v.score || v.score === 0);
     }
 
-    // Heuristic Sorting: In the future, this intersects with assets_video_curation scores.
     filtered.sort((a, b) => (b.comment_count || 0) - (a.comment_count || 0));
     
     return sendOk(res, 200, filtered), true;
