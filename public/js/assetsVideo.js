@@ -42,9 +42,12 @@
 
   async function loadTopicDropdowns() {
     try {
-      // Use the standard App.api handler
+      console.log('Fetching topics for dropdowns...');
       const res = await App.api('/api/messaging/topics');
+      console.log('Topics fetch response:', res);
+      
       const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : [];
+      console.log('Parsed topics array:', topics);
       
       const topicSelect = UI.topic();
       const assignSelect = UI.assignTopic();
@@ -53,6 +56,8 @@
         const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
         return `<option value="${val}">${val}</option>`;
       }).join('');
+
+      console.log('Generated options HTML:', optionsHtml);
 
       if (topicSelect) topicSelect.innerHTML = optionsHtml;
       
@@ -63,6 +68,7 @@
       if (assignSelect) assignSelect.innerHTML = assignHtml;
     } catch (err) {
       console.error('Failed to load topics:', err);
+      App.notify('Error fetching topics for dropdowns', true);
     }
   }
 
