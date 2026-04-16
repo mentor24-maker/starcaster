@@ -108,7 +108,8 @@
     state.videos.forEach((vid, index) => {
       const el = document.createElement('div');
       el.className = `curation-thumb ${index === state.currentIndex ? 'active' : ''}`;
-      el.style.backgroundImage = `url(${vid.thumbnail_url || ''})`;
+      const thumbUrl = vid.thumbnail_url || (vid.video_id ? `https://img.youtube.com/vi/${vid.video_id}/hqdefault.jpg` : '');
+      el.style.backgroundImage = thumbUrl ? `url(${thumbUrl})` : '';
       el.title = vid.title || 'Unknown Video';
       el.onclick = () => {
         state.currentIndex = index;
@@ -130,7 +131,8 @@
     }
     
     const activeVideo = state.videos[state.currentIndex];
-    UI.title().innerText = activeVideo.title || 'Untitled';
+    const vidUrl = activeVideo.video_url || `https://www.youtube.com/watch?v=${activeVideo.video_id}`;
+    UI.title().innerHTML = `<a href="${vidUrl}" target="_blank" style="color: inherit;">${activeVideo.title || 'Untitled'}</a>`;
     UI.channel().innerText = activeVideo.channel_name || 'Unknown Channel';
     
     const container = UI.playerContainer();
