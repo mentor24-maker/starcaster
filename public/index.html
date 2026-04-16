@@ -5634,17 +5634,10 @@
               <input type="text" id="videoCurationSearch" />
             </div>
             <div class="form-group">
-              <label for="videoCurationTopic">Topic / Folder</label>
+              <label for="videoCurationTopic">Topics</label>
               <select id="videoCurationTopic">
                 <option value="">Any</option>
               </select>
-            </div>
-            <div class="form-group" style="position: relative;">
-              <label>Tags</label>
-              <button id="videoCurationTagsBtn" type="button" class="develop-richtext-tool" onclick="App.assetsVideo.toggleTagsPopup()">0 Selected</button>
-              <div id="videoCurationTagsPopup" class="video-curation-tags-popup hidden">
-                <!-- Javascript will render a 5-col grid of checkboxes here -->
-              </div>
             </div>
             <div class="form-group" style="display: flex; align-items: flex-end;">
               <button type="button" class="black-btn full-width" onclick="App.assetsVideo.applyFilters()">Search & Curate</button>
