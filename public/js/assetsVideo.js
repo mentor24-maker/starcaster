@@ -24,6 +24,8 @@
     scoreContainer: () => document.getElementById('videoFeedbackStarsContainer'),
     positive: () => document.getElementById('videoFeedbackPositive'),
     negative: () => document.getElementById('videoFeedbackNegative'),
+    visuals: () => document.getElementById('videoFeedbackVisuals'),
+    clips: () => document.getElementById('videoFeedbackClips'),
     topicModal: () => document.getElementById('videoCurationTopicModal'),
     topicCheckboxes: () => document.getElementById('videoCurationTopicCheckboxes'),
     topicSummary: () => document.getElementById('videoFeedbackTopicSummary')
@@ -45,10 +47,12 @@
 
   async function loadTopicDropdowns() {
     try {
-      if (!App.ui || !App.ui.populateTopicsDropdown) return;
-      await App.ui.populateTopicsDropdown(UI.topic(), 'Any', '');
+      if (!App.ui) return;
       if (App.ui.ensureMessagingTopicsLoaded) {
         await App.ui.ensureMessagingTopicsLoaded();
+      }
+      if (App.ui.populateTopicsDropdown) {
+        await App.ui.populateTopicsDropdown(UI.topic(), 'Any', '');
       }
     } catch (err) {
       console.error('Failed to load topics:', err);
@@ -233,6 +237,8 @@
     }
     if (UI.positive()) UI.positive().value = '';
     if (UI.negative()) UI.negative().value = '';
+    if (UI.visuals()) UI.visuals().value = '';
+    if (UI.clips()) UI.clips().value = '';
     
     const summary = UI.topicSummary();
     if (summary) {
@@ -264,6 +270,8 @@
     const scoreVal = parseInt(UI.scoreContainer()?.getAttribute('data-score') || '0', 10);
     const posText = UI.positive()?.value.trim() || '';
     const negText = UI.negative()?.value.trim() || '';
+    const visText = UI.visuals()?.value.trim() || '';
+    const clipsText = UI.clips()?.value.trim() || '';
     
     const selectedText = UI.topicSummary()?.textContent || '';
     const assignedTopic = (selectedText === 'No Topics Selected') ? '' : selectedText;
@@ -274,9 +282,11 @@
       title: activeVideo.title,
       thumbnail_url: activeVideo.thumbnail_url,
       score: scoreVal,
-      topic: assignedTopic, // We map the comma separated string to topic for now as it's a string column.
-      visuals_liked: JSON.stringify([{ note: posText }]),
-      specific_clips: JSON.stringify([{ timestamps: negText }])
+      topic: assignedTopic,
+      positive_feedback: posText,
+      negative_feedback: negText,
+      visuals_liked: JSON.stringify([{ note: visText }]),
+      specific_clips: JSON.stringify([{ timestamps: clipsText }])
     };
 
     try {
