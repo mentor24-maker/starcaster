@@ -502,13 +502,23 @@ App.assets = (function () {
     if (els.assetsFilterType.options[0]) els.assetsFilterType.options[0].textContent = 'All Types';
 
     els.assetsFilterName.value = String(state.assetsFilters?.asset_name || '');
-    els.assetsFilterType.value = String(state.assetsFilters?.asset_type || '');
+    const activeType = String(state.assetsFilters?.asset_type || '').trim();
+    els.assetsFilterType.value = activeType;
     els.assetsFilterTags.value = String(state.assetsFilters?.tags || '');
     renderAssetFilterCategoryOptions(
-      String(state.assetsFilters?.asset_type || '').trim(),
+      activeType,
       String(state.assetsFilters?.category || '').trim(),
       { bulkMode: false }
     );
+
+    const createBtn = document.getElementById('openCreateVideoToolBtn');
+    if (createBtn) {
+      if (activeType === 'Video' && !bulkMode) {
+        createBtn.classList.remove('hidden');
+      } else {
+        createBtn.classList.add('hidden');
+      }
+    }
   }
 
   function beginEdit(asset) {
