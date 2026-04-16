@@ -13,12 +13,18 @@ CREATE TABLE IF NOT EXISTS public.assets_video_curation (
     topic TEXT,
     tags TEXT,
     score INTEGER DEFAULT 0,
+    positive_feedback TEXT,
+    negative_feedback TEXT,
     visuals_liked JSONB DEFAULT '[]'::jsonb,
     specific_clips JSONB DEFAULT '[]'::jsonb,
     search_context JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- For existing installations:
+-- ALTER TABLE public.assets_video_curation ADD COLUMN positive_feedback TEXT;
+-- ALTER TABLE public.assets_video_curation ADD COLUMN negative_feedback TEXT;
 
 -- Indexing for fast search and algorithmic sorting
 CREATE INDEX IF NOT EXISTS idx_assets_video_curation_video_id ON public.assets_video_curation(video_id);

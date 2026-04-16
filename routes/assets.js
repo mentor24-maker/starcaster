@@ -349,6 +349,31 @@ async function handle(req, res, pathname, method) {
     if (!vidsRes.ok) return sendErr(res, vidsRes.status || 500, vidsRes.error), true;
     
     let filtered = Array.isArray(vidsRes.data) ? vidsRes.data : [];
+
+    try {
+      const curTable = tableConfig().assetsVideoCuration;
+      if (curTable) {
+        const curRes = await sbQuery({ method: 'GET', table: curTable, limit: 2000 });
+        if (curRes && Array.isArray(curRes.data)) {
+          const map = new Map();
+          curRes.data.forEach(r => map.set(r.video_id, r));
+          filtered.forEach(v => {
+            const match = map.get(v.video_id);
+            if (match) {
+              v.score = match.score;
+              v.positive_feedback = match.positive_feedback;
+              v.negative_feedback = match.negative_feedback;
+              v.visuals_liked = match.visuals_liked;
+              v.specific_clips = match.specific_clips;
+              // If it already had a curated topic, overwrite it so they see it
+              if (match.topic) v.topic = match.topic;
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed blending curated states into search feed:', err);
+    }
     
     if (query) {
       filtered = filtered.filter(v => 
