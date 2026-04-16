@@ -10062,7 +10062,7 @@ button.section-settings-gear-btn svg {
   user-select: none;
 }
 .star-btn:hover,
-.star-btn.active {
+.star-btn.yt-star-golden {
   color: #ffb700 !important;
   transform: scale(1.15);
 }
