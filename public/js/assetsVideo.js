@@ -7,9 +7,7 @@
 (function() {
   const state = {
     videos: [],
-    currentIndex: -1,
-    selectedTags: new Set(),
-    tagsPopupOpen: false
+    currentIndex: -1
   };
 
   const UI = {
@@ -21,8 +19,6 @@
     // Filters
     search: () => document.getElementById('videoCurationSearch'),
     topic: () => document.getElementById('videoCurationTopic'),
-    tagsBtn: () => document.getElementById('videoCurationTagsBtn'),
-    tagsPopup: () => document.getElementById('videoCurationTagsPopup'),
     
     // Feedback Form
     score: () => document.getElementById('videoFeedbackScore'),
@@ -34,7 +30,6 @@
   function openCreateVideoTool() {
     App.setActivePage('assetsCreateVideoToolPage');
     loadTopicDropdowns();
-    loadTagsGrid();
   }
 
   function closeCreateVideoTool() {
@@ -42,111 +37,52 @@
     if (container) {
       container.innerHTML = '<div class="viewer-placeholder"><p>Session closed</p></div>';
     }
-    state.tagsPopupOpen = false;
-    UI.tagsPopup()?.classList.add('hidden');
     App.setActivePage('assetsPage');
   }
 
   async function loadTopicDropdowns() {
     try {
-      const res = await App.core.apiGet('/messaging/topics');
+      // Use the standard App.api handler
+      const res = await App.api('/api/messaging/topics');
       const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : [];
+      
       const topicSelect = UI.topic();
       const assignSelect = UI.assignTopic();
       
       const optionsHtml = '<option value="">Any</option>' + topics.map(t => {
-        const val = t.topic || t.category;
+        const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
         return `<option value="${val}">${val}</option>`;
       }).join('');
 
       if (topicSelect) topicSelect.innerHTML = optionsHtml;
-      if (assignSelect) assignSelect.innerHTML = '<option value="">None</option>' + topics.map(t => {
-        const val = t.topic || t.category;
+      
+      const assignHtml = '<option value="">None</option>' + topics.map(t => {
+        const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
         return `<option value="${val}">${val}</option>`;
       }).join('');
+      if (assignSelect) assignSelect.innerHTML = assignHtml;
     } catch (err) {
       console.error('Failed to load topics:', err);
     }
   }
 
-  async function loadTagsGrid() {
-    try {
-      const res = await App.core.apiGet('/messaging/tags');
-      const tags = Array.isArray(res?.tags) ? res.tags : Array.isArray(res?.data) ? res.data : [];
-      
-      const popup = UI.tagsPopup();
-      if (!popup) return;
-      
-      popup.innerHTML = '';
-      tags.forEach(t => {
-        const val = typeof t === 'string' ? t : t.tag || t.name;
-        if (!val) return;
-        
-        const label = document.createElement('label');
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = val;
-        cb.checked = state.selectedTags.has(val);
-        cb.onchange = (e) => {
-          if (e.target.checked) state.selectedTags.add(val);
-          else state.selectedTags.delete(val);
-          
-          const btn = UI.tagsBtn();
-          if (btn) btn.innerText = `${state.selectedTags.size} Selected`;
-        };
-        
-        label.appendChild(cb);
-        label.appendChild(document.createTextNode(val));
-        popup.appendChild(label);
-      });
-    } catch (err) {
-      console.error('Failed to load tags:', err);
-    }
-  }
-
-  function toggleTagsPopup() {
-    const popup = UI.tagsPopup();
-    if (!popup) return;
-    
-    state.tagsPopupOpen = !state.tagsPopupOpen;
-    popup.classList.toggle('hidden', !state.tagsPopupOpen);
-  }
-
-  // Close tags popup if clicking outside
-  document.addEventListener('click', (e) => {
-    const popup = UI.tagsPopup();
-    const btn = UI.tagsBtn();
-    if (!popup || !btn) return;
-    
-    if (state.tagsPopupOpen && !popup.contains(e.target) && !btn.contains(e.target)) {
-      state.tagsPopupOpen = false;
-      popup.classList.add('hidden');
-    }
-  });
-
   async function applyFilters() {
-    state.tagsPopupOpen = false;
-    UI.tagsPopup()?.classList.add('hidden');
-
     const query = UI.search()?.value.trim() || '';
     const topic = UI.topic()?.value || '';
-    const tags = Array.from(state.selectedTags).join(',');
     
     UI.playerContainer().innerHTML = '<div class="viewer-placeholder"><p>Curating results...</p></div>';
     
     try {
       const qs = new URLSearchParams({
         q: query,
-        topic: topic,
-        tags: tags
+        topic: topic
       });
-      const res = await App.core.apiGet(`/assets/video/search?${qs.toString()}`);
+      // Use the standard App.api handler
+      const res = await App.api(`/api/assets/video/search?${qs.toString()}`);
       
-      if (!res.success) {
-        throw new Error(res.error || 'Failed to fetch curated videos');
-      }
-      
-      state.videos = res.data || [];
+      // Handle the payload shape correctly (App.api unwraps JSON automatically, but may not have "success" flag if it just returns the object directly).
+      const rows = res.data || res.videos || res || [];
+      state.videos = Array.isArray(rows) ? rows : [];
       state.currentIndex = state.videos.length > 0 ? 0 : -1;
       
       renderThumbnails();
@@ -240,7 +176,7 @@
 
   async function saveFeedback() {
     if (state.currentIndex < 0 || !state.videos[state.currentIndex]) {
-      App.core.showError('No active video to review.');
+      App.notify('No active video to review.', true);
       return;
     }
 
@@ -258,14 +194,16 @@
     };
 
     try {
-      const res = await App.core.apiPost('/assets/video/feedback', payload);
-      if (!res.success) throw new Error(res.error || 'Failed to save feedback');
+      await App.api('/api/assets/video/feedback', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
       
-      App.core.showSuccess('Feedback saved! Advancing to next video.');
+      App.notify('Feedback saved! Advancing to next video.');
       nextVideo();
     } catch (err) {
       console.error(err);
-      App.core.showError(err.message);
+      App.notify(err.message, true);
     }
   }
 
@@ -276,8 +214,7 @@
     applyFilters,
     prevVideo,
     nextVideo,
-    saveFeedback,
-    toggleTagsPopup
+    saveFeedback
   };
 
 })();
