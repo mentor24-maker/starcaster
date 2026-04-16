@@ -809,14 +809,15 @@ App.ui.populateTopicsDropdown = async function(selectId, defaultLabel = 'Select 
   const currentValue = String(select.value || '').trim();
   const topics = await App.ui.ensureMessagingTopicsLoaded();
   
-  select.options.length = 0;
+  let html = '';
   if (defaultLabel !== null && defaultLabel !== false) {
-    select.add(new Option(defaultLabel, defaultOptionValue));
+    html += `<option value="${defaultOptionValue}">${defaultLabel}</option>`;
   }
-  
   topics.forEach(topic => {
-    select.add(new Option(topic, topic));
+    html += `<option value="${topic}">${topic}</option>`;
   });
+  // Bypass browser Option mutation bugs by writing strictly into innerHTML
+  select.innerHTML = html;
   
   if (currentValue && (currentValue === defaultOptionValue || topics.includes(currentValue))) {
     select.value = currentValue;
