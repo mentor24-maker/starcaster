@@ -5613,8 +5613,124 @@
       </section>
 
       <section id="assetsVideoPage" class="app-page hidden">
-        <h2>Assets: Video</h2>
-        <p>Video module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Assets: Video</h2>
+          <div class="page-heading-actions">
+            <button id="addVideoBtn" type="button">Add Video</button>
+            <button id="openCreateVideoToolBtn" type="button" class="black-btn" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
+            <button type="button" onclick="App.assets.openAssetsLanding(); return false;">Back To Assets</button>
+          </div>
+        </div>
+        <div id="assetsVideoMainContent">
+          <p>Video module placeholder.</p>
+        </div>
+      </section>
+
+      <section id="assetsCreateVideoToolPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Video: Curation Studio</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.assetsVideo.closeCreateVideoTool(); return false;">Close Studio</button>
+          </div>
+        </div>
+        
+        <div class="video-curation-layout">
+          <!-- PART 1: Filter Row -->
+          <div class="video-curation-filters standard-form-grid">
+            <div class="form-group">
+              <label for="videoCurationSearch">Search Query</label>
+              <input type="text" id="videoCurationSearch" placeholder="Keywords (e.g. AI Marketing)" />
+            </div>
+            <div class="form-group">
+              <label for="videoCurationTopic">Topic / Folder</label>
+              <select id="videoCurationTopic">
+                <option value="">Any</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="videoCurationContacts">Contacts</label>
+              <input type="text" id="videoCurationContacts" placeholder="Contact ID or Persona" />
+            </div>
+            <div class="form-group">
+              <label for="videoCurationTags">Tags</label>
+              <input type="text" id="videoCurationTags" placeholder="Tags (comma separated)" />
+            </div>
+            <div class="form-group full-width" style="text-align: right;">
+              <button type="button" class="black-btn" onclick="App.assetsVideo.applyFilters()">Search & Curate</button>
+            </div>
+          </div>
+
+          <!-- PART 2: Video Viewer -->
+          <div class="video-curation-viewer-arena">
+            <div class="viewer-carousel-container">
+              <button type="button" class="carousel-nav-btn left-nav" onclick="App.assetsVideo.prevVideo()">
+                &#9664;
+              </button>
+              
+              <div class="viewer-main-screen" id="videoCurationPlayerContainer">
+                <div class="viewer-placeholder">
+                  <p>Apply filters to fetch videos</p>
+                </div>
+              </div>
+              
+              <button type="button" class="carousel-nav-btn right-nav" onclick="App.assetsVideo.nextVideo()">
+                &#9654;
+              </button>
+            </div>
+            
+            <div class="video-metadata-bar">
+              <h3 id="videoCurationTitle">No Video Selected</h3>
+              <p id="videoCurationChannel" class="meta-channel"></p>
+            </div>
+
+            <!-- Thumbnail Gallery -->
+            <div class="video-curation-thumbnail-strip" id="videoCurationThumbnails">
+              <!-- Thumbnails dynamically rendered here -->
+            </div>
+          </div>
+
+          <!-- PART 3: Creator (Feedback Area) -->
+          <div class="video-curation-feedback-tools standard-form-grid">
+            <div class="form-group full-width">
+              <h3>Training Feedback & Notes</h3>
+            </div>
+            
+            <div class="form-group">
+              <label for="videoFeedbackScore">Overall Quality Score</label>
+              <div class="score-selector">
+                <select id="videoFeedbackScore">
+                  <option value="0">Unrated</option>
+                  <option value="1">1 - Poor</option>
+                  <option value="2">2 - Needs Work</option>
+                  <option value="3">3 - Acceptable</option>
+                  <option value="4">4 - Good</option>
+                  <option value="5">5 - Excellent</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="videoFeedbackTopic">Assign to Topic (Folder)</label>
+              <select id="videoFeedbackTopic">
+                <option value="">None</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label for="videoFeedbackVisuals">Visuals We Like / Notes</label>
+              <textarea id="videoFeedbackVisuals" rows="3" placeholder="Describe the style, aesthetic, or techniques used..."></textarea>
+            </div>
+
+            <div class="form-group full-width">
+              <label for="videoFeedbackClips">Specific Clips (Timestamps)</label>
+              <textarea id="videoFeedbackClips" rows="2" placeholder="e.g. 1:05-1:15 (great transition), 3:20 (B-roll idea)"></textarea>
+            </div>
+
+            <div class="form-group full-width" style="text-align: right;">
+              <button type="button" class="black-btn" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="assetsMusicPage" class="app-page hidden">
@@ -8186,6 +8302,7 @@
     <script src="/js/observe.js"></script>
     <script src="/js/roger.js"></script>
     <script src="/js/assets.js"></script>
+    <script src="/js/assetsVideo.js"></script>
     <script src="/js/assetCategories.js"></script>
     <script src="/js/channels.js"></script>
     <script src="/js/envConfig.js"></script>
