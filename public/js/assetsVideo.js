@@ -46,23 +46,15 @@
   }
 
   async function loadTopicDropdowns() {
-    try {
-      if (!App.ui) return;
-      if (App.ui.ensureMessagingTopicsLoaded) {
-        let topics = await App.ui.ensureMessagingTopicsLoaded();
-        let retries = 5;
-        while ((!topics || topics.length === 0) && retries > 0) {
-          await new Promise(r => setTimeout(r, 1200));
-          topics = await App.ui.ensureMessagingTopicsLoaded();
-          retries--;
+    setTimeout(async () => {
+      try {
+        if (App.ui && App.ui.populateTopicsDropdown) {
+          await App.ui.populateTopicsDropdown('videoCurationTopic', 'Any', '');
         }
+      } catch (err) {
+        console.error('Failed to load curation topics:', err);
       }
-      if (App.ui.populateTopicsDropdown) {
-        await App.ui.populateTopicsDropdown(UI.topic(), 'Any', '');
-      }
-    } catch (err) {
-      console.error('Failed to load topics:', err);
-    }
+    }, 150);
   }
 
   async function openTopicModal() {
