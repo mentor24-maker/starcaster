@@ -385,14 +385,14 @@ async function handle(req, res, pathname, method) {
     const query = String(urlObj.searchParams.get('q') || '').toLowerCase().trim();
     const topic = String(urlObj.searchParams.get('topic') || '').toLowerCase().trim();
     const tagsSearch = String(urlObj.searchParams.get('tags') || '').toLowerCase().trim();
-    const liveSearchStr = [query, tagsSearch].filter(Boolean).join(' ');
+    const liveSearchStr = [query, topic, tagsSearch].filter(Boolean).join(' ');
 
     let filteredMap = new Map();
     let liveIds = new Set();
 
     // 1. Live Fetch
     if (liveSearchStr) {
-      const liveVids = await searchYoutubeNatively(query, tagsSearch, 50);
+      const liveVids = await searchYoutubeNatively(liveSearchStr, tagsSearch, 50);
       liveVids.forEach(v => {
         liveIds.add(v.video_id);
         filteredMap.set(v.video_id, v);
