@@ -176,19 +176,18 @@ App.acquire = (function () {
 
   async function refreshDirectAcquireTopics() {
     try {
-      const res = await api('/api/messaging/topics');
-      const topics = Array.isArray(res?.topics)
-        ? res.topics
-        : Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-            ? res
-            : [];
-      directAcquireTopics = topics
-        .map((item) => String(item?.topic || item?.category || '').trim())
-        .filter(Boolean)
-        .filter((value, index, list) => list.indexOf(value) === index)
-        .sort((a, b) => a.localeCompare(b));
+      if (App.ui && App.ui.ensureMessagingTopicsLoaded) {
+        const topics = await App.ui.ensureMessagingTopicsLoaded();
+        directAcquireTopics = topics.slice();
+      } else {
+        const res = await api('/api/messaging/topics');
+        const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        directAcquireTopics = topics
+          .map((item) => String(item?.topic || item?.category || '').trim())
+          .filter(Boolean)
+          .filter((value, index, list) => list.indexOf(value) === index)
+          .sort((a, b) => a.localeCompare(b));
+      }
     } catch (_) {
       directAcquireTopics = [];
     }
