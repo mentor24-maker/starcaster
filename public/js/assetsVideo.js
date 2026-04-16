@@ -52,20 +52,25 @@
       const topicSelect = UI.topic();
       const assignSelect = UI.assignTopic();
       
-      const optionsHtml = '<option value="">Any</option>' + topics.map(t => {
-        const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
-        return `<option value="${val}">${val}</option>`;
-      }).join('');
+      // Empty and populate Topics Select
+      if (topicSelect) {
+        topicSelect.innerHTML = '';
+        topicSelect.add(new Option('Any', ''));
+        topics.forEach(t => {
+          const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
+          topicSelect.add(new Option(val, val));
+        });
+      }
 
-      console.log('Generated options HTML:', optionsHtml);
-
-      if (topicSelect) topicSelect.innerHTML = optionsHtml;
-      
-      const assignHtml = '<option value="">None</option>' + topics.map(t => {
-        const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
-        return `<option value="${val}">${val}</option>`;
-      }).join('');
-      if (assignSelect) assignSelect.innerHTML = assignHtml;
+      // Empty and populate Assign Select
+      if (assignSelect) {
+        assignSelect.innerHTML = '';
+        assignSelect.add(new Option('None', ''));
+        topics.forEach(t => {
+          const val = typeof t === 'string' ? t : (t.topic || t.category || t.name || t.id);
+          assignSelect.add(new Option(val, val));
+        });
+      }
     } catch (err) {
       console.error('Failed to load topics:', err);
       App.notify('Error fetching topics for dropdowns', true);
