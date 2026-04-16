@@ -503,10 +503,30 @@ async function handle(req, res, pathname, method) {
       table: targetTable,
       query: 'select=*',
       body: record,
-      headers: { Prefer: 'return=representation' }
+      headers: { Prefer: 'return=representation,resolution=merge-duplicates' }
     });
 
     if (!insRes.ok) return sendErr(res, insRes.status || 500, insRes.error), true;
+    
+    // Auto-mirror to acquire repository
+    const acquireTable = tableConfig().acquireYoutubeVideos || 'acquire_youtube_videos';
+    try {
+      await sbQuery({
+        method: 'POST',
+        table: acquireTable,
+        query: 'on_conflict=video_id',
+        body: {
+          video_id: record.video_id,
+          video_url: record.video_url,
+          title: record.title,
+          topic: record.topic,
+          updated_at: new Date().toISOString()
+        },
+        headers: { Prefer: 'resolution=merge-duplicates' }
+      });
+    } catch (err) {
+      console.warn('Failed to mirror curated video to acquire repository:', err);
+    }
     
     return sendOk(res, 201, Array.isArray(insRes.data) ? insRes.data[0] : insRes.data), true;
   }
