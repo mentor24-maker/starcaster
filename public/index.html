@@ -5628,7 +5628,7 @@
         
         <div class="video-curation-layout">
           <!-- PART 1: Filter Row -->
-          <div class="video-curation-filters standard-form-grid">
+          <div class="video-curation-filters" style="display: grid; grid-template-columns: 1fr 1fr 200px; gap: 1rem; align-items: end; margin-bottom: 1.5rem;">
             <div class="form-group">
               <label for="videoCurationSearch">Search Query</label>
               <input type="text" id="videoCurationSearch" />
@@ -5675,8 +5675,8 @@
             </div>
 
             <!-- PART 3: Creator (Feedback Area) -->
-            <div class="video-curation-feedback-tools standard-form-grid">
-              <div class="form-group full-width">
+            <div class="video-curation-feedback-tools" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="form-group full-width" style="grid-column: 1 / -1;">
                 <h3>Training Feedback & Notes</h3>
               </div>
               
@@ -5718,7 +5718,7 @@
               </div>
 
               <!-- ROW 4 -->
-              <div class="form-group full-width" style="text-align: center;">
+              <div class="form-group full-width" style="grid-column: 1 / -1; text-align: center;">
                 <button type="button" class="black-btn" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
               </div>
             </div>
