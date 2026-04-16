@@ -50,10 +50,11 @@
       if (!App.ui) return;
       if (App.ui.ensureMessagingTopicsLoaded) {
         let topics = await App.ui.ensureMessagingTopicsLoaded();
-        if (!topics || topics.length === 0) {
-          // Wait briefly for auth to serialize if it just loaded
+        let retries = 3;
+        while ((!topics || topics.length === 0) && retries > 0) {
           await new Promise(r => setTimeout(r, 600));
-          await App.ui.ensureMessagingTopicsLoaded();
+          topics = await App.ui.ensureMessagingTopicsLoaded();
+          retries--;
         }
       }
       if (App.ui.populateTopicsDropdown) {
