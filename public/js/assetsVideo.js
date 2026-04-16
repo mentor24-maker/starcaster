@@ -359,4 +359,11 @@
     closeTopicModal
   };
 
+  // Run initialization routines globally on script hook rather than sequestering them behind openCreateVideoTool routing
+  // This guarantees that Star Rating Event Listeners and Topics Taxonomy properly hydrate regardless of how the User accessed the view.
+  document.addEventListener('DOMContentLoaded', () => {
+    initStars();
+    loadTopicDropdowns();
+  });
+
 })();
