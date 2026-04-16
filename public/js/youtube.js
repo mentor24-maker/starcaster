@@ -2051,8 +2051,10 @@ App.youtube = (function () {
   }
 
   function topicOptions() {
+    if (App.state && Array.isArray(App.state.cachedTopics)) {
+      return App.state.cachedTopics;
+    }
     var rawMessaging = App.messaging && typeof App.messaging.getTopics === 'function' ? App.messaging.getTopics() : [];
-    console.log('[DEBUG] topicOptions called. App.messaging.getTopics() returned:', rawMessaging.length, 'items');
     return rawMessaging
       .map(function(item) { return safeText(item && (item.topic || item.category)); })
       .filter(Boolean);
