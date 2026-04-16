@@ -202,8 +202,11 @@
     const container = UI.playerContainer();
     if (activeVideo.video_id) {
       container.innerHTML = `<iframe 
-        src="https://www.youtube-nocookie.com/embed/${activeVideo.video_id}?autoplay=1&enablejsapi=1" 
-        allow="autoplay; encrypted-media" 
+        width="100%"
+        height="100%"
+        style="width: 100%; height: 100%; border: none;"
+        src="https://www.youtube-nocookie.com/embed/${activeVideo.video_id}?enablejsapi=1&rel=0" 
+        allow="encrypted-media" 
         allowfullscreen>
       </iframe>`;
     } else {
