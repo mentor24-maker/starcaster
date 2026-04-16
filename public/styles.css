@@ -9879,6 +9879,7 @@ button.section-settings-gear-btn svg {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0; /* Prevents grid column from exploding to 5000px from thumbnail track */
 }
 
 .viewer-carousel-container {
@@ -9903,6 +9904,7 @@ button.section-settings-gear-btn svg {
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
 }
 
 .carousel-nav-btn:hover {
@@ -9911,8 +9913,8 @@ button.section-settings-gear-btn svg {
 }
 .viewer-main-screen {
   flex: none;
-  width: 960px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 960px;
   margin: 0 auto;
   background: #000;
   border-radius: var(--radius-md);
