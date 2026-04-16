@@ -10057,13 +10057,14 @@ button.section-settings-gear-btn svg {
   font-size: 1.5rem;
 }
 .star-btn {
-  color: var(--border);
-  transition: color 0.2s;
+  color: #cbd5e1 !important;
+  transition: color 0.2s, transform 0.1s;
   user-select: none;
 }
 .star-btn:hover,
 .star-btn.active {
-  color: #ffc107;
+  color: #ffb700 !important;
+  transform: scale(1.15);
 }
 
 @media (max-width: 900px) {
