@@ -369,6 +369,10 @@ async function handle(req, res, pathname, method) {
       });
     }
     
+    if (!query && !tagsSearch) {
+      filtered = filtered.filter(v => !v.score || v.score === 0);
+    }
+
     // Heuristic Sorting: In the future, this intersects with assets_video_curation scores.
     filtered.sort((a, b) => (b.comment_count || 0) - (a.comment_count || 0));
     
@@ -387,8 +391,10 @@ async function handle(req, res, pathname, method) {
       thumbnail_url: String(body.thumbnail_url || '').trim(),
       score: Number(body.score || 0),
       topic: String(body.topic || '').trim(),
-      visuals_liked: JSON.parse(body.visuals_liked || '[]'),
-      specific_clips: JSON.parse(body.specific_clips || '[]')
+      positive_feedback: String(body.positive_feedback || '').trim(),
+      negative_feedback: String(body.negative_feedback || '').trim(),
+      visuals_liked: Array.isArray(body.visuals_liked) ? body.visuals_liked : JSON.parse(body.visuals_liked || '[]'),
+      specific_clips: Array.isArray(body.specific_clips) ? body.specific_clips : JSON.parse(body.specific_clips || '[]')
     };
 
     const targetTable = tableConfig().assetsVideoCuration;
