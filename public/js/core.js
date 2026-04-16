@@ -809,20 +809,16 @@ App.ui.populateTopicsDropdown = async function(selectId, defaultLabel = 'Select 
   const currentValue = String(select.value || '').trim();
   const topics = await App.ui.ensureMessagingTopicsLoaded();
   
-  select.innerHTML = '';
+  select.options.length = 0;
   if (defaultLabel !== null && defaultLabel !== false) {
-    const placeholder = document.createElement('option');
-    placeholder.value = defaultOptionValue;
-    placeholder.textContent = defaultLabel;
-    select.appendChild(placeholder);
+    select.add(new Option(defaultLabel, defaultOptionValue));
   }
   
-  topics.forEach(topic => {
-    const opt = document.createElement('option');
-    opt.value = topic;
-    opt.textContent = topic;
-    select.appendChild(opt);
-  });
+  if (Array.isArray(topics)) {
+    topics.forEach(topic => {
+      select.add(new Option(topic, topic));
+    });
+  }
   
   if (currentValue && (currentValue === defaultOptionValue || topics.includes(currentValue))) {
     select.value = currentValue;
