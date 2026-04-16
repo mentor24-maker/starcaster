@@ -50,9 +50,9 @@
       if (!App.ui) return;
       if (App.ui.ensureMessagingTopicsLoaded) {
         let topics = await App.ui.ensureMessagingTopicsLoaded();
-        let retries = 3;
+        let retries = 5;
         while ((!topics || topics.length === 0) && retries > 0) {
-          await new Promise(r => setTimeout(r, 600));
+          await new Promise(r => setTimeout(r, 1200));
           topics = await App.ui.ensureMessagingTopicsLoaded();
           retries--;
         }

@@ -353,7 +353,7 @@ async function handle(req, res, pathname, method) {
     try {
       const curTable = tableConfig().assetsVideoCuration;
       if (curTable) {
-        const curRes = await sbQuery({ method: 'GET', table: curTable, limit: 2000 });
+        const curRes = await sbQuery({ method: 'GET', table: curTable, limit: 2000, query: 'select=*,order=created_at.asc' });
         if (curRes && Array.isArray(curRes.data)) {
           const map = new Map();
           curRes.data.forEach(r => map.set(r.video_id, r));
