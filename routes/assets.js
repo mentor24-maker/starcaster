@@ -17,7 +17,6 @@ const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../
 const { isConfigured: isBlobConfigured, handleClientUpload } = require('../lib/blobStorage');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const { listYoutubeVideos } = require('../lib/acquire/YoutubeVideosStore');
-const { getIntegrationStoreKey } = require('../lib/integrationStore');
 
 const ASSET_TYPES = new Set(['Image', 'Video', 'Audio', 'Lead Magnet', 'File']);
 const ASSETS_PATH_RE = /^\/api\/assets\/?$/;
@@ -340,8 +339,8 @@ async function handle(req, res, pathname, method) {
 
   // --- Video Curation Features ---
   async function searchYoutubeNatively(q, tags, limit = 50) {
-    const { getIntegrationStoreKey } = require('../lib/integrationStore');
-    const storeKey = await getIntegrationStoreKey('youtube', 'api_key');
+    const { getProviderValues } = require('../lib/apiSettings');
+    const storeKey = String(getProviderValues('youtube')?.api_key || getProviderValues('google')?.api_key || '').trim();
     const apiKey = String(process.env.YOUTUBE_API_KEY || '').trim() || storeKey;
     if (!apiKey) {
       console.warn('YouTube API key not found for live search.');
