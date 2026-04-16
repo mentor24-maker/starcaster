@@ -339,6 +339,7 @@ async function handle(req, res, pathname, method) {
 
   // --- Video Curation Features ---
   if (pathname === '/api/assets/video/search' && requestMethod === 'GET') {
+    const urlObj = new URL(req.url, 'http://localhost');
     const query = String(urlObj.searchParams.get('q') || '').toLowerCase().trim();
     const topic = String(urlObj.searchParams.get('topic') || '').toLowerCase().trim();
     const tagsSearch = String(urlObj.searchParams.get('tags') || '').toLowerCase().trim();

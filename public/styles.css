@@ -9875,14 +9875,10 @@ button.section-settings-gear-btn svg {
 }
 
 .video-curation-viewer-arena {
-  background: #0f172a; /* Dark premium background */
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  color: #fff;
+  padding: 1.5rem 0;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
 }
 
 .viewer-carousel-container {
@@ -9894,9 +9890,9 @@ button.section-settings-gear-btn svg {
 }
 
 .carousel-nav-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: none;
+  background: var(--bg-card, #f8f9fa);
+  color: var(--text-dark, #333);
+  border: 1px solid var(--border-light, #e2e8f0);
   border-radius: 50%;
   width: 48px;
   height: 48px;
@@ -9906,16 +9902,16 @@ button.section-settings-gear-btn svg {
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: var(--shadow-sm);
 }
 
 .carousel-nav-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--bg-hover, #e2e8f0);
   transform: scale(1.1);
 }
-
 .viewer-main-screen {
   flex: none;
-  width: 640px;
+  width: 960px;
   max-width: 100%;
   margin: 0 auto;
   background: #000;
