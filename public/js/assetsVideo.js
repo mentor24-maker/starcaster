@@ -763,6 +763,21 @@
                    if (Math.floor(Date.now() / 1000) % 8 === 0) {
                        try {
                           const statusRes = await App.api(`/api/assets/generate/status?id=${asset.id}`);
+                          
+                          if (statusRes.asset && statusRes.asset._vertexDiagnostic) {
+                             const vDiag = statusRes.asset._vertexDiagnostic;
+                             console.log(`[Veo Diagnostic] Asset ${asset.id}:`, vDiag);
+                             
+                             // Attempt to map progress out of the raw Vertex JSON dynamically
+                             const progNode = document.getElementById(`elapsed-time-${asset.id}`);
+                             if (progNode && vDiag.metadata) {
+                                const progCount = vDiag.metadata.progressPercent || vDiag.metadata.progressPercentage || '';
+                                if (progCount) {
+                                   progNode.title = `Vertex Engine: ${progCount}% Complete`;
+                                }
+                             }
+                          }
+                          
                           if (statusRes.asset && statusRes.asset.generationStatus !== 'processing') {
                              clearInterval(galleryPollers[asset.id]);
                              delete galleryPollers[asset.id];

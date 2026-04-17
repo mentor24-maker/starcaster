@@ -205,6 +205,7 @@ async function handle(req, res, pathname, method) {
        try {
           if (target.generationJobId) {
              const statusData = await vertexVeo.getLROStatus(target.generationJobId);
+             target._vertexDiagnostic = statusData; 
              
              if (statusData.error) {
                  await updateAsset(target.id, { generationStatus: 'failed', comments: 'Vertex Error: ' + JSON.stringify(statusData.error) }, scope);
