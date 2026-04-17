@@ -61,11 +61,15 @@
 
   async function loadCreationAssetCategories() {
     const select = document.getElementById('creationRefAssetCategory');
+    const typeSelect = document.getElementById('creationRefAssetType');
     if (!select) return;
     try {
       const res = await App.api('/api/asset-categories');
       const categories = res.categories || [];
-      const names = Array.from(new Set(categories.map(c => c.category).filter(Boolean)));
+      const filterType = typeSelect ? String(typeSelect.value || '').trim() : '';
+
+      const filtered = filterType ? categories.filter(c => String(c.assetType || '') === filterType) : categories;
+      const names = Array.from(new Set(filtered.map(c => c.category).filter(Boolean)));
       names.sort();
       
       const currentVal = select.value;
@@ -739,6 +743,11 @@
     initStars();
     loadTopicDropdowns();
     loadCreationAssetCategories();
+    
+    const creationTypeFilter = document.getElementById('creationRefAssetType');
+    if (creationTypeFilter) {
+       creationTypeFilter.addEventListener('change', loadCreationAssetCategories);
+    }
   });
 
 })();
