@@ -691,14 +691,77 @@
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      App.notify(data.message || 'Video generation structural pipeline triggered!', false);
+      App.notify(data.message || 'Video generation pipeline locked. Rendering asynchronously.', false);
       promptInput.value = '';
       creationReferences = [];
       renderCreationReferences();
+
+      // Start Poller Sequence
+      if (data.asset && data.asset.id) {
+        startGalleryPoller(data.asset);
+      }
     } catch (err) {
       console.error(err);
       App.notify('Failed to route context to generation engine.', true);
     }
+  }
+
+  function startGalleryPoller(assetData) {
+    const queueUI = document.getElementById('creationGalleryQueue');
+    if (!queueUI) return;
+
+    // Inject Loading Card
+    const loaderId = `gallery-poll-${assetData.id}`;
+    const card = document.createElement('div');
+    card.id = loaderId;
+    card.className = 'dashboard-card';
+    card.style.marginTop = '1rem';
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h4>${assetData.assetName || 'Generating Video...'}</h4>
+          <span class="muted" style="font-size:0.85rem;">Status: <strong style="color:var(--primary-color);">Processing</strong> (Est ~3 min)</span>
+        </div>
+        <div class="loader-spinner" style="border: 4px solid var(--border); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite;"></div>
+      </div>
+    `;
+    queueUI.prepend(card);
+
+    if (!document.getElementById('galleryPollStyles')) {
+       const style = document.createElement('style');
+       style.id = 'galleryPollStyles';
+       style.textContent = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+       document.head.appendChild(style);
+    }
+
+    // Set internal interval to ping backend status natively
+    const intervalObj = setInterval(async () => {
+      try {
+        const res = await App.api(`/api/assets/generate/status?id=${assetData.id}`);
+        // If the backend drops successful video URL payload safely down
+        if (res.asset && res.asset.generationStatus === 'completed') {
+           clearInterval(intervalObj);
+           card.innerHTML = `
+             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 0.5rem;">
+               <div>
+                 <h4>${res.asset.assetName || 'Generated Output'}</h4>
+                 <span class="muted" style="font-size:0.85rem;">Status: <strong style="color:limegreen;">Completed</strong></span>
+               </div>
+               <button class="white-btn tiny-btn" onclick="window.open('${res.asset.location}', '_blank')">Download raw .mp4</button>
+             </div>
+             <video src="${res.asset.location}" controls style="width:100%; border-radius:var(--radius); max-height:400px; background:#000;"></video>
+           `;
+        } else if (res.asset && res.asset.generationStatus === 'failed') {
+           clearInterval(intervalObj);
+           card.innerHTML = `
+             <h4>${res.asset.assetName || 'Generation Failed'}</h4>
+             <span style="color:tomato;">The external AI process failed structurally. Review payload params.</span>
+           `;
+        }
+      } catch (e) {
+         console.warn("Polling interval skipped step due to API timeout.", e);
+      }
+    }, 8000); // 8 second cycle
   }
 
   window.App = window.App || {};
