@@ -277,10 +277,31 @@ App.assets = (function () {
       return;
     }
 
-    if (type === 'Video' && valid && els.assetPreviewVideo) {
-      els.assetPreviewVideo.src = direct;
-      els.assetPreviewVideo.classList.remove('hidden');
-      return;
+    const isYouTube = location.includes('youtube.com') || location.includes('youtu.be');
+
+    if (type === 'Video' && valid) {
+      if (isYouTube && els.assetPreviewFrame) {
+        let embedUrl = location;
+        try {
+          const u = new URL(location);
+          if (!u.pathname.startsWith('/embed/')) {
+            let vidId = u.searchParams.get('v');
+            if (u.hostname === 'youtu.be') vidId = u.pathname.substring(1);
+            if (vidId) {
+              const sp = new URLSearchParams(u.search);
+              sp.delete('v');
+              embedUrl = `https://www.youtube.com/embed/${vidId}?${sp.toString()}`;
+            }
+          }
+        } catch(e){}
+        els.assetPreviewFrame.src = embedUrl;
+        els.assetPreviewFrame.classList.remove('hidden');
+        return;
+      } else if (els.assetPreviewVideo && !isYouTube) {
+        els.assetPreviewVideo.src = direct;
+        els.assetPreviewVideo.classList.remove('hidden');
+        return;
+      }
     }
 
     if (type === 'Audio' && valid && els.assetPreviewAudio) {
@@ -532,7 +553,15 @@ App.assets = (function () {
     els.assetForm.asset_name.value = String(asset.assetName || '');
     els.assetForm.asset_type.value = String(asset.assetType || '');
     renderCategoryOptionsByType(asset.assetType, String(asset.category || ''));
-    if (els.assetForm.topic) els.assetForm.topic.value = String(asset.topic || '');
+    if (els.assetForm.topic) {
+      if (els.assetForm.topic.tagName === 'SELECT') {
+        if (App && App.ui && typeof App.ui.populateTopicsDropdown === 'function') {
+          App.ui.populateTopicsDropdown(els.assetForm.topic, 'Select Topic', String(asset.topic || ''));
+        }
+      } else {
+        els.assetForm.topic.value = String(asset.topic || '');
+      }
+    }
     if (els.assetForm.comments) els.assetForm.comments.value = String(asset.comments || '');
     els.assetForm.tags.value = Array.isArray(asset.tags) ? asset.tags.join(', ') : '';
     if (els.assetIdInput) {
@@ -542,11 +571,25 @@ App.assets = (function () {
       els.assetLocationText.innerHTML = '';
       const location = String(asset.location || '').trim();
       if (isValidUrl(location)) {
+        let displayUrl = location;
+        try {
+          const u = new URL(location);
+          if (u.hostname.includes('youtube.com') && u.pathname.startsWith('/embed/')) {
+            const vidId = u.pathname.replace('/embed/', '');
+            const out = new URL('https://www.youtube.com/watch');
+            out.searchParams.set('v', vidId);
+            for (const [k, v] of u.searchParams.entries()) {
+              out.searchParams.set(k, v);
+            }
+            displayUrl = out.toString();
+          }
+        } catch(e){}
+
         const link = document.createElement('a');
-        link.href = location;
+        link.href = displayUrl;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        link.textContent = location;
+        link.textContent = displayUrl;
         els.assetLocationText.appendChild(link);
       } else {
         els.assetLocationText.textContent = location || '-';
