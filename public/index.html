@@ -5877,13 +5877,30 @@
         <!-- COLLAPSIBLE: Generation History -->
         <div class="studio-collapsible-wrapper" id="generationHistoryWrap" style="margin-top: 1rem;">
           <div class="studio-collapsible-header collapsed" id="generationHistoryHeader" onclick="App.assetsVideo.toggleStudioPanel('generationHistoryWrap')">
-            <h3>History</h3>
+            <h3>AI Video Library</h3>
             <span class="studio-collapsible-icon">▼</span>
           </div>
           <div class="studio-collapsible-body hidden" id="generationHistoryBody" style="padding: 1rem;">
+             
+             <!-- Bulk Actions Filter Bar -->
+             <div class="youtube-comment-bulk-toolbar" style="margin-bottom: 1rem;">
+                <div class="youtube-comment-bulk-checkall">
+                  <input id="generationHistorySelectAll" type="checkbox" aria-label="Select all jobs" onchange="App.assetsVideo.toggleAllGenerations(this)" />
+                </div>
+                <div class="youtube-comment-bulk-actions">
+                  <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()">Delete Selected</button>
+                  &nbsp;&nbsp;|&nbsp;&nbsp;
+                  <select id="generationHistoryAssignTopicSelect" class="form-input" style="max-width: 150px; display: inline-block;">
+                    <option value="">-- Topic --</option>
+                  </select>
+                </div>
+             </div>
+
+             <div class="table-wrap">
              <table class="standard-table">
                <thead>
                  <tr>
+                   <th style="width: 40px; text-align: center;">✓</th>
                    <th>Job Asset Name</th>
                    <th>Status</th>
                    <th>Start Time</th>
