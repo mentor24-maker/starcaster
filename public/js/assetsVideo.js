@@ -501,6 +501,42 @@
     }
   }
 
+  function toggleStudioPanel(panelId) {
+    const wrap = document.getElementById(panelId);
+    if (!wrap) return;
+    const header = wrap.querySelector('.studio-collapsible-header');
+    const body = wrap.querySelector('.studio-collapsible-body');
+    if (!header || !body) return;
+    
+    if (body.classList.contains('hidden')) {
+      body.classList.remove('hidden');
+      header.classList.remove('collapsed');
+    } else {
+      body.classList.add('hidden');
+      header.classList.add('collapsed');
+    }
+  }
+
+  async function submitCreationPrompt() {
+    const promptInput = document.getElementById('videoCreationPrompt');
+    if (!promptInput) return;
+    const promptText = String(promptInput.value || '').trim();
+    if (!promptText) return App.notify('Please provide a directive prompt before initializing generation.', true);
+
+    try {
+      const payload = { prompt: promptText, references: [] };
+      const data = await App.api('/api/assets/generate', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      App.notify(data.message || 'Video generation structural pipeline triggered!', false);
+      promptInput.value = '';
+    } catch (err) {
+      console.error(err);
+      App.notify('Failed to route context to generation engine.', true);
+    }
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -514,7 +550,9 @@
     addToAssets,
     markClipStart,
     markClipEnd,
-    saveVirtualClip
+    saveVirtualClip,
+    toggleStudioPanel,
+    submitCreationPrompt
   };
 
   function injectYoutubeScript() {
