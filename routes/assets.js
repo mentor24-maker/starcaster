@@ -183,6 +183,50 @@ async function handle(req, res, pathname, method) {
     }
   }
 
+  if (pathname === '/api/assets/generate/status' && requestMethod === 'GET') {
+    const assetId = Number(parsedUrl.searchParams.get('id') || 0);
+    if (!assetId || assetId <= 0) {
+      return sendErr(res, 400, 'Valid asset id conceptually required to check Vertex job output.', { code: 'INVALID_ID' }), true;
+    }
+    
+    const read = await listAssets(scope);
+    if (!read.ok) return sendErr(res, read.status || 500, read.error), true;
+    const assets = (Array.isArray(read.data) ? read.data : []).map(rowToAsset);
+    let target = assets.find(a => a.id === assetId);
+
+    if (!target) {
+       return sendErr(res, 404, 'Job Tracker row not found entirely in local schema mapped to that ID.', { code: 'NOT_FOUND' }), true;
+    }
+
+    // Standard checking mechanism hook
+    if (target.generationStatus === 'processing') {
+       try {
+         // Future: When Vertex SDK completes the job in the cloud, we actually grab the URL down.
+         // Until the true webhooks are defined natively, trigger a basic timeout pseudo-check simulating external completion randomly or safely!
+         
+         // Mock Vertex LRO success response for testing the UI Gallery 
+         // Assuming completion if 5 seconds elapsed from some DB parameter natively: currently random chance for UI testing
+         const isDone = Math.random() > 0.6; // 40% probability per poll to complete
+         
+         if (isDone) {
+            const updated = await updateAsset(target.id, {
+                generationStatus: 'completed',
+                location: 'https://vjs.zencdn.net/v/oceans.mp4' // physical dummy generated vertex URL placement
+            }, scope);
+            
+            if (updated.ok) {
+               const raw = Array.isArray(updated.data) ? updated.data[0] : updated.data;
+               target = rowToAsset(raw);
+            }
+         }
+       } catch (err) {
+         console.warn("LRO check natively bypassed:", err);
+       }
+    }
+
+    return sendOk(res, 200, { asset: target }, { asset: target }), true;
+  }
+
   if (pathname === '/api/assets/upload-google-drive' && requestMethod === 'POST') {
     if (!isAssetStorageConfigured()) {
       return sendErr(
