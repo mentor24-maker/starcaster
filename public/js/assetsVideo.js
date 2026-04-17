@@ -52,12 +52,35 @@
       try {
         if (App.ui && App.ui.populateTopicsDropdown) {
           await App.ui.populateTopicsDropdown('videoCurationTopic', 'Any', '');
-          await App.ui.populateTopicsDropdown('creationRefAssetCategory', 'All Categories', '');
         }
       } catch (err) {
         console.error('Failed to load curation topics:', err);
       }
     }, 150);
+  }
+
+  async function loadCreationAssetCategories() {
+    const select = document.getElementById('creationRefAssetCategory');
+    if (!select) return;
+    try {
+      const res = await App.api('/api/asset-categories');
+      const categories = res.categories || [];
+      const names = Array.from(new Set(categories.map(c => c.category).filter(Boolean)));
+      names.sort();
+      
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">All Categories</option>';
+      
+      names.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+      select.value = currentVal;
+    } catch (err) {
+      console.error('Failed to load asset categories:', err);
+    }
   }
 
   async function openTopicModal() {
@@ -715,6 +738,7 @@
     injectYoutubeScript();
     initStars();
     loadTopicDropdowns();
+    loadCreationAssetCategories();
   });
 
 })();
