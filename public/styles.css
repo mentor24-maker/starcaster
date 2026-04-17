@@ -10044,7 +10044,7 @@ button.section-settings-gear-btn svg {
 /* --- Video Curation layout --- */
 .video-curation-split-layout {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr;
   gap: 2rem;
   margin-top: 1rem;
 }

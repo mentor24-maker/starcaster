@@ -370,6 +370,7 @@ async function handle(req, res, pathname, method) {
         video_url: item?.id?.videoId ? `https://www.youtube.com/watch?v=${item?.id?.videoId}` : '',
         title: String(item?.snippet?.title || ''),
         channel_name: String(item?.snippet?.channelTitle || ''),
+        channel_id: String(item?.snippet?.channelId || ''),
         published_at: String(item?.snippet?.publishedAt || ''),
         thumbnail_url: String(item?.snippet?.thumbnails?.medium?.url || item?.snippet?.thumbnails?.default?.url || ''),
         description: String(item?.snippet?.description || '')
@@ -529,6 +530,62 @@ async function handle(req, res, pathname, method) {
     }
     
     return sendOk(res, 201, Array.isArray(insRes.data) ? insRes.data[0] : insRes.data), true;
+  }
+  if (pathname === '/api/assets/video/stats' && requestMethod === 'GET') {
+    const urlObj = new URL(req.url, 'http://localhost');
+    const videoId = String(urlObj.searchParams.get('videoId') || '').trim();
+    const channelId = String(urlObj.searchParams.get('channelId') || '').trim();
+    
+    if (!videoId) return sendOk(res, 200, { views: '-', comments: '-', subscribers: '-' }), true;
+    
+    const { getProviderValues } = require('../lib/apiSettings');
+    const storeKey = String(getProviderValues('youtube')?.api_key || getProviderValues('google')?.api_key || '').trim();
+    const apiKey = String(process.env.YOUTUBE_API_KEY || '').trim() || storeKey;
+    
+    if (!apiKey) return sendOk(res, 200, { views: '-', comments: '-', subscribers: '-' }), true;
+    
+    let stats = { views: '-', comments: '-', subscribers: '-' };
+    let retrievedChannelId = channelId;
+    
+    try {
+      const vidUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+      vidUrl.searchParams.set('part', 'statistics,snippet');
+      vidUrl.searchParams.set('id', videoId);
+      vidUrl.searchParams.set('key', apiKey);
+      
+      const vRes = await fetch(vidUrl.toString());
+      if (vRes.ok) {
+        const vBody = await vRes.json();
+        const vItem = vBody.items?.[0];
+        if (vItem) {
+          stats.views = Number(vItem.statistics?.viewCount || 0).toLocaleString();
+          stats.comments = Number(vItem.statistics?.commentCount || 0).toLocaleString();
+          if (!retrievedChannelId && vItem.snippet?.channelId) {
+            retrievedChannelId = String(vItem.snippet.channelId);
+          }
+        }
+      }
+      
+      if (retrievedChannelId) {
+        const chUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+        chUrl.searchParams.set('part', 'statistics');
+        chUrl.searchParams.set('id', retrievedChannelId);
+        chUrl.searchParams.set('key', apiKey);
+        
+        const chRes = await fetch(chUrl.toString());
+        if (chRes.ok) {
+          const chBody = await chRes.json();
+          const chItem = chBody.items?.[0];
+          if (chItem) {
+            stats.subscribers = Number(chItem.statistics?.subscriberCount || 0).toLocaleString();
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch on-the-fly video statistics:', err.message);
+    }
+    
+    return sendOk(res, 200, stats), true;
   }
 
   return false;
