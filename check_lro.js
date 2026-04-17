@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: ['.env.local', '.env'] });
 const { sbQuery, tableConfig } = require('./lib/supabase');
 const { getLROStatus } = require('./lib/vendor/vertexVeo');
 

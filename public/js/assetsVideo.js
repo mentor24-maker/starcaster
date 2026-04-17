@@ -783,7 +783,9 @@
                              delete galleryPollers[asset.id];
                              renderGenerationHistory(); 
                           }
-                       } catch (e) {}
+                       } catch (e) {
+                          console.error(`[Veo Tracker Crash] Status check for Asset ${asset.id} structurally failed:`, e.message || e);
+                       }
                    }
                 }, 1000);
              }
