@@ -809,10 +809,10 @@ App.ui.ensureMessagingTopicsLoaded = async function() {
   }
 };
 
-App.ui.populateTopicsDropdown = async function(selectId, defaultLabel = 'Select Topic', defaultOptionValue = '') {
+App.ui.populateTopicsDropdown = async function(selectId, defaultLabel = 'Select Topic', defaultOptionValue = '', forceSelectedValue = null) {
   const select = typeof selectId === 'string' ? document.getElementById(selectId) : selectId;
   if (!select) return;
-  const currentValue = String(select.value || '').trim();
+  const currentValue = forceSelectedValue !== null ? forceSelectedValue : String(select.value || '').trim();
   const topics = await App.ui.ensureMessagingTopicsLoaded();
   
   select.options.length = 0;
@@ -820,13 +820,17 @@ App.ui.populateTopicsDropdown = async function(selectId, defaultLabel = 'Select 
     select.add(new Option(defaultLabel, defaultOptionValue));
   }
   
-  if (Array.isArray(topics)) {
-    topics.forEach(topic => {
-      select.add(new Option(topic, topic));
-    });
+  const displayTopics = Array.isArray(topics) ? topics.slice() : [];
+  if (currentValue && currentValue !== defaultOptionValue && !displayTopics.includes(currentValue)) {
+     displayTopics.push(currentValue);
+     displayTopics.sort((a, b) => a.localeCompare(b));
   }
   
-  if (currentValue && (currentValue === defaultOptionValue || topics.includes(currentValue))) {
+  displayTopics.forEach(topic => {
+    select.add(new Option(topic, topic));
+  });
+  
+  if (currentValue && (currentValue === defaultOptionValue || displayTopics.includes(currentValue))) {
     select.value = currentValue;
   } else if (!currentValue && defaultLabel !== null && defaultLabel !== false) {
     select.value = defaultOptionValue;
