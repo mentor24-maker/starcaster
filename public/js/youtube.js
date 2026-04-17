@@ -1702,21 +1702,8 @@ App.youtube = (function () {
   }
 
   function syncYoutubeMinerContentFilters() {
-    var assignTopic = document.getElementById('youtubeCommentMinerAssignTopicSelect');
-    
-    if (assignTopic) {
-      var selectedTopic = String(assignTopic.value || '');
-      assignTopic.innerHTML = '<option value="">-- Topic --</option>';
-      youtubeMinerTopicConfig.forEach(function(row) {
-        var val = safeText(row && row.name);
-        if (!val) return;
-        var opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        assignTopic.appendChild(opt);
-      });
-      assignTopic.value = selectedTopic;
-      if (assignTopic.selectedIndex < 0) assignTopic.value = '';
+    if (App.ui && App.ui.populateTopicsDropdown) {
+      App.ui.populateTopicsDropdown('youtubeCommentMinerAssignTopicSelect', '-- Topic --', '');
     }
   }
 
