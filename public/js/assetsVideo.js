@@ -8,7 +8,8 @@
   const state = {
     videos: [],
     currentIndex: -1,
-    ytPlayer: null
+    ytPlayer: null,
+    sessionClips: {}
   };
 
   const UI = {
@@ -227,6 +228,39 @@
 
     hydrateFeedbackForm(activeVideo);
     fetchActiveVideoStats(activeVideo);
+    renderVirtualClipsList(activeVideo);
+  }
+
+  function renderVirtualClipsList(video) {
+    const list = document.getElementById('videoVirtualClipsList');
+    if (!list) return;
+    
+    if (!video || !video.video_id || !state.sessionClips[video.video_id] || state.sessionClips[video.video_id].length === 0) {
+      list.innerHTML = '<li class="muted">No clips created yet</li>';
+      return;
+    }
+    
+    list.innerHTML = '';
+    state.sessionClips[video.video_id].forEach((c, idx) => {
+      const li = document.createElement('li');
+      li.style.display = 'flex';
+      li.style.justifyContent = 'space-between';
+      li.style.padding = '4px 0';
+      li.style.borderBottom = '1px solid var(--border)';
+      
+      const span = document.createElement('span');
+      span.textContent = `Clip ${idx + 1}: ${c.start}s - ${c.end}s`;
+      
+      const testLnk = document.createElement('a');
+      testLnk.href = `https://www.youtube.com/watch?v=${video.video_id}&start=${c.start}&end=${c.end}`;
+      testLnk.target = '_blank';
+      testLnk.textContent = 'Test';
+      testLnk.style.color = 'var(--primary-color)';
+      
+      li.appendChild(span);
+      li.appendChild(testLnk);
+      list.appendChild(li);
+    });
   }
 
   async function fetchActiveVideoStats(video) {
@@ -448,12 +482,16 @@
         assetName: `${activeVideo.title || 'Untitled'} [Clip: ${sVal}s - ${eVal}s]`,
         assetType: 'Video',
         category: 'URL',
-        location: `https://www.youtube.com/embed/${activeVideo.video_id}?start=${sVal}&end=${eVal}`,
+        location: `https://www.youtube.com/watch?v=${activeVideo.video_id}&start=${sVal}&end=${eVal}`,
         tags: [activeVideo.topic || 'Uncategorized', 'Virtual Clip']
       };
       
       await App.api('/api/assets', { method: 'POST', body: JSON.stringify(payload) });
       App.notify(`Virtual Clip saved directly to Assets Framework!`, false);
+      
+      if (!state.sessionClips[activeVideo.video_id]) state.sessionClips[activeVideo.video_id] = [];
+      state.sessionClips[activeVideo.video_id].push({ start: sVal, end: eVal });
+      renderVirtualClipsList(activeVideo);
       
       document.getElementById('vClipStart').value = '';
       document.getElementById('vClipEnd').value = '';
