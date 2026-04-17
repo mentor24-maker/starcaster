@@ -153,6 +153,8 @@ async function handle(req, res, pathname, method) {
     try {
       // 1. Fire asynchronous job natively to Google Cloud
       const generationJob = await vertexVeo.generateVideo(promptText, references);
+      const { logUsage } = require('../lib/observeStore');
+      logUsage('vertex_veo', 'video_generation_job', 1, scope);
 
       // 2. Instantiate standalone DB Row capturing the queued event
       const dbPayload = {
