@@ -787,10 +787,10 @@
                           console.error(`[Veo Tracker Crash] Status check for Asset ${asset.id} structurally failed:`, e.message || e);
                           // Emergency Kill Switch: Protect Vercel Compute Credits!
                           // If the backend is hard-crashing on 500, stop endlessly hammering the proxy.
-                          if (!galleryPollers[asset.id]._failCount) galleryPollers[asset.id]._failCount = 0;
-                          galleryPollers[asset.id]._failCount++;
+                          if (!asset._failCount) asset._failCount = 0;
+                          asset._failCount++;
                           
-                          if (galleryPollers[asset.id]._failCount > 3) {
+                          if (asset._failCount > 3) {
                              console.warn(`[Veo Fallback] Structurally closing ghosted API poll for Asset ${asset.id} terminating Vercel abuse.`);
                              clearInterval(galleryPollers[asset.id]);
                              delete galleryPollers[asset.id];
