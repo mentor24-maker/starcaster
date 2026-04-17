@@ -52,6 +52,7 @@
       try {
         if (App.ui && App.ui.populateTopicsDropdown) {
           await App.ui.populateTopicsDropdown('videoCurationTopic', 'Any', '');
+          await App.ui.populateTopicsDropdown('creationRefAssetTopic', 'All Topics', '');
         }
       } catch (err) {
         console.error('Failed to load curation topics:', err);
@@ -534,6 +535,7 @@
   async function searchCreationReferences() {
     const type = String(document.getElementById('creationRefAssetType')?.value || '');
     const category = String(document.getElementById('creationRefAssetCategory')?.value || '');
+    const topic = String(document.getElementById('creationRefAssetTopic')?.value || '');
     const query = String(document.getElementById('creationRefSearchInput')?.value || '').toLowerCase();
     const resultsContainer = document.getElementById('creationRefSearchResults');
     if (!resultsContainer) return;
@@ -544,6 +546,7 @@
       const matches = allAssets.filter(a => {
         if (type && String(a.assetType || '') !== type) return false;
         if (category && String(a.category || '') !== category) return false;
+        if (topic && String(a.topic || '') !== topic) return false;
         if (query) {
            const matchString = `${a.assetName} ${Array.isArray(a.tags) ? a.tags.join(' ') : ''}`.toLowerCase();
            if (!matchString.includes(query)) return false;
