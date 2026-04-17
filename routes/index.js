@@ -155,6 +155,17 @@ async function handleRequest(req, res) {
     }
   }
 
+  // Globally track the invocation to model Vercel edge/serverless boundaries natively
+  if (pathname.startsWith('/api/') && req.projectContext) {
+     const { logUsage } = require('../lib/observeStore');
+     const scope = {
+        projectId: req.projectContext.project?.id || '',
+        userId: authUser?.id || ''
+     };
+     // Fire and forget to not block execution
+     logUsage('vercel', 'api_request', 1, scope);
+  }
+
   if (pathname === '/api/debug-routes' && method === 'GET') {
     const google = getProviderValues('google_drive');
     const openclaw = getProviderValues('openclaw');

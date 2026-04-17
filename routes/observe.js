@@ -184,9 +184,26 @@ async function pingOpenclaw(req, res) {
 
 // Ensure `sendJson` is accessible since it's used inside ping handles
 const { sendJson } = require('./http');
+const { getUsageAnalytics } = require('../lib/observeStore');
 
 async function handle(req, res, pathname, method) {
   if (!pathname.startsWith('/api/observe')) return false;
+
+  const scope = {
+    projectId: String(req?.projectContext?.project?.id || '').trim(),
+    userId: String(req?.authUser?.id || '').trim(),
+    projectIds: Array.isArray(req?.projectContext?.projects)
+      ? req.projectContext.projects.map(p => String(p?.id || '').trim()).filter(Boolean)
+      : []
+  };
+
+  if (method === 'GET') {
+     if (pathname === '/api/observe/usage-reports') {
+        const payload = await getUsageAnalytics(scope);
+        if (!payload.ok) return sendErr(res, 500, payload.error), true;
+        return sendOk(res, 200, payload.data), true;
+     }
+  }
 
   if (method === 'POST') {
     if (pathname === '/api/observe/ping-youtube') {
