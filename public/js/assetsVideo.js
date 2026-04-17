@@ -7,7 +7,8 @@
 (function() {
   const state = {
     videos: [],
-    currentIndex: -1
+    currentIndex: -1,
+    ytPlayer: null
   };
 
   const UI = {
@@ -205,13 +206,21 @@
     const container = UI.playerContainer();
     if (activeVideo.video_id) {
       container.innerHTML = `<iframe 
+        id="videoCurationNativePlayer"
         width="100%"
         height="100%"
         style="width: 100%; height: 100%; border: none;"
-        src="https://www.youtube-nocookie.com/embed/${activeVideo.video_id}?enablejsapi=1&rel=0" 
+        src="https://www.youtube-nocookie.com/embed/${activeVideo.video_id}?enablejsapi=1&origin=${window.location.origin}&rel=0" 
         allow="encrypted-media" 
         allowfullscreen>
       </iframe>`;
+
+      // Mount global player abstraction
+      setTimeout(() => {
+        if (window.YT && window.YT.Player) {
+          state.ytPlayer = new window.YT.Player('videoCurationNativePlayer');
+        }
+      }, 500);
     } else {
       container.innerHTML = `<div class="viewer-placeholder"><p>Video Cannot be Embedded. Click Title above to view externally.</p></div>`;
     }
@@ -406,6 +415,54 @@
     }
   }
 
+  function markClipStart() {
+    if (state.ytPlayer && typeof state.ytPlayer.getCurrentTime === 'function') {
+      document.getElementById('vClipStart').value = Math.floor(state.ytPlayer.getCurrentTime());
+    } else {
+      App.notify('Player API not ready or disconnected.', true);
+    }
+  }
+
+  function markClipEnd() {
+    if (state.ytPlayer && typeof state.ytPlayer.getCurrentTime === 'function') {
+      document.getElementById('vClipEnd').value = Math.floor(state.ytPlayer.getCurrentTime());
+    } else {
+      App.notify('Player API not ready or disconnected.', true);
+    }
+  }
+
+  async function saveVirtualClip() {
+    if (state.currentIndex < 0 || state.currentIndex >= state.videos.length) return;
+    const activeVideo = state.videos[state.currentIndex];
+    if (!activeVideo.video_id) return App.notify('Cannot export clip from non-video asset.', true);
+
+    const sVal = parseInt(document.getElementById('vClipStart').value, 10);
+    const eVal = parseInt(document.getElementById('vClipEnd').value, 10);
+    
+    if (isNaN(sVal) || isNaN(eVal) || eVal <= sVal) {
+      return App.notify('Invalid boundaries tracking. Please ensure Start and End times are correct.', true);
+    }
+
+    try {
+      const payload = {
+        assetName: `${activeVideo.title || 'Untitled'} [Clip: ${sVal}s - ${eVal}s]`,
+        assetType: 'Video',
+        category: 'URL',
+        location: `https://www.youtube.com/embed/${activeVideo.video_id}?start=${sVal}&end=${eVal}`,
+        tags: [activeVideo.topic || 'Uncategorized', 'Virtual Clip']
+      };
+      
+      await App.api('/api/assets', { method: 'POST', body: JSON.stringify(payload) });
+      App.notify(`Virtual Clip saved directly to Assets Framework!`, false);
+      
+      document.getElementById('vClipStart').value = '';
+      document.getElementById('vClipEnd').value = '';
+    } catch (err) {
+      console.error(err);
+      App.notify('Failed exporting clip boundaries.', true);
+    }
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -416,12 +473,30 @@
     saveFeedback,
     openTopicModal,
     closeTopicModal,
-    addToAssets
+    addToAssets,
+    markClipStart,
+    markClipEnd,
+    saveVirtualClip
   };
+
+  function injectYoutubeScript() {
+    if (!document.getElementById('youtubeIframeApiScript')) {
+      const tag = document.createElement('script');
+      tag.id = 'youtubeIframeApiScript';
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      if (firstScriptTag) {
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      } else {
+        document.body.appendChild(tag);
+      }
+    }
+  }
 
   // Run initialization routines globally on script hook rather than sequestering them behind openCreateVideoTool routing
   // This guarantees that Star Rating Event Listeners and Topics Taxonomy properly hydrate regardless of how the User accessed the view.
   document.addEventListener('DOMContentLoaded', () => {
+    injectYoutubeScript();
     initStars();
     loadTopicDropdowns();
   });

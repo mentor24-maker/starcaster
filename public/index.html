@@ -5716,9 +5716,32 @@
                 <label for="videoFeedbackClips">Specific Clips (Timestamps)</label>
                 <textarea id="videoFeedbackClips" rows="2"></textarea>
               </div>
+              <!-- ROW 4: Virtual Clip Generator -->
+              <div class="form-group full-width" style="grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 0.5rem;">
+                <label style="color: var(--primary-color);">Capture Custom Clip (Virtual Asset)</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 1rem; margin-top: 0.5rem; align-items: end;">
+                  <div class="form-group">
+                    <label style="font-size: 0.8rem;">Start Time (sec)</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <input type="number" id="vClipStart" placeholder="0" />
+                      <button type="button" class="white-btn" style="padding: 0 0.75rem;" onclick="App.assetsVideo.markClipStart()" title="Grab Current Player Time">📍</button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label style="font-size: 0.8rem;">End Time (sec)</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <input type="number" id="vClipEnd" placeholder="0" />
+                      <button type="button" class="white-btn" style="padding: 0 0.75rem;" onclick="App.assetsVideo.markClipEnd()" title="Grab Current Player Time">📍</button>
+                    </div>
+                  </div>
+                  <div class="form-group" style="padding-bottom: 2px;">
+                    <button type="button" class="white-btn full-width" onclick="App.assetsVideo.saveVirtualClip()">Export Boundary to Assets</button>
+                  </div>
+                </div>
+              </div>
 
-              <!-- ROW 4 -->
-              <div class="form-group full-width" style="grid-column: 1 / -1; text-align: center;">
+              <!-- ROW 5 -->
+              <div class="form-group full-width" style="grid-column: 1 / -1; margin-top: 1rem;">
                 <button type="button" class="black-btn full-width" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
               </div>
             </div>
