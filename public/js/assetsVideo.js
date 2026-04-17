@@ -737,14 +737,15 @@
          
          let actionHTML = '';
          if (asset.generationStatus === 'completed' && asset.location) {
-             actionHTML = `<button type="button" class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')">View Resource</button>`;
+             actionHTML = `<button type="button" class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')" style="margin-right: 8px;">View Resource</button>`;
+             actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
          } else if (asset.generationStatus === 'processing') {
              actionHTML = `
-               <span class="muted" style="font-size:0.8rem; display:inline-flex; align-items:center; gap:0.5rem; vertical-align:middle;">
+               <span class="muted" style="font-size:0.8rem; display:inline-flex; align-items:center; gap:0.5rem; vertical-align:middle; margin-right: 8px;">
                  <span class="loader-spinner" style="border: 2px solid var(--border); border-top: 2px solid var(--primary-color); border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite;"></span>
                  <span>Rendering...</span>
                </span>
-               <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cancelGeneration('${asset.id}')" style="margin-left:8px; border-color:tomato; color:tomato; vertical-align:middle;">Cancel</button>
+               <button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Cancel/Delete" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>
              `;
              
              // CRITICAL: Restart tracker organically out of schema caching loop!
@@ -772,10 +773,11 @@
                 }, 1000);
              }
          } else {
-             actionHTML = `<span class="muted" style="color:tomato">Failed Link</span>`;
+             actionHTML = `<span class="muted" style="color:tomato; margin-right: 8px;">Failed Link</span>`;
+             actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
          }
          
-         actionHTML += ` <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cloneGeneration('${asset.id}')" style="margin-left:8px; vertical-align:middle;">Clone</button>`;
+         actionHTML += ` <button type="button" class="tiny-btn icon-btn" title="Clone" onclick="App.assetsVideo.cloneGeneration('${asset.id}')" style="margin-left:4px;"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.clone}</svg></span></button>`;
 
          window.__genCache = window.__genCache || {};
          window.__genCache[asset.id] = asset;
@@ -793,6 +795,7 @@
          }
 
          row.innerHTML = `
+           <td style="text-align: center;"><input type="checkbox" name="genItem" value="${asset.id}" onchange="App.assetsVideo.updateBulkActionsGenerations()" /></td>
            <td><strong>${asset.assetName || 'Untitled LRO'}</strong></td>
            <td><strong style="color:${statusColor}; text-transform:uppercase; font-size:0.85rem;">${asset.generationStatus || 'unknown'}</strong></td>
            <td style="font-size:0.85rem;">${dateString}</td>
@@ -810,6 +813,22 @@
          document.head.appendChild(style);
       }
       
+      
+      if (App.ui && App.ui.populateTopicsDropdown) {
+          App.ui.populateTopicsDropdown('generationHistoryAssignTopicSelect', '-- Topic --');
+      }
+      
+      const topicSel = document.getElementById('generationHistoryAssignTopicSelect');
+      if (topicSel && !topicSel.dataset.boundBulkGen) {
+         topicSel.dataset.boundBulkGen = "true";
+         topicSel.addEventListener('change', async (e) => {
+            const val = e.target.value;
+            if (!val) return;
+            await App.assetsVideo.assignTopicToSelectedGenerations(val);
+            e.target.value = ''; // Reset visibly out functionally
+         });
+      }
+
     } catch (err) {
       console.error('Failed fetching Generation History natively:', err);
       tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1rem;" class="muted">Server API routing error.</td></tr>';
@@ -871,6 +890,62 @@
      window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function toggleAllGenerations(source) {
+     const checkboxes = document.querySelectorAll('input[name="genItem"]');
+     checkboxes.forEach(cb => cb.checked = source.checked);
+     updateBulkActionsGenerations();
+  }
+
+  function updateBulkActionsGenerations() {
+     const checked = document.querySelectorAll('input[name="genItem"]:checked');
+     const delBtn = document.getElementById('generationHistoryDeleteBtn');
+     if (delBtn) delBtn.disabled = checked.length === 0;
+  }
+
+  async function deleteSelectedGenerations() {
+     const checked = Array.from(document.querySelectorAll('input[name="genItem"]:checked'));
+     if (checked.length === 0) return;
+     if (!confirm(`Are you sure you want to rigorously delete ${checked.length} generation task(s)?`)) return;
+
+     App.notify('Deleting bulk generations...', true);
+     for (const cb of checked) {
+         try {
+             if (galleryPollers[cb.value]) {
+                 clearInterval(galleryPollers[cb.value]);
+                 delete galleryPollers[cb.value];
+             }
+             await App.api('/api/assets/generate/cancel', { method: 'POST', body: JSON.stringify({ id: cb.value }) });
+         } catch (e) {
+             console.warn('Physical block error on deletion:', e);
+         }
+     }
+     
+     document.getElementById('generationHistorySelectAll').checked = false;
+     renderGenerationHistory();
+     App.notify('Selected generations completely removed from physical storage layout.');
+  }
+
+  async function assignTopicToSelectedGenerations(topic) {
+     const checked = Array.from(document.querySelectorAll('input[name="genItem"]:checked'));
+     if (checked.length === 0) return;
+
+     App.notify(`Assigning topic "${topic}" explicitly to ${checked.length} selected row(s)...`);
+     
+     for (const cb of checked) {
+         try {
+             await App.api(`/api/assets/${cb.value}`, { 
+                 method: 'PATCH', 
+                 body: JSON.stringify({ topic: topic }) 
+             });
+         } catch (e) {
+             console.warn('Physical assignment collision natively on PATCH.', e);
+         }
+     }
+     
+     renderGenerationHistory();
+     App.notify('Bulk topic physically locked onto generation matrix successfully.');
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -892,7 +967,11 @@
     removeCreationReference,
     renderGenerationHistory,
     cancelGeneration,
-    cloneGeneration
+    cloneGeneration,
+    toggleAllGenerations,
+    updateBulkActionsGenerations,
+    deleteSelectedGenerations,
+    assignTopicToSelectedGenerations
   };
 
   function injectYoutubeScript() {
