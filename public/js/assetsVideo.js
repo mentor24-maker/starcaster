@@ -530,22 +530,31 @@
       } else {
         matches.forEach(a => {
           const row = document.createElement('div');
-          row.style.display = 'flex';
-          row.style.justifyContent = 'space-between';
+          row.style.display = 'grid';
+          row.style.gridTemplateColumns = '50% 50%';
           row.style.alignItems = 'center';
           row.style.padding = '0.5rem';
           row.style.borderBottom = '1px solid var(--border)';
           
           const label = document.createElement('span');
+          label.style.whiteSpace = 'nowrap';
+          label.style.overflow = 'hidden';
+          label.style.textOverflow = 'ellipsis';
+          label.style.paddingRight = '1rem';
           label.textContent = `[${a.assetType || 'Asset'}] ${a.assetName || a.id}`;
           
+          const btnWrap = document.createElement('div');
           const attachBtn = document.createElement('button');
           attachBtn.type = 'button';
           attachBtn.textContent = 'Attach';
+          attachBtn.style.width = '70px';
+          attachBtn.style.padding = '4px';
+          attachBtn.style.fontSize = '0.75rem';
           attachBtn.onclick = () => App.assetsVideo.attachCreationReference(a);
           
+          btnWrap.appendChild(attachBtn);
           row.appendChild(label);
-          row.appendChild(attachBtn);
+          row.appendChild(btnWrap);
           resultsContainer.appendChild(row);
         });
       }
