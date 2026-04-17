@@ -2050,48 +2050,15 @@ App.youtube = (function () {
     return Array.isArray(state.acquireYoutubeTopics) ? state.acquireYoutubeTopics : [];
   }
 
-  function topicOptions() {
-    if (App.state && Array.isArray(App.state.cachedTopics)) {
-      return App.state.cachedTopics;
-    }
-    var rawMessaging = App.messaging && typeof App.messaging.getTopics === 'function' ? App.messaging.getTopics() : [];
-    return rawMessaging
-      .map(function(item) { return safeText(item && (item.topic || item.category)); })
-      .filter(Boolean);
-  }
-
-  function syncSelectOptions(selectEl, placeholder, selected) {
-    if (!selectEl) return;
-    var chosen = safeText(selected);
-    var items = topicOptions().slice();
-    if (chosen && items.indexOf(chosen) < 0) items.push(chosen);
-    items.sort(function(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
-
-    selectEl.innerHTML = '';
-    var defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = placeholder;
-    selectEl.appendChild(defaultOption);
-
-    items.forEach(function(topic) {
-      var option = document.createElement('option');
-      option.value = topic;
-      option.textContent = topic;
-      selectEl.appendChild(option);
-    });
-
-    selectEl.value = chosen && items.indexOf(chosen) >= 0 ? chosen : '';
-  }
-
   function renderTopicControls() {
-    var formSelect = document.getElementById('youtubeTopicInput');
-    var currentFormValue = safeText(formSelect && formSelect.value);
-    syncSelectOptions(formSelect, 'Topic', currentFormValue || safeText(currentDetailsRun && currentDetailsRun.topic));
-    syncSelectOptions(document.getElementById('youtubeRunsTopicFilter'), 'Topics', runFilters.topic);
-    syncSelectOptions(document.getElementById('youtubeRunEditTopic'), 'Topic', safeText(currentEditRun && currentEditRun.topic));
-    syncSelectOptions(document.getElementById('youtubeBulkEditTopic'), 'Topic', safeText(document.getElementById('youtubeBulkEditTopic') && document.getElementById('youtubeBulkEditTopic').value));
-    var bulkTopicSelect = document.getElementById('youtubeRunsBulkEditTopicSelect');
-    if (bulkTopicSelect) syncSelectOptions(bulkTopicSelect, 'Select...', '');
+    if (App.ui && App.ui.populateTopicsDropdown) {
+      App.ui.populateTopicsDropdown('youtubeTopicInput', 'Topic', '', safeText(currentDetailsRun && currentDetailsRun.topic));
+      App.ui.populateTopicsDropdown('youtubeRunsTopicFilter', 'Topics', '', runFilters.topic);
+      App.ui.populateTopicsDropdown('youtubeRunEditTopic', 'Topic', '', safeText(currentEditRun && currentEditRun.topic));
+      const bulkSelect = document.getElementById('youtubeBulkEditTopic');
+      App.ui.populateTopicsDropdown('youtubeBulkEditTopic', 'Topic', '', safeText(bulkSelect && bulkSelect.value));
+      App.ui.populateTopicsDropdown('youtubeRunsBulkEditTopicSelect', 'Select...', '');
+    }
   }
 
   function pruneSelectedRunIds() {
