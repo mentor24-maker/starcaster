@@ -736,9 +736,9 @@
          const statusColor = asset.generationStatus === 'completed' ? 'limegreen' : (asset.generationStatus === 'processing' ? 'var(--primary-color)' : 'tomato');
          
          let actionHTML = '';
-          if (asset.generationStatus === 'completed' && asset.location) {
+         if (asset.generationStatus === 'completed' && asset.location) {
              actionHTML = `<button type="button" class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')">View Resource</button>`;
-          } else if (asset.generationStatus === 'processing') {
+         } else if (asset.generationStatus === 'processing') {
              actionHTML = `
                <span class="muted" style="font-size:0.8rem; display:inline-flex; align-items:center; gap:0.5rem; vertical-align:middle;">
                  <span class="loader-spinner" style="border: 2px solid var(--border); border-top: 2px solid var(--primary-color); border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite;"></span>
@@ -746,20 +746,11 @@
                </span>
                <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cancelGeneration('${asset.id}')" style="margin-left:8px; border-color:tomato; color:tomato; vertical-align:middle;">Cancel</button>
              `;
-          } else {
-             actionHTML = `<span class="muted" style="color:tomato">Failed Link</span>`;
-          }
-          
-          actionHTML += ` <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cloneGeneration('${asset.id}')" style="margin-left:8px; vertical-align:middle;">Clone</button>`;
-
-          window.__genCache = window.__genCache || {};
-          window.__genCache[asset.id] = asset;
              
              // CRITICAL: Restart tracker organically out of schema caching loop!
              if (!galleryPollers[asset.id]) {
                 const startTime = new Date(asset.created_at || Date.now()).getTime();
                 
-                // Track internally per row mapping natively overriding timeouts.
                 galleryPollers[asset.id] = setInterval(async () => {
                    const elapsedTd = document.getElementById(`elapsed-time-${asset.id}`);
                    if (elapsedTd) {
@@ -768,14 +759,13 @@
                       elapsedTd.textContent = `${seconds}s`;
                    }
                    
-                   // Every ~8 seconds ping the backend dynamically for physical LRO states
                    if (Math.floor(Date.now() / 1000) % 8 === 0) {
                        try {
                           const statusRes = await App.api(`/api/assets/generate/status?id=${asset.id}`);
                           if (statusRes.asset && statusRes.asset.generationStatus !== 'processing') {
                              clearInterval(galleryPollers[asset.id]);
                              delete galleryPollers[asset.id];
-                             renderGenerationHistory(); // Pure table reload catching green/red status!
+                             renderGenerationHistory(); 
                           }
                        } catch (e) {}
                    }
@@ -784,7 +774,12 @@
          } else {
              actionHTML = `<span class="muted" style="color:tomato">Failed Link</span>`;
          }
+         
+         actionHTML += ` <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cloneGeneration('${asset.id}')" style="margin-left:8px; vertical-align:middle;">Clone</button>`;
 
+         window.__genCache = window.__genCache || {};
+         window.__genCache[asset.id] = asset;
+         
          const rawDate = asset.created_at || (new Date()).toISOString();
          const dateString = new Date(rawDate).toLocaleTimeString(); // Only showing Time natively usually cleaner
          
