@@ -1,6 +1,6 @@
 'use strict';
 
-const { sendOk, sendErr, parseJsonBody } = require('./http');
+const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { listAssets, createAsset, updateAsset, deleteAsset, rowToAsset } = require('../lib/assetsStore');
 const {
   listAssetCategories,
@@ -59,6 +59,7 @@ function estimatedBytesFromBase64(base64Text) {
 }
 
 async function handle(req, res, pathname, method) {
+  const parsedUrl = getUrlObj(req);
   const isAssetsPath = ASSETS_PATH_RE.test(String(pathname || ''));
   const requestMethod = String(method || '').toUpperCase();
   const scope = {
