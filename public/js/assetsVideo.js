@@ -767,6 +767,57 @@
     }, 8000); // 8 second cycle
   }
 
+  async function renderGenerationHistory() {
+    const tbody = document.getElementById('generationHistoryTableBody');
+    if (!tbody) return;
+
+    try {
+      const res = await App.api('/api/assets');
+      const allAssets = Array.isArray(res.assets) ? res.assets : [];
+      const generated = allAssets.filter(a => a.category === 'Generated');
+
+      tbody.innerHTML = '';
+      if (generated.length === 0) {
+         tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1rem;" class="muted">No generation history tracked natively.</td></tr>';
+         return;
+      }
+
+      generated.reverse().forEach(asset => {
+         const row = document.createElement('tr');
+         
+         const statusColor = asset.generationStatus === 'completed' ? 'limegreen' : (asset.generationStatus === 'processing' ? 'var(--primary-color)' : 'tomato');
+         
+         let actionHTML = '';
+         if (asset.generationStatus === 'completed' && asset.location) {
+             actionHTML = `<button class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')">View Resource</button>`;
+         } else if (asset.generationStatus === 'processing') {
+             actionHTML = `<span class="muted" style="font-size:0.8rem;">Rendering...</span>`;
+             // CRITICAL: Restart tracker organically out of schema caching loop!
+             // We only start a new tracker visually if it's not already physically mounted!
+             if (!document.getElementById(`gallery-poll-${asset.id}`)) {
+                startGalleryPoller(asset);
+             }
+         } else {
+             actionHTML = `<span class="muted">Failed Link</span>`;
+         }
+
+         const rawDate = asset.created_at || (new Date()).toISOString();
+         const dateString = new Date(rawDate).toLocaleString();
+
+         row.innerHTML = `
+           <td><strong>${asset.assetName || 'Untitled LRO'}</strong></td>
+           <td><strong style="color:${statusColor}; text-transform:uppercase; font-size:0.85rem;">${asset.generationStatus || 'unknown'}</strong></td>
+           <td style="font-size:0.85rem;">${dateString}</td>
+           <td>${actionHTML}</td>
+         `;
+         tbody.appendChild(row);
+      });
+    } catch (err) {
+      console.error('Failed fetching Generation History natively:', err);
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1rem;" class="muted">Server API routing error.</td></tr>';
+    }
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -785,7 +836,8 @@
     submitCreationPrompt,
     searchCreationReferences,
     attachCreationReference,
-    removeCreationReference
+    removeCreationReference,
+    renderGenerationHistory
   };
 
   function injectYoutubeScript() {
@@ -809,6 +861,7 @@
     initStars();
     loadTopicDropdowns();
     loadCreationAssetCategories();
+    renderGenerationHistory();
     
     const creationTypeFilter = document.getElementById('creationRefAssetType');
     if (creationTypeFilter) {
