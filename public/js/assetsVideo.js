@@ -699,73 +699,21 @@
       creationReferences = [];
       renderCreationReferences();
 
-      // Start Poller Sequence
-      if (data.asset && data.asset.id) {
-        startGalleryPoller(data.asset);
+      // Force History Tracker open natively on successful job start
+      const historyHeader = document.getElementById('generationHistoryHeader');
+      if (historyHeader && historyHeader.classList.contains('collapsed')) {
+         toggleStudioPanel('generationHistoryWrap');
       }
+      renderGenerationHistory();
     } catch (err) {
       console.error(err);
       App.notify(err.message || 'Failed to route context to generation engine.', true);
     }
   }
 
-  function startGalleryPoller(assetData) {
-    const queueUI = document.getElementById('creationGalleryQueue');
-    if (!queueUI) return;
-
-    // Inject Loading Card
-    const loaderId = `gallery-poll-${assetData.id}`;
-    const card = document.createElement('div');
-    card.id = loaderId;
-    card.className = 'dashboard-card';
-    card.style.marginTop = '1rem';
-    card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <h4>${assetData.assetName || 'Generating Video...'}</h4>
-          <span class="muted" style="font-size:0.85rem;">Status: <strong style="color:var(--primary-color);">Processing</strong> (Est ~3 min)</span>
-        </div>
-        <div class="loader-spinner" style="border: 4px solid var(--border); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite;"></div>
-      </div>
-    `;
-    queueUI.prepend(card);
-
-    if (!document.getElementById('galleryPollStyles')) {
-       const style = document.createElement('style');
-       style.id = 'galleryPollStyles';
-       style.textContent = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
-       document.head.appendChild(style);
-    }
-
-    // Set internal interval to ping backend status natively
-    const intervalObj = setInterval(async () => {
-      try {
-        const res = await App.api(`/api/assets/generate/status?id=${assetData.id}`);
-        // If the backend drops successful video URL payload safely down
-        if (res.asset && res.asset.generationStatus === 'completed') {
-           clearInterval(intervalObj);
-           card.innerHTML = `
-             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 0.5rem;">
-               <div>
-                 <h4>${res.asset.assetName || 'Generated Output'}</h4>
-                 <span class="muted" style="font-size:0.85rem;">Status: <strong style="color:limegreen;">Completed</strong></span>
-               </div>
-               <button class="white-btn tiny-btn" onclick="window.open('${res.asset.location}', '_blank')">Download raw .mp4</button>
-             </div>
-             <video src="${res.asset.location}" controls style="width:100%; border-radius:var(--radius); max-height:400px; background:#000;"></video>
-           `;
-        } else if (res.asset && res.asset.generationStatus === 'failed') {
-           clearInterval(intervalObj);
-           card.innerHTML = `
-             <h4>${res.asset.assetName || 'Generation Failed'}</h4>
-             <span style="color:tomato;">The external AI process failed structurally. Review payload params.</span>
-           `;
-        }
-      } catch (e) {
-         console.warn("Polling interval skipped step due to API timeout.", e);
-      }
-    }, 8000); // 8 second cycle
-  }
+  window.App = window.App || {};
+  window.App.assetsVideo = window.App.assetsVideo || {};
+  window.App.assetsVideo.galleryPollers = window.App.assetsVideo.galleryPollers || {};
 
   async function renderGenerationHistory() {
     const tbody = document.getElementById('generationHistoryTableBody');
@@ -776,14 +724,15 @@
       const allAssets = Array.isArray(res.assets) ? res.assets : [];
       const generated = allAssets.filter(a => a.category === 'Generated');
 
-      tbody.innerHTML = '';
       if (generated.length === 0) {
-         tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1rem;" class="muted">No generation history tracked natively.</td></tr>';
+         tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1rem;" class="muted">No generation history tracked natively.</td></tr>';
          return;
       }
-
+      
+      tbody.innerHTML = '';
       generated.reverse().forEach(asset => {
          const row = document.createElement('tr');
+         row.id = `gen-row-${asset.id}`;
          
          const statusColor = asset.generationStatus === 'completed' ? 'limegreen' : (asset.generationStatus === 'processing' ? 'var(--primary-color)' : 'tomato');
          
@@ -791,30 +740,71 @@
          if (asset.generationStatus === 'completed' && asset.location) {
              actionHTML = `<button class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')">View Resource</button>`;
          } else if (asset.generationStatus === 'processing') {
-             actionHTML = `<span class="muted" style="font-size:0.8rem;">Rendering...</span>`;
+             actionHTML = `<span class="muted" style="font-size:0.8rem;"><span class="loader-spinner" style="display:inline-block; border: 2px solid var(--border); border-top: 2px solid var(--primary-color); border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite; margin-right:4px; vertical-align:middle;"></span>Rendering...</span>`;
+             
              // CRITICAL: Restart tracker organically out of schema caching loop!
-             // We only start a new tracker visually if it's not already physically mounted!
-             if (!document.getElementById(`gallery-poll-${asset.id}`)) {
-                startGalleryPoller(asset);
+             if (!window.App.assetsVideo.galleryPollers[asset.id]) {
+                const startTime = new Date(asset.created_at || Date.now()).getTime();
+                
+                // Track internally per row mapping natively overriding timeouts.
+                window.App.assetsVideo.galleryPollers[asset.id] = setInterval(async () => {
+                   const elapsedTd = document.getElementById(`elapsed-time-${asset.id}`);
+                   if (elapsedTd) {
+                      const now = Date.now();
+                      const seconds = Math.floor((now - startTime) / 1000);
+                      elapsedTd.textContent = `${seconds}s`;
+                   }
+                   
+                   // Every ~8 seconds ping the backend dynamically for physical LRO states
+                   if (Math.floor(Date.now() / 1000) % 8 === 0) {
+                       try {
+                          const statusRes = await App.api(`/api/assets/generate/status?id=${asset.id}`);
+                          if (statusRes.asset && statusRes.asset.generationStatus !== 'processing') {
+                             clearInterval(window.App.assetsVideo.galleryPollers[asset.id]);
+                             delete window.App.assetsVideo.galleryPollers[asset.id];
+                             renderGenerationHistory(); // Pure table reload catching green/red status!
+                          }
+                       } catch (e) {}
+                   }
+                }, 1000);
              }
          } else {
-             actionHTML = `<span class="muted">Failed Link</span>`;
+             actionHTML = `<span class="muted" style="color:tomato">Failed Link</span>`;
          }
 
          const rawDate = asset.created_at || (new Date()).toISOString();
-         const dateString = new Date(rawDate).toLocaleString();
+         const dateString = new Date(rawDate).toLocaleTimeString(); // Only showing Time natively usually cleaner
+         
+         let initialElapsed = '-';
+         if (asset.generationStatus === 'processing') {
+             const startTime = new Date(rawDate).getTime();
+             const seconds = Math.floor((Date.now() - startTime) / 1000);
+             initialElapsed = `<span id="elapsed-time-${asset.id}">${seconds}s</span>`;
+         } else if (asset.generationStatus === 'completed') {
+             initialElapsed = 'Done';
+         }
 
          row.innerHTML = `
            <td><strong>${asset.assetName || 'Untitled LRO'}</strong></td>
            <td><strong style="color:${statusColor}; text-transform:uppercase; font-size:0.85rem;">${asset.generationStatus || 'unknown'}</strong></td>
            <td style="font-size:0.85rem;">${dateString}</td>
+           <td style="font-size:0.85rem;" class="muted">${initialElapsed}</td>
            <td>${actionHTML}</td>
          `;
          tbody.appendChild(row);
       });
+      
+      // Inject spinner keyframes if missing
+      if (!document.getElementById('galleryPollStyles')) {
+         const style = document.createElement('style');
+         style.id = 'galleryPollStyles';
+         style.textContent = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+         document.head.appendChild(style);
+      }
+      
     } catch (err) {
       console.error('Failed fetching Generation History natively:', err);
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1rem;" class="muted">Server API routing error.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1rem;" class="muted">Server API routing error.</td></tr>';
     }
   }
 
