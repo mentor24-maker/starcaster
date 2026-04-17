@@ -214,6 +214,32 @@
     }
 
     hydrateFeedbackForm(activeVideo);
+    fetchActiveVideoStats(activeVideo);
+  }
+
+  async function fetchActiveVideoStats(video) {
+    document.getElementById('videoMetaTitle').textContent = video.title || '-';
+    document.getElementById('videoMetaChannel').textContent = video.channel_name || '-';
+    document.getElementById('videoMetaSubs').textContent = '-';
+    document.getElementById('videoMetaViews').textContent = '-';
+    document.getElementById('videoMetaComments').textContent = '-';
+    
+    if (!video.video_id) return;
+    
+    try {
+      const q = new URLSearchParams();
+      q.set('videoId', video.video_id);
+      if (video.channel_id) q.set('channelId', video.channel_id);
+      
+      const res = await App.api(`/api/assets/video/stats?${q.toString()}`);
+      if (res && res.views) {
+        document.getElementById('videoMetaSubs').textContent = res.subscribers || '-';
+        document.getElementById('videoMetaViews').textContent = res.views || '-';
+        document.getElementById('videoMetaComments').textContent = res.comments || '-';
+      }
+    } catch (err) {
+      console.warn('Failed to dynamically map video stats:', err);
+    }
   }
 
   function updateThumbnailHighlights() {
@@ -347,6 +373,36 @@
     }
   }
 
+  async function addToAssets() {
+    if (state.currentIndex < 0 || state.currentIndex >= state.videos.length) return;
+    const activeVideo = state.videos[state.currentIndex];
+    
+    if (!activeVideo.video_id) {
+      App.notify('Cannot add non-video asset here.', true);
+      return;
+    }
+    
+    try {
+      const payload = {
+        assetName: String(activeVideo.title || 'Untitled Youtube Video').trim(),
+        assetType: 'Video',
+        category: 'URL',
+        location: activeVideo.video_url || `https://www.youtube.com/watch?v=${activeVideo.video_id}`,
+        tags: [activeVideo.topic || 'Uncategorized']
+      };
+      
+      await App.api('/api/assets', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      
+      App.notify('Successfully pushed video to Primary Assets library!', false);
+    } catch (err) {
+      console.error(err);
+      App.notify(err.message, true);
+    }
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -356,7 +412,8 @@
     nextVideo,
     saveFeedback,
     openTopicModal,
-    closeTopicModal
+    closeTopicModal,
+    addToAssets
   };
 
   // Run initialization routines globally on script hook rather than sequestering them behind openCreateVideoTool routing
