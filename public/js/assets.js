@@ -532,6 +532,8 @@ App.assets = (function () {
     els.assetForm.asset_name.value = String(asset.assetName || '');
     els.assetForm.asset_type.value = String(asset.assetType || '');
     renderCategoryOptionsByType(asset.assetType, String(asset.category || ''));
+    if (els.assetForm.topic) els.assetForm.topic.value = String(asset.topic || '');
+    if (els.assetForm.comments) els.assetForm.comments.value = String(asset.comments || '');
     els.assetForm.tags.value = Array.isArray(asset.tags) ? asset.tags.join(', ') : '';
     if (els.assetIdInput) {
       els.assetIdInput.value = String(editingAssetId);
@@ -1012,6 +1014,8 @@ App.assets = (function () {
           assetName: String(formData.get('asset_name') || '').trim(),
           assetType: String(formData.get('asset_type') || '').trim(),
           category: String(formData.get('category') || '').trim(),
+          topic: String(formData.get('topic') || '').trim(),
+          comments: String(formData.get('comments') || '').trim(),
           tags: String(formData.get('tags') || '')
             .split(',')
             .map((s) => s.trim())
