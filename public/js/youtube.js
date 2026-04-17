@@ -4453,15 +4453,10 @@ App.youtube = (function () {
       var topicTd = document.createElement('td');
       if (safeText(run.video_record_id) || safeText(run.detail_run_id)) {
         var topicSelect = document.createElement('select');
-        topicSelect.innerHTML = '<option value="">Topic</option>';
         var currentTopic = safeText(run.topic);
-        topicOptions().forEach(function(topic) {
-          var option = document.createElement('option');
-          option.value = topic;
-          option.textContent = topic;
-          if (topic.toLowerCase() === currentTopic.toLowerCase()) option.selected = true;
-          topicSelect.appendChild(option);
-        });
+        if (App.ui && App.ui.populateTopicsDropdown) {
+           App.ui.populateTopicsDropdown(topicSelect, 'Topic', '', currentTopic);
+        }
         topicSelect.addEventListener('change', function() {
           var nextTopic = safeText(topicSelect.value);
           if (!nextTopic) return;
