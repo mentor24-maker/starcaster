@@ -5628,11 +5628,20 @@
 
       <section id="assetsCreateVideoToolPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Create Video: Curation Studio</h2>
+          <h2>Video Production Factory</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetsVideo.closeCreateVideoTool(); return false;">Close Studio</button>
+            <button type="button" onclick="App.assetsVideo.closeCreateVideoTool(); return false;">Return to Videos</button>
+            <button type="button" class="black-btn" onclick="App.openAssetsLanding(); return false;">Return to Assets</button>
           </div>
         </div>
+
+        <!-- COLLAPSIBLE: Curation -->
+        <div class="studio-collapsible-wrapper" id="curationStudioWrap">
+          <div class="studio-collapsible-header" id="curationStudioHeader" onclick="App.assetsVideo.toggleStudioPanel('curationStudioWrap')">
+            <h3>Curation Studio</h3>
+            <span class="studio-collapsible-icon">▼</span>
+          </div>
+          <div class="studio-collapsible-body" id="curationStudioBody">
         
         <div class="video-curation-layout">
           <!-- PART 1: Filter Row -->
@@ -5795,6 +5804,40 @@
               <button type="button" class="black-btn" onclick="App.assetsVideo.closeTopicModal()">Done</button>
             </div>
           </div>
+        </div> <!-- End Curation Split Layout -->
+
+        <div style="margin-bottom: 1rem; text-align: center;">
+          <button type="button" class="black-btn" onclick="App.assetsVideo.toggleStudioPanel('creationStudioWrap')" style="margin-top: -10px;">Proceed to Creation Studio ▼</button>
+        </div>
+
+        </div> <!-- End Curation Collapsible Body -->
+        </div> <!-- End Curation Collapsible Wrap -->
+
+        <!-- COLLAPSIBLE: Creation -->
+        <div class="studio-collapsible-wrapper" id="creationStudioWrap">
+          <div class="studio-collapsible-header collapsed" id="creationStudioHeader" onclick="App.assetsVideo.toggleStudioPanel('creationStudioWrap')">
+            <h3>Creation Studio</h3>
+            <span class="studio-collapsible-icon">▼</span>
+          </div>
+          <div class="studio-collapsible-body hidden" id="creationStudioBody">
+            <div class="standard-form-grid" style="padding: 1rem 0;">
+              <div class="form-group full-width">
+                 <label style="color: var(--primary-color);">Generative Prompt</label>
+                 <textarea id="videoCreationPrompt" rows="6" placeholder="Describe the video generation sequences precisely..."></textarea>
+              </div>
+              <div class="form-group full-width">
+                 <label>Referential Assets</label>
+                 <ul id="videoCreationAttachedAssets" class="muted" style="font-size: 0.9rem; padding-left: 1.5rem; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                    <li>No context elements explicitly attached.</li>
+                 </ul>
+              </div>
+              <div class="form-group full-width" style="margin-top: 1rem;">
+                 <button type="button" class="black-btn full-width" onclick="App.assetsVideo.submitCreationPrompt()">Run Video Generation Pipeline</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <section id="assetsMusicPage" class="app-page hidden">

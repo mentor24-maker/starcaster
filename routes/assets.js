@@ -128,6 +128,20 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, rowToAsset(deleted), { asset: rowToAsset(deleted) }), true;
   }
 
+  if (pathname === '/api/assets/generate' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const promptText = String(body.prompt || '').trim();
+    if (!promptText) {
+      return sendErr(res, 400, 'Prompt string required to initialize generation pipeline.', { code: 'INVALID_PROMPT' }), true;
+    }
+    
+    // Future Generation Logic will be scaffolded here natively processing the prompt text
+    return sendOk(res, 200, {
+      status: 'queued',
+      message: 'Video Generation Engine standing by. Downstream AI node infrastructure ready to receive inputs.'
+    }), true;
+  }
+
   if (pathname === '/api/assets/upload-google-drive' && requestMethod === 'POST') {
     if (!isAssetStorageConfigured()) {
       return sendErr(

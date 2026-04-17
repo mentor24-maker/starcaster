@@ -10098,3 +10098,43 @@ button.section-settings-gear-btn svg {
   box-shadow: 0 10px 25px rgba(0,0,0,0.2);
 }
 
+/* Studio Collapsibles */
+.studio-collapsible-wrapper {
+  margin-bottom: 2rem;
+}
+.studio-collapsible-header {
+  background: var(--text, #000);
+  color: #fff;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  transition: border-radius 0.2s ease;
+}
+.studio-collapsible-header.collapsed {
+  border-radius: var(--radius-md);
+}
+.studio-collapsible-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: 0.5px;
+}
+.studio-collapsible-icon {
+  font-size: 1rem;
+  transition: transform 0.3s ease;
+}
+.studio-collapsible-header:not(.collapsed) .studio-collapsible-icon {
+  transform: rotate(180deg);
+}
+.studio-collapsible-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  padding: 1.5rem;
+  background: var(--bg-card);
+}
+.studio-collapsible-body.hidden {
+  display: none;
+}
