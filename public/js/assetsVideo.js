@@ -750,7 +750,7 @@
              
              // CRITICAL: Restart tracker organically out of schema caching loop!
              if (!galleryPollers[asset.id]) {
-                const startTime = new Date(asset.created_at || Date.now()).getTime();
+                const startTime = new Date(asset.createdAt || asset.created_at || Date.now()).getTime();
                 
                 galleryPollers[asset.id] = setInterval(async () => {
                    const elapsedTd = document.getElementById(`elapsed-time-${asset.id}`);
@@ -782,7 +782,7 @@
          window.__genCache = window.__genCache || {};
          window.__genCache[asset.id] = asset;
          
-         const rawDate = asset.created_at || (new Date()).toISOString();
+         const rawDate = asset.createdAt || asset.created_at || (new Date()).toISOString();
          const dateString = new Date(rawDate).toLocaleTimeString(); // Only showing Time natively usually cleaner
          
          let initialElapsed = '-';
