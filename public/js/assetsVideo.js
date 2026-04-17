@@ -501,6 +501,131 @@
     }
   }
 
+  let creationReferences = [];
+
+  async function searchCreationReferences() {
+    const type = String(document.getElementById('creationRefAssetType')?.value || '');
+    const category = String(document.getElementById('creationRefAssetCategory')?.value || '');
+    const query = String(document.getElementById('creationRefSearchInput')?.value || '').toLowerCase();
+    const resultsContainer = document.getElementById('creationRefSearchResults');
+    if (!resultsContainer) return;
+
+    try {
+      const res = await App.api('/api/assets');
+      const allAssets = Array.isArray(res.assets) ? res.assets : [];
+      const matches = allAssets.filter(a => {
+        if (type && String(a.assetType || '') !== type) return false;
+        if (category && String(a.category || '') !== category) return false;
+        if (query) {
+           const matchString = `${a.assetName} ${Array.isArray(a.tags) ? a.tags.join(' ') : ''}`.toLowerCase();
+           if (!matchString.includes(query)) return false;
+        }
+        return true;
+      });
+
+      resultsContainer.innerHTML = '';
+      if (matches.length === 0) {
+        resultsContainer.innerHTML = '<div class="muted">No matching assets found.</div>';
+      } else {
+        matches.forEach(a => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.justifyContent = 'space-between';
+          row.style.alignItems = 'center';
+          row.style.padding = '0.5rem';
+          row.style.borderBottom = '1px solid var(--border)';
+          
+          const label = document.createElement('span');
+          label.textContent = `[${a.assetType || 'Asset'}] ${a.assetName || a.id}`;
+          
+          const attachBtn = document.createElement('button');
+          attachBtn.type = 'button';
+          attachBtn.textContent = 'Attach';
+          attachBtn.onclick = () => App.assetsVideo.attachCreationReference(a);
+          
+          row.appendChild(label);
+          row.appendChild(attachBtn);
+          resultsContainer.appendChild(row);
+        });
+      }
+      resultsContainer.classList.remove('hidden');
+    } catch(err) {
+      console.error(err);
+      App.notify('Failed to search assets.', true);
+    }
+  }
+
+  function attachCreationReference(asset) {
+    if (creationReferences.find(r => r.id === asset.id)) {
+      return App.notify('Asset is already attached as a reference.', true);
+    }
+    creationReferences.push({
+      id: asset.id,
+      assetName: asset.assetName,
+      assetType: asset.assetType,
+      instructions: ''
+    });
+    renderCreationReferences();
+    document.getElementById('creationRefSearchResults')?.classList.add('hidden');
+  }
+
+  function removeCreationReference(id) {
+    creationReferences = creationReferences.filter(r => r.id !== id);
+    renderCreationReferences();
+  }
+
+  function updateCreationReferenceInstruction(id, value) {
+    const ref = creationReferences.find(r => r.id === id);
+    if (ref) ref.instructions = value;
+  }
+
+  function renderCreationReferences() {
+    const container = document.getElementById('videoCreationAttachedAssets');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (creationReferences.length === 0) {
+      container.innerHTML = '<li class="muted" style="padding-left: 0.5rem;">No referential assets explicitly attached.</li>';
+      return;
+    }
+
+    creationReferences.forEach(ref => {
+      const li = document.createElement('li');
+      li.style.border = '1px solid var(--border)';
+      li.style.padding = '0.75rem';
+      li.style.borderRadius = 'var(--radius-md)';
+      li.style.background = 'var(--bg-body)';
+
+      const header = document.createElement('div');
+      header.style.display = 'flex';
+      header.style.justifyContent = 'space-between';
+      header.style.marginBottom = '0.5rem';
+      
+      const title = document.createElement('strong');
+      title.textContent = `Attached ${ref.assetType}: ${ref.assetName}`;
+
+      const remBtn = document.createElement('button');
+      remBtn.type = 'button';
+      remBtn.textContent = 'Remove';
+      remBtn.style.fontSize = '0.8rem';
+      remBtn.onclick = () => App.assetsVideo.removeCreationReference(ref.id);
+      
+      header.appendChild(title);
+      header.appendChild(remBtn);
+
+      const ta = document.createElement('textarea');
+      ta.rows = 2;
+      ta.className = 'full-width';
+      ta.placeholder = `Specific instructions for utilizing this reference...`;
+      ta.value = ref.instructions || '';
+      ta.oninput = (e) => updateCreationReferenceInstruction(ref.id, e.target.value);
+
+      li.appendChild(header);
+      li.appendChild(ta);
+      container.appendChild(li);
+    });
+  }
+
   function toggleStudioPanel(panelId) {
     const wrap = document.getElementById(panelId);
     if (!wrap) return;
@@ -524,13 +649,15 @@
     if (!promptText) return App.notify('Please provide a directive prompt before initializing generation.', true);
 
     try {
-      const payload = { prompt: promptText, references: [] };
+      const payload = { prompt: promptText, references: creationReferences };
       const data = await App.api('/api/assets/generate', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
       App.notify(data.message || 'Video generation structural pipeline triggered!', false);
       promptInput.value = '';
+      creationReferences = [];
+      renderCreationReferences();
     } catch (err) {
       console.error(err);
       App.notify('Failed to route context to generation engine.', true);
@@ -552,7 +679,10 @@
     markClipEnd,
     saveVirtualClip,
     toggleStudioPanel,
-    submitCreationPrompt
+    submitCreationPrompt,
+    searchCreationReferences,
+    attachCreationReference,
+    removeCreationReference
   };
 
   function injectYoutubeScript() {
