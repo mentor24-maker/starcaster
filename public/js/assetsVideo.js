@@ -52,6 +52,7 @@
       try {
         if (App.ui && App.ui.populateTopicsDropdown) {
           await App.ui.populateTopicsDropdown('videoCurationTopic', 'Any', '');
+          await App.ui.populateTopicsDropdown('creationRefAssetCategory', 'All Categories', '');
         }
       } catch (err) {
         console.error('Failed to load curation topics:', err);
