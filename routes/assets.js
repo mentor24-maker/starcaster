@@ -263,14 +263,12 @@ async function handle(req, res, pathname, method) {
        }
     }
 
-    // Physical shutdown execution: map `cancelled` into tracker table natively.
-    const del = await updateAsset(assetId, {
-      generationStatus: 'cancelled'
-    }, scope);
+    // Physical shutdown execution: map `deleteAsset` to formally purge clutter.
+    const del = await deleteAsset(assetId, scope);
     
     if (!del.ok) return sendErr(res, del.status || 500, del.error), true;
 
-    return sendOk(res, 200, { message: 'Generation elegantly cancelled on Google infrastructure successfully.' }), true;
+    return sendOk(res, 200, { message: 'Generation elegantly cancelled and successfully removed from history tracker.' }), true;
   }
 
   if (pathname === '/api/assets/upload-google-drive' && requestMethod === 'POST') {
