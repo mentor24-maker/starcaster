@@ -712,8 +712,7 @@
   }
 
   window.App = window.App || {};
-  window.App.assetsVideo = window.App.assetsVideo || {};
-  window.App.assetsVideo.galleryPollers = window.App.assetsVideo.galleryPollers || {};
+  const galleryPollers = {};
 
   async function renderGenerationHistory() {
     const tbody = document.getElementById('generationHistoryTableBody');
@@ -743,11 +742,11 @@
              actionHTML = `<span class="muted" style="font-size:0.8rem;"><span class="loader-spinner" style="display:inline-block; border: 2px solid var(--border); border-top: 2px solid var(--primary-color); border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite; margin-right:4px; vertical-align:middle;"></span>Rendering...</span>`;
              
              // CRITICAL: Restart tracker organically out of schema caching loop!
-             if (!window.App.assetsVideo.galleryPollers[asset.id]) {
+             if (!galleryPollers[asset.id]) {
                 const startTime = new Date(asset.created_at || Date.now()).getTime();
                 
                 // Track internally per row mapping natively overriding timeouts.
-                window.App.assetsVideo.galleryPollers[asset.id] = setInterval(async () => {
+                galleryPollers[asset.id] = setInterval(async () => {
                    const elapsedTd = document.getElementById(`elapsed-time-${asset.id}`);
                    if (elapsedTd) {
                       const now = Date.now();
@@ -760,8 +759,8 @@
                        try {
                           const statusRes = await App.api(`/api/assets/generate/status?id=${asset.id}`);
                           if (statusRes.asset && statusRes.asset.generationStatus !== 'processing') {
-                             clearInterval(window.App.assetsVideo.galleryPollers[asset.id]);
-                             delete window.App.assetsVideo.galleryPollers[asset.id];
+                             clearInterval(galleryPollers[asset.id]);
+                             delete galleryPollers[asset.id];
                              renderGenerationHistory(); // Pure table reload catching green/red status!
                           }
                        } catch (e) {}
