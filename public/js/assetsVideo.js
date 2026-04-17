@@ -746,6 +746,14 @@
                </span>
                <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cancelGeneration('${asset.id}')" style="margin-left:8px; border-color:tomato; color:tomato; vertical-align:middle;">Cancel</button>
              `;
+          } else {
+             actionHTML = `<span class="muted" style="color:tomato">Failed Link</span>`;
+          }
+          
+          actionHTML += ` <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cloneGeneration('${asset.id}')" style="margin-left:8px; vertical-align:middle;">Clone</button>`;
+
+          window.__genCache = window.__genCache || {};
+          window.__genCache[asset.id] = asset;
              
              // CRITICAL: Restart tracker organically out of schema caching loop!
              if (!galleryPollers[asset.id]) {
@@ -831,6 +839,43 @@
     }
   }
 
+  async function cloneGeneration(assetId) {
+     const cache = window.__genCache && window.__genCache[assetId];
+     if (!cache) return;
+     
+     let prompt = cache.comments || '';
+     prompt = prompt.replace('Generative Prompt Instructions: \n', '');
+     
+     const promptBox = document.getElementById('videoCreationPrompt');
+     if (promptBox) promptBox.value = prompt;
+     
+     const rawTags = Array.isArray(cache.tags) ? cache.tags : [];
+     const refIds = rawTags
+       .filter(t => t && String(t).startsWith('ref:'))
+       .map(t => Number(String(t).replace('ref:', '')));
+     
+     if (refIds.length > 0) {
+        try {
+           const res = await App.api('/api/assets');
+           const allAssets = Array.isArray(res.assets) ? res.assets : [];
+           const matches = allAssets.filter(a => refIds.includes(a.id));
+           
+           creationReferences = []; 
+           const ctr = document.getElementById('creationReferenceList');
+           if (ctr) ctr.innerHTML = '';
+           
+           matches.forEach(asset => {
+              attachCreationReference(asset.id, asset.assetName, asset.assetType);
+           });
+        } catch (e) {
+           console.error("Failed cloning reference context constraints.", e);
+        }
+     }
+     
+     App.notify('Job loaded completely into Assemble Assets Form.');
+     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -851,7 +896,8 @@
     attachCreationReference,
     removeCreationReference,
     renderGenerationHistory,
-    cancelGeneration
+    cancelGeneration,
+    cloneGeneration
   };
 
   function injectYoutubeScript() {

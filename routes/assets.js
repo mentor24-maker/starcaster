@@ -160,7 +160,8 @@ async function handle(req, res, pathname, method) {
         category: 'Generated',
         generationStatus: 'processing',
         generationJobId: generationJob.jobId,
-        comments: `Generative Prompt Instructions: \n${promptText}`
+        comments: `Generative Prompt Instructions: \n${promptText}`,
+        tags: references.map(r => `ref:${r.id}`)
       };
       
       const result = await createAsset(dbPayload, scope);
