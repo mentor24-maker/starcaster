@@ -5869,6 +5869,30 @@
           </div>
         </div>
 
+        <!-- COLLAPSIBLE: Generation History -->
+        <div class="studio-collapsible-wrapper" id="generationHistoryWrap" style="margin-top: 1rem;">
+          <div class="studio-collapsible-header collapsed" id="generationHistoryHeader" onclick="App.assetsVideo.toggleStudioPanel('generationHistoryWrap')">
+            <h3>Generation History Tracker</h3>
+            <span class="studio-collapsible-icon">▼</span>
+          </div>
+          <div class="studio-collapsible-body hidden" id="generationHistoryBody" style="padding: 1rem;">
+             <table class="standard-table">
+               <thead>
+                 <tr>
+                   <th>Job Asset Name</th>
+                   <th>Status</th>
+                   <th>Execution Timestamp</th>
+                   <th>Actions / Output</th>
+                 </tr>
+               </thead>
+               <tbody id="generationHistoryTableBody">
+                 <!-- JavaScript populated -->
+                 <tr><td colspan="4" style="text-align: center; padding: 1rem;" class="muted">Loading generation histories...</td></tr>
+               </tbody>
+             </table>
+          </div>
+        </div>
+
       </section>
 
       <section id="assetsMusicPage" class="app-page hidden">
