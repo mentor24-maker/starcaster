@@ -5820,34 +5820,38 @@
             <span class="studio-collapsible-icon">▼</span>
           </div>
           <div class="studio-collapsible-body hidden" id="creationStudioBody">
-            <div class="standard-form-grid" style="padding: 1rem 0;">
-              <div class="form-group full-width">
-                 <label style="color: var(--primary-color);">Generative Prompt</label>
-                 <textarea id="videoCreationPrompt" rows="6" placeholder="Describe the video generation sequences precisely..."></textarea>
-              </div>
-              <div class="form-group full-width">
-                 <label>Referential Context Assets</label>
-                 
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 1rem 0;">
+              
+              <!-- LEFT COLUMN: Assemble Assets -->
+              <div>
+                 <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Assemble Assets</h4>
                  <!-- Asset Picker Inline Module -->
-                 <div class="creation-asset-picker" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; margin-top: 0.5rem; background: var(--bg-card);">
-                   <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.5rem;">
-                     <select id="creationRefAssetType" style="width: auto; min-width: 150px;">
+                 <div class="creation-asset-picker" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; background: var(--bg-card);">
+                   <!-- Row 1: Dropdowns -->
+                   <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+                     <select id="creationRefAssetType" style="width: 100%;">
                        <option value="">All Types</option>
                        <option value="Image">Image</option>
                        <option value="Video">Video</option>
                        <option value="Audio">Audio</option>
                      </select>
-                     <select id="creationRefAssetCategory" style="width: auto; min-width: 150px;">
+                     <select id="creationRefAssetCategory" style="width: 100%;">
                        <option value="">All Categories</option>
                      </select>
-                     <select id="creationRefAssetTopic" class="topic-dropdown" style="width: auto; min-width: 150px;">
+                     <select id="creationRefAssetTopic" class="topic-dropdown" style="width: 100%;">
                        <option value="">All Topics</option>
                      </select>
-                     <input id="creationRefSearchInput" type="text" placeholder="Search by name or tags..." style="flex: 1; min-width: 200px;" />
-                     <button type="button" class="black-btn" onclick="App.assetsVideo.searchCreationReferences()">Find Assets</button>
+                   </div>
+                   <!-- Row 2: Search -->
+                   <div style="margin-bottom: 0.5rem;">
+                     <input id="creationRefSearchInput" type="text" placeholder="Search by name or tags..." style="width: 100%; box-sizing: border-box;" />
+                   </div>
+                   <!-- Row 3: Button -->
+                   <div>
+                     <button type="button" class="black-btn" onclick="App.assetsVideo.searchCreationReferences()" style="width: 100%;">Find Assets</button>
                    </div>
                    
-                   <div id="creationRefSearchResults" class="hidden" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); padding: 0.5rem; background: var(--bg-alt); border-radius: var(--radius);">
+                   <div id="creationRefSearchResults" class="hidden" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); padding: 0.5rem; background: var(--bg-alt); border-radius: var(--radius); margin-top: 1rem;">
                      <!-- Rendered search results populated via Javascript -->
                    </div>
                  </div>
@@ -5857,8 +5861,13 @@
                     <li class="muted" style="padding-left: 0.5rem;">No referential assets explicitly attached.</li>
                  </ul>
               </div>
-              <div class="form-group full-width" style="margin-top: 1rem;">
-                 <button type="button" class="black-btn full-width" onclick="App.assetsVideo.submitCreationPrompt()">Run Video Generation Pipeline</button>
+
+              <!-- RIGHT COLUMN: Produce Video -->
+              <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                 <h4 style="margin-top: 0; margin-bottom: 0;">Produce Video</h4>
+                 <label for="videoCreationPrompt" style="color: var(--primary-color);">Describe the video</label>
+                 <textarea id="videoCreationPrompt" style="flex: 1; resize: vertical; min-height: 200px;" placeholder="Describe the video generation sequences precisely..."></textarea>
+                 <button type="button" class="black-btn" onclick="App.assetsVideo.submitCreationPrompt()" style="width: 100%;">Generate Video</button>
               </div>
 
             </div>
