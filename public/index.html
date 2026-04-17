@@ -109,7 +109,7 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link" data-page="assetsPage" onclick="App.assets.openAssetsLanding(); return false;">Assets</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.assetCategories.openCategoriesPage(); return false;">Topics</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.assetCategories.openCategoriesPage(); return false;">Categories</a>
             <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Image'); return false;">Images</a>
             <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Video'); return false;">Video</a>
             <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Audio'); return false;">Audio</a>
@@ -5416,7 +5416,7 @@
                 <th>Thumbnail</th>
                 <th><button id="assetsSortNameBtn" type="button" class="tiny-btn">Asset Name</button></th>
                 <th><button id="assetsSortTypeBtn" type="button" class="tiny-btn">Asset Type</button></th>
-                <th><button id="assetsSortCategoryBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th><button id="assetsSortCategoryBtn" type="button" class="tiny-btn">Category</button></th>
                 <th><button id="assetsSortTagsBtn" type="button" class="tiny-btn">Tags</button></th>
                 <th><button id="assetsSortSizeBtn" type="button" class="tiny-btn">Size</button></th>
                 <th>Actions</th>
@@ -5508,7 +5508,7 @@
         <div class="page-heading-row">
           <h2>Assets: Categories</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Topic</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
             <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
             <button type="button" onclick="App.assets.openAssetsLanding()">Back To Assets</button>
           </div>
@@ -5531,7 +5531,7 @@
               </select>
             
             
-              <label for="assetCategoryName">Topic</label>
+              <label for="assetCategoryName">Category Name</label>
               <input id="assetCategoryName" name="category" required />
             
             <div></div>
@@ -5557,7 +5557,7 @@
               </tr>
               <tr>
                 <th><button id="assetCategoriesSortType" type="button" class="tiny-btn">Asset Type</button></th>
-                <th><button id="assetCategoriesSortCategory" type="button" class="tiny-btn">Topic</button></th>
+                <th><button id="assetCategoriesSortCategory" type="button" class="tiny-btn">Category Name</button></th>
                 <th class="asset-categories-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -5570,7 +5570,7 @@
         <div class="page-heading-row">
           <h2>Manage Asset Categories</h2>
           <div class="page-heading-actions">
-            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Topic</button>
+            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
             <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
           </div>
         </div>
@@ -5587,9 +5587,9 @@
 
       <section id="editAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Edit Topic</h2>
+          <h2>Edit Asset Category</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Topic</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
             <button id="backFromEditAssetCategoryBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
             <button type="button" onclick="App.assets.openAssetsLanding()">Back To Assets</button>
           </div>
@@ -5608,7 +5608,7 @@
             </select>
           
           
-            <label for="assetCategoryEditName">Topic</label>
+            <label for="assetCategoryEditName">Category Name</label>
             <input id="assetCategoryEditName" name="category" required />
           
           <div></div>
@@ -5837,7 +5837,7 @@
                        <option value="Video">Video</option>
                        <option value="Audio">Audio</option>
                      </select>
-                     <select id="creationRefAssetCategory" class="topic-dropdown" style="width: auto; min-width: 150px;">
+                     <select id="creationRefAssetCategory" style="width: auto; min-width: 150px;">
                        <option value="">All Categories</option>
                      </select>
                      <input id="creationRefSearchInput" type="text" placeholder="Search by name or tags..." style="flex: 1; min-width: 200px;" />
