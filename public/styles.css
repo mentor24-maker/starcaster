@@ -9885,8 +9885,8 @@ button.section-settings-gear-btn svg {
 .viewer-carousel-container {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: center;
+  gap: 1.5rem;
   min-height: 480px;
 }
 
@@ -9895,9 +9895,9 @@ button.section-settings-gear-btn svg {
   color: var(--text-dark, #333);
   border: 1px solid var(--border-light, #e2e8f0);
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
-  font-size: 1.5rem;
+  width: 72px;
+  height: 72px;
+  font-size: 2.5rem;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -9912,10 +9912,10 @@ button.section-settings-gear-btn svg {
   transform: scale(1.1);
 }
 .viewer-main-screen {
-  flex: none;
+  flex: 1;
   width: 100%;
   max-width: 960px;
-  margin: 0 auto;
+  margin: 0;
   background: #000;
   border-radius: var(--radius-md);
   overflow: hidden;
