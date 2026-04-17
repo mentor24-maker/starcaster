@@ -73,7 +73,10 @@
       const lbl = document.createElement('label');
       lbl.style.display = 'flex';
       lbl.style.gap = '0.5rem';
-      lbl.style.alignItems = 'center';
+      lbl.style.alignItems = 'flex-start';
+      lbl.style.justifyContent = 'flex-start';
+      lbl.style.textAlign = 'left';
+      lbl.style.wordBreak = 'break-word';
       
       const cb = document.createElement('input');
       cb.type = 'checkbox';
@@ -232,10 +235,10 @@
       if (video.channel_id) q.set('channelId', video.channel_id);
       
       const res = await App.api(`/api/assets/video/stats?${q.toString()}`);
-      if (res && res.views) {
-        document.getElementById('videoMetaSubs').textContent = res.subscribers || '-';
-        document.getElementById('videoMetaViews').textContent = res.views || '-';
-        document.getElementById('videoMetaComments').textContent = res.comments || '-';
+      if (res && res.data && res.data.views) {
+        document.getElementById('videoMetaSubs').textContent = res.data.subscribers || '-';
+        document.getElementById('videoMetaViews').textContent = res.data.views || '-';
+        document.getElementById('videoMetaComments').textContent = res.data.comments || '-';
       }
     } catch (err) {
       console.warn('Failed to dynamically map video stats:', err);
