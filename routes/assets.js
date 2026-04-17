@@ -179,7 +179,8 @@ async function handle(req, res, pathname, method) {
 
     } catch (err) {
       console.error('Vertex Gen Error:', err);
-      return sendErr(res, 500, 'Failed to map prompt structurally through Vertex protocols.', { code: 'VERTEX_FAIL' }), true;
+      // Pass the physical mechanical error dynamically explicitly down so the UI doesn't hide it
+      return sendErr(res, 500, `Vertex Execution Failed: ${err.message}`, { code: 'VERTEX_FAIL' }), true;
     }
   }
 
