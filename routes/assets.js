@@ -18,6 +18,14 @@ const { isConfigured: isBlobConfigured, handleClientUpload } = require('../lib/b
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const { listYoutubeVideos } = require('../lib/acquire/YoutubeVideosStore');
 
+// Google Vertex SDK
+let vertexVeo = null;
+try {
+  vertexVeo = require('../lib/vendor/vertexVeo');
+} catch (e) {
+  console.warn('Vertex SDK not configured locally:', e.message);
+}
+
 const ASSET_TYPES = new Set(['Image', 'Video', 'Audio', 'Lead Magnet', 'File']);
 const ASSETS_PATH_RE = /^\/api\/assets\/?$/;
 const MAX_UPLOAD_BASE64_CHARS = 9_000_000;
@@ -131,15 +139,48 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/assets/generate' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const promptText = String(body.prompt || '').trim();
+    const references = Array.isArray(body.references) ? body.references : [];
+
     if (!promptText) {
       return sendErr(res, 400, 'Prompt string required to initialize generation pipeline.', { code: 'INVALID_PROMPT' }), true;
     }
     
-    // Future Generation Logic will be scaffolded here natively processing the prompt text
-    return sendOk(res, 200, {
-      status: 'queued',
-      message: 'Video Generation Engine standing by. Downstream AI node infrastructure ready to receive inputs.'
-    }), true;
+    if (!vertexVeo) {
+      return sendErr(res, 503, 'Vertex AI Veo integration is missing or improperly mapped in backend.', { code: 'SDK_NOT_FOUND' }), true;
+    }
+
+    try {
+      // 1. Fire asynchronous job natively to Google Cloud
+      const generationJob = await vertexVeo.generateVideo(promptText, references);
+
+      // 2. Instantiate standalone DB Row capturing the queued event
+      const dbPayload = {
+        assetName: `Generated Video: ${promptText.substring(0, 30)}...`,
+        assetType: 'Video',
+        category: 'Generated',
+        generationStatus: 'processing',
+        generationJobId: generationJob.jobId,
+        comments: `Generative Prompt Instructions: \n${promptText}`
+      };
+      
+      const result = await createAsset(dbPayload, scope);
+      if (!result.ok) {
+         console.error('Failed to log Veo generation in DB:', result.error);
+         return sendErr(res, 500, 'Generation fired but failed database synchronization.', { code: 'DB_SYNC_FAIL' }), true;
+      }
+      
+      const created = Array.isArray(result.data) ? result.data[0] : result.data;
+      return sendOk(res, 200, {
+        status: 'queued',
+        jobId: generationJob.jobId,
+        asset: rowToAsset(created),
+        message: 'Google Cloud Veo initialization successful. Asset rendering async in the cloud.'
+      }), true;
+
+    } catch (err) {
+      console.error('Vertex Gen Error:', err);
+      return sendErr(res, 500, 'Failed to map prompt structurally through Vertex protocols.', { code: 'VERTEX_FAIL' }), true;
+    }
   }
 
   if (pathname === '/api/assets/upload-google-drive' && requestMethod === 'POST') {
