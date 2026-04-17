@@ -736,10 +736,16 @@
          const statusColor = asset.generationStatus === 'completed' ? 'limegreen' : (asset.generationStatus === 'processing' ? 'var(--primary-color)' : 'tomato');
          
          let actionHTML = '';
-         if (asset.generationStatus === 'completed' && asset.location) {
-             actionHTML = `<button class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')">View Resource</button>`;
-         } else if (asset.generationStatus === 'processing') {
-             actionHTML = `<span class="muted" style="font-size:0.8rem;"><span class="loader-spinner" style="display:inline-block; border: 2px solid var(--border); border-top: 2px solid var(--primary-color); border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite; margin-right:4px; vertical-align:middle;"></span>Rendering...</span>`;
+          if (asset.generationStatus === 'completed' && asset.location) {
+             actionHTML = `<button type="button" class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')">View Resource</button>`;
+          } else if (asset.generationStatus === 'processing') {
+             actionHTML = `
+               <span class="muted" style="font-size:0.8rem; display:inline-flex; align-items:center; gap:0.5rem; vertical-align:middle;">
+                 <span class="loader-spinner" style="border: 2px solid var(--border); border-top: 2px solid var(--primary-color); border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite;"></span>
+                 <span>Rendering...</span>
+               </span>
+               <button type="button" class="white-btn tiny-btn" onclick="App.assetsVideo.cancelGeneration('${asset.id}')" style="margin-left:8px; border-color:tomato; color:tomato; vertical-align:middle;">Cancel</button>
+             `;
              
              // CRITICAL: Restart tracker organically out of schema caching loop!
              if (!galleryPollers[asset.id]) {
@@ -807,6 +813,24 @@
     }
   }
 
+  async function cancelGeneration(assetId) {
+    if (!confirm('Are you sure you want to cancel this rendering job?')) return;
+    try {
+      if (galleryPollers[assetId]) {
+        clearInterval(galleryPollers[assetId]);
+        delete galleryPollers[assetId];
+      }
+      const res = await App.api('/api/assets/generate/cancel', { 
+        method: 'POST', 
+        body: JSON.stringify({ id: assetId }) 
+      });
+      App.notify(res.message || 'Generation gracefully cancelled.');
+      renderGenerationHistory();
+    } catch (err) {
+      App.notify(err.message, true);
+    }
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -826,7 +850,8 @@
     searchCreationReferences,
     attachCreationReference,
     removeCreationReference,
-    renderGenerationHistory
+    renderGenerationHistory,
+    cancelGeneration
   };
 
   function injectYoutubeScript() {

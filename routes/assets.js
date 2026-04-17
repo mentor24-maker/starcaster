@@ -228,6 +228,28 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { asset: target }, { asset: target }), true;
   }
 
+  if (pathname === '/api/assets/generate/cancel' && requestMethod === 'POST') {
+    const bodyString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+    let bodyObj = {};
+    try { bodyObj = JSON.parse(bodyString); } catch (e) {}
+    
+    const assetId = Number(bodyObj.id || parsedUrl.searchParams.get('id') || 0);
+
+    if (!assetId || assetId <= 0) {
+      return sendErr(res, 400, 'Valid asset id conceptually required to cancel Vertex job natively.', { code: 'INVALID_ID' }), true;
+    }
+    
+    // In the future this should dynamically trigger LRO stop via GCP REST gracefully.
+    // Physical shutdown execution: map `cancelled` into tracker table natively.
+    const del = await updateAsset(assetId, {
+      generationStatus: 'cancelled'
+    }, scope);
+    
+    if (!del.ok) return sendErr(res, del.status || 500, del.error), true;
+
+    return sendOk(res, 200, { message: 'Generation gracefully terminated locally.' }), true;
+  }
+
   if (pathname === '/api/assets/upload-google-drive' && requestMethod === 'POST') {
     if (!isAssetStorageConfigured()) {
       return sendErr(
