@@ -705,7 +705,7 @@
       }
     } catch (err) {
       console.error(err);
-      App.notify('Failed to route context to generation engine.', true);
+      App.notify(err.message || 'Failed to route context to generation engine.', true);
     }
   }
 
