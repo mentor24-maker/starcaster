@@ -53,7 +53,7 @@ App.loadUsageReports = async function() {
         <div class="card">
           <h3 style="margin-top:0; text-transform:uppercase; letter-spacing:0.5px; font-size:1rem;">${p}</h3>
           <div style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--muted);">
-             <strong>${data.totalQueries}</strong> structural hits
+             <strong>${data.totalQueries}</strong> recent telemetry logs
           </div>
           <div style="background: var(--bg-body); padding: 0.5rem; border-radius: 6px; font-size: 0.9rem;">
             ${typeList}
