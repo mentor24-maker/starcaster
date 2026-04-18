@@ -31,7 +31,10 @@
           <label>Password</label>
           <input name="password" type="password" required />
           <div></div>
-          <button type="submit">Login</button>
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <button type="submit">Login</button>
+            <a href="#" id="authShowForgotPassword" style="font-size: 0.85rem; color: var(--muted); text-decoration: underline;">Forgot password?</a>
+          </div>
         </form>
         <form id="authRegisterForm" class="standard-form-grid hidden">
           <label>Name</label>
@@ -44,6 +47,25 @@
           <input name="confirm_password" type="password" required />
           <div></div>
           <button type="submit">Create Account</button>
+        </form>
+        <form id="authForgotPasswordForm" class="standard-form-grid hidden">
+          <p style="grid-column: 1/-1; color: var(--muted); font-size: 0.9rem;">Enter your email to receive a secure 6-digit password reset code.</p>
+          <label>Email</label>
+          <input name="email" type="email" required />
+          <div></div>
+          <button type="submit">Send Reset Code</button>
+          <div style="grid-column: 1/-1; text-align: center; margin-top: 1rem;">
+            <a href="#" id="authCancelForgotPassword" style="font-size: 0.85rem; color: var(--muted); text-decoration: underline;">Back to login</a>
+          </div>
+        </form>
+        <form id="authResetPasswordForm" class="standard-form-grid hidden">
+          <p style="grid-column: 1/-1; color: var(--muted); font-size: 0.9rem;">Enter the 6-digit code dispatched to your email along with your new password.</p>
+          <label>6-Digit Code</label>
+          <input name="code" type="text" pattern="[0-9]{6}" maxlength="6" required placeholder="123456" style="letter-spacing: 4px; text-align: center; font-variant-numeric: tabular-nums;" />
+          <label>New Password</label>
+          <input name="new_password" type="password" minlength="8" required />
+          <div></div>
+          <button type="submit">Confirm Reset</button>
         </form>
       </div>
     </section>
