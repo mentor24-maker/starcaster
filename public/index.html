@@ -4995,6 +4995,9 @@
         </form>
       </section>
 
+
+
+
       <section id="messagingReportsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Reports</h2>
@@ -7243,8 +7246,18 @@
       </section>
 
       <section id="observeReportsPage" class="app-page hidden">
-        <h2>Observe: Reports</h2>
-        <p>Reports module placeholder.</p>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--ink); padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
+          <h2>Observe: Cost & Burn-Rate Analytics</h2>
+          <button class="standard-btn" onclick="App.loadObserveReports()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            Refresh Estimates
+          </button>
+        </div>
+        
+        <div id="observeCfoDashboard">
+          <!-- Dynamically populated by App.loadObserveReports() -->
+          <p style="color: var(--muted); text-align: center; padding: 3rem;">Reports dashboard initializing...</p>
+        </div>
       </section>
 
       <section id="observeAnalysisPage" class="app-page hidden">
@@ -7329,23 +7342,6 @@
             </div>
           </div>
         </div>
-        
-        <div style="margin-top: 3rem; margin-bottom: 2rem;">
-          <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--ink); padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
-            <h2>Internal Usage Analytics</h2>
-            <button class="standard-btn" onclick="App.loadUsageReports()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-              Refresh Data
-            </button>
-          </div>
-          
-          <div id="usageAnalyticsContainer">
-            <div style="color: var(--muted); text-align: center; padding: 2rem;">
-              Click 'Refresh Data' to load the latest telemetry aggregated directly from Supabase logs. 
-            </div>
-          </div>
-        </div>
-        
       </section>
 
       <section id="activityLogPage" class="app-page hidden">
