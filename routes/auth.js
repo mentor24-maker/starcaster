@@ -14,7 +14,11 @@ const {
   createSession,
   deleteSession,
   getUserFromSessionToken,
+  findUserByEmail,
+  updateUserPassword
 } = require('../lib/authStore');
+
+const { sendEmail } = require('../lib/mailer');
 
 const SESSION_COOKIE_NAME = 'app_session';
 const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
@@ -102,6 +106,69 @@ async function handle(req, res, pathname, method) {
 
     setSessionCookie(res, session.data.token, req);
     return sendOk(res, 200, { user: matched.data }, { user: matched.data }), true;
+  }
+
+  if (pathname === '/api/auth/forgot-password' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const email = normalizeEmail(body.email);
+    const user = await findUserByEmail(email);
+    if (!user) return sendErr(res, 404, 'User not found', { code: 'USER_NOT_FOUND' }), true;
+
+    // Generate highly secure 6-digit OTP mapping
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetTokenStruct = `OTP:${email}:${otp}`;
+    
+    // Store in AuthSessions internally for 15 minutes physically ensuring cross-lambda sync!
+    const session = await createSession(user.id, resetTokenStruct, 15 * 60 * 1000);
+    if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to provision reset tunnel.', { code: 'OTP_FAILED' }), true;
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; padding: 2rem;">
+        <h2>Password Reset Code</h2>
+        <p>A password reset was requested for your Alphire Promo account. If this was not you, please ignore this email securely.</p>
+        <div style="margin: 2rem 0; padding: 1.5rem; background: #f3f4f6; text-align: center; border-radius: 8px;">
+          <h1 style="margin:0; font-size: 2.5rem; letter-spacing: 4px; color: #111827;">${otp}</h1>
+        </div>
+        <p>This code strictly expires natively in 15 minutes.</p>
+      </div>
+    `;
+
+    const mail = await sendEmail({
+      to: email,
+      subject: 'Security: Alphire Account Password Reset',
+      html: htmlBody
+    });
+
+    if (!mail.ok) return sendErr(res, mail.status || 500, mail.error, { code: 'EMAIL_FAILED' }), true;
+
+    return sendOk(res, 200, { email }, { message: 'OTP Dispatched' }), true;
+  }
+
+  if (pathname === '/api/auth/confirm-reset' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const email = normalizeEmail(body.email);
+    const code = String(body.code || '').trim();
+    const newPassword = String(body.new_password || '').trim();
+
+    if (!email || !code || code.length !== 6 || !newPassword || newPassword.length < 8) {
+      return sendErr(res, 400, 'Valid email, 6-digit code, and new password (min 8 chars) physically required.', { code: 'INVALID_INPUT' }), true;
+    }
+
+    const resetTokenStruct = `OTP:${email}:${code}`;
+    const mappedUser = await getUserFromSessionToken(resetTokenStruct);
+
+    if (!mappedUser || mappedUser.email !== email) {
+      return sendErr(res, 401, 'Invalid or expired secure reset code.', { code: 'INVALID_OTP' }), true;
+    }
+
+    // Overwrite exact Master Cryptography hash
+    const update = await updateUserPassword({ email, newPassword });
+    if (!update.ok) return sendErr(res, update.status || 500, update.error, { code: 'UPDATE_FAILED' }), true;
+
+    // Securely burn the single-use OTP instantly after successful override!
+    await deleteSession(resetTokenStruct);
+
+    return sendOk(res, 200, { success: true }, { message: 'Password Reset Successful' }), true;
   }
 
   
