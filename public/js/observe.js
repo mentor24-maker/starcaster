@@ -16,7 +16,7 @@ App.manifests.push({
     if (pageId === 'observeQuotasPage') {
       App.loadUsageReports();
     }
-    if (pageId === 'observeReportsPage') {
+    if (pageId === 'observeDashboardPage') {
       App.loadObserveReports();
     }
   }
