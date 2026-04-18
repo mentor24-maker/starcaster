@@ -16,10 +16,13 @@ App.auth._els = {
   authLanding: null,
   authMessage: null,
   authModeLabel: null,
-  authLoginForm: null,
   authRegisterForm: null,
+  authForgotPasswordForm: null,
+  authResetPasswordForm: null,
   authShowLogin: null,
   authShowRegister: null,
+  authShowForgotPassword: null,
+  authCancelForgotPassword: null,
   authWelcomeName: null,
   authLogoutButton: null,
 };
@@ -32,8 +35,12 @@ App.auth._cacheEls = function _cacheEls() {
     'authModeLabel',
     'authLoginForm',
     'authRegisterForm',
+    'authForgotPasswordForm',
+    'authResetPasswordForm',
     'authShowLogin',
     'authShowRegister',
+    'authShowForgotPassword',
+    'authCancelForgotPassword',
     'authWelcomeName',
     'authLogoutButton',
   ];
@@ -49,22 +56,35 @@ App.auth._setMessage = function _setMessage(text, isError = false) {
   box.classList.toggle('error', Boolean(isError));
 };
 
-App.auth._setMode = function _setMode(modeInput) {
-  const mode = modeInput === 'register' ? 'register' : 'login';
+  let mode = 'login';
+  if (['register', 'forgot_password', 'reset_password'].includes(modeInput)) {
+    mode = modeInput;
+  }
+  
   const {
     authModeLabel,
     authLoginForm,
     authRegisterForm,
+    authForgotPasswordForm,
+    authResetPasswordForm,
     authShowLogin,
     authShowRegister,
+    authShowForgotPassword,
   } = App.auth._els;
 
   if (authModeLabel) {
-    authModeLabel.textContent = mode === 'register' ? 'Create your account' : 'Sign in';
+    if (mode === 'register') authModeLabel.textContent = 'Create your account';
+    else if (mode === 'forgot_password') authModeLabel.textContent = 'Password Reset';
+    else if (mode === 'reset_password') authModeLabel.textContent = 'Verify Secure Code';
+    else authModeLabel.textContent = 'Sign in';
   }
+  
   if (authLoginForm) authLoginForm.classList.toggle('hidden', mode !== 'login');
   if (authRegisterForm) authRegisterForm.classList.toggle('hidden', mode !== 'register');
-  if (authShowLogin) authShowLogin.classList.toggle('active', mode === 'login');
+  if (authForgotPasswordForm) authForgotPasswordForm.classList.toggle('hidden', mode !== 'forgot_password');
+  if (authResetPasswordForm) authResetPasswordForm.classList.toggle('hidden', mode !== 'reset_password');
+  
+  if (authShowLogin) authShowLogin.classList.toggle('active', mode === 'login' || mode === 'forgot_password' || mode === 'reset_password');
   if (authShowRegister) authShowRegister.classList.toggle('active', mode === 'register');
   App.auth._setMessage('');
 };
@@ -142,6 +162,20 @@ App.auth._register = async function _register(payload) {
     return res.user || res.data?.user || null;
 };
 
+App.auth._forgotPassword = async function _forgotPassword(email) {
+  return App.api('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email: String(email || '').trim() }),
+  });
+};
+
+App.auth._confirmReset = async function _confirmReset(email, code, new_password) {
+  return App.api('/api/auth/confirm-reset', {
+    method: 'POST',
+    body: JSON.stringify({ email: String(email || '').trim(), code: String(code || '').trim(), new_password: String(new_password || '') }),
+  });
+};
+
 App.auth._me = async function _me() {
   const res = await App.api('/api/auth/me', { method: 'GET' });
   return res.user || res.data?.user || null;
@@ -158,8 +192,12 @@ App.auth.init = function init(bootMainApp) {
   const {
     authShowLogin,
     authShowRegister,
+    authShowForgotPassword,
+    authCancelForgotPassword,
     authLoginForm,
     authRegisterForm,
+    authForgotPasswordForm,
+    authResetPasswordForm,
     authWelcomeName,
     authLogoutButton,
   } = App.auth._els;
@@ -216,6 +254,59 @@ App.auth.init = function init(bootMainApp) {
         App.auth._setMessage('');
       } catch (err) {
         App.auth._setMessage(err.message || 'Registration failed', true);
+      }
+    });
+  }
+
+  if (authShowForgotPassword) {
+    authShowForgotPassword.addEventListener('click', (event) => {
+      event.preventDefault();
+      App.auth._setMode('forgot_password');
+    });
+  }
+
+  if (authCancelForgotPassword) {
+    authCancelForgotPassword.addEventListener('click', (event) => {
+      event.preventDefault();
+      App.auth._setMode('login');
+    });
+  }
+
+  let resetContextEmail = '';
+
+  if (authForgotPasswordForm) {
+    authForgotPasswordForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = new FormData(authForgotPasswordForm);
+      const email = form.get('email');
+      App.auth._setMessage('Dispatching reset code locally...');
+      try {
+        await App.auth._forgotPassword(email);
+        resetContextEmail = email;
+        App.auth._setMode('reset_password');
+        App.auth._setMessage('Code sent perfectly. Check your inbox.', false);
+      } catch (err) {
+        App.auth._setMessage(err.message || 'Error sending code', true);
+      }
+    });
+  }
+
+  if (authResetPasswordForm) {
+    authResetPasswordForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = new FormData(authResetPasswordForm);
+      const code = form.get('code');
+      const newPwd = form.get('new_password');
+      App.auth._setMessage('Verifying cryptographic token...');
+      try {
+        await App.auth._confirmReset(resetContextEmail, code, newPwd);
+        App.auth._setMode('login');
+        App.auth._setMessage('Password physically updated. You may now securely login.', false);
+        authResetPasswordForm.reset();
+        authForgotPasswordForm.reset();
+        resetContextEmail = '';
+      } catch (err) {
+        App.auth._setMessage(err.message || 'Invalid code or password structure', true);
       }
     });
   }
