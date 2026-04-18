@@ -56,6 +56,7 @@ App.auth._setMessage = function _setMessage(text, isError = false) {
   box.classList.toggle('error', Boolean(isError));
 };
 
+App.auth._setMode = function _setMode(modeInput) {
   let mode = 'login';
   if (['register', 'forgot_password', 'reset_password'].includes(modeInput)) {
     mode = modeInput;
