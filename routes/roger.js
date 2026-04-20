@@ -210,19 +210,36 @@ async function handle(req, res, pathname, requestMethod) {
     // Add the newly saved user record to the working history matrix
     history.push(userSaveRes.data);
 
-    // Determine target agent based on mention in the human's latest prompt
-    const isForAntigravity = finalContent.toLowerCase().includes('@antigravity');
-    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
+    // Determine all target agents based on mentions in the human's latest prompt
+    const textLower = finalContent.toLowerCase();
+    const isForRoger = textLower.includes('@roger') || textLower.includes('@rt');
+    const isForAntigravity = textLower.includes('@antigravity') || textLower.includes('@ag');
+    
+    let agentsToTrigger = [];
+    if (isForRoger) agentsToTrigger.push('roger');
+    if (isForAntigravity) agentsToTrigger.push('antigravity');
 
-    const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, status: 'processing', content: '[SYSTEM::PROCESSING]' });
-    if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
+    // Default to Roger if no specific agent is mentioned
+    if (agentsToTrigger.length === 0) {
+      agentsToTrigger.push('roger');
+    }
+
+    const processingNodes = [];
+    for (const agent of agentsToTrigger) {
+      const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: agent, status: 'processing', content: '[SYSTEM::PROCESSING]' });
+      if (rogerSaveRes.ok) {
+        processingNodes.push(rogerSaveRes.data);
+      } else {
+        return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
+      }
+    }
 
     // Fire and forget via internal fetch wrapper
     // Decoupled. Logic handled seamlessly downstream by SSE daemon.
 
     return sendOk(res, 202, {
       userChat: userSaveRes.data,
-      rogerChat: rogerSaveRes.data
+      replies: processingNodes
     }), true;
   }
 
