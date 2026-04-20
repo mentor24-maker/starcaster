@@ -10245,3 +10245,47 @@ button.section-settings-gear-btn svg {
   width: 100px;
   text-align: right;
 }
+
+/* Roger Chat State Version Anchors */
+.roger-version-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+}
+
+.roger-version-link:hover {
+  text-decoration-style: solid;
+  color: var(--accent-hover);
+}
+
+/* Chat bubble target animation */
+.roger-chat-bubble {
+  transition: box-shadow 0.3s ease, background-color 0.3s ease;
+}
+
+.roger-chat-bubble.highlight-ping {
+  animation: rogerHighlightPing 1.5s ease-out;
+}
+
+@keyframes rogerHighlightPing {
+  0% { 
+    background-color: rgba(245, 158, 11, 0.25); 
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.4); 
+    transform: scale(1.01);
+  }
+  50% {
+    background-color: rgba(245, 158, 11, 0.1); 
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); 
+    transform: scale(1.005);
+  }
+  100% { 
+    background-color: inherit; 
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); 
+    transform: scale(1);
+  }
+}
