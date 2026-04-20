@@ -45,8 +45,9 @@ function parseTriAgentBackend(rawString) {
       }
       if (data.state.state_version_id !== undefined) {
         data.state.state_version_id = Number(data.state.state_version_id);
-        if (data.state.state_version_id !== undefined) {
-         return data;
+        if (!isNaN(data.state.state_version_id)) {
+           return data;
+        }
       }
     }
   } catch (e) {
