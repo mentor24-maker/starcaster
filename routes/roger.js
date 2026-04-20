@@ -45,10 +45,36 @@ function parseTriAgentBackend(rawString) {
       }
       if (data.state.state_version_id !== undefined) {
         data.state.state_version_id = Number(data.state.state_version_id);
-        if (!isNaN(data.state.state_version_id)) return data;
+        if (data.state.state_version_id !== undefined) {
+         return data;
       }
     }
-  } catch(e) {}
+  } catch (e) {
+    // Regex Recovery for structurally broken JSON (unescaped quotes/newlines inside payload.content)
+    try {
+      let rawStr = String(rawString).trim();
+      const contentMatch = rawStr.match(/"content"\s*:\s*([\s\S]*)/);
+      if (contentMatch) {
+         let contentStr = contentMatch[1].trim();
+         // Strip the trailing JSON brackets and quotes like: " \n  }\n}
+         contentStr = contentStr.replace(/\"\s*\}?\s*\}?\s*$/g, '');
+         if (contentStr.startsWith('"')) contentStr = contentStr.substring(1);
+         // Unescape standard JSON text escapes since we bypassed parser
+         contentStr = contentStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+         
+         let stateObj = { state_version_id: 1 };
+         // Try to regex extract the state block
+         const stateMatch = rawStr.match(/"state"\s*:\s*(\{[\s\S]*?\})\s*,\s*"payload"/);
+         if (stateMatch) {
+            try { stateObj = JSON.parse(stateMatch[1]); } catch(e2) {}
+         }
+         return {
+            state: stateObj,
+            payload: { type: 'RESPONSE', content: contentStr }
+         };
+      }
+    } catch(regexErr) {}
+  }
   return null;
 }
 
