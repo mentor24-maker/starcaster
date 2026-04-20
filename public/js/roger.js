@@ -390,7 +390,7 @@ App.roger.formatMarkdown = function(text) {
     let unescapedCodeBlock = rawCodeBlock.replace(/^>\s?/gm, '');
     let index = chunks.length;
     chunks.push(unescapedCodeBlock);
-    return `__CODEBLOCK_${index}__`;
+    return `@@@CODEBLOCK${index}@@@`;
   });
 
   // 2. Escape all remaining text globally (user text outside codeblocks)
@@ -408,7 +408,7 @@ App.roger.formatMarkdown = function(text) {
   html = html.replace(/\n/g, '<br/>');
 
   // 5. Restore code blocks, but now we format them properly with our UI wrapper
-  html = html.replace(/__CODEBLOCK_(\d+)__/g, (match, i) => {
+  html = html.replace(/@@@CODEBLOCK(\d+)@@@/g, (match, i) => {
     const codeBlock = chunks[parseInt(i)];
     let filename = 'code.txt';
     const lines = codeBlock.split('\n');
