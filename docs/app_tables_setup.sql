@@ -103,6 +103,8 @@ create table if not exists public.channels (
   password_iv  text      null,
   password_tag text      null,
   key_version  text      null,
+  channel_type text      not null default 'organic' check (channel_type in ('organic', 'virtual')),
+  contact_id   text      null references public.contacts(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -155,9 +157,15 @@ alter table public.channels
 alter table public.channels
   add column if not exists key_version text null;
 alter table public.channels
+  add column if not exists channel_type text not null default 'organic' check (channel_type in ('organic', 'virtual'));
+alter table public.channels
+  add column if not exists contact_id text null references public.contacts(id) on delete set null;
+alter table public.channels
   alter column password set default '';
 alter table public.channels
   disable row level security;
+  
+create index if not exists idx_channels_contact_id on public.channels(contact_id);
 
 update public.assets
 set id = default

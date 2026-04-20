@@ -744,13 +744,18 @@ th,
 td {
   text-align: left;
   border-bottom: 1px solid var(--border);
-  padding: 0.45rem;
+  padding: 12px 14px;
   font-size: 0.93rem;
+  color: var(--ink);
+  vertical-align: middle;
 }
 
 th {
-  background: #000;
-  color: #d6f1ff;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--border);
 }
 
 .contacts-filter-row th {
@@ -7072,6 +7077,24 @@ th {
   --c-success:      #38a169;
 }
 
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.crud-actions-cell {
+  text-align: right;
+  white-space: nowrap !important;
+}
+
 /* ---------------------------------------------------------------------------
    1. DataGrid
    --------------------------------------------------------------------------- */
@@ -10137,4 +10160,86 @@ button.section-settings-gear-btn svg {
 }
 .studio-collapsible-body.hidden {
   display: none;
+}
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--c-radius);
+  padding: 0.7rem;
+  background: rgba(39, 166, 255, 0.04);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s;
+}
+.card:hover {
+  background: rgba(39, 166, 255, 0.12);
+  border-color: rgba(39, 166, 255, 0.4);
+}
+
+/* ================== POD ABSTRACTION ================== */
+.pod {
+  display: flex;
+  gap: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--c-radius);
+  padding: 0.85rem;
+  background: rgba(39, 166, 255, 0.04);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s;
+  cursor: pointer;
+}
+.pod:hover {
+  background: rgba(39, 166, 255, 0.12);
+  border-color: rgba(39, 166, 255, 0.4);
+}
+.pod-icon-col {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 0.15rem;
+  flex-shrink: 0;
+}
+.pod-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.messaging-content-map {
+  background: var(--bg-card);
+}
+.studio-collapsible-body.hidden {
+  display: none;
+}
+
+.develop-template-accordion-summary {
+  font-weight: 600;
+  font-size: 1.15rem;
+  padding: 0.8rem 1rem;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 1rem;
+}
+.develop-template-accordion[open] .develop-template-accordion-summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-bottom: 0;
+  border-bottom-width: 0;
+}
+
+/* Parameter Grid Settings Matrix */
+.parameter-grid {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  column-gap: 2rem;
+  row-gap: 0.75rem;
+  align-items: center;
+  white-space: nowrap;
+}
+.parameter-grid label {
+  margin: 0;
+  text-align: right;
+}
+.parameter-grid input {
+  width: 100px;
+  text-align: right;
 }

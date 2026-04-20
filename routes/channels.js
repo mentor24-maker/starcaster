@@ -27,14 +27,15 @@ async function handle(req, res, pathname, method) {
     const channel = String(body.channel || '').trim();
     const userName = String(body.userName || body.user_name || '').trim();
     const email = String(body.email || '').trim();
-    const password = String(body.password || '').trim();
+    const channelType = String(body.channelType || body.channel_type || 'organic').trim();
+    const contactId = body.contactId || body.contact_id || null;
 
     if (!channel) return sendErr(res, 400, 'channel is required', { code: 'VALIDATION_ERROR' }), true;
     if (!userName) return sendErr(res, 400, 'userName is required', { code: 'VALIDATION_ERROR' }), true;
     if (!email) return sendErr(res, 400, 'email is required', { code: 'VALIDATION_ERROR' }), true;
     if (!password) return sendErr(res, 400, 'password is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const result = await createChannel({ channel, userName, email, password }, scope);
+    const result = await createChannel({ channel, channelType, contactId, userName, email, password }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToChannel(created), { channel: rowToChannel(created) }), true;
@@ -56,6 +57,12 @@ async function handle(req, res, pathname, method) {
     if ('channel' in body) {
       patch.channel = String(body.channel || '').trim();
       if (!patch.channel) return sendErr(res, 400, 'channel is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if ('channelType' in body || 'channel_type' in body) {
+      patch.channelType = String(body.channelType || body.channel_type || 'organic').trim();
+    }
+    if ('contactId' in body || 'contact_id' in body) {
+      patch.contactId = body.contactId || body.contact_id || null;
     }
     if ('userName' in body || 'user_name' in body) {
       patch.userName = String(body.userName || body.user_name || '').trim();

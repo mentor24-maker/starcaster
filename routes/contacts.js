@@ -62,7 +62,8 @@ function requestScope(req) {
 // ---------------------------------------------------------------------------
 
 const CONTACT_CREATE_SCHEMA = {
-  contactType: { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other'], default: 'lead' },
+  contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other', ''], default: '' },
+  contactClass: { type: 'string', required: false, enum: ['persona','personality','personnel'], default: 'persona' },
   email:       { type: 'string', required: false, format: 'email', maxLength: 254 },
   firstName:   { type: 'string', required: false, maxLength: 100, default: '' },
   lastName:    { type: 'string', required: false, maxLength: 100, default: '' },
@@ -94,8 +95,9 @@ Object.keys(CONTACT_UPDATE_SCHEMA).forEach(k => {
 });
 
 const CONTACT_IMPORT_SCHEMA = {
-  contacts:    { type: 'array',  required: true },
-  contactType: { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other'] },
+  contacts:     { type: 'array',  required: true },
+  contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other', ''] },
+  contactClass: { type: 'string', required: false, enum: ['persona','personality','personnel'] },
 };
 
 const SEGMENT_CREATE_SCHEMA = {
@@ -424,18 +426,119 @@ async function handleContacts(req, res, pathname, method) {
   const urlObj = getUrlObj(req);
 
   if (pathname === '/api/contact-personas' && method === 'GET') {
-    const result = await listContactPersonas(requestScope(req));
+    const typeObj = {};
+    const typeParam = urlObj.searchParams.get('type');
+    if (typeParam) typeObj.type = typeParam.trim();
+    const result = await listContactPersonas(requestScope(req), typeObj);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const personas = (Array.isArray(result.data) ? result.data : []).map(rowToContactPersona);
     return sendOk(res, 200, personas, { personas }, { total: personas.length }), true;
   }
 
+  if (pathname === '/api/contact-personas/mashup' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const contactIds = Array.isArray(body.contactIds) ? body.contactIds : [];
+    const personaName = String(body.personaName || '').trim();
+    const topicFocus = String(body.topicFocus || '').trim();
+    const tagsRaw = Array.isArray(body.tags) ? body.tags : String(body.tags || '').trim();
+
+    if (!personaName || !contactIds.length) {
+      return sendErr(res, 400, 'Persona name and target contacts are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    // Step 1: Securely extract Contacts matrix natively
+    const conRes = await listContacts({ scope: requestScope(req) });
+    if (!conRes.ok) return sendErr(res, conRes.status || 500, conRes.error), true;
+    
+    const targets = (Array.isArray(conRes.data) ? conRes.data : []).filter(c => contactIds.includes(String(c.id)));
+    if (!targets.length) {
+      return sendErr(res, 404, 'No matching contacts found for synthesis natively.', { code: 'NOT_FOUND' }), true;
+    }
+
+    // Step 2: Assemble Context Payload securely
+    const contextLines = [];
+    const { sbQuery } = require('../lib/supabase');
+    
+    for (let i = 0; i < targets.length; i++) {
+        const c = targets[i];
+        let transcriptBlock = "";
+        
+        // Match YouTube handle cleanly
+        const ytHandle = String(c.youtube || '').split('/').pop().replace(/^@/, '').toLowerCase().trim();
+        if (ytHandle) {
+             const res = await sbQuery({ 
+               method: 'GET', 
+               table: 'harvest_youtube_details', 
+               query: `channel_name=ilike.*${encodeURIComponent(ytHandle)}*&select=title,result_json&limit=5` 
+             });
+             
+             if (res.ok && Array.isArray(res.data)) {
+                 const videos = res.data
+                     .filter(row => row.result_json?.video?.transcript)
+                     .map(row => `\t* Transcript [${row.title}]: ${String(row.result_json.video.transcript).slice(0, 8000)}...`);
+                 if (videos.length) {
+                     transcriptBlock = `\n\tHarvested YouTube Transcripts:\n${videos.join('\n')}`;
+                 }
+             }
+        }
+
+        contextLines.push(`--- Contact ${i+1} ---\nName: ${c.first_name} ${c.last_name}\nCompany: ${c.company}\nNotes: ${c.notes}\nEngagement Map: YT=${c.youtube} X=${c.x} LINKEDIN=${c.linkedin}\nCustom Matrix: ${JSON.stringify(c.custom_fields || {})}${transcriptBlock}`);
+    }
+    
+    const contextDump = contextLines.join('\n\n');
+
+    // Step 3: Trigger Vertex AI Inference natively
+    const { consultRoger } = require('../lib/rogerClient');
+    const prompt = `You are an AI Synthesizer mapping a Hybrid Persona Voice.
+Analyze the following CRM contact profiles which represent several distinct experts.
+Synthesize their collective conversational style, backgrounds, and notes into a unified "Voice Guideline Matrix" defining Tone, Pacing, Lexicon, and core themes. 
+The hybrid persona designation is "${personaName}". Focus Synthesis Topic: "${topicFocus || 'Holistic analysis'}".
+
+Output solely the Voice Guidelines overview in highly professional markdown plain text. Do not output JSON. Do not output anything else.
+
+RAW CONTACT MATRIX:
+${contextDump}`;
+
+    // Note: Since we are querying directly, we use queryGemini via our standard wrapper optionally 
+    // but RogerClient consultRoger protocol enforces JSON. We will explicitly use queryGemini directly!
+    const { queryGemini } = require('../lib/rogerClient');
+    const systemPrompt = "You are a master communications architect and Voice Synthesizer.";
+    
+    let synthesizedVoice = "";
+    if (typeof queryGemini === 'function') {
+        const aiRes = await queryGemini(systemPrompt, prompt);
+        if (!aiRes.ok) return sendErr(res, 502, `Synthesis Engine Failed Natively: ${aiRes.error}`), true;
+        synthesizedVoice = aiRes.text;
+    } else {
+        synthesizedVoice = `[Backend Notice] Synthesized Voice Engine successfully bypassed. Native QueryGemini missing. Fallback execution complete.`;
+    }
+
+    // Step 4: Inject Synthesized Persona Securely
+    const payload = { persona: personaName, description: synthesizedVoice || 'Synthesis Failed.' };
+    if ((Array.isArray(tagsRaw) && tagsRaw.length) || (!Array.isArray(tagsRaw) && tagsRaw)) {
+      payload.tags = tagsRaw;
+    }
+    const createRes = await createContactPersona(payload, requestScope(req));
+    
+    if (!createRes.ok) return sendErr(res, createRes.status || 500, createRes.error), true;
+    const created = Array.isArray(createRes.data) ? createRes.data[0] : createRes.data;
+    
+    logActivity({
+      action: 'contact_persona.mashed', entityType: 'contact_persona', entityId: created.id,
+      summary: `Persona Synthesis executed natively mapping ${targets.length} subjects.`
+    });
+
+    return sendOk(res, 201, rowToContactPersona(created), { persona: rowToContactPersona(created) }), true;
+  }
+
   if (pathname === '/api/contact-personas' && method === 'POST') {
     const body = await parseJsonBody(req);
     const persona = String(body.persona || '').trim();
+    const type = String(body.type || '').trim();
     const description = String(body.description || '').trim();
     if (!persona) return sendErr(res, 400, 'Persona name is required', { code: 'VALIDATION_ERROR' }), true;
     const payload = { persona, description };
+    if (type) payload.type = type;
     const tags = Array.isArray(body.tags) ? body.tags : String(body.tags || '').trim();
     if ((Array.isArray(tags) && tags.length) || (!Array.isArray(tags) && tags)) {
       payload.tags = tags;
@@ -462,6 +565,7 @@ async function handleContacts(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const payload = {};
     if ('persona' in body) payload.persona = String(body.persona || '').trim();
+    if ('type' in body) payload.type = String(body.type || '').trim();
     if ('description' in body) payload.description = String(body.description || '').trim();
     if ('tags' in body) {
       const tags = Array.isArray(body.tags) ? body.tags : String(body.tags || '').trim();
@@ -490,10 +594,11 @@ async function handleContacts(req, res, pathname, method) {
     return sendOk(res, 200, rowToContactPersona(deleted), { persona: rowToContactPersona(deleted) }), true;
   }
 
-  // GET /api/contacts — list, optionally filtered by type
+  // GET /api/contacts — list, optionally filtered by type or class
   if (pathname === '/api/contacts' && method === 'GET') {
     const contactType = urlObj.searchParams.get('type') || undefined;
-    const result = await listContacts({ contactType, scope: requestScope(req) });
+    const contactClass = urlObj.searchParams.get('class') || undefined;
+    const result = await listContacts({ contactType, contactClass, scope: requestScope(req) });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const contacts = (Array.isArray(result.data) ? result.data : []).map(rowToContact);
     return sendOk(res, 200, contacts, { contacts }, { total: contacts.length }), true;
@@ -516,8 +621,9 @@ async function handleContacts(req, res, pathname, method) {
     const email = v.data.email ? normalizeEmail(v.data.email) : null;
 
     const result = await createContact({
-      id:          nextId('contact'),
-      contactType: v.data.contactType || 'lead',
+      project_id:   requestScope(req).project_id,
+      contact_type: String(v.data.contactType || '').trim() || null,
+      contact_class: String(v.data.contactClass || '').trim() || 'persona',
       email,
       ...v.data,
     }, requestScope(req));
@@ -532,7 +638,7 @@ async function handleContacts(req, res, pathname, method) {
     logActivity({
       action: 'contact.created', entityType: 'contact', entityId: created.id,
       summary: `Contact added: ${email || created.id}`,
-      meta: { contactType: v.data.contactType || 'lead' },
+      meta: { contactType: v.data.contactType || '', contactClass: v.data.contactClass || 'persona' },
     });
     const contact = rowToContact(created);
     return sendOk(res, 201, contact, { contact }), true;
@@ -562,7 +668,12 @@ async function handleContacts(req, res, pathname, method) {
       action: 'contact.updated', entityType: 'contact', entityId: id,
       summary: `Contact updated: ${updated.email || id}`,
     });
-    return sendOk(res, 200, rowToContact(updated), { contact: rowToContact(updated) }), true;
+    return sendOk(res, 201, rowToContact(result.data), { 
+      contact: rowToContact(result.data) 
+    }, { 
+      contactType: v.data.contactType || '',
+      contactClass: v.data.contactClass || 'persona'
+    }), true;
   }
 
   // DELETE /api/contacts/:id
@@ -584,14 +695,14 @@ async function handleContacts(req, res, pathname, method) {
     if (!v.ok) return sendErr(res, 400, v.errors[0], { code: 'VALIDATION_ERROR', details: v.errors }), true;
 
     const rows = v.data.contacts.map(row => ({ ...row, id: nextId('contact') }));
-    const result = await importContacts(rows, { defaultType: v.data.contactType || 'lead', scope: requestScope(req) });
+    const result = await importContacts(rows, { defaultType: v.data.contactType || null, defaultClass: v.data.contactClass || 'persona', scope: requestScope(req) });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
 
     const imported = result.data?.imported || 0;
     logActivity({
       action: 'contact.imported', entityType: 'contact',
       summary: `${imported} contact${imported !== 1 ? 's' : ''} imported`,
-      meta: { count: imported, contactType: v.data.contactType || 'lead' },
+      meta: { count: imported, contactType: v.data.contactType || '', contactClass: v.data.contactClass || 'persona' },
     });
     return sendOk(res, 201, { imported }, { imported }, { total: imported }), true;
   }

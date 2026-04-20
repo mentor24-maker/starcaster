@@ -184,7 +184,7 @@ async function pingOpenclaw(req, res) {
 
 // Ensure `sendJson` is accessible since it's used inside ping handles
 const { sendJson } = require('./http');
-const { getUsageAnalytics } = require('../lib/observeStore');
+const { getUsageAnalytics, recordPageView, listPageViews } = require('../lib/observeStore');
 
 async function handle(req, res, pathname, method) {
   if (!pathname.startsWith('/api/observe')) return false;
@@ -200,6 +200,11 @@ async function handle(req, res, pathname, method) {
   if (method === 'GET') {
      if (pathname === '/api/observe/usage-reports') {
         const payload = await getUsageAnalytics(scope);
+        if (!payload.ok) return sendErr(res, 500, payload.error), true;
+        return sendOk(res, 200, payload.data), true;
+     }
+     if (pathname === '/api/observe/page-views') {
+        const payload = await listPageViews(req.query?.limit || 1000, scope);
         if (!payload.ok) return sendErr(res, 500, payload.error), true;
         return sendOk(res, 200, payload.data), true;
      }
@@ -221,6 +226,14 @@ async function handle(req, res, pathname, method) {
     if (pathname === '/api/observe/ping-gemini') {
       await pingGemini(req, res);
       return true;
+    }
+    if (pathname === '/api/observe/page-views') {
+      const { parseJsonBody } = require('./http');
+      const body = await parseJsonBody(req);
+      const pageId = body.pageId || body.page_id;
+      if (!pageId) return sendErr(res, 400, "pageId is required"), true;
+      await recordPageView(pageId, scope);
+      return sendOk(res, 200, { success: true }), true;
     }
   }
 

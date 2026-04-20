@@ -53,6 +53,7 @@
         if (App.ui && App.ui.populateTopicsDropdown) {
           await App.ui.populateTopicsDropdown('videoCurationTopic', 'Any', '');
           await App.ui.populateTopicsDropdown('creationRefAssetTopic', 'All Topics', '');
+          await App.ui.populateTopicsDropdown('videoCreationTopic', '-- No Topic --', '');
         }
       } catch (err) {
         console.error('Failed to load curation topics:', err);
@@ -603,6 +604,9 @@
       id: asset.id,
       assetName: asset.assetName,
       assetType: asset.assetType,
+      category: asset.category,
+      topic: asset.topic,
+      location: asset.location,
       instructions: ''
     });
     renderCreationReferences();
@@ -619,50 +623,108 @@
     if (ref) ref.instructions = value;
   }
 
+  function openVertexBlob(assetId) {
+      const cache = window.__genCache && window.__genCache[assetId];
+      if (!cache || !cache.location) return;
+      try {
+          const obj = JSON.parse(cache.location);
+          let b64 = '';
+          if (obj.videos && obj.videos[0]) {
+             b64 = obj.videos[0].bytesBase64Encoded || '';
+          }
+          if (!b64) throw new Error('No bytes found in Veo response payload.');
+          
+          const byteCharacters = atob(b64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], {type: 'video/mp4'});
+          const blobUrl = URL.createObjectURL(blob);
+          window.open(blobUrl, '_blank');
+      } catch (err) {
+          console.error(err);
+          App.notify('Failed to decode native Vertex Veo MP4 stream.', true);
+      }
+  }
+
   function renderCreationReferences() {
     const container = document.getElementById('videoCreationAttachedAssets');
-    if (!container) return;
+    const searchForm = document.getElementById('creationAssetSearchForm');
+    if (!container || !searchForm) return;
+    
     container.innerHTML = '';
     
     if (creationReferences.length === 0) {
-      container.innerHTML = '<li class="muted" style="padding-left: 0.5rem;">No referential assets explicitly attached.</li>';
+      container.classList.add('hidden');
+      searchForm.classList.remove('hidden');
       return;
     }
 
+    // Force strictly explicitly hide the form picker module explicitly intrinsically matching layout logic
+    searchForm.classList.add('hidden');
+    container.classList.remove('hidden');
+
     creationReferences.forEach(ref => {
-      const li = document.createElement('li');
-      li.style.border = '1px solid var(--border)';
-      li.style.padding = '0.75rem';
-      li.style.borderRadius = 'var(--radius-md)';
-      li.style.background = 'var(--bg-body)';
+      const block = document.createElement('div');
+      block.style.display = 'flex';
+      block.style.flexDirection = 'column';
+      block.style.gap = '0.75rem';
+      block.style.border = '1px solid var(--border)';
+      block.style.padding = '0.75rem';
+      block.style.borderRadius = 'var(--radius-md)';
+      block.style.background = 'var(--bg-body)';
+      
+      let imgHtml = '';
+      if (ref.location && (ref.location.includes('http') || ref.location.startsWith('data:image'))) {
+          imgHtml = `<img src="${ref.location}" style="width: 60px; height: 60px; min-width: 60px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border);" />`;
+      } else {
+          imgHtml = `<div style="width: 60px; height: 60px; min-width: 60px; display:flex; align-items:center; justify-content:center; background: var(--bg-alt); border: 1px dashed var(--border); border-radius: var(--radius); font-size: 0.70rem; color: var(--subtext); text-align: center;">No Preview</div>`;
+      }
 
       const header = document.createElement('div');
       header.style.display = 'flex';
       header.style.justifyContent = 'space-between';
-      header.style.marginBottom = '0.5rem';
+      header.style.alignItems = 'flex-start';
       
-      const title = document.createElement('strong');
-      title.textContent = `Attached ${ref.assetType}: ${ref.assetName}`;
+      const leftHeaderHtml = `
+         <div style="display: flex; gap: 1rem; align-items: center;">
+            ${imgHtml}
+            <div>
+               <strong style="display: block; font-size: 1rem; color: var(--primary-color);">${ref.assetName || 'Untitled Asset'}</strong>
+               <span class="muted" style="font-size: 0.85rem; display: block; margin-top: 2px;">Format: ${ref.assetType || '-'} | Category: ${ref.category || '-'} | Topic: ${ref.topic || '-'}</span>
+            </div>
+         </div>
+      `;
+      const leftHeaderWrap = document.createElement('div');
+      leftHeaderWrap.innerHTML = leftHeaderHtml;
 
       const remBtn = document.createElement('button');
       remBtn.type = 'button';
-      remBtn.textContent = 'Remove';
-      remBtn.style.fontSize = '0.8rem';
+      remBtn.className = 'tiny-btn icon-btn icon-btn-danger';
+      remBtn.title = 'Detach Asset';
+      remBtn.innerHTML = `<span class="icon-btn-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12h.01M16 12h2M6 12h2M15 7h2a5 5 0 0 1 0 10h-2M9 7H7a5 5 0 0 0 0 10h2"/></svg></span>`;
       remBtn.onclick = () => App.assetsVideo.removeCreationReference(ref.id);
       
-      header.appendChild(title);
+      header.appendChild(leftHeaderWrap);
       header.appendChild(remBtn);
 
       const ta = document.createElement('textarea');
-      ta.rows = 2;
-      ta.className = 'full-width';
-      ta.placeholder = `Specific instructions for utilizing this reference...`;
+      ta.rows = 4;
+      ta.style.width = '100%';
+      ta.style.boxSizing = 'border-box';
+      ta.style.padding = '0.5rem';
+      ta.style.border = '1px solid var(--border)';
+      ta.style.borderRadius = 'var(--radius)';
+      ta.style.background = 'var(--bg-alt)';
+      ta.placeholder = `Specific layout instructions for utilizing this visual reference within the prompt pipeline...`;
       ta.value = ref.instructions || '';
       ta.oninput = (e) => updateCreationReferenceInstruction(ref.id, e.target.value);
 
-      li.appendChild(header);
-      li.appendChild(ta);
-      container.appendChild(li);
+      block.appendChild(header);
+      block.appendChild(ta);
+      container.appendChild(block);
     });
   }
 
@@ -684,18 +746,24 @@
 
   async function submitCreationPrompt() {
     const promptInput = document.getElementById('videoCreationPrompt');
+    const titleInput = document.getElementById('videoCreationAssetName');
+    const topicInput = document.getElementById('videoCreationTopic');
     if (!promptInput) return;
     const promptText = String(promptInput.value || '').trim();
     if (!promptText) return App.notify('Please provide a directive prompt before initializing generation.', true);
 
+    const assetName = titleInput ? String(titleInput.value || '').trim() : '';
+    const topic = topicInput ? String(topicInput.value || '').trim() : '';
+
     try {
-      const payload = { prompt: promptText, references: creationReferences };
+      const payload = { assetName, topic, prompt: promptText, references: creationReferences };
       const data = await App.api('/api/assets/generate', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
       App.notify(data.message || 'Video generation pipeline locked. Rendering asynchronously.', false);
       promptInput.value = '';
+      if (titleInput) titleInput.value = '';
       creationReferences = [];
       renderCreationReferences();
 
@@ -737,7 +805,11 @@
          
          let actionHTML = '';
          if (asset.generationStatus === 'completed' && asset.location) {
-             actionHTML = `<button type="button" class="white-btn tiny-btn" onclick="window.open('${asset.location}', '_blank')" style="margin-right: 8px;">View Resource</button>`;
+             let viewAction = `window.open('${asset.location}', '_blank')`;
+             if (asset.location.startsWith('{') && asset.location.includes('@type')) {
+                 viewAction = `App.assetsVideo.openVertexBlob('${asset.id}')`;
+             }
+             actionHTML = `<button type="button" class="white-btn tiny-btn" onclick="${viewAction}" style="margin-right: 8px;">View Resource</button>`;
              actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
          } else if (asset.generationStatus === 'processing') {
              actionHTML = `
@@ -762,6 +834,13 @@
                    
                    if (Math.floor(Date.now() / 1000) % 8 === 0) {
                        try {
+                          // Prevent ghost polling if User structurally logged out
+                          if (!App.auth || !App.auth.user) {
+                            clearInterval(galleryPollers[asset.id]);
+                            delete galleryPollers[asset.id];
+                            return;
+                          }
+
                           const statusRes = await App.api(`/api/assets/generate/status?id=${asset.id}`);
                           
                           if (statusRes.asset && statusRes.asset._vertexDiagnostic) {
@@ -813,22 +892,42 @@
 
          window.__genCache = window.__genCache || {};
          window.__genCache[asset.id] = asset;
+
+         let rawDate = Date.now();
+         let endTime = null;
+         if (Array.isArray(asset.tags)) {
+             const startTag = asset.tags.find(t => String(t).startsWith('startTime:'));
+             if (startTag) rawDate = parseInt(startTag.replace('startTime:', ''), 10);
+             
+             const endTag = asset.tags.find(t => String(t).startsWith('endTime:'));
+             if (endTag) endTime = parseInt(endTag.replace('endTime:', ''), 10);
+         }
          
-         const rawDate = asset.createdAt || asset.created_at || (new Date()).toISOString();
          const dateString = new Date(rawDate).toLocaleTimeString(); // Only showing Time natively usually cleaner
          
          let initialElapsed = '-';
          if (asset.generationStatus === 'processing') {
-             const startTime = new Date(rawDate).getTime();
-             const seconds = Math.floor((Date.now() - startTime) / 1000);
+             const seconds = Math.floor((Date.now() - rawDate) / 1000);
              initialElapsed = `<span id="elapsed-time-${asset.id}">${seconds}s</span>`;
          } else if (asset.generationStatus === 'completed') {
-             initialElapsed = 'Done';
+             if (endTime && rawDate) {
+                 const diff = Math.floor((endTime - rawDate) / 1000);
+                 const mins = Math.floor(diff / 60);
+                 const secs = diff % 60;
+                 initialElapsed = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+             } else {
+                 initialElapsed = 'Done';
+             }
          }
 
+         const safeName = (asset.assetName || 'Untitled LRO').replace(/'/g, "\\'").replace(/"/g, '&quot;');
          row.innerHTML = `
            <td style="text-align: center;"><input type="checkbox" name="genItem" value="${asset.id}" onchange="App.assetsVideo.updateBulkActionsGenerations()" /></td>
-           <td><strong>${asset.assetName || 'Untitled LRO'}</strong></td>
+           <td>
+              <span style="font-weight: 600;">${asset.assetName || 'Untitled LRO'}</span>
+              <button type="button" class="tiny-btn icon-btn" title="Edit Name" onclick="App.assetsVideo.editGenerationName('${asset.id}', '${safeName}')" style="margin-left:8px; border:none; background:transparent;"><span class="icon-btn-glyph" style="opacity: 0.6;"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.edit}</svg></span></button>
+           </td>
+           <td style="font-size:0.85rem;" class="muted">${asset.topic || '-'}</td>
            <td><strong style="color:${statusColor}; text-transform:uppercase; font-size:0.85rem;">${asset.generationStatus || 'unknown'}</strong></td>
            <td style="font-size:0.85rem;">${dateString}</td>
            <td style="font-size:0.85rem;" class="muted">${initialElapsed}</td>
@@ -849,23 +948,30 @@
       if (App.ui && App.ui.populateTopicsDropdown) {
           App.ui.populateTopicsDropdown('generationHistoryAssignTopicSelect', '-- Topic --');
       }
-      
-      const topicSel = document.getElementById('generationHistoryAssignTopicSelect');
-      if (topicSel && !topicSel.dataset.boundBulkGen) {
-         topicSel.dataset.boundBulkGen = "true";
-         topicSel.addEventListener('change', async (e) => {
-            const val = e.target.value;
-            if (!val) return;
-            await App.assetsVideo.assignTopicToSelectedGenerations(val);
-            e.target.value = ''; // Reset visibly out functionally
-         });
-      }
 
     } catch (err) {
       console.error('Failed fetching Generation History natively:', err);
       tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1rem;" class="muted">Server API routing error.</td></tr>';
     }
   }
+
+  async function editGenerationName(assetId, currentName) {
+     const newName = prompt('Enter a new name for this video job:', currentName);
+     if (newName === null || newName === currentName) return;
+     if (!newName.trim()) return App.notify('Name cannot be completely empty.', true);
+     
+     try {
+       await App.api(`/api/assets/${assetId}`, {
+         method: 'PATCH',
+         body: JSON.stringify({ assetName: newName.trim() })
+       });
+       App.notify('Job successfully renamed.');
+       renderGenerationHistory();
+     } catch (err) {
+       console.error(err);
+       App.notify(err.message || 'Failed to rename job natively.', true);
+     }
+   }
 
   async function cancelGeneration(assetId) {
     if (!confirm('Are you sure you want to cancel this rendering job?')) return;
@@ -895,23 +1001,43 @@
      const promptBox = document.getElementById('videoCreationPrompt');
      if (promptBox) promptBox.value = prompt;
      
+     const titleBox = document.getElementById('videoCreationAssetName');
+     if (titleBox && cache.assetName) {
+        let n = cache.assetName;
+        if (n.startsWith('Generated Video: ')) n = n.replace('Generated Video: ', '');
+        titleBox.value = n;
+     }
+
+     const topicBox = document.getElementById('videoCreationTopic');
+     if (topicBox && cache.topic) {
+        topicBox.value = cache.topic;
+     }
+
      const rawTags = Array.isArray(cache.tags) ? cache.tags : [];
      const refIds = rawTags
        .filter(t => t && String(t).startsWith('ref:'))
        .map(t => Number(String(t).replace('ref:', '')));
      
+     console.log('--- Cloning Job ID:', assetId, '---');
+     console.log('Raw tags:', rawTags);
+     console.log('Parsed ref IDs to extract:', refIds);
+     
      if (refIds.length > 0) {
         try {
            const res = await App.api('/api/assets');
-           const allAssets = Array.isArray(res.assets) ? res.assets : [];
-           const matches = allAssets.filter(a => refIds.includes(a.id));
+           const allAssets = Array.isArray(res.assets) ? res.assets : (Array.isArray(res.data) ? res.data : []);
+           console.log('Fetched API Assets Count:', allAssets.length);
+           
+           const matches = allAssets.filter(a => refIds.includes(Number(a.id)));
+           console.log('Matches Found natively:', matches);
            
            creationReferences = []; 
-           const ctr = document.getElementById('creationReferenceList');
+           const ctr = document.getElementById('videoCreationAttachedAssets');
            if (ctr) ctr.innerHTML = '';
            
            matches.forEach(asset => {
-              attachCreationReference(asset.id, asset.assetName, asset.assetType);
+              console.log('Attaching matched asset:', asset.id, asset.assetName);
+              attachCreationReference(asset);
            });
         } catch (e) {
            console.error("Failed cloning reference context constraints.", e);
@@ -919,7 +1045,19 @@
      }
      
      App.notify('Job loaded completely into Assemble Assets Form.');
-     window.scrollTo({ top: 0, behavior: 'smooth' });
+     
+     const wrap = document.getElementById('creationStudioWrap');
+     if (wrap) {
+        const header = wrap.querySelector('.studio-collapsible-header');
+        const body = wrap.querySelector('.studio-collapsible-body');
+        if (body && body.classList.contains('hidden')) {
+           body.classList.remove('hidden');
+           if (header) header.classList.remove('collapsed');
+        }
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+     } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+     }
   }
 
   function toggleAllGenerations(source) {
@@ -978,6 +1116,18 @@
      App.notify('Bulk topic physically locked onto generation matrix successfully.');
   }
 
+  async function triggerAssignTopicBtn() {
+     const val = document.getElementById('generationHistoryAssignTopicSelect')?.value;
+     if (!val) return App.notify('Please choose a topic first prior to binding explicitly.', true);
+     
+     await assignTopicToSelectedGenerations(val);
+     const topicSel = document.getElementById('generationHistoryAssignTopicSelect');
+     if (topicSel) topicSel.value = '';
+     
+     const checkAll = document.getElementById('generationHistorySelectAll');
+     if (checkAll) checkAll.checked = false;
+  }
+
   window.App = window.App || {};
   window.App.assetsVideo = {
     openCreateVideoTool,
@@ -1003,7 +1153,10 @@
     toggleAllGenerations,
     updateBulkActionsGenerations,
     deleteSelectedGenerations,
-    assignTopicToSelectedGenerations
+    assignTopicToSelectedGenerations,
+    triggerAssignTopicBtn,
+    openVertexBlob,
+    editGenerationName
   };
 
   function injectYoutubeScript() {

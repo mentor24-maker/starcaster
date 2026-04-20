@@ -42,6 +42,7 @@ const engage      = require('./engage');
 const develop     = require('./develop');
 const observe     = require('./observe');
 const roger       = require('./roger');
+const personas    = require('./personas');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -61,6 +62,7 @@ const ROUTE_MODULES = [
   observe,
   config,
   roger,
+  personas,
 ];
 
 function maskSecret(value) {

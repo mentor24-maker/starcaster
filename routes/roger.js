@@ -213,16 +213,31 @@ async function handle(req, res, pathname, requestMethod) {
       });
       history = history.filter(h => h.id !== chatId && h.content !== '[SYSTEM::QUEUED]' && h.content !== '[SYSTEM::PROCESSING]' && !h.content.includes('SYSTEM ERROR') && h.status !== 'failed');
       
-      const messages = history.map(row => {
+      const messages = [];
+      for (const row of history) {
         let prefix = '';
         if (row.role === 'user') prefix = '[From Human]: ';
         if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
         if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
-        return {
+        let rowText = prefix + row.content;
+        
+        if (row.attachment_url && (row.attachment_name?.endsWith('.md') || Object.is(row.attachment_mime, 'application/octet-stream') || row.attachment_mime?.startsWith('text/'))) {
+           try {
+              const fetchRes = await fetch(row.attachment_url);
+              if (fetchRes.ok) {
+                 const textData = await fetchRes.text();
+                 rowText += "\n\n[ATTACHED FILE CONTENT: " + (row.attachment_name || "attachment") + "]\n" + textData;
+              }
+           } catch (e) {
+              rowText += "\n\n[SYSTEM ERROR: Could not fetch attachment at " + row.attachment_url + "]";
+           }
+        }
+
+        messages.push({
           role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
-          text: prefix + row.content
-        };
-      });
+          text: rowText
+        });
+      }
 
       const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
       if (!geminiRes.ok) {

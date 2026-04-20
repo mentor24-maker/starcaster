@@ -7,20 +7,28 @@
 
 window.App = window.App || {};
 
-App.manifests = App.manifests || [];
-App.manifests.push({
+App.observe = App.observe || {};
+
+App.observe.manifest = {
   id: 'observe',
   label: 'Observe',
   pageId: 'observeQuotasPage',
-  onPageActivated: function(pageId) {
-    if (pageId === 'observeQuotasPage') {
-      App.loadUsageReports();
-    }
-    if (pageId === 'observeDashboardPage') {
-      App.loadObserveReports();
+  secondaryPages: ['observeDashboardPage', 'activityPage']
+};
+
+App.observe.onPageActivated = function(pageId) {
+  if (pageId === 'observeQuotasPage') {
+    App.loadUsageReports();
+  }
+  if (pageId === 'observeDashboardPage') {
+    App.loadObserveReports();
+  }
+  if (pageId === 'activityPage') {
+    if (typeof App.observe.loadPageViews === 'function') {
+       App.observe.loadPageViews();
     }
   }
-});
+};
 
 // Hardcoded Phase 1 industry-average pricing constants resolving mathematically
 App.PricingMatrix = {
@@ -222,4 +230,92 @@ App.pingGeminiQuota = async function() {
   } catch (err) {
     updateQuotaCard('Gemini', { status: 'error', message: err.message });
   }
+};
+
+App.observe = App.observe || {};
+
+App.observe.loadPageViews = async function() {
+    const tbody = document.getElementById('observePageViewsTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 2rem;"><span class="spinner"></span> Loading history...</td></tr>`;
+    
+    try {
+        const res = await App.api('/api/observe/page-views');
+        App.observe.cachedViews = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+        App.observe.hydrateFilterDropdown();
+        App.observe.renderPageViews();
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #d32f2f; padding: 2rem;">Error: ${e.message}</td></tr>`;
+    }
+};
+
+App.observe.hydrateFilterDropdown = function() {
+    const filterSelect = document.getElementById('observePageViewsFilter');
+    if (!filterSelect) return;
+    
+    const allIds = (App.observe.cachedViews || []).map(v => v.page_id);
+    const uniqueIds = [...new Set(allIds)].sort();
+    
+    let optionsHtml = `<option value="">All user views</option>`;
+    uniqueIds.forEach(id => {
+        let label = id;
+        if (label.endsWith('Page')) label = label.replace(/Page$/, '');
+        label = label.replace(/([A-Z])/g, ' $1').trim();
+        label = label.charAt(0).toUpperCase() + label.slice(1);
+        optionsHtml += `<option value="${id}">${label}</option>`;
+    });
+    
+    filterSelect.innerHTML = optionsHtml;
+    filterSelect.disabled = false;
+    filterSelect.title = "Filter History by Interface";
+    
+    // Bind the listener ensuring it's only attached once
+    filterSelect.onchange = (e) => App.observe.renderPageViews(e.target.value);
+};
+
+App.observe.filterByPage = function(pageId) {
+    const filterSelect = document.getElementById('observePageViewsFilter');
+    if (filterSelect) filterSelect.value = pageId;
+    App.observe.renderPageViews(pageId);
+};
+
+App.observe.renderPageViews = function(filterId = '') {
+    const tbody = document.getElementById('observePageViewsTableBody');
+    const countEl = document.getElementById('observePageViewsCount');
+    if (!tbody) return;
+    
+    let views = App.observe.cachedViews || [];
+    if (filterId) {
+        views = views.filter(v => v.page_id === filterId);
+    }
+    
+    if (countEl) {
+        countEl.textContent = `${views.length} entries`;
+    }
+    
+    if (views.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 2rem;">No page views mapped in this scope.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    views.forEach(v => {
+        const dateStr = new Date(v.created_at).toLocaleString();
+        let pageDisp = v.page_id;
+        
+        if (pageDisp.endsWith('Page')) pageDisp = pageDisp.replace(/Page$/, '');
+        pageDisp = pageDisp.replace(/([A-Z])/g, ' $1').trim();
+        pageDisp = pageDisp.charAt(0).toUpperCase() + pageDisp.slice(1);
+        
+        html += `<tr>
+            <td style="color: var(--muted); font-size: 0.9em;">${dateStr}</td>
+            <td style="font-family: monospace; font-size: 0.9em;">Session Active</td>
+            <td style="font-weight: 500;">
+               <a href="#" onclick="App.observe.filterByPage('${v.page_id}'); return false;" style="text-decoration: none;">${pageDisp}</a>
+            </td>
+        </tr>`;
+    });
+    
+    tbody.innerHTML = html;
 };

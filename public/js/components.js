@@ -83,34 +83,49 @@ App.components.DataGrid = function DataGrid(opts) {
   // ── Root element ───────────────────────────────────────────────────────
   const wrapper = h('div', { class: 'c-grid' + (opts.class ? ' ' + opts.class : '') });
 
-  // ── Filter row ─────────────────────────────────────────────────────────
-  const filterRow = h('div', { class: 'c-grid__filters' });
-
-  function buildFilterInputs() {
-    filterRow.innerHTML = '';
-    if (!filterable) return;
-    for (const col of columns) {
-      const input = h('input', {
-        class:       'c-grid__filter-input',
-        placeholder: col.label || col.key,
-        value:       filters[col.key] || '',
-        oninput:     (e) => { filters[col.key] = e.target.value; renderBody(); }
-      });
-      filterRow.appendChild(input);
-    }
-  }
-
   // ── Table ──────────────────────────────────────────────────────────────
   const table  = h('table', { class: 'c-grid__table' });
   const thead  = h('thead');
   const tbody  = h('tbody');
   table.appendChild(thead);
   table.appendChild(tbody);
-  wrapper.appendChild(filterRow);
   wrapper.appendChild(table);
 
   function buildHeader() {
     thead.innerHTML = '';
+    
+    // 1. Filter Row
+    if (filterable) {
+      const filterTr = h('tr', { class: 'table-filter-row' });
+      for (const col of columns) {
+        const th = h('th');
+        let filterControl;
+        if (col.filterOptions) {
+          filterControl = h('select', {
+            class: 'c-grid__filter-select',
+            onchange: (e) => { filters[col.key] = e.target.value; renderBody(); }
+          });
+          for (const opt of col.filterOptions) {
+            const isSelected = filters[col.key] === opt.value;
+            const optionEl = h('option', { value: opt.value }, opt.label);
+            if (isSelected) optionEl.selected = true;
+            filterControl.appendChild(optionEl);
+          }
+        } else {
+          filterControl = h('input', {
+            class:       'c-grid__filter-input',
+            placeholder: col.label || col.key,
+            value:       filters[col.key] || '',
+            oninput:     (e) => { filters[col.key] = e.target.value; renderBody(); }
+          });
+        }
+        th.appendChild(filterControl);
+        filterTr.appendChild(th);
+      }
+      thead.appendChild(filterTr);
+    }
+
+    // 2. Headings Row
     const tr = h('tr');
     for (const col of columns) {
       const isSorted = sortKey === col.key;
@@ -189,7 +204,6 @@ App.components.DataGrid = function DataGrid(opts) {
   }
 
   function render() {
-    buildFilterInputs();
     buildHeader();
     renderBody();
   }
