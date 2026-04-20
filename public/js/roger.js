@@ -831,7 +831,19 @@ App.roger.parseTriAgent = function(rawText) {
              parsed.payload = { ...parsed.payload, ...innerParsed.payload };
          }
       } catch(e3) {
-         // Not double-wrapped valid json, standard payload.
+         // Malformed inner double-wrapped payload. Fallback to extracting the content string manually.
+         let innerText = String(parsed.payload.content).trim();
+         if (innerText.includes('"state"') && innerText.includes('"payload"')) {
+            const innerContentMatch = innerText.match(/"content"\s*:\s*([\s\S]*)/);
+            if (innerContentMatch) {
+               let innerContentStr = innerContentMatch[1].trim();
+               // Strip trailing JSON array brackets, rogue concatenated payloads, etc
+               innerContentStr = innerContentStr.replace(/\"\s*\}?\s*\}?\s*\]?\s*(```)?\s*(,\s*\{[\s\S]*)?$/g, '');
+               if (innerContentStr.startsWith('"')) innerContentStr = innerContentStr.substring(1);
+               innerContentStr = innerContentStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+               parsed.payload.content = innerContentStr;
+            }
+         }
       }
 
       // We only care about payload content rendering.
@@ -845,8 +857,8 @@ App.roger.parseTriAgent = function(rawText) {
       const contentMatch = rawStr.match(/"content"\s*:\s*([\s\S]*)/);
       if (contentMatch) {
          let contentStr = contentMatch[1].trim();
-         // Strip the trailing JSON brackets, quotes, and any trailing Markdown ticks
-         contentStr = contentStr.replace(/\"\s*\}?\s*\}?\s*(`{3})?\s*$/g, '');
+         // Strip the trailing JSON brackets, quotes, trailing array comma payloads, and Markdown ticks
+         contentStr = contentStr.replace(/\"\s*\}?\s*\}?\s*\]?\s*(```)?\s*(,\s*\{[\s\S]*)?$/g, '');
          if (contentStr.startsWith('"')) contentStr = contentStr.substring(1);
          // Unescape standard JSON text escapes since we bypassed parser
          contentStr = contentStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
