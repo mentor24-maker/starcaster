@@ -210,19 +210,8 @@ async function handle(req, res, pathname, requestMethod) {
     // Add the newly saved user record to the working history matrix
     history.push(userSaveRes.data);
 
-    // Determine all target agents based on mentions in the human's latest prompt
-    const textLower = finalContent.toLowerCase();
-    const isForRoger = textLower.includes('@roger') || textLower.includes('@rt');
-    const isForAntigravity = textLower.includes('@antigravity') || textLower.includes('@ag');
-    
-    let agentsToTrigger = [];
-    if (isForRoger) agentsToTrigger.push('roger');
-    if (isForAntigravity) agentsToTrigger.push('antigravity');
-
-    // Default to Roger if no specific agent is mentioned
-    if (agentsToTrigger.length === 0) {
-      agentsToTrigger.push('roger');
-    }
+    // Auto-broadcast all messages to both AI agents natively 
+    let agentsToTrigger = ['roger', 'antigravity'];
 
     const processingNodes = [];
     for (const agent of agentsToTrigger) {
