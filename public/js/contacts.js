@@ -10,6 +10,17 @@ App.contacts = (function () {
   let exploreContactsApplied = false;
   let lastSuggestedSegmentName = '';
   let lastSuggestedLogicExpression = '';
+  let activeFilteredContactClass = null;
+
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+  function safeText(str, max) {
+    if (str == null) return '';
+    const s = String(str);
+    return max ? s.substring(0, max) : s;
+  }
 
   const CONTACT_DETAIL_FILTER_FIELDS = [
     { key: 'first_name', label: 'First Name' },
@@ -618,7 +629,10 @@ App.contacts = (function () {
       first_name: 'firstName',
       last_name: 'lastName',
     };
-    const payload = { contactType: 'lead' };
+    const payload = { 
+      contactType: '',
+      contactClass: activeFilteredContactClass || 'persona' 
+    };
     for (const [key, value] of new FormData(form).entries()) {
       const trimmed = String(value || '').trim();
       if (!trimmed) continue;
@@ -701,7 +715,49 @@ App.contacts = (function () {
   }
 
   function openContactsPage() {
+    activeFilteredContactClass = null;
+    const heading = document.getElementById('contactsPageHeading');
+    if (heading) heading.textContent = 'Contacts';
+    const subtitle = document.getElementById('contactsPageSubtitle');
+    if (subtitle) subtitle.textContent = 'Select a class below to manage audience records and systemic entities.';
+    const mashupBtn = document.getElementById('createMashupBtn');
+    if (mashupBtn) mashupBtn.classList.add('hidden');
+
+    const overview = document.getElementById('contactsOverviewSection');
+    const tableRegion = document.getElementById('contactsTableSection');
+    if (overview) overview.classList.remove('hidden');
+    if (tableRegion) tableRegion.classList.add('hidden');
+
     App.setActivePage('contactsPage');
+    document.querySelectorAll('.submenu-link[data-subpage]').forEach(el => el.classList.remove('active'));
+    renderContacts();
+  }
+
+  function openFilteredContactsPage(type) {
+    activeFilteredContactClass = type;
+    const headerDisplay = type === 'personality' ? 'Personalities' : (type.charAt(0).toUpperCase() + type.slice(1) + (type !== 'personnel' ? 's' : ''));
+    
+    const heading = document.getElementById('contactsPageHeading');
+    if (heading) heading.textContent = `Contacts: ${headerDisplay}`;
+    const subtitle = document.getElementById('contactsPageSubtitle');
+    if (subtitle) {
+      if (type === 'persona') subtitle.textContent = 'Create and manage the theoretical models that define your ideal targets.';
+      if (type === 'personality') subtitle.textContent = 'Capture, import, and maintain physical contacts mapped from campaigns and web mining.';
+      if (type === 'personnel') subtitle.textContent = 'Manage internal users and administrators of the App environment.';
+    }
+    
+    const mashupBtn = document.getElementById('createMashupBtn');
+    if (mashupBtn) mashupBtn.classList.toggle('hidden', type !== 'personality');
+    
+    const overview = document.getElementById('contactsOverviewSection');
+    const tableRegion = document.getElementById('contactsTableSection');
+    if (overview) overview.classList.add('hidden');
+    if (tableRegion) tableRegion.classList.remove('hidden');
+
+    App.setActivePage('contactsPage');
+    document.querySelectorAll('.submenu-link[data-subpage]').forEach(el => el.classList.remove('active'));
+    const targetLink = document.querySelector(`.submenu-link[data-subpage="${type}"]`);
+    if (targetLink) targetLink.classList.add('active');
     renderContacts();
   }
 
@@ -2286,6 +2342,13 @@ App.contacts = (function () {
       const visibleColumns = getVisibleContactsColumns();
       let filteredContacts = state.contacts.filter((contact) => contactPassesContactFilters(contact, state.contactsFilters));
 
+      if (activeFilteredContactClass) {
+        filteredContacts = filteredContacts.filter(c => {
+           let val = c.contact_class || c.contactClass;
+           return String(val).toLowerCase().trim() === String(activeFilteredContactClass).toLowerCase().trim();
+        });
+      }
+
       if (state.contactsSortColumn) {
         filteredContacts.sort((a, b) => {
           let valA = contactValue(a, state.contactsSortColumn);
@@ -2498,6 +2561,10 @@ App.contacts = (function () {
     const thead = document.getElementById('contactsTableHead');
     if (!thead) return;
     const visibleColumns = getVisibleContactsColumns();
+    const colsStr = visibleColumns.map(c => c.key).join(',');
+    if (thead.dataset.renderedCols === colsStr) return; // Prevent focus-destroying DOM teardowns
+    
+    thead.dataset.renderedCols = colsStr;
     thead.innerHTML = '';
 
     const filterRow = document.createElement('tr');
@@ -2508,6 +2575,11 @@ App.contacts = (function () {
     checkAll.id = 'contactsCheckAll';
     checkAll.type = 'checkbox';
     checkAll.title = 'Select all filtered contacts';
+    checkAll.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      const checkboxes = document.querySelectorAll('#contactsTable tbody input.contact-row-check');
+      checkboxes.forEach(cb => { cb.checked = isChecked; });
+    });
     checkTh.appendChild(checkAll);
     filterRow.appendChild(checkTh);
 
@@ -2521,7 +2593,7 @@ App.contacts = (function () {
         const container = document.createElement('div');
         container.style.display = 'flex';
         container.style.alignItems = 'center';
-        container.style.justifyContent = 'center';
+        container.style.justifyContent = 'flex-start';
         container.style.gap = '6px';
         container.style.cursor = 'pointer';
         
@@ -2878,6 +2950,137 @@ App.contacts = (function () {
       });
       markerBtn.className = 'section-settings-gear-btn';
       contactsActionRow.appendChild(markerBtn);
+    }
+
+    const createMashupBtn = document.getElementById('createMashupBtn');
+    const executeMashupBtn = document.getElementById('executeMashupSynthesisBtn');
+    const openTagsModalBtn = document.getElementById('mashupOpenTagsModalBtn');
+    const saveTagsBtn = document.getElementById('mashupSaveTagsBtn');
+    
+    // Lazy loaded tags cache
+    let availableSystemTags = null;
+
+    if (createMashupBtn && !createMashupBtn.dataset.bound) {
+      createMashupBtn.dataset.bound = 'true';
+      createMashupBtn.addEventListener('click', () => {
+        const checkedValues = Array.from(document.querySelectorAll('.contact-row-check:checked')).map(el => el.value);
+        if (!checkedValues.length) {
+           return notify('Please select at least one contact to synthesize natively.', true);
+        }
+        
+        let contactsHtml = '';
+        const selectedContacts = (state.contacts || []).filter(c => checkedValues.includes(String(c.id)));
+        selectedContacts.forEach(c => {
+           let linkHtml = '';
+           if (c.youtube) linkHtml = `<a href="${safeText(c.youtube)}" target="_blank" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: underline;">[YouTube]</a>`;
+           else if (c.instagram) linkHtml = `<a href="${safeText(c.instagram)}" target="_blank" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: underline;">[Instagram]</a>`;
+           else if (c.tiktok) linkHtml = `<a href="${safeText(c.tiktok)}" target="_blank" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: underline;">[TikTok]</a>`;
+           else if (c.x) linkHtml = `<a href="${safeText(c.x)}" target="_blank" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: underline;">[X]</a>`;
+           else if (c.linkedin) linkHtml = `<a href="${safeText(c.linkedin)}" target="_blank" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: underline;">[LinkedIn]</a>`;
+           
+           const name = (c.first_name || c.firstName || '') + ' ' + (c.last_name || c.lastName || '');
+           const display = name.trim() ? name.trim() : (c.company || c.email || 'Unknown Contact');
+           contactsHtml += `<div style="padding: 0.3rem 0; border-bottom: 1px dotted var(--border-color);">${safeText(display)}${linkHtml}</div>`;
+        });
+        
+        document.getElementById('mashupSelectedContacts').innerHTML = contactsHtml;
+        document.getElementById('mashupPersonalityName').value = '';
+        
+        const topicSelect = document.getElementById('mashupTopicFocus');
+        topicSelect.innerHTML = '<option value="">No Filter (Synthesize holistic voice profile)</option>';
+        if (state.availableTopics && state.availableTopics.length) {
+            state.availableTopics.forEach(topic => {
+                const opt = document.createElement('option');
+                const tName = typeof topic === 'object' ? (topic.topic || topic.name || '') : topic;
+                opt.value = opt.textContent = tName;
+                topicSelect.appendChild(opt);
+            });
+        }
+        
+        document.getElementById('mashupSelectedTags').value = '';
+        document.getElementById('mashupTagsDisplay').textContent = 'No tags selected';
+        
+        document.getElementById('mashupPersonalityModal').classList.remove('hidden');
+      });
+    }
+
+    if (openTagsModalBtn && !openTagsModalBtn.dataset.bound) {
+      openTagsModalBtn.dataset.bound = 'true';
+      openTagsModalBtn.addEventListener('click', async () => {
+         if (!availableSystemTags) {
+             try {
+                const res = await api('/api/messaging/tags?limit=5000');
+                if (Array.isArray(res?.tags)) availableSystemTags = res.tags.map(t => typeof t === 'object' ? (t.tag || t.name || '') : t);
+                else availableSystemTags = [];
+             } catch (e) {
+                console.warn('Failed to load global tags, falling back to empty', e);
+                availableSystemTags = [];
+             }
+         }
+         
+         const tbody = document.getElementById('mashupTagsModalList');
+         tbody.innerHTML = '';
+         
+         const currentlySelected = (document.getElementById('mashupSelectedTags').value || '').split(',').filter(Boolean);
+         
+         if (availableSystemTags.length === 0) {
+             tbody.innerHTML = '<tr><td style="padding: 1rem; color: var(--muted);">No tags available globally.</td></tr>';
+         } else {
+             availableSystemTags.forEach(tag => {
+                 const tagTitle = (typeof tag === 'string') ? tag : (tag.name || String(tag));
+                 const row = document.createElement('tr');
+                 row.innerHTML = `<td style="padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                        <input type="checkbox" class="mashup-tag-checkbox" value="${escapeHtml(tagTitle)}" ${currentlySelected.includes(tagTitle) ? 'checked' : ''} />
+                        ${escapeHtml(tagTitle)}
+                    </label>
+                 </td>`;
+                 tbody.appendChild(row);
+             });
+         }
+         document.getElementById('mashupTagsModal').classList.remove('hidden');
+      });
+    }
+
+    if (saveTagsBtn && !saveTagsBtn.dataset.bound) {
+       saveTagsBtn.dataset.bound = 'true';
+       saveTagsBtn.addEventListener('click', () => {
+           const checks = Array.from(document.querySelectorAll('.mashup-tag-checkbox:checked')).map(el => el.value);
+           document.getElementById('mashupSelectedTags').value = checks.join(',');
+           document.getElementById('mashupTagsDisplay').textContent = checks.length ? checks.join(', ') : 'No tags selected';
+           document.getElementById('mashupTagsModal').classList.add('hidden');
+       });
+    }
+
+    if (executeMashupBtn && !executeMashupBtn.dataset.bound) {
+      executeMashupBtn.dataset.bound = 'true';
+      executeMashupBtn.addEventListener('click', async () => {
+        const checked = Array.from(document.querySelectorAll('.contact-row-check:checked')).map(el => el.value);
+        const personaName = document.getElementById('mashupPersonalityName').value.trim();
+        const topicFocus = document.getElementById('mashupTopicFocus').value.trim();
+        const tagsRaw = document.getElementById('mashupSelectedTags').value.trim();
+        const tags = tagsRaw ? tagsRaw.split(',') : [];
+        
+        if (!personaName) return notify('Please provide a designation for the hybrid personality securely.', true);
+        
+        const payload = { contactIds: checked, personaName, topicFocus, tags };
+        try {
+           executeMashupBtn.textContent = 'Synthesizing...';
+           executeMashupBtn.disabled = true;
+           const result = await api('/api/contact-personas/mashup', { method: 'POST', body: JSON.stringify(payload) });
+           notify('Personality synthesized successfully directly into Personalities Matrix!');
+           document.getElementById('mashupPersonalityModal').classList.add('hidden');
+           
+           if (window.App && App.contactPersonas && typeof App.contactPersonas.refresh === 'function') {
+               App.contactPersonas.refresh().catch(() => {});
+           }
+        } catch (err) {
+           notify(`Synthesis failed: ${err.message}`, true);
+        } finally {
+           executeMashupBtn.textContent = 'Generate Personality';
+           executeMashupBtn.disabled = false;
+        }
+      });
     }
 
     const contactsSettingsBackBtn = document.getElementById('contactsSettingsBackBtn');
@@ -3238,8 +3441,11 @@ App.contacts = (function () {
     manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage', pagePrefixes: ['contacts', 'contactsSettingsPage'] },
     init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment,
     activeExploreFilterRules, exploreFilterDefinition,
-    openContactsPage, openPeerSitesPage, openViewPage, openEditPage, openClonePage,
+    openContactsPage, openFilteredContactsPage, openPeerSitesPage, openViewPage, openEditPage, openClonePage,
     onPageActivated(targetPageId) {
+      if (targetPageId !== 'contactsPage') {
+        document.querySelectorAll('.submenu-link[data-subpage]').forEach(el => el.classList.remove('active'));
+      }
       if (targetPageId === 'contactsSettingsPage') {
         renderContactsSettingsPage();
       }

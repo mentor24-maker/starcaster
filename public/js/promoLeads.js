@@ -149,14 +149,6 @@ App.promoLeads = (function () {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = 'Filter Contacts';
-    btn.style.width = 'auto';
-    btn.style.minWidth = '400px';
-    btn.style.maxWidth = '100%';
-    btn.style.gridColumn = '1 / -1';
-    btn.style.justifySelf = 'center';
-    btn.style.display = 'inline-flex';
-    btn.style.justifyContent = 'center';
-    btn.style.textAlign = 'center';
     btn.addEventListener('click', () => {
       if (typeof App.contacts?.applyExploreFilters === 'function') {
         App.contacts.applyExploreFilters();
@@ -294,7 +286,7 @@ App.promoLeads = (function () {
   async function refresh() {
     const [fieldsRes, leadsRes] = await Promise.all([
       api('/api/promo-leads/fields'),
-      api('/api/contacts?type=lead')
+      api('/api/contacts')
     ]);
     state.promoFields = fieldsRes.fields || [];
     replaceLeadsInState(leadsRes.contacts || []);

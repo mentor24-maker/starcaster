@@ -140,6 +140,8 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/assets/generate' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const promptText = String(body.prompt || '').trim();
+    const customName = String(body.assetName || '').trim();
+    const topic = String(body.topic || '').trim();
     const references = Array.isArray(body.references) ? body.references : [];
 
     if (!promptText) {
@@ -151,20 +153,56 @@ async function handle(req, res, pathname, method) {
     }
 
     try {
+      // Physically expand image references to Base64 arrays if native images are explicitly attached 
+      let primaryImage = null;
+      if (references.length > 0) {
+          const { listAssets } = require('../lib/assetsStore');
+          const read = await listAssets(scope);
+          const allAssets = Array.isArray(read.data) ? read.data : [];
+          for (const ref of references) {
+              const row = allAssets.find(a => Number(a.id) === Number(ref.id));
+              if (row && (row.asset_type === 'Image' || row.assetType === 'Image') && row.location) {
+                 if (row.location.startsWith('http')) {
+                    try {
+                       const imgRes = await fetch(row.location);
+                       const arr = await imgRes.arrayBuffer();
+                       const b64 = Buffer.from(arr).toString('base64');
+                       const mime = imgRes.headers.get('content-type') || 'image/jpeg';
+                       primaryImage = { bytesBase64Encoded: b64, mimeType: mime };
+                       break; // Limit vertex input to explicitly one seed image
+                    } catch (e) { console.warn('Failed to natively buffer layout image URL:', e); }
+                 } else if (row.location.startsWith('data:image/')) {
+                    const parts = row.location.split(',');
+                    let mime = 'image/jpeg';
+                    const mimeMatch = parts[0].match(/data:([^;]+);/);
+                    if (mimeMatch) mime = mimeMatch[1];
+                    primaryImage = { bytesBase64Encoded: parts[1], mimeType: mime };
+                    break;
+                 }
+              }
+          }
+      }
+
       // 1. Fire asynchronous job natively to Google Cloud
-      const generationJob = await vertexVeo.generateVideo(promptText, references);
+      const generationJob = await vertexVeo.generateVideo(promptText, references, primaryImage);
       const { logUsage } = require('../lib/observeStore');
       logUsage('vertex_veo', 'video_generation_job', 1, scope);
 
+      const resolvedName = customName || `Generated Video: ${promptText.substring(0, 30)}...`;
+
       // 2. Instantiate standalone DB Row capturing the queued event
+      const explicitTags = references.map(r => `ref:${r.id}`);
+      explicitTags.push(`startTime:${Date.now()}`);
+
       const dbPayload = {
-        assetName: `Generated Video: ${promptText.substring(0, 30)}...`,
+        assetName: resolvedName,
         assetType: 'Video',
         category: 'Generated',
+        topic: topic || null, // Natively preserve pipeline structural assignment constraints 
         generationStatus: 'processing',
         generationJobId: generationJob.jobId,
         comments: `Generative Prompt Instructions: \n${promptText}`,
-        tags: references.map(r => `ref:${r.id}`)
+        tags: explicitTags
       };
       
       const result = await createAsset(dbPayload, scope);
@@ -219,13 +257,18 @@ async function handle(req, res, pathname, method) {
                  let locationVal = 'https://vjs.zencdn.net/v/oceans.mp4'; 
                  try {
                      if (statusData.response) {
-                        locationVal = JSON.stringify(statusData.response); // Dump the URI dynamically when visible
+                        locationVal = JSON.stringify(statusData.response);
                      }
                  } catch (e) {}
 
+                 const existingTags = target.tags || [];
+                 const updatedTags = existingTags.filter(t => !String(t).startsWith('endTime:'));
+                 updatedTags.push(`endTime:${Date.now()}`);
+
                  const updated = await updateAsset(target.id, {
                      generationStatus: 'completed',
-                     location: locationVal
+                     location: locationVal,
+                     tags: updatedTags
                  }, scope);
                  
                  if (updated.ok) {
@@ -235,7 +278,10 @@ async function handle(req, res, pathname, method) {
              }
           }
        } catch (err) {
-         console.warn("LRO GET check natively threw API rejection:", err);
+         console.warn("LRO GET check natively threw API rejection:", err.message || err);
+         await updateAsset(target.id, { generationStatus: 'failed', comments: 'Vertex Error: ' + (err.message || 'Unknown Crash') }, scope);
+         target.generationStatus = 'failed';
+         target.comments = 'Vertex Error: ' + (err.message || 'Unknown Crash');
        }
     }
 

@@ -171,3 +171,16 @@ When creating small, icon-only utility buttons (e.g., Save, Copy, Delete), they 
 4. Use `!important` on the `width`, `height`, and `min-width: 0` if the button sits inside a layout that globally forces buttons to `100%` width (like `.standard-form-grid`).
 5. If overlaying onto content (like top-right aligned inside code blocks), use `position: absolute` with exact pixel offsets.
 
+---
+
+## 7. Page Headings Hierarchy
+
+To maintain consistent mental models across the entire application, all application page titles MUST adhere to the `[Top Level]: [Second Level]` format for any view nested beneath a top-level navigational category.
+
+**Core Rules:**
+1. **Top Level Prefix:** Headings should always be prefixed by the parent module (e.g., `Contacts:`, `Acquire:`, `Messaging:`).
+2. **Second Level Focus:** The specific feature or sub-page follows after a space (e.g., `Contacts: Personnel`, `Builder: Forms`).
+3. **Punctuation:** Always use a single colon followed by a space `: ` as the separator.
+4. **Implementation:** This exact text should serve as the `<h2>` immediately inside the `.page-heading-row` element.
+
+*(Do not use formats like "Manage Personas" or "Personnel Database". Use "Contacts: Manage Personas" and "Contacts: Personnel").*

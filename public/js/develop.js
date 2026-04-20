@@ -375,6 +375,7 @@ App.develop = (function () {
   let activeModularRowEditor = null;
   let modularPageEditorMode = 'template';
   let modularPageEditorSourceTemplateId = '';
+  let modularPageEditorOptions = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
   let savedAgents = [];
@@ -8212,6 +8213,7 @@ App.develop = (function () {
 
   function openModularPageTemplateEditor(template, options = {}) {
     const source = template && typeof template === 'object' ? template : {};
+    modularPageEditorOptions = options || null;
     modularPageEditorMode = safeText(options.mode) === 'page' ? 'page' : 'template';
     modularPageEditorSourceTemplateId = safeText(options.sourceTemplateId || source.templateId || source.id);
     const next = applyLandingPageDefaultSelections({
@@ -9428,6 +9430,22 @@ App.develop = (function () {
       if (type === 'cta') return `<div class="develop-template-cta-row"><button type="button">${contentLabel}</button></div>`;
       if (type === 'eyebrow') return `<div class="develop-template-eyebrow">${contentLabel}</div>`;
       if (type === 'spacer') return `<div style="height:1.25rem;"></div>`;
+      if (type === 'system-app') {
+        const mountId = safeText(module.content || module.systemId);
+        const liveMountId = `mount-${mountId}`;
+        
+        let projection = '';
+        const liveNode = document.getElementById(liveMountId);
+        if (liveNode) {
+          const clone = liveNode.cloneNode(true);
+          clone.id = '';
+          const subIds = clone.querySelectorAll('[id]');
+          for (let i = 0; i < subIds.length; i++) subIds[i].id = '';
+          projection = `<div class="system-app-preview-wrap" style="pointer-events: none; opacity: 0.95;">${clone.innerHTML}</div>`;
+        }
+        
+        return `<div id="${liveMountId}">${projection}</div>`;
+      }
       return `<div class="meta">${contentLabel}</div>`;
     };
     const renderColumn = (modules, className, settings) => {
@@ -11109,6 +11127,19 @@ App.develop = (function () {
         const payload = modularPageEditorMode === 'page'
           ? buildModularLandingPagePayload()
           : buildModularPageTemplatePayload();
+        if (!payload) return;
+        
+        if (modularPageEditorOptions && typeof modularPageEditorOptions.onSave === 'function') {
+          try {
+            await Promise.resolve(modularPageEditorOptions.onSave(payload));
+            closeModularPageTemplateEditor();
+            return;
+          } catch (err) {
+            notify(err.message || 'Error executing custom save handler', true);
+            return;
+          }
+        }
+
         if (!payload.name) {
           notify(modularPageEditorMode === 'page' ? 'Page name is required' : 'Template name is required', true);
           return;

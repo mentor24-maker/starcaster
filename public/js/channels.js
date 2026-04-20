@@ -2,6 +2,7 @@ window.App = window.App || {};
 
 App.channels = (function () {
   const { state, els, api, notify } = App;
+  let activeFilteredChannelType = null;
 
   function byId(id) {
     return document.getElementById(id);
@@ -18,17 +19,77 @@ App.channels = (function () {
   }
 
   function openChannelsPage() {
+    activeFilteredChannelType = null;
     setCreatePanelVisible(false);
+    
+    const heading = byId('channelsPageHeading');
+    if (heading) heading.textContent = 'Channels';
+    const subtitle = byId('channelsPageSubtitle');
+    if (subtitle) subtitle.textContent = 'Select a class below to manage primary organizational accounts vs targeted agent accounts.';
+    const btn = byId('openAddChannelPageBtn');
+    if (btn) btn.classList.add('hidden');
+    
+    const overview = byId('channelsOverviewSection');
+    const tableRegion = byId('channelsTableSection');
+    if (overview) overview.classList.remove('hidden');
+    if (tableRegion) tableRegion.classList.add('hidden');
+    
     App.setActivePage('channelsPage');
     refresh().catch((err) => notify(err.message || 'Unable to load channels', true));
-    window.setTimeout(() => {
-      refresh().catch(() => {});
-    }, 250);
+    return false;
+  }
+
+  function openFilteredChannelsPage(type) {
+    activeFilteredChannelType = type;
+    setCreatePanelVisible(false);
+    
+    const headerDisplay = type === 'virtual' ? 'Virtual Channels' : 'Organic Channels';
+    const heading = byId('channelsPageHeading');
+    if (heading) heading.textContent = `Channels: ${headerDisplay}`;
+    
+    const subtitle = byId('channelsPageSubtitle');
+    if (subtitle) {
+      if (type === 'virtual') subtitle.textContent = 'Social accounts proxying as synthesized Virtual Personalities.';
+      if (type === 'organic') subtitle.textContent = 'The primary, authentic social accounts owned and operated directly by your brand.';
+    }
+    
+    const btn = byId('openAddChannelPageBtn');
+    if (btn) btn.classList.remove('hidden');
+
+    const overview = byId('channelsOverviewSection');
+    const tableRegion = byId('channelsTableSection');
+    if (overview) overview.classList.add('hidden');
+    if (tableRegion) tableRegion.classList.remove('hidden');
+
+    App.setActivePage('channelsPage');
+    renderChannels();
     return false;
   }
 
   function openChannelsCreate() {
     if (els.channelForm) els.channelForm.reset();
+    
+    const vpLabel = byId('channelTypeAssignLabel');
+    const vpSelect = byId('channelTypeAssign');
+    if (vpLabel && vpSelect) {
+       if (activeFilteredChannelType === 'virtual') {
+         vpLabel.classList.remove('hidden');
+         vpSelect.classList.remove('hidden');
+         const vps = (state.contacts || []).filter(c => (c.contactClass || c.contact_class) === 'personality');
+         vpSelect.innerHTML = '<option value="">-- Select Virtual Personality --</option>';
+         vps.forEach(v => {
+           const opt = document.createElement('option');
+           opt.value = v.id;
+           opt.textContent = `${v.firstName || ''} ${v.lastName || ''}`.trim() || v.email;
+           vpSelect.appendChild(opt);
+         });
+       } else {
+         vpLabel.classList.add('hidden');
+         vpSelect.classList.add('hidden');
+         vpSelect.innerHTML = '';
+       }
+    }
+    
     setCreatePanelVisible(true);
     App.setActivePage('channelsPage');
     const panel = byId('channelCreatePanel');
@@ -93,6 +154,29 @@ App.channels = (function () {
     }
 
     els.channelEditForm.reset();
+    
+    const vpLabel = byId('channelEditTypeAssignLabel');
+    const vpSelect = byId('channelEditTypeAssign');
+    if (vpLabel && vpSelect) {
+       if (item.channelType === 'virtual') {
+         vpLabel.classList.remove('hidden');
+         vpSelect.classList.remove('hidden');
+         const vps = (state.contacts || []).filter(c => (c.contactClass || c.contact_class) === 'personality');
+         vpSelect.innerHTML = '<option value="">-- Select Virtual Personality --</option>';
+         vps.forEach(v => {
+           const opt = document.createElement('option');
+           opt.value = v.id;
+           opt.textContent = `${v.firstName || ''} ${v.lastName || ''}`.trim() || v.email;
+           vpSelect.appendChild(opt);
+         });
+         vpSelect.value = item.contactId || '';
+       } else {
+         vpLabel.classList.add('hidden');
+         vpSelect.classList.add('hidden');
+         vpSelect.innerHTML = '';
+       }
+    }
+
     if (els.channelEditId) els.channelEditId.value = String(id);
     els.channelEditForm.channel.value = String(item.channel || '');
     els.channelEditForm.user_name.value = String(item.userName || '');
@@ -118,7 +202,13 @@ App.channels = (function () {
   function renderChannels() {
     if (!els.channelsTable) return;
     els.channelsTable.innerHTML = '';
-    (state.channels || []).forEach((item) => {
+    
+    let activeSet = state.channels || [];
+    if (activeFilteredChannelType) {
+      activeSet = activeSet.filter(c => String(c.channelType || 'organic').toLowerCase() === String(activeFilteredChannelType).toLowerCase());
+    }
+    
+    activeSet.forEach((item) => {
       const tr = document.createElement('tr');
 
       const channelTd = document.createElement('td');
@@ -208,6 +298,8 @@ App.channels = (function () {
       userName: String(formData.get('user_name') || '').trim(),
       email: String(formData.get('email') || '').trim(),
       password: String(formData.get('password') || '').trim(),
+      channelType: activeFilteredChannelType || 'organic',
+      contactId: formData.get('contact_id') || null,
     };
 
     try {
@@ -236,6 +328,8 @@ App.channels = (function () {
       userName: String(formData.get('user_name') || '').trim(),
       email: String(formData.get('email') || '').trim(),
     };
+    const cId = formData.get('contact_id');
+    if (cId) payload.contactId = cId;
     const password = String(formData.get('password') || '');
     if (password.trim()) payload.password = password.trim();
 
@@ -258,6 +352,7 @@ App.channels = (function () {
     manifest: { id: 'channels', label: 'Channels', pageId: 'channelsPage' },
     init,
     openChannelsPage,
+    openFilteredChannelsPage,
     openChannelsCreate,
     refresh,
     submitChannelCreate,

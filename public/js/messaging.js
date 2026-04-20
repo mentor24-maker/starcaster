@@ -4897,6 +4897,101 @@ App.messaging = (function () {
       });
   }
 
+  function renderMessagingOverview() {
+    const formatsDiv = document.getElementById('messagingOverviewFormatsList');
+    if (formatsDiv) {
+      formatsDiv.innerHTML = '';
+      (currentMessagingFormats || []).slice(0, 15).forEach(item => {
+        const row = document.createElement('div');
+        const name = String(item.format || item.type || '(Unknown Format)').trim();
+        const a = document.createElement('a');
+        a.href = '#';
+        a.style.cssText = 'display:block; font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0;';
+        a.innerHTML = escapeHtml(name);
+        a.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const targetPage = String(item.pageId || '').trim();
+          if (targetPage) {
+            openContentTarget(targetPage);
+          } else {
+            openMessagingFormatEdit(item);
+          }
+        };
+        row.appendChild(a);
+        formatsDiv.appendChild(row);
+      });
+    }
+
+    const topicsDiv = document.getElementById('messagingOverviewTopicsList');
+    if (topicsDiv) {
+      topicsDiv.innerHTML = '';
+      
+      const topicRecords = (currentMessagingTopics || []).map(item => {
+        const topicName = String(item.topic || item.category || '').trim();
+        const topicLower = topicName.toLowerCase();
+        const messagesCount = 
+          (currentWhitePapers || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+          (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+          (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+          simpleContentConfigs.reduce((acc, config) => {
+              const configItems = simpleContentState[config.key]?.items || [];
+              return acc + configItems.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
+          }, 0);
+         return { name: topicName, count: messagesCount };
+      }).filter(t => t.count > 0).slice(0, 15);
+
+      topicRecords.forEach(t => {
+        const row = document.createElement('div');
+        const a = document.createElement('a');
+        a.href = '#page=messagingContentPage';
+        a.style.cssText = 'display:block; font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0;';
+        a.innerHTML = `${escapeHtml(t.name)} <span style="color:var(--text-muted); font-size: 0.85em; font-weight: normal;">(${t.count})</span>`;
+        a.onclick = (e) => {
+           e.preventDefault();
+           e.stopPropagation();
+           activeMessagingContentCategory = '';
+           const formatSel = document.getElementById('messagingContentFormatFilter');
+           if (formatSel) formatSel.value = '';
+           const textFilter = document.getElementById('messagingContentTextFilter');
+           if (textFilter) textFilter.value = '';
+           
+           const topicSel = document.getElementById('messagingContentTopicFilter');
+           if (topicSel) topicSel.value = t.name;
+           
+           App.setActivePage('messagingContentPage');
+           renderMessagingContentLibraryTable();
+        };
+        row.appendChild(a);
+        topicsDiv.appendChild(row);
+      });
+      
+      if (topicRecords.length === 0) {
+        topicsDiv.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted);">No topics with content.</div>';
+      }
+    }
+
+    const tagsDiv = document.getElementById('messagingOverviewTagsList');
+    if (tagsDiv) {
+      tagsDiv.innerHTML = '';
+      (currentMessagingTags || []).slice(0, 15).forEach(item => {
+        const row = document.createElement('div');
+        const name = String(item.tag || '(Unknown Tag)').trim();
+        const a = document.createElement('a');
+        a.href = '#';
+        a.style.cssText = 'display:block; font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0;';
+        a.innerHTML = escapeHtml(name);
+        a.onclick = (e) => {
+           e.preventDefault();
+           e.stopPropagation();
+           openMessagingTagEditForm(item);
+        };
+        row.appendChild(a);
+        tagsDiv.appendChild(row);
+      });
+    }
+  }
+
   function renderMessagingContentLibraryTable() {
     const tbody = document.getElementById('messagingContentLibraryTable');
     if (!tbody) return;
@@ -5877,6 +5972,7 @@ App.messaging = (function () {
   }
 
   function renderMessagingTopicsTable(categories) {
+    const countsRef = window.App.state || {};
     const tbody = document.getElementById('messagingTopicsTable');
     const sortBtn = document.getElementById('messagingTopicsSortBtn');
     currentMessagingTopics = Array.isArray(categories) ? categories.slice() : [];
@@ -5901,9 +5997,91 @@ App.messaging = (function () {
 
     rows.forEach((item) => {
       const tr = document.createElement('tr');
+      
+      const topicName = String(item.topic || item.category || '').trim();
+      const topicLower = topicName.toLowerCase();
+      
+      const contactsCount = (countsRef.contacts || []).filter(c => 
+          String(c.comments_topic || '').toLowerCase() === topicLower || 
+          String(c.topic || '').toLowerCase() === topicLower
+      ).length;
+
+      const channelsCount = (countsRef.channels || []).filter(c => 
+          String(c.topic || '').toLowerCase() === topicLower
+      ).length;
+      
+      const assetsCount = (countsRef.assets || []).filter(a => 
+          String(a.topic || '').toLowerCase() === topicLower
+      ).length;
+      
+      const campaignsCount = (countsRef.campaigns || []).filter(c => 
+          String(c.topic || '').toLowerCase() === topicLower
+      ).length;
+
+      const segmentsCount = (countsRef.segments || []).filter(s => 
+          String(s.name || s.topic || '').toLowerCase().includes(topicLower)
+      ).length;
+
+      const pagesCount = (countsRef.developLandingPages || []).filter(p => 
+          String(p.name || p.topic || '').toLowerCase().includes(topicLower)
+      ).length;
+
+      const reportsCount = (currentReports || []).filter(r => 
+          String(r.topic || r.category || '').toLowerCase() === topicLower
+      ).length;
+
+      const messagesCount = 
+          (currentWhitePapers || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+          (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+          (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+          simpleContentConfigs.reduce((acc, config) => {
+              const items = simpleContentState[config.key]?.items || [];
+              return acc + items.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
+          }, 0);
+
       const categoryTd = document.createElement('td');
-      categoryTd.textContent = String(item.topic || item.category || '').trim() || '-';
+      categoryTd.textContent = topicName || '-';
       tr.appendChild(categoryTd);
+
+      const drawStat = (count, pageId, filterInputId) => {
+          const td = document.createElement('td');
+          td.style.textAlign = 'center';
+          if (count > 0) {
+              const a = document.createElement('a');
+              a.href = '#';
+              a.textContent = count;
+              a.style.fontSize = '1.3em';
+              a.style.fontWeight = 'bold';
+              a.onclick = (e) => {
+                  e.preventDefault();
+                  if (pageId === 'contactsPage') {
+                      window.App.state.segmentContactsFilters = { comments_topic: { mode: 'contains', value: topicName } };
+                  } else if (filterInputId) {
+                      const input = document.getElementById(filterInputId);
+                      if (input) {
+                          input.value = topicName;
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                  }
+                  App.setActivePage(pageId);
+              };
+              td.appendChild(a);
+          } else {
+              td.textContent = '0';
+              td.style.color = 'var(--border-color)';
+              td.style.fontSize = '1.3em';
+          }
+          return td;
+      };
+
+      tr.appendChild(drawStat(contactsCount, 'contactsPage', null)); // filter set actively above
+      tr.appendChild(drawStat(channelsCount, 'channelsPage', null));
+      tr.appendChild(drawStat(messagesCount, 'messagingContentPage', 'messagingContentTextFilter'));
+      tr.appendChild(drawStat(assetsCount, 'assetsPage', null));
+      tr.appendChild(drawStat(campaignsCount, 'campaignsPage', null));
+      tr.appendChild(drawStat(segmentsCount, 'segmentsPage', null));
+      tr.appendChild(drawStat(pagesCount, 'developLandingPagesPage', 'developLandingPagesNameFilter'));
+      tr.appendChild(drawStat(reportsCount, 'messagingReportsPage', null));
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'messaging-topics-actions-cell';
@@ -8232,6 +8410,7 @@ async function saveTweetFromForm(form) {
       return loadThumbnailOptions().then(function () {
         return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
+          renderMessagingOverview();
         });
       });
     },
@@ -8239,6 +8418,7 @@ async function saveTweetFromForm(form) {
       return loadThumbnailOptions().then(function () {
         return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
+          renderMessagingOverview();
         });
       });
     }
