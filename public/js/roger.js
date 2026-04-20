@@ -817,6 +817,10 @@ App.roger.parseTriAgent = function(rawText) {
     else if (maybeJson.startsWith('```')) maybeJson = maybeJson.replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
     const parsed = JSON.parse(maybeJson);
     if (parsed && parsed.state && parsed.payload) {
+      if (parsed.state.sessionid !== undefined && parsed.state.session_id === undefined) {
+        parsed.state.session_id = parsed.state.sessionid;
+        delete parsed.state.sessionid;
+      }
       if (parsed.state.stateversionid !== undefined && parsed.state.state_version_id === undefined) {
         parsed.state.state_version_id = parsed.state.stateversionid;
         delete parsed.state.stateversionid;
@@ -824,6 +828,18 @@ App.roger.parseTriAgent = function(rawText) {
       if (parsed.state.contextchecksum !== undefined && parsed.state.context_checksum === undefined) {
         parsed.state.context_checksum = parsed.state.contextchecksum;
         delete parsed.state.contextchecksum;
+      }
+      if (parsed.state.sourceagent !== undefined && parsed.state.source_agent === undefined) {
+        parsed.state.source_agent = parsed.state.sourceagent;
+        delete parsed.state.sourceagent;
+      }
+      if (parsed.state.targetagent !== undefined && parsed.state.target_agent === undefined) {
+        parsed.state.target_agent = parsed.state.targetagent;
+        delete parsed.state.targetagent;
+      }
+      if (parsed.state.activeobjectiveid !== undefined && parsed.state.active_objective_id === undefined) {
+        parsed.state.active_objective_id = parsed.state.activeobjectiveid;
+        delete parsed.state.activeobjectiveid;
       }
       if (!parsed.state.state_version_id || !parsed.state.session_id) {
          return { valid: false, error: 'Malformed TriAgentState JSON Schema detected. Missing core keys.' };
