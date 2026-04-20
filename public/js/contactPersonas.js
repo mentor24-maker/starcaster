@@ -10,6 +10,20 @@ App.contactPersonas = (function () {
     },
   };
 
+  let activeType = 'persona';
+
+  function getActiveTypeDisplay() {
+    if (activeType === 'personality') return 'Personality';
+    if (activeType === 'personnel') return 'Personnel';
+    return 'Persona';
+  }
+
+  function getActiveTypeDisplayPlural() {
+    if (activeType === 'personality') return 'Personalities';
+    if (activeType === 'personnel') return 'Personnel';
+    return 'Personas';
+  }
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -37,7 +51,7 @@ App.contactPersonas = (function () {
     const marker = tableState.sort.key === 'persona'
       ? (tableState.sort.dir === 'asc' ? ' ▲' : ' ▼')
       : '';
-    btn.textContent = `Persona${marker}`;
+    btn.textContent = `${getActiveTypeDisplay()}${marker}`;
   }
 
   function formatTags(tags) {
@@ -65,7 +79,7 @@ App.contactPersonas = (function () {
       if (excludeId && itemId === Number(excludeId || 0)) return;
       const option = document.createElement('option');
       option.value = String(itemId);
-      option.textContent = safeText(item.persona) || `Persona ${itemId}`;
+      option.textContent = safeText(item.persona) || `${getActiveTypeDisplay()} ${itemId}`;
       if (String(itemId) === current) option.selected = true;
       select.appendChild(option);
     });
@@ -77,13 +91,41 @@ App.contactPersonas = (function () {
     panel.classList.toggle('hidden', !visible);
   }
 
-  function openPersonasPage() {
+  function openPersonasPage(type) {
+    if (typeof type === 'string') activeType = type;
+    const display = getActiveTypeDisplay();
+    const displayPlural = getActiveTypeDisplayPlural();
+
+    const pageHeading = document.querySelector('#contactsPersonasPage h2');
+    if (pageHeading) pageHeading.textContent = `Contact ${displayPlural}`;
+    
+    document.querySelectorAll('#contactsPersonasPage button[onclick*="openPersonasPage"]').forEach(b => {
+      if (b.textContent.startsWith('Back To')) b.textContent = `Back To ${displayPlural}`;
+    });
+
+    const createBtn = byId('openCreateContactPersonaFromLandingBtn');
+    if (createBtn) createBtn.textContent = `Create ${display}`;
+    
+    const panelHeading = document.querySelector('#contactPersonaCreatePanel h3');
+    if (panelHeading) panelHeading.textContent = `Create Contact ${display}`;
+    
+    const labels = document.querySelectorAll('#contactPersonaForm label');
+    if (labels[0] && labels[0].getAttribute('for') === 'contactPersonaName') labels[0].textContent = display;
+    if (labels[1] && labels[1].getAttribute('for') === 'contactPersonaParent') labels[1].textContent = `Parent ${display}`;
+    
+    const saveBtn = document.querySelector('#contactPersonaForm button[type="submit"]');
+    if (saveBtn) saveBtn.textContent = `Save ${display}`;
+    
+    const editHeading = document.querySelector('#editContactPersonaPage h2');
+    if (editHeading) editHeading.textContent = `Edit Contact ${display}`;
+    
+    const editLabels = document.querySelectorAll('#contactPersonaEditForm label');
+    if (editLabels[0] && editLabels[0].getAttribute('for') === 'contactPersonaEditName') editLabels[0].textContent = display;
+    if (editLabels[1] && editLabels[1].getAttribute('for') === 'contactPersonaEditParent') editLabels[1].textContent = `Parent ${display}`;
+
     setCreatePanelVisible(false);
     App.setActivePage('contactsPersonasPage');
-    refresh().catch((err) => notify(err.message || 'Unable to load personas', true));
-    window.setTimeout(() => {
-      refresh().catch(() => {});
-    }, 250);
+    refresh().catch((err) => notify(err.message || `Unable to load ${displayPlural.toLowerCase()}`, true));
     return false;
   }
 
@@ -104,7 +146,7 @@ App.contactPersonas = (function () {
   }
 
   function openEditPage(item) {
-    if (!item || !item.id) return notify('Persona id is missing', true);
+    if (!item || !item.id) return notify('Personality id is missing', true);
     const form = byId('contactPersonaEditForm');
     if (form) form.reset();
     const idInput = byId('contactPersonaEditId');
@@ -134,10 +176,12 @@ App.contactPersonas = (function () {
   }
 
   async function clonePersona(item) {
-    if (!item) return notify('Persona is missing', true);
+    if (!item) return notify('Item is missing', true);
     const baseName = safeText(item.persona);
+    const display = getActiveTypeDisplay();
     const payload = {
-      persona: baseName ? `${baseName} (Copy)` : 'Persona Copy',
+      persona: baseName ? `${baseName} (Copy)` : `${display} Copy`,
+      type: activeType,
       parentPersonaId: Number(item.parentPersonaId || 0) || null,
       tags: Array.isArray(item.tags) ? item.tags : [],
       description: safeText(item.description),
@@ -182,9 +226,10 @@ App.contactPersonas = (function () {
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'contact-personas-actions-cell';
-      const editBtn = App.makeIconButton('edit', 'Edit Persona', () => openEditPage(item));
-      const cloneBtn = App.makeIconButton('clone', 'Clone Persona', () => clonePersona(item), { marginLeft: '8px' });
-      const deleteBtn = App.makeIconButton('delete', 'Delete Persona', () => deletePersona(item), { danger: true, marginLeft: '8px' });
+      const display = getActiveTypeDisplay();
+      const editBtn = App.makeIconButton('edit', `Edit ${display}`, () => openEditPage(item));
+      const cloneBtn = App.makeIconButton('clone', `Clone ${display}`, () => clonePersona(item), { marginLeft: '8px' });
+      const deleteBtn = App.makeIconButton('delete', `Delete ${display}`, () => deletePersona(item), { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
       actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
@@ -201,7 +246,7 @@ App.contactPersonas = (function () {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 5;
-      td.textContent = 'No personas yet.';
+      td.textContent = `No ${getActiveTypeDisplayPlural().toLowerCase()} yet.`;
       tr.appendChild(td);
       tbody.appendChild(tr);
     }
@@ -209,7 +254,7 @@ App.contactPersonas = (function () {
 
   async function refresh() {
     try {
-      const result = await api('/api/contact-personas');
+      const result = await api('/api/contact-personas?type=' + encodeURIComponent(activeType));
       const personas = Array.isArray(result?.personas)
         ? result.personas
         : Array.isArray(result?.data)
@@ -236,6 +281,7 @@ App.contactPersonas = (function () {
     const formData = new FormData(createForm);
     const payload = {
       persona: safeText(formData.get('persona')),
+      type: activeType,
       description: safeText(formData.get('description')),
     };
     const tags = safeText(formData.get('tags'));
@@ -272,6 +318,7 @@ App.contactPersonas = (function () {
     }
     const payload = {
       persona: safeText(formData.get('persona')),
+      type: activeType,
       description: safeText(formData.get('description')),
     };
     const tags = safeText(formData.get('tags'));

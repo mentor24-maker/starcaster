@@ -458,14 +458,18 @@ function normalizeInitialPageId(pageId) {
   return id;
 }
 
-function persistActivePage(pageId) {
+function persistActivePage(pageId, skipPushState = false) {
   const id = String(pageId || '').trim();
   if (!isValidPageId(id)) return;
   try { window.localStorage.setItem(ACTIVE_PAGE_STORAGE_KEY, id); } catch (_) {}
   try {
     const nextHash = `#page=${encodeURIComponent(id)}`;
     if (window.location.hash !== nextHash) {
-      window.history.replaceState(null, '', nextHash);
+      if (!skipPushState) {
+         window.history.pushState({ pageId: id }, '', nextHash);
+      } else {
+         window.history.replaceState({ pageId: id }, '', nextHash);
+      }
     }
   } catch (_) {}
 }
@@ -486,9 +490,23 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
   const shouldPersist = options.persist !== false;
 
   state.activePage = target;
+  const activePageEl = document.getElementById(target);
   document.querySelectorAll('.app-page').forEach((page) => {
-    page.classList.toggle('hidden', page.id !== target);
+    page.classList.toggle('hidden', page !== activePageEl);
   });
+  
+  // Inject history controls into the active page's header row
+  const historyControls = document.getElementById('globalHistoryControls');
+  if (activePageEl && historyControls) {
+      const headingRow = activePageEl.querySelector('.page-heading-row');
+      if (headingRow) {
+         headingRow.style.position = 'relative';
+         headingRow.appendChild(historyControls);
+         historyControls.style.display = 'flex';
+      } else {
+         historyControls.style.display = 'none';
+      }
+  }
   
   // Clean up any YouTube iframes that are now hidden to stop background audio bleed
   document.querySelectorAll('.app-page.hidden iframe[src*="youtube"]').forEach((iframe) => {
@@ -504,9 +522,10 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
     if (!mod || typeof mod.onPageActivated !== 'function') return;
     const manifest = mod.manifest || {};
     const pageIdMatch = manifest.pageId === target;
+    const secondaryMatch = Array.isArray(manifest.secondaryPages) && manifest.secondaryPages.includes(target);
     const pagePrefixes = Array.isArray(manifest.pagePrefixes) ? manifest.pagePrefixes : [];
     const prefixMatch = pagePrefixes.some((prefix) => String(target || '').startsWith(String(prefix || '')));
-    if (!pageIdMatch && !prefixMatch) return;
+    if (!pageIdMatch && !secondaryMatch && !prefixMatch) return;
     Promise.resolve()
       .then(() => mod.onPageActivated(target))
       .catch((err) => {
@@ -517,8 +536,29 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
       });
   });
 
-  if (shouldPersist) persistActivePage(target);
+  if (shouldPersist) persistActivePage(target, options.skipPushState === true);
+  
+  if (!options.skipTracking) {
+      // Background ping to insert into observe history
+      App.api('/api/observe/page-views', { 
+          method: 'POST', 
+          body: JSON.stringify({ pageId: target }) 
+      }).catch(err => console.debug('[Observe] page-view log failed:', err));
+  }
 };
+
+window.addEventListener('popstate', (e) => {
+    let target = null;
+    if (e.state && e.state.pageId) {
+        target = e.state.pageId;
+    } else {
+        target = readPageFromHash() || 'contactsPage';
+    }
+    // Set the explicitly captured page view via the DOM back button skipping pushState cyclic behavior.
+    if (window.App && typeof App.setActivePage === 'function') {
+        App.setActivePage(target, { skipPushState: true });
+    }
+});
 
 App.openTrainingSection = function openTrainingSection(sectionId) {
   const targetId = String(sectionId || '').trim();
@@ -758,7 +798,7 @@ App.makeInlineIcon = function makeInlineIcon(iconKey, extraClass = '') {
 App.makeIconButton = function makeIconButton(iconKey, label, onClick, options = {}) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = `tiny-btn icon-btn${options.primary ? ' icon-btn-primary' : ''}${options.danger ? ' icon-btn-danger' : ''}`;
+  btn.className = `btn tiny-btn icon-btn${options.primary ? ' icon-btn-primary' : ''}${options.danger ? ' icon-btn-danger' : ''}`;
   btn.title = label;
   btn.setAttribute('aria-label', label);
   if (options.disabled) btn.disabled = true;
@@ -779,7 +819,7 @@ App.makeIconButton = function makeIconButton(iconKey, label, onClick, options = 
 };
 
 App.iconButtonMarkup = function iconButtonMarkup(iconKey, label, className = '') {
-  const classes = `tiny-btn icon-btn ${className}`.trim();
+  const classes = `btn tiny-btn icon-btn ${className}`.trim();
   const svg = App.ACTION_ICONS[iconKey] || App.ACTION_ICONS.view;
   return `<button type="button" class="${classes}" title="${label}" aria-label="${label}"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${svg}</svg></span></button>`;
 };

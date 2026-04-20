@@ -6,7 +6,7 @@
     <title>Omni-channel Engagement Engine</title>
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=2" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body>
@@ -1258,62 +1258,52 @@
           <h2>Acquire</h2>
           <div class="page-heading-actions" id="acquirePageActions"></div>
         </div>
-        <p>Acquire pulls source material into APP from web and platform channels before it is organized into contacts, messaging, and assets.</p>
-        <div class="acquire-flow-map" aria-label="Acquire channel infographic">
-          <button class="acquire-flow-node acquire-flow-node-web" type="button" onclick="App.setActivePage('acquireWebPage')">
-            <span class="acquire-flow-label">Web</span>
-          </button>
-
-          <button class="acquire-flow-node acquire-flow-node-youtube" type="button" onclick="App.setActivePage('acquireYoutubePage')">
-            <span class="acquire-flow-label">YouTube</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-instagram" type="button" onclick="App.setActivePage('acquireInstagramPage')">
-            <span class="acquire-flow-label">Instagram</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-tiktok" type="button" onclick="App.setActivePage('acquireTiktokPage')">
-            <span class="acquire-flow-label">TikTok</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-facebook" type="button" onclick="App.setActivePage('acquireFacebookPage')">
-            <span class="acquire-flow-label">Facebook</span>
-          </button>
-
-          <div class="acquire-flow-core-wrap">
-            <div class="acquire-flow-core">
-              <span class="acquire-flow-core-kicker">Acquisition Hub</span>
-              <span class="acquire-flow-core-title">APP</span>
+        <div id="acquireHubBody" class="section-settings-shell" style="margin-top: 2rem;">
+          <div class="pod" onclick="App.setActivePage('acquireWebPage')">
+            <div class="pod-icon-col"><i data-lucide="globe"></i></div>
+            <div class="pod-content">
+              <h3>Web Domain</h3>
+              <p>Automated crawler fetching external site content.</p>
             </div>
           </div>
-
-          <button class="acquire-flow-node acquire-flow-node-x" type="button" onclick="App.setActivePage('acquireXPage')">
-            <span class="acquire-flow-label">X</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-x" type="button" onclick="App.setActivePage('acquireBlueskyPage')">
-            <span class="acquire-flow-label">BlueSky</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-reddit" type="button" onclick="App.setActivePage('acquireRedditPage')">
-            <span class="acquire-flow-label">Reddit</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-quora" type="button" onclick="App.setActivePage('acquireQuoraPage')">
-            <span class="acquire-flow-label">Quora</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-substack" type="button" onclick="App.setActivePage('acquireSubstackPage')">
-            <span class="acquire-flow-label">Substack</span>
-          </button>
-          <button class="acquire-flow-node acquire-flow-node-medium" type="button" onclick="App.setActivePage('acquireMediumPage')">
-            <span class="acquire-flow-label">Medium</span>
-          </button>
+          <div class="pod" onclick="App.setActivePage('acquireYoutubePage')">
+            <div class="pod-icon-col"><i data-lucide="youtube"></i></div>
+            <div class="pod-content">
+              <h3>YouTube</h3>
+              <p>Video indexing and transcript mining tools.</p>
+            </div>
+          </div>
+          <div class="pod" onclick="App.setActivePage('acquireRedditPage')">
+            <div class="pod-icon-col"><i data-lucide="message-square"></i></div>
+            <div class="pod-content">
+              <h3>Reddit</h3>
+              <p>Thread discovery and structured comment extraction.</p>
+            </div>
+          </div>
+          <div class="pod" onclick="App.setActivePage('acquireBlueskyPage')">
+            <div class="pod-icon-col"><i data-lucide="at-sign"></i></div>
+            <div class="pod-content">
+              <h3>BlueSky</h3>
+              <p>Rapid decentralised feed monitoring.</p>
+            </div>
+          </div>
+          <div class="pod" onclick="App.setActivePage('acquireInstagramPage')">
+            <div class="pod-icon-col"><i data-lucide="instagram"></i></div>
+            <div class="pod-content">
+              <h3>Instagram</h3>
+              <p>Basic meta ingestion via official endpoints.</p>
+            </div>
+          </div>
         </div>
       </section>
 
       <section id="acquireWebPage" class="app-page hidden">
         <h2>Acquire: Web</h2>
-        <form id="directAcquireForm" class="labeled-hero-stack acquire-web-hero-form">
-          <label class="labeled-hero-stack-label" for="directAcquireUrlInput">Website</label>
-          <div class="labeled-hero-stack-body">
-            <input id="directAcquireUrlInput" class="hero-action-input" name="source_url" aria-label="Website URL" />
-            
-            <div class="acquire-web-hero-options-row">
-              <details class="hanging-details">
+        <form id="directAcquireForm" class="standard-form-grid">
+            <label for="directAcquireUrlInput">Website</label>
+            <input id="directAcquireUrlInput" name="source_url" aria-label="Website URL" placeholder="https://example.com" />
+          <div class="acquire-web-hero-options-row">
+            <details class="hanging-details" style="margin-top: 1.5rem;">
                 <summary>Advanced</summary>
                 <div class="standard-form-grid" style="margin-top: 1.5rem; width: 100%;">
                   
@@ -1368,7 +1358,6 @@
               <div id="directAcquireProgressText" class="asset-upload-progress-text">Harvesting website...</div>
               <progress id="directAcquireProgressBar" max="100" value="8" style="width: 100%;"></progress>
             </div>
-          </div>
         </form>
 
 
@@ -1849,7 +1838,7 @@
                       <label for="youtubeResearchManualPhrases">Keywords</label>
                       <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="5"></textarea>
                   </div>
-                  <div class="standard-form-grid youtube-research-right-column" style="margin:0;">
+                  <div class="parameter-grid youtube-research-right-column" style="margin:0;">
                       <label for="youtubeResearchMaxPhrases">Max Phrases</label>
                       <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
                       <label for="youtubeResearchVideosPerPhrase">Videos Per Phrase</label>
@@ -2007,19 +1996,13 @@
                     <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
                     <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" form="youtubeCommentMinerForm" placeholder="first, lol, sub4sub" />
                   </div>
-                  <div class="form-row">
+                  <div class="parameter-grid" style="margin-top: 1rem;">
                     <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
                     <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" form="youtubeCommentMinerForm" type="number" min="1" max="20" value="5" />
-                  </div>
-                  <div class="form-row">
                     <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
                     <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" form="youtubeCommentMinerForm" type="number" min="1" max="500" value="100" />
-                  </div>
-                  <div class="form-row">
                     <label for="youtubeMinerMinScore">Minimum Score</label>
                     <input id="youtubeMinerMinScore" name="min_score" form="youtubeCommentMinerForm" type="number" min="0" max="20" value="3" />
-                  </div>
-                  <div class="form-row">
                     <label for="youtubeMinerSortBy">Sort</label>
                     <select id="youtubeMinerSortBy" name="sort_by" form="youtubeCommentMinerForm">
                       <option value="relevance" selected>relevance</option>
@@ -2898,57 +2881,40 @@
             </div>
           </div>
           <p style="margin-top: 0;">Find and rank candidate Reddit threads directly before moving into harvesting or reply work.</p>
-          <form id="redditDiscoveryForm"  style="max-width: 980px;">
-            
-              <label for="redditDiscoveryTarget">Subreddit or Post URL</label>
-              <input id="redditDiscoveryTarget" name="target" required />
-            
-            <div class="grid-form">
+          <form id="redditDiscoveryForm" class="standard-form-grid" style="max-width: 980px;">
+              <label for="redditDiscoveryTarget">Subreddit or URL</label>
+              <input id="redditDiscoveryTarget" name="target" required placeholder="/r/example" />
               
-                <label for="redditDiscoverySourceMode">Source Mode</label>
-                <select id="redditDiscoverySourceMode" name="source_mode">
-                  <option value="auto" selected>Auto</option>
-                  <option value="oauth">OAuth</option>
-                  <option value="public">Public JSON</option>
-                </select>
+              <label for="redditDiscoverySourceMode">Source Mode</label>
+              <select id="redditDiscoverySourceMode" name="source_mode">
+                <option value="auto" selected>Auto</option>
+                <option value="oauth">OAuth</option>
+                <option value="public">Public JSON</option>
+              </select>
               
+              <label for="redditDiscoverySort">Sort</label>
+              <select id="redditDiscoverySort" name="sort">
+                <option value="new">new</option>
+                <option value="hot">hot</option>
+                <option value="top">top</option>
+                <option value="rising">rising</option>
+              </select>
+              <label for="redditDiscoveryMaxPosts">Max Threads</label>
+              <input id="redditDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
               
-                <label for="redditDiscoverySort">Sort</label>
-                <select id="redditDiscoverySort" name="sort">
-                  <option value="new">new</option>
-                  <option value="hot">hot</option>
-                  <option value="top">top</option>
-                  <option value="rising">rising</option>
-                </select>
+              <label for="redditDiscoveryKeyword">Keyword Filter (optional)</label>
+              <input id="redditDiscoveryKeyword" name="keyword" />
               
+              <label for="redditDiscoveryMinScore">Min Score</label>
+              <input id="redditDiscoveryMinScore" name="min_score" type="number" min="0" max="100000" value="0" />
+              <label for="redditDiscoveryMinComments">Min Comments</label>
+              <input id="redditDiscoveryMinComments" name="min_comments" type="number" min="0" max="100000" value="0" />
               
-                <label for="redditDiscoveryMaxPosts">Max Threads</label>
-                <input id="redditDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
+              <label for="redditDiscoveryStartTime">Start Date (optional)</label>
+              <input id="redditDiscoveryStartTime" name="start_time" type="date" />
               
-            </div>
-            <div class="grid-form">
-              
-                <label for="redditDiscoveryKeyword">Keyword Filter (optional)</label>
-                <input id="redditDiscoveryKeyword" name="keyword" />
-              
-              
-                <label for="redditDiscoveryMinScore">Min Score</label>
-                <input id="redditDiscoveryMinScore" name="min_score" type="number" min="0" max="100000" value="0" />
-              
-              
-                <label for="redditDiscoveryMinComments">Min Comments</label>
-                <input id="redditDiscoveryMinComments" name="min_comments" type="number" min="0" max="100000" value="0" />
-              
-            </div>
-            <div class="grid-form">
-              
-                <label for="redditDiscoveryStartTime">Start Date (optional)</label>
-                <input id="redditDiscoveryStartTime" name="start_time" type="date" />
-              
-              
-                <label for="redditDiscoveryEndTime">End Date (optional)</label>
-                <input id="redditDiscoveryEndTime" name="end_time" type="date" />
-              
+              <label for="redditDiscoveryEndTime">End Date (optional)</label>
+              <input id="redditDiscoveryEndTime" name="end_time" type="date" />
             </div>
             <div></div>
               <div class="page-heading-actions" style="justify-content: flex-start;">
@@ -3183,56 +3149,41 @@
               <h3 style="margin: 0;">Thread Discovery</h3>
             </div>
             <p style="margin-top: 0;">Find and rank candidate BlueSky posts before moving into reply drafting or posting work.</p>
-            <form id="blueskyDiscoveryForm">
-              
-                <label for="blueskyDiscoveryTarget">Handle, Feed, or Post URL</label>
-                <input id="blueskyDiscoveryTarget" name="target" required />
-              
-              <div class="grid-form">
+            <form id="blueskyDiscoveryForm" class="standard-form-grid">
+                <label for="blueskyDiscoveryTarget">Handle, Feed, or URL</label>
+                <input id="blueskyDiscoveryTarget" name="target" required placeholder="did:plc:..." />
                 
-                  <label for="blueskyDiscoverySourceMode">Source Mode</label>
-                  <select id="blueskyDiscoverySourceMode" name="source_mode">
-                    <option value="auto" selected>Auto</option>
-                    <option value="api">API</option>
-                    <option value="browser">OpenClaw Browser</option>
-                  </select>
+                <label for="blueskyDiscoverySourceMode">Source Mode</label>
+                <select id="blueskyDiscoverySourceMode" name="source_mode">
+                  <option value="auto" selected>Auto</option>
+                  <option value="api">API</option>
+                  <option value="browser">OpenClaw Browser</option>
+                </select>
                 
+                <label for="blueskyDiscoverySort">Sort</label>
+                <select id="blueskyDiscoverySort" name="sort">
+                  <option value="new">new</option>
+                  <option value="top">top</option>
+                  <option value="engaging">engaging</option>
+                </select>
                 
-                  <label for="blueskyDiscoverySort">Sort</label>
-                  <select id="blueskyDiscoverySort" name="sort">
-                    <option value="new">new</option>
-                    <option value="top">top</option>
-                    <option value="engaging">engaging</option>
-                  </select>
+                <label for="blueskyDiscoveryMaxPosts">Max Posts</label>
+                <input id="blueskyDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
                 
+                <label for="blueskyDiscoveryKeyword">Keyword Filter (optional)</label>
+                <input id="blueskyDiscoveryKeyword" name="keyword" />
                 
-                  <label for="blueskyDiscoveryMaxPosts">Max Posts</label>
-                  <input id="blueskyDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
+                <label for="blueskyDiscoveryMinLikes">Min Likes</label>
+                <input id="blueskyDiscoveryMinLikes" name="min_likes" type="number" min="0" max="100000" value="0" />
                 
-              </div>
-              <div class="grid-form">
+                <label for="blueskyDiscoveryMinReplies">Min Replies</label>
+                <input id="blueskyDiscoveryMinReplies" name="min_replies" type="number" min="0" max="100000" value="0" />
                 
-                  <label for="blueskyDiscoveryKeyword">Keyword Filter (optional)</label>
-                  <input id="blueskyDiscoveryKeyword" name="keyword" />
+                <label for="blueskyDiscoveryStartTime">Start Date (optional)</label>
+                <input id="blueskyDiscoveryStartTime" name="start_time" type="date" />
                 
-                
-                  <label for="blueskyDiscoveryMinLikes">Min Likes</label>
-                  <input id="blueskyDiscoveryMinLikes" name="min_likes" type="number" min="0" max="100000" value="0" />
-                
-                
-                  <label for="blueskyDiscoveryMinReplies">Min Replies</label>
-                  <input id="blueskyDiscoveryMinReplies" name="min_replies" type="number" min="0" max="100000" value="0" />
-                
-              </div>
-              <div class="grid-form">
-                
-                  <label for="blueskyDiscoveryStartTime">Start Date (optional)</label>
-                  <input id="blueskyDiscoveryStartTime" name="start_time" type="date" />
-                
-                
-                  <label for="blueskyDiscoveryEndTime">End Date (optional)</label>
-                  <input id="blueskyDiscoveryEndTime" name="end_time" type="date" />
-                
+                <label for="blueskyDiscoveryEndTime">End Date (optional)</label>
+                <input id="blueskyDiscoveryEndTime" name="end_time" type="date" />
               </div>
               <div></div>
               <div class="page-heading-actions" style="justify-content: flex-start;">
@@ -3249,31 +3200,23 @@
               <h3 style="margin: 0;">Reply Candidate Generator</h3>
             </div>
             <p style="margin-top: 0;">Generate several context-aware BlueSky reply options for a selected post without posting anything yet.</p>
-            <form id="blueskyReplyCandidatesForm">
-              
+            <form id="blueskyReplyCandidatesForm" class="standard-form-grid">
                 <label for="blueskyReplyTarget">Post URL</label>
                 <input id="blueskyReplyTarget" name="target" required />
-              
-              <div class="grid-form acquire-workbench-compact-grid">
                 
-                  <label for="blueskyReplySourceMode">Source Mode</label>
-                  <select id="blueskyReplySourceMode" name="source_mode">
-                    <option value="auto" selected>Auto</option>
-                    <option value="api">API</option>
-                    <option value="browser">OpenClaw Browser</option>
-                  </select>
+                <label for="blueskyReplySourceMode">Source Mode</label>
+                <select id="blueskyReplySourceMode" name="source_mode">
+                  <option value="auto" selected>Auto</option>
+                  <option value="api">API</option>
+                  <option value="browser">OpenClaw Browser</option>
+                </select>
                 
-              </div>
-              <div class="grid-form acquire-workbench-compact-grid">
-                
-                  <label for="blueskyReplyContextLimit">Thread Context Limit</label>
-                  <input id="blueskyReplyContextLimit" name="context_limit" type="number" min="3" max="20" value="8" />
-                
+                <label for="blueskyReplyContextLimit">Thread Context Limit</label>
+                <input id="blueskyReplyContextLimit" name="context_limit" type="number" min="3" max="20" value="8" />
               </div>
               <div></div>
-              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start;">
-                <div></div>
-              <button type="submit">Generate Reply Candidates</button>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 1rem;">
+                <button type="submit">Generate Reply Candidates</button>
               </div>
               <div id="blueskyReplyStatus" class="youtube-comments-schedule-summary">BlueSky reply generation is idle.</div>
             </form>

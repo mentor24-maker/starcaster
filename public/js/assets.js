@@ -828,6 +828,23 @@ App.assets = (function () {
 
   async function openAssetsLanding() {
     App.setActivePage('assetsPage');
+    
+    const overview = byId('assetsOverviewSection');
+    const tbSection = byId('assetsTableSection');
+    if(overview) overview.classList.remove('hidden');
+    if(tbSection) tbSection.classList.add('hidden');
+    
+    const panel = byId('assetUploadPanel');
+    if (panel) panel.classList.add('hidden');
+    
+    const hdr = byId('assetsPageHeading');
+    if(hdr) hdr.textContent = 'Assets';
+    const sub = byId('assetsPageSubtitle');
+    if(sub) sub.textContent = 'Manage the reusable media and physical files that support campaigns, pages, and publishing sequences.';
+
+    const btns = document.querySelectorAll('.assets-header-action-btn');
+    btns.forEach(b => b.classList.add('hidden'));
+
     try {
       await refresh();
     } catch (err) {
@@ -858,6 +875,19 @@ App.assets = (function () {
     if (els.assetsFilterTags) {
       els.assetsFilterTags.value = '';
     }
+    
+    const overview = byId('assetsOverviewSection');
+    const tbSection = byId('assetsTableSection');
+    if(overview) overview.classList.add('hidden');
+    if(tbSection) tbSection.classList.remove('hidden');
+    
+    const hdr = byId('assetsPageHeading');
+    const nextTypeSafe = String(assetType || 'All Assets').trim();
+    if(hdr) hdr.textContent = `Assets: ${nextTypeSafe}`;
+    
+    const btns = document.querySelectorAll('.assets-header-action-btn');
+    btns.forEach(b => b.classList.remove('hidden'));
+    
     App.setActivePage('assetsPage');
     try {
       await refresh();

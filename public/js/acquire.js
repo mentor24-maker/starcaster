@@ -1567,31 +1567,19 @@ App.acquire = (function () {
       const actionsTd = document.createElement('td');
       actionsTd.className = 'crud-actions-cell';
 
-      const viewBtn = document.createElement('button');
-      viewBtn.type = 'button';
-      viewBtn.className = 'tiny-btn';
-      viewBtn.textContent = 'View';
-      viewBtn.addEventListener('click', () => {
+      const viewBtn = App.makeIconButton('view', 'View', () => {
         if (String(peer?.site_url || '').trim()) window.open(String(peer.site_url).trim(), '_blank', 'noopener');
       });
       actionsTd.appendChild(viewBtn);
 
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'tiny-btn';
-      editBtn.textContent = 'Edit';
-      editBtn.addEventListener('click', () => {
+      const editBtn = App.makeIconButton('edit', 'Edit', () => {
         fillDirectAcquireWebsitePeerForm(peer);
         const panel = document.getElementById('directAcquireWebsitePeersPanel');
         if (panel) panel.open = true;
       });
       actionsTd.appendChild(editBtn);
 
-      const deleteBtn = document.createElement('button');
-      deleteBtn.type = 'button';
-      deleteBtn.className = 'tiny-btn danger';
-      deleteBtn.textContent = 'Delete';
-      deleteBtn.addEventListener('click', async () => {
+      const deleteBtn = App.makeIconButton('trash', 'Delete', async () => {
         if (!confirm(`Delete ${String(peer?.domain || peer?.site_url || 'this website').trim()}?`)) return;
         try {
           await api(`/api/acquire/website-peers/${encodeURIComponent(peer.id)}`, { method: 'DELETE' });
@@ -1602,7 +1590,7 @@ App.acquire = (function () {
         } catch (err) {
           notify(err.message || 'Could not delete website peer', true);
         }
-      });
+      }, { danger: true });
       actionsTd.appendChild(deleteBtn);
 
       tr.appendChild(actionsTd);
@@ -3021,6 +3009,65 @@ App.acquire = (function () {
 
   function init() {
     setDirectAcquireResultsVisible(false);
+    
+    // Begin: Theme Builder DOM Projection Pattern
+    if (App.develop && typeof App.develop.buildModularPageTemplatePreviewMarkup === 'function') {
+      const STORAGE_KEY = 'alphire:acquire-hub:layout';
+      let payload;
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) payload = JSON.parse(saved);
+      } catch (err) {}
+      if (!payload || !payload.layoutSections) {
+        payload = {
+          layoutSections: [
+            { layout: '12', title: 'Acquire Hub', collapsed: false, modules: [{ type: 'system-app', systemId: 'acquire-hub-panel', column: 'col1' }] }
+          ]
+        };
+      }
+      
+      const targetWrap = document.getElementById('acquirePage');
+      if (targetWrap && !targetWrap.dataset.builderHydrated) {
+        const heading = targetWrap.querySelector('.page-heading-row');
+        const hubBody = targetWrap.querySelector('#acquireHubBody');
+        
+        targetWrap.innerHTML = App.develop.buildModularPageTemplatePreviewMarkup(payload);
+        
+        if (heading) {
+          const actionRow = heading.querySelector('.page-heading-actions');
+          if (actionRow) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'tiny-btn';
+            editBtn.innerHTML = '<i data-lucide="layout-template"></i> Edit Hub UI';
+            editBtn.addEventListener('click', () => {
+              App.develop.openModularPageTemplateEditor(payload, {
+                mode: 'template',
+                onSave: (newPayload) => {
+                  try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newPayload));
+                    App.notify('Acquire Hub layout saved locally. Refreshed required.', false);
+                    setTimeout(() => window.location.reload(), 800);
+                  } catch (e) {
+                    App.notify('Could not save local config', true);
+                  }
+                }
+              });
+            });
+            actionRow.appendChild(editBtn);
+            if (window.lucide) window.lucide.createIcons({ root: editBtn });
+          }
+          targetWrap.insertBefore(heading, targetWrap.firstChild);
+        }
+        
+        const mHub = targetWrap.querySelector('#mount-acquire-hub-panel');
+        if (mHub && hubBody) mHub.appendChild(hubBody);
+        
+        targetWrap.dataset.builderHydrated = 'true';
+      }
+    }
+    // End Theme Builder Integration
+
     const acquirePageActions = document.getElementById('acquirePageActions');
     if (acquirePageActions && !acquirePageActions.dataset.bound) {
       acquirePageActions.dataset.bound = 'true';

@@ -59,6 +59,16 @@ App.activityLog = (function () {
     {
       key:   'action',
       label: 'Action',
+      filterOptions: [
+        { value: '', label: 'All actions' },
+        { value: 'contact', label: 'Contacts' },
+        { value: 'segment', label: 'Segments' },
+        { value: 'campaign', label: 'Campaigns' },
+        { value: 'promolead', label: 'Promo Leads' },
+        { value: 'settings', label: 'Settings' },
+        { value: 'openclaw', label: 'OpenClaw' },
+        { value: 'acquire', label: 'Acquire' },
+      ],
       render: (val) => {
         const span = document.createElement('span');
         span.className = 'badge ' + badgeClass(val);
@@ -99,20 +109,12 @@ App.activityLog = (function () {
     mountPoint.appendChild(grid.el);
   }
 
-  // ── Filtered rows (action dropdown filter, separate from grid column filters)
-
-  function getFilteredRows() {
-    if (!filterAction) return allEntries;
-    return allEntries.filter(e => e.action && e.action.startsWith(filterAction));
-  }
-
   function updateGrid() {
     if (!grid) return;
-    const rows = getFilteredRows();
-    grid.update({ rows });
+    grid.update({ rows: allEntries });
 
     const countEl = el('activityLogCount');
-    if (countEl) countEl.textContent = `${rows.length} entr${rows.length !== 1 ? 'ies' : 'y'}`;
+    if (countEl) countEl.textContent = `${allEntries.length} entr${allEntries.length !== 1 ? 'ies' : 'y'}`;
   }
 
   // ── Load data ────────────────────────────────────────────────────────────
@@ -144,25 +146,21 @@ App.activityLog = (function () {
   // ── Init ─────────────────────────────────────────────────────────────────
 
   function init() {
-    // Action filter dropdown
-    const filterSel = el('activityLogFilter');
-    if (filterSel) {
-      filterSel.addEventListener('change', () => {
-        filterAction = filterSel.value;
-        updateGrid();
-      });
-    }
-
     // Refresh button
     const refreshBtn = el('activityLogRefresh');
     if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => loadLog());
+      refreshBtn.addEventListener('click', () => {
+         loadLog();
+         if (App.observe && typeof App.observe.loadPageViews === 'function') {
+            App.observe.loadPageViews();
+         }
+      });
     }
   }
 
   // Called by app.js on every global refresh
   async function refresh() {
-    const page = el('activityLogPage');
+    const page = el('activityPage');
     if (page && page.classList.contains('active')) {
       await loadLog();
     }
@@ -174,7 +172,7 @@ App.activityLog = (function () {
   }
 
   return {
-    manifest: { id: 'activityLog', label: 'Activity Log', pageId: 'activityLogPage' },
+    manifest: { id: 'activityLog', label: 'Activity', pageId: 'activityPage' },
     init,
     refresh,
     onPageActivated,
