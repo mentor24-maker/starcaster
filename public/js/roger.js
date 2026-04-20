@@ -816,37 +816,28 @@ App.roger.parseTriAgent = function(rawText) {
     if (maybeJson.startsWith('```json')) maybeJson = maybeJson.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
     else if (maybeJson.startsWith('```')) maybeJson = maybeJson.replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
     const parsed = JSON.parse(maybeJson);
-    if (parsed && parsed.state && parsed.payload) {
-      if (parsed.state.sessionid !== undefined && parsed.state.session_id === undefined) {
-        parsed.state.session_id = parsed.state.sessionid;
-        delete parsed.state.sessionid;
+    
+    if (parsed && parsed.payload && parsed.payload.content) {
+      
+      // Auto-unwrap if the LLM double-encapsulated the JSON schema inside payload.content
+      try {
+         let innerText = String(parsed.payload.content).trim();
+         if (innerText.startsWith('```json')) innerText = innerText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+         else if (innerText.startsWith('```')) innerText = innerText.replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
+         
+         const innerParsed = JSON.parse(innerText);
+         if (innerParsed && innerParsed.payload && innerParsed.payload.content) {
+             parsed.state = { ...parsed.state, ...innerParsed.state };
+             parsed.payload = { ...parsed.payload, ...innerParsed.payload };
+         }
+      } catch(e3) {
+         // Not double-wrapped valid json, standard payload.
       }
-      if (parsed.state.stateversionid !== undefined && parsed.state.state_version_id === undefined) {
-        parsed.state.state_version_id = parsed.state.stateversionid;
-        delete parsed.state.stateversionid;
-      }
-      if (parsed.state.contextchecksum !== undefined && parsed.state.context_checksum === undefined) {
-        parsed.state.context_checksum = parsed.state.contextchecksum;
-        delete parsed.state.contextchecksum;
-      }
-      if (parsed.state.sourceagent !== undefined && parsed.state.source_agent === undefined) {
-        parsed.state.source_agent = parsed.state.sourceagent;
-        delete parsed.state.sourceagent;
-      }
-      if (parsed.state.targetagent !== undefined && parsed.state.target_agent === undefined) {
-        parsed.state.target_agent = parsed.state.targetagent;
-        delete parsed.state.targetagent;
-      }
-      if (parsed.state.activeobjectiveid !== undefined && parsed.state.active_objective_id === undefined) {
-        parsed.state.active_objective_id = parsed.state.activeobjectiveid;
-        delete parsed.state.activeobjectiveid;
-      }
-      if (!parsed.state.state_version_id || !parsed.state.session_id) {
-         return { valid: false, error: 'Malformed TriAgentState JSON Schema detected. Missing core keys.' };
-      }
+
+      // We only care about payload content rendering.
+      // Strict state schema missing property validation is bypassed here to allow rendering older chat histories.
       return { valid: true, data: parsed };
     }
-    return null;
   } catch (e) {
     // Regex Recovery for structurally broken JSON (unescaped quotes/newlines inside payload.content)
     try {
@@ -854,30 +845,23 @@ App.roger.parseTriAgent = function(rawText) {
       const contentMatch = rawStr.match(/"content"\s*:\s*([\s\S]*)/);
       if (contentMatch) {
          let contentStr = contentMatch[1].trim();
-         // Strip the trailing JSON brackets and quotes like: " \n  }\n}
-         contentStr = contentStr.replace(/\"\s*\}?\s*\}?\s*$/g, '');
+         // Strip the trailing JSON brackets, quotes, and any trailing Markdown ticks
+         contentStr = contentStr.replace(/\"\s*\}?\s*\}?\s*(`{3})?\s*$/g, '');
          if (contentStr.startsWith('"')) contentStr = contentStr.substring(1);
          // Unescape standard JSON text escapes since we bypassed parser
          contentStr = contentStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
          
-         let stateObj = { state_version_id: 1, session_id: '0' };
-         // Try to regex extract the state block
-         const stateMatch = rawStr.match(/"state"\s*:\s*(\{[\s\S]*?\})\s*,\s*"payload"/);
-         if (stateMatch) {
-            try { stateObj = JSON.parse(stateMatch[1]); } catch(e2) {}
-         }
          return {
             valid: true,
             data: {
-               state: stateObj,
+               state: { state_version_id: 1, session_id: '0' },
                payload: { type: 'RESPONSE', content: contentStr }
             }
          };
       }
     } catch(regexErr) {}
-    
-    return null; // Not valid JSON, which is fine for generic text
   }
+  return null; // Not valid JSON, fallback to generic Markdown text formatting
 };
 
 App.roger.editChat = function(chatId, btn) {
