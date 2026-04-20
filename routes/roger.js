@@ -113,7 +113,10 @@ async function handle(req, res, pathname, requestMethod) {
     const content = String(body?.content || '').trim();
     if (!content) return sendErr(res, 400, 'Content is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const attachmentBase64 = String(body?.attachmentBase64 || '').trim();
+    let attachmentBase64 = String(body?.attachmentBase64 || '').trim();
+    if (attachmentBase64 && attachmentBase64.includes('base64,')) {
+      attachmentBase64 = attachmentBase64.split('base64,')[1];
+    }
     const attachmentMime = String(body?.attachmentMime || '').trim();
     const attachmentName = String(body?.attachmentName || '').trim();
 
