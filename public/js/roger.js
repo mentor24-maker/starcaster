@@ -407,6 +407,9 @@ App.roger.formatMarkdown = function(text) {
   // 4. Replace linebreaks outside of blocks
   html = html.replace(/\n/g, '<br/>');
 
+  // 4.5 Bind State Version anchors to allow interactive routing
+  html = html.replace(/\b(?:(?:state_?)?version_?id|version)\s*:\s*(\d+)/gi, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion($1); return false;">$&</a>');
+
   // 5. Restore code blocks, but now we format them properly with our UI wrapper
   html = html.replace(/@@@CODEBLOCK(\d+)@@@/g, (match, i) => {
     const codeBlock = chunks[parseInt(i)];
@@ -600,6 +603,9 @@ App.roger.appendChatNode = function(chat) {
   }
 
   if (parsedTriAgent) {
+    if (parsedTriAgent.state && parsedTriAgent.state.state_version_id) {
+       bubble.id = 'rogerChatVersion_' + parsedTriAgent.state.state_version_id;
+    }
     const rawContentHTML = App.roger.formatMarkdown(parsedTriAgent.payload.content);
     let finalUI = rawContentHTML;
     
@@ -874,6 +880,18 @@ App.roger.parseTriAgent = function(rawText) {
     } catch(regexErr) {}
   }
   return null; // Not valid JSON, fallback to generic Markdown text formatting
+};
+
+App.roger.scrollToVersion = function(versionId) {
+  const el = document.getElementById('rogerChatVersion_' + versionId);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('highlight-ping');
+    void el.offsetWidth; // trigger layout reflow to restart animation sequence
+    el.classList.add('highlight-ping');
+  } else {
+    console.warn(`Chat version ID ${versionId} not yet loaded or missing from current DOM.`);
+  }
 };
 
 App.roger.editChat = function(chatId, btn) {
