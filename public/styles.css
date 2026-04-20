@@ -9638,6 +9638,8 @@ button.section-settings-gear-btn svg {
   padding: 1rem;
   border-radius: 6px;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 400px;
   margin: 0.5rem 0;
 }
 
