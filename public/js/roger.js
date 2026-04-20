@@ -24,8 +24,8 @@ const rogerElements = {
 App.roger.init = async function() {
   try {
     const cfgRes = await App.api('/api/develop/roger/config');
-    if (cfgRes && cfgRes.url && cfgRes.anonKey && window.supabase) {
-      window.supabaseClient = window.supabase.createClient(cfgRes.url, cfgRes.anonKey);
+    if (cfgRes && cfgRes.data && cfgRes.data.url && cfgRes.data.anonKey && window.supabase) {
+      window.supabaseClient = window.supabase.createClient(cfgRes.data.url, cfgRes.data.anonKey);
     }
   } catch(e) { console.error('Failed to load Supabase Realtime Config', e); }
 
@@ -1037,7 +1037,8 @@ App.roger.sendProtocolAction = function(actionType, commandHash, btnEl) {
 
 App.roger.submitChat = async function() {
   const text = rogerElements.input?.value.trim();
-  if (!text || !rogerState.activeSessionId) return;
+  if (!text && rogerState.stagedFiles.length === 0) return; // Do nothing if no input
+  if (!rogerState.activeSessionId) return;
 
   const staged = rogerState.stagedFiles[0] || null;
 
@@ -1079,22 +1080,61 @@ App.roger.submitChat = async function() {
       body: JSON.stringify(payload)
     });
     
-    if (res.error) {
-      alert("Agent Failed to Receive Message: " + (res.error.message || res.error));
-    } else if (res.data?.userChat) {
-       App.roger.appendChatNode(res.data.userChat);
-       if (res.data.rogerChat) App.roger.appendChatNode(res.data.rogerChat);
-       App.roger.scrollToBottom();
+    console.log("========== DIAGNOSTIC DIAGNOSTIC ==========");
+    console.log("RAW DISPATCH URL: /api/develop/roger/chat");
+    console.log("PAYLOAD OUT:", payload);
+    console.log("RAW RESPONSE OBJECT:", JSON.parse(JSON.stringify(res)));
+    console.log("has res.data?", !!res.data);
+    console.log("res.data contents:", res.data);
+    console.log("isArray(res.data.replies)?", res.data ? Array.isArray(res.data.replies) : false);
+    console.log("==========================================");
 
+    if (res.error) {
+      App.roger.appendChatNode({
+        role: 'roger', // Use a generic agent role for system errors
+        status: 'failed',
+        content: `API Error: ${res.error.message || res.error}`,
+        created_at: new Date().toISOString()
+      });
+    } else if (res.data) {
+       // The backend should return the user's message for persistence.
+       if (res.data.userChat) {
+         console.log("appending userChat");
+         App.roger.appendChatNode(res.data.userChat);
+       }
+
+       // Handle new multi-response format from agents.
+       if (Array.isArray(res.data.replies) && res.data.replies.length > 0) {
+         console.log("appending replies array of len", res.data.replies.length);
+         res.data.replies.forEach(chat => App.roger.appendChatNode(chat));
+       } 
+       // Fallback for older, single-response format.
+       else if (res.data.rogerChat) {
+         console.log("appending rogerChat legacy fallback");
+         App.roger.appendChatNode(res.data.rogerChat);
+       } else {
+         console.log("CRITICAL WARN: missing replies array OR rogerChat legacy node!");
+       }
+    } else {
+      console.log("CRITICAL WARN: no res.error AND no res.data!!!");
     }
   } catch (err) {
-    App.notify("Fetch issue: " + (err.message || err), true);
+    // Display client-side or network errors directly in the chat UI.
+    App.roger.appendChatNode({
+      role: 'roger',
+      status: 'failed',
+      content: `Client-side Error: ${err.message || 'An unknown error occurred.'}`,
+      created_at: new Date().toISOString()
+    });
+    App.notify("Request failed: " + (err.message || err), true);
   } finally {
     rogerElements.input.disabled = false;
     if (rogerElements.fileBtn) rogerElements.fileBtn.disabled = false;
     rogerElements.input.focus();
+    App.roger.scrollToBottom();
   }
 };
+
 
 document.addEventListener('DOMContentLoaded', () => {
   App.roger.init();
