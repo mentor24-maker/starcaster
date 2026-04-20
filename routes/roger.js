@@ -19,6 +19,10 @@ function parseTriAgentBackend(rawString) {
   try {
     const data = JSON.parse(potentialJson);
     if (data && data.state) {
+      if (data.state.sessionid !== undefined && data.state.session_id === undefined) {
+        data.state.session_id = data.state.sessionid;
+        delete data.state.sessionid;
+      }
       if (data.state.stateversionid !== undefined && data.state.state_version_id === undefined) {
         data.state.state_version_id = data.state.stateversionid;
         delete data.state.stateversionid;
@@ -26,6 +30,18 @@ function parseTriAgentBackend(rawString) {
       if (data.state.contextchecksum !== undefined && data.state.context_checksum === undefined) {
         data.state.context_checksum = data.state.contextchecksum;
         delete data.state.contextchecksum;
+      }
+      if (data.state.sourceagent !== undefined && data.state.source_agent === undefined) {
+        data.state.source_agent = data.state.sourceagent;
+        delete data.state.sourceagent;
+      }
+      if (data.state.targetagent !== undefined && data.state.target_agent === undefined) {
+        data.state.target_agent = data.state.targetagent;
+        delete data.state.targetagent;
+      }
+      if (data.state.activeobjectiveid !== undefined && data.state.active_objective_id === undefined) {
+        data.state.active_objective_id = data.state.activeobjectiveid;
+        delete data.state.activeobjectiveid;
       }
       if (data.state.state_version_id !== undefined) {
         data.state.state_version_id = Number(data.state.state_version_id);
