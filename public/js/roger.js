@@ -1498,6 +1498,9 @@ App.rogerFriction = {
       }
     } catch (e) {
       console.error("Failed to load friction logs", e);
+      if (this.elements.leftSidebarList) {
+        this.elements.leftSidebarList.innerHTML = `<li class="roger-session-item" style="color: red; font-size:0.75rem;">Error: ${e.message}</li>`;
+      }
     }
   },
 
