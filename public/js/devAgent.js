@@ -1,19 +1,20 @@
 'use strict';
 
 window.App = window.App || {};
-App.roger = {};
+App.devAgent = {};
 
-const rogerState = {
+const devState = {
   activeSessionId: null,
   sessions: [],
   stagedFiles: []
 };
 
-const rogerElements = {
+const devElements = {
   log: null,
   form: null,
   input: null,
   sessionList: null,
+  taskList: null,
   newSessionBtn: null,
   activeSessionTitle: null,
   fileInput: null,
@@ -21,39 +22,40 @@ const rogerElements = {
   attachmentsContainer: null
 };
 
-App.roger.init = async function() {
+App.devAgent.init = async function() {
   try {
-    const cfgRes = await App.api('/api/develop/roger/config');
+    const cfgRes = await App.api('/api/develop/devAgent/config');
     if (cfgRes && cfgRes.data && cfgRes.data.url && cfgRes.data.anonKey && window.supabase) {
       window.supabaseClient = window.supabase.createClient(cfgRes.data.url, cfgRes.data.anonKey);
     }
   } catch(e) { console.error('Failed to load Supabase Realtime Config', e); }
 
-  rogerElements.log = document.getElementById('rogerChatLog');
-  rogerElements.form = document.getElementById('rogerChatForm');
-  rogerElements.input = document.getElementById('rogerChatInput');
-  rogerElements.sessionList = document.getElementById('rogerSessionList');
-  rogerElements.newSessionBtn = document.getElementById('rogerNewSessionBtn');
-  rogerElements.activeSessionTitle = document.getElementById('rogerActiveSessionTitle');
+  devElements.log = document.getElementById('devChatLog');
+  devElements.form = document.getElementById('devChatForm');
+  devElements.input = document.getElementById('devChatInput');
+  devElements.sessionList = document.getElementById('devSessionList');
+  devElements.taskList = document.getElementById('devTaskList');
+  devElements.newSessionBtn = document.getElementById('devNewSessionBtn');
+  devElements.activeSessionTitle = document.getElementById('devActiveSessionTitle');
 
-  rogerElements.fileInput = document.getElementById('rogerChatFile');
-  rogerElements.fileBtn = document.getElementById('rogerFileTriggerBtn');
-  rogerElements.attachmentsContainer = document.getElementById('rogerChatAttachmentsContainer');
+  devElements.fileInput = document.getElementById('devChatFile');
+  devElements.fileBtn = document.getElementById('devFileTriggerBtn');
+  devElements.attachmentsContainer = document.getElementById('devChatAttachmentsContainer');
 
-  if (rogerElements.fileBtn) {
-    rogerElements.fileBtn.addEventListener('click', () => {
-      if (rogerElements.fileInput) rogerElements.fileInput.click();
+  if (devElements.fileBtn) {
+    devElements.fileBtn.addEventListener('click', () => {
+      if (devElements.fileInput) devElements.fileInput.click();
     });
   }
 
-  if (rogerElements.previewClearBtn) {
-    rogerElements.previewClearBtn.addEventListener('click', () => {
-      App.roger.clearStagedFile();
+  if (devElements.previewClearBtn) {
+    devElements.previewClearBtn.addEventListener('click', () => {
+      App.devAgent.clearStagedFile();
     });
   }
 
-  if (rogerElements.fileInput) {
-    rogerElements.fileInput.addEventListener('change', (e) => {
+  if (devElements.fileInput) {
+    devElements.fileInput.addEventListener('change', (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
       if (file.size > 5 * 1024 * 1024) {
@@ -65,49 +67,49 @@ App.roger.init = async function() {
       const fileId = Date.now().toString() + Math.random().toString().substring(2, 6);
       const reader = new FileReader();
       reader.onload = (evt) => {
-        rogerState.stagedFiles.push({
+        devState.stagedFiles.push({
           id: fileId,
           name: file.name,
           mime: file.type,
           base64: evt.target.result
         });
-        App.roger.renderStagedFiles();
+        App.devAgent.renderStagedFiles();
       };
       reader.readAsDataURL(file);
       e.target.value = '';
     });
   }
 
-  if (rogerElements.form) {
-    rogerElements.form.addEventListener('submit', async (e) => {
+  if (devElements.form) {
+    devElements.form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      await App.roger.submitChat();
+      await App.devAgent.submitChat();
     });
     
-    rogerElements.input.addEventListener('keydown', (e) => {
+    devElements.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        App.roger.submitChat();
+        App.devAgent.submitChat();
       }
     });
   }
 
-  const rogerCopySessionBtn = document.getElementById('rogerCopySessionBtn');
-  if (rogerCopySessionBtn) {
-    rogerCopySessionBtn.addEventListener('click', async () => {
-      if (!rogerElements.log) return;
-      const nodes = rogerElements.log.querySelectorAll('.roger-chat-bubble');
+  const devCopySessionBtn = document.getElementById('devCopySessionBtn');
+  if (devCopySessionBtn) {
+    devCopySessionBtn.addEventListener('click', async () => {
+      if (!devElements.log) return;
+      const nodes = devElements.log.querySelectorAll('.dev-chat-bubble');
       let fullText = '';
       nodes.forEach(n => {
-        const header = n.querySelector('.roger-chat-header strong');
+        const header = n.querySelector('.dev-chat-header strong');
         const author = header ? header.textContent : 'Unknown';
-        const content = n.querySelector('.roger-chat-content');
+        const content = n.querySelector('.dev-chat-content');
         let text = content ? content.innerText : '';
         fullText += `[${author}]:\n${text}\n\n`;
       });
       try {
         await navigator.clipboard.writeText(fullText.trim());
-        const svg = rogerCopySessionBtn.querySelector('svg');
+        const svg = devCopySessionBtn.querySelector('svg');
         if (svg) {
           const originalHTML = svg.innerHTML;
           svg.innerHTML = '<polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2"></polyline>';
@@ -119,23 +121,23 @@ App.roger.init = async function() {
     });
   }
 
-  const rogerSaveSessionBtn = document.getElementById('rogerSaveSessionBtn');
-  if (rogerSaveSessionBtn) {
-    rogerSaveSessionBtn.addEventListener('click', () => {
-      if (!rogerElements.log) return;
+  const devSaveSessionBtn = document.getElementById('devSaveSessionBtn');
+  if (devSaveSessionBtn) {
+    devSaveSessionBtn.addEventListener('click', () => {
+      if (!devElements.log) return;
       let sessionName = 'chat-session';
-      if (rogerElements.activeSessionTitle && rogerElements.activeSessionTitle.textContent !== 'Loading Session...') {
-        sessionName = rogerElements.activeSessionTitle.textContent.trim().replace(/[^a-z0-9_-]/gi, '_');
+      if (devElements.activeSessionTitle && devElements.activeSessionTitle.textContent !== 'Loading Session...') {
+        sessionName = devElements.activeSessionTitle.textContent.trim().replace(/[^a-z0-9_-]/gi, '_');
       }
 
-      const nodes = rogerElements.log.querySelectorAll('.roger-chat-bubble');
-      let fullText = `# ${rogerElements.activeSessionTitle.textContent}\n\n`;
+      const nodes = devElements.log.querySelectorAll('.dev-chat-bubble');
+      let fullText = `# ${devElements.activeSessionTitle.textContent}\n\n`;
       nodes.forEach(n => {
-        const header = n.querySelector('.roger-chat-header strong');
+        const header = n.querySelector('.dev-chat-header strong');
         const author = header ? header.textContent : 'Unknown';
         const timeNode = n.querySelector('.chat-time');
         const timeStr = timeNode ? timeNode.textContent : '';
-        const content = n.querySelector('.roger-chat-content');
+        const content = n.querySelector('.dev-chat-content');
         let text = content ? content.innerText : '';
         fullText += `### ${author} \`${timeStr}\`\n\n${text}\n\n---\n\n`;
       });
@@ -151,7 +153,7 @@ App.roger.init = async function() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        const svg = rogerSaveSessionBtn.querySelector('svg');
+        const svg = devSaveSessionBtn.querySelector('svg');
         if (svg) {
           const originalHTML = svg.innerHTML;
           svg.innerHTML = '<polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2"></polyline>';
@@ -165,19 +167,19 @@ App.roger.init = async function() {
     });
   }
 
-  if (rogerElements.newSessionBtn) {
-    rogerElements.newSessionBtn.addEventListener('click', () => {
+  if (devElements.newSessionBtn) {
+    devElements.newSessionBtn.addEventListener('click', () => {
       const today = new Date().toISOString().split('T')[0];
-      App.roger.createNewSession(`${today}_New_Discussion`);
+      App.devAgent.createNewSession(`${today}_New_Discussion`);
     });
   }
 
-  if (rogerElements.activeSessionTitle) {
-    rogerElements.activeSessionTitle.addEventListener('click', () => {
-      const titleEl = rogerElements.activeSessionTitle;
+  if (devElements.activeSessionTitle) {
+    devElements.activeSessionTitle.addEventListener('click', () => {
+      const titleEl = devElements.activeSessionTitle;
       if (titleEl.classList.contains('editing')) return;
       
-      const session = rogerState.sessions.find(s => s.id === rogerState.activeSessionId);
+      const session = devState.sessions.find(s => s.id === devState.activeSessionId);
       if (!session) return;
       
       const currentName = session.name;
@@ -194,11 +196,11 @@ App.roger.init = async function() {
         
         if (newName !== currentName) {
           session.name = newName;
-          const li = rogerElements.sessionList.querySelector(`[data-session-id="${session.id}"]`);
+          const li = devElements.sessionList.querySelector(`[data-session-id="${session.id}"]`);
           if (li) li.textContent = newName;
           
           try {
-            await App.api('/api/develop/roger/sessions', {
+            await App.api('/api/develop/devAgent/sessions', {
               method: 'PATCH',
               body: JSON.stringify({ sessionId: session.id, name: newName })
             });
@@ -221,119 +223,162 @@ App.roger.init = async function() {
   const originalSetActivePage = App.setActivePage;
   App.setActivePage = function(pageId) {
     originalSetActivePage.apply(App, arguments);
-    if (pageId === 'askRogerPage') {
-      App.roger.loadSessions();
+    if (pageId === 'devAgentPage') {
+      App.devAgent.loadSessions();
+      App.devAgent.loadTasks();
     }
   };
 };
 
-App.roger.loadSessions = async function() {
-  if (!rogerElements.sessionList) return;
+App.devAgent.loadTasks = async function() {
+  if (!devElements.taskList) return;
   try {
-    rogerElements.sessionList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
-    const res = await App.api('/api/develop/roger/sessions');
-    rogerElements.sessionList.innerHTML = '';
+    devElements.taskList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    const res = await window.supabaseClient
+      .from('dev_tasks')
+      .select('*')
+      .neq('status', 'completed')
+      .order('created_at', { ascending: false });
+      
+    devElements.taskList.innerHTML = '';
     
     if (res.error) {
-      rogerElements.sessionList.innerHTML = `<li class="error-msg">Failed to load</li>`;
+      devElements.taskList.innerHTML = `<li class="error-msg">Failed to load tasks</li>`;
       return;
     }
     
-    rogerState.sessions = res.sessions || res.data || [];
+    const tasks = res.data || [];
     
-    if (rogerState.sessions.length === 0) {
-      // First boot, create a default session implicitly
-      const today = new Date().toISOString().split('T')[0];
-      await App.roger.createNewSession(`${today}_New_Discussion`);
+    if (tasks.length === 0) {
+      devElements.taskList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>';
       return;
     }
 
-    rogerState.sessions.forEach(session => App.roger.appendSessionNode(session));
-    
-    // Auto-select latest session if none is active
-    if (!rogerState.activeSessionId && rogerState.sessions.length > 0) {
-      App.roger.selectSession(rogerState.sessions[0].id);
-    } else if (rogerState.activeSessionId) {
-      App.roger.selectSession(rogerState.activeSessionId);
-    }
+    tasks.forEach(task => {
+      const li = document.createElement('li');
+      li.className = 'dev-session-item';
+      li.dataset.taskId = task.id;
+      // Truncate title
+      const shortTitle = task.title.length > 25 ? task.title.substring(0,25) + '...' : task.title;
+      li.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:6px;"></span> ${shortTitle}`;
+      li.addEventListener('click', () => {
+        // Eventually, open task editor logic
+        console.log("Clicked Task: ", task.id);
+      });
+      devElements.taskList.appendChild(li);
+    });
   } catch (err) {
-    rogerElements.sessionList.innerHTML = `<li class="error-msg">Error.</li>`;
+    devElements.taskList.innerHTML = `<li class="error-msg">Error executing tasks table logic.</li>`;
   }
 };
 
-App.roger.createNewSession = async function(name = 'New Discussion') {
+App.devAgent.loadSessions = async function() {
+  if (!devElements.sessionList) return;
   try {
-    const res = await App.api('/api/develop/roger/sessions', {
+    devElements.sessionList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    const res = await App.api('/api/develop/devAgent/sessions');
+    devElements.sessionList.innerHTML = '';
+    
+    if (res.error) {
+      devElements.sessionList.innerHTML = `<li class="error-msg">Failed to load</li>`;
+      return;
+    }
+    
+    devState.sessions = res.sessions || res.data || [];
+    
+    if (devState.sessions.length === 0) {
+      // First boot, create a default session implicitly
+      const today = new Date().toISOString().split('T')[0];
+      await App.devAgent.createNewSession(`${today}_New_Discussion`);
+      return;
+    }
+
+    devState.sessions.forEach(session => App.devAgent.appendSessionNode(session));
+    
+    // Auto-select latest session if none is active
+    if (!devState.activeSessionId && devState.sessions.length > 0) {
+      App.devAgent.selectSession(devState.sessions[0].id);
+    } else if (devState.activeSessionId) {
+      App.devAgent.selectSession(devState.activeSessionId);
+    }
+  } catch (err) {
+    devElements.sessionList.innerHTML = `<li class="error-msg">Error.</li>`;
+  }
+};
+
+App.devAgent.createNewSession = async function(name = 'New Discussion') {
+  try {
+    const res = await App.api('/api/develop/devAgent/sessions', {
       method: 'POST',
       body: JSON.stringify({ name })
     });
     const sessionData = res.session || res.data;
     if (sessionData) {
-      rogerState.sessions.unshift(sessionData);
+      devState.sessions.unshift(sessionData);
       // Re-render
-      rogerElements.sessionList.innerHTML = '';
-      rogerState.sessions.forEach(s => App.roger.appendSessionNode(s));
-      App.roger.selectSession(sessionData.id);
+      devElements.sessionList.innerHTML = '';
+      devState.sessions.forEach(s => App.devAgent.appendSessionNode(s));
+      App.devAgent.selectSession(sessionData.id);
     }
   } catch (e) {
     alert("Could not create session: " + e.message);
   }
 };
 
-App.roger.appendSessionNode = function(session) {
-  if (!rogerElements.sessionList) return;
+App.devAgent.appendSessionNode = function(session) {
+  if (!devElements.sessionList) return;
   const li = document.createElement('li');
-  li.className = 'roger-session-item';
+  li.className = 'dev-session-item';
   li.dataset.sessionId = session.id;
   li.textContent = session.name;
-  if (session.id === rogerState.activeSessionId) {
+  if (session.id === devState.activeSessionId) {
     li.classList.add('active');
   }
   
   li.addEventListener('click', () => {
-    App.roger.selectSession(session.id);
+    App.devAgent.selectSession(session.id);
   });
   
-  rogerElements.sessionList.appendChild(li);
+  devElements.sessionList.appendChild(li);
 };
 
-App.roger.selectSession = function(sessionId) {
-  rogerState.activeSessionId = sessionId;
+App.devAgent.selectSession = function(sessionId) {
+  devState.activeSessionId = sessionId;
   
   // Close the Friction Editor natively if it happens to be masking the screen
-  if (App.rogerFriction && typeof App.rogerFriction.closeEditor === 'function') {
-    App.rogerFriction.closeEditor();
+  if (App.devAgentFriction && typeof App.devAgentFriction.closeEditor === 'function') {
+    App.devAgentFriction.closeEditor();
   }
   
   // Highlight UI
-  if (rogerElements.sessionList) {
-    const items = rogerElements.sessionList.querySelectorAll('.roger-session-item');
+  if (devElements.sessionList) {
+    const items = devElements.sessionList.querySelectorAll('.dev-session-item');
     items.forEach(el => {
       if (Number(el.dataset.sessionId) === sessionId) el.classList.add('active');
       else el.classList.remove('active');
     });
   }
   
-  const activeSessionData = rogerState.sessions.find(s => s.id === sessionId);
-  if (activeSessionData && rogerElements.activeSessionTitle) {
-    rogerElements.activeSessionTitle.textContent = activeSessionData.name;
+  const activeSessionData = devState.sessions.find(s => s.id === sessionId);
+  if (activeSessionData && devElements.activeSessionTitle) {
+    devElements.activeSessionTitle.textContent = activeSessionData.name;
   }
   
-  App.roger.loadHistory(sessionId);
-  App.roger.initSupabaseRealtime(sessionId);
+  App.devAgent.loadHistory(sessionId);
+  App.devAgent.initSupabaseRealtime(sessionId);
 };
 
-App.roger.loadHistory = async function(sessionId) {
-  if (!rogerElements.log || !sessionId) return;
+App.devAgent.loadHistory = async function(sessionId) {
+  if (!devElements.log || !sessionId) return;
   try {
-    rogerElements.log.innerHTML = '<div class="loading-spinner">Loading chat history...</div>';
-    rogerElements.input.disabled = true;
-    const res = await App.api(`/api/develop/roger/history?sessionId=${sessionId}`);
-    rogerElements.log.innerHTML = '';
-    rogerElements.input.disabled = false;
+    devElements.log.innerHTML = '<div class="loading-spinner">Loading chat history...</div>';
+    devElements.input.disabled = true;
+    const res = await App.api(`/api/develop/devAgent/history?sessionId=${sessionId}`);
+    devElements.log.innerHTML = '';
+    devElements.input.disabled = false;
     
     if (res.error) {
-      rogerElements.log.innerHTML = `<div class="error-msg">Could not load chats: ${res.error.message || res.error}</div>`;
+      devElements.log.innerHTML = `<div class="error-msg">Could not load chats: ${res.error.message || res.error}</div>`;
       return;
     }
     
@@ -342,24 +387,24 @@ App.roger.loadHistory = async function(sessionId) {
     // Sniff historical sync arrays for `OBJ-002.2` compliance
     let maxVersion = 0;
     chats.forEach(chat => {
-      const p = App.roger.parseTriAgent(chat.content);
+      const p = App.devAgent.parseTriAgent(chat.content);
       if (p && p.valid && p.data && p.data.state && p.data.state.state_version_id) {
          maxVersion = Math.max(maxVersion, Number(p.data.state.state_version_id));
       }
     });
-    rogerState.localVersionId = Math.max(rogerState.localVersionId || 0, maxVersion);
+    devState.localVersionId = Math.max(devState.localVersionId || 0, maxVersion);
 
     if (chats.length === 0) {
     } else {
-      App.roger.activePendingCommand = null;
+      App.devAgent.activePendingCommand = null;
       chats.forEach(chat => {
-        App.roger.appendChatNode(chat);
+        App.devAgent.appendChatNode(chat);
         
         // Track functional command resolutions
-        const p = App.roger.parseTriAgent(chat.content);
+        const p = App.devAgent.parseTriAgent(chat.content);
         if (p && p.valid && p.data && p.data.payload) {
           if (p.data.payload.type === 'COMMAND' && chat.role === 'model') {
-             App.roger.activePendingCommand = {
+             App.devAgent.activePendingCommand = {
                hash: p.data.state.context_checksum,
                content: p.data.payload.content,
                version: p.data.state.state_version_id
@@ -367,26 +412,26 @@ App.roger.loadHistory = async function(sessionId) {
           } else if (p.data.payload.type === 'COMMAND' && chat.role === 'user') {
              try {
                const confObj = JSON.parse(p.data.payload.content);
-               if (App.roger.activePendingCommand && confObj.commandhash === App.roger.activePendingCommand.hash) {
-                 App.roger.activePendingCommand = null;
+               if (App.devAgent.activePendingCommand && confObj.commandhash === App.devAgent.activePendingCommand.hash) {
+                 App.devAgent.activePendingCommand = null;
                }
              } catch(e) {}
           }
         }
       });
-      App.roger.scrollToBottom();
-      App.roger.generateGlossary();
+      App.devAgent.scrollToBottom();
+      App.devAgent.generateGlossary();
     }
     
     // Evaluate constraints natively post-load
-    App.roger.renderActiveCommand();
+    App.devAgent.renderActiveCommand();
   } catch (err) {
-    rogerElements.log.innerHTML = `<div class="error-msg">Failed to load history.</div>`;
-    rogerElements.input.disabled = false;
+    devElements.log.innerHTML = `<div class="error-msg">Failed to load history.</div>`;
+    devElements.input.disabled = false;
   }
 };
 
-App.roger.formatMarkdown = function(text) {
+App.devAgent.formatMarkdown = function(text) {
   if (!text) return '';
   
   // 1. Extract code blocks and replace with placeholders
@@ -414,7 +459,7 @@ App.roger.formatMarkdown = function(text) {
 
   // 4.5 Bind State Version anchors to allow interactive routing
   const versionRegex = /\b(?:(?:state_?)?version_?id|version|commandhash)(?:\\n|\s|<br\s*\/?>|"|'|&quot;)*:(?:\\n|\s|<br\s*\/?>|"|'|&quot;)*([\w\d]+)/gi;
-  html = html.replace(versionRegex, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion(\'$1\'); return false;">$&</a>');
+  html = html.replace(versionRegex, '<a href="#devChatVersion_$1" class="dev-version-link" onclick="App.devAgent.scrollToVersion(\'$1\'); return false;">$&</a>');
 
   // 5. Restore code blocks, but now we format them properly with our UI wrapper
   html = html.replace(/@@@CODEBLOCK(\d+)@@@/g, (match, i) => {
@@ -435,17 +480,17 @@ App.roger.formatMarkdown = function(text) {
       .replace(/>/g, '&gt;');
       
     // Apply Version binding to text within code blocks 
-    escapedCode = escapedCode.replace(versionRegex, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion($1); return false;">$&</a>');
+    escapedCode = escapedCode.replace(versionRegex, '<a href="#devChatVersion_$1" class="dev-version-link" onclick="App.devAgent.scrollToVersion($1); return false;">$&</a>');
 
     return `<div class="code-block-wrapper" style="position:relative; margin: 0.5rem 0;">
-      <div class="roger-code-actions">
-        <button class="roger-copy-btn" title="Copy Code" data-content="${encoded}" onclick="App.roger.copyCodeBlock(this)">
+      <div class="dev-code-actions">
+        <button class="dev-copy-btn" title="Copy Code" data-content="${encoded}" onclick="App.devAgent.copyCodeBlock(this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
           </svg>
         </button>
-        <button class="roger-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" onclick="App.roger.saveCodeBlock(this)">
+        <button class="dev-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" onclick="App.devAgent.saveCodeBlock(this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
             <polyline points="17 21 17 13 7 13 7 21"></polyline>
@@ -460,7 +505,7 @@ App.roger.formatMarkdown = function(text) {
   return html;
 };
 
-App.roger.copyCodeBlock = async function(btn) {
+App.devAgent.copyCodeBlock = async function(btn) {
   const encoded = btn.getAttribute('data-content');
   if (!encoded) return;
   
@@ -482,7 +527,7 @@ App.roger.copyCodeBlock = async function(btn) {
   }
 };
 
-App.roger.saveCodeBlock = function(btn) {
+App.devAgent.saveCodeBlock = function(btn) {
   const filename = btn.getAttribute('data-filename') || 'code.txt';
   const encoded = btn.getAttribute('data-content');
   if (!encoded) return;
@@ -504,35 +549,35 @@ App.roger.saveCodeBlock = function(btn) {
   }
 };
 
-App.roger.appendChatNode = function(chat) {
+App.devAgent.appendChatNode = function(chat) {
   
-  if (!rogerElements.log) return;
+  if (!devElements.log) return;
   
   if (chat.status === 'processing') {
     const spinner = document.createElement('div');
-    spinner.className = 'roger-chat-bubble-wrapper ' + chat.role;
-    spinner.id = 'rogerChatNode_' + chat.id;
+    spinner.className = 'dev-chat-bubble-wrapper ' + chat.role;
+    spinner.id = 'devChatNode_' + chat.id;
     spinner.dataset.status = 'processing';
     spinner.innerHTML = `
-      <div class="roger-chat-avatar ${chat.role}" style="background-image: url('/images/${chat.role}.png');"></div>
-      <div class="roger-chat-content-col">
-        <div class="roger-chat-bubble ${chat.role} loading">Agent is processing objective...</div>
+      <div class="dev-chat-avatar ${chat.role}" style="background-image: url('/images/${chat.role}.png');"></div>
+      <div class="dev-chat-content-col">
+        <div class="dev-chat-bubble ${chat.role} loading">Agent is processing objective...</div>
       </div>
     `;
-    rogerElements.log.appendChild(spinner);
+    devElements.log.appendChild(spinner);
     return;
   }
 
-  if (rogerElements.log.querySelector('.empty-state')) {
-    rogerElements.log.innerHTML = '';
+  if (devElements.log.querySelector('.empty-state')) {
+    devElements.log.innerHTML = '';
   }
 
   const wrapper = document.createElement('div');
-  wrapper.className = `roger-chat-bubble-wrapper ${chat.role}`;
-  if (chat.id) wrapper.id = 'rogerChatNode_' + chat.id;
+  wrapper.className = `dev-chat-bubble-wrapper ${chat.role}`;
+  if (chat.id) wrapper.id = 'devChatNode_' + chat.id;
   
   const avatar = document.createElement('div');
-  avatar.className = `roger-chat-avatar ${chat.role}`;
+  avatar.className = `dev-chat-avatar ${chat.role}`;
   if (chat.role === 'user') {
     avatar.style.backgroundImage = 'url("/images/mentor.png")';
   } else if (chat.role === 'roger') {
@@ -542,10 +587,10 @@ App.roger.appendChatNode = function(chat) {
   }
 
   const contentCol = document.createElement('div');
-  contentCol.className = 'roger-chat-content-col';
+  contentCol.className = 'dev-chat-content-col';
   
   const bubble = document.createElement('div');
-  bubble.className = `roger-chat-bubble ${chat.role}`;
+  bubble.className = `dev-chat-bubble ${chat.role}`;
   if (chat.status === 'failed') {
     bubble.style.border = '2px solid #ef4444';
     bubble.style.backgroundColor = '#fef2f2';
@@ -554,11 +599,11 @@ App.roger.appendChatNode = function(chat) {
   }
 
   const header = document.createElement('div');
-  header.className = 'roger-chat-header';
+  header.className = 'dev-chat-header';
   
   let author = 'Unknown';
   if (chat.role === 'user') author = 'Mentor';
-  if (chat.role === 'roger') author = '@RogerThorson';
+  if (chat.role === 'roger') author = '@DevAgent';
   if (chat.role === 'antigravity') author = '@antigravity';
 
   const dateStr = chat.created_at ? new Date(chat.created_at).toLocaleString() : new Date().toLocaleString();
@@ -570,7 +615,7 @@ App.roger.appendChatNode = function(chat) {
   let editBtnHTML = '';
   if (chat.role === 'user' && chat.id) {
     editBtnHTML = `
-      <button class="roger-copy-btn" onclick="App.roger.editChat(${chat.id}, this);" title="Edit Message" style="margin-right: 4px;">
+      <button class="dev-copy-btn" onclick="App.devAgent.editChat(${chat.id}, this);" title="Edit Message" style="margin-right: 4px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -582,9 +627,9 @@ App.roger.appendChatNode = function(chat) {
   const copyBtnId = `copyChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
   header.innerHTML = `
     <div><strong>${author}</strong> <span class="chat-time">${dateStr}</span></div>
-    <div class="roger-copy-btn-container">
+    <div class="dev-copy-btn-container">
       ${editBtnHTML}
-      <button id="${copyBtnId}" class="roger-copy-btn" title="Copy Message">
+      <button id="${copyBtnId}" class="dev-copy-btn" title="Copy Message">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
           <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
@@ -594,13 +639,13 @@ App.roger.appendChatNode = function(chat) {
   `;
   
   const content = document.createElement('div');
-  content.className = 'roger-chat-content';
+  content.className = 'dev-chat-content';
 
-  let parsedTriAgent = App.roger.parseTriAgent(chat.content);
+  let parsedTriAgent = App.devAgent.parseTriAgent(chat.content);
 
   if (parsedTriAgent && !parsedTriAgent.valid) {
     if (chat.content && chat.content.includes('"state"')) {
-       App.roger.appendChatNode({
+       App.devAgent.appendChatNode({
          role: 'roger',
          content: `**SYSTEM NOTICE / DESYNC EVENT:** TriAgent Schema Validation explicitly failed. ${parsedTriAgent.error}`,
          created_at: new Date().toISOString()
@@ -613,9 +658,9 @@ App.roger.appendChatNode = function(chat) {
 
   if (parsedTriAgent) {
     if (parsedTriAgent.state && parsedTriAgent.state.state_version_id) {
-       bubble.id = 'rogerChatVersion_' + parsedTriAgent.state.state_version_id;
+       bubble.id = 'devChatVersion_' + parsedTriAgent.state.state_version_id;
     }
-    const rawContentHTML = App.roger.formatMarkdown(parsedTriAgent.payload.content);
+    const rawContentHTML = App.devAgent.formatMarkdown(parsedTriAgent.payload.content);
     let finalUI = rawContentHTML;
     
     // Robust parsing for case-insensitive and safe property access
@@ -640,8 +685,8 @@ App.roger.appendChatNode = function(chat) {
             ${rawContentHTML}
           </div>
           <div style="display:flex; gap:10px; margin-top:1rem; padding-top:0.75rem; border-top:1px solid rgba(245, 158, 11, 0.3);">
-            <button type="button" class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${parsedTriAgent.state.context_checksum}', this)" style="background:#10b981; border:none; flex:1; padding:0.75rem;">CONFIRM COMMAND</button>
-            <button type="button" class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${parsedTriAgent.state.context_checksum}', this)" style="flex:1; padding:0.75rem; background:rgba(0,0,0,0.05);">DENY COMMAND</button>
+            <button type="button" class="primary-btn" onclick="App.devAgent.sendProtocolAction('CONFIRM', '${parsedTriAgent.state.context_checksum}', this)" style="background:#10b981; border:none; flex:1; padding:0.75rem;">CONFIRM COMMAND</button>
+            <button type="button" class="secondary-btn" onclick="App.devAgent.sendProtocolAction('DENY', '${parsedTriAgent.state.context_checksum}', this)" style="flex:1; padding:0.75rem; background:rgba(0,0,0,0.05);">DENY COMMAND</button>
           </div>
         </div>
       `;
@@ -651,9 +696,9 @@ App.roger.appendChatNode = function(chat) {
     header.innerHTML = `
       <div style="flex: 1; display:flex; align-items:center;"><strong>${author}</strong> <span class="chat-time" style="margin-left: 0.5rem">${dateStr}</span></div>
       <div style="flex: 1; text-align: center; color: rgba(0,0,0,0.5); font-family: monospace; font-weight: bold; font-size: 0.85rem;">[${versionStr}]</div>
-      <div style="flex: 1; justify-content: flex-end;" class="roger-copy-btn-container">
+      <div style="flex: 1; justify-content: flex-end;" class="dev-copy-btn-container">
         ${editBtnHTML}
-        <button id="${copyBtnId}" class="roger-copy-btn" title="Copy Message">
+        <button id="${copyBtnId}" class="dev-copy-btn" title="Copy Message">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
@@ -672,12 +717,12 @@ App.roger.appendChatNode = function(chat) {
     // Rewrite internal chat.content so the summary extractor later on uses human-readable text
     chat.content = parsedTriAgent.payload.content; 
   } else {
-    content.innerHTML = App.roger.formatMarkdown(chat.content);
+    content.innerHTML = App.devAgent.formatMarkdown(chat.content);
   }
 
   if (chat.attachment_url) {
     const attachWrap = document.createElement('div');
-    attachWrap.className = 'roger-chat-attachment';
+    attachWrap.className = 'dev-chat-attachment';
     if (chat.attachment_url.includes('image/') || chat.attachment_url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i)) {
       attachWrap.innerHTML = `<a href="${chat.attachment_url}" target="_blank"><img src="${chat.attachment_url}" style="max-width:100%; border-radius:4px; margin-top:8px; display:block;" alt="Attached" /></a>`;
     } else {
@@ -702,13 +747,13 @@ App.roger.appendChatNode = function(chat) {
   }
 
   const summaryNode = document.createElement('div');
-  summaryNode.className = 'roger-chat-summary';
+  summaryNode.className = 'dev-chat-summary';
   summaryNode.style.cursor = 'pointer';
   summaryNode.onclick = function(e) {
     e.preventDefault();
-    const b = this.closest('.roger-chat-bubble');
+    const b = this.closest('.dev-chat-bubble');
     b.classList.add('expanded');
-    this.closest('.roger-chat-bubble-wrapper').classList.add('expanded');
+    this.closest('.dev-chat-bubble-wrapper').classList.add('expanded');
   };
   summaryNode.innerHTML = `<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <span style="color:#2563eb; margin-left:8px; font-family:monospace; font-weight:bold;">[+]</span>`;
 
@@ -717,9 +762,9 @@ App.roger.appendChatNode = function(chat) {
   header.onclick = function(e) {
     if (e.target.closest('button') || e.target.closest('a')) return; // ignore button clicks
     e.preventDefault();
-    const b = this.closest('.roger-chat-bubble');
+    const b = this.closest('.dev-chat-bubble');
     b.classList.remove('expanded');
-    this.closest('.roger-chat-bubble-wrapper').classList.remove('expanded');
+    this.closest('.dev-chat-bubble-wrapper').classList.remove('expanded');
   };
   
   // Inject the [-] into the header display
@@ -738,7 +783,7 @@ App.roger.appendChatNode = function(chat) {
     wrapper.appendChild(contentCol);
   }
   
-  rogerElements.log.appendChild(wrapper);
+  devElements.log.appendChild(wrapper);
 
   const copyBtn = bubble.querySelector(`#${copyBtnId}`);
   if (copyBtn) {
@@ -758,43 +803,43 @@ App.roger.appendChatNode = function(chat) {
   }
 
   // Trigger dynamic glossary sync
-  if (App.roger.glossaryTimeout) clearTimeout(App.roger.glossaryTimeout);
-  App.roger.glossaryTimeout = setTimeout(App.roger.generateGlossary, 600);
+  if (App.devAgent.glossaryTimeout) clearTimeout(App.devAgent.glossaryTimeout);
+  App.devAgent.glossaryTimeout = setTimeout(App.devAgent.generateGlossary, 600);
 };
 
-App.roger.scrollToBottom = function() {
-  if (rogerElements.log) {
-    rogerElements.log.scrollTop = rogerElements.log.scrollHeight;
+App.devAgent.scrollToBottom = function() {
+  if (devElements.log) {
+    devElements.log.scrollTop = devElements.log.scrollHeight;
   }
 };
 
 
-App.roger.initSupabaseRealtime = function(sessionId) {
+App.devAgent.initSupabaseRealtime = function(sessionId) {
   if (!window.supabaseClient) {
     console.warn('Supabase Realtime not initialized. Ensure URL and ANON_KEY are in settings.');
     return;
   }
-  if (App.roger.realtimeChannel) {
-    App.roger.realtimeChannel.unsubscribe();
+  if (App.devAgent.realtimeChannel) {
+    App.devAgent.realtimeChannel.unsubscribe();
   }
   
-  App.roger.realtimeChannel = window.supabaseClient.channel('roger_chats_' + sessionId)
+  App.devAgent.realtimeChannel = window.supabaseClient.channel('dev_chats_' + sessionId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'agent_messages', filter: 'session_id=eq.' + sessionId },
       (payload) => {
         const chat = payload.new;
         if (!chat) return;
-        const existingNode = document.getElementById('rogerChatNode_' + chat.id);
+        const existingNode = document.getElementById('devChatNode_' + chat.id);
         if (existingNode) {
           if (chat.status !== 'processing' && existingNode.dataset.status === 'processing') {
             existingNode.outerHTML = '';
-            App.roger.appendChatNode(chat);
-            App.roger.scrollToBottom();
+            App.devAgent.appendChatNode(chat);
+            App.devAgent.scrollToBottom();
           }
         } else {
-           App.roger.appendChatNode(chat);
-           App.roger.scrollToBottom();
+           App.devAgent.appendChatNode(chat);
+           App.devAgent.scrollToBottom();
         }
       }
     )
@@ -802,12 +847,12 @@ App.roger.initSupabaseRealtime = function(sessionId) {
 };
 
 
-App.roger.renderStagedFiles = function() {
-  if (!rogerElements.attachmentsContainer) return;
-  rogerElements.attachmentsContainer.innerHTML = '';
-  if (rogerState.stagedFiles.length === 0) return;
+App.devAgent.renderStagedFiles = function() {
+  if (!devElements.attachmentsContainer) return;
+  devElements.attachmentsContainer.innerHTML = '';
+  if (devState.stagedFiles.length === 0) return;
   
-  rogerState.stagedFiles.forEach(fileObj => {
+  devState.stagedFiles.forEach(fileObj => {
     const row = document.createElement('div');
     row.style.display = 'flex';
     row.style.alignItems = 'center';
@@ -818,13 +863,13 @@ App.roger.renderStagedFiles = function() {
     row.innerHTML = `
       <span>Attached:</span>
       <a href="${fileObj.base64}" download="${fileObj.name}" target="_blank" style="text-decoration:underline; color: var(--accent);">${fileObj.name}</a>
-      <a href="#" title="Remove attachment" style="color: #ef4444; font-size:18px; font-weight:bold; cursor:pointer; text-decoration:none; margin-left:8px;" onclick="event.preventDefault(); App.roger.removeStagedFile('${fileObj.id}');">&times;</a>
+      <a href="#" title="Remove attachment" style="color: #ef4444; font-size:18px; font-weight:bold; cursor:pointer; text-decoration:none; margin-left:8px;" onclick="event.preventDefault(); App.devAgent.removeStagedFile('${fileObj.id}');">&times;</a>
     `;
-    rogerElements.attachmentsContainer.appendChild(row);
+    devElements.attachmentsContainer.appendChild(row);
   });
 };
 
-App.roger.parseTriAgent = function(rawText) {
+App.devAgent.parseTriAgent = function(rawText) {
   if (!rawText) return null;
   try {
     let maybeJson = String(rawText).trim();
@@ -891,8 +936,8 @@ App.roger.parseTriAgent = function(rawText) {
   return null; // Not valid JSON, fallback to generic Markdown text formatting
 };
 
-App.roger.scrollToVersion = function(versionId) {
-  const el = document.getElementById('rogerChatVersion_' + versionId);
+App.devAgent.scrollToVersion = function(versionId) {
+  const el = document.getElementById('devChatVersion_' + versionId);
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.remove('highlight-ping');
@@ -903,9 +948,9 @@ App.roger.scrollToVersion = function(versionId) {
   }
 };
 
-App.roger.editChat = function(chatId, btn) {
-  const wrapper = btn.closest('.roger-chat-bubble');
-  const contentDiv = wrapper.querySelector('.roger-chat-content');
+App.devAgent.editChat = function(chatId, btn) {
+  const wrapper = btn.closest('.dev-chat-bubble');
+  const contentDiv = wrapper.querySelector('.dev-chat-content');
   if (!contentDiv) return;
 
   const rawEncoded = wrapper.dataset.rawContent || '';
@@ -913,7 +958,7 @@ App.roger.editChat = function(chatId, btn) {
 
   // Unwrap TriAgent if applicable for editing pure text
   let editableText = rawString;
-  const p = App.roger.parseTriAgent(rawString);
+  const p = App.devAgent.parseTriAgent(rawString);
   if (p && p.valid && p.data.payload) {
     editableText = p.data.payload.content || '';
   }
@@ -924,15 +969,15 @@ App.roger.editChat = function(chatId, btn) {
     <div style="display:flex; flex-direction:column; gap:8px;">
       <textarea id="editChatText_${chatId}" style="width:100%; min-height:100px; padding:10px; border-radius:4px; border:1px solid #ccc; background:var(--bg-input); color:var(--text-primary); font-family:inherit;">${editableText}</textarea>
       <div style="display:flex; gap:8px; justify-content:flex-end;">
-         <button class="secondary-btn" onclick="const p=this.closest('.roger-chat-content'); p.innerHTML=p.dataset.originalHtml;">Cancel</button>
-         <button class="primary-btn" onclick="App.roger.saveChatEdit(${chatId}, this)">Save Changes</button>
+         <button class="secondary-btn" onclick="const p=this.closest('.dev-chat-content'); p.innerHTML=p.dataset.originalHtml;">Cancel</button>
+         <button class="primary-btn" onclick="App.devAgent.saveChatEdit(${chatId}, this)">Save Changes</button>
       </div>
     </div>
   `;
 };
 
-App.roger.saveChatEdit = async function(chatId, btn) {
-  const wrapper = btn.closest('.roger-chat-bubble');
+App.devAgent.saveChatEdit = async function(chatId, btn) {
+  const wrapper = btn.closest('.dev-chat-bubble');
   const textarea = document.getElementById(`editChatText_${chatId}`);
   if (!textarea) return;
   const newText = textarea.value.trim();
@@ -941,10 +986,10 @@ App.roger.saveChatEdit = async function(chatId, btn) {
   const rawString = decodeURIComponent(rawEncoded);
   let finalPayloadStr = newText;
 
-  const p = App.roger.parseTriAgent(rawString);
+  const p = App.devAgent.parseTriAgent(rawString);
   if (p && p.valid && p.data) {
      p.data.payload.content = newText;
-     p.data.state.state_version_id = Math.max(Number(p.data.state.state_version_id) + 1, ++rogerState.localVersionId);
+     p.data.state.state_version_id = Math.max(Number(p.data.state.state_version_id) + 1, ++devState.localVersionId);
      finalPayloadStr = JSON.stringify(p.data, null, 2);
   }
 
@@ -964,16 +1009,16 @@ App.roger.saveChatEdit = async function(chatId, btn) {
   }
   
   // Reload history to properly re-sync the DOM
-  App.roger.loadHistory(rogerState.activeSessionId);
+  App.devAgent.loadHistory(devState.activeSessionId);
 };
 
-App.roger.renderActiveCommand = function() {
+App.devAgent.renderActiveCommand = function() {
   const overlay = document.getElementById('rogerPersistentOverlay');
-  const chatForm = document.getElementById('rogerChatForm');
+  const chatForm = document.getElementById('devChatForm');
   if (!overlay || !chatForm) return;
 
-  if (App.roger.activePendingCommand) {
-    const rawContentHTML = App.roger.formatMarkdown(App.roger.activePendingCommand.content);
+  if (App.devAgent.activePendingCommand) {
+    const rawContentHTML = App.devAgent.formatMarkdown(App.devAgent.activePendingCommand.content);
     overlay.innerHTML = `
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="24" height="24">
@@ -987,32 +1032,32 @@ App.roger.renderActiveCommand = function() {
         ${rawContentHTML}
       </div>
       <div style="display:flex; gap:10px; border-top:1px solid #eee; padding-top:16px;">
-        <button type="button" class="primary-btn" onclick="App.roger.sendProtocolAction('CONFIRM', '${App.roger.activePendingCommand.hash}', this)" style="background:#10b981; border:none; flex:1;">CONFIRM</button>
-        <button type="button" class="secondary-btn" onclick="App.roger.sendProtocolAction('DENY', '${App.roger.activePendingCommand.hash}', this)" style="flex:1; background:rgba(0,0,0,0.05);">DENY</button>
+        <button type="button" class="primary-btn" onclick="App.devAgent.sendProtocolAction('CONFIRM', '${App.devAgent.activePendingCommand.hash}', this)" style="background:#10b981; border:none; flex:1;">CONFIRM</button>
+        <button type="button" class="secondary-btn" onclick="App.devAgent.sendProtocolAction('DENY', '${App.devAgent.activePendingCommand.hash}', this)" style="flex:1; background:rgba(0,0,0,0.05);">DENY</button>
       </div>
     `;
     overlay.classList.remove('hidden');
-    chatForm.classList.add('roger-overlay-active');
+    chatForm.classList.add('dev-overlay-active');
   } else {
     overlay.innerHTML = '';
     overlay.classList.add('hidden');
-    chatForm.classList.remove('roger-overlay-active');
+    chatForm.classList.remove('dev-overlay-active');
   }
 };
 
-App.roger.removeStagedFile = function(id) {
-  rogerState.stagedFiles = rogerState.stagedFiles.filter(f => f.id !== id);
-  App.roger.renderStagedFiles();
+App.devAgent.removeStagedFile = function(id) {
+  devState.stagedFiles = devState.stagedFiles.filter(f => f.id !== id);
+  App.devAgent.renderStagedFiles();
 };
 
-App.roger.clearStagedFiles = function() {
-  rogerState.stagedFiles = [];
-  if (rogerElements.fileInput) rogerElements.fileInput.value = '';
-  App.roger.renderStagedFiles();
+App.devAgent.clearStagedFiles = function() {
+  devState.stagedFiles = [];
+  if (devElements.fileInput) devElements.fileInput.value = '';
+  App.devAgent.renderStagedFiles();
 };
 
-App.roger.sendProtocolAction = function(actionType, commandHash, btnEl) {
-  if (!rogerState.activeSessionId) return;
+App.devAgent.sendProtocolAction = function(actionType, commandHash, btnEl) {
+  if (!devState.activeSessionId) return;
   
   if (btnEl) {
     btnEl.disabled = true;
@@ -1021,11 +1066,11 @@ App.roger.sendProtocolAction = function(actionType, commandHash, btnEl) {
     btnEl.style.cursor = 'not-allowed';
   }
 
-  rogerState.localVersionId = rogerState.localVersionId || 1;
+  devState.localVersionId = devState.localVersionId || 1;
   const triAgentPayload = JSON.stringify({
     state: {
-      session_id: rogerState.activeSessionId,
-      state_version_id: ++rogerState.localVersionId,
+      session_id: devState.activeSessionId,
+      state_version_id: ++devState.localVersionId,
       timestamp: new Date().toISOString(),
       source_agent: '@Human',
       target_agent: '@Antigravity',
@@ -1039,7 +1084,7 @@ App.roger.sendProtocolAction = function(actionType, commandHash, btnEl) {
   }, null, 2);
 
   const payload = { 
-    sessionId: rogerState.activeSessionId, 
+    sessionId: devState.activeSessionId, 
     content: triAgentPayload 
   };
 
@@ -1048,33 +1093,33 @@ App.roger.sendProtocolAction = function(actionType, commandHash, btnEl) {
     body: JSON.stringify(payload)
   }).then(res => {
     if (res.data?.userChat) {
-      App.roger.appendChatNode(res.data.userChat);
+      App.devAgent.appendChatNode(res.data.userChat);
     }
-    if (res.data?.rogerChat) {
-      App.roger.appendChatNode(res.data.rogerChat);
+    if (res.data?.devChat) {
+      App.devAgent.appendChatNode(res.data.devChat);
 
     }
-    App.roger.scrollToBottom();
+    App.devAgent.scrollToBottom();
   });
 };
 
-App.roger.submitChat = async function() {
-  const text = rogerElements.input?.value.trim();
-  if (!text && rogerState.stagedFiles.length === 0) return; // Do nothing if no input
-  if (!rogerState.activeSessionId) return;
+App.devAgent.submitChat = async function() {
+  const text = devElements.input?.value.trim();
+  if (!text && devState.stagedFiles.length === 0) return; // Do nothing if no input
+  if (!devState.activeSessionId) return;
 
-  const staged = rogerState.stagedFiles[0] || null;
+  const staged = devState.stagedFiles[0] || null;
 
-  rogerElements.input.value = '';
-  rogerElements.input.disabled = true;
-  if (rogerElements.fileBtn) rogerElements.fileBtn.disabled = true;
-  App.roger.clearStagedFiles();
+  devElements.input.value = '';
+  devElements.input.disabled = true;
+  if (devElements.fileBtn) devElements.fileBtn.disabled = true;
+  App.devAgent.clearStagedFiles();
 
-  rogerState.localVersionId = rogerState.localVersionId || 1;
+  devState.localVersionId = devState.localVersionId || 1;
   const triAgentPayload = JSON.stringify({
     state: {
-      session_id: rogerState.activeSessionId,
-      state_version_id: ++rogerState.localVersionId,
+      session_id: devState.activeSessionId,
+      state_version_id: ++devState.localVersionId,
       timestamp: new Date().toISOString(),
       source_agent: '@Human',
       target_agent: '@Roger',
@@ -1089,7 +1134,7 @@ App.roger.submitChat = async function() {
 
   try {
     const payload = { 
-      sessionId: rogerState.activeSessionId, 
+      sessionId: devState.activeSessionId, 
       content: triAgentPayload 
     };
     if (staged) {
@@ -1113,7 +1158,7 @@ App.roger.submitChat = async function() {
     console.log("==========================================");
 
     if (res.error) {
-      App.roger.appendChatNode({
+      App.devAgent.appendChatNode({
         role: 'roger', // Use a generic agent role for system errors
         status: 'failed',
         content: `API Error: ${res.error.message || res.error}`,
@@ -1123,27 +1168,27 @@ App.roger.submitChat = async function() {
        // The backend should return the user's message for persistence.
        if (res.data.userChat) {
          console.log("appending userChat");
-         App.roger.appendChatNode(res.data.userChat);
+         App.devAgent.appendChatNode(res.data.userChat);
        }
 
        // Handle new multi-response format from agents.
        if (Array.isArray(res.data.replies) && res.data.replies.length > 0) {
          console.log("appending replies array of len", res.data.replies.length);
-         res.data.replies.forEach(chat => App.roger.appendChatNode(chat));
+         res.data.replies.forEach(chat => App.devAgent.appendChatNode(chat));
        } 
        // Fallback for older, single-response format.
-       else if (res.data.rogerChat) {
-         console.log("appending rogerChat legacy fallback");
-         App.roger.appendChatNode(res.data.rogerChat);
+       else if (res.data.devChat) {
+         console.log("appending devChat legacy fallback");
+         App.devAgent.appendChatNode(res.data.devChat);
        } else {
-         console.log("CRITICAL WARN: missing replies array OR rogerChat legacy node!");
+         console.log("CRITICAL WARN: missing replies array OR devChat legacy node!");
        }
     } else {
       console.log("CRITICAL WARN: no res.error AND no res.data!!!");
     }
   } catch (err) {
     // Display client-side or network errors directly in the chat UI.
-    App.roger.appendChatNode({
+    App.devAgent.appendChatNode({
       role: 'roger',
       status: 'failed',
       content: `Client-side Error: ${err.message || 'An unknown error occurred.'}`,
@@ -1151,36 +1196,36 @@ App.roger.submitChat = async function() {
     });
     App.notify("Request failed: " + (err.message || err), true);
   } finally {
-    rogerElements.input.disabled = false;
-    if (rogerElements.fileBtn) rogerElements.fileBtn.disabled = false;
-    rogerElements.input.focus();
-    App.roger.scrollToBottom();
+    devElements.input.disabled = false;
+    if (devElements.fileBtn) devElements.fileBtn.disabled = false;
+    devElements.input.focus();
+    App.devAgent.scrollToBottom();
   }
 };
 
 
 document.addEventListener('DOMContentLoaded', () => {
-  App.roger.init();
+  App.devAgent.init();
 });
 
-App.roger.searchHits = [];
-App.roger.currentSearchIndex = -1;
+App.devAgent.searchHits = [];
+App.devAgent.currentSearchIndex = -1;
 
-App.roger.applySearchHighlights = function(term) {
-  const log = document.getElementById('rogerChatLog');
+App.devAgent.applySearchHighlights = function(term) {
+  const log = document.getElementById('devChatLog');
   if (!log) return;
   
   // 1. Clear existing highlights
-  const existingMatches = log.querySelectorAll('mark.roger-search-match');
+  const existingMatches = log.querySelectorAll('mark.dev-search-match');
   existingMatches.forEach(mark => {
     const parent = mark.parentNode;
     parent.replaceChild(document.createTextNode(mark.textContent), mark);
     parent.normalize();
   });
 
-  App.roger.searchHits = [];
-  App.roger.currentSearchIndex = -1;
-  const countSpan = document.getElementById('rogerSearchCount');
+  App.devAgent.searchHits = [];
+  App.devAgent.currentSearchIndex = -1;
+  const countSpan = document.getElementById('devSearchCount');
 
   if (!term || !term.trim()) {
     if (countSpan) countSpan.textContent = '';
@@ -1209,10 +1254,10 @@ App.roger.applySearchHighlights = function(term) {
           fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
         }
         const mark = document.createElement('mark');
-        mark.className = 'roger-search-match';
+        mark.className = 'dev-search-match';
         mark.textContent = match[0];
         fragment.appendChild(mark);
-        App.roger.searchHits.push(mark);
+        App.devAgent.searchHits.push(mark);
         lastIndex = regex.lastIndex;
       }
       if (lastIndex < text.length) {
@@ -1223,7 +1268,7 @@ App.roger.applySearchHighlights = function(term) {
     }
   });
 
-  const hitCount = App.roger.searchHits.length;
+  const hitCount = App.devAgent.searchHits.length;
   if (countSpan) {
     countSpan.textContent = `${hitCount} match${hitCount !== 1 ? 'es' : ''}`;
     if (hitCount > 0) {
@@ -1232,7 +1277,7 @@ App.roger.applySearchHighlights = function(term) {
       countSpan.style.color = '#2563eb';
       countSpan.title = 'Click to cycle to the next result';
       countSpan.onclick = function() {
-        App.roger.focusSearchHit(App.roger.currentSearchIndex + 1);
+        App.devAgent.focusSearchHit(App.devAgent.currentSearchIndex + 1);
       };
     } else {
       countSpan.style.cursor = 'default';
@@ -1245,28 +1290,28 @@ App.roger.applySearchHighlights = function(term) {
   
   // Automatically focus the first hit if any exist
   if (hitCount > 0) {
-    App.roger.focusSearchHit(0);
+    App.devAgent.focusSearchHit(0);
   }
 };
 
-App.roger.focusSearchHit = function(index) {
-  if (App.roger.searchHits.length === 0) return;
+App.devAgent.focusSearchHit = function(index) {
+  if (App.devAgent.searchHits.length === 0) return;
   
-  if (App.roger.currentSearchIndex >= 0 && App.roger.currentSearchIndex < App.roger.searchHits.length) {
-    App.roger.searchHits[App.roger.currentSearchIndex].classList.remove('active-match');
+  if (App.devAgent.currentSearchIndex >= 0 && App.devAgent.currentSearchIndex < App.devAgent.searchHits.length) {
+    App.devAgent.searchHits[App.devAgent.currentSearchIndex].classList.remove('active-match');
   }
   
-  App.roger.currentSearchIndex = index % App.roger.searchHits.length;
-  if (App.roger.currentSearchIndex < 0) {
-    App.roger.currentSearchIndex += App.roger.searchHits.length;
+  App.devAgent.currentSearchIndex = index % App.devAgent.searchHits.length;
+  if (App.devAgent.currentSearchIndex < 0) {
+    App.devAgent.currentSearchIndex += App.devAgent.searchHits.length;
   }
   
-  const targetMark = App.roger.searchHits[App.roger.currentSearchIndex];
+  const targetMark = App.devAgent.searchHits[App.devAgent.currentSearchIndex];
   
-  const bubble = targetMark.closest('.roger-chat-bubble');
+  const bubble = targetMark.closest('.dev-chat-bubble');
   if (bubble) {
     bubble.classList.add('expanded');
-    const wrapper = targetMark.closest('.roger-chat-bubble-wrapper');
+    const wrapper = targetMark.closest('.dev-chat-bubble-wrapper');
     if (wrapper) wrapper.classList.add('expanded');
   }
 
@@ -1278,9 +1323,9 @@ App.roger.focusSearchHit = function(index) {
 
 const rogerStopWords = new Set(['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', "don't", 'should', "should've", 'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't"]);
 
-App.roger.generateGlossary = function() {
-  const log = document.getElementById('rogerChatLog');
-  const select = document.getElementById('rogerGlossarySelect');
+App.devAgent.generateGlossary = function() {
+  const log = document.getElementById('devChatLog');
+  const select = document.getElementById('devGlossarySelect');
   if (!log || !select) return;
 
   const rawText = log.innerText || log.textContent;
@@ -1307,15 +1352,15 @@ App.roger.generateGlossary = function() {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  const toggleBtn = document.getElementById('rogerToggleCollapseBtn');
-  const searchInput = document.getElementById('rogerSearchInput');
-  const log = document.getElementById('rogerChatLog');
-  const glossarySelect = document.getElementById('rogerGlossarySelect');
+  const toggleBtn = document.getElementById('devToggleCollapseBtn');
+  const searchInput = document.getElementById('devSearchInput');
+  const log = document.getElementById('devChatLog');
+  const glossarySelect = document.getElementById('devGlossarySelect');
 
   if (toggleBtn && log) {
     toggleBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      const isCollapsed = log.classList.toggle('roger-collapsed-mode');
+      const isCollapsed = log.classList.toggle('dev-collapsed-mode');
       toggleBtn.textContent = isCollapsed ? 'Expand All' : 'Collapse All';
       
       const expandedNodes = log.querySelectorAll('.expanded');
@@ -1328,16 +1373,16 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('input', (e) => {
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
-        App.roger.applySearchHighlights(e.target.value);
+        App.devAgent.applySearchHighlights(e.target.value);
       }, 300);
     });
 
     searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Tab' || e.key === 'Enter') {
         e.preventDefault();
-        if (App.roger.searchHits.length > 0) {
+        if (App.devAgent.searchHits.length > 0) {
           const step = e.shiftKey ? -1 : 1;
-          App.roger.focusSearchHit(App.roger.currentSearchIndex + step);
+          App.devAgent.focusSearchHit(App.devAgent.currentSearchIndex + step);
         }
       }
     });
@@ -1348,19 +1393,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const term = e.target.value;
       if (term) {
         searchInput.value = term;
-        App.roger.applySearchHighlights(term);
+        App.devAgent.applySearchHighlights(term);
       }
     });
   }
 
-  const testBtn = document.getElementById('rogerTestBtn');
+  const testBtn = document.getElementById('devTestBtn');
   if (testBtn) {
-    testBtn.addEventListener('click', App.roger.testAiConnection);
+    testBtn.addEventListener('click', App.devAgent.testAiConnection);
   }
 });
 
-App.roger.testAiConnection = async function() {
-  const btn = document.getElementById('rogerTestBtn');
+App.devAgent.testAiConnection = async function() {
+  const btn = document.getElementById('devTestBtn');
   if (btn) {
     btn.disabled = true;
     btn.textContent = 'Testing...';
@@ -1389,19 +1434,19 @@ App.roger.testAiConnection = async function() {
 // ==========================================
 // HITL Friction Logger Implementation
 // ==========================================
-App.rogerFriction = {
+App.devAgentFriction = {
   elements: {
-    form: document.getElementById('rogerFrictionForm'),
-    input: document.getElementById('rogerFrictionInput'),
-    list: document.getElementById('rogerFrictionList'),
-    sidebar: document.getElementById('rogerFrictionSidebar'),
-    toggleBtn: document.getElementById('rogerFrictionToggleBtn'),
-    closeBtn: document.getElementById('rogerFrictionCloseBtn'),
-    leftSidebarList: document.getElementById('rogerFrictionSidebarList'),
-    editorPanelWrapper: document.getElementById('rogerFrictionEditorPanel'),
+    form: document.getElementById('devFrictionForm'),
+    input: document.getElementById('devFrictionInput'),
+    list: document.getElementById('devFrictionList'),
+    sidebar: document.getElementById('devFrictionSidebar'),
+    toggleBtn: document.getElementById('devFrictionToggleBtn'),
+    closeBtn: document.getElementById('devFrictionCloseBtn'),
+    leftSidebarList: document.getElementById('devFrictionSidebarList'),
+    editorPanelWrapper: document.getElementById('devFrictionEditorPanel'),
     
     // Editor Form Elements
-    editorForm: document.getElementById('rogerFrictionEditorForm'),
+    editorForm: document.getElementById('devFrictionEditorForm'),
     editTitle: document.getElementById('rogerEditFrictionTitle'),
     editSection: document.getElementById('rogerEditFrictionSection'),
     editDesc: document.getElementById('rogerEditFrictionDesc'),
@@ -1427,7 +1472,7 @@ App.rogerFriction = {
       }
       
       const { data, error } = await window.supabaseClient
-        .from('roger_friction_logs')
+        .from('dev_friction_logs')
         .select('id, title, section, description, status, resolution_notes')
         .neq('status', 'documented')
         .order('created_at', { ascending: false })
@@ -1442,7 +1487,7 @@ App.rogerFriction = {
         data.forEach(log => {
           // Right drawer generic render
           const li = document.createElement('li');
-          li.className = 'roger-friction-item ' + (log.status === 'resolved' ? 'resolved' : '');
+          li.className = 'dev-friction-item ' + (log.status === 'resolved' ? 'resolved' : '');
           li.innerHTML = `
             <div><strong>${log.title || 'New Friction Log'}</strong> - ${log.status.toUpperCase()}</div>
             <div style="font-size:0.8rem; margin-top:0.2rem;">${log.description.substring(0,60)}...</div>
@@ -1452,7 +1497,7 @@ App.rogerFriction = {
           // Left Sidebar render with inline editing structure
           if (this.elements.leftSidebarList) {
             const sideLi = document.createElement('li');
-            sideLi.className = 'roger-session-item' + (this.elements.activeLogId === log.id ? ' active' : '');
+            sideLi.className = 'dev-session-item' + (this.elements.activeLogId === log.id ? ' active' : '');
             
             const titleSpan = document.createElement('span');
             titleSpan.className = 'session-title';
@@ -1472,7 +1517,7 @@ App.rogerFriction = {
               const newTitle = titleSpan.textContent.trim();
               if (newTitle && newTitle !== log.title) {
                 try {
-                  await window.supabaseClient.from('roger_friction_logs').update({title: newTitle}).eq('id', log.id);
+                  await window.supabaseClient.from('dev_friction_logs').update({title: newTitle}).eq('id', log.id);
                   if (this.elements.activeLogId === log.id && this.elements.editTitle) {
                     this.elements.editTitle.value = newTitle;
                   }
@@ -1490,7 +1535,7 @@ App.rogerFriction = {
             sideLi.addEventListener('click', (e) => {
               // Ignore if we are currently editing the title
               if (titleSpan.classList.contains('editing')) return;
-              document.querySelectorAll('#rogerFrictionSidebarList .roger-session-item').forEach(el => el.classList.remove('active'));
+              document.querySelectorAll('#devFrictionSidebarList .dev-session-item').forEach(el => el.classList.remove('active'));
               sideLi.classList.add('active');
               this.openEditor(log);
             });
@@ -1499,13 +1544,13 @@ App.rogerFriction = {
           }
         });
       } else {
-        if (this.elements.list) this.elements.list.innerHTML = '<li class="roger-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>';
-        if (this.elements.leftSidebarList) this.elements.leftSidebarList.innerHTML = '<li class="roger-session-item" style="color: #666; font-style: italic;">Nothing logged.</li>';
+        if (this.elements.list) this.elements.list.innerHTML = '<li class="dev-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>';
+        if (this.elements.leftSidebarList) this.elements.leftSidebarList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">Nothing logged.</li>';
       }
     } catch (e) {
       console.error("Failed to load friction logs", e);
       if (this.elements.leftSidebarList) {
-        this.elements.leftSidebarList.innerHTML = `<li class="roger-session-item" style="color: red; font-size:0.75rem;">Error: ${e.message}</li>`;
+        this.elements.leftSidebarList.innerHTML = `<li class="dev-session-item" style="color: red; font-size:0.75rem;">Error: ${e.message}</li>`;
       }
     }
   },
@@ -1519,7 +1564,7 @@ App.rogerFriction = {
       if (!window.supabaseClient) throw new Error("Database disconnected.");
 
       const { data, error } = await window.supabaseClient
-        .from('roger_friction_logs')
+        .from('dev_friction_logs')
         .insert([{ description: txt, status: 'open' }]);
 
       if (!error) {
@@ -1528,12 +1573,12 @@ App.rogerFriction = {
         this.loadLogs();
         
         // Auto-ping Roger with context
-        const chatInput = document.getElementById('rogerChatInput');
-        if (chatInput && App.roger && App.roger.submitChat) {
+        const chatInput = document.getElementById('devChatInput');
+        if (chatInput && App.devAgent && App.devAgent.submitChat) {
           chatInput.value = `### SYSTEM NOTIFICATION
 @Human has logged a new HITL Friction Intervention: "${txt}". 
 Please analyze this friction boundary and formulate an architectural plan to engineer this bottleneck out of the system.`;
-          App.roger.submitChat();
+          App.devAgent.submitChat();
         }
         
       } else {
@@ -1547,9 +1592,9 @@ Please analyze this friction boundary and formulate an architectural plan to eng
   openEditor(log) {
     this.elements.activeLogId = log.id;
     // Hide standard chat internals
-    const chatLog = document.getElementById('rogerChatLog');
-    const chatForm = document.getElementById('rogerChatForm');
-    const header = document.querySelector('.roger-chat-main-header');
+    const chatLog = document.getElementById('devChatLog');
+    const chatForm = document.getElementById('devChatForm');
+    const header = document.querySelector('.dev-chat-main-header');
     
     if (chatLog) chatLog.classList.add('hidden');
     if (chatForm) chatForm.classList.add('hidden');
@@ -1568,9 +1613,9 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 
   closeEditor() {
     this.elements.activeLogId = null;
-    const chatLog = document.getElementById('rogerChatLog');
-    const chatForm = document.getElementById('rogerChatForm');
-    const header = document.querySelector('.roger-chat-main-header');
+    const chatLog = document.getElementById('devChatLog');
+    const chatForm = document.getElementById('devChatForm');
+    const header = document.querySelector('.dev-chat-main-header');
     
     if (chatLog) chatLog.classList.remove('hidden');
     if (chatForm) chatForm.classList.remove('hidden');
@@ -1579,8 +1624,8 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     if (this.elements.editorPanelWrapper) this.elements.editorPanelWrapper.classList.add('hidden');
     
     // Reset selection styling
-    document.querySelectorAll('#rogerFrictionSidebarList .roger-session-item').forEach(el => el.classList.remove('active'));
-    App.roger.scrollToBottom();
+    document.querySelectorAll('#devFrictionSidebarList .dev-session-item').forEach(el => el.classList.remove('active'));
+    App.devAgent.scrollToBottom();
   },
 
   async saveEditorChanges(e) {
@@ -1597,7 +1642,7 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     
     try {
       const { error } = await window.supabaseClient
-        .from('roger_friction_logs')
+        .from('dev_friction_logs')
         .update(payload)
         .eq('id', this.elements.activeLogId);
         
@@ -1618,16 +1663,16 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 
   init() {
     // Re-bind elements in case it's called late
-    this.elements.form = document.getElementById('rogerFrictionForm');
-    this.elements.input = document.getElementById('rogerFrictionInput');
-    this.elements.list = document.getElementById('rogerFrictionList');
-    this.elements.sidebar = document.getElementById('rogerFrictionSidebar');
-    this.elements.toggleBtn = document.getElementById('rogerFrictionToggleBtn');
-    this.elements.closeBtn = document.getElementById('rogerFrictionCloseBtn');
+    this.elements.form = document.getElementById('devFrictionForm');
+    this.elements.input = document.getElementById('devFrictionInput');
+    this.elements.list = document.getElementById('devFrictionList');
+    this.elements.sidebar = document.getElementById('devFrictionSidebar');
+    this.elements.toggleBtn = document.getElementById('devFrictionToggleBtn');
+    this.elements.closeBtn = document.getElementById('devFrictionCloseBtn');
     
-    this.elements.leftSidebarList = document.getElementById('rogerFrictionSidebarList');
-    this.elements.editorPanelWrapper = document.getElementById('rogerFrictionEditorPanel');
-    this.elements.editorForm = document.getElementById('rogerFrictionEditorForm');
+    this.elements.leftSidebarList = document.getElementById('devFrictionSidebarList');
+    this.elements.editorPanelWrapper = document.getElementById('devFrictionEditorPanel');
+    this.elements.editorForm = document.getElementById('devFrictionEditorForm');
     this.elements.editTitle = document.getElementById('rogerEditFrictionTitle');
     this.elements.editSection = document.getElementById('rogerEditFrictionSection');
     this.elements.editDesc = document.getElementById('rogerEditFrictionDesc');
@@ -1651,9 +1696,9 @@ Please analyze this friction boundary and formulate an architectural plan to eng
       this.elements.editorCloseBtn.addEventListener('click', () => this.closeEditor());
     }
     
-    // Bind to the Ask Roger page show event to refresh logs
+    // Bind to the Dev Agent page show event to refresh logs
     document.addEventListener('pageChanged', (e) => {
-      if (e.detail && e.detail.pageId === 'askRogerPage') {
+      if (e.detail && e.detail.pageId === 'devAgentPage') {
         this.loadLogs();
       }
     });
@@ -1664,7 +1709,7 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 };
 
 window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => App.rogerFriction.init(), 1000);
+  setTimeout(() => App.devAgentFriction.init(), 1000);
   
   // Bind collapsible sidebar headers globally
   const toggles = document.querySelectorAll('.sidebar-section-toggle');

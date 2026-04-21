@@ -222,9 +222,9 @@
           </div>
         </li>
         <li class="menu-item menu-item-right has-submenu">
-          <a href="#" class="menu-link" data-page="askRogerPage">Dev</a>
+          <a href="#" class="menu-link" data-page="devAgentPage">Dev</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="askRogerPage">Ask Roger</a>
+            <a href="#" class="menu-link submenu-link" data-page="devAgentPage">Dev Agent</a>
           </div>
         </li>
       </ul>
@@ -2404,18 +2404,18 @@
         </section>
 
       </section>
-      <section id="askRogerPage" class="app-page hidden">
+      <section id="devAgentPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Ask Roger</h2>
+          <h2>Dev Agent</h2>
         </div>
-        <div class="roger-chat-container">
-          <aside class="roger-sessions-sidebar">
+        <div class="dev-chat-container">
+          <aside class="dev-sessions-sidebar">
             
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerSessionList">
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devSessionList">
               Threads
               <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
-            <ul id="rogerSessionList" class="roger-session-list">
+            <ul id="devSessionList" class="dev-session-list">
               <!-- Dynamically populated -->
             </ul>
 
@@ -2423,83 +2423,83 @@
               Tasks
               <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
-            <ul id="rogerTaskList" class="roger-session-list">
-              <li class="roger-session-item" style="color: #666; font-style: italic;">No active tasks.</li>
+            <ul id="devTaskList" class="dev-session-list">
+              <li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>
             </ul>
 
             <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerTeamList">
               Team
               <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
-            <ul id="rogerTeamList" class="roger-session-list">
-              <li class="roger-session-item" style="color: #666; font-style: italic;">No team members.</li>
+            <ul id="devTeamList" class="dev-session-list">
+              <li class="dev-session-item" style="color: #666; font-style: italic;">No team members.</li>
             </ul>
 
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerFrictionSidebarList">
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devFrictionSidebarList">
               Friction
               <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
-            <ul id="rogerFrictionSidebarList" class="roger-session-list">
+            <ul id="devFrictionSidebarList" class="dev-session-list">
               <!-- Dynamically populated -->
             </ul>
           </aside>
-          <div class="roger-chat-main-panel">
-            <div class="roger-chat-main-header" style="justify-content: space-between;">
+          <div class="dev-chat-main-panel">
+            <div class="dev-chat-main-header" style="justify-content: space-between;">
               <div style="display:flex; align-items:center; gap:0.5rem; flex:1;">
-                <h3 id="rogerActiveSessionTitle">Loading Session...</h3>
+                <h3 id="devActiveSessionTitle">Loading Session...</h3>
               </div>
               <div style="display:flex; align-items:center; gap:0.75rem;">
                 <div style="position:relative; display:flex; align-items:center;">
-                  <button id="rogerTestBtn" class="secondary-btn tiny-btn hidden" style="position:absolute; top:-34px; right:0; padding:0.2rem 0.6rem; font-size: 0.75rem;">Test Connection</button>
-                  <select id="rogerGlossarySelect" style="padding:0.4rem 0.5rem; border-radius:4px; border:1px solid #888; background:var(--bg-input); color:var(--text-primary); font-size:0.9rem; margin-right: 0.25rem; max-width: 140px;">
+                  <button id="devTestBtn" class="secondary-btn tiny-btn hidden" style="position:absolute; top:-34px; right:0; padding:0.2rem 0.6rem; font-size: 0.75rem;">Test Connection</button>
+                  <select id="devGlossarySelect" style="padding:0.4rem 0.5rem; border-radius:4px; border:1px solid #888; background:var(--bg-input); color:var(--text-primary); font-size:0.9rem; margin-right: 0.25rem; max-width: 140px;">
                     <option value="">Keywords</option>
                   </select>
-                  <input type="text" id="rogerSearchInput" placeholder="Search discussion..." style="padding:0.4rem 0.5rem; border-radius:4px; border:1px solid #888; background:var(--bg-input); color:var(--text-primary); width:200px; font-size:0.9rem;" />
-                  <span id="rogerSearchCount" style="margin-left:0.5rem; font-size:0.8rem; color:#6b7280; white-space:nowrap;"></span>
+                  <input type="text" id="devSearchInput" placeholder="Search discussion..." style="padding:0.4rem 0.5rem; border-radius:4px; border:1px solid #888; background:var(--bg-input); color:var(--text-primary); width:200px; font-size:0.9rem;" />
+                  <span id="devSearchCount" style="margin-left:0.5rem; font-size:0.8rem; color:#6b7280; white-space:nowrap;"></span>
                 </div>
-                <button id="rogerFrictionToggleBtn" class="danger-btn" style="padding:0.4rem 0.75rem; font-size:0.85rem; font-weight:bold; white-space:nowrap;">🚨 Log Friction</button>
-                <button id="rogerToggleCollapseBtn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.85rem; min-width:80px;">Expand</button>
-                <button id="rogerCopySessionBtn" class="roger-copy-btn main-copy" title="Copy Entire Discussion" style="margin-left: 0.5rem;">
+                <button id="devFrictionToggleBtn" class="danger-btn" style="padding:0.4rem 0.75rem; font-size:0.85rem; font-weight:bold; white-space:nowrap;">🚨 Log Friction</button>
+                <button id="devToggleCollapseBtn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.85rem; min-width:80px;">Expand</button>
+                <button id="devCopySessionBtn" class="dev-copy-btn main-copy" title="Copy Entire Discussion" style="margin-left: 0.5rem;">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
                     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
                     <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
                   </svg>
                 </button>
-                <button id="rogerSaveSessionBtn" class="roger-copy-btn main-copy" title="Save Entire Discussion as .md" style="background: none; border: none; cursor: pointer; color: var(--text-secondary);">
+                <button id="devSaveSessionBtn" class="dev-copy-btn main-copy" title="Save Entire Discussion as .md" style="background: none; border: none; cursor: pointer; color: var(--text-secondary);">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                     <polyline points="17 21 17 13 7 13 7 21"></polyline>
                     <polyline points="7 3 7 8 15 8"></polyline>
                   </svg>
                 </button>
-                <button id="rogerNewSessionBtn" class="primary-btn" style="padding:0.4rem 0.75rem; font-size:0.85rem; white-space:nowrap; margin-left: 0.5rem;">+ New Thread</button>
+                <button id="devNewSessionBtn" class="primary-btn" style="padding:0.4rem 0.75rem; font-size:0.85rem; white-space:nowrap; margin-left: 0.5rem;">+ New Thread</button>
               </div>
             </div>
-            <div id="rogerChatLog" class="roger-chat-log roger-collapsed-mode"></div>
+            <div id="devChatLog" class="dev-chat-log dev-collapsed-mode"></div>
             
-            <div id="rogerPersistentOverlay" class="roger-persistent-overlay hidden"></div>
+            <div id="devPersistentOverlay" class="dev-persistent-overlay hidden"></div>
             
-            <form id="rogerChatForm" class="roger-chat-input-area">
-              <div id="rogerChatAttachmentsContainer" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px; align-self:flex-start;">
+            <form id="devChatForm" class="dev-chat-input-area">
+              <div id="devChatAttachmentsContainer" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px; align-self:flex-start;">
               </div>
-              <div class="roger-chat-input-row" style="display: flex; gap: 8px; width: 100%;">
-                <button type="button" id="rogerFileTriggerBtn" class="secondary-btn" title="Attach file" aria-label="Attach file">📎</button>
-                <input type="file" id="rogerChatFile" class="hidden" accept=".md,.txt,.csv,.json,text/markdown,text/plain,image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip" />
-                <textarea id="rogerChatInput" placeholder="Message Roger Thorson..."></textarea>
+              <div class="dev-chat-input-row" style="display: flex; gap: 8px; width: 100%;">
+                <button type="button" id="devFileTriggerBtn" class="secondary-btn" title="Attach file" aria-label="Attach file">📎</button>
+                <input type="file" id="devChatFile" class="hidden" accept=".md,.txt,.csv,.json,text/markdown,text/plain,image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip" />
+                <textarea id="devChatInput" placeholder="Message Dev Agent..."></textarea>
                 <button type="submit" class="primary-btn">Send</button>
               </div>
             </form>
             
-            <div id="rogerFrictionEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
-              <h2 id="rogerFrictionEditorHeader" style="margin-top: 0;">Friction Log Details</h2>
-              <form id="rogerFrictionEditorForm" class="standard-form-grid" style="max-width: 800px;">
+            <div id="devFrictionEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+              <h2 id="devFrictionEditorHeader" style="margin-top: 0;">Friction Log Details</h2>
+              <form id="devFrictionEditorForm" class="standard-form-grid" style="max-width: 800px;">
                 <div class="form-group full-width">
                   <label for="rogerEditFrictionTitle">Title</label>
-                  <input type="text" id="rogerEditFrictionTitle" required />
+                  <input type="text" id="devEditFrictionTitle" required />
                 </div>
                 <div class="form-group full-width">
                   <label for="rogerEditFrictionSection">Section</label>
-                  <select id="rogerEditFrictionSection">
+                  <select id="devEditFrictionSection">
                     <option value="Acquire">Acquire</option>
                     <option value="Contacts">Contacts</option>
                     <option value="Channels">Channels</option>
@@ -2518,11 +2518,11 @@
                 </div>
                 <div class="form-group full-width">
                   <label for="rogerEditFrictionDesc">Payload / Description</label>
-                  <textarea id="rogerEditFrictionDesc" style="min-height: 120px;" required></textarea>
+                  <textarea id="devEditFrictionDesc" style="min-height: 120px;" required></textarea>
                 </div>
                 <div class="form-group">
                   <label for="rogerEditFrictionStatus">Status</label>
-                  <select id="rogerEditFrictionStatus">
+                  <select id="devEditFrictionStatus">
                     <option value="open">Open</option>
                     <option value="resolved">Resolved</option>
                     <option value="documented">Documented</option>
@@ -2530,33 +2530,33 @@
                 </div>
                 <div class="form-group full-width">
                   <label for="rogerEditFrictionResolution">Resolution Notes</label>
-                  <textarea id="rogerEditFrictionResolution" style="min-height: 120px;"></textarea>
+                  <textarea id="devEditFrictionResolution" style="min-height: 120px;"></textarea>
                 </div>
                 <div class="form-actions full-width" style="margin-top: 1rem;">
                   <button type="submit" class="primary-btn">Save Changes</button>
-                  <button type="button" id="rogerCloseFrictionEditorBtn" class="secondary-btn">Close Editor</button>
+                  <button type="button" id="devCloseFrictionEditorBtn" class="secondary-btn">Close Editor</button>
                 </div>
               </form>
             </div>
             
           </div>
-          <aside class="roger-friction-sidebar" id="rogerFrictionSidebar">
-            <div class="roger-sidebar-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <aside class="dev-friction-sidebar" id="devFrictionSidebar">
+            <div class="dev-sidebar-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
               <div>
                 <h4 style="margin: 0; color: var(--text-color-secondary); font-size: 0.85rem; text-transform: uppercase;">HITL Friction Log</h4>
                 <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: #666;">Log manual payloads & data shuttles</p>
               </div>
-              <button type="button" id="rogerFrictionCloseBtn" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem; line-height:1;">&times;</button>
+              <button type="button" id="devFrictionCloseBtn" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem; line-height:1;">&times;</button>
             </div>
             <div style="padding: 1rem; border-bottom: 1px solid var(--border-light);">
-              <form id="rogerFrictionForm" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                <textarea id="rogerFrictionInput" placeholder="Describe the manual intervention..." required style="min-height: 80px;"></textarea>
+              <form id="devFrictionForm" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <textarea id="devFrictionInput" placeholder="Describe the manual intervention..." required style="min-height: 80px;"></textarea>
                 <button type="submit" class="primary-btn" style="width: 100%;">Log Friction</button>
               </form>
             </div>
-            <ul id="rogerFrictionList" class="roger-friction-log-list">
+            <ul id="devFrictionList" class="dev-friction-log-list">
               <!-- Logs populated here -->
-              <li class="roger-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>
+              <li class="dev-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>
             </ul>
           </aside>
         </div>
@@ -8557,7 +8557,7 @@
     <script src="/js/develop.js"></script>
     <script src="/js/activityLog.js"></script>
     <script src="/js/observe.js"></script>
-    <script src="/js/roger.js"></script>
+    <script src="/js/devAgent.js"></script>
     <script src="/js/assets.js"></script>
     <script src="/js/assetsVideo.js"></script>
     <script src="/js/assetCategories.js"></script>
