@@ -1389,6 +1389,15 @@ App.rogerFriction = {
     form: document.getElementById('rogerFrictionForm'),
     input: document.getElementById('rogerFrictionInput'),
     list: document.getElementById('rogerFrictionList'),
+    sidebar: document.getElementById('rogerFrictionSidebar'),
+    toggleBtn: document.getElementById('rogerFrictionToggleBtn'),
+    closeBtn: document.getElementById('rogerFrictionCloseBtn')
+  },
+
+  toggleDrawer() {
+    if (this.elements.sidebar) {
+      this.elements.sidebar.classList.toggle('visible');
+    }
   },
 
   async loadLogs() {
@@ -1443,6 +1452,16 @@ App.rogerFriction = {
         this.elements.input.value = '';
         App.notify("Friction Logged successfully.");
         this.loadLogs();
+        
+        // Auto-ping Roger with context
+        const chatInput = document.getElementById('rogerChatInput');
+        if (chatInput && App.roger && App.roger.submitChat) {
+          chatInput.value = `### SYSTEM NOTIFICATION
+@Human has logged a new HITL Friction Intervention: "${txt}". 
+Please analyze this friction boundary and formulate an architectural plan to engineer this bottleneck out of the system.`;
+          App.roger.submitChat();
+        }
+        
       } else {
         App.notify(error.message || "Failed to log friction", true);
       }
@@ -1456,9 +1475,18 @@ App.rogerFriction = {
     this.elements.form = document.getElementById('rogerFrictionForm');
     this.elements.input = document.getElementById('rogerFrictionInput');
     this.elements.list = document.getElementById('rogerFrictionList');
+    this.elements.sidebar = document.getElementById('rogerFrictionSidebar');
+    this.elements.toggleBtn = document.getElementById('rogerFrictionToggleBtn');
+    this.elements.closeBtn = document.getElementById('rogerFrictionCloseBtn');
     
     if (this.elements.form) {
       this.elements.form.addEventListener('submit', (e) => this.submitLog(e));
+    }
+    if (this.elements.toggleBtn) {
+      this.elements.toggleBtn.addEventListener('click', () => this.toggleDrawer());
+    }
+    if (this.elements.closeBtn) {
+      this.elements.closeBtn.addEventListener('click', () => this.toggleDrawer());
     }
     
     // Bind to the Ask Roger page show event to refresh logs
