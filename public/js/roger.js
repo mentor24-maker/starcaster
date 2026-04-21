@@ -300,6 +300,11 @@ App.roger.appendSessionNode = function(session) {
 App.roger.selectSession = function(sessionId) {
   rogerState.activeSessionId = sessionId;
   
+  // Close the Friction Editor natively if it happens to be masking the screen
+  if (App.rogerFriction && typeof App.rogerFriction.closeEditor === 'function') {
+    App.rogerFriction.closeEditor();
+  }
+  
   // Highlight UI
   if (rogerElements.sessionList) {
     const items = rogerElements.sessionList.querySelectorAll('.roger-session-item');
@@ -1398,6 +1403,7 @@ App.rogerFriction = {
     // Editor Form Elements
     editorForm: document.getElementById('rogerFrictionEditorForm'),
     editTitle: document.getElementById('rogerEditFrictionTitle'),
+    editSection: document.getElementById('rogerEditFrictionSection'),
     editDesc: document.getElementById('rogerEditFrictionDesc'),
     editStatus: document.getElementById('rogerEditFrictionStatus'),
     editResNotes: document.getElementById('rogerEditFrictionResolution'),
@@ -1422,7 +1428,7 @@ App.rogerFriction = {
       
       const { data, error } = await window.supabaseClient
         .from('roger_friction_logs')
-        .select('id, title, description, status, resolution_notes')
+        .select('id, title, section, description, status, resolution_notes')
         .neq('status', 'documented')
         .order('created_at', { ascending: false })
         .limit(50);
@@ -1554,6 +1560,7 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     
     // Seed fields
     if (this.elements.editTitle) this.elements.editTitle.value = log.title || '';
+    if (this.elements.editSection) this.elements.editSection.value = log.section || 'Acquire';
     if (this.elements.editDesc) this.elements.editDesc.value = log.description || '';
     if (this.elements.editStatus) this.elements.editStatus.value = log.status || 'open';
     if (this.elements.editResNotes) this.elements.editResNotes.value = log.resolution_notes || '';
@@ -1582,6 +1589,7 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     
     const payload = {
       title: this.elements.editTitle.value.trim(),
+      section: this.elements.editSection ? this.elements.editSection.value : 'Acquire',
       description: this.elements.editDesc.value.trim(),
       status: this.elements.editStatus.value,
       resolution_notes: this.elements.editResNotes.value.trim()
@@ -1621,6 +1629,7 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     this.elements.editorPanelWrapper = document.getElementById('rogerFrictionEditorPanel');
     this.elements.editorForm = document.getElementById('rogerFrictionEditorForm');
     this.elements.editTitle = document.getElementById('rogerEditFrictionTitle');
+    this.elements.editSection = document.getElementById('rogerEditFrictionSection');
     this.elements.editDesc = document.getElementById('rogerEditFrictionDesc');
     this.elements.editStatus = document.getElementById('rogerEditFrictionStatus');
     this.elements.editResNotes = document.getElementById('rogerEditFrictionResolution');
@@ -1656,4 +1665,18 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => App.rogerFriction.init(), 1000);
+  
+  // Bind collapsible sidebar headers globally
+  const toggles = document.querySelectorAll('.sidebar-section-toggle');
+  toggles.forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', !isExpanded);
+      const targetId = toggle.getAttribute('aria-controls');
+      const targetList = document.getElementById(targetId);
+      if (targetList) {
+        targetList.style.display = isExpanded ? 'none' : 'block';
+      }
+    });
+  });
 });

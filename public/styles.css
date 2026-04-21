@@ -9421,8 +9421,37 @@ button.section-settings-gear-btn svg {
   margin: 0;
 }
 
+.sidebar-section-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  margin-top: 0;
+  background-color: #111;
+  color: #fff;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-section-toggle:hover {
+  background-color: #000;
+}
+
+.sidebar-section-toggle .toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+.sidebar-section-toggle[aria-expanded="false"] .toggle-icon {
+  transform: rotate(-90deg);
+}
+
 .roger-session-item {
-  padding: 0.75rem 1rem;
+  padding: 0.4rem 1rem;
   border-bottom: 1px solid var(--border-light);
   cursor: pointer;
   font-size: 0.9rem;

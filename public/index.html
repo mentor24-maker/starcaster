@@ -2350,12 +2350,35 @@
             <div class="roger-sidebar-header">
               <button id="rogerNewSessionBtn" class="primary-btn full-width">+ New Discussion</button>
             </div>
-            <h4 style="margin: 1rem 1rem 0.5rem 1rem; color: var(--text-color-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Discussion Threads</h4>
+            
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerSessionList">
+              Threads
+              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
             <ul id="rogerSessionList" class="roger-session-list">
               <!-- Dynamically populated -->
             </ul>
 
-            <h4 style="margin: 1rem 1rem 0.5rem 1rem; color: var(--text-color-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Friction Logs</h4>
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerTaskList">
+              Tasks
+              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <ul id="rogerTaskList" class="roger-session-list">
+              <li class="roger-session-item" style="color: #666; font-style: italic;">No active tasks.</li>
+            </ul>
+
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerTeamList">
+              Team
+              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <ul id="rogerTeamList" class="roger-session-list">
+              <li class="roger-session-item" style="color: #666; font-style: italic;">No team members.</li>
+            </ul>
+
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerFrictionSidebarList">
+              Friction
+              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
             <ul id="rogerFrictionSidebarList" class="roger-session-list">
               <!-- Dynamically populated -->
             </ul>
@@ -2412,6 +2435,25 @@
                 <div class="form-group full-width">
                   <label for="rogerEditFrictionTitle">Title</label>
                   <input type="text" id="rogerEditFrictionTitle" required />
+                </div>
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionSection">Section</label>
+                  <select id="rogerEditFrictionSection">
+                    <option value="Acquire">Acquire</option>
+                    <option value="Contacts">Contacts</option>
+                    <option value="Channels">Channels</option>
+                    <option value="Messaging">Messaging</option>
+                    <option value="Assets">Assets</option>
+                    <option value="Builder">Builder</option>
+                    <option value="Campaigns">Campaigns</option>
+                    <option value="Promote">Promote</option>
+                    <option value="Engage">Engage</option>
+                    <option value="Observe">Observe</option>
+                    <option value="Training">Training</option>
+                    <option value="Settings">Settings</option>
+                    <option value="Help">Help</option>
+                    <option value="Dev">Dev</option>
+                  </select>
                 </div>
                 <div class="form-group full-width">
                   <label for="rogerEditFrictionDesc">Payload / Description</label>
