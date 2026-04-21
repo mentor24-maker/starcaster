@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS public.roger_friction_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     project_id BIGINT DEFAULT NULL,
     title TEXT DEFAULT 'New Friction Log' NOT NULL,
+    section TEXT DEFAULT 'Acquire',
     description TEXT NOT NULL,
     status TEXT DEFAULT 'open'::text,
     resolution_notes TEXT,
@@ -14,6 +15,9 @@ CREATE TABLE IF NOT EXISTS public.roger_friction_logs (
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roger_friction_logs' AND column_name='title') THEN
     ALTER TABLE public.roger_friction_logs ADD COLUMN title TEXT DEFAULT 'New Friction Log' NOT NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roger_friction_logs' AND column_name='section') THEN
+    ALTER TABLE public.roger_friction_logs ADD COLUMN section TEXT DEFAULT 'Acquire';
   END IF;
 END $$;
 
