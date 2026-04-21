@@ -9376,13 +9376,13 @@ button.section-settings-gear-btn svg {
   right: -400px;
   width: 380px;
   height: 100%;
-  background: var(--bg-card);
+  background: var(--bg-body, #ffffff);
   border-left: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   transition: right 0.3s ease;
-  z-index: 10;
-  box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+  z-index: 50;
+  box-shadow: -4px 0 15px rgba(0,0,0,0.15);
 }
 .roger-friction-sidebar.visible {
   right: 0;
