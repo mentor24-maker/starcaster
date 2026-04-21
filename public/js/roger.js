@@ -1391,7 +1391,19 @@ App.rogerFriction = {
     list: document.getElementById('rogerFrictionList'),
     sidebar: document.getElementById('rogerFrictionSidebar'),
     toggleBtn: document.getElementById('rogerFrictionToggleBtn'),
-    closeBtn: document.getElementById('rogerFrictionCloseBtn')
+    closeBtn: document.getElementById('rogerFrictionCloseBtn'),
+    leftSidebarList: document.getElementById('rogerFrictionSidebarList'),
+    editorPanelWrapper: document.getElementById('rogerFrictionEditorPanel'),
+    
+    // Editor Form Elements
+    editorForm: document.getElementById('rogerFrictionEditorForm'),
+    editTitle: document.getElementById('rogerEditFrictionTitle'),
+    editDesc: document.getElementById('rogerEditFrictionDesc'),
+    editStatus: document.getElementById('rogerEditFrictionStatus'),
+    editResNotes: document.getElementById('rogerEditFrictionResolution'),
+    editorCloseBtn: document.getElementById('rogerCloseFrictionEditorBtn'),
+    
+    activeLogId: null
   },
 
   toggleDrawer() {
@@ -1410,26 +1422,79 @@ App.rogerFriction = {
       
       const { data, error } = await window.supabaseClient
         .from('roger_friction_logs')
-        .select('id, description, status')
+        .select('id, title, description, status, resolution_notes')
         .neq('status', 'documented')
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw error;
 
+      if (this.elements.list) this.elements.list.innerHTML = '';
+      if (this.elements.leftSidebarList) this.elements.leftSidebarList.innerHTML = '';
+
       if (data && data.length > 0) {
-        this.elements.list.innerHTML = ''; // clear
         data.forEach(log => {
+          // Right drawer generic render
           const li = document.createElement('li');
           li.className = 'roger-friction-item ' + (log.status === 'resolved' ? 'resolved' : '');
           li.innerHTML = `
-            <div><strong>${log.status.toUpperCase()}</strong></div>
-            <div>${log.description}</div>
+            <div><strong>${log.title || 'New Friction Log'}</strong> - ${log.status.toUpperCase()}</div>
+            <div style="font-size:0.8rem; margin-top:0.2rem;">${log.description.substring(0,60)}...</div>
           `;
-          this.elements.list.appendChild(li);
+          if (this.elements.list) this.elements.list.appendChild(li);
+
+          // Left Sidebar render with inline editing structure
+          if (this.elements.leftSidebarList) {
+            const sideLi = document.createElement('li');
+            sideLi.className = 'roger-session-item' + (this.elements.activeLogId === log.id ? ' active' : '');
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'session-title';
+            titleSpan.textContent = log.title || 'New Friction Log';
+            
+            // Inline editing via double click
+            titleSpan.addEventListener('dblclick', (e) => {
+              e.stopPropagation();
+              titleSpan.contentEditable = true;
+              titleSpan.focus();
+              titleSpan.classList.add('editing');
+            });
+            
+            const saveTitle = async () => {
+              titleSpan.contentEditable = false;
+              titleSpan.classList.remove('editing');
+              const newTitle = titleSpan.textContent.trim();
+              if (newTitle && newTitle !== log.title) {
+                try {
+                  await window.supabaseClient.from('roger_friction_logs').update({title: newTitle}).eq('id', log.id);
+                  if (this.elements.activeLogId === log.id && this.elements.editTitle) {
+                    this.elements.editTitle.value = newTitle;
+                  }
+                } catch(err) { console.error("Inline edit failed", err); }
+              }
+            };
+            titleSpan.addEventListener('blur', saveTitle);
+            titleSpan.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') { e.preventDefault(); saveTitle(); }
+            });
+
+            sideLi.appendChild(titleSpan);
+            
+            // Click to open editor
+            sideLi.addEventListener('click', (e) => {
+              // Ignore if we are currently editing the title
+              if (titleSpan.classList.contains('editing')) return;
+              document.querySelectorAll('#rogerFrictionSidebarList .roger-session-item').forEach(el => el.classList.remove('active'));
+              sideLi.classList.add('active');
+              this.openEditor(log);
+            });
+            
+            this.elements.leftSidebarList.appendChild(sideLi);
+          }
         });
       } else {
-        this.elements.list.innerHTML = '<li class="roger-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>';
+        if (this.elements.list) this.elements.list.innerHTML = '<li class="roger-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>';
+        if (this.elements.leftSidebarList) this.elements.leftSidebarList.innerHTML = '<li class="roger-session-item" style="color: #666; font-style: italic;">Nothing logged.</li>';
       }
     } catch (e) {
       console.error("Failed to load friction logs", e);
@@ -1470,6 +1535,76 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     }
   },
 
+  openEditor(log) {
+    this.elements.activeLogId = log.id;
+    // Hide standard chat internals
+    const chatLog = document.getElementById('rogerChatLog');
+    const chatForm = document.getElementById('rogerChatForm');
+    const header = document.querySelector('.roger-chat-main-header');
+    
+    if (chatLog) chatLog.classList.add('hidden');
+    if (chatForm) chatForm.classList.add('hidden');
+    if (header) header.classList.add('hidden');
+    
+    // Show editor panel
+    if (this.elements.editorPanelWrapper) this.elements.editorPanelWrapper.classList.remove('hidden');
+    
+    // Seed fields
+    if (this.elements.editTitle) this.elements.editTitle.value = log.title || '';
+    if (this.elements.editDesc) this.elements.editDesc.value = log.description || '';
+    if (this.elements.editStatus) this.elements.editStatus.value = log.status || 'open';
+    if (this.elements.editResNotes) this.elements.editResNotes.value = log.resolution_notes || '';
+  },
+
+  closeEditor() {
+    this.elements.activeLogId = null;
+    const chatLog = document.getElementById('rogerChatLog');
+    const chatForm = document.getElementById('rogerChatForm');
+    const header = document.querySelector('.roger-chat-main-header');
+    
+    if (chatLog) chatLog.classList.remove('hidden');
+    if (chatForm) chatForm.classList.remove('hidden');
+    if (header) header.classList.remove('hidden');
+    
+    if (this.elements.editorPanelWrapper) this.elements.editorPanelWrapper.classList.add('hidden');
+    
+    // Reset selection styling
+    document.querySelectorAll('#rogerFrictionSidebarList .roger-session-item').forEach(el => el.classList.remove('active'));
+    App.roger.scrollToBottom();
+  },
+
+  async saveEditorChanges(e) {
+    e.preventDefault();
+    if (!this.elements.activeLogId) return;
+    
+    const payload = {
+      title: this.elements.editTitle.value.trim(),
+      description: this.elements.editDesc.value.trim(),
+      status: this.elements.editStatus.value,
+      resolution_notes: this.elements.editResNotes.value.trim()
+    };
+    
+    try {
+      const { error } = await window.supabaseClient
+        .from('roger_friction_logs')
+        .update(payload)
+        .eq('id', this.elements.activeLogId);
+        
+      if (!error) {
+        App.notify("Friction Log updated successfully.");
+        this.loadLogs(); // Refresh lists
+        
+        if (payload.status === 'documented') {
+           this.closeEditor(); // Jump out if documented out of scope
+        }
+      } else {
+        App.notify(error.message || "Failed to update", true);
+      }
+    } catch(err) {
+      App.notify("Error: " + err.message, true);
+    }
+  },
+
   init() {
     // Re-bind elements in case it's called late
     this.elements.form = document.getElementById('rogerFrictionForm');
@@ -1479,6 +1614,15 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     this.elements.toggleBtn = document.getElementById('rogerFrictionToggleBtn');
     this.elements.closeBtn = document.getElementById('rogerFrictionCloseBtn');
     
+    this.elements.leftSidebarList = document.getElementById('rogerFrictionSidebarList');
+    this.elements.editorPanelWrapper = document.getElementById('rogerFrictionEditorPanel');
+    this.elements.editorForm = document.getElementById('rogerFrictionEditorForm');
+    this.elements.editTitle = document.getElementById('rogerEditFrictionTitle');
+    this.elements.editDesc = document.getElementById('rogerEditFrictionDesc');
+    this.elements.editStatus = document.getElementById('rogerEditFrictionStatus');
+    this.elements.editResNotes = document.getElementById('rogerEditFrictionResolution');
+    this.elements.editorCloseBtn = document.getElementById('rogerCloseFrictionEditorBtn');
+    
     if (this.elements.form) {
       this.elements.form.addEventListener('submit', (e) => this.submitLog(e));
     }
@@ -1487,6 +1631,12 @@ Please analyze this friction boundary and formulate an architectural plan to eng
     }
     if (this.elements.closeBtn) {
       this.elements.closeBtn.addEventListener('click', () => this.toggleDrawer());
+    }
+    if (this.elements.editorForm) {
+      this.elements.editorForm.addEventListener('submit', (e) => this.saveEditorChanges(e));
+    }
+    if (this.elements.editorCloseBtn) {
+      this.elements.editorCloseBtn.addEventListener('click', () => this.closeEditor());
     }
     
     // Bind to the Ask Roger page show event to refresh logs
