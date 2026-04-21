@@ -3,11 +3,19 @@ CREATE TABLE IF NOT EXISTS public.roger_friction_logs (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     project_id BIGINT DEFAULT NULL,
+    title TEXT DEFAULT 'New Friction Log' NOT NULL,
     description TEXT NOT NULL,
     status TEXT DEFAULT 'open'::text,
     resolution_notes TEXT,
     CONSTRAINT roger_friction_logs_status_check CHECK (status = ANY (ARRAY['open'::text, 'resolved'::text, 'documented'::text]))
 );
+
+-- Migration for existing environments
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roger_friction_logs' AND column_name='title') THEN
+    ALTER TABLE public.roger_friction_logs ADD COLUMN title TEXT DEFAULT 'New Friction Log' NOT NULL;
+  END IF;
+END $$;
 
 -- Enable RLS
 ALTER TABLE public.roger_friction_logs ENABLE ROW LEVEL SECURITY;
