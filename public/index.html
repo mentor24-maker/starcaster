@@ -8518,6 +8518,21 @@
       </div>
     </div>
 
+    <!-- Training Context Corpus Viewer Modal -->
+    <div id="trainingCorpusViewerModal" class="c-modal__backdrop hidden" style="z-index: 10050; display: none;">
+      <div class="c-modal__dialog" style="max-width: 900px; max-height: 85vh; width: 90vw; border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-card); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <h2 id="trainingCorpusViewerTitle" style="margin: 0; font-size: 1.2rem; font-weight: 700;">Context Document</h2>
+          <button type="button" id="trainingCorpusViewerCloseBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-primary);">&times;</button>
+        </div>
+        <div style="flex: 1; overflow-y: auto;">
+          <pre id="trainingCorpusViewerContent" class="code-box" style="white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; padding: 1rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-light);"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- SDKs -->
+    <script src="/js/supabaseClient.js"></script>
     <!-- Module order matters: core first, then features, then app (orchestrator) last -->
     <script src="/js/utils.js"></script>
     <script src="/js/core.js"></script>

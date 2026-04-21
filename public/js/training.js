@@ -8,6 +8,18 @@ App.training = {
     this.elements.countBadge = document.getElementById('trainingContextRepoCount');
     this.elements.refreshBtn = document.getElementById('refreshTrainingCorpusBtn');
     
+    this.elements.viewerModal = document.getElementById('trainingCorpusViewerModal');
+    this.elements.viewerTitle = document.getElementById('trainingCorpusViewerTitle');
+    this.elements.viewerContent = document.getElementById('trainingCorpusViewerContent');
+    this.elements.viewerClose = document.getElementById('trainingCorpusViewerCloseBtn');
+
+    if (this.elements.viewerClose) {
+      this.elements.viewerClose.addEventListener('click', () => {
+        this.elements.viewerModal.classList.add('hidden');
+        this.elements.viewerModal.style.display = 'none';
+      });
+    }
+
     // Filters
     this.elements.filterFileType = document.getElementById('filterTrainingFileType');
     this.elements.filterDomain = document.getElementById('filterTrainingDomain');
@@ -55,7 +67,7 @@ App.training = {
       
       let query = window.supabaseClient
         .from('training_corpus')
-        .select('id, title, source_type, category, created_at', { count: 'exact' });
+        .select('id, title, source_type, category, created_at, content_text', { count: 'exact' });
 
       // Apply Filters
       if (this.elements.filterFileType && this.elements.filterFileType.value) {
@@ -103,7 +115,9 @@ App.training = {
         const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         tr.innerHTML = `
-          <td style="padding: 0.75rem 1rem; font-weight: 500;">${item.title || 'Untitled'}</td>
+          <td style="padding: 0.75rem 1rem; font-weight: 500;">
+            <a href="#" class="view-corpus-btn" style="color: var(--link-color, #3b82f6); text-decoration: underline;">${item.title || 'Untitled'}</a>
+          </td>
           <td style="padding: 0.75rem 1rem;"><span style="background:var(--bg-input); padding:0.15rem 0.5rem; border-radius:10px; font-size:0.75rem;">${item.source_type}</span></td>
           <td style="padding: 0.75rem 1rem;">${item.category || '-'}</td>
           <td style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-color-secondary);">${dateStr}</td>
@@ -111,6 +125,14 @@ App.training = {
             <button class="danger-btn tiny-btn delete-btn" data-id="${item.id}" style="padding:0.2rem 0.6rem; font-size:0.75rem; background:transparent; color:#e02424; border:1px solid #e02424;">Delete</button>
           </td>
         `;
+
+        const viewBtn = tr.querySelector('.view-corpus-btn');
+        if (viewBtn) {
+          viewBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.openViewer(item.title, item.content_text);
+          });
+        }
 
         const delBtn = tr.querySelector('.delete-btn');
         if (delBtn) {
@@ -144,6 +166,14 @@ App.training = {
     } catch (e) {
       alert("Error deleting record: " + e.message);
     }
+  },
+
+  openViewer(title, rawText) {
+    if (!this.elements.viewerModal) return;
+    this.elements.viewerTitle.textContent = title || 'Document Viewer';
+    this.elements.viewerContent.textContent = rawText || '// No text extracted or vector is corrupted.';
+    this.elements.viewerModal.classList.remove('hidden');
+    this.elements.viewerModal.style.display = 'flex';
   }
 };
 
