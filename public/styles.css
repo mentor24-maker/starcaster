@@ -9369,6 +9369,34 @@ button.section-settings-gear-btn svg {
   flex-direction: column;
 }
 
+.roger-friction-sidebar {
+  width: 380px;
+  background: var(--bg-body);
+  border-left: 1px solid #c0c0c0;
+  display: flex;
+  flex-direction: column;
+}
+
+.roger-friction-log-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.roger-friction-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.roger-friction-item.resolved {
+  opacity: 0.7;
+}
+
 .roger-sidebar-header {
   padding: 1rem;
   border-bottom: 1px solid var(--border-light);

@@ -1380,3 +1380,99 @@ App.roger.testAiConnection = async function() {
     }
   }
 };
+
+// ==========================================
+// HITL Friction Logger Implementation
+// ==========================================
+App.rogerFriction = {
+  elements: {
+    form: document.getElementById('rogerFrictionForm'),
+    input: document.getElementById('rogerFrictionInput'),
+    list: document.getElementById('rogerFrictionList'),
+  },
+
+  async loadLogs() {
+    if (!this.elements.list) return;
+    try {
+      if (!window.supabaseClient) {
+        console.warn("Supabase client not initialized yet.");
+        return;
+      }
+      
+      const { data, error } = await window.supabaseClient
+        .from('roger_friction_logs')
+        .select('id, description, status')
+        .neq('status', 'documented')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        this.elements.list.innerHTML = ''; // clear
+        data.forEach(log => {
+          const li = document.createElement('li');
+          li.className = 'roger-friction-item ' + (log.status === 'resolved' ? 'resolved' : '');
+          li.innerHTML = `
+            <div><strong>${log.status.toUpperCase()}</strong></div>
+            <div>${log.description}</div>
+          `;
+          this.elements.list.appendChild(li);
+        });
+      } else {
+        this.elements.list.innerHTML = '<li class="roger-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>';
+      }
+    } catch (e) {
+      console.error("Failed to load friction logs", e);
+    }
+  },
+
+  async submitLog(e) {
+    e.preventDefault();
+    const txt = this.elements.input.value.trim();
+    if (!txt) return;
+
+    try {
+      if (!window.supabaseClient) throw new Error("Database disconnected.");
+
+      const { data, error } = await window.supabaseClient
+        .from('roger_friction_logs')
+        .insert([{ description: txt, status: 'open' }]);
+
+      if (!error) {
+        this.elements.input.value = '';
+        App.notify("Friction Logged successfully.");
+        this.loadLogs();
+      } else {
+        App.notify(error.message || "Failed to log friction", true);
+      }
+    } catch (err) {
+      App.notify("Error: " + err.message, true);
+    }
+  },
+
+  init() {
+    // Re-bind elements in case it's called late
+    this.elements.form = document.getElementById('rogerFrictionForm');
+    this.elements.input = document.getElementById('rogerFrictionInput');
+    this.elements.list = document.getElementById('rogerFrictionList');
+    
+    if (this.elements.form) {
+      this.elements.form.addEventListener('submit', (e) => this.submitLog(e));
+    }
+    
+    // Bind to the Ask Roger page show event to refresh logs
+    document.addEventListener('pageChanged', (e) => {
+      if (e.detail && e.detail.pageId === 'askRogerPage') {
+        this.loadLogs();
+      }
+    });
+
+    // Initial load
+    this.loadLogs();
+  }
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => App.rogerFriction.init(), 1000);
+});

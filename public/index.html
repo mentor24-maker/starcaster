@@ -2400,6 +2400,22 @@
               </div>
             </form>
           </div>
+          <aside class="roger-friction-sidebar">
+            <div class="roger-sidebar-header">
+              <h4 style="margin: 0; color: var(--text-color-secondary); font-size: 0.85rem; text-transform: uppercase;">HITL Friction Log</h4>
+              <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: #666;">Log manual payloads & data shuttles</p>
+            </div>
+            <div style="padding: 1rem; border-bottom: 1px solid var(--border-light);">
+              <form id="rogerFrictionForm" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <textarea id="rogerFrictionInput" placeholder="Describe the manual intervention..." required style="min-height: 80px;"></textarea>
+                <button type="submit" class="primary-btn" style="width: 100%;">Log Friction</button>
+              </form>
+            </div>
+            <ul id="rogerFrictionList" class="roger-friction-log-list">
+              <!-- Logs populated here -->
+              <li class="roger-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>
+            </ul>
+          </aside>
         </div>
       </section>
 
