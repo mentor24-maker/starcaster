@@ -408,8 +408,8 @@ App.roger.formatMarkdown = function(text) {
   html = html.replace(/\n/g, '<br/>');
 
   // 4.5 Bind State Version anchors to allow interactive routing
-  const versionRegex = /\b(?:(?:state_?)?version_?id|version)(?:\\n|\s)*:(?:\\n|\s)*(\d+)/gi;
-  html = html.replace(versionRegex, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion($1); return false;">$&</a>');
+  const versionRegex = /\b(?:(?:state_?)?version_?id|version|commandhash)(?:\\n|\s|<br\s*\/?>|"|'|&quot;)*:(?:\\n|\s|<br\s*\/?>|"|'|&quot;)*([\w\d]+)/gi;
+  html = html.replace(versionRegex, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion(\'$1\'); return false;">$&</a>');
 
   // 5. Restore code blocks, but now we format them properly with our UI wrapper
   html = html.replace(/@@@CODEBLOCK(\d+)@@@/g, (match, i) => {
