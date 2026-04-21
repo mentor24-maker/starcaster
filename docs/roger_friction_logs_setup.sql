@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS public.roger_friction_logs (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+    project_id BIGINT DEFAULT NULL,
     description TEXT NOT NULL,
     status TEXT DEFAULT 'open'::text,
     resolution_notes TEXT,
