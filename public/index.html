@@ -2354,6 +2354,11 @@
             <ul id="rogerSessionList" class="roger-session-list">
               <!-- Dynamically populated -->
             </ul>
+
+            <h4 style="margin: 1rem 1rem 0.5rem 1rem; color: var(--text-color-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Friction Logs</h4>
+            <ul id="rogerFrictionSidebarList" class="roger-session-list">
+              <!-- Dynamically populated -->
+            </ul>
           </aside>
           <div class="roger-chat-main-panel">
             <div class="roger-chat-main-header" style="justify-content: space-between;">
@@ -2400,6 +2405,37 @@
                 <button type="submit" class="primary-btn">Send</button>
               </div>
             </form>
+            
+            <div id="rogerFrictionEditorPanel" class="hidden" style="display: flex; flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+              <h2 id="rogerFrictionEditorHeader" style="margin-top: 0;">Friction Log Details</h2>
+              <form id="rogerFrictionEditorForm" class="standard-form-grid" style="max-width: 800px;">
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionTitle">Title</label>
+                  <input type="text" id="rogerEditFrictionTitle" required />
+                </div>
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionDesc">Payload / Description</label>
+                  <textarea id="rogerEditFrictionDesc" style="min-height: 120px;" required></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="rogerEditFrictionStatus">Status</label>
+                  <select id="rogerEditFrictionStatus">
+                    <option value="open">Open</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="documented">Documented</option>
+                  </select>
+                </div>
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionResolution">Resolution Notes</label>
+                  <textarea id="rogerEditFrictionResolution" style="min-height: 120px;"></textarea>
+                </div>
+                <div class="form-actions full-width" style="margin-top: 1rem;">
+                  <button type="submit" class="primary-btn">Save Changes</button>
+                  <button type="button" id="rogerCloseFrictionEditorBtn" class="secondary-btn">Close Editor</button>
+                </div>
+              </form>
+            </div>
+            
           </div>
           <aside class="roger-friction-sidebar" id="rogerFrictionSidebar">
             <div class="roger-sidebar-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
