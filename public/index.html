@@ -2172,6 +2172,43 @@
           <button id="refreshTrainingCorpusBtn" class="secondary-btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">⟳ Refresh Knowledge</button>
         </section>
 
+        <section id="trainingCorpusFilters" class="standard-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1rem; background: var(--bg-hover); padding: 1rem; border-radius: 6px;">
+          <div class="form-group">
+            <label>File Type</label>
+            <select id="filterTrainingFileType">
+              <option value="">All</option>
+              <option value=".md">Markdown (.md)</option>
+              <option value=".sql">SQL (.sql)</option>
+              <option value=".js">Javascript (.js)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Domain</label>
+            <select id="filterTrainingDomain">
+              <option value="">All</option>
+              <option value="Architecture & Rules">Architecture & Rules</option>
+              <option value="Friction Log">Friction Log</option>
+              <option value="Agent Persona">Agent Persona</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <input type="text" id="filterTrainingCategory" placeholder="e.g. Alpha..." />
+          </div>
+          <div class="form-group">
+            <label>Title Query</label>
+            <input type="text" id="filterTrainingSearch" placeholder="Search titles..." />
+          </div>
+          <div class="form-group">
+            <label>Start Date</label>
+            <input type="date" id="filterTrainingStartDate" />
+          </div>
+          <div class="form-group">
+            <label>End Date</label>
+            <input type="date" id="filterTrainingEndDate" />
+          </div>
+        </section>
+
         <section class="table-container" style="border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; background: var(--bg-card);">
           <table class="data-table" style="width: 100%; border-collapse: collapse;">
             <thead style="background: var(--bg-hover);">
