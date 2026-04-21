@@ -408,7 +408,8 @@ App.roger.formatMarkdown = function(text) {
   html = html.replace(/\n/g, '<br/>');
 
   // 4.5 Bind State Version anchors to allow interactive routing
-  html = html.replace(/\b(?:(?:state_?)?version_?id|version)\s*:\s*(\d+)/gi, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion($1); return false;">$&</a>');
+  const versionRegex = /\b(?:(?:state_?)?version_?id|version)(?:\\n|\s)*:(?:\\n|\s)*(\d+)/gi;
+  html = html.replace(versionRegex, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion($1); return false;">$&</a>');
 
   // 5. Restore code blocks, but now we format them properly with our UI wrapper
   html = html.replace(/@@@CODEBLOCK(\d+)@@@/g, (match, i) => {
@@ -423,10 +424,13 @@ App.roger.formatMarkdown = function(text) {
       }
     }
     const encoded = btoa(unescape(encodeURIComponent(codeBlock)));
-    const escapedCode = codeBlock
+    let escapedCode = codeBlock
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+      
+    // Apply Version binding to text within code blocks 
+    escapedCode = escapedCode.replace(versionRegex, '<a href="#rogerChatVersion_$1" class="roger-version-link" onclick="App.roger.scrollToVersion($1); return false;">$&</a>');
 
     return `<div class="code-block-wrapper" style="position:relative; margin: 0.5rem 0;">
       <div class="roger-code-actions">
