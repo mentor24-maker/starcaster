@@ -2146,21 +2146,49 @@
           <h2>Training: Context</h2>
         </div>
         <p>Define the shared project narrative, positioning, and reference context used across channels.</p>
-        <section class="youtube-miner-panel">
+        
+        <!-- Legacy Response Injector -->
+        <section class="youtube-miner-panel" style="margin-bottom: 2rem;">
           <div class="form-row">
             <label for="youtubeMinerResponseContext">
-              Context used for draft replies (project themes, positioning, references)
+              Direct Reply Prompt Modifier (project themes, positioning, references)
             </label>
             <textarea
               id="youtubeMinerResponseContext"
               name="response_context"
               form="youtubeCommentMinerForm"
-              rows="10"
-              placeholder="Example: ISITAS focuses on practical self-alignment. Keep references moderate and relevant. Prefer encouraging, non-pushy replies that ask one clarifying question before CTA."
+              rows="3"
+              placeholder="Example: Keep references moderate and relevant. Prefer encouraging, non-pushy replies..."
             ></textarea>
           </div>
         </section>
 
+        <!-- New Tri-Agent Active Context Repository Dashboard -->
+        <section style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.5rem;">
+          <div>
+            <h3 style="margin:0; font-size: 1.1rem;">Active Model Context <span id="trainingContextRepoCount" class="badge" style="background:var(--accent); color:#000; padding:0.1rem 0.5rem; border-radius:10px; font-size:0.75rem; margin-left:0.5rem;">0</span></h3>
+            <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: #666;">Centralized RAG (Retrieval-Augmented Generation) corpus automatically ingested via Node pipeline.</p>
+          </div>
+          <button id="refreshTrainingCorpusBtn" class="secondary-btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">⟳ Refresh Knowledge</button>
+        </section>
+
+        <section class="table-container" style="border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; background: var(--bg-card);">
+          <table class="data-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="background: var(--bg-hover);">
+              <tr>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">TITLE</th>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">DOMAIN</th>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">CATEGORY</th>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">INGESTED</th>
+                <th style="padding: 0.75rem 1rem; text-align: right; font-size: 0.8rem; color: var(--text-color-secondary);">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="trainingContextRepoTable">
+              <!-- Dynamically populated rows go here -->
+              <tr><td colspan="5" style="text-align:center; padding:2rem; opacity:0.6;">Loading Knowledge Base vectors...</td></tr>
+            </tbody>
+          </table>
+        </section>
       </section>
       <section id="trainingCategoriesPage" class="app-page hidden training-page">
         <div class="page-heading-row">
@@ -8483,6 +8511,7 @@
     <script src="/js/assetCategories.js"></script>
     <script src="/js/channels.js"></script>
     <script src="/js/envConfig.js"></script>
+    <script src="/js/training.js"></script>
     <script src="/app.js"></script>
     <script src="/bundle.js"></script>
   </body>
