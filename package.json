@@ -17,7 +17,8 @@
     "backfill:channels-passwords:apply": "node scripts/backfill_channels_password_encryption.js --apply",
     "migrate:assets-drive-to-blob:dry-run": "node scripts/migrate_assets_drive_to_blob.js",
     "migrate:assets-drive-to-blob:apply": "node scripts/migrate_assets_drive_to_blob.js --apply",
-    "check:vercel-cutover": "node scripts/vercel_cutover_check.js"
+    "check:vercel-cutover": "node scripts/vercel_cutover_check.js",
+    "import:training-context:apply": "node scripts/harvest_knowledge.mjs"
   },
   "devDependencies": {
     "dotenv": "^17.3.1",
