@@ -9359,6 +9359,7 @@ button.section-settings-gear-btn svg {
   overflow: hidden;
   margin-top: 1rem;
   min-width: 0;
+  position: relative;
 }
 
 .roger-sessions-sidebar {
