@@ -13,18 +13,15 @@ CREATE TABLE IF NOT EXISTS public.roger_friction_logs (
 ALTER TABLE public.roger_friction_logs ENABLE ROW LEVEL SECURITY;
 
 -- Create basic access policies
-CREATE POLICY "Enable read access for all authenticated users"
-    ON public.roger_friction_logs FOR SELECT
-    USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable read access for all authenticated users" ON public.roger_friction_logs;
+DROP POLICY IF EXISTS "Enable insert access for all authenticated users" ON public.roger_friction_logs;
+DROP POLICY IF EXISTS "Enable update access for all authenticated users" ON public.roger_friction_logs;
+DROP POLICY IF EXISTS "Enable delete access for all authenticated users" ON public.roger_friction_logs;
+DROP POLICY IF EXISTS "Allow all access on friction logs" ON public.roger_friction_logs;
 
-CREATE POLICY "Enable insert access for all authenticated users"
-    ON public.roger_friction_logs FOR INSERT
-    WITH CHECK (auth.role() = 'authenticated');
-
-CREATE POLICY "Enable update access for all authenticated users"
-    ON public.roger_friction_logs FOR UPDATE
-    USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Enable delete access for all authenticated users"
-    ON public.roger_friction_logs FOR DELETE
-    USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access on friction logs" 
+ON public.roger_friction_logs 
+FOR ALL 
+TO public
+USING (true) 
+WITH CHECK (true);
