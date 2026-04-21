@@ -9348,7 +9348,7 @@ button.section-settings-gear-btn svg {
 }
 
 /* Ask Roger Chat Interface */
-.roger-chat-container {
+.dev-chat-container {
   display: flex;
   flex-direction: row;
   height: calc(100vh - 180px);
@@ -9362,7 +9362,7 @@ button.section-settings-gear-btn svg {
   position: relative;
 }
 
-.roger-sessions-sidebar {
+.dev-sessions-sidebar {
   width: 320px;
   background: var(--bg-body);
   border-right: 1px solid #c0c0c0; /* silver vertical line */
@@ -9370,7 +9370,7 @@ button.section-settings-gear-btn svg {
   flex-direction: column;
 }
 
-.roger-friction-sidebar {
+.dev-friction-sidebar {
   position: absolute;
   top: 0;
   right: -400px;
@@ -9384,11 +9384,11 @@ button.section-settings-gear-btn svg {
   z-index: 50;
   box-shadow: -4px 0 15px rgba(0,0,0,0.15);
 }
-.roger-friction-sidebar.visible {
+.dev-friction-sidebar.visible {
   right: 0;
 }
 
-.roger-friction-log-list {
+.dev-friction-log-list {
   flex: 1;
   overflow-y: auto;
   list-style: none;
@@ -9396,7 +9396,7 @@ button.section-settings-gear-btn svg {
   padding: 0;
 }
 
-.roger-friction-item {
+.dev-friction-item {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-light);
   font-size: 0.85rem;
@@ -9404,16 +9404,16 @@ button.section-settings-gear-btn svg {
   flex-direction: column;
   gap: 0.5rem;
 }
-.roger-friction-item.resolved {
+.dev-friction-item.resolved {
   opacity: 0.7;
 }
 
-.roger-sidebar-header {
+.dev-sidebar-header {
   padding: 1rem;
   border-bottom: 1px solid var(--border-light);
 }
 
-.roger-session-list {
+.dev-session-list {
   flex: 1;
   overflow-y: auto;
   list-style: none;
@@ -9450,7 +9450,7 @@ button.section-settings-gear-btn svg {
   transform: rotate(-90deg);
 }
 
-.roger-session-item {
+.dev-session-item {
   padding: 0.4rem 1rem;
   border-bottom: 1px solid var(--border-light);
   cursor: pointer;
@@ -9461,13 +9461,13 @@ button.section-settings-gear-btn svg {
   text-overflow: ellipsis;
 }
 
-.roger-session-item:hover, .roger-session-item.active {
+.dev-session-item:hover, .dev-session-item.active {
   background-color: var(--bg-hover);
   color: var(--accent);
   font-weight: 500;
 }
 
-.roger-chat-main-panel {
+.dev-chat-main-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -9475,13 +9475,13 @@ button.section-settings-gear-btn svg {
   min-width: 0;
 }
 
-.roger-chat-main-header {
+.dev-chat-main-header {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-card);
 }
 
-.roger-chat-main-header h3 {
+.dev-chat-main-header h3 {
   margin: 0;
   font-size: 1.1rem;
   color: var(--text-dark);
@@ -9491,7 +9491,7 @@ button.section-settings-gear-btn svg {
   align-items: center;
 }
 
-.roger-chat-main-header h3:hover {
+.dev-chat-main-header h3:hover {
   opacity: 0.8;
 }
 
@@ -9514,7 +9514,7 @@ button.section-settings-gear-btn svg {
   box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
 }
 
-.roger-chat-log {
+.dev-chat-log {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
@@ -9524,26 +9524,26 @@ button.section-settings-gear-btn svg {
   min-width: 0;
 }
 
-.roger-chat-bubble-wrapper {
+.dev-chat-bubble-wrapper {
   display: flex;
   width: 100%;
   min-width: 0;
   gap: 1rem;
 }
 
-.roger-chat-bubble-wrapper.user {
+.dev-chat-bubble-wrapper.user {
   justify-content: flex-end;
 }
 
-.roger-chat-bubble-wrapper.roger {
+.dev-chat-bubble-wrapper.roger {
   justify-content: flex-start;
 }
 
-.roger-chat-bubble-wrapper.antigravity {
+.dev-chat-bubble-wrapper.antigravity {
   justify-content: center;
 }
 
-.roger-chat-avatar {
+.dev-chat-avatar {
   flex-shrink: 0;
   width: 48px;
   height: 48px;
@@ -9555,14 +9555,14 @@ button.section-settings-gear-btn svg {
   background-color: var(--bg-card);
 }
 
-.roger-chat-content-col {
+.dev-chat-content-col {
   display: flex;
   flex-direction: column;
   max-width: 80%;
   min-width: 0;
 }
 
-.roger-chat-bubble {
+.dev-chat-bubble {
   width: 100%;
   min-width: 0;
   padding: 1rem 1.25rem;
@@ -9572,27 +9572,27 @@ button.section-settings-gear-btn svg {
   box-shadow: var(--shadow-sm);
 }
 
-.roger-chat-bubble.user {
+.dev-chat-bubble.user {
   background-color: #e0f2fe; /* Lighter soft blue */
   color: var(--text-dark);
   border-top-right-radius: 4px;
 }
 
-.roger-chat-bubble.roger {
+.dev-chat-bubble.roger {
   background-color: #ecfdf5; /* Crisp light emerald */
   border: 1px solid #b5e4c8;
   color: #1e3a8a; /* Dark blue text */
   border-top-left-radius: 4px;
 }
 
-.roger-chat-bubble.antigravity {
+.dev-chat-bubble.antigravity {
   background-color: #fef9c3; /* Lighter soft gold */
   color: #1a1a1a; /* Dark font */
   border-radius: var(--radius-md);
   box-shadow: 0 0 10px rgba(251, 238, 165, 0.4);
 }
 
-.roger-chat-header {
+.dev-chat-header {
   font-size: 0.8rem;
   padding: 0.5rem 1.25rem;
   margin: -1rem -1.25rem 0.75rem -1.25rem;
@@ -9604,34 +9604,34 @@ button.section-settings-gear-btn svg {
   border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
-.roger-chat-bubble.user .roger-chat-header {
+.dev-chat-bubble.user .dev-chat-header {
   border-top-right-radius: 4px;
   background-color: #bae6fd; /* Darker blue */
   border-bottom: 1px solid #7dd3fc;
 }
 
-.roger-chat-bubble.roger .roger-chat-header {
+.dev-chat-bubble.roger .dev-chat-header {
   border-top-left-radius: 4px;
   background-color: #a7f3d0; /* Darker emerald */
   border-bottom: 1px solid #6ee7b7;
 }
 
-.roger-chat-bubble.antigravity .roger-chat-header {
+.dev-chat-bubble.antigravity .dev-chat-header {
   background-color: #fde047; /* Darker gold */
   border-bottom: 1px solid #facc15;
 }
 
-.roger-chat-header strong {
+.dev-chat-header strong {
   font-weight: 600;
 }
 
-.roger-copy-btn-container {
+.dev-copy-btn-container {
   display: flex;
   justify-content: flex-end;
   margin-left: auto;
 }
 
-.roger-copy-btn {
+.dev-copy-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: inherit;
@@ -9648,16 +9648,16 @@ button.section-settings-gear-btn svg {
   pointer-events: auto;
 }
 
-.roger-chat-bubble.user .roger-copy-btn {
+.dev-chat-bubble.user .dev-copy-btn {
   border-color: rgba(0, 0, 0, 0.2);
 }
 
-.roger-copy-btn:hover {
+.dev-copy-btn:hover {
   opacity: 1;
   background: rgba(255, 255, 255, 0.1);
 }
 
-.roger-code-actions {
+.dev-code-actions {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -9666,8 +9666,8 @@ button.section-settings-gear-btn svg {
   z-index: 10;
 }
 
-.roger-code-save-btn,
-.roger-code-actions .roger-copy-btn {
+.dev-code-save-btn,
+.dev-code-actions .dev-copy-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: #a0a0a0;
@@ -9683,24 +9683,24 @@ button.section-settings-gear-btn svg {
   transition: opacity 0.2s, background 0.2s;
 }
 
-.roger-code-save-btn:hover,
-.roger-code-actions .roger-copy-btn:hover {
+.dev-code-save-btn:hover,
+.dev-code-actions .dev-copy-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
 
-.roger-copy-btn.main-copy {
+.dev-copy-btn.main-copy {
   margin-left: 10px;
   width: 28px;
   height: 28px;
 }
 
-.roger-chat-main-header {
+.dev-chat-main-header {
   display: flex;
   align-items: center;
 }
 
-.roger-chat-content pre {
+.dev-chat-content pre {
   background: #1e1e1e;
   color: #d4d4d4;
   padding: 1rem;
@@ -9711,28 +9711,28 @@ button.section-settings-gear-btn svg {
   margin: 0.5rem 0;
 }
 
-.roger-chat-content code {
+.dev-chat-content code {
   font-family: monospace;
   background: rgba(0,0,0,0.05);
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
 }
 
-.roger-chat-bubble.antigravity .roger-chat-content code {
+.dev-chat-bubble.antigravity .dev-chat-content code {
   background: rgba(0, 0, 0, 0.06);
   color: #ab2c2c;
   border-radius: 3px;
   padding: 0.1em 0.3em;
 }
 
-.roger-chat-content pre code,
-.roger-chat-bubble.antigravity .roger-chat-content pre code {
+.dev-chat-content pre code,
+.dev-chat-bubble.antigravity .dev-chat-content pre code {
   background: transparent;
   padding: 0;
   color: inherit;
 }
 
-.roger-chat-input-area {
+.dev-chat-input-area {
   display: flex;
   padding: 1rem;
   border-top: 1px solid var(--border-light);
@@ -9741,7 +9741,7 @@ button.section-settings-gear-btn svg {
   align-items: flex-end;
 }
 
-.roger-chat-input-area textarea {
+.dev-chat-input-area textarea {
   flex: 1;
   min-height: 50px;
   max-height: 200px;
@@ -9754,17 +9754,17 @@ button.section-settings-gear-btn svg {
   font-family: inherit;
 }
 
-.roger-chat-input-area textarea:focus {
+.dev-chat-input-area textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
 
-.roger-chat-bubble.loading {
+.dev-chat-bubble.loading {
   font-style: italic;
   opacity: 0.7;
 }
 
-.roger-chat-bubble.pending {
+.dev-chat-bubble.pending {
   font-style: italic;
   font-weight: bold;
   opacity: 0.9;
@@ -9779,11 +9779,11 @@ button.section-settings-gear-btn svg {
 }
 
 /* Roger Chat Attachments */
-.roger-chat-input-area {
+.dev-chat-input-area {
   flex-direction: column;
   align-items: stretch;
 }
-.roger-chat-attachment-preview {
+.dev-chat-attachment-preview {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -9794,7 +9794,7 @@ button.section-settings-gear-btn svg {
   font-size: 0.85rem;
   border: 1px solid var(--border-light);
 }
-.roger-chat-attachment-preview.hidden {
+.dev-chat-attachment-preview.hidden {
   display: none;
 }
 .attachment-name {
@@ -9817,16 +9817,16 @@ button.section-settings-gear-btn svg {
 .attachment-clear-btn:hover {
   color: var(--text-primary);
 }
-.roger-chat-attachment img {
+.dev-chat-attachment img {
   border: 1px solid var(--border-light);
   background: var(--bg-body);
   transition: opacity 0.2s;
 }
-.roger-chat-attachment img:hover {
+.dev-chat-attachment img:hover {
   opacity: 0.9;
 }
 
-.roger-chat-input-row button {
+.dev-chat-input-row button {
   width: auto !important;
   min-width: 0 !important;
   flex: 0 0 auto;
@@ -9841,20 +9841,20 @@ button.section-settings-gear-btn svg {
   justify-content: center;
 }
 
-.roger-chat-input-row {
+.dev-chat-input-row {
   align-items: center;
 }
-.roger-chat-content { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
+.dev-chat-content { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
 
 /* Ask Roger Feature Extensions */
-.roger-search-match {
+.dev-search-match {
   background-color: #ffeb3b;
   color: #000;
   border-radius: 2px;
   box-shadow: 0 0 0 1px #ff9800;
 }
 
-.roger-chat-summary {
+.dev-chat-summary {
   font-size: 0.9rem;
   white-space: nowrap;
   overflow: hidden;
@@ -9864,37 +9864,37 @@ button.section-settings-gear-btn svg {
 }
 
 /* Global Collapsed Mode */
-.roger-chat-log.roger-collapsed-mode .roger-chat-content-col {
+.dev-chat-log.dev-collapsed-mode .dev-chat-content-col {
   max-width: 100%;
 }
 
-.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-content,
-.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-attachment,
-.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-header {
+.dev-chat-log.dev-collapsed-mode .dev-chat-bubble:not(.expanded) .dev-chat-content,
+.dev-chat-log.dev-collapsed-mode .dev-chat-bubble:not(.expanded) .dev-chat-attachment,
+.dev-chat-log.dev-collapsed-mode .dev-chat-bubble:not(.expanded) .dev-chat-header {
   display: none !important;
 }
 
-.roger-chat-log.roger-collapsed-mode .roger-chat-bubble-wrapper:not(.expanded) {
+.dev-chat-log.dev-collapsed-mode .dev-chat-bubble-wrapper:not(.expanded) {
   gap: 0.5rem;
 }
 
-.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) {
+.dev-chat-log.dev-collapsed-mode .dev-chat-bubble:not(.expanded) {
   padding: 0.5rem 1rem;
 }
 
-.roger-chat-log.roger-collapsed-mode .roger-chat-bubble:not(.expanded) .roger-chat-summary {
+.dev-chat-log.dev-collapsed-mode .dev-chat-bubble:not(.expanded) .dev-chat-summary {
   display: block;
 }
 
-.roger-chat-bubble .roger-chat-summary {
+.dev-chat-bubble .dev-chat-summary {
   display: none; /* hidden normally */
 }
 
-.roger-chat-bubble .roger-chat-summary:hover {
+.dev-chat-bubble .dev-chat-summary:hover {
   opacity: 0.8;
 }
 
-.roger-expand-link {
+.dev-expand-link {
   color: #2563eb;
   text-decoration: none;
   margin-left: 0.5rem;
@@ -9903,16 +9903,16 @@ button.section-settings-gear-btn svg {
   font-family: monospace;
 }
 
-.roger-expand-link::after {
+.dev-expand-link::after {
   content: "[+]";
 }
 
-.roger-chat-bubble.expanded .roger-expand-link::after,
-.roger-chat-bubble-wrapper.expanded .roger-expand-link::after {
+.dev-chat-bubble.expanded .dev-expand-link::after,
+.dev-chat-bubble-wrapper.expanded .dev-expand-link::after {
   content: "[-]";
 }
 
-.roger-persistent-overlay {
+.dev-persistent-overlay {
   background: white;
   border-top: 4px solid var(--accent-warning);
   box-shadow: 0 -4px 15px rgba(0,0,0,0.1);
@@ -9924,25 +9924,25 @@ button.section-settings-gear-btn svg {
   gap: 1rem;
 }
 
-.roger-persistent-overlay.hidden {
+.dev-persistent-overlay.hidden {
   display: none !important;
 }
 
-.roger-overlay-active #rogerChatInput {
+.dev-overlay-active #rogerChatInput {
   background: #f3f4f6 !important;
   color: #9ca3af !important;
   cursor: not-allowed;
   pointer-events: none;
 }
 
-.roger-overlay-active #rogerChatForm .primary-btn,
-.roger-overlay-active #rogerFileTriggerBtn {
+.dev-overlay-active #rogerChatForm .primary-btn,
+.dev-overlay-active #rogerFileTriggerBtn {
   opacity: 0.5;
   pointer-events: none;
 }
 
 
-.roger-search-match.active-match {
+.dev-search-match.active-match {
   background-color: #ff9800;
   color: #fff;
   box-shadow: 0 0 0 2px #e65100;
@@ -10315,7 +10315,7 @@ button.section-settings-gear-btn svg {
 }
 
 /* Roger Chat State Version Anchors */
-.roger-version-link {
+.dev-version-link {
   color: var(--accent);
   text-decoration: underline;
   text-decoration-style: dotted;
@@ -10326,17 +10326,17 @@ button.section-settings-gear-btn svg {
   transition: all 0.2s ease-in-out;
 }
 
-.roger-version-link:hover {
+.dev-version-link:hover {
   text-decoration-style: solid;
   color: var(--accent-hover);
 }
 
 /* Chat bubble target animation */
-.roger-chat-bubble {
+.dev-chat-bubble {
   transition: box-shadow 0.3s ease, background-color 0.3s ease;
 }
 
-.roger-chat-bubble.highlight-ping {
+.dev-chat-bubble.highlight-ping {
   animation: rogerHighlightPing 1.5s ease-out;
 }
 
