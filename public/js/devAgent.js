@@ -1360,8 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (toggleBtn && log) {
     toggleBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      const isCollapsed = log.classList.toggle('dev-collapsed-mode');
-      toggleBtn.textContent = isCollapsed ? 'Expand All' : 'Collapse All';
+      log.classList.toggle('dev-collapsed-mode');
       
       const expandedNodes = log.querySelectorAll('.expanded');
       expandedNodes.forEach(node => node.classList.remove('expanded'));
