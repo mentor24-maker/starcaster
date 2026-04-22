@@ -5081,15 +5081,6 @@ th {
   font-weight: 600;
 }
 
-.develop-themes-builder-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.develop-themes-builder-header h3 {
-  margin: 0;
-}
 
 .develop-theme-table-thumb {
   vertical-align: middle;
