@@ -9459,8 +9459,9 @@ button.section-settings-gear-btn svg {
   right: 0;
   top: 0;
   bottom: 0;
-  background: yellow !important;
-  border: 2px solid red !important;
+  width: auto;
+  background: transparent;
+  border: none;
   color: inherit;
   padding: 0.5rem 1rem 0.5rem 1rem;
   cursor: pointer;
