@@ -58,7 +58,10 @@ function serveStatic(req, res) {
       return res.end('Not found');
     }
     const ext = path.extname(fullPath);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+    });
     res.end(data);
   });
 }
