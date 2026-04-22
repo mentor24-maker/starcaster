@@ -850,7 +850,7 @@ App.settings = (function () {
   }
 
   function initConnectionOpsSectionToggles() {
-    const toggles = Array.from(document.querySelectorAll('.standard-collapsible-header[data-ops-target]'));
+    const toggles = Array.from(document.querySelectorAll('.accordion-header[data-ops-target]'));
     toggles.forEach((toggle) => {
       if (toggle.dataset.bound === '1') return;
       toggle.dataset.bound = '1';
