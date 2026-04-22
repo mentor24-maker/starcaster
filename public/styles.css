@@ -2829,7 +2829,7 @@ th {
   background: #000;
 }
 
-.develop-template-section-header-row > button:not(.develop-template-section-toggle) {
+.develop-template-section-header-row > button:not(.standard-collapsible-header) {
   flex: 0 0 auto;
   margin: 0.45rem;
   min-width: 0;
@@ -2838,32 +2838,7 @@ th {
   margin-left: auto;
 }
 
-.develop-template-section-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
-  margin: 0;
-  padding: 0.95rem 1.1rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #fff;
-  font-size: 1.05rem;
-  font-weight: 700;
-  justify-content: flex-start;
-  box-shadow: none;
-}
-
-.develop-template-section-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.develop-template-editor .develop-template-section-header-row > button:not(.develop-template-section-toggle) {
+.develop-template-editor .develop-template-section-header-row > button:not(.standard-collapsible-header) {
   flex: 0 0 auto;
   width: auto;
   max-width: max-content;
@@ -2871,22 +2846,6 @@ th {
   padding-right: 1rem;
 }
 
-.develop-template-section-toggle:hover,
-.develop-template-section-toggle:focus {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.develop-template-section-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1rem;
-  transition: transform 0.18s ease;
-}
-
-.develop-template-section-toggle[aria-expanded="false"] .develop-template-section-arrow {
-  transform: rotate(-90deg);
-}
 
 .develop-template-section-body {
   padding: 1rem 0.95rem 1rem;
@@ -7598,39 +7557,6 @@ table {
   background: #f7fbff;
 }
 
-.connection-ops-section-toggle {
-  margin: 0;
-  border-radius: 0;
-  border: none;
-  width: 100%;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #000;
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 700;
-  padding: 0.55rem 0.7rem;
-}
-
-.connection-ops-section-toggle:hover {
-  background: #111;
-  border: none;
-  box-shadow: none;
-  transform: none;
-}
-
-.connection-ops-arrow {
-  font-size: 1rem;
-  line-height: 1;
-  transition: transform 140ms ease;
-}
-
-.connection-ops-section-toggle[aria-expanded="false"] .connection-ops-arrow {
-  transform: rotate(-90deg);
-}
-
 .connection-ops-section-body {
   padding: 0.65rem 0.75rem 0.75rem;
 }
@@ -8310,29 +8236,6 @@ table {
   background: #ffffff;
   margin-bottom: 10px;
   overflow: visible;
-}
-
-.youtube-miner-collapsible-toggle {
-  width: 100%;
-  border: 0;
-  border-bottom: 1px solid var(--c-border);
-  border-radius: 0;
-  margin: 0;
-  min-height: 48px;
-  padding: 0 12px 0 34px;
-  background: #000000;
-  color: #ffffff;
-  text-align: left;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 700;
-  position: relative;
-  overflow: visible;
-}
-
-.youtube-miner-collapsible-toggle:hover {
-  background: #111111;
 }
 
 .youtube-miner-section-badge {
@@ -9421,40 +9324,44 @@ button.section-settings-gear-btn svg {
   margin: 0;
 }
 
-.sidebar-section-header {
-  position: relative;
+/* --- Standardized Collapsible Components --- */
+.standard-collapsible-header {
   display: flex;
-  align-items: stretch;
+  position: relative;
   width: 100%;
-  padding: 0;
-  margin-top: 0;
+  align-items: stretch;
   background-color: #111;
   color: #fff;
   border: none;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: capitalize;
-  transition: background-color 0.2s ease;
-  border-radius: 10px;
-  margin-bottom: 2px;
-}
-
-.sidebar-section-header:hover {
-  background-color: #000;
-}
-
-.sidebar-nav-link {
-  color: inherit;
-  text-decoration: none;
+  margin: 0 0 2px 0;
+  padding: 0;
   text-align: left;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  padding: 0.5rem 2.5rem 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+  overflow: hidden;
+}
+
+button.standard-collapsible-header {
   cursor: pointer;
 }
 
-.sidebar-section-chevron {
+.standard-collapsible-header:hover {
+  background-color: #000;
+}
+
+.standard-collapsible-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  padding: 0.65rem 2.5rem 0.65rem 1rem;
+}
+
+.standard-collapsible-toggle {
   position: absolute;
   right: 0;
   top: 0;
@@ -9463,27 +9370,44 @@ button.section-settings-gear-btn svg {
   background: transparent;
   border: none;
   color: inherit;
-  padding: 0.5rem 1rem 0.5rem 1rem;
-  cursor: pointer;
+  padding: 0 1rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   outline: none;
+  cursor: pointer;
 }
 
-.sidebar-section-chevron:hover,
-.sidebar-section-chevron:focus,
-.sidebar-section-chevron:active {
-  outline: none;
+button.standard-collapsible-toggle:hover,
+button.standard-collapsible-toggle:focus,
+button.standard-collapsible-toggle:active {
   background: transparent;
   box-shadow: none;
+  outline: none;
 }
 
-.sidebar-section-chevron .toggle-icon {
-  transition: transform 0.2s ease;
+.standard-collapsible-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease;
 }
 
-.sidebar-section-chevron[aria-expanded="false"] .toggle-icon {
+button.standard-collapsible-header[aria-expanded="false"] .standard-collapsible-arrow {
   transform: rotate(-90deg);
+}
+
+button.standard-collapsible-toggle[aria-expanded="false"] .standard-collapsible-arrow {
+  transform: rotate(-90deg);
+}
+
+/* Used within develop template rows to match old styles */
+.develop-template-section-header-row .standard-collapsible-header {
+  background: transparent;
+  border-radius: 0;
+}
+.develop-template-section-header-row .standard-collapsible-header:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .dev-session-item {
