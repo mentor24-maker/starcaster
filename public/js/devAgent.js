@@ -262,8 +262,7 @@ App.devAgent.loadTasks = async function() {
       const shortTitle = task.title.length > 25 ? task.title.substring(0,25) + '...' : task.title;
       li.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:6px;"></span> ${shortTitle}`;
       li.addEventListener('click', () => {
-        // Eventually, open task editor logic
-        console.log("Clicked Task: ", task.id);
+        App.devAgent.openTaskEditor(task.id);
       });
       devElements.taskList.appendChild(li);
     });
@@ -1740,8 +1739,8 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => App.devAgentFriction.init(), 1000);
   
-  // Bind collapsible sidebar headers globally
-  const toggles = document.querySelectorAll('.sidebar-section-toggle');
+  // Bind collapsible sidebar headers strictly to chevron icons
+  const toggles = document.querySelectorAll('.sidebar-section-chevron');
   toggles.forEach(toggle => {
     toggle.addEventListener('click', () => {
       const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
@@ -1753,4 +1752,123 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // Bind sidebar nav links mapper
+  const navLinks = document.querySelectorAll('.sidebar-nav-link');
+  navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const navItem = link.getAttribute('data-nav');
+      if (navItem === 'tasks') App.devAgent.showTaskBrowser();
+      else if (navItem === 'forum') App.devAgent.restoreChatPanel();
+    });
+  });
+  
+  // Tasks binding
+  const devCloseTaskEditorBtn = document.getElementById('devCloseTaskEditorBtn');
+  if (devCloseTaskEditorBtn) {
+    devCloseTaskEditorBtn.addEventListener('click', App.devAgent.closeTaskEditor);
+  }
+  const devTaskEditorForm = document.getElementById('devTaskEditorForm');
+  if (devTaskEditorForm) {
+    devTaskEditorForm.addEventListener('submit', App.devAgent.saveTaskEditor);
+  }
 });
+
+App.devAgent.restoreChatPanel = function() {
+  document.getElementById('devChatLog').classList.remove('hidden');
+  document.getElementById('devChatForm').classList.remove('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const taskPanel = document.getElementById('devTaskEditorPanel'); if(taskPanel) taskPanel.classList.add('hidden');
+  const browserPanel = document.getElementById('devTaskBrowserPanel'); if(browserPanel) browserPanel.classList.add('hidden');
+};
+
+App.devAgent.showTaskBrowser = async function() {
+  document.getElementById('devChatLog').classList.add('hidden');
+  document.getElementById('devChatForm').classList.add('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const editorPanel = document.getElementById('devTaskEditorPanel'); if(editorPanel) editorPanel.classList.add('hidden');
+  
+  const browserPanel = document.getElementById('devTaskBrowserPanel');
+  if (browserPanel) browserPanel.classList.remove('hidden');
+  
+  const tbody = document.getElementById('devTaskBrowserTable');
+  if (tbody && window.supabaseClient) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:1rem; opacity:0.7;">Loading tasks...</td></tr>';
+    const { data: tasks, error } = await window.supabaseClient.from('dev_tasks').select('*').order('created_at', { ascending: false });
+    if (error) {
+      tbody.innerHTML = '<tr><td colspan="5">Failed to fetch.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    tasks.forEach(t => {
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', () => App.devAgent.openTaskEditor(t.id));
+      tr.innerHTML = `
+        <td style="text-align:left;"><strong>${t.title}</strong></td>
+        <td>${t.status}</td>
+        <td>${t.priority}</td>
+        <td>${t.assignee}</td>
+        <td>${new Date(t.created_at).toLocaleDateString()}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+};
+
+App.devAgent.openTaskEditor = async function(taskId) {
+  document.getElementById('devChatLog').classList.add('hidden');
+  document.getElementById('devChatForm').classList.add('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const browserPanel = document.getElementById('devTaskBrowserPanel'); if(browserPanel) browserPanel.classList.add('hidden');
+  
+  const panel = document.getElementById('devTaskEditorPanel');
+  if (panel) {
+    panel.classList.remove('hidden');
+    document.getElementById('devTaskEditorHeader').textContent = 'Loading...';
+    try {
+      const { data: log, error } = await window.supabaseClient.from('dev_tasks').select('*').eq('id', taskId).single();
+      if (error) throw error;
+      document.getElementById('devTaskEditorHeader').textContent = 'Edit Task';
+      document.getElementById('devEditTaskId').value = log.id;
+      document.getElementById('devEditTaskTitle').value = log.title || '';
+      document.getElementById('devEditTaskDesc').value = log.description || '';
+      let statusSel = document.getElementById('devEditTaskStatus'); if(statusSel) statusSel.value = log.status || 'todo';
+      let prioSel = document.getElementById('devEditTaskPriority'); if(prioSel) prioSel.value = log.priority || 'medium';
+      let assgSel = document.getElementById('devEditTaskAssignee'); if(assgSel) assgSel.value = log.assignee || 'mentor';
+    } catch (e) {
+      document.getElementById('devTaskEditorHeader').textContent = 'Task Unresolved';
+    }
+  }
+};
+
+App.devAgent.saveTaskEditor = async function(e) {
+  e.preventDefault();
+  const taskId = document.getElementById('devEditTaskId').value;
+  if (!taskId) return;
+  const payload = {
+    title: document.getElementById('devEditTaskTitle').value,
+    description: document.getElementById('devEditTaskDesc').value,
+    status: document.getElementById('devEditTaskStatus') ? document.getElementById('devEditTaskStatus').value : 'todo',
+    priority: document.getElementById('devEditTaskPriority') ? document.getElementById('devEditTaskPriority').value : 'medium',
+    assignee: document.getElementById('devEditTaskAssignee') ? document.getElementById('devEditTaskAssignee').value : 'mentor',
+  };
+  try {
+    const { error } = await window.supabaseClient.from('dev_tasks').update(payload).eq('id', taskId);
+    if (error) throw error;
+    App.notify('Task saved.', false);
+    App.devAgent.loadTasks(); // refresh sidebar bounds
+    App.devAgent.showTaskBrowser(); // switch panel back to list
+  } catch (err) {
+    App.notify('Failed to save task: ' + err.message, true);
+  }
+};
+
+App.devAgent.closeTaskEditor = function() {
+  document.getElementById('devTaskEditorPanel').classList.add('hidden');
+  App.devAgent.restoreChatPanel();
+};
