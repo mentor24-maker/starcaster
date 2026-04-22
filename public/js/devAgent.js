@@ -1740,7 +1740,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => App.devAgentFriction.init(), 1000);
   
   // Bind collapsible sidebar headers
-  const toggles = document.querySelectorAll('#devAgentPage .standard-collapsible-toggle');
+  const toggles = document.querySelectorAll('#devAgentPage .accordion-toggle');
   toggles.forEach((toggle) => {
     toggle.addEventListener('click', () => {
       const isExpanded = toggle.getAttribute('aria-expanded') === 'true';

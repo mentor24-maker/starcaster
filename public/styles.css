@@ -2829,7 +2829,7 @@ th {
   background: #000;
 }
 
-.develop-template-section-header-row > button:not(.standard-collapsible-header) {
+.develop-template-section-header-row > button:not(.accordion-header) {
   flex: 0 0 auto;
   margin: 0.45rem;
   min-width: 0;
@@ -2838,7 +2838,7 @@ th {
   margin-left: auto;
 }
 
-.develop-template-editor .develop-template-section-header-row > button:not(.standard-collapsible-header) {
+.develop-template-editor .develop-template-section-header-row > button:not(.accordion-header) {
   flex: 0 0 auto;
   width: auto;
   max-width: max-content;
@@ -9316,7 +9316,7 @@ button.section-settings-gear-btn svg {
 }
 
 /* --- Standardized Collapsible Components --- */
-.standard-collapsible-header {
+.accordion-header {
   display: flex;
   position: relative;
   width: 100%;
@@ -9334,15 +9334,15 @@ button.section-settings-gear-btn svg {
   overflow: hidden;
 }
 
-button.standard-collapsible-header {
+button.accordion-header {
   cursor: pointer;
 }
 
-.standard-collapsible-header:hover {
+.accordion-header:hover {
   background-color: #000;
 }
 
-.standard-collapsible-title {
+.accordion-title {
   flex: 1 1 auto;
   min-width: 0;
   text-decoration: none;
@@ -9352,7 +9352,7 @@ button.standard-collapsible-header {
   padding: 0.65rem 2.5rem 0.65rem 1rem;
 }
 
-.standard-collapsible-toggle {
+.accordion-toggle {
   position: absolute;
   right: 0;
   top: 0;
@@ -9369,35 +9369,35 @@ button.standard-collapsible-header {
   cursor: pointer;
 }
 
-button.standard-collapsible-toggle:hover,
-button.standard-collapsible-toggle:focus,
-button.standard-collapsible-toggle:active {
+button.accordion-toggle:hover,
+button.accordion-toggle:focus,
+button.accordion-toggle:active {
   background: transparent;
   box-shadow: none;
   outline: none;
 }
 
-.standard-collapsible-arrow {
+.accordion-arrow {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.18s ease;
 }
 
-button.standard-collapsible-header[aria-expanded="false"] .standard-collapsible-arrow {
+button.accordion-header[aria-expanded="false"] .accordion-arrow {
   transform: rotate(-90deg);
 }
 
-button.standard-collapsible-toggle[aria-expanded="false"] .standard-collapsible-arrow {
+button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   transform: rotate(-90deg);
 }
 
 /* Used within develop template rows to match old styles */
-.develop-template-section-header-row .standard-collapsible-header {
+.develop-template-section-header-row .accordion-header {
   background: transparent;
   border-radius: 0;
 }
-.develop-template-section-header-row .standard-collapsible-header:hover {
+.develop-template-section-header-row .accordion-header:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 

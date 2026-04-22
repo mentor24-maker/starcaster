@@ -184,3 +184,34 @@ To maintain consistent mental models across the entire application, all applicat
 4. **Implementation:** This exact text should serve as the `<h2>` immediately inside the `.page-heading-row` element.
 
 *(Do not use formats like "Manage Personas" or "Personnel Database". Use "Contacts: Manage Personas" and "Contacts: Personnel").*
+
+---
+
+## 8. Accordion Header
+
+When creating collapsible sections, panels, or expandable containers across the application, you must use the standardized `accordion-header` component. This ensures unified layout, hover states, and chevron rotation behavior natively without custom JavaScript manipulation of the DOM.
+
+### CSS Blueprint
+The structure relies on the following core classes:
+- `.accordion-header`: The main flex container (applied to a `<button>`).
+- `.accordion-title`: The text wrapper (flex-grow pushes the toggle to the right).
+- `.accordion-toggle`: The pinned container for the chevron.
+- `.accordion-arrow`: The chevron icon itself (rotates based on the parent's `aria-expanded` state).
+
+### HTML Structure
+```html
+<button class="accordion-header" type="button" aria-expanded="false" aria-controls="targetPanelId">
+  <span class="accordion-title">Section Title</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
+  </span>
+</button>
+<div id="targetPanelId" class="hidden">
+  <!-- Content goes here -->
+</div>
+```
+
+**Key Requirements:**
+1. The open/closed state is natively managed visually by toggling the `aria-expanded="true/false"` attribute on the `.accordion-header` button.
+2. The CSS handles the 180-degree rotation of `.accordion-arrow` automatically when `aria-expanded="false"`.
+3. Do not manually overwrite the `innerHTML` or `textContent` of the button to change the chevron via JavaScript, as this destroys the HTML structure. Only toggle the `aria-expanded` attribute.

@@ -2441,40 +2441,40 @@
         <div class="dev-chat-container">
           <aside class="dev-sessions-sidebar">
             
-            <div class="standard-collapsible-header">
-              <a href="#" class="standard-collapsible-title" data-nav="tasks">Tasks</a>
-              <button class="standard-collapsible-toggle" aria-expanded="true" aria-controls="devTaskList">
-                <svg class="standard-collapsible-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <div class="accordion-header">
+              <a href="#" class="accordion-title" data-nav="tasks">Tasks</a>
+              <button class="accordion-toggle" aria-expanded="true" aria-controls="devTaskList">
+                <svg class="accordion-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </button>
             </div>
             <ul id="devTaskList" class="dev-session-list">
               <li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>
             </ul>
 
-            <div class="standard-collapsible-header">
-              <a href="#" class="standard-collapsible-title" data-nav="forum">Forum</a>
-              <button class="standard-collapsible-toggle" aria-expanded="true" aria-controls="devSessionList">
-                <svg class="standard-collapsible-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <div class="accordion-header">
+              <a href="#" class="accordion-title" data-nav="forum">Forum</a>
+              <button class="accordion-toggle" aria-expanded="true" aria-controls="devSessionList">
+                <svg class="accordion-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </button>
             </div>
             <ul id="devSessionList" class="dev-session-list">
               <!-- Dynamically populated -->
             </ul>
 
-            <div class="standard-collapsible-header">
-              <a href="#" class="standard-collapsible-title" data-nav="team">Team</a>
-              <button class="standard-collapsible-toggle" aria-expanded="true" aria-controls="devTeamList">
-                <svg class="standard-collapsible-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <div class="accordion-header">
+              <a href="#" class="accordion-title" data-nav="team">Team</a>
+              <button class="accordion-toggle" aria-expanded="true" aria-controls="devTeamList">
+                <svg class="accordion-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </button>
             </div>
             <ul id="devTeamList" class="dev-session-list">
               <li class="dev-session-item" style="color: #666; font-style: italic;">No team members.</li>
             </ul>
 
-            <div class="standard-collapsible-header">
-              <a href="#" class="standard-collapsible-title" data-nav="friction">Friction</a>
-              <button class="standard-collapsible-toggle" aria-expanded="true" aria-controls="devFrictionSidebarList">
-                <svg class="standard-collapsible-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <div class="accordion-header">
+              <a href="#" class="accordion-title" data-nav="friction">Friction</a>
+              <button class="accordion-toggle" aria-expanded="true" aria-controls="devFrictionSidebarList">
+                <svg class="accordion-arrow toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </button>
             </div>
             <ul id="devFrictionSidebarList" class="dev-session-list">
@@ -6183,14 +6183,14 @@
           <div class="develop-template-section-header-row">
             <button
               id="developModulesEditorToggle"
-              class="standard-collapsible-header"
+              class="accordion-header"
               type="button"
               aria-expanded="true"
               aria-controls="developModulesEditorBody"
             >
-  <span class="standard-collapsible-title">Module Studio</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+  <span class="accordion-title">Module Studio</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
           </div>
@@ -6220,14 +6220,14 @@
           <div class="develop-template-section-header-row">
             <button
               id="developModulesLibraryToggle"
-              class="standard-collapsible-header"
+              class="accordion-header"
               type="button"
               aria-expanded="true"
               aria-controls="developModulesLibraryBody"
             >
-  <span class="standard-collapsible-title">Saved Modules</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+  <span class="accordion-title">Saved Modules</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
           </div>
@@ -6280,10 +6280,10 @@
             </table>
           </div>
         </section>
-        <button id="developThemesBuilderToggleBtn" class="standard-collapsible-header" type="button" aria-expanded="false" aria-controls="developThemesBuilderPanel" style="margin-bottom: 10px;">
-          <span class="standard-collapsible-title">Theme Builder</span>
-          <span class="standard-collapsible-toggle">
-            <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+        <button id="developThemesBuilderToggleBtn" class="accordion-header" type="button" aria-expanded="false" aria-controls="developThemesBuilderPanel" style="margin-bottom: 10px;">
+          <span class="accordion-title">Theme Builder</span>
+          <span class="accordion-toggle">
+            <span class="accordion-arrow" aria-hidden="true">▾</span>
           </span>
         </button>
         <section id="developThemesBuilderPanel" class="hidden">
@@ -6942,14 +6942,14 @@
           <div class="develop-template-section-header-row">
             <button
               id="developPageTemplateEditorToggle"
-              class="standard-collapsible-header"
+              class="accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developPageTemplateEditorBody"
             >
-              <span id="developPageTemplateEditorTitle" class="standard-collapsible-title">Page: Modular</span>
-              <span class="standard-collapsible-toggle">
-                <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+              <span id="developPageTemplateEditorTitle" class="accordion-title">Page: Modular</span>
+              <span class="accordion-toggle">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
               </span>
             </button>
           </div>
@@ -7007,14 +7007,14 @@
           <div class="develop-template-section-header-row">
             <button
               id="developTemplateEditorToggle"
-              class="standard-collapsible-header"
+              class="accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developTemplateEditorBody"
             >
-              <span id="developTemplateEditorTitle" class="standard-collapsible-title">Email: Modular</span>
-              <span class="standard-collapsible-toggle">
-                <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+              <span id="developTemplateEditorTitle" class="accordion-title">Email: Modular</span>
+              <span class="accordion-toggle">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
               </span>
             </button>
           </div>
@@ -7051,14 +7051,14 @@
           <div class="develop-template-section-header-row">
             <button
               id="developFormsSectionToggle"
-              class="standard-collapsible-header"
+              class="accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developFormsSectionBody"
             >
-  <span class="standard-collapsible-title">Forms</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+  <span class="accordion-title">Forms</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
           </div>
@@ -7074,14 +7074,14 @@
           <div class="develop-template-section-header-row">
             <button
               id="developEmailSectionToggle"
-              class="standard-collapsible-header"
+              class="accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developEmailSectionBody"
             >
-  <span class="standard-collapsible-title">Email: Text</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+  <span class="accordion-title">Email: Text</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
           </div>
@@ -8447,10 +8447,10 @@
             <div id="connectionOpsChannelLabel" class="meta"></div>
             <div class="connection-ops-accordion">
               <section class="connection-ops-section">
-                <button type="button" class="standard-collapsible-header" data-ops-target="connectionOpsSetupLinksBody" aria-expanded="true">
-  <span class="standard-collapsible-title">Setup Links</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+                <button type="button" class="accordion-header" data-ops-target="connectionOpsSetupLinksBody" aria-expanded="true">
+  <span class="accordion-title">Setup Links</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
                 <div id="connectionOpsSetupLinksBody" class="connection-ops-section-body">
@@ -8459,10 +8459,10 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="standard-collapsible-header" data-ops-target="connectionOpsStatusBody" aria-expanded="true">
-  <span class="standard-collapsible-title">Status</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+                <button type="button" class="accordion-header" data-ops-target="connectionOpsStatusBody" aria-expanded="true">
+  <span class="accordion-title">Status</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
                 <div id="connectionOpsStatusBody" class="connection-ops-section-body">
@@ -8472,10 +8472,10 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="standard-collapsible-header" data-ops-target="connectionOpsGatesBody" aria-expanded="true">
-  <span class="standard-collapsible-title">Human Gates</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+                <button type="button" class="accordion-header" data-ops-target="connectionOpsGatesBody" aria-expanded="true">
+  <span class="accordion-title">Human Gates</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
                 <div id="connectionOpsGatesBody" class="connection-ops-section-body">
@@ -8484,10 +8484,10 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="standard-collapsible-header" data-ops-target="connectionOpsAttemptsLogBody" aria-expanded="true">
-  <span class="standard-collapsible-title">Log Attempts (Diagnostics)</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+                <button type="button" class="accordion-header" data-ops-target="connectionOpsAttemptsLogBody" aria-expanded="true">
+  <span class="accordion-title">Log Attempts (Diagnostics)</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
                 <div id="connectionOpsAttemptsLogBody" class="connection-ops-section-body">
@@ -8533,10 +8533,10 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="standard-collapsible-header" data-ops-target="connectionOpsPlaybookWrapBody" aria-expanded="true">
-  <span class="standard-collapsible-title">Blocker Playbook</span>
-  <span class="standard-collapsible-toggle">
-    <span class="standard-collapsible-arrow" aria-hidden="true">▾</span>
+                <button type="button" class="accordion-header" data-ops-target="connectionOpsPlaybookWrapBody" aria-expanded="true">
+  <span class="accordion-title">Blocker Playbook</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
   </span>
 </button>
                 <div id="connectionOpsPlaybookWrapBody" class="connection-ops-section-body">
