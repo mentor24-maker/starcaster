@@ -224,8 +224,8 @@
         <li class="menu-item menu-item-right has-submenu">
           <a href="#" class="menu-link" data-page="devAgentPage">Dev</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="devAgentPage">Threads</a>
             <a href="#" class="menu-link submenu-link" data-page="devAgentPage">Tasks</a>
+            <a href="#" class="menu-link submenu-link" data-page="devAgentPage">Forum</a>
             <a href="#" class="menu-link submenu-link" data-page="devAgentPage">Team</a>
             <a href="#" class="menu-link submenu-link" data-page="devAgentPage">Friction</a>
           </div>
@@ -2414,15 +2414,7 @@
         <div class="dev-chat-container">
           <aside class="dev-sessions-sidebar">
             
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devSessionList">
-              Threads
-              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
-            <ul id="devSessionList" class="dev-session-list">
-              <!-- Dynamically populated -->
-            </ul>
-
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerTaskList">
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devTaskList">
               Tasks
               <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
@@ -2430,7 +2422,15 @@
               <li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>
             </ul>
 
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="rogerTeamList">
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devSessionList">
+              Forum
+              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <ul id="devSessionList" class="dev-session-list">
+              <!-- Dynamically populated -->
+            </ul>
+
+            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devTeamList">
               Team
               <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
