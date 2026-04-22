@@ -2441,34 +2441,42 @@
         <div class="dev-chat-container">
           <aside class="dev-sessions-sidebar">
             
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devTaskList">
-              Tasks
-              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
+            <div class="sidebar-section-header" style="display:flex; justify-content:space-between; align-items:center; width:100%; border:none; background:none; padding:10px; font-weight:600; color:var(--text-primary); text-transform:uppercase; font-size:0.85rem;">
+              <a href="#" class="sidebar-nav-link" data-nav="tasks" style="color:inherit; text-decoration:none; flex:1;">Tasks</a>
+              <button class="sidebar-section-chevron" aria-expanded="true" aria-controls="devTaskList" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+                <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
             <ul id="devTaskList" class="dev-session-list">
               <li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>
             </ul>
 
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devSessionList">
-              Forum
-              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
+            <div class="sidebar-section-header" style="display:flex; justify-content:space-between; align-items:center; width:100%; border:none; background:none; padding:10px; font-weight:600; color:var(--text-primary); text-transform:uppercase; font-size:0.85rem;">
+              <a href="#" class="sidebar-nav-link" data-nav="forum" style="color:inherit; text-decoration:none; flex:1;">Forum</a>
+              <button class="sidebar-section-chevron" aria-expanded="true" aria-controls="devSessionList" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+                <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
             <ul id="devSessionList" class="dev-session-list">
               <!-- Dynamically populated -->
             </ul>
 
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devTeamList">
-              Team
-              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
+            <div class="sidebar-section-header" style="display:flex; justify-content:space-between; align-items:center; width:100%; border:none; background:none; padding:10px; font-weight:600; color:var(--text-primary); text-transform:uppercase; font-size:0.85rem;">
+              <a href="#" class="sidebar-nav-link" data-nav="team" style="color:inherit; text-decoration:none; flex:1;">Team</a>
+              <button class="sidebar-section-chevron" aria-expanded="true" aria-controls="devTeamList" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+                <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
             <ul id="devTeamList" class="dev-session-list">
               <li class="dev-session-item" style="color: #666; font-style: italic;">No team members.</li>
             </ul>
 
-            <button class="sidebar-section-toggle" aria-expanded="true" aria-controls="devFrictionSidebarList">
-              Friction
-              <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
+            <div class="sidebar-section-header" style="display:flex; justify-content:space-between; align-items:center; width:100%; border:none; background:none; padding:10px; font-weight:600; color:var(--text-primary); text-transform:uppercase; font-size:0.85rem;">
+              <a href="#" class="sidebar-nav-link" data-nav="friction" style="color:inherit; text-decoration:none; flex:1;">Friction</a>
+              <button class="sidebar-section-chevron" aria-expanded="true" aria-controls="devFrictionSidebarList" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+                <svg class="toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
             <ul id="devFrictionSidebarList" class="dev-session-list">
               <!-- Dynamically populated -->
             </ul>
@@ -2499,6 +2507,64 @@
                 <button type="submit" class="primary-btn">Send</button>
               </div>
             </form>
+            
+            <div id="devTaskBrowserPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+              <h2 style="margin-top: 0;">Task Directory</h2>
+              <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                  <thead>
+                    <tr><th style="text-align:left;">Title</th><th>Status</th><th>Priority</th><th>Assignee</th><th>Created</th></tr>
+                  </thead>
+                  <tbody id="devTaskBrowserTable"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="devTaskEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+              <h2 id="devTaskEditorHeader" style="margin-top: 0;">Task Details</h2>
+              <form id="devTaskEditorForm" class="standard-form-grid" style="max-width: 800px;">
+                <input type="hidden" id="devEditTaskId" />
+                <div class="form-group full-width">
+                  <label for="devEditTaskTitle">Title</label>
+                  <input type="text" id="devEditTaskTitle" required />
+                </div>
+                <div class="form-group full-width">
+                  <label for="devEditTaskDesc">Description</label>
+                  <textarea id="devEditTaskDesc" style="min-height: 120px;"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="devEditTaskStatus">Status</label>
+                  <select id="devEditTaskStatus">
+                    <option value="backlog">Backlog</option>
+                    <option value="todo">Todo</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="review">Review</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="devEditTaskPriority">Priority</label>
+                  <select id="devEditTaskPriority">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="devEditTaskAssignee">Assignee</label>
+                  <select id="devEditTaskAssignee">
+                    <option value="mentor">Mentor</option>
+                    <option value="roger">Roger</option>
+                    <option value="antigravity">Antigravity</option>
+                  </select>
+                </div>
+                <div class="form-actions full-width" style="margin-top: 1rem;">
+                  <button type="submit" class="primary-btn">Save Changes</button>
+                  <button type="button" id="devCloseTaskEditorBtn" class="secondary-btn">Close Editor</button>
+                </div>
+              </form>
+            </div>
             
             <div id="devFrictionEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
               <h2 id="devFrictionEditorHeader" style="margin-top: 0;">Friction Log Details</h2>
