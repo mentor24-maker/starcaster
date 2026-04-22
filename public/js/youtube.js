@@ -3921,7 +3921,7 @@ App.youtube = (function () {
       'youtubeMinerRepositoryBody',
       'youtubeMinerContentBody'
     ];
-    var toggles = Array.prototype.slice.call(document.querySelectorAll('.standard-collapsible-header[data-target-id]'));
+    var toggles = Array.prototype.slice.call(document.querySelectorAll('.accordion-header[data-target-id]'));
     toggles.forEach(function(toggle) {
       var targetId = safeText(toggle.getAttribute('data-target-id'));
       var badgeIndex = orderedTargetIds.indexOf(targetId) + 1;
@@ -3953,7 +3953,7 @@ App.youtube = (function () {
     if (!body) return;
     var container = body.closest('.youtube-miner-collapsible');
     if (!container) return;
-    var toggle = container.querySelector('.standard-collapsible-header[data-target-id]');
+    var toggle = container.querySelector('.accordion-header[data-target-id]');
     var shouldOpen = open !== false;
     container.classList.toggle('is-open', shouldOpen);
     if (toggle) toggle.setAttribute('aria-expanded', String(shouldOpen));
@@ -5438,7 +5438,7 @@ App.youtube = (function () {
         var targetBody = document.getElementById('youtubeMinerRepositoryBody');
         if (targetBody) {
           var targetWrap = targetBody.closest('.youtube-miner-collapsible');
-          var targetToggle = targetWrap ? targetWrap.querySelector('.standard-collapsible-header') : null;
+          var targetToggle = targetWrap ? targetWrap.querySelector('.accordion-header') : null;
           if (targetToggle && targetToggle.getAttribute('aria-expanded') !== 'true') {
             if (targetWrap) targetWrap.classList.add('is-open');
             if (targetToggle) targetToggle.setAttribute('aria-expanded', 'true');
