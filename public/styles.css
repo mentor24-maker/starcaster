@@ -9422,8 +9422,8 @@ button.section-settings-gear-btn svg {
 }
 
 .sidebar-section-header {
+  position: relative;
   display: flex;
-  justify-content: space-between;
   align-items: stretch;
   width: 100%;
   padding: 0;
@@ -9450,11 +9450,15 @@ button.section-settings-gear-btn svg {
   display: flex;
   align-items: center;
   flex: 1;
-  padding: 0.5rem 0 0.5rem 1rem;
+  padding: 0.5rem 2.5rem 0.5rem 1rem;
   cursor: pointer;
 }
 
 .sidebar-section-chevron {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
   background: transparent;
   border: none;
   color: inherit;
