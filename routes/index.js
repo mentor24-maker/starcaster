@@ -41,7 +41,7 @@ const messaging   = require('./messaging');
 const engage      = require('./engage');
 const develop     = require('./develop');
 const observe     = require('./observe');
-const roger       = require('./roger');
+const roger       = require('./devAgent');
 const personas    = require('./personas');
 
 // Route modules are tried in order — first match wins.
@@ -134,7 +134,7 @@ async function handleRequest(req, res) {
   const method   = req.method;
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
-  const isWebhookRoute = pathname === '/api/develop/roger/worker';
+  const isWebhookRoute = pathname === '/api/develop/devAgent/worker';
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);
