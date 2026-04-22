@@ -9,7 +9,7 @@ const { uploadAssetToBlob } = require('../lib/blobStorage');
 const manifest = {
   id: 'develop-roger',
   label: 'Ask Roger API',
-  prefixes: ['/api/develop/roger']
+  prefixes: ['/api/develop/devAgent']
 };
 
 function parseTriAgentBackend(rawString) {
@@ -83,20 +83,20 @@ async function handle(req, res, pathname, requestMethod) {
   const scope = await resolveCurrentProject(req);
   const projectId = scope?.projectId || null;
 
-  if (pathname === '/api/develop/roger/sessions' && requestMethod === 'GET') {
+  if (pathname === '/api/develop/devAgent/sessions' && requestMethod === 'GET') {
     const result = await listRogerSessions(projectId);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { sessions: result.data }, { total: result.data.length }), true;
   }
 
-  if (pathname === '/api/develop/roger/sessions' && requestMethod === 'POST') {
+  if (pathname === '/api/develop/devAgent/sessions' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const result = await createRogerSession({ project_id: projectId, name: body?.name });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { session: result.data }), true;
   }
 
-  if (pathname === '/api/develop/roger/sessions' && requestMethod === 'PATCH') {
+  if (pathname === '/api/develop/devAgent/sessions' && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const sessionId = Number(body?.sessionId || 0);
     if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
@@ -107,7 +107,7 @@ async function handle(req, res, pathname, requestMethod) {
     return sendOk(res, 200, result.data, { session: result.data }), true;
   }
 
-  if (pathname === '/api/develop/roger/history' && requestMethod === 'GET') {
+  if (pathname === '/api/develop/devAgent/history' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const sessionId = Number(urlObj.searchParams.get('sessionId') || 0);
     if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
@@ -118,7 +118,7 @@ async function handle(req, res, pathname, requestMethod) {
     return sendOk(res, 200, result.data, { chats: result.data }, { total: result.data.length }), true;
   }
 
-  if (pathname === '/api/develop/roger/config' && requestMethod === 'GET') {
+  if (pathname === '/api/develop/devAgent/config' && requestMethod === 'GET') {
     const config = require('../lib/config');
     const url = config.get('supabaseUrl') || '';
     const anonKey = config.get('supabaseAnonKey') || '';
@@ -126,7 +126,7 @@ async function handle(req, res, pathname, requestMethod) {
     return sendOk(res, 200, { url, anonKey }), true;
   }
 
-  if (pathname === '/api/develop/roger/test' && requestMethod === 'GET') {
+  if (pathname === '/api/develop/devAgent/test' && requestMethod === 'GET') {
     const geminiRes = await consultRoger([ { role: 'user', content: 'Ping' } ], { agentRole: 'roger' });
     if (!geminiRes.ok) {
        return sendErr(res, 502, `AI Test Failed: ${geminiRes.error}`), true;
@@ -134,7 +134,7 @@ async function handle(req, res, pathname, requestMethod) {
     return sendOk(res, 200, { status: "Success", message: "AI Engine is responding correctly." }), true;
   }
 
-  if (pathname === '/api/develop/roger/chat' && requestMethod === 'PATCH') {
+  if (pathname === '/api/develop/devAgent/chat' && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const chatId = Number(body?.chatId || 0);
     if (!chatId) return sendErr(res, 400, 'chatId is required', { code: 'VALIDATION_ERROR' }), true;
@@ -148,7 +148,7 @@ async function handle(req, res, pathname, requestMethod) {
     return sendOk(res, 200, result.data, { chat: result.data }), true;
   }
 
-  if (pathname === '/api/develop/roger/chat' && requestMethod === 'POST') {
+  if (pathname === '/api/develop/devAgent/chat' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const sessionId = Number(body?.sessionId || 0);
     if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
@@ -233,7 +233,7 @@ async function handle(req, res, pathname, requestMethod) {
   }
 
   
-  if (pathname === '/api/develop/roger/worker' && requestMethod === 'POST') {
+  if (pathname === '/api/develop/devAgent/worker' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     let sessionId, projectId, chatId, respondingAgent;
     if (body && body.type === 'INSERT' && body.record) {
@@ -347,7 +347,7 @@ async function handle(req, res, pathname, requestMethod) {
 
 
 
-  if (pathname === '/api/develop/roger/retry' && requestMethod === 'POST') {
+  if (pathname === '/api/develop/devAgent/retry' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const sessionId = Number(body?.sessionId || 0);
     if (!sessionId) return sendErr(res, 400, 'sessionId is required', { code: 'VALIDATION_ERROR' }), true;
