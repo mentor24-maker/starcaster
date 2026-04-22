@@ -9424,9 +9424,9 @@ button.section-settings-gear-btn svg {
 .sidebar-section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
-  padding: 0.5rem 1rem;
+  padding: 0;
   margin-top: 0;
   background-color: #111;
   color: #fff;
@@ -9437,7 +9437,6 @@ button.section-settings-gear-btn svg {
   transition: background-color 0.2s ease;
   border-radius: 10px;
   margin-bottom: 2px;
-  cursor: pointer;
 }
 
 .sidebar-section-header:hover {
@@ -9448,20 +9447,22 @@ button.section-settings-gear-btn svg {
   color: inherit;
   text-decoration: none;
   text-align: left;
-  display: block;
+  display: flex;
+  align-items: center;
   flex: 1;
+  padding: 0.5rem 0 0.5rem 1rem;
+  cursor: pointer;
 }
 
 .sidebar-section-chevron {
   background: transparent;
   border: none;
   color: inherit;
-  padding: 0;
+  padding: 0.5rem 1rem 0.5rem 1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   outline: none;
-  margin-left: auto;
 }
 
 .sidebar-section-chevron:hover,
