@@ -1739,9 +1739,9 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => App.devAgentFriction.init(), 1000);
   
-  // Bind collapsible sidebar headers strictly to chevron icons
-  const toggles = document.querySelectorAll('.sidebar-section-chevron');
-  toggles.forEach(toggle => {
+  // Bind collapsible sidebar headers
+  const toggles = document.querySelectorAll('#devAgentPage .standard-collapsible-toggle');
+  toggles.forEach((toggle) => {
     toggle.addEventListener('click', () => {
       const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
       toggle.setAttribute('aria-expanded', !isExpanded);
