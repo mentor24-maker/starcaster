@@ -483,7 +483,6 @@ App.develop = (function () {
     if (panel) panel.classList.toggle('hidden', !visible);
     if (toggle) {
       toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
-      toggle.textContent = visible ? '▾' : '▸';
     }
   }
 
