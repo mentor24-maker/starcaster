@@ -996,7 +996,7 @@ App.devAgent.saveChatEdit = async function(chatId, btn) {
   btn.disabled = true;
   btn.textContent = 'Saving...';
   
-  const res = await App.api('/api/develop/roger/chat', {
+  const res = await App.api('/api/develop/devAgent/chat', {
     method: 'PATCH',
     body: JSON.stringify({ chatId: chatId, content: finalPayloadStr })
   });
@@ -1088,7 +1088,7 @@ App.devAgent.sendProtocolAction = function(actionType, commandHash, btnEl) {
     content: triAgentPayload 
   };
 
-  App.api('/api/develop/roger/chat', {
+  App.api('/api/develop/devAgent/chat', {
     method: 'POST',
     body: JSON.stringify(payload)
   }).then(res => {
@@ -1143,13 +1143,13 @@ App.devAgent.submitChat = async function() {
       payload.attachmentName = staged.name;
     }
 
-    const res = await App.api('/api/develop/roger/chat', {
+    const res = await App.api('/api/develop/devAgent/chat', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
     
     console.log("========== DIAGNOSTIC DIAGNOSTIC ==========");
-    console.log("RAW DISPATCH URL: /api/develop/roger/chat");
+    console.log("RAW DISPATCH URL: /api/develop/devAgent/chat");
     console.log("PAYLOAD OUT:", payload);
     console.log("RAW RESPONSE OBJECT:", JSON.parse(JSON.stringify(res)));
     console.log("has res.data?", !!res.data);
@@ -1401,7 +1401,37 @@ document.addEventListener('DOMContentLoaded', () => {
   if (testBtn) {
     testBtn.addEventListener('click', App.devAgent.testAiConnection);
   }
+
+  const newTaskBtn = document.getElementById('devNewTaskBtn');
+  if (newTaskBtn) {
+    newTaskBtn.addEventListener('click', App.devAgent.promptNewTask);
+  }
 });
+
+App.devAgent.promptNewTask = async function() {
+  const title = prompt("Enter a title for the new Task:");
+  if (!title) return;
+  
+  try {
+    if (!window.supabaseClient) throw new Error("Database not connected.");
+    
+    // Default task attributes using 'todo' and standard metadata
+    const { error } = await window.supabaseClient
+      .from('dev_tasks')
+      .insert([{ 
+        title: title, 
+        status: 'todo',
+        priority: 'medium',
+        assignee: 'mentor'
+      }]);
+      
+    if (error) throw error;
+    App.notify("Task created securely.");
+    App.devAgent.loadTasks(); // Automatically refresh the Tasks list in the left panel
+  } catch (err) {
+    App.notify("Error creating task: " + err.message, true);
+  }
+};
 
 App.devAgent.testAiConnection = async function() {
   const btn = document.getElementById('devTestBtn');
@@ -1411,7 +1441,7 @@ App.devAgent.testAiConnection = async function() {
   }
   
   try {
-    const res = await App.api('/api/develop/roger/test', {
+    const res = await App.api('/api/develop/devAgent/test', {
       method: 'GET'
     });
     
