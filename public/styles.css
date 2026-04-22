@@ -9449,6 +9449,7 @@ button.section-settings-gear-btn svg {
   text-decoration: none;
   text-align: left;
   display: block;
+  flex: 1;
 }
 
 .sidebar-section-chevron {
@@ -9460,6 +9461,7 @@ button.section-settings-gear-btn svg {
   display: flex;
   align-items: center;
   outline: none;
+  margin-left: auto;
 }
 
 .sidebar-section-chevron:hover,
