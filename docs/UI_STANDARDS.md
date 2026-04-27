@@ -215,3 +215,15 @@ The structure relies on the following core classes:
 1. The open/closed state is natively managed visually by toggling the `aria-expanded="true/false"` attribute on the `.accordion-header` button.
 2. The CSS handles the 180-degree rotation of `.accordion-arrow` automatically when `aria-expanded="false"`.
 3. Do not manually overwrite the `innerHTML` or `textContent` of the button to change the chevron via JavaScript, as this destroys the HTML structure. Only toggle the `aria-expanded` attribute.
+
+---
+
+## 9. Form Modals
+
+**LAW: No scrollbars in form modals. Especially horizontal scrollbars.**
+
+- **Rationale:** Scrollbars in modals cause poor user experience, broken formatting, and nested scrolling confusion. Form modals must be clean, readable, and fully visible without requiring horizontal scrolling.
+- **Implementation:** 
+  - Ensure the `max-width` of the modal container is sufficient for its internal content (e.g. data tables). 
+  - If a table or grid exceeds standard bounds, widen the modal rather than forcing `overflow-x: auto` on the table.
+  - Form modals should be fluid or explicitly large enough to support the number of columns required.

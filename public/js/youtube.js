@@ -3937,11 +3937,9 @@ App.youtube = (function () {
         if (!targetId) return;
         var body = document.getElementById(targetId);
         if (!body) return;
-        var container = toggle.closest('.youtube-miner-collapsible');
-        if (!container) return;
-        var isOpen = container.classList.contains('is-open');
-        container.classList.toggle('is-open', !isOpen);
-        toggle.setAttribute('aria-expanded', String(!isOpen));
+        var isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', String(!isExpanded));
+        body.classList.toggle('hidden', isExpanded);
       });
     });
   }
@@ -3951,12 +3949,10 @@ App.youtube = (function () {
     if (!id) return;
     var body = document.getElementById(id);
     if (!body) return;
-    var container = body.closest('.youtube-miner-collapsible');
-    if (!container) return;
-    var toggle = container.querySelector('.accordion-header[data-target-id]');
-    var shouldOpen = open !== false;
-    container.classList.toggle('is-open', shouldOpen);
-    if (toggle) toggle.setAttribute('aria-expanded', String(shouldOpen));
+    var toggle = document.querySelector('.accordion-header[data-target-id="' + id + '"]');
+    if (!toggle) return;
+    toggle.setAttribute('aria-expanded', String(open));
+    body.classList.toggle('hidden', !open);
   }
 
   function applyYoutubeMinerInputToForm(formEl, input) {
