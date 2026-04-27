@@ -143,6 +143,7 @@ body {
   width: auto;
   margin: 0;
   border: none;
+  position: relative;
   border-radius: 0;
   padding: 0;
   background: transparent;
@@ -194,6 +195,7 @@ header {
   min-height: 58px;
   padding: 0;
   border: none;
+  position: relative;
   border-radius: 999px;
   background: transparent;
   color: #07325a;
@@ -216,6 +218,7 @@ header {
   object-fit: contain;
   background: transparent;
   border: none;
+  position: relative;
   padding: 0;
 }
 
@@ -350,6 +353,7 @@ header {
   color: #ffffff;
   font-weight: 700;
   line-height: 1;
+  font-size: 1.1rem;
   transition: background-color 140ms ease, color 140ms ease;
 }
 
@@ -395,6 +399,10 @@ main {
   display: block;
   padding: 1rem;
   background: #ffffff;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .app-page {
@@ -403,6 +411,10 @@ main {
   border-radius: 12px;
   padding: 1rem;
   box-shadow: 0 8px 18px rgba(0, 22, 44, 0.08);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 h2 {
@@ -656,21 +668,44 @@ input[type="color"]::-moz-color-swatch {
 }
 
 button {
-  background: #000;
-  color: white;
-  border: 1px solid var(--border);
+  /* Stripped of visual styles to be handled by specific classes */
   cursor: pointer;
-  text-align: center;
-  justify-content: center;
-  box-shadow: none;
-  transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease;
+  border: none;
+  position: relative; /* Reset default border */
+  background: transparent; /* Reset default background */
+  padding: 0; /* Reset default padding */
+  font-family: inherit; /* Ensure font is inherited from parent */
 }
 
-button:hover {
-  background: #020202;
-  border-color: #2aa7fa;
-  box-shadow: 0 0 0 1px rgba(39, 166, 255, 0.35), 0 0 16px rgba(39, 166, 255, 0.5);
-  transform: translateY(-1px);
+/* === Button Normalization === */
+.primary-btn,
+.secondary-btn {
+  /* Core Visuals */
+  display: inline-block;
+  background-color: #000;
+  color: #fff;
+  font-weight: bold;
+  text-align: center;
+  text-decoration: none; /* For <a> tags that might use these classes */
+
+  /* Sizing and Shape */
+  padding: 0.3rem 2rem;
+  border-radius: 0.5rem;
+  border: none;
+  position: relative;
+  font-size: 1.1rem;
+
+  /* Usability */
+  transition: opacity 0.2s ease-in-out;
+}
+
+.primary-btn:hover,
+.primary-btn:focus,
+.secondary-btn:hover,
+.secondary-btn:focus {
+  color: #cceeff;
+  box-shadow: 0 0 12px rgba(204, 238, 255, 0.4);
+  opacity: 1;
 }
 
 button[type="submit"] {
@@ -678,7 +713,6 @@ button[type="submit"] {
   align-self: flex-start;
   justify-content: center;
   width: auto;
-  min-width: 400px;
   max-width: 100%;
 }
 
@@ -693,29 +727,29 @@ button[type="submit"] {
   flex-direction: column;
 }
 
-.standard-form-grid {
+.form-grid {
   display: grid;
   grid-template-columns: 140px 1fr;
   gap: 0.75rem;
   align-items: center;
 }
 
-.standard-form-grid > label {
+.form-grid > label {
   text-align: right;
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
 }
 
-.standard-form-grid > input,
-.standard-form-grid > select,
-.standard-form-grid > textarea,
-.standard-form-grid > button {
+.form-grid > input,
+.form-grid > select,
+.form-grid > textarea,
+.form-grid > button {
   margin: 0;
   width: 100%;
 }
 
-.standard-form-grid-full {
+.form-grid-full {
   grid-column: 1 / -1;
   margin: 0;
 }
@@ -978,13 +1012,20 @@ th {
 }
 
 .contacts-go-cell {
-  min-width: 78px;
-  width: 78px;
+  min-width: 170px;
+  width: 170px;
+  vertical-align: middle;
+  position: sticky;
+  right: 0;
+  background-color: var(--bg-card, #ffffff);
+  z-index: 2;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.05);
 }
 
 .contacts-go-cell button {
   width: 100%;
   min-width: 56px;
+  padding: 0.25rem 0.5rem;
 }
 
 #segmentsList {
@@ -1291,7 +1332,7 @@ th {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .icon-builder-result {
@@ -1381,6 +1422,7 @@ th {
   height: auto;
   padding: 0;
   border: none;
+  position: relative;
   border-radius: 0;
   background: transparent;
   object-fit: contain;
@@ -4106,6 +4148,7 @@ th {
   min-height: 0;
   padding: 1rem;
   border: none;
+  position: relative;
   border-radius: 0;
   box-shadow: none;
 }
@@ -5889,6 +5932,11 @@ th {
   white-space: nowrap;
   width: 170px;
   min-width: 170px;
+  position: sticky;
+  right: 0;
+  background-color: var(--bg-card, #ffffff);
+  z-index: 2;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.05);
 }
 
 .contacts-actions-cell {
@@ -5896,6 +5944,11 @@ th {
   white-space: nowrap;
   width: 170px;
   min-width: 170px;
+  position: sticky;
+  right: 0;
+  background-color: var(--bg-card, #ffffff);
+  z-index: 1;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.05);
 }
 
 .contacts-actions-cell .icon-btn + .icon-btn {
@@ -6763,6 +6816,7 @@ th {
   .submenu {
     position: static;
     border: none;
+  position: relative;
     border-top: 1px solid #ffffff;
   }
   .grid-form {
@@ -7176,6 +7230,7 @@ table {
 .c-modal__close {
   background: none;
   border: none;
+  position: relative;
   font-size: 20px;
   color: var(--c-text-muted);
   cursor: pointer;
@@ -7324,6 +7379,7 @@ table {
 .c-toast__close {
   background: none;
   border: none;
+  position: relative;
   color: rgba(255,255,255,0.8);
   font-size: 16px;
   cursor: pointer;
@@ -7909,7 +7965,10 @@ table {
   letter-spacing: 0.2px;
 }
 
+.youtube-miner-panel .accordion-header { padding-left: 28px; }
+
 .youtube-miner-panel {
+  padding-left: 28px;
   margin: 14px 0 20px;
   padding: 0;
   border: 0;
@@ -9142,24 +9201,24 @@ button.section-settings-gear-btn svg {
 }
 
 
-.standard-form-grid-4col {
+.form-grid-4col {
   display: grid;
   grid-template-columns: 140px 1fr 140px 1fr;
   gap: 0.75rem;
   align-items: center;
 }
 
-.standard-form-grid-4col > label {
+.form-grid-4col > label {
   text-align: right;
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
 }
 
-.standard-form-grid-4col > input,
-.standard-form-grid-4col > select,
-.standard-form-grid-4col > textarea,
-.standard-form-grid-4col > button {
+.form-grid-4col > input,
+.form-grid-4col > select,
+.form-grid-4col > textarea,
+.form-grid-4col > button {
   width: 100%;
   margin: 0;
 }
@@ -9242,9 +9301,10 @@ button.section-settings-gear-btn svg {
 
 /* Ask Roger Chat Interface */
 .dev-chat-container {
-  display: flex;
-  flex-direction: row;
-  height: calc(100vh - 180px);
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: calc(100vh - 200px);
+  min-height: 400px;
   background: var(--bg-card);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
@@ -9256,7 +9316,6 @@ button.section-settings-gear-btn svg {
 }
 
 .dev-sessions-sidebar {
-  width: 320px;
   background: var(--bg-body);
   border-right: 1px solid #c0c0c0; /* silver vertical line */
   display: flex;
@@ -9265,21 +9324,28 @@ button.section-settings-gear-btn svg {
 }
 
 .dev-friction-sidebar {
-  position: absolute;
-  top: 0;
-  right: -400px;
-  width: 380px;
+  width: 100%;
   height: 100%;
   background: var(--bg-body, #ffffff);
-  border-left: 1px solid var(--border-light);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
-  transition: right 0.3s ease;
   z-index: 50;
-  box-shadow: -4px 0 15px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-sm);
 }
-.dev-friction-sidebar.visible {
-  right: 0;
+
+.dev-friction-layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 2rem;
+  padding: 2rem;
+  height: calc(100vh - 120px);
+  align-items: flex-start;
+}
+
+.dev-friction-sidebar-wrapper {
+  height: 100%;
 }
 
 .dev-friction-log-list {
@@ -9318,12 +9384,14 @@ button.section-settings-gear-btn svg {
 /* --- Standardized Collapsible Components --- */
 .accordion-header {
   display: flex;
-  position: relative;
   width: 100%;
+  flex-shrink: 0;
   align-items: stretch;
+  justify-content: space-between;
   background-color: #111;
   color: #fff;
   border: none;
+  position: relative;
   margin: 0 0 2px 0;
   padding: 0;
   text-align: left;
@@ -9349,17 +9417,14 @@ button.accordion-header {
   color: inherit;
   display: flex;
   align-items: center;
-  padding: 0.65rem 2.5rem 0.65rem 1rem;
+  padding: 0.65rem 1rem;
 }
 
 .accordion-toggle {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
   width: auto;
   background: transparent;
   border: none;
+  position: relative;
   color: inherit;
   padding: 0 1rem;
   display: flex;
@@ -9424,6 +9489,9 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   flex-direction: column;
   background: var(--bg-card);
   min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .dev-chat-main-header {
@@ -9475,6 +9543,84 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   min-width: 0;
 }
 
+.dev-chat-log::after {
+  content: "";
+  display: block;
+  min-height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.dev-chat-thread-block {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.5rem;
+  position: relative;
+}
+
+/* Draw the vertical line starting from the center of the parent avatar */
+.dev-chat-thread-block:has(> .dev-chat-children:not(:empty))::before {
+  content: "";
+  position: absolute;
+  top: 24px; /* Starts at the middle of the 48px avatar */
+  bottom: 0;
+  left: 23px; /* Centers the 2px line on the 48px avatar */
+  width: 2px;
+  background-color: var(--border-light, #cbd5e1);
+  z-index: 0;
+}
+
+
+
+.dev-chat-children {
+  margin-left: 23px; /* Aligns with the 24px center of the parent avatar */
+  padding-left: 1.5rem;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dev-chat-children > .dev-chat-thread-block > .dev-chat-bubble-wrapper {
+  position: relative;
+}
+
+/* Horizontal elbow line connecting the vertical border to the child avatar */
+.dev-chat-children > .dev-chat-thread-block > .dev-chat-bubble-wrapper::before {
+  content: "";
+  position: absolute;
+  top: 24px; /* Center of the avatar */
+  left: -1.5rem; /* Spans the padding-left of .dev-chat-children */
+  width: 1.5rem;
+  height: 2px;
+  background-color: var(--border-light, #cbd5e1);
+  z-index: 0;
+}
+
+/* Hide the vertical border below the last child's elbow */
+.dev-chat-children > .dev-chat-thread-block:last-child {
+  position: relative;
+}
+.dev-chat-children > .dev-chat-thread-block:last-child::after {
+  content: "";
+  position: absolute;
+  top: 26px; /* Just below the elbow line */
+  bottom: -1rem; /* Extend far enough to cover any bottom gap */
+  left: -1.6rem; /* Cover the 2px border completely */
+  width: 6px; /* Thick enough to hide the border */
+  background-color: var(--bg-card, #ffffff); /* Matches the panel background */
+  z-index: 1;
+}
+
+.dev-inline-reply-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
 .dev-chat-bubble-wrapper {
   display: flex;
   width: 100%;
@@ -9483,7 +9629,11 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 }
 
 .dev-chat-bubble-wrapper.user {
-  justify-content: flex-end;
+  justify-content: flex-start;
+}
+
+.dev-chat-children .dev-chat-bubble-wrapper.user {
+  justify-content: flex-start !important;
 }
 
 .dev-chat-bubble-wrapper.roger {
@@ -9492,6 +9642,14 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 
 .dev-chat-bubble-wrapper.antigravity {
   justify-content: center;
+}
+
+.dev-chat-bubble-wrapper.angie {
+  justify-content: flex-start;
+}
+
+.dev-chat-bubble-wrapper.archie {
+  justify-content: flex-start;
 }
 
 .dev-chat-avatar {
@@ -9504,6 +9662,37 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   background-repeat: no-repeat;
   border: 2px solid var(--border-light);
   background-color: var(--bg-card);
+  position: relative;
+  z-index: 1;
+}
+
+.dev-chat-avatar.archie,
+.dev-chat-avatar.antigravity {
+  border-color: #22c55e !important;
+}
+
+.dev-chat-avatar.checkdev-alert {
+  background-color: #fee2e2 !important;
+  border: 4px solid #ef4444 !important;
+  animation: pulse-halo-red 2s infinite !important;
+}
+
+@keyframes pulse-halo-red {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.dev-chat-avatar.harvest-alert {
+  background-color: #f3e8ff !important; /* light purple */
+  border: 4px solid #a855f7 !important; /* strong purple */
+  animation: pulse-halo-purple 2s infinite !important;
+}
+
+@keyframes pulse-halo-purple {
+  0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(168, 85, 247, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
 }
 
 .dev-chat-content-col {
@@ -9526,13 +9715,13 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 .dev-chat-bubble.user {
   background-color: #e0f2fe; /* Lighter soft blue */
   color: var(--text-dark);
-  border-top-right-radius: 4px;
+  border-top-left-radius: 4px;
 }
 
 .dev-chat-bubble.roger {
-  background-color: #ecfdf5; /* Crisp light emerald */
-  border: 1px solid #b5e4c8;
-  color: #1e3a8a; /* Dark blue text */
+  background-color: #fdf2f8; /* Soft pink */
+  border: 1px solid #fbcfe8;
+  color: #831843; /* Dark pink text */
   border-top-left-radius: 4px;
 }
 
@@ -9541,6 +9730,20 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   color: #1a1a1a; /* Dark font */
   border-radius: var(--radius-md);
   box-shadow: 0 0 10px rgba(251, 238, 165, 0.4);
+}
+
+.dev-chat-bubble.angie {
+  background-color: #fef2f2; /* Soft red */
+  border: 1px solid #fecaca;
+  color: #991b1b; /* Dark red text */
+  border-top-left-radius: 4px;
+}
+
+.dev-chat-bubble.archie {
+  background-color: #f0fdf4; /* Soft green */
+  border: 1px solid #bbf7d0;
+  color: #166534; /* Dark green text */
+  border-top-left-radius: 4px;
 }
 
 .dev-chat-header {
@@ -9556,20 +9759,32 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 }
 
 .dev-chat-bubble.user .dev-chat-header {
-  border-top-right-radius: 4px;
+  border-top-left-radius: 4px;
   background-color: #bae6fd; /* Darker blue */
   border-bottom: 1px solid #7dd3fc;
 }
 
 .dev-chat-bubble.roger .dev-chat-header {
   border-top-left-radius: 4px;
-  background-color: #a7f3d0; /* Darker emerald */
-  border-bottom: 1px solid #6ee7b7;
+  background-color: #fce7f3; /* Darker pink */
+  border-bottom: 1px solid #f9a8d4;
 }
 
 .dev-chat-bubble.antigravity .dev-chat-header {
   background-color: #fde047; /* Darker gold */
   border-bottom: 1px solid #facc15;
+}
+
+.dev-chat-bubble.angie .dev-chat-header {
+  border-top-left-radius: 4px;
+  background-color: #fee2e2; /* Darker red header */
+  border-bottom: 1px solid #fca5a5;
+}
+
+.dev-chat-bubble.archie .dev-chat-header {
+  border-top-left-radius: 4px;
+  background-color: #dcfce7; /* Darker green header */
+  border-bottom: 1px solid #86efac;
 }
 
 .dev-chat-header strong {
@@ -9609,12 +9824,8 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 }
 
 .dev-code-actions {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   display: flex;
   gap: 6px;
-  z-index: 10;
 }
 
 .dev-code-save-btn,
@@ -9649,6 +9860,7 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 .dev-header-icon {
   background: none;
   border: none;
+  position: relative;
   cursor: pointer;
   color: #000;
   padding: 4px;
@@ -9705,9 +9917,10 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   display: flex;
   padding: 1rem;
   border-top: 1px solid var(--border-light);
-  background: var(--bg-body);
+  background: var(--bg-body, #ffffff);
   gap: 1rem;
   align-items: flex-end;
+  z-index: 10;
 }
 
 .dev-chat-input-area textarea {
@@ -9715,7 +9928,7 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   min-height: 50px;
   max-height: 200px;
   resize: vertical;
-  background: var(--bg-input);
+  background: var(--bg-input, #ffffff);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 0.75rem;
@@ -9726,6 +9939,11 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 .dev-chat-input-area textarea:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.task-discussion-input {
+  border: 2px solid var(--accent) !important;
+  box-shadow: 0 0 5px rgba(0, 122, 255, 0.2);
 }
 
 .dev-chat-bubble.loading {
@@ -9777,6 +9995,7 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
 .attachment-clear-btn {
   background: transparent;
   border: none;
+  position: relative;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 1.2rem;
@@ -10022,6 +10241,7 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   width: 100%;
   height: 100%;
   border: none;
+  position: relative;
 }
 
 .viewer-placeholder {
@@ -10325,4 +10545,187 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
     box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); 
     transform: scale(1);
   }
+}
+
+/* Task Accordion Header Hover State */
+.task-accordion-header {
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+.task-accordion-header:hover {
+  background-color: var(--bg-hover, rgba(0,0,0,0.05));
+  opacity: 0.85;
+}
+
+/* ==========================================================================
+   Relational Linking Mode (Dev Agent)
+   ========================================================================== */
+body.dev-linking-mode {
+  cursor: crosshair !important;
+}
+body.dev-linking-mode::before {
+  content: "LINKING MODE: Select a task or message to link...";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background-color: var(--accent-primary, #3b82f6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.9rem;
+  z-index: 999999;
+  pointer-events: none;
+  animation: pulseBg 2s infinite;
+}
+@keyframes pulseBg {
+  0% { background-color: var(--accent-primary, #3b82f6); }
+  50% { background-color: #2563eb; }
+  100% { background-color: var(--accent-primary, #3b82f6); }
+}
+body.dev-linking-mode .dev-chat-bubble-wrapper,
+body.dev-linking-mode .dev-session-item,
+body.dev-linking-mode button[onclick^="App.devAgent.openTaskEditor"] {
+  cursor: crosshair !important;
+  transition: all 0.2s ease;
+}
+body.dev-linking-mode .dev-chat-bubble-wrapper:hover .dev-chat-bubble,
+body.dev-linking-mode .dev-session-item:hover,
+body.dev-linking-mode button[onclick^="App.devAgent.openTaskEditor"]:hover {
+  outline: 2px dashed var(--accent-primary, #3b82f6) !important;
+  background-color: rgba(59, 130, 246, 0.05) !important;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+}
+body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
+  color: var(--accent-primary, #3b82f6);
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Kanban Dashboard (Dev)
+   ========================================================================== */
+.kanban-board {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+  height: calc(100vh - 150px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--bg-body);
+}
+
+.kanban-column {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  max-height: 100%;
+}
+
+.kanban-column-header {
+  padding: 1rem;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  border-bottom: 2px solid var(--border-color);
+  background: var(--bg-hover);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.kanban-count {
+  background: var(--accent);
+  color: #000;
+  padding: 0.1rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+}
+
+.kanban-column-body {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.kanban-card {
+  background: var(--bg-body);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--accent);
+  border-radius: 20px;
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+/* Status-based backgrounds */
+.kanban-card[data-status="backlog"] { background: rgba(107, 114, 128, 0.05); }
+.kanban-card[data-status="todo"] { background: rgba(59, 130, 246, 0.05); }
+.kanban-card[data-status="in_progress"] { background: rgba(245, 158, 11, 0.05); }
+.kanban-card[data-status="review"] { background: rgba(16, 185, 129, 0.05); }
+.kanban-card[data-status="completed"] { background: rgba(34, 197, 94, 0.05); }
+
+.kanban-column-body.drag-over {
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: var(--radius-md);
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.kanban-card-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-dark);
+}
+
+.kanban-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.kanban-priority {
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.kanban-priority.critical { background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; }
+.kanban-priority.high { background: #fef3c7; color: #f59e0b; border: 1px solid #fcd34d; }
+.kanban-priority.medium { background: #e0f2fe; color: #3b82f6; border: 1px solid #bae6fd; }
+.kanban-priority.low { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+
+.kanban-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  background: var(--bg-hover);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
 }

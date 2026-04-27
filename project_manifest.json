@@ -1,0 +1,16 @@
+{
+  "projectName": "alphire-promo",
+  "description": "Public promotional website and project management portal. Multi-tenant architecture serving the public site and internal admin tools.",
+  "primaryStack": "Vanilla JS",
+  "backend": "Node/Express",
+  "styling": "CSS3",
+  "database": "Supabase (PostgreSQL)",
+  "keyDirectories": {
+    "public": "Static assets, CSS, and frontend JavaScript (e.g. /public/js/devAgent.js)",
+    "routes": "Express router handlers",
+    "lib": "Backend controllers, database access layers, and utilities",
+    "scripts": "Maintenance, migration, and cron scripts",
+    "docs": "Documentation and SQL schemas"
+  },
+  "architecturalNotes": "This project DOES NOT use React, Vue, Next.js, or TypeScript. Frontend views are rendered via vanilla HTML in /public/index.html and managed via imperative DOM manipulation in /public/js/*. Backend views are served natively by Express."
+}

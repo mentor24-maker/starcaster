@@ -11,6 +11,7 @@ App.contacts = (function () {
   let lastSuggestedSegmentName = '';
   let lastSuggestedLogicExpression = '';
   let activeFilteredContactClass = null;
+  let returnPageOnSave = null;
 
   function escapeHtml(str) {
     if (str == null) return '';
@@ -81,6 +82,7 @@ App.contacts = (function () {
     { key: 'first_name', label: 'First Name', filterPlaceholder: 'First' },
     { key: 'last_name', label: 'Last Name', filterPlaceholder: 'Last' },
     { key: 'company', label: 'Company', filterPlaceholder: 'Company' },
+    { key: 'entity_type', label: 'Entity Type', filterPlaceholder: 'Entity Type' },
     { key: 'email', label: 'Email', filterPlaceholder: 'Email' },
     { key: 'website', label: 'Website', filterPlaceholder: 'Website' },
     { key: 'youtube', label: 'Youtube', filterPlaceholder: 'Youtube' },
@@ -112,7 +114,7 @@ App.contacts = (function () {
     { label: 'Training Settings', pageId: 'trainingSettingsPage' },
   ];
   const CONTACT_EDITABLE_FIELDS = [
-    'first_name', 'last_name', 'company', 'email', 'phone', 'city', 'country',
+    'first_name', 'middle_name', 'last_name', 'company', 'entity_type', 'email', 'phone', 'city', 'country',
     'website', 'youtube', 'instagram', 'tiktok', 'facebook', 'x', 'bluesky',
     'patreon', 'linkedin', 'tags', 'notes',
   ];
@@ -627,6 +629,7 @@ App.contacts = (function () {
   function toContactPayload(form) {
     const keyMap = {
       first_name: 'firstName',
+      middle_name: 'middleName',
       last_name: 'lastName',
     };
     const payload = { 
@@ -666,6 +669,7 @@ App.contacts = (function () {
   function contactDetailRows(contact) {
     return [
       ['First Name', contactValue(contact, 'first_name')],
+      ['Middle Name', contactValue(contact, 'middle_name')],
       ['Last Name', contactValue(contact, 'last_name')],
       ['Company', contactValue(contact, 'company')],
       ['Email', contactValue(contact, 'email')],
@@ -1468,12 +1472,13 @@ App.contacts = (function () {
     App.setActivePage('viewContactPage');
   }
 
-  function openEditPage(contactOrId) {
+  function openEditPage(contactOrId, returnPageId = null) {
     const contact = typeof contactOrId === 'object' ? contactOrId : findContactById(contactOrId);
     if (!contact || !els.contactEditForm) {
       notify('Contact not found', true);
       return;
     }
+    returnPageOnSave = returnPageId;
     activeContactId = String(contact.id || '');
     if (els.contactEditId) els.contactEditId.value = activeContactId;
     fillContactForm(els.contactEditForm, contact);
@@ -2978,7 +2983,7 @@ App.contacts = (function () {
            else if (c.x) linkHtml = `<a href="${safeText(c.x)}" target="_blank" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: underline;">[X]</a>`;
            else if (c.linkedin) linkHtml = `<a href="${safeText(c.linkedin)}" target="_blank" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: underline;">[LinkedIn]</a>`;
            
-           const name = (c.first_name || c.firstName || '') + ' ' + (c.last_name || c.lastName || '');
+           const name = ((c.first_name || c.firstName || '') + ' ' + (c.middle_name || c.middleName || '') + ' ' + (c.last_name || c.lastName || '')).replace(/\s+/g, ' ').trim();
            const display = name.trim() ? name.trim() : (c.company || c.email || 'Unknown Contact');
            contactsHtml += `<div style="padding: 0.3rem 0; border-bottom: 1px dotted var(--border-color);">${safeText(display)}${linkHtml}</div>`;
         });
@@ -3172,7 +3177,14 @@ App.contacts = (function () {
       els.backFromViewContactBtn.addEventListener('click', () => openContactsPage());
     }
     if (els.backFromEditContactBtn) {
-      els.backFromEditContactBtn.addEventListener('click', () => openContactsPage());
+      els.backFromEditContactBtn.addEventListener('click', () => {
+        if (returnPageOnSave) {
+          App.setActivePage(returnPageOnSave);
+          returnPageOnSave = null;
+        } else {
+          openContactsPage();
+        }
+      });
     }
     if (els.backFromCloneContactBtn) {
       els.backFromCloneContactBtn.addEventListener('click', () => openContactsPage());
@@ -3193,12 +3205,17 @@ App.contacts = (function () {
         if (!id) return notify('Missing contact id', true);
         try {
           await api(`/api/contacts/${encodeURIComponent(id)}`, {
-            method: 'PATCH',
+            method: 'PUT',
             body: JSON.stringify(toContactPayload(els.contactEditForm)),
           });
           notify('Contact updated');
           await App.refresh();
-          openContactsPage();
+          if (returnPageOnSave) {
+            App.setActivePage(returnPageOnSave);
+            returnPageOnSave = null;
+          } else {
+            openContactsPage();
+          }
         } catch (err) {
           notify(err.message, true);
         }

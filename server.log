@@ -1,0 +1,102 @@
+
+> mini-mailchimp-clone@1.0.0 dev
+> esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx --watch & node server.js
+
+[watch] stopped automatically because stdin was closed (use "--watch=forever" to keep watching even after stdin is closed)
+[dotenv@17.3.1] injecting env (48) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+[server] Loaded .env
+[config] ✓ All required environment variables are set.
+[server] Listening on http://localhost:3000
+[APP] Route registry:
+  [auth] Authentication
+        /api/auth/*
+  [projects] Projects
+        /api/projects/*
+  [settings] Settings & OpenClaw Gateway
+        /api/settings/*
+        /api/openclaw/*
+        /api/health/*
+  [acquire] Acquire
+        /api/acquire/*
+        /api/harvest/*
+  [promoLeads] Contacts
+        /api/promo-leads/*
+  [assets] Assets
+        /api/assets/*
+        /api/asset-categories/*
+  [channels] Channels
+        /api/channels/*
+  [contacts] Contacts, Segments & Campaigns
+        /api/contacts/*
+        /api/contact-personas/*
+        /api/segments/*
+        /api/campaigns/*
+  [engage] Engage
+        /api/engage/*
+  [develop] Develop
+        /api/develop/*
+  [messaging] Messaging
+        /api/messaging/*
+  [activityLog] Activity Log
+        /api/activity-log/*
+  [observe] Observe Module
+        /api/observe/*
+  [config] Environment Configuration
+        /api/config/*
+  [develop-roger] Ask Roger API
+        /api/develop/devAgent/*
+  [influencerPersonas] Digital Clone Engine API
+        /api/personas/*
+[TimerDaemon] Starting background timer daemon...
+[Worker] Started processing for chatId 1200 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Started processing for chatId 1202 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Started processing for chatId 1205 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Started processing for chatId 1207 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Started processing for chatId 1209 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Agent antigravity handed off to angie. Enqueuing next node...
+[Worker] Started processing for chatId 1210 (angie)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for angie...
+[Worker] Inference complete for angie (ok: true)
+[Worker] Agent angie handed off to antigravity. Enqueuing next node...
+[Worker] Started processing for chatId 1211 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Started processing for chatId 1213 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Started processing for chatId 1215 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Started processing for chatId 1217 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
+[Worker] Agent antigravity handed off to angie. Enqueuing next node...
+[Worker] Started processing for chatId 1218 (angie)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for angie...
+[Worker] Inference complete for angie (ok: true)
+[Worker] Agent angie handed off to antigravity. Enqueuing next node...
+[Worker] Started processing for chatId 1219 (antigravity)
+[Worker] Loaded 70 history items for session 19
+[Worker] Executing inference loop via consultRoger for antigravity...
+[Worker] Inference complete for antigravity (ok: true)
