@@ -5,8 +5,10 @@ App.devAgent = {};
 
 const devState = {
   activeSessionId: null,
+  activeDevPage: null,
   sessions: [],
-  stagedFiles: []
+  stagedFiles: [],
+  actionItemsState: [] // Dynamically populated
 };
 
 const devElements = {
@@ -15,6 +17,7 @@ const devElements = {
   input: null,
   sessionList: null,
   taskList: null,
+  actionItemsList: null,
   newSessionBtn: null,
   activeSessionTitle: null,
   fileInput: null,
@@ -35,8 +38,11 @@ App.devAgent.init = async function() {
   devElements.input = document.getElementById('devChatInput');
   devElements.sessionList = document.getElementById('devSessionList');
   devElements.taskList = document.getElementById('devTaskList');
+  devElements.actionItemsList = document.getElementById('devActionItemsList');
   devElements.newSessionBtn = document.getElementById('devNewSessionBtn');
   devElements.activeSessionTitle = document.getElementById('devActiveSessionTitle');
+  
+  App.devAgent.loadActionItems();
 
   devElements.fileInput = document.getElementById('devChatFile');
   devElements.fileBtn = document.getElementById('devFileTriggerBtn');
@@ -221,24 +227,242 @@ App.devAgent.init = async function() {
   }
 
   const originalSetActivePage = App.setActivePage;
-  App.setActivePage = function(pageId) {
+  App.setActivePage = async function(pageId) {
+    if (devState.activeDevPage && devState.activeDevPage !== pageId && devState.activeDevPage.startsWith('dev')) {
+      App.devAgent.cleanup(devState.activeDevPage);
+    }
+    const prevPage = App.state.activePage;
+    
+    const isDevRoute = pageId.startsWith('dev');
+    if (isDevRoute) {
+      devState.activeDevPage = pageId;
+    } else {
+      devState.activeDevPage = null;
+    }
+
     originalSetActivePage.apply(App, arguments);
-    if (pageId === 'devAgentPage') {
-      App.devAgent.loadSessions();
-      App.devAgent.loadTasks();
+    if (isDevRoute) {
+      if (!window.supabaseClient) await App.devAgent.init();
+    }
+    
+    // Skip panel resets if the page hasn't changed (e.g. clicking New Task while on Tasks page)
+    if (prevPage === pageId) return;
+    
+    try {
+      if (pageId === 'devProjectsPage') {
+        await App.devAgent.loadTasks(); // Keep sidebar loaded
+        setTimeout(() => App.devAgent.loadActionItems(), 50);
+      } else if (pageId === 'devTasksPage') {
+        await App.devAgent.loadTasks();
+        setTimeout(() => App.devAgent.showTaskBrowser(), 50);
+      } else if (pageId === 'devDashboardPage') {
+        await App.devAgent.loadTasks();
+        setTimeout(() => App.devAgent.loadActionItems(), 50);
+        setTimeout(() => App.devAgent.loadGitStatus(), 50);
+      } else if (pageId === 'devForumPage') {
+        await App.devAgent.loadSessions();
+        setTimeout(() => App.devAgent.restoreChatPanel(), 50);
+      } else if (pageId === 'devTeamPage') {
+        await App.devAgent.loadTeam();
+        setTimeout(() => App.devAgent.showTeamBrowser(), 50);
+      } else if (pageId === 'devRolesPage') {
+        await App.devAgent.loadTeam();
+        setTimeout(() => App.devAgent.showRolesBrowser(), 50);
+      } else if (pageId === 'devFrictionPage') {
+        if (App.devAgentFriction) await App.devAgentFriction.loadLogs();
+        setTimeout(() => {
+           const fricBrowser = document.getElementById('devFrictionBrowserPanel');
+           const fricEditor = document.getElementById('devFrictionEditorPanel');
+           if (fricBrowser) fricBrowser.classList.remove('hidden');
+           if (fricEditor) fricEditor.classList.add('hidden');
+        }, 50);
+      }
+    } catch (err) {
+      console.error(`Error loading dev page ${pageId}:`, err);
+      App.devAgent.renderErrorState(pageId, err);
+    }
+  };
+
+  App.devAgent.renderErrorState = function(containerId, err, isInline = false) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    
+    const message = err.message || err.toString() || 'Unknown error occurred.';
+    if (isInline) {
+      el.innerHTML = `<li class="error-msg" style="padding: 1rem; color: #dc2626;">Failed to load: ${message}</li>`;
+    } else {
+      el.innerHTML = `
+        <div class="page-heading-row"><h2>Error Loading Section</h2></div>
+        <div style="padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--accent-warning); background: rgba(245, 158, 11, 0.05); margin: 1rem;">
+          <h3 style="color: var(--accent-warning); margin-top: 0; display: flex; align-items: center; gap: 0.5rem;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            Error Details
+          </h3>
+          <p style="color: var(--text-color-secondary);">${message}</p>
+        </div>
+      `;
+    }
+  };
+
+  App.devAgent.cleanup = function(pageId) {
+    if (pageId === 'devForumPage') {
+      if (window.supabaseRealtimeDevChannel) {
+        window.supabaseClient.removeChannel(window.supabaseRealtimeDevChannel);
+        window.supabaseRealtimeDevChannel = null;
+      }
+    } else if (pageId === 'devProjectsPage') {
+      const el = document.getElementById('devProjectBrowserTable');
+      if (el) el.innerHTML = '';
+      if (App.devAgent.closeProjectEditor) App.devAgent.closeProjectEditor();
+    } else if (pageId === 'devTasksPage') {
+      const el = document.getElementById('devTaskBrowserTable');
+      if (el) el.innerHTML = '';
+      if (App.devAgent.closeTaskEditor) App.devAgent.closeTaskEditor();
+    } else if (pageId === 'devTeamPage') {
+      const el = document.getElementById('devTeamBrowserTable');
+      if (el) el.innerHTML = '';
+    } else if (pageId === 'devRolesPage') {
+      const el = document.getElementById('devRolesBrowserTable');
+      if (el) el.innerHTML = '';
+    }
+    
+    if (devElements.activeSessionTitle && devElements.activeSessionTitle.classList.contains('editing')) {
+       devElements.activeSessionTitle.classList.remove('editing');
     }
   };
 };
 
-App.devAgent.loadTasks = async function() {
-  if (!devElements.taskList) return;
+
+App.devAgent.loadGitStatus = async function() {
+  const container = document.getElementById('devGitStatusContainer');
+  if (!container) return;
+  
+  container.innerHTML = '<div style="color: #666; font-style: italic;">Loading git metrics...</div>';
+  
   try {
-    devElements.taskList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    const res = await fetch('/api/develop/devAgent/git-status');
+    if (!res.ok) throw new Error('Network response was not ok');
+    const data = await res.json();
+    
+    if (data.ok && data.data) {
+      const d = data.data;
+      
+      const unpushedColor = d.unpushedCommits > 0 ? '#b45309' : '#15803d'; // orange/green
+      const uncommittedColor = d.uncommittedFiles > 0 ? '#dc2626' : '#15803d'; // red/green
+      
+      // Format dates nicely
+      const formatDate = (dateStr) => {
+        if (!dateStr || dateStr.includes('No origin')) return 'None';
+        try {
+          const dt = new Date(dateStr);
+          return dt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch(e) { return dateStr; }
+      };
+      
+      container.innerHTML = `
+        <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
+          <span style="color: #555; font-weight: 500;">Branch:</span>
+          <span style="font-family: monospace; background: #e2e8f0; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">${d.currentBranch}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
+          <span style="color: #555; font-weight: 500;">Last Commit:</span>
+          <span style="font-size: 0.85rem;">${formatDate(d.lastCommitDate)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
+          <span style="color: #555; font-weight: 500;">Last Push:</span>
+          <span style="font-size: 0.85rem;">${formatDate(d.lastPushDate)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
+          <span style="color: #555; font-weight: 500;">Unpushed Commits:</span>
+          <span style="font-weight: bold; color: ${unpushedColor};">${d.unpushedCommits}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
+          <span style="color: #555; font-weight: 500;">Uncommitted Files:</span>
+          <span style="font-weight: bold; color: ${uncommittedColor};">${d.uncommittedFiles}</span>
+        </div>
+      `;
+    } else {
+      throw new Error(data.error || 'Unknown error');
+    }
+  } catch (err) {
+    console.error('Failed to load git status:', err);
+    container.innerHTML = `<div style="color: #dc2626;">Failed to load metrics: ${err.message}</div>`;
+  }
+};
+
+App.devAgent.loadActionItems = async function() {
+  if (!devElements.actionItemsList) return;
+  
+  try {
     const res = await window.supabaseClient
       .from('dev_tasks')
       .select('*')
+      .or('status.eq.review,assignee.eq.mentor')
       .neq('status', 'completed')
       .order('created_at', { ascending: false });
+
+    if (res.error) throw res.error;
+    
+    devState.actionItemsState = res.data || [];
+  } catch (err) {
+    console.error('Failed to load action items', err);
+    devElements.actionItemsList.innerHTML = '<li class="dev-session-item error-msg">Failed to load actions.</li>';
+    return;
+  }
+  
+  const pendingItems = devState.actionItemsState;
+  
+  if (pendingItems.length === 0) {
+    devElements.actionItemsList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No pending actions.</li>';
+    return;
+  }
+  
+  devElements.actionItemsList.innerHTML = '';
+  
+  pendingItems.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'dev-session-item';
+    li.style.whiteSpace = 'nowrap';
+    li.style.overflow = 'hidden';
+    li.style.textOverflow = 'ellipsis';
+    li.style.display = 'block';
+    li.style.cursor = 'pointer';
+    
+    let typeLabel = item.status === 'review' ? 'Review Requested' : 'Task Assigned';
+    let displayTitle = item.title ? item.title : typeLabel;
+    
+    li.title = displayTitle; // Add hover text
+    li.innerHTML = `<span style="color: var(--accent-warning); font-weight: bold; margin-right: 4px;">&bull;</span>${displayTitle}`;
+    
+    li.addEventListener('click', () => {
+      if (App.devAgent.openTaskEditor) {
+        App.devAgent.openTaskEditor(item.id);
+      }
+    });
+    
+    devElements.actionItemsList.appendChild(li);
+  });
+};
+
+App.devAgent.loadTasks = async function(projectId = null) {
+  if (!devElements.taskList) return;
+  try {
+    devElements.taskList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    
+    let query = window.supabaseClient
+      .from('dev_tasks')
+      .select('*')
+      .neq('status', 'completed');
+      
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+    
+    const res = await query.order('created_at', { ascending: false });
       
     devElements.taskList.innerHTML = '';
     
@@ -248,6 +472,7 @@ App.devAgent.loadTasks = async function() {
     }
     
     const tasks = res.data || [];
+    devState.tasks = tasks;
     
     if (tasks.length === 0) {
       devElements.taskList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>';
@@ -258,50 +483,314 @@ App.devAgent.loadTasks = async function() {
       const li = document.createElement('li');
       li.className = 'dev-session-item';
       li.dataset.taskId = task.id;
-      // Truncate title
       const shortTitle = task.title.length > 25 ? task.title.substring(0,25) + '...' : task.title;
-      li.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:6px;"></span> ${shortTitle}`;
+      
+      const statusColors = {
+        backlog: '#9ca3af',
+        todo: '#3b82f6',
+        in_progress: '#f59e0b',
+        review: '#8b5cf6',
+        completed: '#10b981'
+      };
+      const badgeColor = statusColors[task.status] || '#9ca3af';
+      const statusLabel = (task.status || 'unknown').replace('_', ' ').toUpperCase();
+
+      let timerHtml = '';
+      if (task.timer_active && task.estimated_completion_time) {
+        const now = new Date();
+        const est = new Date(task.estimated_completion_time);
+        const diffMs = est - now;
+        if (diffMs > 0) {
+          const diffMins = Math.ceil(diffMs / 60000);
+          timerHtml = `<span style="font-size:0.6rem; margin-right:4px; padding:0.15rem 0.4rem; border-radius:10px; background:#1f2937; color:#f3f4f6; border:1px solid #374151; white-space:nowrap;" title="Time until agent evaluation">⏱ ${diffMins}m</span>`;
+        } else {
+          timerHtml = `<span style="font-size:0.6rem; margin-right:4px; padding:0.15rem 0.4rem; border-radius:10px; background:#7f1d1d; color:#fca5a5; border:1px solid #991b1b; white-space:nowrap;">⏱ Expired</span>`;
+        }
+      }
+
+      li.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-right: 0.5rem; margin-bottom: 2px;">
+          <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${task.title.replace(/"/g, '&quot;')}">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${badgeColor}; margin-right:6px;"></span> ${shortTitle}
+          </span>
+          <div style="display:flex; align-items:center;">
+            ${timerHtml}
+            <span style="font-size:0.6rem; padding:0.15rem 0.4rem; border-radius:10px; background:${badgeColor}22; color:${badgeColor}; border:1px solid ${badgeColor}44; white-space:nowrap; font-weight:600;">${statusLabel}</span>
+          </div>
+        </div>
+      `;
       li.addEventListener('click', () => {
         App.devAgent.openTaskEditor(task.id);
       });
       devElements.taskList.appendChild(li);
     });
+    
+    // Also refresh the dashboard if it's rendered
+    if (typeof App.devAgent.loadDashboard === 'function') {
+      App.devAgent.loadActionItems();
+    }
   } catch (err) {
-    devElements.taskList.innerHTML = `<li class="error-msg">Error executing tasks table logic.</li>`;
+    App.devAgent.renderErrorState('devTaskList', err, true);
   }
 };
 
-App.devAgent.loadSessions = async function() {
-  if (!devElements.sessionList) return;
+App.devAgent.loadSessions = async function() { 
+  App.devAgent.loadAllMessages();
+  const accordionContainer = document.getElementById('devSessionList');
+  const dashboardList = document.getElementById('devDashboardForumList');
+  
+  if (!accordionContainer && !dashboardList) return;
+  
   try {
-    devElements.sessionList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    if (dashboardList) dashboardList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    if (accordionContainer) accordionContainer.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666; font-style: italic;">Loading threads...</div>';
+    
     const res = await App.api('/api/develop/devAgent/sessions');
-    devElements.sessionList.innerHTML = '';
+    
+    if (dashboardList) dashboardList.innerHTML = '';
+    if (accordionContainer) accordionContainer.innerHTML = '';
     
     if (res.error) {
-      devElements.sessionList.innerHTML = `<li class="error-msg">Failed to load</li>`;
+      if (dashboardList) dashboardList.innerHTML = `<li class="error-msg">Failed to load</li>`;
+      if (accordionContainer) accordionContainer.innerHTML = `<div class="error-msg">Failed to load</div>`;
       return;
     }
     
     devState.sessions = res.sessions || res.data || [];
     
     if (devState.sessions.length === 0) {
-      // First boot, create a default session implicitly
-      const today = new Date().toISOString().split('T')[0];
-      await App.devAgent.createNewSession(`${today}_New_Discussion`);
+      if (dashboardList) dashboardList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No active discussions.</li>';
+      if (accordionContainer) accordionContainer.innerHTML = '<div style="color: #666; font-style: italic; text-align: center;">No active discussions.</div>';
       return;
     }
 
-    devState.sessions.forEach(session => App.devAgent.appendSessionNode(session));
-    
-    // Auto-select latest session if none is active
-    if (!devState.activeSessionId && devState.sessions.length > 0) {
-      App.devAgent.selectSession(devState.sessions[0].id);
-    } else if (devState.activeSessionId) {
-      App.devAgent.selectSession(devState.activeSessionId);
+    // Sort by id descending (newest first)
+    devState.sessions.sort((a, b) => b.id - a.id);
+
+    // Render Dashboard List (Top 10)
+    if (dashboardList) {
+      devState.sessions.slice(0, 10).forEach(session => {
+        const li = document.createElement('li');
+        li.className = 'dev-session-item';
+        li.dataset.sessionId = session.id;
+        li.innerHTML = `
+          <div class="dev-session-item-title">${session.name || 'Untitled Thread'}</div>
+        `;
+        li.addEventListener('click', () => {
+          if (App.setActivePage) App.setActivePage('devForumPage');
+          App.devAgent.expandThreadAccordion(session.id);
+        });
+        dashboardList.appendChild(li);
+      });
     }
+
+    // Render Forum Accordions
+    if (accordionContainer) {
+      devState.sessions.forEach(session => {
+        const accordion = App.devAgent.createThreadAccordion(session);
+        accordionContainer.appendChild(accordion);
+      });
+      
+      // Auto-expand the active session if one exists
+      if (devState.activeSessionId) {
+        App.devAgent.expandThreadAccordion(devState.activeSessionId);
+      }
+    }
+    
+    // Also load pending action items
+    App.devAgent.loadPendingCommands();
   } catch (err) {
-    devElements.sessionList.innerHTML = `<li class="error-msg">Error.</li>`;
+    if (dashboardList) App.devAgent.renderErrorState('devDashboardForumList', err, true);
+    if (accordionContainer) App.devAgent.renderErrorState('devSessionList', err, true);
+  }
+};
+
+App.devAgent.createThreadAccordion = function(session) {
+  const container = document.createElement('div');
+  container.className = 'dev-thread-accordion';
+  container.dataset.sessionId = session.id;
+  container.style.border = '1px solid var(--border-light)';
+  container.style.borderRadius = '8px';
+  container.style.background = 'var(--bg-card)';
+  container.style.overflow = 'hidden';
+
+  const header = document.createElement('div');
+  header.className = 'dev-thread-accordion-header';
+  header.style.padding = '1rem';
+  header.style.cursor = 'pointer';
+  header.style.display = 'flex';
+  header.style.justifyContent = 'space-between';
+  header.style.alignItems = 'center';
+  header.style.background = 'var(--bg-input)';
+  header.innerHTML = `<h3 style="margin:0; font-size: 1.05rem;">${session.name}</h3><span class="dev-accordion-icon">▼</span>`;
+  
+  const body = document.createElement('div');
+  body.className = 'dev-thread-accordion-body hidden';
+  body.style.padding = '1rem';
+  body.style.borderTop = '1px solid var(--border-light)';
+  
+  header.addEventListener('click', () => {
+    if (body.classList.contains('hidden')) {
+      App.devAgent.expandThreadAccordion(session.id);
+    } else {
+      App.devAgent.collapseThreadAccordion(session.id);
+    }
+  });
+
+  container.appendChild(header);
+  container.appendChild(body);
+  return container;
+};
+
+App.devAgent.expandThreadAccordion = function(sessionId) {
+  devState.activeSessionId = sessionId;
+  
+  const container = document.getElementById('devSessionList');
+  if (!container) return;
+  
+  const accordions = container.querySelectorAll('.dev-thread-accordion');
+  accordions.forEach(acc => {
+    const body = acc.querySelector('.dev-thread-accordion-body');
+    const icon = acc.querySelector('.dev-accordion-icon');
+    if (Number(acc.dataset.sessionId) === sessionId) {
+      body.classList.remove('hidden');
+      icon.textContent = '▲';
+      
+      // Load history into this accordion if it's not already loaded
+      if (!body.querySelector('.dev-chat-log')) {
+        body.innerHTML = '<div class="dev-chat-log" style="max-height: 400px; overflow-y: auto;"></div>';
+        
+        // Clone chat form template
+        const template = document.getElementById('devChatFormTemplate');
+        if (template) {
+          const formClone = template.content.cloneNode(true);
+          body.appendChild(formClone);
+          
+          // Bind form submit event
+          const form = body.querySelector('.dev-inline-chat-form');
+          form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            App.devAgent.submitChat(form);
+          });
+          
+          // Bind file trigger
+          const fileTrigger = form.querySelector('.dev-file-trigger-btn');
+          const fileInput = form.querySelector('.dev-chat-file');
+          if (fileTrigger && fileInput) {
+             fileTrigger.addEventListener('click', () => fileInput.click());
+             fileInput.addEventListener('change', (e) => {
+                if (App.devAgent.handleFileSelect) {
+                    App.devAgent.handleFileSelect(e, form);
+                }
+             });
+          }
+        }
+        
+        App.devAgent.loadHistory(sessionId, body.querySelector('.dev-chat-log'));
+      }
+      
+      // Focus the input
+      const chatInput = body.querySelector('.dev-chat-input');
+      if (chatInput) {
+        setTimeout(() => chatInput.focus(), 100);
+      }
+    } else {
+      body.classList.add('hidden');
+      icon.textContent = '▼';
+    }
+  });
+};
+
+App.devAgent.collapseThreadAccordion = function(sessionId) {
+  const container = document.getElementById('devSessionList');
+  if (!container) return;
+  const acc = container.querySelector(`.dev-thread-accordion[data-session-id="${sessionId}"]`);
+  if (acc) {
+    acc.querySelector('.dev-thread-accordion-body').classList.add('hidden');
+    acc.querySelector('.dev-accordion-icon').textContent = '▼';
+  }
+  if (devState.activeSessionId === sessionId) {
+    devState.activeSessionId = null;
+  }
+};
+
+App.devAgent.loadPendingCommands = async function() {
+  const listEl = document.getElementById('devActionItemsList');
+  if (!listEl) return;
+  
+  try {
+    const res = await App.api('/api/develop/devAgent/pendingCommands');
+    
+    await App.devAgent.loadActionItems(); // This clears and rebuilds the basic action items
+    
+    if (res.error) {
+      console.error('Failed to load pending commands', res.error);
+      return;
+    }
+    
+    const commands = res.commands || res.data || [];
+    
+    if (commands.length === 0) {
+      return;
+    }
+    
+    // Remove the "No pending actions" item if loadActionItems inserted it and we have commands to add
+    const pendingItems = devState.actionItemsState;
+    if (pendingItems.length === 0) {
+      listEl.innerHTML = '';
+    }
+    
+    commands.forEach(cmdObj => {
+      const li = document.createElement('li');
+      li.className = 'dev-session-item';
+      li.style.whiteSpace = 'nowrap';
+      li.style.overflow = 'hidden';
+      li.style.textOverflow = 'ellipsis';
+      li.style.display = 'block';
+      li.style.cursor = 'pointer';
+      
+      const parsed = cmdObj.parsed;
+      let taskId = parsed.state?.active_objective_id;
+      
+      const applyTitle = (tName) => {
+        let finalTitle = "Approval Required";
+        if (tName) finalTitle += `: ${tName}`;
+        li.innerHTML = `<span style="color: var(--accent-warning); font-weight: bold; margin-right: 4px;">&bull;</span>${finalTitle}`;
+        li.title = finalTitle;
+      };
+      
+      applyTitle(); // Initial render
+      
+      if (taskId && taskId.length > 20) {
+        if (devState.tasks && devState.tasks.length > 0) {
+          const t = devState.tasks.find(x => x.id === taskId);
+          if (t) applyTitle(t.title);
+          else {
+            window.supabaseClient.from('dev_tasks').select('title').eq('id', taskId).single()
+              .then(res => { if (res.data) applyTitle(res.data.title); else applyTitle(taskId.substring(0,8) + '...'); })
+              .catch(() => applyTitle(taskId.substring(0,8) + '...'));
+          }
+        } else {
+          window.supabaseClient.from('dev_tasks').select('title').eq('id', taskId).single()
+            .then(res => { if (res.data) applyTitle(res.data.title); else applyTitle(taskId.substring(0,8) + '...'); })
+            .catch(() => applyTitle(taskId.substring(0,8) + '...'));
+        }
+      } else if (taskId) {
+        applyTitle(taskId);
+      }
+      
+      li.addEventListener('click', (e) => {
+        if (App.setActivePage) App.setActivePage('devForumPage');
+        if (App.devAgent && App.devAgent.selectSession && cmdObj.chat && cmdObj.chat.session_id) {
+          App.devAgent.selectSession(cmdObj.chat.session_id);
+        }
+      });
+      
+      listEl.appendChild(li);
+    });
+    
+  } catch(err) {
+    listEl.innerHTML = `<li class="error-msg" style="font-size: 0.8rem;">Error loading actions</li>`;
   }
 };
 
@@ -313,11 +802,8 @@ App.devAgent.createNewSession = async function(name = 'New Discussion') {
     });
     const sessionData = res.session || res.data;
     if (sessionData) {
-      devState.sessions.unshift(sessionData);
-      // Re-render
-      devElements.sessionList.innerHTML = '';
-      devState.sessions.forEach(s => App.devAgent.appendSessionNode(s));
-      App.devAgent.selectSession(sessionData.id);
+      devState.activeSessionId = sessionData.id;
+      App.devAgent.loadSessions();
     }
   } catch (e) {
     alert("Could not create session: " + e.message);
@@ -341,15 +827,16 @@ App.devAgent.appendSessionNode = function(session) {
   devElements.sessionList.appendChild(li);
 };
 
-App.devAgent.selectSession = function(sessionId) {
+App.devAgent.selectSession = function(sessionId, isFromTaskEditor = false) {
   devState.activeSessionId = sessionId;
   
-  // Close the Friction Editor natively if it happens to be masking the screen
-  if (App.devAgentFriction && typeof App.devAgentFriction.closeEditor === 'function') {
-    App.devAgentFriction.closeEditor();
+  // If we are not opening this session from the task editor, switch to forum page and expand
+  if (!isFromTaskEditor) {
+    App.devAgent.restoreChatPanel();
+    App.devAgent.expandThreadAccordion(sessionId);
   }
   
-  // Highlight UI
+  // Highlighting dashboard list if available
   if (devElements.sessionList) {
     const items = devElements.sessionList.querySelectorAll('.dev-session-item');
     items.forEach(el => {
@@ -358,30 +845,73 @@ App.devAgent.selectSession = function(sessionId) {
     });
   }
   
-  const activeSessionData = devState.sessions.find(s => s.id === sessionId);
-  if (activeSessionData && devElements.activeSessionTitle) {
-    devElements.activeSessionTitle.textContent = activeSessionData.name;
-  }
-  
-  App.devAgent.loadHistory(sessionId);
   App.devAgent.initSupabaseRealtime(sessionId);
 };
 
-App.devAgent.loadHistory = async function(sessionId) {
-  if (!devElements.log || !sessionId) return;
+App.devAgent.toggleTaskLinkDropdown = async function() {
+  const select = document.getElementById('devThreadTaskLinkSelect');
+  if (!select) return;
+  
+  if (select.classList.contains('hidden')) {
+    // Populate dropdown
+    select.innerHTML = '<option value="">Select Task...</option>';
+    if (devState.tasks && devState.tasks.length > 0) {
+      devState.tasks.forEach(task => {
+        const opt = document.createElement('option');
+        opt.value = task.id;
+        opt.textContent = task.title;
+        select.appendChild(opt);
+      });
+    } else {
+       const opt = document.createElement('option');
+       opt.value = "";
+       opt.textContent = "No tasks available";
+       select.appendChild(opt);
+    }
+    select.classList.remove('hidden');
+  } else {
+    select.classList.add('hidden');
+  }
+};
+
+App.devAgent.linkThreadToSelectedTask = async function(taskId) {
+  if (!taskId || !devState.activeSessionId) return;
+  
   try {
-    devElements.log.innerHTML = '<div class="loading-spinner">Loading chat history...</div>';
-    devElements.input.disabled = true;
-    const res = await App.api(`/api/develop/devAgent/history?sessionId=${sessionId}`);
-    devElements.log.innerHTML = '';
-    devElements.input.disabled = false;
+    const { error } = await window.supabaseClient.from('dev_tasks')
+      .update({ session_id: devState.activeSessionId })
+      .eq('id', taskId);
+      
+    if (error) throw error;
+    
+    App.notify('Thread linked to task successfully.', false);
+    App.devAgent.loadTasks(); // refresh task list to show linked session
+    
+    document.getElementById('devThreadTaskLinkSelect').classList.add('hidden');
+    document.getElementById('devThreadTaskLinkSelect').value = '';
+  } catch (err) {
+    App.notify('Failed to link thread: ' + err.message, true);
+  }
+};
+
+App.devAgent.loadHistory = async function(sessionId, customLogContainer = null) {
+  const targetLog = customLogContainer || devElements.log;
+  if (!targetLog || !sessionId) return;
+  try {
+    targetLog.innerHTML = '<div class="loading-spinner">Loading chat history...</div>';
+    if (devElements.input) devElements.input.disabled = true;
+    const res = await App.api(`/api/develop/devAgent/history?sessionId=${sessionId}&limit=1000&_t=${Date.now()}`);
+    targetLog.innerHTML = '';
+    if (devElements.input) devElements.input.disabled = false;
     
     if (res.error) {
-      devElements.log.innerHTML = `<div class="error-msg">Could not load chats: ${res.error.message || res.error}</div>`;
+      console.error('[devAgent] loadHistory API error:', res.error);
+      targetLog.innerHTML = `<div class="error-msg">Could not load chats: ${res.error.message || res.error}</div>`;
       return;
     }
     
     const chats = res.chats || res.data || [];
+    console.log(`[devAgent] loadHistory sessionId=${sessionId} returned ${chats.length} chats`);
     
     // Sniff historical sync arrays for `OBJ-002.2` compliance
     let maxVersion = 0;
@@ -394,10 +924,12 @@ App.devAgent.loadHistory = async function(sessionId) {
     devState.localVersionId = Math.max(devState.localVersionId || 0, maxVersion);
 
     if (chats.length === 0) {
+      targetLog.innerHTML = '<div class="dev-chat-item dev-chat-system" style="opacity: 0.5;">No message history.</div>';
     } else {
       App.devAgent.activePendingCommand = null;
       chats.forEach(chat => {
-        App.devAgent.appendChatNode(chat);
+        // Find if we are rendering into a specific accordion body
+        App.devAgent.appendChatNode(chat, targetLog);
         
         // Track functional command resolutions
         const p = App.devAgent.parseTriAgent(chat.content);
@@ -418,20 +950,25 @@ App.devAgent.loadHistory = async function(sessionId) {
           }
         }
       });
-      App.devAgent.scrollToBottom();
+      setTimeout(() => {
+        App.devAgent.scrollToBottom();
+      }, 50);
       App.devAgent.generateGlossary();
     }
     
     // Evaluate constraints natively post-load
     App.devAgent.renderActiveCommand();
   } catch (err) {
-    devElements.log.innerHTML = `<div class="error-msg">Failed to load history.</div>`;
+    devElements.log.innerHTML = `<div class="error-msg">Failed to load history. Error: ${err.message}<br><pre>${err.stack}</pre></div>`;
     devElements.input.disabled = false;
   }
 };
 
 App.devAgent.formatMarkdown = function(text) {
   if (!text) return '';
+  if (typeof text === 'object') {
+    text = "```json\n" + JSON.stringify(text, null, 2) + "\n```";
+  }
   
   // 1. Extract code blocks and replace with placeholders
   let chunks = [];
@@ -452,6 +989,14 @@ App.devAgent.formatMarkdown = function(text) {
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
   html = html.replace(/^&gt;\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+  // 3.5 Process markdown links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+    if (url.startsWith('#dev-task-')) {
+      const taskId = url.replace('#dev-task-', '');
+      return `<a href="${url}" onclick="App.devAgent.openTaskEditor('${taskId}'); return false;">${text}</a>`;
+    }
+    return `<a href="${url}" target="_blank">${text}</a>`;
+  });
   
   // 4. Replace linebreaks outside of blocks
   html = html.replace(/\n/g, '<br/>');
@@ -481,23 +1026,26 @@ App.devAgent.formatMarkdown = function(text) {
     // Apply Version binding to text within code blocks 
     escapedCode = escapedCode.replace(versionRegex, '<a href="#devChatVersion_$1" class="dev-version-link" onclick="App.devAgent.scrollToVersion($1); return false;">$&</a>');
 
-    return `<div class="code-block-wrapper" style="position:relative; margin: 0.5rem 0;">
-      <div class="dev-code-actions">
-        <button class="dev-copy-btn" title="Copy Code" data-content="${encoded}" onclick="App.devAgent.copyCodeBlock(this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-          </svg>
-        </button>
-        <button class="dev-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" onclick="App.devAgent.saveCodeBlock(this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-            <polyline points="7 3 7 8 15 8"></polyline>
-          </svg>
-        </button>
+    return `<div class="code-block-wrapper" style="margin: 0.5rem 0; display: flex; flex-direction: column; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-light);">
+      <div class="dev-code-header" style="display: flex; justify-content: space-between; align-items: center; background: #2d2d2d; padding: 0.25rem 0.5rem; color: #a0a0a0; font-size: 0.8rem; border-bottom: 1px solid #111;">
+        <span style="font-family: monospace;">${filename}</span>
+        <div class="dev-code-actions">
+          <button class="dev-copy-btn" title="Copy Code" data-content="${encoded}" onclick="App.devAgent.copyCodeBlock(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+          </button>
+          <button class="dev-code-save-btn" title="Save File" data-filename="${filename}" data-content="${encoded}" onclick="App.devAgent.saveCodeBlock(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+          </button>
+        </div>
       </div>
-      <pre style="margin:0;"><code>${escapedCode}</code></pre>
+      <pre style="margin:0; border-radius: 0;"><code>${escapedCode}</code></pre>
     </div>`;
   });
 
@@ -548,11 +1096,22 @@ App.devAgent.saveCodeBlock = function(btn) {
   }
 };
 
-App.devAgent.appendChatNode = function(chat) {
+App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
+  const logContainer = targetLogContainer || devElements.log;
+  if (!logContainer) return;
   
-  if (!devElements.log) return;
+  // Normalize chat.content to a string if it was accidentally saved as JSON/Array
+  if (Array.isArray(chat.content)) {
+    chat.content = chat.content.map(part => typeof part === 'string' ? part : part.text || JSON.stringify(part)).join('\n');
+  } else if (typeof chat.content === 'object' && chat.content !== null) {
+    chat.content = JSON.stringify(chat.content, null, 2);
+  } else {
+    chat.content = String(chat.content || '');
+  }
   
   if (chat.status === 'processing') {
+    if (chat.id && document.getElementById('devChatNode_' + chat.id)) return; // Prevent duplicate processing nodes
+    
     const spinner = document.createElement('div');
     spinner.className = 'dev-chat-bubble-wrapper ' + chat.role;
     spinner.id = 'devChatNode_' + chat.id;
@@ -563,7 +1122,20 @@ App.devAgent.appendChatNode = function(chat) {
         <div class="dev-chat-bubble ${chat.role} loading">Agent is processing objective...</div>
       </div>
     `;
-    devElements.log.appendChild(spinner);
+
+    const outerWrapper = document.createElement('div');
+    outerWrapper.className = 'dev-chat-thread-block';
+    outerWrapper.id = 'devChatThread_' + chat.id;
+    outerWrapper.appendChild(spinner);
+    
+    if (chat.parent_id) {
+       const parentContainer = document.getElementById('devChatChildren_' + chat.parent_id);
+       if (parentContainer) parentContainer.appendChild(outerWrapper);
+       else logContainer.appendChild(outerWrapper);
+    } else {
+       logContainer.appendChild(outerWrapper);
+    }
+    logContainer.scrollTop = logContainer.scrollHeight;
     return;
   }
 
@@ -571,18 +1143,111 @@ App.devAgent.appendChatNode = function(chat) {
     devElements.log.innerHTML = '';
   }
 
+  if (chat.id) {
+    const existingNode = document.getElementById('devChatNode_' + chat.id);
+    if (existingNode) {
+      if (existingNode.dataset.status === 'processing') {
+        existingNode.remove(); // Remove the processing spinner to replace it with the actual message
+      } else {
+        return; // Node already exists, prevent duplication
+      }
+    }
+  }
+
   const wrapper = document.createElement('div');
   wrapper.className = `dev-chat-bubble-wrapper ${chat.role}`;
   if (chat.id) wrapper.id = 'devChatNode_' + chat.id;
   
+  let parsedTriAgent = App.devAgent.parseTriAgent(chat.content);
+  let triAgentData = null;
+  if (parsedTriAgent && parsedTriAgent.valid) {
+    triAgentData = parsedTriAgent.data;
+  } else if (parsedTriAgent && !parsedTriAgent.valid && chat.content && typeof chat.content === 'string' && chat.content.includes('"state"')) {
+    // We'll handle the DESYNC event lower down
+  }
+
+  const payloadType = String(triAgentData?.payload?.type || '').toUpperCase();
+  const sourceAgent = String(triAgentData?.state?.source_agent || '').toUpperCase();
+  const targetAgent = String(triAgentData?.state?.target_agent || '').toUpperCase();
+  const taskStatus = String(triAgentData?.state?.task_status || '').toLowerCase();
+  const payloadContentString = String(triAgentData?.payload?.content || '');
+
+  const isApprovalPrompt = 
+       (payloadType === 'COMMAND' && sourceAgent === '@ROGER') || 
+       (payloadType === 'QUERY' && sourceAgent === '@ANTIGRAVITY' && payloadContentString.toLowerCase().includes('awaiting confirmation')) ||
+       (targetAgent === '@MENTOR' && (taskStatus === 'review' || payloadContentString.toLowerCase().includes('if you approve') || payloadContentString.toLowerCase().includes('final sign-off')));
+
   const avatar = document.createElement('div');
   avatar.className = `dev-chat-avatar ${chat.role}`;
+  
+  const hasCheckdev = typeof chat.content === 'string' && chat.content.toLowerCase().includes('checkdev');
+  const hasHarvest = typeof chat.content === 'string' && (chat.content.toLowerCase().includes('trigger harvest') || chat.content.toLowerCase().includes('training harvest'));
+  
+  if (chat.role !== 'user' && (hasCheckdev || isApprovalPrompt)) {
+    avatar.classList.add('checkdev-alert');
+    avatar.style.cursor = 'pointer';
+    avatar.title = hasCheckdev ? 'Click to trigger Archie (Shift-click to dismiss)' : 'Action Required - See Message (Shift-click to dismiss)';
+    avatar.onclick = async (e) => {
+      avatar.classList.remove('checkdev-alert');
+      avatar.style.cursor = 'default';
+      avatar.title = '';
+      
+      if (e && e.shiftKey) {
+        return; // Silent dismiss
+      }
+      
+      if (hasCheckdev) {
+        try {
+          const res = await fetch('http://localhost:3005/trigger', { method: 'POST' });
+          if (res.ok) console.log('Archie macro triggered successfully!');
+          else console.error('Archie macro failed to trigger.');
+        } catch (err) {
+          console.error('Failed to connect to Archie macro server. Is it running on port 3005?', err);
+        }
+      } else {
+        // Just scroll down to the message
+        wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+  } else if (chat.role !== 'user' && hasHarvest) {
+    avatar.classList.add('harvest-alert');
+    avatar.style.cursor = 'pointer';
+    avatar.title = 'Click to trigger Training Harvest (Shift-click to dismiss)';
+    avatar.onclick = async (e) => {
+      avatar.classList.remove('harvest-alert');
+      avatar.style.cursor = 'default';
+      avatar.title = '';
+      
+      if (e && e.shiftKey) {
+        return; // Silent dismiss
+      }
+      
+      App.notify('Triggering Knowledge Harvest...', false);
+      try {
+        const res = await fetch('/api/develop/devAgent/harvest', { method: 'POST' });
+        if (res.ok) {
+           App.notify('Training Harvest completed!', false);
+        } else {
+           App.notify('Training Harvest failed.', true);
+        }
+      } catch (err) {
+        console.error('Failed to connect to harvest endpoint.', err);
+        App.notify('Failed to connect to harvest endpoint.', true);
+      }
+    };
+  }
   if (chat.role === 'user') {
     avatar.style.backgroundImage = 'url("/images/mentor.png")';
   } else if (chat.role === 'roger') {
     avatar.style.backgroundImage = 'url("/images/roger.png")';
   } else if (chat.role === 'antigravity') {
-    avatar.style.backgroundImage = 'url("/images/antigravity.png")'; // Fix the ext from svg to png
+    avatar.style.backgroundImage = 'url("/images/roger.png")'; // Antigravity is now Roger_Thorson
+  } else if (chat.role === 'angie') {
+    avatar.style.backgroundImage = 'url("/images/antigravity.png")';
+  } else if (chat.role === 'archie') {
+    avatar.style.backgroundImage = 'url("/images/antigravity.png")';
+    avatar.style.filter = 'hue-rotate(270deg) saturate(300%) contrast(1.2)';
+    avatar.style.border = '2px solid #10b981';
   }
 
   const contentCol = document.createElement('div');
@@ -602,8 +1267,10 @@ App.devAgent.appendChatNode = function(chat) {
   
   let author = 'Unknown';
   if (chat.role === 'user') author = 'Mentor';
-  if (chat.role === 'roger') author = '@DevAgent';
-  if (chat.role === 'antigravity') author = '@antigravity';
+  if (chat.role === 'roger') author = '@Angie';
+  if (chat.role === 'antigravity') author = '@Roger_Thorson';
+  if (chat.role === 'angie') author = '@Angie';
+  if (chat.role === 'archie') author = '@Archie';
 
   const dateStr = chat.created_at ? new Date(chat.created_at).toLocaleString() : new Date().toLocaleString();
   
@@ -624,10 +1291,23 @@ App.devAgent.appendChatNode = function(chat) {
   }
 
   const copyBtnId = `copyChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
+  const linkBtnId = `linkChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
   header.innerHTML = `
     <div><strong>${author}</strong> <span class="chat-time">${dateStr}</span></div>
     <div class="dev-copy-btn-container">
       ${editBtnHTML}
+      <button class="dev-copy-btn" title="Reply to Message" style="margin-right: 4px;" onclick="App.devAgent.toggleInlineReply(${chat.id}, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+      <button id="${linkBtnId}" class="dev-copy-btn" title="Link Message to Task/Chat" style="margin-right: 4px;" ${chat.id ? `onclick="App.devAgent.startLinkingMode('${chat.id}')"` : ''}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+      </button>
       <button id="${copyBtnId}" class="dev-copy-btn" title="Copy Message">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
@@ -640,10 +1320,9 @@ App.devAgent.appendChatNode = function(chat) {
   const content = document.createElement('div');
   content.className = 'dev-chat-content';
 
-  let parsedTriAgent = App.devAgent.parseTriAgent(chat.content);
 
   if (parsedTriAgent && !parsedTriAgent.valid) {
-    if (chat.content && chat.content.includes('"state"')) {
+    if (typeof chat.content === 'string' && chat.content.includes('"state"')) {
        App.devAgent.appendChatNode({
          role: 'roger',
          content: `**SYSTEM NOTICE / DESYNC EVENT:** TriAgent Schema Validation explicitly failed. ${parsedTriAgent.error}`,
@@ -662,14 +1341,7 @@ App.devAgent.appendChatNode = function(chat) {
     const rawContentHTML = App.devAgent.formatMarkdown(parsedTriAgent.payload.content);
     let finalUI = rawContentHTML;
     
-    // Robust parsing for case-insensitive and safe property access
-    const payloadType = String(parsedTriAgent.payload?.type || '').toUpperCase();
-    const sourceAgent = String(parsedTriAgent.state?.source_agent || '').toUpperCase();
-    const payloadContentString = String(parsedTriAgent.payload?.content || '');
-
-    // UI/UX Distinction: Mandatory card encapsulation for Auth streams
-    if ( (payloadType === 'COMMAND' && sourceAgent === '@ROGER') || 
-         (payloadType === 'QUERY' && sourceAgent === '@ANTIGRAVITY' && payloadContentString.toLowerCase().includes('awaiting confirmation')) ) {
+    if ( isApprovalPrompt ) {
       finalUI = `
         <div style="background:rgba(245, 158, 11, 0.1); border: 2px solid var(--accent-warning); padding:1rem; border-radius:var(--radius-md); box-shadow: 0 4px 12px rgba(245,158,11,0.15);">
           <div style="display:flex; align-items:center; gap: 8px; margin-bottom: 0.75rem; border-bottom:1px solid rgba(245, 158, 11, 0.3); padding-bottom:0.5rem;">
@@ -678,25 +1350,56 @@ App.devAgent.appendChatNode = function(chat) {
               <line x1="12" y1="9" x2="12" y2="13"></line>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            <strong style="color:var(--accent-warning); font-size:1.1rem; letter-spacing: 0.5px;">AUTHORIZATION REQUIRED</strong>
+            <strong style="color:var(--accent-warning); font-size:1.1rem; letter-spacing: 0.5px;">APPROVAL REQUIRED</strong>
           </div>
           <div style="font-size:0.95rem; line-height: 1.5; color: var(--text-dark);">
             ${rawContentHTML}
           </div>
           <div style="display:flex; gap:10px; margin-top:1rem; padding-top:0.75rem; border-top:1px solid rgba(245, 158, 11, 0.3);">
-            <button type="button" class="primary-btn" onclick="App.devAgent.sendProtocolAction('CONFIRM', '${parsedTriAgent.state.context_checksum}', this)" style="background:#10b981; border:none; flex:1; padding:0.75rem;">CONFIRM COMMAND</button>
-            <button type="button" class="secondary-btn" onclick="App.devAgent.sendProtocolAction('DENY', '${parsedTriAgent.state.context_checksum}', this)" style="flex:1; padding:0.75rem; background:rgba(0,0,0,0.05);">DENY COMMAND</button>
+            <button type="button" class="primary-btn" onclick="App.devAgent.sendProtocolAction('CONFIRM', '${parsedTriAgent.state.context_checksum}', this)" style="background:#10b981; border:none; flex:1; padding:0.75rem;">APPROVE & CONFIRM</button>
+            <button type="button" class="secondary-btn" onclick="App.devAgent.sendProtocolAction('DENY', '${parsedTriAgent.state.context_checksum}', this)" style="flex:1; padding:0.75rem; background:rgba(0,0,0,0.05);">DENY / REJECT</button>
           </div>
         </div>
       `;
     }
     
-    const versionStr = `v${parsedTriAgent.state.state_version_id}`;
+    let handoffBtnId = null;
+    if ( !isApprovalPrompt ) {
+      const textContent = (chat.content || '').toLowerCase();
+      const targetAgent = (parsedTriAgent.state?.target_agent || '').toLowerCase();
+      const isArchieTarget = targetAgent.includes('archie') || targetAgent.includes('antigravity') || textContent.includes('awaiting archie') || textContent.includes('awaiting @archie') || textContent.includes('to: @archie');
+      
+      if (isArchieTarget) {
+        handoffBtnId = `handoff_${chat.id || Math.random().toString(36).substr(2, 9)}`;
+        finalUI += `
+          <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid rgba(0,0,0,0.1);">
+            <button id="${handoffBtnId}" type="button" class="primary-btn" style="display:inline-flex; align-items:center; gap:6px; background:var(--accent-warning); color:#fff; border:none; padding:0.5rem 1rem;">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect></svg>
+              Copy Handoff Prompt
+            </button>
+          </div>
+        `;
+      }
+    }
+    
+    const versionStr = parsedTriAgent.state?.state_version_id ? `v${parsedTriAgent.state.state_version_id}` : '';
     header.innerHTML = `
       <div style="flex: 1; display:flex; align-items:center;"><strong>${author}</strong> <span class="chat-time" style="margin-left: 0.5rem">${dateStr}</span></div>
-      <div style="flex: 1; text-align: center; color: rgba(0,0,0,0.5); font-family: monospace; font-weight: bold; font-size: 0.85rem;">[${versionStr}]</div>
+      <div style="flex: 1; text-align: center; color: rgba(0,0,0,0.5); font-family: monospace; font-weight: bold; font-size: 0.85rem;">${versionStr ? '[' + versionStr + ']' : ''}</div>
       <div style="flex: 1; justify-content: flex-end;" class="dev-copy-btn-container">
         ${editBtnHTML}
+        <button class="dev-copy-btn" title="Reply to Message" style="margin-right: 4px;" onclick="App.devAgent.toggleInlineReply(${chat.id}, this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <button id="${linkBtnId}" class="dev-copy-btn" title="Link Message to Task/Chat" style="margin-right: 4px;" ${chat.id ? `onclick="App.devAgent.startLinkingMode('${chat.id}')"` : ''}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+        </button>
         <button id="${copyBtnId}" class="dev-copy-btn" title="Copy Message">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
@@ -716,7 +1419,48 @@ App.devAgent.appendChatNode = function(chat) {
     // Rewrite internal chat.content so the summary extractor later on uses human-readable text
     chat.content = parsedTriAgent.payload.content; 
   } else {
-    content.innerHTML = App.devAgent.formatMarkdown(chat.content);
+    let finalUI = App.devAgent.formatMarkdown(chat.content);
+    
+    const textContent = (chat.content || '').toLowerCase();
+    const isArchieTarget = textContent.includes('awaiting archie') || textContent.includes('awaiting @archie') || textContent.includes('to: @archie');
+    
+    let handoffBtnId = null;
+    if (isArchieTarget) {
+      handoffBtnId = `handoff_${chat.id || Math.random().toString(36).substr(2, 9)}`;
+      finalUI += `
+        <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid rgba(0,0,0,0.1);">
+          <button id="${handoffBtnId}" type="button" class="primary-btn" style="display:inline-flex; align-items:center; gap:6px; background:var(--accent-warning); color:#fff; border:none; padding:0.5rem 1rem;">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect></svg>
+            Copy Handoff Prompt
+          </button>
+        </div>
+      `;
+      
+      // Wire up the button using setTimeout to ensure it's in the DOM
+      setTimeout(() => {
+        const handoffBtn = document.getElementById(handoffBtnId);
+        if (handoffBtn) {
+          handoffBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            let prompt = chat.raw_content || chat.content || '';
+            try {
+              await navigator.clipboard.writeText(prompt);
+              const originalHtml = handoffBtn.innerHTML;
+              handoffBtn.innerHTML = 'Copied! Paste to IDE';
+              handoffBtn.style.background = 'var(--accent-success)';
+              setTimeout(() => {
+                handoffBtn.innerHTML = originalHtml;
+                handoffBtn.style.background = 'var(--accent-warning)';
+              }, 3000);
+            } catch(err) {
+              App.notify("Failed to copy handoff prompt.", true);
+            }
+          });
+        }
+      }, 0);
+    }
+    
+    content.innerHTML = finalUI;
   }
 
   if (chat.attachment_url) {
@@ -730,7 +1474,12 @@ App.devAgent.appendChatNode = function(chat) {
     content.appendChild(attachWrap);
   }
 
-  let rawText = (chat.content || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+  let rawText = '';
+  if (typeof chat.content === 'object' && chat.content !== null) {
+    rawText = JSON.stringify(chat.content).replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+  } else {
+    rawText = String(chat.content || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+  }
   let plainTextSummary = rawText;
   const sentenceMatches = rawText.match(/.*?[.!?](?:\s|$)/g);
   if (sentenceMatches && sentenceMatches.length > 0) {
@@ -774,15 +1523,29 @@ App.devAgent.appendChatNode = function(chat) {
   bubble.appendChild(content);
   contentCol.appendChild(bubble);
   
-  if (chat.role === 'user') {
-    wrapper.appendChild(contentCol);
-    wrapper.appendChild(avatar);
-  } else {
-    wrapper.appendChild(avatar);
-    wrapper.appendChild(contentCol);
-  }
+  wrapper.appendChild(avatar);
+  wrapper.appendChild(contentCol);
   
-  devElements.log.appendChild(wrapper);
+  const outerWrapper = document.createElement('div');
+  outerWrapper.className = 'dev-chat-thread-block';
+  outerWrapper.id = 'devChatThread_' + chat.id;
+  outerWrapper.appendChild(wrapper);
+  
+  const childrenContainer = document.createElement('div');
+  childrenContainer.className = 'dev-chat-children';
+  childrenContainer.id = 'devChatChildren_' + chat.id;
+  outerWrapper.appendChild(childrenContainer);
+
+  if (chat.parent_id) {
+    const parentContainer = document.getElementById('devChatChildren_' + chat.parent_id);
+    if (parentContainer) {
+      parentContainer.appendChild(outerWrapper);
+    } else {
+      logContainer.appendChild(outerWrapper);
+    }
+  } else {
+    logContainer.appendChild(outerWrapper);
+  }
 
   const copyBtn = bubble.querySelector(`#${copyBtnId}`);
   if (copyBtn) {
@@ -805,10 +1568,79 @@ App.devAgent.appendChatNode = function(chat) {
   if (App.devAgent.glossaryTimeout) clearTimeout(App.devAgent.glossaryTimeout);
   App.devAgent.glossaryTimeout = setTimeout(App.devAgent.generateGlossary, 600);
 };
+App.devAgent.toggleInlineReply = function(chatId, btn) {
+  const containerId = 'devChatChildren_' + chatId;
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  let replyBox = document.getElementById('devInlineReply_' + chatId);
+  if (replyBox) {
+    replyBox.remove();
+    return;
+  }
+  
+  replyBox = document.createElement('div');
+  replyBox.id = 'devInlineReply_' + chatId;
+  replyBox.className = 'dev-inline-reply-box';
+  replyBox.innerHTML = `
+    <textarea id="devInlineReplyInput_${chatId}" placeholder="Write a reply..." class="form-input" style="width:100%; min-height:60px; margin-bottom:8px; border-radius: var(--radius-md); padding: 8px;"></textarea>
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button class="secondary-btn" onclick="document.getElementById('devInlineReply_${chatId}').remove();">Cancel</button>
+      <button class="primary-btn" onclick="App.devAgent.submitInlineReply(${chatId})">Reply</button>
+    </div>
+  `;
+  container.insertBefore(replyBox, container.firstChild);
+  document.getElementById('devInlineReplyInput_' + chatId).focus();
+};
+
+App.devAgent.submitInlineReply = async function(parentId) {
+  const input = document.getElementById('devInlineReplyInput_' + parentId);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  
+  const sessionId = devState.activeSessionId;
+  const projectId = window.App?.currentProjectId || null;
+  
+  const btn = input.nextElementSibling.querySelector('.primary-btn');
+  btn.innerText = 'Sending...';
+  btn.disabled = true;
+
+  try {
+    const res = await App.api('/api/develop/devAgent/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        projectId,
+        content: text,
+        parentId
+      })
+    });
+    
+    document.getElementById('devInlineReply_' + parentId).remove();
+    // Supabase realtime will pick up the new message and append it
+  } catch (err) {
+    console.error(err);
+    App.notify('Error sending reply', true);
+    btn.innerText = 'Reply';
+    btn.disabled = false;
+  }
+};
 
 App.devAgent.scrollToBottom = function() {
-  if (devElements.log) {
-    devElements.log.scrollTop = devElements.log.scrollHeight;
+  if (devState.activeSessionId) {
+    const acc = document.querySelector(`.dev-thread-accordion[data-session-id="${devState.activeSessionId}"]`);
+    if (acc) {
+      const scrollContainer = acc.querySelector('.dev-chat-log');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        return;
+      }
+    }
+  }
+  const genericContainer = document.querySelector('.dev-chat-log');
+  if (genericContainer) {
+    genericContainer.scrollTop = genericContainer.scrollHeight;
   }
 };
 
@@ -832,7 +1664,9 @@ App.devAgent.initSupabaseRealtime = function(sessionId) {
         const existingNode = document.getElementById('devChatNode_' + chat.id);
         if (existingNode) {
           if (chat.status !== 'processing' && existingNode.dataset.status === 'processing') {
-            existingNode.outerHTML = '';
+            const threadBlock = document.getElementById('devChatThread_' + chat.id);
+            if (threadBlock) threadBlock.remove();
+            else existingNode.remove();
             App.devAgent.appendChatNode(chat);
             App.devAgent.scrollToBottom();
           }
@@ -874,7 +1708,16 @@ App.devAgent.parseTriAgent = function(rawText) {
     let maybeJson = String(rawText).trim();
     if (maybeJson.startsWith('```json')) maybeJson = maybeJson.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
     else if (maybeJson.startsWith('```')) maybeJson = maybeJson.replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
-    const parsed = JSON.parse(maybeJson);
+    let parsed = JSON.parse(maybeJson);
+    
+    if (Array.isArray(parsed)) {
+      const combinedContent = parsed.map(p => p.payload?.content || '').filter(Boolean).join('\n\n---\n\n');
+      let targetObj = parsed.find(p => p.payload?.type === 'COMMAND') || parsed[parsed.length - 1];
+      if (targetObj && targetObj.payload) {
+         targetObj.payload.content = combinedContent;
+      }
+      parsed = targetObj;
+    }
     
     if (parsed && parsed.payload && parsed.payload.content) {
       
@@ -910,9 +1753,26 @@ App.devAgent.parseTriAgent = function(rawText) {
       return { valid: true, data: parsed };
     }
   } catch (e) {
+    // Heuristic fallback for pure markdown panic attacks
+    let rawStr = String(rawText).trim();
+    if (!rawStr.startsWith('{') && !rawStr.startsWith('[')) {
+      let target = '@Human';
+      if (rawStr.toLowerCase().includes('@angie')) target = '@Angie';
+      else if (rawStr.toLowerCase().includes('@archie') || rawStr.toLowerCase().includes('@antigravity')) target = '@Archie';
+      
+      let type = rawStr.includes('COMMAND:') ? 'COMMAND' : 'RESPONSE';
+      
+      return {
+        valid: true,
+        data: {
+          state: { target_agent: target, source_agent: '@Roger', state_version_id: 1, context_checksum: 'RAW' },
+          payload: { type: type, content: rawStr }
+        }
+      };
+    }
+    
     // Regex Recovery for structurally broken JSON (unescaped quotes/newlines inside payload.content)
     try {
-      let rawStr = String(rawText).trim();
       const contentMatch = rawStr.match(/"content"\s*:\s*([\s\S]*)/);
       if (contentMatch) {
          let contentStr = contentMatch[1].trim();
@@ -1009,6 +1869,8 @@ App.devAgent.saveChatEdit = async function(chatId, btn) {
   
   // Reload history to properly re-sync the DOM
   App.devAgent.loadHistory(devState.activeSessionId);
+    // Force default to projects
+    setTimeout(() => App.devAgent.loadActionItems(), 100);
 };
 
 App.devAgent.renderActiveCommand = function() {
@@ -1063,6 +1925,16 @@ App.devAgent.sendProtocolAction = function(actionType, commandHash, btnEl) {
     btnEl.textContent = actionType === 'CONFIRM' ? 'Confirmed ✓' : 'Denied X';
     btnEl.style.opacity = '0.7';
     btnEl.style.cursor = 'not-allowed';
+    
+    const wrapper = btnEl.closest('.dev-chat-bubble-wrapper');
+    if (wrapper) {
+      const avatar = wrapper.querySelector('.dev-chat-avatar');
+      if (avatar) {
+        avatar.classList.remove('checkdev-alert');
+        avatar.style.cursor = 'default';
+        avatar.title = '';
+      }
+    }
   }
 
   devState.localVersionId = devState.localVersionId || 1;
@@ -1071,7 +1943,7 @@ App.devAgent.sendProtocolAction = function(actionType, commandHash, btnEl) {
       session_id: devState.activeSessionId,
       state_version_id: ++devState.localVersionId,
       timestamp: new Date().toISOString(),
-      source_agent: '@Human',
+      source_agent: window.App?.state?.profile?.contactName ? '@' + window.App.state.profile.contactName.replace(/[^a-zA-Z0-9_-]/g, '') : '@Mentor',
       target_agent: '@Antigravity',
       active_objective_id: 'ACTIVE-SESSION',
       context_checksum: 'N/A'
@@ -1102,17 +1974,34 @@ App.devAgent.sendProtocolAction = function(actionType, commandHash, btnEl) {
   });
 };
 
-App.devAgent.submitChat = async function() {
-  const text = devElements.input?.value.trim();
+App.devAgent.submitChat = async function(formEl = null) {
+  let inputEl = formEl ? formEl.querySelector('.dev-chat-input') : devElements.input;
+  let fileBtn = formEl ? formEl.querySelector('.dev-file-trigger-btn') : devElements.fileBtn;
+  
+  const text = inputEl?.value.trim();
   if (!text && devState.stagedFiles.length === 0) return; // Do nothing if no input
   if (!devState.activeSessionId) return;
 
   const staged = devState.stagedFiles[0] || null;
 
-  devElements.input.value = '';
-  devElements.input.disabled = true;
-  if (devElements.fileBtn) devElements.fileBtn.disabled = true;
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.disabled = true;
+  }
+  if (fileBtn) fileBtn.disabled = true;
   App.devAgent.clearStagedFiles();
+
+  let activeTaskId = 'ACTIVE-SESSION';
+  let activeTaskTitle = '';
+  if (window.supabaseClient) {
+    try {
+      const { data: taskData } = await window.supabaseClient.from('dev_tasks').select('id, title').eq('session_id', devState.activeSessionId).maybeSingle();
+      if (taskData) {
+        activeTaskId = taskData.id;
+        activeTaskTitle = taskData.title;
+      }
+    } catch(e) { console.error("Error fetching task context:", e); }
+  }
 
   devState.localVersionId = devState.localVersionId || 1;
   const triAgentPayload = JSON.stringify({
@@ -1120,10 +2009,10 @@ App.devAgent.submitChat = async function() {
       session_id: devState.activeSessionId,
       state_version_id: ++devState.localVersionId,
       timestamp: new Date().toISOString(),
-      source_agent: '@Human',
+      source_agent: window.App?.state?.profile?.contactName ? '@' + window.App.state.profile.contactName.replace(/[^a-zA-Z0-9_-]/g, '') : '@Mentor',
       target_agent: '@Roger',
-      active_objective_id: 'ACTIVE-SESSION',
-      context_checksum: 'N/A'
+      active_objective_id: activeTaskId,
+      context_checksum: activeTaskTitle ? `Task: ${activeTaskTitle}` : 'N/A'
     },
     payload: {
       type: 'QUERY',
@@ -1195,9 +2084,11 @@ App.devAgent.submitChat = async function() {
     });
     App.notify("Request failed: " + (err.message || err), true);
   } finally {
-    devElements.input.disabled = false;
-    if (devElements.fileBtn) devElements.fileBtn.disabled = false;
-    devElements.input.focus();
+    if (inputEl) {
+      inputEl.disabled = false;
+      inputEl.focus();
+    }
+    if (fileBtn) fileBtn.disabled = false;
     App.devAgent.scrollToBottom();
   }
 };
@@ -1405,6 +2296,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (newTaskBtn) {
     newTaskBtn.addEventListener('click', App.devAgent.promptNewTask);
   }
+  const newProjectTaskBtn = document.getElementById('devNewProjectTaskBtn');
+  if (newProjectTaskBtn) {
+    newProjectTaskBtn.addEventListener('click', async () => {
+      const projectId = document.getElementById('devEditProjectId').value;
+      if (!projectId) {
+        App.notify('Save the project first before adding tasks.', true);
+        return;
+      }
+      await App.devAgent.createProjectTask(projectId);
+    });
+  }
 });
 
 App.devAgent.promptNewTask = async function() {
@@ -1415,16 +2317,17 @@ App.devAgent.promptNewTask = async function() {
     if (!window.supabaseClient) throw new Error("Database not connected.");
     
     // Default task attributes using 'todo' and standard metadata
-    const { error } = await window.supabaseClient
-      .from('dev_tasks')
-      .insert([{ 
-        title: title, 
+    const res = await App.api('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: title,
         status: 'todo',
         priority: 'medium',
         assignee: 'mentor'
-      }]);
+      })
+    });
       
-    if (error) throw error;
+    if (res.error) throw new Error(res.error);
     App.notify("Task created securely.");
     App.devAgent.loadTasks(); // Automatically refresh the Tasks list in the left panel
   } catch (err) {
@@ -1641,15 +2544,8 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 
   closeEditor() {
     this.elements.activeLogId = null;
-    const chatLog = document.getElementById('devChatLog');
-    const chatForm = document.getElementById('devChatForm');
-    const header = document.querySelector('.dev-chat-main-header');
-    
-    if (chatLog) chatLog.classList.remove('hidden');
-    if (chatForm) chatForm.classList.remove('hidden');
-    if (header) header.classList.remove('hidden');
-    
     if (this.elements.editorPanelWrapper) this.elements.editorPanelWrapper.classList.add('hidden');
+    App.devAgent.restoreChatPanel();
     
     // Reset selection styling
     document.querySelectorAll('#devFrictionSidebarList .dev-session-item').forEach(el => el.classList.remove('active'));
@@ -1754,16 +2650,28 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Bind sidebar nav links mapper
-  const navLinks = document.querySelectorAll('.sidebar-nav-link');
+  const navLinks = document.querySelectorAll('.sidebar-nav-link, .accordion-title[data-nav]');
   navLinks.forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       const navItem = link.getAttribute('data-nav');
-      if (navItem === 'tasks') App.devAgent.showTaskBrowser();
+      if (navItem === 'projects') App.devAgent.loadActionItems();
+      else if (navItem === 'tasks') App.devAgent.showTaskBrowser();
+      else if (navItem === 'team') App.devAgent.showTeamBrowser();
       else if (navItem === 'forum') App.devAgent.restoreChatPanel();
     });
   });
   
+  
+  const devNewProjectBtn = document.getElementById('devNewProjectBtn');
+  if (devNewProjectBtn) devNewProjectBtn.addEventListener('click', () => App.devAgent.openProjectEditor());
+  const devCloseProjectEditorBtn = document.getElementById('devCloseProjectEditorBtn');
+  if (devCloseProjectEditorBtn) devCloseProjectEditorBtn.addEventListener('click', App.devAgent.closeProjectEditor);
+  const devProjectEditorForm = document.getElementById('devProjectEditorForm');
+  if (devProjectEditorForm) devProjectEditorForm.addEventListener('submit', App.devAgent.saveProjectEditor);
+  const devEditProjectMemberAddBtn = document.getElementById('devEditProjectMemberAddBtn');
+  if (devEditProjectMemberAddBtn) devEditProjectMemberAddBtn.addEventListener('click', App.devAgent.addProjectMember);
+
   // Tasks binding
   const devCloseTaskEditorBtn = document.getElementById('devCloseTaskEditorBtn');
   if (devCloseTaskEditorBtn) {
@@ -1773,96 +2681,529 @@ window.addEventListener('DOMContentLoaded', () => {
   if (devTaskEditorForm) {
     devTaskEditorForm.addEventListener('submit', App.devAgent.saveTaskEditor);
   }
+  
+  // Team binding
+  const devAddTeamMemberBtn = document.getElementById('devAddTeamMemberBtn');
+  if (devAddTeamMemberBtn) {
+    devAddTeamMemberBtn.addEventListener('click', () => App.devAgent.openTeamEditor());
+  }
+  const devCloseTeamEditorBtn = document.getElementById('devCloseTeamEditorBtn');
+  if (devCloseTeamEditorBtn) {
+    devCloseTeamEditorBtn.addEventListener('click', App.devAgent.closeTeamEditor);
+  }
+  const devTeamEditorForm = document.getElementById('devTeamEditorForm');
+  if (devTeamEditorForm) {
+    devTeamEditorForm.addEventListener('submit', App.devAgent.saveTeamEditor);
+  }
+  
+  // Roles binding
+  const devManageRolesBtn = document.getElementById('devManageRolesBtn');
+  if (devManageRolesBtn) devManageRolesBtn.addEventListener('click', App.devAgent.showRolesBrowser);
+  const devBackToTeamBtn = document.getElementById('devBackToTeamBtn');
+  if (devBackToTeamBtn) devBackToTeamBtn.addEventListener('click', App.devAgent.showTeamBrowser);
+  const devAddRoleBtn = document.getElementById('devAddRoleBtn');
+  if (devAddRoleBtn) devAddRoleBtn.addEventListener('click', () => App.devAgent.openRoleEditor());
+  const devCloseRoleEditorBtn = document.getElementById('devCloseRoleEditorBtn');
+  if (devCloseRoleEditorBtn) devCloseRoleEditorBtn.addEventListener('click', App.devAgent.closeRoleEditor);
+  const devRoleEditorForm = document.getElementById('devRoleEditorForm');
+  if (devRoleEditorForm) devRoleEditorForm.addEventListener('submit', App.devAgent.saveRoleEditor);
 });
 
 App.devAgent.restoreChatPanel = function() {
-  document.getElementById('devChatLog').classList.remove('hidden');
-  document.getElementById('devChatForm').classList.remove('hidden');
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
-  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
-  const taskPanel = document.getElementById('devTaskEditorPanel'); if(taskPanel) taskPanel.classList.add('hidden');
-  const browserPanel = document.getElementById('devTaskBrowserPanel'); if(browserPanel) browserPanel.classList.add('hidden');
+  if (App.setActivePage) {
+    App.setActivePage('devForumPage');
+  }
 };
 
+
+
+
 App.devAgent.showTaskBrowser = async function() {
+  const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
+  const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
+
   document.getElementById('devChatLog').classList.add('hidden');
   document.getElementById('devChatForm').classList.add('hidden');
+  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
   const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const editorPanel = document.getElementById('devTaskEditorPanel'); if(editorPanel) editorPanel.classList.add('hidden');
+  const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
+  const teamEditorPanel = document.getElementById('devTeamEditorPanel'); if(teamEditorPanel) teamEditorPanel.classList.add('hidden');
+  const rolesBrowserPanel = document.getElementById('devRolesBrowserPanel'); if(rolesBrowserPanel) rolesBrowserPanel.classList.add('hidden');
+  const roleEditorPanel = document.getElementById('devRoleEditorPanel'); if(roleEditorPanel) roleEditorPanel.classList.add('hidden');
   
   const browserPanel = document.getElementById('devTaskBrowserPanel');
   if (browserPanel) browserPanel.classList.remove('hidden');
   
+  App.devAgent.loadTasks(); // Reset sidebar task filter to show all tasks
+  
+  const tbody = document.getElementById('devTaskBrowserTable');
+  
+  // Populate project filter dropdown
+  const projSelect = document.getElementById('devTaskFilterProject');
+  if (projSelect && window.supabaseClient && projSelect.options.length <= 1) {
+    const { data: projects } = await window.supabaseClient.from('dev_projects').select('id, name').order('name');
+    projSelect.innerHTML = '<option value="all">All Projects</option>';
+    if (projects) {
+      projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        projSelect.appendChild(opt);
+      });
+    }
+  }
+
+  App.devAgent.loadTasksTable();
+};
+
+App.devAgent.getAssigneeName = function(id) {
+  if (!id) return 'Unassigned';
+  
+  const knownAgents = {
+    'mentor': 'Mentor',
+    'roger': 'Roger',
+    'angie': 'Angie',
+    'archie': 'Archie'
+  };
+  
+  if (knownAgents[id.toLowerCase()]) {
+    return knownAgents[id.toLowerCase()];
+  }
+  
+  if (devState && devState.teamData && devState.teamData.contactMap && devState.teamData.contactMap[id]) {
+    return devState.teamData.contactMap[id];
+  }
+  
+  if (!id.includes('-') && id.length < 20) {
+     return id.charAt(0).toUpperCase() + id.slice(1);
+  }
+  
+  return id;
+};
+
+App.devAgent.loadDashboard = async function() {
+  if (!document.getElementById('devDashboardKanban')) return;
+  if (!window.supabaseClient) return;
+
+  const { data: tasks, error } = await window.supabaseClient.from('dev_tasks').select('*, dev_projects(name)').order('created_at', { ascending: false });
+  if (error || !tasks) return;
+
+  const columns = {
+    backlog: { el: document.getElementById('colBacklog'), count: document.getElementById('countBacklog'), tasks: [] },
+    todo: { el: document.getElementById('colTodo'), count: document.getElementById('countTodo'), tasks: [] },
+    in_progress: { el: document.getElementById('colInProgress'), count: document.getElementById('countInProgress'), tasks: [] },
+    review: { el: document.getElementById('colReview'), count: document.getElementById('countReview'), tasks: [] },
+    completed: { el: document.getElementById('colCompleted'), count: document.getElementById('countCompleted'), tasks: [] }
+  };
+
+  tasks.forEach(t => {
+    const s = t.status || 'backlog';
+    if (columns[s]) columns[s].tasks.push(t);
+  });
+
+  Object.values(columns).forEach(col => {
+    if (!col.el) return;
+    if (col.count) col.count.textContent = col.tasks.length;
+    col.el.innerHTML = '';
+    col.tasks.forEach(t => {
+      const projectName = t.dev_projects && t.dev_projects.name ? t.dev_projects.name : '-';
+      let assigneeName = App.devAgent.getAssigneeName(t.assignee);
+      
+      const card = document.createElement('div');
+      card.className = 'kanban-card';
+      card.dataset.status = t.status || 'backlog';
+      card.draggable = true;
+      card.onclick = () => App.devAgent.openTaskEditor(t.id);
+      card.ondragstart = (e) => App.devAgent.handleDragStart(e, t.id);
+      
+      card.innerHTML = `
+        <div class="kanban-card-title">${t.title}</div>
+        <div class="kanban-card-meta">
+          <span title="Project">📌 ${projectName}</span>
+          <span class="kanban-priority ${t.priority || 'low'}">${t.priority || 'low'}</span>
+        </div>
+        <div class="kanban-assignee">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          ${assigneeName}
+        </div>
+      `;
+      col.el.appendChild(card);
+    });
+  });
+};
+
+App.devAgent.handleDragStart = function(e, taskId) {
+  e.dataTransfer.setData('text/plain', taskId);
+  e.dataTransfer.effectAllowed = 'move';
+  // Small timeout to allow the drag image to capture the element before we change its style
+  setTimeout(() => { e.target.style.opacity = '0.5'; }, 0);
+};
+
+App.devAgent.handleDragOver = function(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const column = e.target.closest('.kanban-column-body');
+  if (column && !column.classList.contains('drag-over')) {
+    column.classList.add('drag-over');
+  }
+};
+
+App.devAgent.handleDragLeave = function(e) {
+  e.preventDefault();
+  const column = e.target.closest('.kanban-column-body');
+  if (column) {
+    column.classList.remove('drag-over');
+  }
+};
+
+App.devAgent.handleDrop = async function(e, newStatus) {
+  e.preventDefault();
+  const column = e.target.closest('.kanban-column-body');
+  if (column) {
+    column.classList.remove('drag-over');
+  }
+  
+  const taskId = e.dataTransfer.getData('text/plain');
+  if (!taskId) return;
+  
+  // Find the card element and restore opacity
+  const draggedCard = document.querySelector(`.kanban-card[draggable="true"]`);
+  if (draggedCard) draggedCard.style.opacity = '1';
+  
+  try {
+    const { error } = await window.supabaseClient.from('dev_tasks').update({ status: newStatus }).eq('id', taskId);
+    if (error) throw error;
+    
+    // Refresh the dashboard and task lists
+    App.notify('Task status updated.');
+    App.devAgent.loadActionItems();
+    App.devAgent.loadTasks(); // refreshes the sidebar lists and tables if active
+  } catch(err) {
+    App.notify('Failed to update task status: ' + err.message, true);
+    App.devAgent.loadActionItems(); // revert visual state
+  }
+};
+
+App.devAgent.loadTasksTable = async function() {
   const tbody = document.getElementById('devTaskBrowserTable');
   if (tbody && window.supabaseClient) {
-    tbody.innerHTML = '<tr><td colspan="5" style="padding:1rem; opacity:0.7;">Loading tasks...</td></tr>';
-    const { data: tasks, error } = await window.supabaseClient.from('dev_tasks').select('*').order('created_at', { ascending: false });
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">Loading tasks...</td></tr>';
+    
+    let query = window.supabaseClient.from('dev_tasks').select('*, dev_projects(name)').order('created_at', { ascending: false });
+    
+    const statusFilter = document.getElementById('devTaskFilterStatus') ? document.getElementById('devTaskFilterStatus').value : 'all';
+    const projectFilter = document.getElementById('devTaskFilterProject') ? document.getElementById('devTaskFilterProject').value : 'all';
+    
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+    if (projectFilter !== 'all') {
+      query = query.eq('project_id', projectFilter);
+    }
+    
+    const { data: tasks, error } = await query;
     if (error) {
-      tbody.innerHTML = '<tr><td colspan="5">Failed to fetch.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Failed to fetch.</td></tr>';
       return;
     }
+    
+    if (!tasks || tasks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">No tasks found.</td></tr>';
+      return;
+    }
+    
     tbody.innerHTML = '';
     tasks.forEach(t => {
+      const projectName = t.dev_projects && t.dev_projects.name ? t.dev_projects.name : '-';
+      let assigneeName = App.devAgent.getAssigneeName(t.assignee);
+
       const tr = document.createElement('tr');
-      tr.style.cursor = 'pointer';
-      tr.addEventListener('click', () => App.devAgent.openTaskEditor(t.id));
       tr.innerHTML = `
         <td style="text-align:left;"><strong>${t.title}</strong></td>
-        <td>${t.status}</td>
-        <td>${t.priority}</td>
-        <td>${t.assignee}</td>
+        <td>${projectName}</td>
+        <td>${t.status || '-'}</td>
+        <td>${t.priority || '-'}</td>
+        <td>${assigneeName}</td>
         <td>${new Date(t.created_at).toLocaleDateString()}</td>
+        <td style="text-align: center; white-space: nowrap; gap: 0.5rem; display: flex; justify-content: center;">
+          <button class="icon-btn" onclick="App.devAgent.openTaskEditor('${t.id}')" title="Edit Task">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </button>
+          <button class="icon-btn" onclick="App.devAgent.cloneTask('${t.id}')" title="Clone Task">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+          <button class="icon-btn danger-hover" onclick="App.devAgent.deleteTask('${t.id}')" title="Delete Task">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          </button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
   }
 };
 
-App.devAgent.openTaskEditor = async function(taskId) {
-  document.getElementById('devChatLog').classList.add('hidden');
-  document.getElementById('devChatForm').classList.add('hidden');
+App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
+  App.setActivePage('devTasksPage');
+  devState.returnToProjectEditorId = returnToProjectId || null;
+  document.getElementById('devChatLog').classList.remove('hidden');
+  document.getElementById('devChatForm').classList.remove('hidden');
+  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.remove('hidden');
+  
+  // Reparent chat interface to task discussion container
+  const chatInterface = document.getElementById('devChatInterface');
+  const discContainer = document.getElementById('devTaskDiscussionContainer');
+  if (chatInterface && discContainer && chatInterface.parentElement !== discContainer) {
+    discContainer.appendChild(chatInterface);
+  }
+  
+  // Show Accordion headers explicitly (since they might have been hidden in restoreChatPanel)
+  const detailsBtn = document.getElementById('devTaskDetailsAccordionBtn'); 
+  if(detailsBtn) { detailsBtn.classList.remove('hidden'); detailsBtn.style.display = 'flex'; detailsBtn.setAttribute('aria-expanded', 'true'); }
+  const discBtn = document.getElementById('devTaskDiscussionAccordionBtn'); 
+  if(discBtn) { discBtn.classList.remove('hidden'); discBtn.style.display = 'flex'; discBtn.setAttribute('aria-expanded', 'true'); }
+  
+  const formWrapper = document.getElementById('devTaskEditorFormWrapper');
+  if(formWrapper) formWrapper.classList.remove('hidden');
+  
+  // Also ensure the bodies are handled.
+  // The panel is handled below. devChatLog and devChatForm are handled above.
+  // devChatMainActions removed from DOM
+  
+  // Hide general buttons inside task context
+  const newThreadBtn = document.getElementById('devNewSessionBtn'); if(newThreadBtn) newThreadBtn.classList.add('hidden');
+  
+  // Style Chat Input for Task Discussion
+  const chatInput = document.getElementById('devChatInput');
+  if (chatInput) {
+    chatInput.placeholder = 'Discuss Task';
+    chatInput.classList.add('task-discussion-input');
+  }
+
   const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const browserPanel = document.getElementById('devTaskBrowserPanel'); if(browserPanel) browserPanel.classList.add('hidden');
+  const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
+  const teamEditorPanel = document.getElementById('devTeamEditorPanel'); if(teamEditorPanel) teamEditorPanel.classList.add('hidden');
+  const rolesBrowserPanel = document.getElementById('devRolesBrowserPanel'); if(rolesBrowserPanel) rolesBrowserPanel.classList.add('hidden');
+  const roleEditorPanel = document.getElementById('devRoleEditorPanel'); if(roleEditorPanel) roleEditorPanel.classList.add('hidden');
   
   const panel = document.getElementById('devTaskEditorPanel');
   if (panel) {
     panel.classList.remove('hidden');
     document.getElementById('devTaskEditorHeader').textContent = 'Loading...';
+    
+    // Default hide the new thread button until existing task is confirmed
+    const newThreadBtn = document.getElementById('devTaskNewThreadBtn');
+    if (newThreadBtn) newThreadBtn.classList.add('hidden');
     try {
+      // Fetch available projects for the dropdown
+      const { data: projects } = await window.supabaseClient.from('dev_projects').select('id, name').order('name');
+      const projSelect = document.getElementById('devEditTaskProject');
+      if (projSelect) {
+        projSelect.innerHTML = '<option value="">-- No Project --</option>';
+        if (projects) {
+          projects.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            projSelect.appendChild(opt);
+          });
+        }
+      }
+
+      // Populate Assignee Dropdown dynamically
+      const assgSel = document.getElementById('devEditTaskAssignee');
+      if (assgSel) {
+        assgSel.innerHTML = '<option value="">-- Select Assignee --</option>';
+        try {
+          const coreTeam = ['mentor', 'roger', 'angie', 'archie'];
+          coreTeam.forEach(id => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = App.devAgent.getAssigneeName(id);
+            assgSel.appendChild(opt);
+          });
+        } catch(assgErr) {
+          console.error("Error populating assignees:", assgErr);
+        }
+      }
+
+      if (!taskId) {
+        // NEW TASK MODE
+        document.getElementById('devTaskEditorHeader').textContent = 'New Task';
+        document.getElementById('devActiveSessionTitle').textContent = `New Task`;
+        document.getElementById('devEditTaskId').value = '';
+        document.getElementById('devEditTaskTitle').value = '';
+        document.getElementById('devEditTaskDesc').value = '';
+        const statusSel = document.getElementById('devEditTaskStatus'); if (statusSel) statusSel.value = 'todo';
+        const prioSel = document.getElementById('devEditTaskPriority'); if (prioSel) prioSel.value = 'medium';
+        if (projSelect && returnToProjectId) {
+          projSelect.value = returnToProjectId;
+        } else if (projSelect) {
+          projSelect.value = '';
+        }
+        
+        document.getElementById('devTaskProjectContext').innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Save the task to see project context.</p>`;
+        document.getElementById('devChatLog').innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic;">Save the task to start a discussion.</div>';
+        
+        const chatForm = document.getElementById('devChatForm');
+        if (chatForm) chatForm.classList.add('hidden');
+        
+        return; // Stop here for new tasks
+      }
+
+      // EXISTING TASK MODE
+      const chatForm = document.getElementById('devChatForm');
+      if (chatForm) chatForm.classList.remove('hidden');
+      
+      if (newThreadBtn) newThreadBtn.classList.remove('hidden');
+
       const { data: log, error } = await window.supabaseClient.from('dev_tasks').select('*').eq('id', taskId).single();
       if (error) throw error;
-      document.getElementById('devTaskEditorHeader').textContent = 'Edit Task';
+      document.getElementById('devTaskEditorHeader').textContent = 'Task Details';
+      document.getElementById('devActiveSessionTitle').textContent = `Task: ${log.title}`;
+      
+      // Lazy load a dev_session for this task if it doesn't exist
+      if (!log.session_id) {
+        try {
+          const sessionRes = await App.api('/api/develop/devAgent/sessions', {
+             method: 'POST',
+             body: JSON.stringify({ name: `Task: ${log.title}`, projectId: log.project_id || null })
+          });
+          
+          if (sessionRes && sessionRes.data && sessionRes.data.id) {
+             log.session_id = sessionRes.data.id;
+             await window.supabaseClient.from('dev_tasks').update({ session_id: log.session_id }).eq('id', log.id);
+             await App.devAgent.loadSessions(); // Refresh the sidebar
+          } else {
+             console.error("Failed to auto-create session for task:", sessionRes.error);
+          }
+        } catch (sessionErr) {
+          console.error("Error creating task session:", sessionErr);
+        }
+      }
+      
+      // Fetch project context and peer tasks
+      if (log.project_id) {
+         const { data: project } = await window.supabaseClient.from('dev_projects').select('name, description').eq('id', log.project_id).single();
+         const { data: peers } = await window.supabaseClient.from('dev_tasks').select('id, title, status').eq('project_id', log.project_id).neq('id', log.id);
+         
+         let html = `<h3 style="margin-top:0;">Project: ${project ? project.name : 'Unknown'}</h3>`;
+         if (project && project.description) {
+           html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">${project.description}</p>`;
+         }
+         
+         html += `<h4 style="margin-bottom:0.5rem; border-bottom:1px solid var(--border-light); padding-bottom:0.25rem;">Peer Tasks</h4>`;
+         if (peers && peers.length > 0) {
+           html += `<ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">`;
+           peers.forEach(p => {
+             html += `<li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items:center;">
+               <span style="font-weight:500;">${p.title}</span>
+               <span style="color: var(--text-muted); font-size:0.75rem; background:var(--bg-hover); padding:0.1rem 0.4rem; border-radius:1rem;">${p.status}</span>
+             </li>`;
+           });
+           html += `</ul>`;
+         } else {
+           html += `<p style="font-size: 0.85rem; color: var(--text-muted);">No other tasks in this project.</p>`;
+         }
+         
+         document.getElementById('devTaskProjectContext').innerHTML = html;
+      } else {
+         document.getElementById('devTaskProjectContext').innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Task does not belong to a project.</p>`;
+      }
+
+      // Load the session into the chat log
+      if (log.session_id) {
+         App.devAgent.selectSession(log.session_id, true); // true = isFromTaskEditor
+      } else {
+         document.getElementById('devChatLog').innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic;">Failed to initialize discussion thread.</div>';
+      }
+
       document.getElementById('devEditTaskId').value = log.id;
       document.getElementById('devEditTaskTitle').value = log.title || '';
       document.getElementById('devEditTaskDesc').value = log.description || '';
       let statusSel = document.getElementById('devEditTaskStatus'); if(statusSel) statusSel.value = log.status || 'todo';
       let prioSel = document.getElementById('devEditTaskPriority'); if(prioSel) prioSel.value = log.priority || 'medium';
-      let assgSel = document.getElementById('devEditTaskAssignee'); if(assgSel) assgSel.value = log.assignee || 'mentor';
+      
+      let projSel = document.getElementById('devEditTaskProject');
+      if (projSel) projSel.value = log.project_id || '';
+
+      // Ensure correct assignee is selected
+      const assgSelExisting = document.getElementById('devEditTaskAssignee');
+      if (assgSelExisting) {
+        assgSelExisting.value = log.assignee || '';
+      }
     } catch (e) {
-      document.getElementById('devTaskEditorHeader').textContent = 'Task Unresolved';
+      console.error("Task Editor Error:", e);
+      document.getElementById('devTaskEditorHeader').textContent = 'Task Unresolved (' + e.message + ')';
     }
+  }
+};
+
+App.devAgent.createNewTaskThread = async function() {
+  const taskId = document.getElementById('devEditTaskId').value;
+  if (!taskId) return;
+  
+  if (!confirm('Start a new discussion thread for this task? The current thread history will be preserved but detached from this task view.')) return;
+  
+  try {
+    const { data: log, error } = await window.supabaseClient.from('dev_tasks').select('*').eq('id', taskId).single();
+    if (error) throw error;
+    
+    // Create new session via backend to trigger agent notification
+    const res = await App.api(`/api/tasks/${taskId}/thread`, {
+      method: 'POST'
+    });
+    
+    if (res && res.data && res.data.session_id) {
+      App.notify('New discussion thread created.', false);
+      // Reload task editor
+      App.devAgent.openTaskEditor(taskId);
+      await App.devAgent.loadSessions(); // refresh sidebar
+    } else {
+      throw new Error(res.error || 'Failed to create new thread');
+    }
+  } catch (err) {
+    App.notify('Failed to create new thread: ' + err.message, true);
   }
 };
 
 App.devAgent.saveTaskEditor = async function(e) {
   e.preventDefault();
   const taskId = document.getElementById('devEditTaskId').value;
-  if (!taskId) return;
   const payload = {
     title: document.getElementById('devEditTaskTitle').value,
     description: document.getElementById('devEditTaskDesc').value,
     status: document.getElementById('devEditTaskStatus') ? document.getElementById('devEditTaskStatus').value : 'todo',
     priority: document.getElementById('devEditTaskPriority') ? document.getElementById('devEditTaskPriority').value : 'medium',
     assignee: document.getElementById('devEditTaskAssignee') ? document.getElementById('devEditTaskAssignee').value : 'mentor',
+    project_id: document.getElementById('devEditTaskProject') && document.getElementById('devEditTaskProject').value !== "" ? document.getElementById('devEditTaskProject').value : null,
   };
   try {
-    const { error } = await window.supabaseClient.from('dev_tasks').update(payload).eq('id', taskId);
-    if (error) throw error;
+    if (taskId) {
+      const res = await App.api('/api/tasks/' + taskId, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      if (res.error) throw new Error(res.error);
+    } else {
+      const res = await App.api('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      if (res.error) throw new Error(res.error);
+    }
     App.notify('Task saved.', false);
     App.devAgent.loadTasks(); // refresh sidebar bounds
-    App.devAgent.showTaskBrowser(); // switch panel back to list
+    if (devState.returnToProjectEditorId) {
+      const projectId = devState.returnToProjectEditorId;
+      devState.returnToProjectEditorId = null;
+      App.devAgent.openProjectEditor(projectId);
+    } else {
+      App.devAgent.showTaskBrowser(); // switch panel back to list
+    }
   } catch (err) {
     App.notify('Failed to save task: ' + err.message, true);
   }
@@ -1870,5 +3211,1154 @@ App.devAgent.saveTaskEditor = async function(e) {
 
 App.devAgent.closeTaskEditor = function() {
   document.getElementById('devTaskEditorPanel').classList.add('hidden');
+  if (devState.returnToProjectEditorId) {
+    const projectId = devState.returnToProjectEditorId;
+    devState.returnToProjectEditorId = null;
+    App.devAgent.openProjectEditor(projectId);
+    return;
+  }
   App.devAgent.restoreChatPanel();
+};
+
+// ==========================================
+// Dev Team Module Functions
+// ==========================================
+
+App.devAgent.loadTeam = async function() {
+  const teamList = document.getElementById('devTeamList');
+  if (!teamList) return;
+  try {
+    teamList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    const res = await window.supabaseClient
+      .from('dev_team')
+      .select('*')
+      .order('created_at', { ascending: true });
+      
+    teamList.innerHTML = '';
+    
+    if (res.error) {
+      teamList.innerHTML = `<li class="error-msg">Failed to load team</li>`;
+      return;
+    }
+    
+    const teamMembers = res.data || [];
+    
+    const contactsRes = await App.api('/api/contacts');
+    const contacts = contactsRes.data || [];
+    const contactMap = {};
+    contacts.forEach(c => {
+      contactMap[c.id] = `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || c.id;
+    });
+
+    devState.teamData = { members: teamMembers, contactMap: contactMap };
+    
+    if (teamMembers.length === 0) {
+      teamList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No team members.</li>';
+      return;
+    }
+
+    teamMembers.forEach(member => {
+      const li = document.createElement('li');
+      li.className = 'dev-session-item';
+      li.dataset.teamId = member.id;
+      
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'session-title';
+      titleSpan.textContent = contactMap[member.contact_id] || 'Unknown Member';
+      
+      // Navigate to Contact profile on click
+      li.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.hash = `#page=editContactPage&id=${encodeURIComponent(member.contact_id)}`;
+      });
+      
+      li.appendChild(titleSpan);
+      teamList.appendChild(li);
+    });
+  } catch (e) {
+    teamList.innerHTML = `<li class="error-msg">Error loading team.</li>`;
+  }
+};
+
+App.devAgent.showTeamBrowser = async function() {
+  const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
+  const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
+
+  document.getElementById('devChatLog').classList.add('hidden');
+  document.getElementById('devChatForm').classList.add('hidden');
+  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
+  const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
+  const teamEditorPanel = document.getElementById('devTeamEditorPanel'); if(teamEditorPanel) teamEditorPanel.classList.add('hidden');
+  const rolesBrowserPanel = document.getElementById('devRolesBrowserPanel'); if(rolesBrowserPanel) rolesBrowserPanel.classList.add('hidden');
+  const roleEditorPanel = document.getElementById('devRoleEditorPanel'); if(roleEditorPanel) roleEditorPanel.classList.add('hidden');
+  
+  const browserPanel = document.getElementById('devTeamBrowserPanel');
+  if (browserPanel) browserPanel.classList.remove('hidden');
+  
+  const tbody = document.getElementById('devTeamBrowserTable');
+  if (tbody && window.supabaseClient) {
+    tbody.innerHTML = '<tr><td colspan="4" style="padding:1rem; opacity:0.7;">Loading team...</td></tr>';
+    const { data: teamMembers, error } = await window.supabaseClient.from('dev_team').select('*').order('created_at', { ascending: false });
+    if (error) {
+      tbody.innerHTML = '<tr><td colspan="4">Failed to fetch.</td></tr>';
+      return;
+    }
+    
+    const contactsRes = await App.api('/api/contacts');
+    const contacts = contactsRes.data || [];
+    const contactMap = {};
+    contacts.forEach(c => {
+      contactMap[c.id] = `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || c.id;
+    });
+
+    tbody.innerHTML = '';
+    teamMembers.forEach(t => {
+      const contact = contacts.find(c => c.id === t.contact_id) || {};
+      const fullName = contactMap[t.contact_id] || 'Unknown Member';
+      const cType = contact.entity_type || 'Human';
+
+      const tr = document.createElement('tr');
+      
+      const nameTd = document.createElement('td');
+      nameTd.style.textAlign = 'left';
+      nameTd.innerHTML = `<strong>${fullName}</strong>`;
+      
+      const typeTd = document.createElement('td');
+      typeTd.innerHTML = `<span class="badge ${cType === 'Agent' ? 'badge-blue' : 'badge-gray'}">${cType}</span>`;
+      
+      const roleTd = document.createElement('td');
+      roleTd.textContent = t.role;
+      
+      const dateTd = document.createElement('td');
+      dateTd.textContent = new Date(t.created_at).toLocaleDateString();
+      
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'contacts-actions-cell';
+      
+      if (typeof App.makeIconButton === 'function' && App.contacts) {
+        const viewBtn = App.makeIconButton('view', 'View Contact', () => App.contacts.openViewPage(t.contact_id));
+        const editBtn = App.makeIconButton('edit', 'Edit Contact', () => App.contacts.openEditPage(t.contact_id, 'devAgentPage'), { marginLeft: '8px' });
+        const cloneBtn = App.makeIconButton('copy', 'Clone Contact', () => App.contacts.openClonePage(t.contact_id), { marginLeft: '8px' });
+        const deleteBtn = App.makeIconButton('delete', 'Remove from Team', () => App.devAgent.deleteTeamMember(t.id), { danger: true, marginLeft: '8px' });
+        
+        actionsTd.appendChild(viewBtn);
+        actionsTd.appendChild(editBtn);
+        actionsTd.appendChild(cloneBtn);
+        actionsTd.appendChild(deleteBtn);
+      } else {
+        actionsTd.innerHTML = `
+          <button type="button" class="secondary-btn tiny-btn" onclick="window.location.hash = '#page=viewContactPage&id=${encodeURIComponent(t.contact_id)}'">View</button>
+          <button type="button" class="secondary-btn tiny-btn" onclick="window.location.hash = '#page=editContactPage&id=${encodeURIComponent(t.contact_id)}'">Edit</button>
+          <button type="button" class="secondary-btn tiny-btn" onclick="App.devAgent.deleteTeamMember('${t.id}')">Remove</button>
+        `;
+      }
+
+      tr.appendChild(nameTd);
+      tr.appendChild(typeTd);
+      tr.appendChild(roleTd);
+      tr.appendChild(dateTd);
+      tr.appendChild(actionsTd);
+      
+      tbody.appendChild(tr);
+    });
+  }
+};
+
+App.devAgent.openTeamEditor = async function() {
+  document.getElementById('devChatLog').classList.add('hidden');
+  document.getElementById('devChatForm').classList.add('hidden');
+  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
+  const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
+  const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
+  const rolesBrowserPanel = document.getElementById('devRolesBrowserPanel'); if(rolesBrowserPanel) rolesBrowserPanel.classList.add('hidden');
+  const roleEditorPanel = document.getElementById('devRoleEditorPanel'); if(roleEditorPanel) roleEditorPanel.classList.add('hidden');
+  
+  const panel = document.getElementById('devTeamEditorPanel');
+  if (panel) {
+    panel.classList.remove('hidden');
+    document.getElementById('devTeamEditorHeader').textContent = 'Add Team Member';
+    document.getElementById('devEditTeamId').value = '';
+    
+    document.getElementById('devEditTeamContactId').value = '';
+    document.getElementById('devEditTeamContactDisplay').value = '';
+    
+    // Populate Roles dropdown
+    const roleSelect = document.getElementById('devEditTeamRole');
+    if (roleSelect && window.supabaseClient) {
+      roleSelect.innerHTML = '<option value="">Loading roles...</option>';
+      try {
+        const { data: roles, error } = await window.supabaseClient.from('dev_roles').select('*').order('role_name', { ascending: true });
+        if (error) throw error;
+        roleSelect.innerHTML = '<option value="">Select Role...</option>';
+        roles.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r.role_name;
+          opt.textContent = r.role_name;
+          roleSelect.appendChild(opt);
+        });
+      } catch (err) {
+        roleSelect.innerHTML = '<option value="">Failed to load roles</option>';
+      }
+    }
+  }
+};
+
+App.devAgent.saveTeamEditor = async function(e) {
+  e.preventDefault();
+  const contactId = document.getElementById('devEditTeamContactId').value;
+  const role = document.getElementById('devEditTeamRole').value;
+  if (!contactId || !role) {
+    App.notify('Please select a contact and a role.', true);
+    return;
+  }
+  
+  const payload = {
+    project_id: App.state.currentProjectId || 'alphire-promo',
+    contact_id: contactId,
+    role: role
+  };
+  
+  try {
+    const { error } = await window.supabaseClient.from('dev_team').insert([payload]);
+    if (error) {
+      // Handle unique constraint violation gracefully
+      if (error.code === '23505') {
+        throw new Error('This contact is already a team member.');
+      }
+      throw error;
+    }
+    App.notify('Team member added successfully.', false);
+    App.devAgent.loadTeam(); // refresh sidebar list
+    App.devAgent.showTeamBrowser(); // switch panel back to list
+  } catch (err) {
+    App.notify('Failed to add member: ' + err.message, true);
+  }
+};
+
+App.devAgent.closeTeamEditor = function() {
+  document.getElementById('devTeamEditorPanel').classList.add('hidden');
+  App.devAgent.showTeamBrowser(); // return to list view instead of chat
+};
+
+App.devAgent.deleteTeamMember = async function(teamId) {
+  if (!confirm('Are you sure you want to remove this team member?')) return;
+  try {
+    const { error } = await window.supabaseClient.from('dev_team').delete().eq('id', teamId);
+    if (error) throw error;
+    App.notify('Team member removed.');
+    App.devAgent.loadTeam();
+    App.devAgent.showTeamBrowser();
+  } catch (err) {
+    App.notify('Failed to remove member: ' + err.message, true);
+  }
+};
+
+// ==========================================
+// Dev Roles Module Functions
+// ==========================================
+
+App.devAgent.showRolesBrowser = async function() {
+  const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
+  const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
+
+  document.getElementById('devChatLog').classList.add('hidden');
+  document.getElementById('devChatForm').classList.add('hidden');
+  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
+  const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
+  const teamEditorPanel = document.getElementById('devTeamEditorPanel'); if(teamEditorPanel) teamEditorPanel.classList.add('hidden');
+  const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
+  const roleEditorPanel = document.getElementById('devRoleEditorPanel'); if(roleEditorPanel) roleEditorPanel.classList.add('hidden');
+  
+  const browserPanel = document.getElementById('devRolesBrowserPanel');
+  if (browserPanel) browserPanel.classList.remove('hidden');
+  
+  const tbody = document.getElementById('devRolesBrowserTable');
+  if (tbody && window.supabaseClient) {
+    tbody.innerHTML = '<tr><td colspan="4" style="padding:1rem; opacity:0.7;">Loading roles...</td></tr>';
+    const { data: roles, error } = await window.supabaseClient.from('dev_roles').select('*').order('created_at', { ascending: false });
+    if (error) {
+      tbody.innerHTML = '<tr><td colspan="4">Failed to fetch roles.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    if (roles.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:1rem; opacity:0.7; text-align:center;">No roles found.</td></tr>';
+      return;
+    }
+    
+    roles.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', (e) => {
+        if (e.target.tagName.toLowerCase() === 'button') return;
+        App.devAgent.openRoleEditor(r.id);
+      });
+      tr.innerHTML = `
+        <td style="text-align:left;"><strong>${r.role_name}</strong></td>
+        <td>${r.description || ''}</td>
+        <td>${new Date(r.created_at).toLocaleDateString()}</td>
+        <td>
+          <button type="button" class="secondary-btn tiny-btn" onclick="App.devAgent.deleteRole('${r.id}')">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+};
+
+App.devAgent.openRoleEditor = async function(roleId = null) {
+  document.getElementById('devChatLog').classList.add('hidden');
+  document.getElementById('devChatForm').classList.add('hidden');
+  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
+  const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
+  const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
+  const teamEditorPanel = document.getElementById('devTeamEditorPanel'); if(teamEditorPanel) teamEditorPanel.classList.add('hidden');
+  const rolesBrowserPanel = document.getElementById('devRolesBrowserPanel'); if(rolesBrowserPanel) rolesBrowserPanel.classList.add('hidden');
+  
+  const panel = document.getElementById('devRoleEditorPanel');
+  if (panel) {
+    panel.classList.remove('hidden');
+    document.getElementById('devRoleEditorHeader').textContent = roleId ? 'Edit Role' : 'Add Role';
+    document.getElementById('devEditRoleId').value = roleId || '';
+    
+    if (roleId && window.supabaseClient) {
+      document.getElementById('devEditRoleName').value = 'Loading...';
+      document.getElementById('devEditRoleDesc').value = '';
+      try {
+        const { data: role, error } = await window.supabaseClient.from('dev_roles').select('*').eq('id', roleId).single();
+        if (error) throw error;
+        document.getElementById('devEditRoleName').value = role.role_name || '';
+        document.getElementById('devEditRoleDesc').value = role.description || '';
+      } catch (e) {
+        document.getElementById('devRoleEditorHeader').textContent = 'Role Unresolved';
+        document.getElementById('devEditRoleName').value = '';
+      }
+    } else {
+      document.getElementById('devEditRoleName').value = '';
+      document.getElementById('devEditRoleDesc').value = '';
+    }
+  }
+};
+
+App.devAgent.saveRoleEditor = async function(e) {
+  e.preventDefault();
+  const roleId = document.getElementById('devEditRoleId').value;
+  const roleName = document.getElementById('devEditRoleName').value;
+  const roleDesc = document.getElementById('devEditRoleDesc').value;
+  
+  if (!roleName) return;
+  
+  const payload = {
+    project_id: App.state.currentProjectId || 'alphire-promo',
+    role_name: roleName,
+    description: roleDesc
+  };
+  
+  try {
+    let error;
+    if (roleId) {
+      const res = await window.supabaseClient.from('dev_roles').update(payload).eq('id', roleId);
+      error = res.error;
+    } else {
+      const res = await window.supabaseClient.from('dev_roles').insert([payload]);
+      error = res.error;
+    }
+    
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('A role with this name already exists.');
+      }
+      throw error;
+    }
+    App.notify(roleId ? 'Role updated successfully.' : 'Role created successfully.', false);
+    App.devAgent.showRolesBrowser();
+  } catch (err) {
+    App.notify('Failed to save role: ' + err.message, true);
+  }
+};
+
+App.devAgent.closeRoleEditor = function() {
+  document.getElementById('devRoleEditorPanel').classList.add('hidden');
+  App.devAgent.showRolesBrowser();
+};
+
+App.devAgent.deleteRole = async function(roleId) {
+  if (!confirm('Are you sure you want to delete this role? Existing team members with this role will not be affected, but you won\'t be able to assign this role to new members.')) return;
+  try {
+    const { error } = await window.supabaseClient.from('dev_roles').delete().eq('id', roleId);
+    if (error) throw error;
+    App.notify('Role deleted.');
+    App.devAgent.showRolesBrowser();
+  } catch (err) {
+    App.notify('Failed to delete role: ' + err.message, true);
+  }
+};
+
+// ==========================================
+// Contact Selector Modal Functions
+// ==========================================
+
+App.devAgent.modalContacts = [];
+
+App.devAgent.openContactSelectorModal = async function() {
+  const modal = document.getElementById('devContactSelectorModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+    document.getElementById('devContactSelectorSearch').value = '';
+    document.getElementById('devContactSelectorEntityType').value = 'All';
+    
+    const tbody = document.getElementById('devContactSelectorTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">Loading contacts...</td></tr>';
+    
+    try {
+      const res = await App.api('/api/contacts');
+      App.devAgent.modalContacts = res.data || [];
+      App.devAgent.filterModalContacts();
+    } catch (e) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem; color:red;">Failed to load contacts.</td></tr>';
+    }
+  }
+};
+
+App.devAgent.closeContactSelectorModal = function() {
+  const modal = document.getElementById('devContactSelectorModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+};
+
+App.devAgent.filterModalContacts = function() {
+  const searchStr = (document.getElementById('devContactSelectorSearch').value || '').toLowerCase();
+  const companyStr = (document.getElementById('devContactSelectorCompany').value || '').toLowerCase();
+  const entityType = document.getElementById('devContactSelectorEntityType').value;
+  
+  const filtered = App.devAgent.modalContacts.filter(c => {
+    const cType = c.entity_type || 'Human';
+    if (entityType !== 'All' && cType !== entityType) return false;
+    
+    if (searchStr) {
+      const name = `${c.first_name || c.firstName || ''} ${c.middle_name || c.middleName || ''} ${c.last_name || c.lastName || ''}`.replace(/\s+/g, ' ').trim().toLowerCase();
+      const em = (c.email || '').toLowerCase();
+      if (!name.includes(searchStr) && !em.includes(searchStr)) {
+        return false;
+      }
+    }
+    if (companyStr) {
+      const comp = (c.company || '').toLowerCase();
+      if (!comp.includes(companyStr)) {
+        return false;
+      }
+    }
+    return true;
+  });
+  
+  const tbody = document.getElementById('devContactSelectorTableBody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = '';
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">No contacts found.</td></tr>';
+    return;
+  }
+  
+  filtered.forEach(c => {
+    const tr = document.createElement('tr');
+    const fullName = `${c.first_name || c.firstName || ''} ${c.middle_name || c.middleName || ''} ${c.last_name || c.lastName || ''}`.replace(/\s+/g, ' ').trim() || c.email || c.id;
+    const cType = c.entity_type || c.entityType || 'Human';
+    
+    tr.innerHTML = `
+      <td style="text-align:left;"><strong>${fullName}</strong></td>
+      <td style="text-align:left;">${c.email || ''}</td>
+      <td>${c.company || ''}</td>
+      <td><span class="badge ${cType === 'Agent' ? 'badge-blue' : 'badge-gray'}">${cType}</span></td>
+      <td style="text-align:center;">
+        <button type="button" class="secondary-btn tiny-btn" onclick="App.devAgent.selectModalContact('${c.id}', '${fullName.replace(/'/g, "\\'")}')">Select</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+};
+
+App.devAgent.selectModalContact = function(id, name) {
+  const displayInput = document.getElementById('devEditTeamContactDisplay');
+  const idInput = document.getElementById('devEditTeamContactId');
+  
+  if (displayInput) displayInput.value = name;
+  if (idInput) idInput.value = id;
+  
+  App.devAgent.closeContactSelectorModal();
+};
+
+
+App.devAgent.showProjectBrowser = async function() {
+  document.getElementById('devChatLog').classList.add('hidden');
+  document.getElementById('devChatForm').classList.add('hidden');
+  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
+  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
+  const editorPanel = document.getElementById('devTaskEditorPanel'); if(editorPanel) editorPanel.classList.add('hidden');
+  const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
+  const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
+  const teamEditorPanel = document.getElementById('devTeamEditorPanel'); if(teamEditorPanel) teamEditorPanel.classList.add('hidden');
+  const rolesBrowserPanel = document.getElementById('devRolesBrowserPanel'); if(rolesBrowserPanel) rolesBrowserPanel.classList.add('hidden');
+  const roleEditorPanel = document.getElementById('devRoleEditorPanel'); if(roleEditorPanel) roleEditorPanel.classList.add('hidden');
+  const projEditorPanel = document.getElementById('devProjectEditorPanel'); if(projEditorPanel) projEditorPanel.classList.add('hidden');
+  
+  const pbPanel = document.getElementById('devProjectBrowserPanel'); 
+  if(pbPanel) pbPanel.classList.remove('hidden');
+  
+  App.devAgent.loadTasks(); // Reset sidebar task filter
+  await App.devAgent.loadProjects();
+};
+
+App.devAgent.loadProjects = async function() {
+  if (!window.supabaseClient) return;
+  const tbody = document.getElementById('devProjectBrowserTable');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+  
+  const { data, error } = await window.supabaseClient.from('dev_projects').select('*, dev_project_members(count), dev_tasks(count)').order('created_at', { ascending: false });
+  if (error) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Error loading projects</td></tr>';
+    return;
+  }
+  
+  devState.projects = data || [];
+  
+  // also populate the task project dropdown
+  const taskProjectSelect = document.getElementById('devEditTaskProject');
+  if (taskProjectSelect) {
+     const currentVal = taskProjectSelect.value;
+     taskProjectSelect.innerHTML = '<option value="">-- No Project --</option>';
+     devState.projects.forEach(p => {
+       const opt = document.createElement('option');
+       opt.value = p.id;
+       opt.textContent = p.name;
+       taskProjectSelect.appendChild(opt);
+     });
+     taskProjectSelect.value = currentVal;
+  }
+  
+  const projList = document.getElementById('devProjectList');
+  if (projList) projList.innerHTML = '';
+  
+  if (devState.projects.length === 0) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No active projects.</td></tr>';
+    if (projList) projList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No active projects.</li>';
+    return;
+  }
+  
+  devState.projects.forEach(proj => {
+    // Populate Sidebar
+    if (projList) {
+      const li = document.createElement('li');
+      li.className = 'dev-session-item';
+      li.dataset.projectId = proj.id;
+      const shortTitle = proj.name.length > 25 ? proj.name.substring(0,25) + '...' : proj.name;
+      li.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent-info, #3b82f6); margin-right:6px;"></span> ${shortTitle}`;
+      li.addEventListener('click', () => {
+        App.devAgent.openProjectEditor(proj.id);
+      });
+      projList.appendChild(li);
+    }
+  });
+  
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  devState.projects.forEach(proj => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${proj.name}</strong></td>
+      <td>${proj.description || ''}</td>
+      <td><span class="badge">${proj.status}</span></td>
+      <td>${proj.dev_project_members ? proj.dev_project_members[0].count : 0}</td>
+      <td>${proj.dev_tasks ? proj.dev_tasks[0].count : 0}</td>
+      <td>${new Date(proj.created_at).toLocaleDateString()}</td>
+      <td style="text-align: center; white-space: nowrap; gap: 0.5rem; display: flex; justify-content: center;">
+        <button class="icon-btn" onclick="App.devAgent.openProjectEditor('${proj.id}')" title="Edit Project">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+        <button class="icon-btn" onclick="App.devAgent.cloneProject('${proj.id}')" title="Clone Project">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button class="icon-btn danger-hover" onclick="App.devAgent.deleteProject('${proj.id}')" title="Delete Project">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+};
+
+App.devAgent.loadProjectTasks = async function(projectId) {
+  const tbody = document.getElementById('devProjectTaskTableBody');
+  if (!tbody) return;
+  if (!projectId) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem; opacity:0.7;">Save the project first to add tasks.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem; opacity:0.7;">Loading tasks...</td></tr>';
+  try {
+    const { data: tasks, error } = await window.supabaseClient
+      .from('dev_tasks')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!tasks || tasks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem; opacity:0.7;">No tasks assigned to this project.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    tasks.forEach(task => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${task.title || ''}</strong></td>
+        <td>${task.status || ''}</td>
+        <td>${task.priority || ''}</td>
+        <td>${task.assignee || ''}</td>
+        <td>${task.created_at ? new Date(task.created_at).toLocaleDateString() : ''}</td>
+        <td style="text-align:right; white-space:nowrap;">
+          <button class="icon-btn" onclick="App.devAgent.openTaskEditor('${task.id}', '${projectId}')" title="Edit Task">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </button>
+          <button class="icon-btn danger-hover" onclick="App.devAgent.deleteProjectTask('${task.id}', '${projectId}')" title="Delete Task">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:1rem; color:red;">${err.message || 'Unable to load tasks'}</td></tr>`;
+  }
+};
+
+App.devAgent.createProjectTask = async function(projectId) {
+  const title = prompt('Enter a title for the new Task:');
+  if (!title) return;
+  try {
+    const { error } = await window.supabaseClient.from('dev_tasks').insert([{ 
+      title,
+      status: 'todo',
+      priority: 'medium',
+      assignee: 'mentor',
+      project_id: projectId
+    }]);
+    if (error) throw error;
+    App.notify('Task created.');
+    await App.devAgent.loadProjectTasks(projectId);
+    App.devAgent.loadTasks();
+  } catch (err) {
+    App.notify('Error creating project task: ' + err.message, true);
+  }
+};
+
+App.devAgent.deleteProjectTask = async function(taskId, projectId) {
+  if (!taskId || !confirm('Delete this task?')) return;
+  try {
+    const { error } = await window.supabaseClient.from('dev_tasks').delete().eq('id', taskId);
+    if (error) throw error;
+    App.notify('Task deleted.');
+    await App.devAgent.loadProjectTasks(projectId);
+    App.devAgent.loadTasks();
+  } catch (err) {
+    App.notify('Error deleting task: ' + err.message, true);
+  }
+};
+
+App.devAgent.deleteTask = async function(taskId) {
+  if (!taskId || !confirm('Delete this task?')) return;
+  try {
+    const { error } = await window.supabaseClient.from('dev_tasks').delete().eq('id', taskId);
+    if (error) throw error;
+    App.notify('Task deleted.');
+    App.devAgent.showTaskBrowser();
+  } catch (err) {
+    App.notify('Error deleting task: ' + err.message, true);
+  }
+};
+
+App.devAgent.openProjectEditor = async function(id = null) {
+  const browserPanel = document.getElementById('devProjectBrowserPanel'); if(browserPanel) browserPanel.classList.add('hidden');
+  const editorPanel = document.getElementById('devProjectEditorPanel'); if(editorPanel) editorPanel.classList.remove('hidden');
+  
+  document.getElementById('devProjectEditorHeader').textContent = id ? 'Edit Project' : 'New Project';
+  const form = document.getElementById('devProjectEditorForm');
+  if (form) form.reset();
+  document.getElementById('devEditProjectId').value = id || '';
+  
+  const memberList = document.getElementById('devEditProjectMembersList');
+  if (memberList) memberList.innerHTML = '';
+
+  await App.devAgent.loadProjectTasks(id);
+  App.devAgent.loadTasks(id); // Update the left panel to only show this project's tasks
+  
+  // Hide team members area if new project
+  const memberSection = document.getElementById('devEditProjectMemberSelect')?.closest('.form-group');
+  if (memberSection) {
+     memberSection.style.display = id ? 'block' : 'none';
+     
+     // Also update the label right above it
+     const label = memberSection.previousElementSibling;
+     if (label && label.tagName === 'LABEL') {
+       label.style.display = id ? 'block' : 'none';
+       
+       if (!id) {
+          // insert a small helper note
+          let note = document.getElementById('devNewProjectTeamNote');
+          if (!note) {
+             note = document.createElement('div');
+             note.id = 'devNewProjectTeamNote';
+             note.style.fontStyle = 'italic';
+             note.style.color = '#666';
+             note.style.marginBottom = '1rem';
+             note.textContent = 'Save the project first to assign team members.';
+             memberSection.parentNode.insertBefore(note, memberSection);
+          }
+          note.style.display = 'block';
+       } else {
+          const note = document.getElementById('devNewProjectTeamNote');
+          if (note) note.style.display = 'none';
+       }
+     }
+  }
+  
+  if (id) {
+    const proj = devState.projects.find(p => p.id === id);
+    if (proj) {
+      document.getElementById('devEditProjectName').value = proj.name;
+      document.getElementById('devEditProjectDesc').value = proj.description || '';
+      document.getElementById('devEditProjectStatus').value = proj.status || 'active';
+      
+      // Load members
+      const { data: members } = await window.supabaseClient.from('dev_project_members').select('*, contacts(*)').eq('dev_project_id', id);
+      if (members && memberList) {
+        members.forEach(m => {
+          const badge = document.createElement('span');
+          badge.className = 'badge badge-blue';
+          badge.innerHTML = `${m.contacts ? m.contacts.first_name + ' ' + m.contacts.last_name : m.contact_id} <span style="cursor:pointer; margin-left:4px;" onclick="App.devAgent.removeProjectMember('${m.id}', '${id}')">&times;</span>`;
+          memberList.appendChild(badge);
+        });
+      }
+    }
+  }
+  
+  // load available team members into select
+  const memberSelect = document.getElementById('devEditProjectMemberSelect');
+  if (memberSelect) {
+     memberSelect.innerHTML = '<option value="">-- Add Team Member --</option>';
+     const { data: team } = await window.supabaseClient.from('dev_team').select('*, contacts(*)');
+     if (team) {
+       team.forEach(t => {
+         if (t.contacts) {
+            const opt = document.createElement('option');
+            opt.value = t.contacts.id;
+            opt.textContent = `${t.contacts.first_name} ${t.contacts.last_name} (${t.role})`;
+            memberSelect.appendChild(opt);
+         }
+       });
+     }
+  }
+};
+
+App.devAgent.closeProjectEditor = function() {
+  document.getElementById('devProjectEditorPanel').classList.add('hidden');
+  App.devAgent.loadActionItems();
+};
+
+App.devAgent.saveProjectEditor = async function(e) {
+  e.preventDefault();
+  const id = document.getElementById('devEditProjectId').value;
+  const name = document.getElementById('devEditProjectName').value;
+  const description = document.getElementById('devEditProjectDesc').value;
+  const status = document.getElementById('devEditProjectStatus').value;
+  
+  const payload = { name, description, status };
+  
+  // Provide a default app_project_id if not using multi-tenant JWTs yet
+  payload.app_project_id = 'default';
+  
+  let result;
+  if (id) {
+    result = await window.supabaseClient.from('dev_projects').update(payload).eq('id', id);
+  } else {
+    result = await window.supabaseClient.from('dev_projects').insert([payload]);
+  }
+  
+  if (result.error) {
+    alert("Error saving project: " + result.error.message);
+    return;
+  }
+  
+  await App.devAgent.loadProjects();
+  App.devAgent.closeProjectEditor();
+};
+
+App.devAgent.addProjectMember = async function() {
+  const projId = document.getElementById('devEditProjectId').value;
+  const contactId = document.getElementById('devEditProjectMemberSelect').value;
+  if (!projId || !contactId) return;
+  await window.supabaseClient.from('dev_project_members').insert([{ dev_project_id: projId, contact_id: contactId }]);
+  App.devAgent.openProjectEditor(projId);
+};
+
+App.devAgent.removeProjectMember = async function(memberId, projId) {
+  await window.supabaseClient.from('dev_project_members').delete().eq('id', memberId);
+  App.devAgent.openProjectEditor(projId);
+};
+
+App.devAgent.cloneProject = async function(projectId) {
+  if (!confirm('Are you sure you want to clone this project?')) return;
+  try {
+    const { data: proj, error } = await window.supabaseClient.from('dev_projects').select('*').eq('id', projectId).single();
+    if (error) throw error;
+    
+    const newProj = {
+      name: proj.name + ' (Clone)',
+      description: proj.description,
+      status: 'planning',
+      repo_url: proj.repo_url
+    };
+    
+    const { error: insertErr } = await window.supabaseClient.from('dev_projects').insert([newProj]);
+    if (insertErr) throw insertErr;
+    
+    App.notify('Project cloned successfully.', false);
+    App.devAgent.loadProjects();
+  } catch (err) {
+    App.notify('Error cloning project: ' + err.message, true);
+  }
+};
+
+App.devAgent.deleteProject = async function(projectId) {
+  if (!confirm('Are you sure you want to delete this project? This will also delete all associated tasks.')) return;
+  try {
+    await window.supabaseClient.from('dev_tasks').delete().eq('project_id', projectId);
+    const { error } = await window.supabaseClient.from('dev_projects').delete().eq('id', projectId);
+    if (error) throw error;
+    
+    App.notify('Project deleted.', false);
+    App.devAgent.loadProjects();
+  } catch (err) {
+    App.notify('Error deleting project: ' + err.message, true);
+  }
+};
+
+App.devAgent.cloneTask = async function(taskId) {
+  if (!confirm('Are you sure you want to clone this task?')) return;
+  try {
+    const { data: task, error } = await window.supabaseClient.from('dev_tasks').select('*').eq('id', taskId).single();
+    if (error) throw error;
+    
+    const newTask = {
+      title: task.title + ' (Clone)',
+      description: task.description,
+      status: 'backlog',
+      priority: task.priority,
+      assignee: task.assignee,
+      project_id: task.project_id
+    };
+    
+    const { error: insertErr } = await window.supabaseClient.from('dev_tasks').insert([newTask]);
+    if (insertErr) throw insertErr;
+    
+    App.notify('Task cloned successfully.', false);
+    App.devAgent.loadTasks();
+  } catch (err) {
+    App.notify('Error cloning task: ' + err.message, true);
+  }
+};
+
+App.devAgent.startLinkingMode = function(sourceMessageId) {
+  devState.linkingMode = { active: true, sourceMessageId };
+  document.body.classList.add('dev-linking-mode');
+  App.showToast('Select a task or another message to link...', 'info');
+};
+
+App.devAgent.finalizeLink = async function(targetType, targetId) {
+  if (!devState.linkingMode || !devState.linkingMode.active) return;
+  const sourceId = devState.linkingMode.sourceMessageId;
+  devState.linkingMode = { active: false };
+  document.body.classList.remove('dev-linking-mode');
+  
+  if (targetType === 'message' && String(sourceId) === String(targetId)) {
+    App.showToast('Cannot link a message to itself', 'error');
+    return;
+  }
+  
+  try {
+    const res = await App.api('/api/develop/devAgent/links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_message_id: sourceId, target_type: targetType, target_id: targetId })
+    });
+    if (res.ok) {
+      App.showToast('Successfully linked!', 'success');
+    } else {
+      App.showToast('Failed to link: ' + (res.error?.message || res.error), 'error');
+    }
+  } catch (err) {
+    App.showToast('Failed to link.', 'error');
+  }
+};
+
+// Global click handler for linking mode
+document.body.addEventListener('click', (e) => {
+  if (devState.linkingMode && devState.linkingMode.active) {
+    // Allow clicking the 'Link' button itself without cancelling
+    if (e.target.closest('.dev-copy-btn[id^="linkChat_"]')) return;
+    
+    const bubble = e.target.closest('.dev-chat-bubble-wrapper');
+    if (bubble && bubble.id) {
+       e.preventDefault(); e.stopPropagation();
+       const targetId = bubble.id.replace('devChatNode_', '');
+       return App.devAgent.finalizeLink('message', targetId);
+    }
+    
+    const taskLi = e.target.closest('.dev-session-item');
+    if (taskLi && taskLi.dataset.taskId) {
+       e.preventDefault(); e.stopPropagation();
+       return App.devAgent.finalizeLink('task', taskLi.dataset.taskId);
+    }
+    
+    const taskBtn = e.target.closest('button[onclick^="App.devAgent.openTaskEditor"]');
+    if (taskBtn) {
+       e.preventDefault(); e.stopPropagation();
+       const match = taskBtn.getAttribute('onclick').match(/'([^']+)'/);
+       if (match && match[1]) return App.devAgent.finalizeLink('task', match[1]);
+    }
+    
+    // If clicked anywhere else, cancel linking mode
+    App.showToast('Linking mode cancelled', 'info');
+    devState.linkingMode.active = false;
+    document.body.classList.remove('dev-linking-mode');
+  }
+}, true);
+
+// Auto-refresh dev dashboard and tasks pages when activated
+if (typeof window.App !== 'undefined') {
+  if (!window.App.manifests) window.App.manifests = [];
+  window.App.manifests.push({
+    manifest: { id: 'devAgentModule', pagePrefixes: ['devDashboard', 'devTasks'] },
+    onPageActivated: function(pageId) {
+      if (pageId === 'devDashboardPage') {
+        if (typeof App.devAgent.loadDashboard === 'function') App.devAgent.loadActionItems();
+      } else if (pageId === 'devTasksPage') {
+        if (typeof App.devAgent.loadTasksTable === 'function') App.devAgent.loadTasksTable();
+      }
+    }
+  });
+}
+
+
+// --- Global Messages Feature ---
+
+App.devAgent.allMessages = [];
+App.devAgent.allMessagesSortKey = 'created_at';
+App.devAgent.allMessagesSortAsc = false;
+
+App.devAgent.loadAllMessages = async function() {
+  if (!window.supabaseClient) return;
+  const { data: messages, error: msgsError } = await window.supabaseClient
+    .from('agent_messages')
+    .select('id, session_id, role, created_at, content')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (msgsError) {
+    console.error("Error fetching agent_messages:", msgsError);
+    return;
+  }
+
+  const sessionIds = [...new Set(messages.map(m => m.session_id).filter(id => id))];
+  
+  let tasksDict = {};
+  if (sessionIds.length > 0) {
+    const { data: tasks, error: tasksError } = await window.supabaseClient
+      .from('dev_tasks')
+      .select('session_id, title')
+      .in('session_id', sessionIds);
+
+    if (!tasksError && tasks) {
+      tasks.forEach(t => {
+        tasksDict[t.session_id] = t.title;
+      });
+    }
+  }
+
+  const parseTargetAgent = (content) => {
+    try {
+      const match = content.match(/\`\`\`json\n([\s\S]*?)\n\`\`\`/);
+      if (match) {
+        const json = JSON.parse(match[1]);
+        if (json.state && json.state.target_agent) return json.state.target_agent;
+      }
+    } catch(e) {}
+    return '-';
+  };
+
+  const parseMessageSnippet = (content) => {
+    try {
+      const match = content.match(/\`\`\`json\n([\s\S]*?)\n\`\`\`/);
+      if (match) {
+        const json = JSON.parse(match[1]);
+        if (json.payload && json.payload.content) {
+            const txt = json.payload.content;
+            return txt.length > 100 ? txt.substring(0, 100) + '...' : txt;
+        }
+      }
+    } catch(e) {}
+    const cleanContent = content.replace(/\`\`\`[\s\S]*?\`\`\`/g, '').trim();
+    return cleanContent.length > 100 ? cleanContent.substring(0, 100) + '...' : cleanContent || '[JSON Payload]';
+  };
+
+  App.devAgent.allMessages = messages.map(m => ({
+    created_at: m.created_at,
+    task_title: tasksDict[m.session_id] || `Session ${m.session_id}`,
+    sender: m.role,
+    receiver: parseTargetAgent(m.content),
+    message: parseMessageSnippet(m.content),
+    raw_content: m.content
+  }));
+
+  App.devAgent.renderAllMessages();
+};
+
+App.devAgent.renderAllMessages = function() {
+  const tbody = document.getElementById('devAllMessagesTableBody');
+  if (!tbody) return;
+
+  const filterText = (document.getElementById('devAllMessagesFilter')?.value || '').toLowerCase();
+
+  let filtered = App.devAgent.allMessages.filter(m => {
+    if (!filterText) return true;
+    return (m.task_title && m.task_title.toLowerCase().includes(filterText)) ||
+           (m.sender && m.sender.toLowerCase().includes(filterText)) ||
+           (m.receiver && m.receiver.toLowerCase().includes(filterText)) ||
+           (m.message && m.message.toLowerCase().includes(filterText));
+  });
+
+  const key = App.devAgent.allMessagesSortKey;
+  const asc = App.devAgent.allMessagesSortAsc;
+  
+  filtered.sort((a, b) => {
+    let valA = a[key] || '';
+    let valB = b[key] || '';
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    if (valA < valB) return asc ? -1 : 1;
+    if (valA > valB) return asc ? 1 : -1;
+    return 0;
+  });
+
+  tbody.innerHTML = '';
+  filtered.forEach(m => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="white-space: nowrap;">${new Date(m.created_at).toLocaleString()}</td>
+      <td>${m.task_title}</td>
+      <td style="text-transform: capitalize;"><strong>${m.sender}</strong></td>
+      <td>${m.receiver}</td>
+      <td style="color: #666; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${m.message.replace(/"/g, '&quot;')}">${m.message}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+};
+
+App.devAgent.sortAllMessages = function(key) {
+  if (App.devAgent.allMessagesSortKey === key) {
+    App.devAgent.allMessagesSortAsc = !App.devAgent.allMessagesSortAsc;
+  } else {
+    App.devAgent.allMessagesSortKey = key;
+    App.devAgent.allMessagesSortAsc = true;
+  }
+  App.devAgent.renderAllMessages();
+};
+
+App.devAgent.filterAllMessages = function() {
+  App.devAgent.renderAllMessages();
+};
+
+
+App.devAgent.currentTasksView = 'list';
+
+App.devAgent.toggleTasksView = function() {
+  const browser = document.getElementById('devTaskBrowserPanel');
+  const kanban = document.getElementById('devDashboardKanban');
+  const btn = document.getElementById('devTasksToggleViewBtn');
+  const editor = document.getElementById('devTaskEditorPanel');
+  
+  if (editor && !editor.classList.contains('hidden')) {
+    editor.classList.add('hidden');
+  }
+
+  if (App.devAgent.currentTasksView === 'list') {
+    App.devAgent.currentTasksView = 'kanban';
+    if(browser) {
+      browser.classList.add('hidden');
+      browser.style.display = 'none';
+    }
+    if(kanban) {
+      kanban.classList.remove('hidden');
+      kanban.style.display = 'flex';
+    }
+    if(btn) btn.innerText = 'List View';
+    App.devAgent.loadActionItems(); // Refreshes Kanban items
+  } else {
+    App.devAgent.currentTasksView = 'list';
+    if(kanban) {
+      kanban.classList.add('hidden');
+      kanban.style.display = 'none';
+    }
+    if(browser) {
+      browser.classList.remove('hidden');
+      browser.style.display = 'flex';
+    }
+    if(btn) btn.innerText = 'Kanban View';
+    App.devAgent.loadTasksTable();
+  }
+};
+
+// Also ensure showTaskBrowser resets appropriately
+const oldShowTaskBrowser = App.devAgent.showTaskBrowser;
+App.devAgent.showTaskBrowser = function() {
+  const btn = document.getElementById('devTasksToggleViewBtn');
+  const kanban = document.getElementById('devDashboardKanban');
+  if (kanban && !kanban.classList.contains('hidden')) {
+    // If we're coming out of the editor back to the browser, preserve kanban view if it was active
+    const editor = document.getElementById('devTaskEditorPanel');
+    if (editor) editor.classList.add('hidden');
+    return;
+  }
+  
+  if (oldShowTaskBrowser) oldShowTaskBrowser.apply(this, arguments);
+  if (App.devAgent.currentTasksView === 'kanban') {
+     App.devAgent.currentTasksView = 'list';
+     if(btn) btn.innerText = 'Kanban View';
+     if(kanban) {
+       kanban.classList.add('hidden');
+       kanban.style.display = 'none';
+     }
+     const browser = document.getElementById('devTaskBrowserPanel');
+     if(browser) browser.style.display = 'flex';
+  }
 };

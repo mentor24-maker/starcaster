@@ -7,6 +7,7 @@ App.training = {
     this.elements.tableBody = document.getElementById('trainingContextRepoTable');
     this.elements.countBadge = document.getElementById('trainingContextRepoCount');
     this.elements.refreshBtn = document.getElementById('refreshTrainingCorpusBtn');
+    this.elements.triggerHarvestBtn = document.getElementById('triggerHarvestBtn');
     
     this.elements.viewerModal = document.getElementById('trainingCorpusViewerModal');
     this.elements.viewerTitle = document.getElementById('trainingCorpusViewerTitle');
@@ -30,6 +31,29 @@ App.training = {
 
     if (this.elements.refreshBtn) {
       this.elements.refreshBtn.addEventListener('click', () => this.loadCorpus());
+    }
+
+    if (this.elements.triggerHarvestBtn) {
+      this.elements.triggerHarvestBtn.addEventListener('click', async () => {
+        const btn = this.elements.triggerHarvestBtn;
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Starting Harvest...";
+        try {
+          const res = await fetch('/api/develop/training/harvest', { method: 'POST' });
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to start harvest');
+          }
+          alert("Knowledge harvest started in the background. Check logs for progress. You can refresh knowledge manually after a few moments.");
+        } catch (e) {
+          console.error(e);
+          alert("Error starting harvest: " + e.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
     }
     
     // Bind auto-refresh to filter changes
@@ -67,7 +91,7 @@ App.training = {
       
       let query = window.supabaseClient
         .from('training_corpus')
-        .select('id, title, source_type, category, created_at, content_text', { count: 'exact' });
+        .select('id, title, source_type, category, updated_at', { count: 'exact' });
 
       // Apply Filters
       if (this.elements.filterFileType && this.elements.filterFileType.value) {
@@ -83,15 +107,14 @@ App.training = {
         query = query.ilike('title', `%${this.elements.filterSearch.value.trim()}%`);
       }
       if (this.elements.filterStart && this.elements.filterStart.value) {
-        // Append time to ensure start of day inclusion natively
-        query = query.gte('created_at', `${this.elements.filterStart.value}T00:00:00Z`);
+        query = query.gte('updated_at', `${this.elements.filterStart.value}T00:00:00Z`);
       }
       if (this.elements.filterEnd && this.elements.filterEnd.value) {
-        query = query.lte('created_at', `${this.elements.filterEnd.value}T23:59:59Z`);
+        query = query.lte('updated_at', `${this.elements.filterEnd.value}T23:59:59Z`);
       }
 
       const { data, error, count } = await query
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
         .limit(200);
 
       if (error) throw error;
@@ -111,7 +134,7 @@ App.training = {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid var(--border-light)';
         
-        const dateObj = new Date(item.created_at);
+        const dateObj = new Date(item.updated_at);
         const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         tr.innerHTML = `
@@ -128,9 +151,20 @@ App.training = {
 
         const viewBtn = tr.querySelector('.view-corpus-btn');
         if (viewBtn) {
-          viewBtn.addEventListener('click', (e) => {
+          viewBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            this.openViewer(item.title, item.content_text);
+            this.openViewer(item.title, 'Loading content...');
+            try {
+              const { data: doc, error: docErr } = await window.supabaseClient
+                .from('training_corpus')
+                .select('content_text')
+                .eq('id', item.id)
+                .single();
+              if (docErr) throw docErr;
+              this.elements.viewerContent.textContent = doc.content_text || '// No text available.';
+            } catch (err) {
+              this.elements.viewerContent.textContent = 'Error loading content: ' + err.message;
+            }
           });
         }
 

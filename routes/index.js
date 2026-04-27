@@ -43,6 +43,7 @@ const develop     = require('./develop');
 const observe     = require('./observe');
 const roger       = require('./devAgent');
 const personas    = require('./personas');
+const tasks       = require('./tasks');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -63,6 +64,7 @@ const ROUTE_MODULES = [
   config,
   roger,
   personas,
+  tasks,
 ];
 
 function maskSecret(value) {
@@ -134,7 +136,7 @@ async function handleRequest(req, res) {
   const method   = req.method;
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
-  const isWebhookRoute = pathname === '/api/develop/devAgent/worker';
+  const isWebhookRoute = pathname === '/api/develop/devAgent/worker' || pathname.startsWith('/api/tasks');
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);

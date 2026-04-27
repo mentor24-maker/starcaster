@@ -30,6 +30,7 @@ const http = require('http');
 const path = require('path');
 const fs   = require('fs');
 const { handleRequest, logRegistry } = require('./routes/index');
+const { initTimerDaemon } = require('./lib/taskTimerDaemon');
 
 const PORT = Number(config.get('port')) || 3000;
 
@@ -147,4 +148,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[server] Listening on http://localhost:${PORT}`);
   logRegistry();
+  initTimerDaemon();
 });

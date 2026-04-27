@@ -64,6 +64,7 @@ function requestScope(req) {
 const CONTACT_CREATE_SCHEMA = {
   contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other', ''], default: '' },
   contactClass: { type: 'string', required: false, enum: ['persona','personality','personnel'], default: 'persona' },
+  entity_type:  { type: 'string', required: false, default: '' },
   email:       { type: 'string', required: false, format: 'email', maxLength: 254 },
   firstName:   { type: 'string', required: false, maxLength: 100, default: '' },
   lastName:    { type: 'string', required: false, maxLength: 100, default: '' },
@@ -621,6 +622,7 @@ ${contextDump}`;
     const email = v.data.email ? normalizeEmail(v.data.email) : null;
 
     const result = await createContact({
+      id:           nextId('contact'),
       project_id:   requestScope(req).project_id,
       contact_type: String(v.data.contactType || '').trim() || null,
       contact_class: String(v.data.contactClass || '').trim() || 'persona',

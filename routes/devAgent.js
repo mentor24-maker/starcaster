@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
-const { listRogerChats, createRogerChat, updateRogerChat, listRogerSessions, createRogerSession, updateRogerSession } = require('../lib/rogerChatsStore');
+const { listRogerChats, createRogerChat, updateRogerChat, listRogerSessions, createRogerSession, updateRogerSession, evaluateAndUpdateTaskStatus, createMessageLink, listPendingCommands } = require('../lib/rogerChatsStore');
 const { consultRoger } = require('../lib/rogerClient');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 const { uploadAssetToBlob } = require('../lib/blobStorage');
@@ -17,7 +17,15 @@ function parseTriAgentBackend(rawString) {
   const match = rawString.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   const potentialJson = match ? match[1] : rawString.trim();
   try {
-    const data = JSON.parse(potentialJson);
+    let data = JSON.parse(potentialJson);
+    if (Array.isArray(data)) {
+      const combinedContent = data.map(d => d.payload?.content || '').filter(Boolean).join('\n\n---\n\n');
+      let targetObj = data.find(d => d.payload?.type === 'COMMAND') || data[data.length - 1];
+      if (targetObj && targetObj.payload) {
+         targetObj.payload.content = combinedContent;
+      }
+      data = targetObj;
+    }
     if (data && data.state) {
       if (data.state.sessionid !== undefined && data.state.session_id === undefined) {
         data.state.session_id = data.state.sessionid;
@@ -63,7 +71,7 @@ function parseTriAgentBackend(rawString) {
          // Unescape standard JSON text escapes since we bypassed parser
          contentStr = contentStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
          
-         let stateObj = { state_version_id: 1 };
+          let stateObj = { state_version_id: 1 };
          // Try to regex extract the state block
          const stateMatch = rawStr.match(/"state"\s*:\s*(\{[\s\S]*?\})\s*,\s*"payload"/);
          if (stateMatch) {
@@ -72,6 +80,20 @@ function parseTriAgentBackend(rawString) {
          return {
             state: stateObj,
             payload: { type: 'RESPONSE', content: contentStr }
+         };
+      }
+      
+      // Heuristic fallback for pure markdown panic attacks
+      if (!rawStr.startsWith('{') && !rawStr.startsWith('[')) {
+         let target = '@Human';
+         if (rawStr.toLowerCase().includes('@angie')) target = '@Angie';
+         else if (rawStr.toLowerCase().includes('@archie') || rawStr.toLowerCase().includes('@antigravity')) target = '@Archie';
+         
+         let type = rawStr.includes('COMMAND:') ? 'COMMAND' : 'RESPONSE';
+         
+         return {
+            state: { target_agent: target, source_agent: '@Roger', state_version_id: 1 },
+            payload: { type: type, content: rawStr }
          };
       }
     } catch(regexErr) {}
@@ -114,8 +136,30 @@ async function handle(req, res, pathname, requestMethod) {
     
     const limit = Number(urlObj.searchParams.get('limit') || 100);
     const result = await listRogerChats(sessionId, projectId, limit);
+    require('fs').writeFileSync('/Users/mentor/Desktop/ISITAS/Development/alphire-promo/history_debug.json', JSON.stringify({ sessionId, projectId, limit, returnedCount: result.data ? result.data.length : 'error', firstFew: result.data ? result.data.slice(0, 7).map(c => c.id) : null }));
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { chats: result.data }, { total: result.data.length }), true;
+  }
+
+  if (pathname === '/api/develop/devAgent/links' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const sourceMessageId = Number(body?.source_message_id || 0);
+    const targetType = String(body?.target_type || '');
+    const targetId = String(body?.target_id || '');
+    
+    if (!sourceMessageId || !targetType || !targetId) {
+      return sendErr(res, 400, 'Missing required fields: source_message_id, target_type, target_id', { code: 'VALIDATION_ERROR' }), true;
+    }
+    
+    const result = await createMessageLink(sourceMessageId, targetType, targetId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, result.data, { link: result.data }), true;
+  }
+
+  if (pathname === '/api/develop/devAgent/pendingCommands' && requestMethod === 'GET') {
+    const result = await listPendingCommands(projectId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { commands: result.data }, { total: result.data.length }), true;
   }
 
   if (pathname === '/api/develop/devAgent/config' && requestMethod === 'GET') {
@@ -155,6 +199,7 @@ async function handle(req, res, pathname, requestMethod) {
     
     const content = String(body?.content || '').trim();
     if (!content) return sendErr(res, 400, 'Content is required', { code: 'VALIDATION_ERROR' }), true;
+    const parentId = body?.parentId ? Number(body.parentId) : null;
 
     let attachmentBase64 = String(body?.attachmentBase64 || '').trim();
     if (attachmentBase64 && attachmentBase64.includes('base64,')) {
@@ -199,6 +244,7 @@ async function handle(req, res, pathname, requestMethod) {
 
     // 2. Save user message to DB
     const chatOptions = { session_id: sessionId, project_id: projectId, role: 'user', content: finalContent };
+    if (parentId) chatOptions.parent_id = parentId;
     if (attachmentUrl) {
       chatOptions.attachment_url = attachmentUrl;
       chatOptions.attachment_mime = attachmentMime;
@@ -210,12 +256,29 @@ async function handle(req, res, pathname, requestMethod) {
     // Add the newly saved user record to the working history matrix
     history.push(userSaveRes.data);
 
-    // Auto-broadcast all messages to both AI agents natively 
-    let agentsToTrigger = ['roger', 'antigravity'];
+    // Dynamic Routing based on Mentioned Handles
+    let agentsToTrigger = [];
+    const contentLower = content.toLowerCase();
+    
+    if (contentLower.includes('@all')) {
+      agentsToTrigger = ['antigravity', 'angie'];
+    } else {
+      if (contentLower.includes('@roger')) agentsToTrigger.push('antigravity');
+      if (contentLower.includes('@angie')) agentsToTrigger.push('angie');
+    }
+    
+    // Broadcast to everyone if no specific agent is addressed
+    if (agentsToTrigger.length === 0) {
+      agentsToTrigger = ['antigravity'];
+    }
 
     const processingNodes = [];
     for (const agent of agentsToTrigger) {
-      const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: agent, status: 'processing', content: '[SYSTEM::PROCESSING]' });
+      const agentOptions = { session_id: sessionId, project_id: projectId, role: agent, status: 'processing', content: '[SYSTEM::PROCESSING]' };
+      // Always make the agent's response a child of the user's message
+      agentOptions.parent_id = userSaveRes.data.id;
+      
+      const rogerSaveRes = await createRogerChat(agentOptions);
       if (rogerSaveRes.ok) {
         processingNodes.push(rogerSaveRes.data);
       } else {
@@ -224,7 +287,22 @@ async function handle(req, res, pathname, requestMethod) {
     }
 
     // Fire and forget via internal fetch wrapper
-    // Decoupled. Logic handled seamlessly downstream by SSE daemon.
+    // Decoupled. Logic handled seamlessly downstream by SSE daemon, but we must manually trigger locally
+    const host = req.headers.host || '127.0.0.1:3000';
+    const protocol = (host.includes('localhost') || host.includes('127.0.0.1')) ? 'http' : 'https';
+    let triggerHost = host;
+    if (triggerHost.startsWith('localhost:')) {
+      triggerHost = triggerHost.replace('localhost:', '127.0.0.1:');
+    }
+    for (const node of processingNodes) {
+      fetch(`${protocol}://${triggerHost}/api/develop/devAgent/worker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'INSERT', record: node })
+      }).catch(err => console.error("Internal worker trigger failed:", err));
+    }
+
+    evaluateAndUpdateTaskStatus(sessionId).catch(e => console.error("[evaluateAndUpdateTaskStatus] Error:", e));
 
     return sendOk(res, 202, {
       userChat: userSaveRes.data,
@@ -254,8 +332,10 @@ async function handle(req, res, pathname, requestMethod) {
     // Do NOT return response early. The browser holds this open to keep Vercel alive.
     
     try {
+      console.log(`[Worker] Started processing for chatId ${chatId} (${respondingAgent})`);
       const historyRes = await listRogerChats(sessionId, projectId, 70);
       let history = historyRes.ok && Array.isArray(historyRes.data) ? historyRes.data : [];
+      console.log(`[Worker] Loaded ${history.length} history items for session ${sessionId}`);
       let maxVersion = 0;
       history.forEach(chat => {
         const p = parseTriAgentBackend(chat.content);
@@ -269,8 +349,8 @@ async function handle(req, res, pathname, requestMethod) {
       for (const row of history) {
         let prefix = '';
         if (row.role === 'user') prefix = '[From Human]: ';
-        if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
-        if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
+        if (row.role === 'antigravity') prefix = '[From Roger]: ';
+        if (row.role === 'roger') prefix = '[From DevAgent]: ';
         let rowText = prefix + row.content;
         
         if (row.attachment_url && (row.attachment_name?.endsWith('.md') || Object.is(row.attachment_mime, 'application/octet-stream') || row.attachment_mime?.startsWith('text/'))) {
@@ -291,7 +371,19 @@ async function handle(req, res, pathname, requestMethod) {
         });
       }
 
-      const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
+      console.log(`[Worker] Executing inference loop via consultRoger for ${respondingAgent}...`);
+      
+      let timer;
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Inference timed out after 60 seconds')), 60000);
+      });
+      const geminiRes = await Promise.race([
+        consultRoger(messages, { agentRole: respondingAgent }),
+        timeoutPromise
+      ]).finally(() => clearTimeout(timer));
+
+      console.log(`[Worker] Inference complete for ${respondingAgent} (ok: ${geminiRes.ok})`);
+
       if (!geminiRes.ok) {
         const isQuotaErr = geminiRes.error && (geminiRes.error.toLowerCase().includes('quota') || geminiRes.error.toLowerCase().includes('demand'));
         if (isQuotaErr) {
@@ -334,17 +426,66 @@ async function handle(req, res, pathname, requestMethod) {
       if (!uRes.ok) {
         await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'antigravity', status: 'complete', content: `**SYSTEM ERROR:** Webhook could not update existing row ${chatId}. Reason: \`${JSON.stringify(uRes.error)}\`` });
       }
+
+      // Inter-Agent Handoff Routing
+      if (outData && outData.state && outData.state.target_agent) {
+        const targetAgent = String(outData.state.target_agent).toLowerCase();
+        let nextRole = null;
+        
+        if (targetAgent.includes('@angie')) {
+          nextRole = 'roger'; // Role 'roger' maps to @Angie
+        } else if (targetAgent.includes('@roger')) {
+          nextRole = 'antigravity'; // Role 'antigravity' maps to @Roger_Thorson
+        } else if (targetAgent.includes('@archie') || targetAgent.includes('@antigravity')) {
+          // DO NOT auto-trigger the backend. Archie is the IDE agent controlled by the human.
+          console.log(`[Worker] Target is Archie/Antigravity. Halting inter-agent chain to wait for human handoff.`);
+        }
+
+        if (nextRole && nextRole !== respondingAgent) {
+          console.log(`[Worker] Agent ${respondingAgent} handed off to ${nextRole}. Enqueuing next node...`);
+          const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: nextRole, status: 'processing', content: '[SYSTEM::PROCESSING]', parent_id: chatId });
+          if (rogerSaveRes.ok) {
+            const host = req.headers.host || '127.0.0.1:3000';
+            const protocol = (host.includes('localhost') || host.includes('127.0.0.1')) ? 'http' : 'https';
+            let triggerHost = host.startsWith('localhost:') ? host.replace('localhost:', '127.0.0.1:') : host;
+            
+            fetch(`${protocol}://${triggerHost}/api/develop/devAgent/worker`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'INSERT', record: rogerSaveRes.data })
+            }).catch(err => console.error("[Worker] Inter-agent chain trigger failed:", err));
+          }
+        }
+      }
     } catch(err) {
       const fRes = await updateRogerChat(chatId, { status: 'failed', error_details: err.message, content: `An error occurred with the AI Inference engine. => ${err.message}` });
       if (!fRes.ok) {
         await createRogerChat({ session_id: sessionId, project_id: projectId, role: 'antigravity', status: 'complete', content: `**SYSTEM ERROR:** Webhook caught exception \`${err.message}\` BUT could not update the row. DB Error: \`${JSON.stringify(fRes.error)}\`` });
       }
     }
+    evaluateAndUpdateTaskStatus(sessionId).catch(e => console.error("[evaluateAndUpdateTaskStatus] Error:", e));
     
     sendOk(res, 200, { success: true });
     return true;
   }
 
+  if (pathname === '/api/develop/devAgent/harvest' && requestMethod === 'POST') {
+    return new Promise((resolve) => {
+      const { exec } = require('child_process');
+      const path = require('path');
+      const scriptPath = path.resolve(__dirname, '../scripts/harvest_knowledge.mjs');
+      
+      exec(`node ${scriptPath}`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Harvest Error: ${error}`);
+          resolve(sendErr(res, 500, `Harvest failed: ${error.message}`));
+        } else {
+          console.log(`Harvest Output: ${stdout}`);
+          resolve(sendOk(res, 200, { success: true, output: stdout }));
+        }
+      });
+    }).then(() => true);
+  }
 
 
   if (pathname === '/api/develop/devAgent/retry' && requestMethod === 'POST') {
@@ -368,8 +509,9 @@ async function handle(req, res, pathname, requestMethod) {
       }), true;
     }
 
-    const isForAntigravity = lastMessage.content.toLowerCase().includes('@antigravity');
-    const respondingAgent = isForAntigravity ? 'antigravity' : 'roger';
+    const isAngie = lastMessage.role === 'angie';
+    const isAntigravity = lastMessage.role === 'antigravity';
+    const respondingAgent = isAngie ? 'angie' : (isAntigravity ? 'antigravity' : 'roger');
 
     let messagesHistory = history;
     messagesHistory = messagesHistory.filter(h => h.content !== '[SYSTEM::QUEUED]' && !h.content.includes('SYSTEM ERROR'));
@@ -377,8 +519,8 @@ async function handle(req, res, pathname, requestMethod) {
     const messages = messagesHistory.map(row => {
       let prefix = '';
       if (row.role === 'user') prefix = '[From Human]: ';
-      if (row.role === 'antigravity') prefix = '[From Antigravity (IDE Agent)]: ';
-      if (row.role === 'roger') prefix = '[From Roger Thorson]: ';
+      if (row.role === 'antigravity') prefix = '[From Roger]: ';
+      if (row.role === 'roger') prefix = '[From DevAgent]: ';
       
       return {
         role: row.role === respondingAgent || row.role === 'model' ? 'model' : 'user',
@@ -442,9 +584,41 @@ async function handle(req, res, pathname, requestMethod) {
     const rogerSaveRes = await createRogerChat({ session_id: sessionId, project_id: projectId, role: respondingAgent, content: cleanText });
     if (!rogerSaveRes.ok) return sendErr(res, rogerSaveRes.status || 500, rogerSaveRes.error), true;
 
+    evaluateAndUpdateTaskStatus(sessionId).catch(e => console.error("[evaluateAndUpdateTaskStatus] Error:", e));
+
     return sendOk(res, 201, {
       rogerChat: rogerSaveRes.data
     }), true;
+  }
+
+
+  if (pathname === '/api/develop/devAgent/git-status' && requestMethod === 'GET') {
+    return new Promise((resolve) => {
+      const { exec } = require('child_process');
+      const cmds = [
+        'git log -1 --format=%cd',
+        'git log -1 --format=%cd origin/main || echo "No origin/main"',
+        'git rev-list origin/main..HEAD --count || echo "0"',
+        'git status --porcelain | wc -l',
+        'git branch --show-current'
+      ];
+      
+      exec(cmds.join(' && '), (error, stdout, stderr) => {
+        if (error) {
+          console.error('[Git Status Error]', error);
+          resolve(sendErr(res, 500, 'Git command failed'));
+          return;
+        }
+        const lines = stdout.trim().split('\n');
+        resolve(sendOk(res, 200, {
+          lastCommitDate: lines[0],
+          lastPushDate: lines[1],
+          unpushedCommits: parseInt(lines[2]) || 0,
+          uncommittedFiles: parseInt(lines[3]) || 0,
+          currentBranch: lines[4]
+        }));
+      });
+    }).then(() => true);
   }
 
   return false;
