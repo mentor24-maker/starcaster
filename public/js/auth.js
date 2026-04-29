@@ -134,6 +134,9 @@ App.auth._syncProjectContext = async function _syncProjectContext() {
 
 App.auth.handleUnauthorized = function handleUnauthorized() {
   App.auth.user = null;
+  try {
+    window.localStorage.removeItem('alphire.authUser');
+  } catch (_) {}
   App.auth._showLanding('login');
   App.auth._setMessage('');
 };
@@ -350,6 +353,9 @@ App.auth.init = function init(bootMainApp) {
       console.error('Core Boot Error:', e);
       if (e?.message !== 'Not authenticated') App.notify('Boot Error: ' + (e?.message || e), true);
       App.auth.user = null;
+      try {
+        window.localStorage.removeItem('alphire.authUser');
+      } catch (_) {}
       App.auth._showLanding('login');
       App.auth._setMessage('');
     });
