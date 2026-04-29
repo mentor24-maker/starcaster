@@ -2372,7 +2372,7 @@ App.youtube = (function () {
   }
 
   function renderFallbackVideoDetails(videoUrl, fallbackMeta) {
-    var meta = Object.assign({}, currentDetailsRun || {}, fallbackMeta || {}, { video_url: safeText(videoUrl) });
+    var meta = Object.assign({}, fallbackMeta || {}, { video_url: safeText(videoUrl), video_id: '' });
     currentDetailsRun = meta;
     rememberActiveVideo(meta);
     renderVideoTitleLink({

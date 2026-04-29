@@ -2321,29 +2321,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 App.devAgent.promptNewTask = async function() {
-  const title = prompt("Enter a title for the new Task:");
-  if (!title) return;
-  
-  try {
-    if (!window.supabaseClient) throw new Error("Database not connected.");
-    
-    // Default task attributes using 'todo' and standard metadata
-    const res = await App.api('/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: title,
-        status: 'todo',
-        priority: 'medium',
-        assignee: 'mentor'
-      })
-    });
-      
-    if (res.error) throw new Error(res.error);
-    App.notify("Task created securely.");
-    App.devAgent.loadTasks(); // Automatically refresh the Tasks list in the left panel
-  } catch (err) {
-    App.notify("Error creating task: " + err.message, true);
-  }
+  App.devAgent.openTaskEditor(null);
 };
 
 App.devAgent.testAiConnection = async function() {
@@ -2780,7 +2758,8 @@ App.devAgent.getAssigneeName = function(id) {
   
   const knownAgents = {
     'mentor': 'Mentor',
-    'roger': 'Roger',
+    'antigravity': 'Roger',
+    'roger': 'Angie',
     'angie': 'Angie',
     'archie': 'Archie'
   };
@@ -3957,11 +3936,17 @@ App.devAgent.renderProjects = function() {
   }
   
   filtered.forEach(proj => {
+    const escapeHTML = (str) => {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
     const tr = document.createElement('tr');
+    const safeName = escapeHTML(proj.name);
+    const safeDesc = escapeHTML(proj.description || '');
     tr.innerHTML = `
-      <td><strong>${proj.name}</strong></td>
-      <td>${proj.description || ''}</td>
-      <td><span class="badge">${proj.status}</span></td>
+      <td><strong>${safeName}</strong></td>
+      <td style="max-width: 350px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${safeDesc}">${safeDesc}</td>
+      <td><span class="badge">${escapeHTML(proj.status)}</span></td>
       <td>${proj.dev_project_members ? proj.dev_project_members[0].count : 0}</td>
       <td>${proj.dev_tasks ? proj.dev_tasks[0].count : 0}</td>
       <td>${new Date(proj.created_at).toLocaleDateString()}</td>
@@ -4055,12 +4040,17 @@ App.devAgent.renderProjectTasks = function() {
       App.devAgent.openTaskEditor(task.id, task.project_id);
     });
     
+    const escapeHTML = (str) => {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
+    
     tr.innerHTML = `
       <td style="font-family: monospace; font-size: 0.8em; color: var(--text-muted);">${task.id.substring(0,8)}</td>
-      <td>${task.title || ''}</td>
-      <td><span class="badge badge-gray" style="text-transform: capitalize;">${(task.status || '').replace('_', ' ')}</span></td>
-      <td><span class="badge badge-gray" style="text-transform: capitalize;">${task.priority || ''}</span></td>
-      <td style="text-transform: capitalize;">${task.assignee || ''}</td>
+      <td style="max-width: 350px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(task.title || '')}">${escapeHTML(task.title || '')}</td>
+      <td><span class="badge badge-gray" style="text-transform: capitalize;">${escapeHTML(task.status || '').replace('_', ' ')}</span></td>
+      <td><span class="badge badge-gray" style="text-transform: capitalize;">${escapeHTML(task.priority || '')}</span></td>
+      <td style="text-transform: capitalize;">${escapeHTML(task.assignee || '')}</td>
       <td style="text-align: right; white-space: nowrap;">
         <button type="button" class="dev-action-btn edit-task-btn" title="Edit Task" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:4px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -4124,23 +4114,7 @@ App.devAgent.loadProjectTasks = async function(projectId) {
 
 
 App.devAgent.createProjectTask = async function(projectId) {
-  const title = prompt('Enter a title for the new Task:');
-  if (!title) return;
-  try {
-    const { error } = await window.supabaseClient.from('dev_tasks').insert([{ 
-      title,
-      status: 'todo',
-      priority: 'medium',
-      assignee: 'mentor',
-      project_id: projectId
-    }]);
-    if (error) throw error;
-    App.notify('Task created.');
-    await App.devAgent.loadProjectTasks(projectId);
-    App.devAgent.loadTasks();
-  } catch (err) {
-    App.notify('Error creating project task: ' + err.message, true);
-  }
+  App.devAgent.openTaskEditor(null, projectId);
 };
 
 App.devAgent.deleteProjectTask = async function(taskId, projectId) {
