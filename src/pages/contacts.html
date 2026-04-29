@@ -1,0 +1,732 @@
+<section id="contactsPage" class="app-page">
+        <div class="page-heading-row">
+          <h2>Contacts</h2>
+          <div class="page-heading-actions">
+            <button id="openAddContactPageBtn" type="button">Add Contact</button>
+            <button id="importContactsToggleBtn" type="button">Import Contacts</button>
+            <button id="exploreContactsBtn" type="button">Explore Contacts</button>
+          </div>
+        </div>
+        <p>Capture, import, and maintain the contact database that you will later segment and target.</p>
+
+        <section id="csvMapperSection" class="hidden">
+          <h3>CSV Upload + Field Mapper</h3>
+          <form id="csvUploadForm" class="standard-form-grid">
+            <label>Field Data (.csv)</label>
+            <input id="csvFileInput" type="file" accept=".csv,text/csv" />
+            <div></div>
+            <button type="submit">Analyze CSV</button>
+          </form>
+
+          <div id="csvMapperWrap" class="hidden">
+            <h3>Column Mapping</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CSV Column</th>
+                    <th>Include</th>
+                    <th>Target Key</th>
+                    <th>Type</th>
+                    <th>DB Status</th>
+                    <th>Create Field</th>
+                    <th>Options (comma-separated)</th>
+                  </tr>
+                </thead>
+                <tbody id="csvMapperTable"></tbody>
+              </table>
+            </div>
+            <textarea id="csvMissingSql" rows="5" class="hidden" readonly></textarea>
+            <button id="csvImportBtn" type="button">Import CSV to promo_leads</button>
+          </div>
+        </section>
+
+        <div class="table-wrap contacts-table-wrap">
+          <table>
+            <thead id="contactsTableHead"></thead>
+            <tbody id="contactsTable"></tbody>
+          </table>
+        </div>
+        
+        <form id="contactsCreateSegmentForm" class="standard-form-grid hidden" style="max-width: 520px; margin: 1.25rem auto;">
+          <h4 class="standard-form-grid-full" style="font-size: 1.4rem; font-weight: 800; margin: 0 0 0.25rem 0; text-align: center;">Save as Segment</h4>
+          <label>Segment Name</label>
+          <input id="contactsCreateSegmentName" name="name" required />
+          <div></div>
+          <button type="submit">Save Segment</button>
+        </form>
+
+      </section>
+      <section id="contactsSettingsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contacts: Settings</h2>
+          <div class="page-heading-actions">
+            <button type="button" id="contactsSettingsBackBtn">Return to Contacts</button>
+          </div>
+        </div>
+        <div class="section-settings-shell" style="display: grid; grid-template-columns: 25% 1fr 25%; gap: 1rem; align-items: start;">
+          <div class="section-settings-main">
+            <section class="card">
+              <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+                <h3 style="margin:0;">Default Columns</h3>
+              </div>
+              <form id="contactsDefaultColumnsForm" class="standard-form-grid" style="margin-top: 1rem;">
+                <div id="contactsDefaultColumnsGrid" class="contacts-settings-columns-grid"></div>
+                <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content:center; margin-top: 0.75rem;">
+                  <div></div>
+              <button type="submit">Save Default Columns</button>
+                </div>
+              </form>
+            </section>
+          </div>
+
+          <div class="section-settings-main">
+            <section class="card">
+              <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+                <h3 style="margin:0;">Settings Options</h3>
+              </div>
+              
+              <div class="form-row" style="margin-top: 1rem;">
+                <label>
+                  <span>Setting</span>
+                  <select id="contactsOptionCategorySelect">
+                    <option value="statuses">Statuses</option>
+                    <option value="types">Contact Types</option>
+                    <option value="sources">Sources</option>
+                    <option value="segment_types" selected>Segment Types</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="table-wrap" style="margin-top: 1rem;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th id="settingsOptionsDynamicLabelHeading" style="min-width: 200px;">Segment Type</th>
+                      <th>Key</th>
+                      <th>Order</th>
+                      <th>Active</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="contactsOptionsTable"></tbody>
+                </table>
+              </div>
+              
+              <form id="addContactOptionForm" class="standard-form-grid" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <h4 class="standard-form-grid-full" style="margin-bottom: 0.25rem;">Add New Option</h4>
+
+                <label id="addContactOptionLabelTitle">Segment Type Name</label>
+                <input type="text" name="label" required placeholder="e.g. Display Name">
+
+                <label>Key</label>
+                <input type="text" name="key" required placeholder="e.g. key_name" pattern="[a-z0-9_]+">
+
+                <label>Order</label>
+                <input type="number" name="sort_order" value="0" required>
+
+                <div></div>
+                <button type="submit">Add Option</button>
+              </form>
+            </section>
+          </div>
+
+          <aside class="section-settings-nav">
+            <section class="card">
+              <h3 style="margin-top:0;">Section Settings</h3>
+              <div id="contactsSectionSettingsNavList" class="section-settings-nav-list"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+      <section id="contactsPeerSitesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contacts: Peer Sites</h2>
+          <div class="page-heading-actions">
+            <button id="contactsPeerSitesRefreshBtn" type="button">Refresh</button>
+            <button id="contactsPeerSitesBackBtn" type="button">Back To Contacts</button>
+          </div>
+        </div>
+        <div id="contactsPeerSitesMeta" class="meta" style="margin-bottom: 0.75rem;">No peer sites saved yet.</div>
+        <form id="contactsPeerSiteForm" class="standard-form-grid" style="margin-bottom: 1rem;">
+          <input type="hidden" id="contactsPeerSiteId" name="id" />
+          
+          <label for="contactsPeerSiteType">Site Type</label>
+          <select id="contactsPeerSiteType" name="website_model"></select>
+          
+          <label for="contactsPeerSiteSourceUrl">Source Website</label>
+          <input id="contactsPeerSiteSourceUrl" name="source_url" type="url" />
+          
+          <label for="contactsPeerSiteUrl">Website URL</label>
+          <input id="contactsPeerSiteUrl" name="site_url" type="url" required />
+          
+          <label for="contactsPeerSiteTitle">Site Title</label>
+          <input id="contactsPeerSiteTitle" name="title" type="text" />
+          
+          <label for="contactsPeerSiteKeywords">Matched Keywords</label>
+          <textarea id="contactsPeerSiteKeywords" name="matched_keywords" rows="2"></textarea>
+          
+          <label for="contactsPeerSiteSnippet">Snippet</label>
+          <textarea id="contactsPeerSiteSnippet" name="snippet" rows="3"></textarea>
+          
+          <label for="contactsPeerSiteNotes">Notes</label>
+          <textarea id="contactsPeerSiteNotes" name="notes" rows="3"></textarea>
+          
+          <div></div>
+          <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 0.75rem;">
+            <button id="contactsPeerSiteSaveBtn" type="submit">Save Peer Site</button>
+            <button id="contactsPeerSiteCancelBtn" type="button" class="tiny-btn">Cancel</button>
+            <button id="contactsPeerSitesAcquireBtn" type="button" style="margin-left:auto;">Acquire Peer Sites</button>
+          </div>
+        </form>
+        <div id="contactsPeerSitesAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite" style="margin-bottom: 1rem;">
+          <div id="contactsPeerSitesAcquireProgressText" class="asset-upload-progress-text">Acquiring peer sites...</div>
+          <progress id="contactsPeerSitesAcquireProgressBar" max="100" value="8"></progress>
+        </div>
+        <section id="contactsPeerSitesDiscoveryWrap" class="card hidden" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Peer Site Candidates</h3>
+            <div class="page-heading-actions">
+              <label class="checkbox-row" style="margin:0;">
+                <input id="contactsPeerSitesDiscoverySelectAll" type="checkbox" />
+                <span>Check All</span>
+              </label>
+              <button id="contactsPeerSitesSaveSelectedBtn" type="button">Save Selected Peer Sites</button>
+            </div>
+          </div>
+          <div id="contactsPeerSitesDiscoveryMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site candidates loaded yet.</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Domain</th>
+                  <th>Site</th>
+                  <th>Matched Keywords</th>
+                  <th>Site Type</th>
+                  <th>Snippet</th>
+                </tr>
+              </thead>
+              <tbody id="contactsPeerSitesDiscoveryTable"></tbody>
+            </table>
+          </div>
+        </section>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Scope</th>
+                <th>Site Type</th>
+                <th>Domain</th>
+                <th>Site</th>
+                <th>Matched Keywords</th>
+                <th>Source Website</th>
+                <th class="contacts-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="contactsPeerSitesTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="contactsPeerSiteDetailsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contacts: Peer Site Details</h2>
+          <div class="page-heading-actions">
+            <button id="contactsPeerSiteDetailsEditBtn" type="button">Edit Peer Site</button>
+            <button id="contactsPeerSiteDetailsBackBtn" type="button">Back To Peer Sites</button>
+          </div>
+        </div>
+        <div id="contactsPeerSiteDetailsMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site selected.</div>
+        <div class="card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Website Summary</h3>
+          </div>
+          <div id="contactsPeerSiteSummary" class="view-field-list"></div>
+        </div>
+        <div class="acquire-web-results-grid">
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Social</h3>
+            </div>
+            <div id="contactsPeerSiteSocialEmpty" class="meta">No social/contact data stored for this website yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="contactsPeerSiteSocialTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Keywords</h3>
+            </div>
+            <div id="contactsPeerSiteKeywordsEmpty" class="meta">No keywords stored for this website yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Keyword</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody id="contactsPeerSiteKeywordsTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Hashtags</h3>
+            </div>
+            <div id="contactsPeerSiteHashtagsEmpty" class="meta">No hashtags stored for this website yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hashtag</th>
+                    <th>Score</th>
+                    <th>Posts</th>
+                  </tr>
+                </thead>
+                <tbody id="contactsPeerSiteHashtagsTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <section class="card" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Captured Images</h3>
+          </div>
+          <div id="contactsPeerSiteImagesEmpty" class="meta">No harvested images stored for this website yet.</div>
+          <div id="contactsPeerSiteImagesGrid" class="direct-acquire-image-grid"></div>
+        </section>
+        <section class="card" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Website Pages</h3>
+          </div>
+          <div id="contactsPeerSitePagesEmpty" class="meta">No harvested page content stored for this website yet.</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>URL</th>
+                  <th>Title</th>
+                  <th>Emails</th>
+                  <th>Phones</th>
+                  <th>Snippet</th>
+                </tr>
+              </thead>
+              <tbody id="contactsPeerSitePagesTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+      </section>
+      <section id="contactsPersonasPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Contact Personas</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
+            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+            <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
+          </div>
+        </div>
+        <section id="contactPersonaCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Contact Persona</h3>
+            <button id="backToContactPersonasInlineBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+          </div>
+          <form id="contactPersonaForm" class="standard-form-grid" onsubmit="App.contactPersonas.submitCreateForm(event); return false;">
+            <label for="contactPersonaName">Persona</label>
+            <input id="contactPersonaName" name="persona" required />
+            
+            <label for="contactPersonaParent">Parent Persona</label>
+            <select id="contactPersonaParent" name="parent_persona_id">
+              <option value="">No Parent</option>
+            </select>
+            
+            <label for="contactPersonaTags">Tags</label>
+            <input id="contactPersonaTags" name="tags" />
+            
+            <label for="contactPersonaDescription">Description</label>
+            <textarea id="contactPersonaDescription" name="description" rows="5"></textarea>
+            
+            <div></div>
+            <button type="submit">Save Persona</button>
+          </form>
+        </section>
+        <div class="table-wrap" style="margin-top: 1rem;">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="contactPersonasSortPersona" type="button" class="tiny-btn">Persona</button></th>
+                <th>Parent</th>
+                <th>Tags</th>
+                <th>Description</th>
+                <th class="contact-personas-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="contactPersonasTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="manageContactPersonasPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Contact Personas</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
+            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+          </div>
+        </div>
+        <p>The Personas editor now lives on the main Personas page.</p>
+      </section>
+      <section id="createContactPersonaPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Contact Persona</h2>
+          <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+        </div>
+        <p>The create form now opens inline on the main Personas page.</p>
+      </section>
+      <section id="editContactPersonaPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Contact Persona</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
+            <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+            <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
+          </div>
+        </div>
+        <form id="contactPersonaEditForm" class="standard-form-grid" onsubmit="App.contactPersonas.submitEditForm(event); return false;">
+          <input id="contactPersonaEditId" name="id" type="hidden" />
+          
+          <label for="contactPersonaEditName">Persona</label>
+          <input id="contactPersonaEditName" name="persona" required />
+          
+          <label for="contactPersonaEditParent">Parent Persona</label>
+          <select id="contactPersonaEditParent" name="parent_persona_id">
+            <option value="">No Parent</option>
+          </select>
+          
+          <label for="contactPersonaEditTags">Tags</label>
+          <input id="contactPersonaEditTags" name="tags" />
+          
+          <label for="contactPersonaEditDescription">Description</label>
+          <textarea id="contactPersonaEditDescription" name="description" rows="5"></textarea>
+          
+          <div></div>
+          <button type="submit">Update Persona</button>
+        </form>
+      </section>
+      <section id="addContactPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Add Contact</h2>
+          <button id="backToContactsBtn" type="button">Back To Contacts</button>
+        </div>
+        <form id="contactForm" class="standard-form-grid">
+          <label>First Name</label>
+          <input name="first_name" />
+          
+          <label>Last Name</label>
+          <input name="last_name" />
+          
+          <label>Company</label>
+          <input name="company" />
+          
+          <label>Email</label>
+          <input name="email" required />
+          
+          <label>Website</label>
+          <input name="website" />
+          
+          <label>YouTube</label>
+          <input name="youtube" />
+          
+          <label>Instagram</label>
+          <input name="instagram" />
+          
+          <label>TikTok</label>
+          <input name="tiktok" />
+          
+          <label>Facebook</label>
+          <input name="facebook" />
+          
+          <label>X (Twitter)</label>
+          <input name="x" />
+          
+          <label>BlueSky</label>
+          <input name="bluesky" />
+          
+          <label>Substack</label>
+          <input name="substack" />
+          
+          <label>Medium</label>
+          <input name="medium" />
+          
+          <label>LinkedIn</label>
+          <input name="linkedin" />
+          
+          <div></div>
+          <button type="submit">Save Contact</button>
+        </form>
+      </section>
+      <section id="viewContactPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>View Contact</h2>
+          <div class="page-heading-actions">
+            <button id="editViewedContactBtn" type="button">Edit Contact</button>
+            <button id="cloneViewedContactBtn" type="button">Clone Contact</button>
+            <button id="backFromViewContactBtn" type="button">Back To Contacts</button>
+          </div>
+        </div>
+        <div id="viewContactDetails" class="contact-detail-grid"></div>
+      </section>
+      <section id="editContactPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Contact</h2>
+          <div class="page-heading-actions">
+            <button id="cloneEditedContactBtn" type="button">Clone Contact</button>
+            <button id="backFromEditContactBtn" type="button">Back To Contacts</button>
+          </div>
+        </div>
+        <form id="contactEditForm" class="standard-form-grid">
+          <input id="contactEditId" name="id" type="hidden" />
+          
+          <label>First Name</label>
+          <input name="first_name" />
+          
+          <label>Last Name</label>
+          <input name="last_name" />
+          
+          <label>Company</label>
+          <input name="company" />
+          
+          <label>Email</label>
+          <input name="email" required />
+          
+          <label>Phone</label>
+          <input name="phone" />
+          
+          <label>City</label>
+          <input name="city" />
+          
+          <label>Country</label>
+          <input name="country" />
+          
+          <label>Website</label>
+          <input name="website" />
+          
+          <label>YouTube</label>
+          <input name="youtube" />
+          
+          <label>Instagram</label>
+          <input name="instagram" />
+          
+          <label>TikTok</label>
+          <input name="tiktok" />
+          
+          <label>Facebook</label>
+          <input name="facebook" />
+          
+          <label>X (Twitter)</label>
+          <input name="x" />
+          
+          <label>BlueSky</label>
+          <input name="bluesky" />
+          
+          <label>Patreon</label>
+          <input name="patreon" />
+          
+          <label>LinkedIn</label>
+          <input name="linkedin" />
+          
+          <label>Tags</label>
+          <input name="tags" placeholder="comma, separated" />
+          
+          <label>Notes</label>
+          <textarea name="notes" rows="5"></textarea>
+          
+          <div></div>
+          <button type="submit">Update Contact</button>
+        </form>
+      </section>
+      <section id="cloneContactPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Clone Contact</h2>
+          <button id="backFromCloneContactBtn" type="button">Back To Contacts</button>
+        </div>
+        <form id="contactCloneForm" class="standard-form-grid">
+          <label>First Name</label>
+          <input name="first_name" />
+          
+          <label>Last Name</label>
+          <input name="last_name" />
+          
+          <label>Company</label>
+          <input name="company" />
+          
+          <label>Email</label>
+          <input name="email" required />
+          
+          <label>Phone</label>
+          <input name="phone" />
+          
+          <label>City</label>
+          <input name="city" />
+          
+          <label>Country</label>
+          <input name="country" />
+          
+          <label>Website</label>
+          <input name="website" />
+          
+          <label>YouTube</label>
+          <input name="youtube" />
+          
+          <label>Instagram</label>
+          <input name="instagram" />
+          
+          <label>TikTok</label>
+          <input name="tiktok" />
+          
+          <label>Facebook</label>
+          <input name="facebook" />
+          
+          <label>X (Twitter)</label>
+          <input name="x" />
+          
+          <label>BlueSky</label>
+          <input name="bluesky" />
+          
+          <label>Patreon</label>
+          <input name="patreon" />
+          
+          <label>LinkedIn</label>
+          <input name="linkedin" />
+          
+          <label>Tags</label>
+          <input name="tags" placeholder="comma, separated" />
+          
+          <label>Notes</label>
+          <textarea name="notes" rows="5"></textarea>
+
+          <div></div>
+          <button type="submit">Save Cloned Contact</button>
+        </form>
+      </section>
+      <section id="contactsExplorePage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Explore Contacts</h2>
+          <div class="page-heading-actions">
+            <button id="viewSegmentsBtn" type="button">View Segments</button>
+          </div>
+        </div>
+        <p>Filter contacts by any visible field, sort by any column, then save a segment definition.</p>
+        <div id="exploreContactsFilters" class="explore-filters-shell"></div>
+        <div id="segmentsLeadFilters" class="filters"></div>
+        <div id="exploreContactsCount" style="margin-top: 40px; font-weight: 700;">Record Count: 0</div>
+        <div class="table-wrap">
+          <table>
+            <thead id="segmentsLeadsHead"></thead>
+            <tbody id="segmentsLeadsBody"></tbody>
+          </table>
+        </div>
+        <form id="createSegmentInlineForm" class="standard-form-grid hidden" style="max-width: 520px; margin: 1.5rem auto;">
+          <h4 class="standard-form-grid-full" style="font-size: 1.4rem; font-weight: 800; margin: 0 0 0.25rem 0; text-align: center;">Save as Segment</h4>
+          <label>Segment Name</label>
+          <input id="createSegmentInlineName" name="name" required />
+          <div></div>
+          <button type="submit">Create Segment</button>
+        </form>
+
+      </section>
+      <section id="segmentsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Segments</h2>
+          <div class="page-heading-actions">
+            <button id="createSegmentBtn" type="button" class="primary-btn">Create Segment</button>
+            <button id="returnToSegmentsBtn" type="button" class="hidden">Close Preview</button>
+          </div>
+        </div>
+        <p>View, edit, and manage all saved segments.</p>
+        <h3>Segment Editor</h3>
+        <div class="table-wrap">
+          <table>
+            <thead id="segmentsPageTableHead"></thead>
+            <tbody id="segmentsTableBody"></tbody>
+          </table>
+        </div>
+        <section id="segmentPreviewSection" class="hidden" style="margin-top: 1.25rem;">
+          <div id="activeSegmentName" class="hidden" style="text-align: left; font-size: 1.2rem; font-weight: 700; margin: 0 0 0.75rem 0;"></div>
+          <div class="table-wrap">
+            <table>
+              <thead id="segmentPreviewTableHead"></thead>
+              <tbody id="segmentPreviewTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+      <section id="segmentEditorPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="segmentEditorHeading">Create Segment</h2>
+          <div class="page-heading-actions">
+            <button id="cancelSegmentEditBtn" type="button">Cancel</button>
+            <button id="saveSegmentEditBtn" type="button" class="primary-btn">Save Segment</button>
+          </div>
+        </div>
+        <p>Define an audience boundary by configuring parameters specific to the segment type.</p>
+        
+        <form id="segmentEditorForm" class="standard-form-grid" style="margin-top: 1rem; max-width: 800px;">
+          <h3 class="standard-form-grid-full">Segment Details</h3>
+          
+          <label>Segment Name</label>
+          <input type="text" id="segmentEditorName" name="name" required placeholder="e.g. VIP Newsletter List" />
+
+          <label>Segment Type</label>
+          <select id="segmentEditorType" name="segment_type" required>
+            <option value="">-- Choose Type --</option>
+            <!-- Populated from state.availableReferenceOptions.segment_types -->
+          </select>
+        </form>
+
+        <hr style="margin: 2rem 0; border: 0; border-top: 1px solid var(--border-color);" />
+
+        <!-- EMAIL LIST SPECIFIC BUILDER (Previously Contacts Explore) -->
+        <div id="segmentBuilder_email_list" class="segment-builder-view hidden">
+          <h3 style="margin-top:0;">Contact Filter Rules</h3>
+          <p class="meta">Define rules to filter standard CRM contacts into this list.</p>
+          <div id="segmentEditorContactRulesContainer" class="explore-filters-shell">
+             <!-- Contact rules builder goes here (migrated from Contacts Explore) -->
+          </div>
+        </div>
+
+        <!-- YOUTUBE COMMENTS SPECIFIC BUILDER -->
+        <div id="segmentBuilder_youtube_comments" class="segment-builder-view hidden">
+          <h3 style="margin-top:0;">YouTube Target Parameters</h3>
+          <p class="meta">Configure endpoints based on YouTube activity data.</p>
+          <form class="standard-form-grid" id="segmentEditorYoutubeRulesForm" style="max-width: 800px;">
+            <label>Campaign Origin</label>
+            <select id="segmentEditorYtCampaign">
+              <option value="">Any Campaign</option>
+            </select>
+
+            <label>Topic Dimension</label>
+            <select id="segmentEditorYtTopic">
+              <option value="">Any Topic</option>
+            </select>
+
+            <label>Minimum Score</label>
+            <input type="number" id="segmentEditorYtScore" placeholder="e.g. 50" min="0" max="100" />
+            
+            <label>Keyword Contains</label>
+            <input type="text" id="segmentEditorYtKeyword" placeholder="e.g. AI alignment" />
+          </form>
+        </div>
+
+      </section>

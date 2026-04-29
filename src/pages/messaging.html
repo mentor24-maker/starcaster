@@ -1,0 +1,1653 @@
+
+      <section id="messagingPage" class="app-page hidden">
+        <h2>Messaging</h2>
+        <p>Messaging organizes reusable copy into shared topics and a structured content library for campaigns, pages, and engagement.</p>
+        <div class="cards">
+          <article class="card">
+            <h3>Topics</h3>
+            <button type="button" onclick="App.messaging.openTopicsLanding()">Open Topics</button>
+          </article>
+          <article class="card">
+            <h3>Content</h3>
+            <button type="button" onclick="App.messaging.openContentLanding()">Open Content</button>
+          </article>
+        </div>
+      </section>
+      <section id="messagingContentPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Content</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openCreateContent(); return false;">Create Content</button>
+            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;">Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="contacts-filter-row">
+                <th><input id="messagingContentTextFilter" placeholder="Filter content" /></th>
+                <th>
+                  <select id="messagingContentFormatFilter">
+                    <option value="">All Formats</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="messagingContentTopicFilter">
+                    <option value="">All Topics</option>
+                  </select>
+                </th>
+                <th class="contacts-go-cell">
+                  <button id="messagingContentFiltersGoBtn" type="button">Go</button>
+                </th>
+              </tr>
+              <tr>
+                <th>Content</th>
+                <th>Format</th>
+                <th>Topic</th>
+                <th class="messaging-content-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingContentLibraryTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingCreateContentPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Create Content</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Content</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <div class="messaging-create-content-layout">
+          <div class="messaging-create-content-column">
+            <form id="messagingCreateContentForm"  style="max-width: none;">
+              
+                <label for="messagingCreateContentFormat"><strong>Format:</strong></label>
+                <select id="messagingCreateContentFormat" name="format" required>
+                  <option value="">Select Format</option>
+                  <option value="Headlines">Headlines</option>
+                  <option value="Sub-headings">Sub-headings</option>
+                  <option value="Taglines">Taglines</option>
+                  <option value="Pitches">Pitches</option>
+                  <option value="Emails">Emails</option>
+                  <option value="Tweets">Tweets</option>
+                  <option value="Posts">Posts</option>
+                  <option value="Descriptions">Descriptions</option>
+                  <option value="Transcripts">Transcripts</option>
+                  <option value="Comments">Comments</option>
+                  <option value="Hashtags">Hashtags</option>
+                  <option value="Calls to Action">Calls to Action</option>
+                  <option value="Articles">Articles</option>
+                  <option value="Reports">Reports</option>
+                  <option value="White Papers">White Papers</option>
+                  <option value="eBooks">eBooks</option>
+                </select>
+              
+              
+                <label for="messagingCreateContentTopic"><strong>Topic:</strong></label>
+                <select id="messagingCreateContentTopic" name="topic" data-messaging-topic-select="true">
+                  <option value="">No Topic</option>
+                </select>
+              
+              <div id="messagingCreateContentDynamicFields" class="stack-form" style="margin: 0;">
+                <input id="messagingCreateContentPromptId" name="prompt_id" type="hidden" />
+                
+                  <label for="messagingCreateContentPrimaryInput"><strong id="messagingCreateContentPrimaryLabel">Content:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingCreateContentSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingCreateContentPrimaryInput" name="primary" rows="5"></textarea>
+                  </div>
+                
+                
+                  <label for="messagingCreateContentAuthor"><strong>Author:</strong></label>
+                  <input id="messagingCreateContentAuthor" name="author" />
+                
+                
+                  <label for="messagingCreateContentSubject"><strong>Subject:</strong></label>
+                  <input id="messagingCreateContentSubject" name="subject" />
+                
+                
+                  <label for="messagingCreateContentTitle"><strong>Title:</strong></label>
+                  <input id="messagingCreateContentTitle" name="title" />
+                
+                
+                  <label for="messagingCreateContentSubtitle"><strong>Subtitle:</strong></label>
+                  <input id="messagingCreateContentSubtitle" name="subtitle" />
+                
+                
+                  <label for="messagingCreateContentUrl"><strong>URL:</strong></label>
+                  <input id="messagingCreateContentUrl" name="url" />
+                
+                
+                  <label for="messagingCreateContentHashtags"><strong>Hashtags:</strong></label>
+                  <input id="messagingCreateContentHashtags" name="hashtags" />
+                
+                
+                  <label for="messagingCreateContentImage"><strong>Image:</strong></label>
+                  <select id="messagingCreateContentImage" name="image_asset_id">
+                    <option value="">Image (optional)</option>
+                  </select>
+                
+                
+                  <label for="messagingCreateContentThumbnail"><strong id="messagingCreateContentThumbnailLabel">Image:</strong></label>
+                  <select id="messagingCreateContentThumbnail" name="thumbnail_asset_id">
+                    <option value="">Thumbnail (optional)</option>
+                  </select>
+                
+                
+                  <label for="messagingCreateContentBody"><strong id="messagingCreateContentBodyLabel">Body:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingCreateContentSavedBodyPrompt" name="saved_body_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingCreateContentBody" name="content" rows="10"></textarea>
+                  </div>
+                
+                
+                  <label for="messagingCreateContentPdf"><strong>PDF:</strong></label>
+                  <input id="messagingCreateContentPdf" name="pdf_file" type="file" accept="application/pdf,.pdf" />
+                
+              </div>
+              <div id="messagingCreateContentActionsRow" class="page-heading-actions hidden" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingCreateContentGenerateBtn" type="button">Generate with AI</button>
+                <button id="messagingCreateContentSavePromptBtn" type="button">Save Prompt</button>
+                <div></div>
+              <button id="messagingCreateContentSubmitBtn" type="submit" class="hidden">Save Content</button>
+              </div>
+            </form>
+          </div>
+          <div id="messagingCreateContentSuggestionsWrap" class="messaging-create-content-column messaging-create-content-results">
+            <div class="page-heading-row" style="margin-bottom: 8px;">
+              <h3 style="margin: 0;">Generated Options</h3>
+              <div class="page-heading-actions">
+                <button id="messagingCreateContentClearSuggestionsBtn" type="button">Clear Options</button>
+              </div>
+            </div>
+            <div id="messagingCreateContentSuggestionsEmpty">
+              Use <strong>Generate with AI</strong> to create suggestions from the content prompt on the left.
+            </div>
+            <div id="messagingCreateContentShortSuggestions" class="hidden">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 44px;"><input id="messagingCreateContentSelectAllSuggestions" type="checkbox" /></th>
+                      <th>Option</th>
+                    </tr>
+                  </thead>
+                  <tbody id="messagingCreateContentSuggestionsTable"></tbody>
+                </table>
+              </div>
+              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingCreateContentSaveSelectedBtn" type="button">Save Selected</button>
+              </div>
+            </div>
+            <div id="messagingCreateContentLongSuggestions" class="hidden">
+              <div class="stack-form labeled-form" style="margin: 0;">
+                <div class="form-row">
+                  <label for="messagingCreateContentGeneratedTitle"><strong>Title:</strong></label>
+                  <input id="messagingCreateContentGeneratedTitle" />
+                </div>
+                <div class="form-row">
+                  <label for="messagingCreateContentGeneratedSubtitle"><strong>Subtitle:</strong></label>
+                  <input id="messagingCreateContentGeneratedSubtitle" />
+                </div>
+                <div class="form-row">
+                  <label><strong>Body:</strong></label>
+                  <div>
+                    <div class="messaging-richtext-toolbar">
+                      <button type="button" data-richtext-command="bold" title="Bold" aria-label="Bold"><strong>B</strong></button>
+                      <button type="button" data-richtext-command="italic" title="Italic" aria-label="Italic"><em>I</em></button>
+                      <button type="button" data-richtext-command="formatBlock" data-richtext-value="h3" title="Heading" aria-label="Heading"><strong>H3</strong></button>
+                      <button type="button" data-richtext-command="insertUnorderedList" title="Bullet List" aria-label="Bullet List">&bull;</button>
+                      <button type="button" data-richtext-command="removeFormat" title="Clear Formatting" aria-label="Clear Formatting">&#215;</button>
+                    </div>
+                    <div id="messagingCreateContentGeneratedBodyEditor" class="messaging-richtext-editor" contenteditable="true"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingCreateContentSaveGeneratedBtn" type="button">Save Generated Draft</button>
+              </div>
+              <div id="messagingCreateContentFeedbackWrap" class="stack-form labeled-form hidden" style="margin-top: 12px;">
+                <div class="form-row">
+                  <label for="messagingCreateContentFeedback"><strong>Feedback/Training:</strong></label>
+                  <textarea id="messagingCreateContentFeedback" rows="5" placeholder="Share what should change in the generated article so AI can revise it."></textarea>
+                </div>
+                <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingCreateContentReviseBtn" type="button">Revise with Feedback</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="messagingManageContentPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Formats</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('messagingContentTypesPage')">Manage Content Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Content</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <div id="messagingContentFilterBar" class="messaging-content-filter hidden">
+          <span id="messagingContentFilterLabel"></span>
+          <button id="messagingContentClearFilterBtn" type="button">Clear Filter</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Format</th>
+                <th>Family</th>
+                <th>Destination</th>
+                <th class="messaging-content-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingFormatsLibraryTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingContentTypesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Content Formats</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;">Back To Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <p>Create a content format by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
+
+        <form id="messagingContentTypeForm">
+          <input type="hidden" name="id" />
+          <div class="grid-form">
+            <input name="content_type_name" placeholder="Content Format Name (example: Abstract)" required />
+            <select name="family" required>
+              <option value="">Select Family</option>
+              <option value="Short Form">Short Form</option>
+              <option value="Long Form">Long Form</option>
+              <option value="Social">Social</option>
+              <option value="Support Copy">Support Copy</option>
+            </select>
+            <label><input name="enabled" type="checkbox" checked /> Enabled</label>
+          </div>
+          <div></div>
+              <div class="page-heading-actions">
+            <div></div>
+              <button id="messagingContentTypeSaveBtn" type="submit">Create Content Format</button>
+            <button id="messagingContentTypeCancelEditBtn" type="button" class="hidden">Cancel Edit</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingContentTypesSortLabelBtn" type="button" class="tiny-btn">Name</button></th>
+                <th><button id="messagingContentTypesSortFamilyBtn" type="button" class="tiny-btn">Family</button></th>
+                <th><button id="messagingContentTypesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th>Enabled</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingContentTypesTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingArticlesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Articles</h2>
+          <div class="page-heading-actions">
+            <button id="messagingArticlesToggleFormBtn" type="button">Add Article</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingArticlesForm">
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Substack">Substack</option>
+              <option value="Medium">Medium</option>
+              <option value="Patreon">Patreon</option>
+              <option value="ISITAS Blog">ISITAS Blog</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingArticleThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <input name="url" placeholder="URL" />
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <div></div>
+              <button type="submit">Save Article</button>
+        </form>
+
+        <form id="messagingArticlesEditForm">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit Article</h3>
+            <button id="messagingArticlesCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Substack">Substack</option>
+              <option value="Medium">Medium</option>
+              <option value="Patreon">Patreon</option>
+              <option value="ISITAS Blog">ISITAS Blog</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingArticleEditThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <input name="url" placeholder="URL" />
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update Article</button>
+        </form>
+
+        <h3>Saved Articles</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingArticlesSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
+                <th><button id="messagingArticlesSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
+                <th><button id="messagingArticlesSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
+                <th><button id="messagingArticlesSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
+                <th><button id="messagingArticlesSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingArticlesTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingTweetsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Tweets</h2>
+          <div class="page-heading-actions">
+            <button id="messagingTweetsToggleFormBtn" type="button">Add Tweet</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <div id="messagingTweetsWorkspace" class="messaging-create-content-layout hidden" style="margin-bottom: 18px;">
+          <div class="messaging-create-content-column">
+            <form id="messagingTweetsForm" class="standard-form-grid" style="max-width: none;">
+              
+                <label for="messagingTweetTopic"><strong>Topic:</strong></label>
+                <select id="messagingTweetTopic" name="topic" data-messaging-topic-select="true">
+                  <option value="">Select Topic</option>
+                </select>
+              
+              <input id="messagingTweetPromptId" name="prompt_id" type="hidden" />
+              
+                <label for="messagingTweetContent"><strong>Tweet:</strong></label>
+                <div class="field-stack">
+                  <select id="messagingTweetSavedPrompt" name="saved_prompt_id">
+                    <option value="">Select Saved Prompt (optional)</option>
+                  </select>
+                  <textarea id="messagingTweetContent" name="content" rows="6" required></textarea>
+                </div>
+              
+              
+                <label for="messagingTweetUrl"><strong>URL:</strong></label>
+                <input id="messagingTweetUrl" name="url" />
+              
+              
+                <label for="messagingTweetHashtags"><strong>Hashtags:</strong></label>
+                <input id="messagingTweetHashtags" name="hashtags" />
+              
+              
+                <label for="messagingTweetImageSelect"><strong>Image:</strong></label>
+                <select id="messagingTweetImageSelect" name="image_asset_id">
+                  <option value="">Image (optional)</option>
+                </select>
+              
+              
+                <label for="messagingTweetFeedback"><strong>Feedback:</strong></label>
+                <textarea id="messagingTweetFeedback" name="feedback" rows="4"></textarea>
+              
+              <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingTweetsGenerateBtn" type="button">Generate with AI</button>
+                <button id="messagingTweetsSavePromptBtn" type="button">Save Prompt</button>
+                <div></div>
+              <button id="messagingTweetsSubmitBtn" type="submit">Save Tweet</button>
+              </div>
+            </form>
+          </div>
+          <div class="messaging-create-content-column messaging-create-content-results">
+            <div class="page-heading-row" style="align-items: center;">
+              <h3 style="margin: 0;">Generated Options</h3>
+              <div class="page-heading-actions">
+                <select id="messagingTweetsBulkQuality" style="min-width: 140px;">
+                  <option value="">Set Quality</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+                <button id="messagingTweetsClearSuggestionsBtn" type="button">Clear Options</button>
+              </div>
+            </div>
+            <div id="messagingTweetsSuggestionsEmpty">
+              Use <strong>Generate with AI</strong> to create tweet suggestions from the fields on the left.
+            </div>
+            <div id="messagingTweetsShortSuggestions" class="hidden">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 44px;"><input id="messagingTweetsSelectAllSuggestions" type="checkbox" /></th>
+                      <th>Tweet</th>
+                      <th>Quality</th>
+                    </tr>
+                  </thead>
+                  <tbody id="messagingTweetsSuggestionsTable"></tbody>
+                </table>
+              </div>
+              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingTweetsSaveSelectedBtn" type="button">Save Selected</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <form id="messagingTweetsEditForm" class="standard-form-grid">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit Tweet</h3>
+            <button id="messagingTweetsCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <select name="topic" data-messaging-topic-select="true">
+            <option value="">Topic</option>
+          </select>
+          <textarea name="content" rows="6" placeholder="Content" required></textarea>
+          <input name="url" placeholder="URL" />
+          <input name="hashtags" placeholder="Hashtags (comma-separated)" />
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <select id="messagingTweetEditImageSelect" name="image_asset_id">
+            <option value="">Image (optional)</option>
+          </select>
+          <div></div>
+              <button type="submit">Update Tweet</button>
+        </form>
+
+        <h3>Saved Tweets</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingTweetsSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
+                <th><button id="messagingTweetsSortContentBtn" type="button" class="tiny-btn">Content</button></th>
+                <th><button id="messagingTweetsSortUrlBtn" type="button" class="tiny-btn">URL</button></th>
+                <th><button id="messagingTweetsSortHashtagsBtn" type="button" class="tiny-btn">Hashtags</button></th>
+                <th><button id="messagingTweetsSortImageBtn" type="button" class="tiny-btn">Image</button></th>
+                <th>Score</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingTweetsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingPostsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Posts</h2>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+        </div>
+        <p>Post writing workspace placeholder.</p>
+      </section>
+      <section id="messagingEmailsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Emails</h2>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+        </div>
+        <p>Email writing workspace placeholder.</p>
+      </section>
+      <section id="messagingPitchesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Pitches</h2>
+          <div class="page-heading-actions">
+            <button id="openMessagingTopicsFromPitchesBtn" type="button">Topics</button>
+            <button id="messagingPitchesToggleFormBtn" type="button">Create Pitches</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <p>Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
+
+        <section id="messagingPitchesCreateWrap" class="hidden">
+          <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
+            <div class="messaging-create-content-column messaging-create-content-form">
+              <form id="messagingPitchesCreatorForm" class="standard-form-grid" style="max-width: none;">
+                
+                  <label for="messagingPitchesCreatorTopic"><strong>Topic:</strong></label>
+                  <select id="messagingPitchesCreatorTopic" name="topic" data-messaging-topic-select="true">
+                    <option value="">No Topic</option>
+                  </select>
+                
+                <input id="messagingPitchesCreatorPromptId" name="prompt_id" type="hidden" />
+                
+                  <label for="messagingPitchesCreatorPrimary"><strong>Pitch/Prompt:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingPitchesCreatorSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingPitchesCreatorPrimary" name="pitch" rows="6"></textarea>
+                  </div>
+                
+                <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingPitchesCreatorGenerateBtn" type="button">Generate with AI</button>
+                  <button id="messagingPitchesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <div></div>
+              <button id="messagingPitchesCreatorSubmitBtn" type="submit">Save Pitch</button>
+                </div>
+              </form>
+            </div>
+            <div class="messaging-create-content-column messaging-create-content-results">
+              <div class="page-heading-row" style="margin-bottom: 8px;">
+                <h3 style="margin: 0;">Generated Options</h3>
+                <div class="page-heading-actions">
+                  <select id="messagingPitchesCreatorBulkQuality" style="min-width: 140px;">
+                    <option value="">Set Quality</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  <button id="messagingPitchesCreatorClearSuggestionsBtn" type="button">Clear</button>
+                  <button id="messagingPitchesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                </div>
+              </div>
+              <p id="messagingPitchesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review pitch options here.</p>
+              <div id="messagingPitchesCreatorSuggestionsWrap" class="hidden">
+                <label class="checkbox-row" style="margin-bottom: 8px;">
+                  <input id="messagingPitchesCreatorSelectAllSuggestions" type="checkbox" />
+                  Check All
+                </label>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Pitch</th>
+                        <th>Quality</th>
+                      </tr>
+                    </thead>
+                    <tbody id="messagingPitchesCreatorSuggestionsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <form id="messagingPitchEditForm" class="standard-form-grid">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit Pitch</h3>
+            <button id="messagingPitchCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <select id="messagingPitchEditTopicSelect" name="topic">
+            <option value="">No Topic</option>
+          </select>
+          <textarea name="pitch" rows="6" placeholder="Pitch text" required></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update Pitch</button>
+        </form>
+
+        <h3>Saved Pitches</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="messagingPitchesSelectAllVisible" type="checkbox" aria-label="Select all visible pitches" /></th>
+                <th><input id="messagingPitchesTextFilter" placeholder="Filter pitch" /></th>
+                <th>
+                  <select id="messagingPitchesTopicFilter">
+                    <option value="">Topics</option>
+                  </select>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th><button id="messagingPitchesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+              </tr>
+              <tr>
+                <th></th>
+                <th><button id="messagingPitchesSortTextBtn" type="button" class="tiny-btn">Pitch</button></th>
+                <th><button id="messagingPitchesSortTopicBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th>Score</th>
+                <th><button id="messagingPitchesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
+                <th><button id="messagingPitchesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingPitchesTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingPitchesBulkEditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Bulk Edit Pitches</h2>
+          <button id="messagingPitchesBackFromBulkEditBtn" type="button">Back To Pitches</button>
+        </div>
+        <p id="messagingPitchesBulkEditSummary">No pitches selected.</p>
+        <form id="messagingPitchesBulkEditForm">
+          <div class="stack-form">
+            <label for="messagingPitchesBulkEditTopicSelect">Topic</label>
+            <select id="messagingPitchesBulkEditTopicSelect" name="topic">
+              <option value="">No Topic</option>
+            </select>
+          </div>
+          <div></div>
+              <button type="submit">Apply To Selected Pitches</button>
+        </form>
+      </section>
+      <section id="messagingCommentsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Comments</h2>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+        </div>
+        <p>Comment writing workspace placeholder.</p>
+      </section>
+      <section id="messagingKeywordsPage" class="app-page hidden"></section>
+      <section id="messagingHashtagsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Hashtags</h2>
+          <div class="page-heading-actions">
+            <button id="messagingHashtagsToggleFormBtn" type="button">Add Hashtags</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingHashtagsForm" class="standard-form-grid">
+          <textarea id="messagingHashtagsInput" name="hashtags" rows="8" placeholder="Enter hashtags in bulk, separated by spaces or line breaks" required></textarea>
+          <select id="messagingHashtagsCampaignSelect" name="campaign_id" required>
+            <option value="">Campaign (placeholder until campaigns are created)</option>
+          </select>
+          <div></div>
+              <button type="submit">Save Hashtags</button>
+        </form>
+
+        <h3>Hashtags By Campaign</h3>
+        <div class="table-wrap">
+          <table>
+            <tbody id="messagingHashtagsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingHeadlinesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Headlines</h2>
+          <div class="page-heading-actions">
+            <button id="openMessagingTopicsPageBtn" type="button">Topics</button>
+            <button id="messagingHeadlinesToggleFormBtn" type="button">Create Headlines</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+
+        <section id="messagingHeadlinesCreateWrap" class="hidden">
+          <div class="messaging-create-content-layout">
+            <div class="messaging-create-content-column">
+              <form id="messagingHeadlinesCreatorForm" class="standard-form-grid" style="max-width: none;">
+                
+                  <label for="messagingHeadlinesCreatorTopic"><strong>Topic:</strong></label>
+                  <select id="messagingHeadlinesCreatorTopic" name="topic" data-messaging-topic-select="true">
+                    <option value="">No Topic</option>
+                  </select>
+                
+                <input id="messagingHeadlinesCreatorPromptId" name="prompt_id" type="hidden" />
+                
+                  <label for="messagingHeadlinesCreatorPrimary"><strong>Headline/Prompt:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingHeadlinesCreatorSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingHeadlinesCreatorPrimary" name="headline" rows="4"></textarea>
+                  </div>
+                
+                <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingHeadlinesCreatorGenerateBtn" type="button">Generate with AI</button>
+                  <button id="messagingHeadlinesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <div></div>
+              <button id="messagingHeadlinesCreatorSubmitBtn" type="submit">Save Headline</button>
+                </div>
+              </form>
+            </div>
+            <div class="messaging-create-content-column messaging-create-content-results">
+              <div class="page-heading-row" style="margin-bottom: 8px;">
+                <h3 style="margin: 0;">Generated Options</h3>
+                <div class="page-heading-actions">
+                  <select id="messagingHeadlinesCreatorBulkQuality" style="min-width: 140px;">
+                    <option value="">Set Quality</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  <button id="messagingHeadlinesCreatorClearSuggestionsBtn" type="button">Clear</button>
+                  <button id="messagingHeadlinesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                </div>
+              </div>
+              <p id="messagingHeadlinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review headline options here.</p>
+              <div id="messagingHeadlinesCreatorSuggestionsWrap" class="hidden">
+                <label class="checkbox-row" style="margin-bottom: 8px;">
+                  <input id="messagingHeadlinesCreatorSelectAllSuggestions" type="checkbox" />
+                  Check All
+                </label>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Headline</th>
+                        <th>Quality</th>
+                      </tr>
+                    </thead>
+                    <tbody id="messagingHeadlinesCreatorSuggestionsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <form id="messagingHeadlineEditForm" class="standard-form-grid">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit Headline</h3>
+            <button id="messagingHeadlineCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <select id="messagingHeadlineEditTopicSelect" name="topic">
+            <option value="">No Topic</option>
+          </select>
+          <textarea name="headline" rows="4" placeholder="Headline text" required></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update Headline</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="messagingHeadlinesSelectAllVisible" type="checkbox" aria-label="Select all visible headlines" /></th>
+                <th><input id="messagingHeadlinesHeadlineFilter" placeholder="Filter headline" /></th>
+                <th>
+                  <select id="messagingHeadlinesTopicFilter">
+                    <option value="">All Topics</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="messagingHeadlinesFormatFilter">
+                    <option value="">All Formats</option>
+                    <option value="Headlines">Headlines</option>
+                  </select>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th><button id="messagingHeadlinesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+              </tr>
+              <tr>
+                <th></th>
+                <th><button id="messagingHeadlinesSortHeadlineBtn" type="button" class="tiny-btn">Headline</button></th>
+                <th><button id="messagingHeadlinesSortTopicBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th>Format</th>
+                <th>Score</th>
+                <th><button id="messagingHeadlinesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
+                <th><button id="messagingHeadlinesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingHeadlinesTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingHeadlinesBulkEditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Bulk Edit Headlines</h2>
+          <button id="messagingHeadlinesBackFromBulkEditBtn" type="button">Back To Headlines</button>
+        </div>
+        <p id="messagingHeadlinesBulkEditSummary">No headlines selected.</p>
+        <form id="messagingHeadlinesBulkEditForm" class="standard-form-grid">
+          
+            <label for="messagingHeadlinesBulkEditTopicSelect">Topic</label>
+            <select id="messagingHeadlinesBulkEditTopicSelect" name="topic">
+              <option value="">No Topic</option>
+            </select>
+          
+          <div></div>
+              <button type="submit">Apply To Selected Headlines</button>
+        </form>
+      </section>
+      <section id="messagingTopicsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging Topics</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <div class="messaging-topics-ai-toolbar">
+          <button id="messagingTopicsGenerateBtn" type="button">Generate AI Suggestions</button>
+        </div>
+        <div id="messagingTopicsProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+          <div id="messagingTopicsProgressText" class="asset-upload-progress-text">Reviewing website data and training context...</div>
+          <progress id="messagingTopicsProgressBar" max="100" value="8"></progress>
+        </div>
+        <section id="messagingTopicsSuggestionsWrap" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>AI Topic Suggestions</h3>
+            <div class="page-heading-actions">
+              <label class="checkbox-row" style="padding: 0;">
+                <input id="messagingTopicsSelectAllSuggestions" type="checkbox" />
+                Check All
+              </label>
+              <button id="messagingTopicsSaveSelectedBtn" type="button">Save Selected Topics</button>
+            </div>
+          </div>
+          <div id="messagingTopicsSuggestionsMeta" class="meta" style="margin-bottom: 0.8rem;"></div>
+          <div id="messagingTopicsSuggestionsColumns" class="messaging-topics-suggestions-grid"></div>
+        </section>
+        <section id="messagingTopicCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Messaging Topic</h3>
+            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+          </div>
+          <form id="messagingTopicForm" class="standard-form-grid" onsubmit="App.messaging.submitTopicCreate(event); return false;">
+            
+              <label for="messagingTopicName">Topic</label>
+              <input id="messagingTopicName" name="topic" required />
+            
+            <div></div>
+              <button type="submit">Save Topic</button>
+          </form>
+        </section>
+        <div class="table-wrap" style="margin-top: 1rem;">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingTopicsSortBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th class="messaging-topics-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingTopicsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingManageCategoriesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Messaging Topics</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateMessagingTopicPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+          </div>
+        </div>
+        <p>The Topics editor now lives on the main Topics page.</p>
+      </section>
+      <section id="createMessagingTopicPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Messaging Topic</h2>
+          <button id="backToMessagingTopicsBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+        </div>
+        <p>The create form now opens inline on the main Topics page.</p>
+      </section>
+      <section id="editMessagingTopicPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Messaging Topic</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
+            <button id="backFromEditMessagingTopicBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingTopicEditForm" class="standard-form-grid" onsubmit="App.messaging.submitTopicEdit(event); return false;">
+          <input id="messagingTopicEditId" name="id" type="hidden" />
+          
+            <label for="messagingTopicEditName">Topic</label>
+            <input id="messagingTopicEditName" name="topic" required />
+          
+          <div></div>
+              <button type="submit">Update Topic</button>
+        </form>
+      </section>
+      <section id="messagingTagsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging Tags</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <section id="messagingTagCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Messaging Tag</h3>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+          </div>
+          <form id="messagingTagForm" class="standard-form-grid" onsubmit="App.messaging.submitTagCreate(event); return false;">
+            
+              <label for="messagingTagName">Tag</label>
+              <input id="messagingTagName" name="tag" required />
+            
+            <div></div>
+              <button type="submit">Save Tag</button>
+          </form>
+        </section>
+        <div class="table-wrap" style="margin-top: 1rem;">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingTagsSortBtn" type="button" class="tiny-btn">Tag</button></th>
+                <th class="messaging-topics-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingTagsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingManageTagsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Manage Messaging Tags</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+          </div>
+        </div>
+        <p>The Tags editor now lives on the main Tags page.</p>
+      </section>
+      <section id="createMessagingTagPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Messaging Tag</h2>
+          <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+        </div>
+        <p>The create form now opens inline on the main Tags page.</p>
+      </section>
+      <section id="editMessagingTagPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Messaging Tag</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingTagEditForm" class="standard-form-grid" onsubmit="App.messaging.submitTagEdit(event); return false;">
+          <input id="messagingTagEditId" name="id" type="hidden" />
+          
+            <label for="messagingTagEditName">Tag</label>
+            <input id="messagingTagEditName" name="tag" required />
+          
+          <div></div>
+              <button type="submit">Update Tag</button>
+        </form>
+      </section>
+      <section id="messagingSubheadingsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Sub-headings</h2>
+          <div class="page-heading-actions">
+            <button id="openMessagingTopicsFromSubheadingsBtn" type="button">Topics</button>
+            <button id="messagingSubheadingsToggleFormBtn" type="button">Create Sub-headings</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <p>Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
+
+        <section id="messagingSubheadingsCreateWrap" class="hidden">
+          <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
+            <div class="messaging-create-content-column messaging-create-content-form">
+              <form id="messagingSubheadingsCreatorForm" class="standard-form-grid" style="max-width: none;">
+                
+                  <label for="messagingSubheadingsCreatorTopic"><strong>Topic:</strong></label>
+                  <select id="messagingSubheadingsCreatorTopic" name="topic" data-messaging-topic-select="true">
+                    <option value="">No Topic</option>
+                  </select>
+                
+                <input id="messagingSubheadingsCreatorPromptId" name="prompt_id" type="hidden" />
+                
+                  <label for="messagingSubheadingsCreatorPrimary"><strong>Sub-heading/Prompt:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingSubheadingsCreatorSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingSubheadingsCreatorPrimary" name="subheading" rows="4"></textarea>
+                  </div>
+                
+                <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingSubheadingsCreatorGenerateBtn" type="button">Generate with AI</button>
+                  <button id="messagingSubheadingsCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <div></div>
+              <button id="messagingSubheadingsCreatorSubmitBtn" type="submit">Save Sub-heading</button>
+                </div>
+              </form>
+            </div>
+            <div class="messaging-create-content-column messaging-create-content-results">
+              <div class="page-heading-row" style="margin-bottom: 8px;">
+                <h3 style="margin: 0;">Generated Options</h3>
+                <div class="page-heading-actions">
+                  <select id="messagingSubheadingsCreatorBulkQuality" style="min-width: 140px;">
+                    <option value="">Set Quality</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  <button id="messagingSubheadingsCreatorClearSuggestionsBtn" type="button">Clear</button>
+                  <button id="messagingSubheadingsCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                </div>
+              </div>
+              <p id="messagingSubheadingsCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review sub-heading options here.</p>
+              <div id="messagingSubheadingsCreatorSuggestionsWrap" class="hidden">
+                <label class="checkbox-row" style="margin-bottom: 8px;">
+                  <input id="messagingSubheadingsCreatorSelectAllSuggestions" type="checkbox" />
+                  Check All
+                </label>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Sub-heading</th>
+                        <th>Quality</th>
+                      </tr>
+                    </thead>
+                    <tbody id="messagingSubheadingsCreatorSuggestionsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <form id="messagingSubheadingEditForm" class="standard-form-grid">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit Sub-heading</h3>
+            <button id="messagingSubheadingCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <select id="messagingSubheadingEditCategorySelect" name="topic">
+            <option value="">No Topic</option>
+          </select>
+          <textarea name="subheading" rows="4" placeholder="Sub-heading text" required></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update Sub-heading</button>
+        </form>
+
+        <h3>Saved Sub-headings</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="messagingSubheadingsSelectAllVisible" type="checkbox" aria-label="Select all visible sub-headings" /></th>
+                <th><input id="messagingSubheadingsTextFilter" placeholder="Filter sub-heading" /></th>
+                <th>
+                  <select id="messagingSubheadingsCategoryFilter">
+                    <option value="">Topics</option>
+                  </select>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th><button id="messagingSubheadingsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+              </tr>
+              <tr>
+                <th></th>
+                <th><button id="messagingSubheadingsSortTextBtn" type="button" class="tiny-btn">Sub-heading</button></th>
+                <th><button id="messagingSubheadingsSortCategoryBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th>Score</th>
+                <th><button id="messagingSubheadingsSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
+                <th><button id="messagingSubheadingsSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingSubheadingsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingSubheadingsBulkEditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Bulk Edit Sub-headings</h2>
+          <button id="messagingSubheadingsBackFromBulkEditBtn" type="button">Back To Sub-headings</button>
+        </div>
+        <p id="messagingSubheadingsBulkEditSummary">No sub-headings selected.</p>
+        <form id="messagingSubheadingsBulkEditForm" class="standard-form-grid">
+          
+            <label for="messagingSubheadingsBulkEditCategorySelect">Topic</label>
+            <select id="messagingSubheadingsBulkEditCategorySelect" name="topic">
+              <option value="">No Topic</option>
+            </select>
+          
+          <div></div>
+              <button type="submit">Apply To Selected Sub-headings</button>
+        </form>
+      </section>
+      <section id="messagingTaglinesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Taglines</h2>
+          <div class="page-heading-actions">
+            <button id="openMessagingTopicsFromTaglinesBtn" type="button">Topics</button>
+            <button id="messagingTaglinesToggleFormBtn" type="button">Create Taglines</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <p>Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
+
+        <section id="messagingTaglinesCreateWrap" class="hidden">
+          <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
+            <div class="messaging-create-content-column messaging-create-content-form">
+              <form id="messagingTaglinesCreatorForm" class="standard-form-grid" style="max-width: none;">
+                
+                  <label for="messagingTaglinesCreatorTopic"><strong>Topic:</strong></label>
+                  <select id="messagingTaglinesCreatorTopic" name="topic" data-messaging-topic-select="true">
+                    <option value="">No Topic</option>
+                  </select>
+                
+                <input id="messagingTaglinesCreatorPromptId" name="prompt_id" type="hidden" />
+                
+                  <label for="messagingTaglinesCreatorPrimary"><strong>Tagline/Prompt:</strong></label>
+                  <div class="field-stack">
+                    <select id="messagingTaglinesCreatorSavedPrompt" name="saved_prompt_id">
+                      <option value="">Select Saved Prompt (optional)</option>
+                    </select>
+                    <textarea id="messagingTaglinesCreatorPrimary" name="tagline" rows="4"></textarea>
+                  </div>
+                
+                <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
+                  <button id="messagingTaglinesCreatorGenerateBtn" type="button">Generate with AI</button>
+                  <button id="messagingTaglinesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <div></div>
+              <button id="messagingTaglinesCreatorSubmitBtn" type="submit">Save Tagline</button>
+                </div>
+              </form>
+            </div>
+            <div class="messaging-create-content-column messaging-create-content-results">
+              <div class="page-heading-row" style="margin-bottom: 8px;">
+                <h3 style="margin: 0;">Generated Options</h3>
+                <div class="page-heading-actions">
+                  <select id="messagingTaglinesCreatorBulkQuality" style="min-width: 140px;">
+                    <option value="">Set Quality</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  <button id="messagingTaglinesCreatorClearSuggestionsBtn" type="button">Clear</button>
+                  <button id="messagingTaglinesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                </div>
+              </div>
+              <p id="messagingTaglinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review tagline options here.</p>
+              <div id="messagingTaglinesCreatorSuggestionsWrap" class="hidden">
+                <label class="checkbox-row" style="margin-bottom: 8px;">
+                  <input id="messagingTaglinesCreatorSelectAllSuggestions" type="checkbox" />
+                  Check All
+                </label>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Tagline</th>
+                        <th>Quality</th>
+                      </tr>
+                    </thead>
+                    <tbody id="messagingTaglinesCreatorSuggestionsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <form id="messagingTaglineEditForm" class="standard-form-grid">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit Tagline</h3>
+            <button id="messagingTaglineCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <select id="messagingTaglineEditCategorySelect" name="topic">
+            <option value="">No Topic</option>
+          </select>
+          <textarea name="tagline" rows="4" placeholder="Tagline text" required></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update Tagline</button>
+        </form>
+
+        <h3>Saved Taglines</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="messagingTaglinesSelectAllVisible" type="checkbox" aria-label="Select all visible taglines" /></th>
+                <th><input id="messagingTaglinesTextFilter" placeholder="Filter tagline" /></th>
+                <th>
+                  <select id="messagingTaglinesCategoryFilter">
+                    <option value="">Topics</option>
+                  </select>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th><button id="messagingTaglinesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+              </tr>
+              <tr>
+                <th></th>
+                <th><button id="messagingTaglinesSortTextBtn" type="button" class="tiny-btn">Tagline</button></th>
+                <th><button id="messagingTaglinesSortCategoryBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th>Score</th>
+                <th><button id="messagingTaglinesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
+                <th><button id="messagingTaglinesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingTaglinesTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingTaglinesBulkEditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Bulk Edit Taglines</h2>
+          <button id="messagingTaglinesBackFromBulkEditBtn" type="button">Back To Taglines</button>
+        </div>
+        <p id="messagingTaglinesBulkEditSummary">No taglines selected.</p>
+        <form id="messagingTaglinesBulkEditForm" class="standard-form-grid">
+          
+            <label for="messagingTaglinesBulkEditCategorySelect">Topic</label>
+            <select id="messagingTaglinesBulkEditCategorySelect" name="topic">
+              <option value="">No Topic</option>
+            </select>
+          
+          <div></div>
+              <button type="submit">Apply To Selected Taglines</button>
+        </form>
+      </section>
+      <section id="messagingReportsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Reports</h2>
+          <div class="page-heading-actions">
+            <button id="messagingReportsToggleFormBtn" type="button">Add Report</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingReportsForm">
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Download">Download</option>
+              <option value="Website">Website</option>
+              <option value="Google Drive">Google Drive</option>
+              <option value="Direct PDF">Direct PDF</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingReportThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <div class="grid-form">
+            <input name="url" placeholder="URL (optional if PDF uploaded)" />
+            <input name="pdf_file" type="file" accept="application/pdf,.pdf" />
+          </div>
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <div></div>
+              <button type="submit">Save Report</button>
+        </form>
+
+        <form id="messagingReportsEditForm">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit Report</h3>
+            <button id="messagingReportsCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Download">Download</option>
+              <option value="Website">Website</option>
+              <option value="Google Drive">Google Drive</option>
+              <option value="Direct PDF">Direct PDF</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingReportEditThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <div class="grid-form">
+            <input name="url" placeholder="URL (optional if PDF uploaded)" />
+            <input name="pdf_file" type="file" accept="application/pdf,.pdf" />
+          </div>
+          <p class="micro-copy">Leave the PDF field blank to keep the existing file.</p>
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update Report</button>
+        </form>
+
+        <h3>Saved Reports</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingReportsSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
+                <th><button id="messagingReportsSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
+                <th><button id="messagingReportsSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
+                <th><button id="messagingReportsSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
+                <th><button id="messagingReportsSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
+                <th><button id="messagingReportsSortPdfBtn" type="button" class="tiny-btn">PDF</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingReportsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingWhitePapersPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: White Papers</h2>
+          <div class="page-heading-actions">
+            <button id="messagingWhitePapersToggleFormBtn" type="button">Add White Paper</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingWhitePapersForm">
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Download">Download</option>
+              <option value="Website">Website</option>
+              <option value="Google Drive">Google Drive</option>
+              <option value="Direct PDF">Direct PDF</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingWhitePaperThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <div class="grid-form">
+            <input name="url" placeholder="URL (optional if PDF uploaded)" />
+            <input name="pdf_file" type="file" accept="application/pdf,.pdf" />
+          </div>
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <div></div>
+              <button type="submit">Save White Paper</button>
+        </form>
+
+        <form id="messagingWhitePapersEditForm">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit White Paper</h3>
+            <button id="messagingWhitePapersCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Download">Download</option>
+              <option value="Website">Website</option>
+              <option value="Google Drive">Google Drive</option>
+              <option value="Direct PDF">Direct PDF</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingWhitePaperEditThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <div class="grid-form">
+            <input name="url" placeholder="URL (optional if PDF uploaded)" />
+            <input name="pdf_file" type="file" accept="application/pdf,.pdf" />
+          </div>
+          <p class="micro-copy">Leave the PDF field blank to keep the existing file.</p>
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update White Paper</button>
+        </form>
+
+        <h3>Saved White Papers</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingWhitePapersSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
+                <th><button id="messagingWhitePapersSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
+                <th><button id="messagingWhitePapersSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
+                <th><button id="messagingWhitePapersSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
+                <th><button id="messagingWhitePapersSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
+                <th><button id="messagingWhitePapersSortPdfBtn" type="button" class="tiny-btn">PDF</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingWhitePapersTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingEbooksPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: eBooks</h2>
+          <div class="page-heading-actions">
+            <button id="messagingEbooksToggleFormBtn" type="button">Add eBook</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          </div>
+        </div>
+        <form id="messagingEbooksForm">
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Download">Download</option>
+              <option value="Website">Website</option>
+              <option value="Google Drive">Google Drive</option>
+              <option value="Direct PDF">Direct PDF</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingEbookThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <div class="grid-form">
+            <input name="url" placeholder="URL (optional if PDF uploaded)" />
+            <input name="pdf_file" type="file" accept="application/pdf,.pdf" />
+          </div>
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <div></div>
+              <button type="submit">Save eBook</button>
+        </form>
+
+        <form id="messagingEbooksEditForm">
+          <input name="id" type="hidden" />
+          <div class="page-heading-row">
+            <h3>Edit eBook</h3>
+            <button id="messagingEbooksCancelEditBtn" type="button">Cancel Edit</button>
+          </div>
+          <div class="grid-form messaging-articles-top-row">
+            <select name="platform">
+              <option value="">Platform</option>
+              <option value="Download">Download</option>
+              <option value="Website">Website</option>
+              <option value="Google Drive">Google Drive</option>
+              <option value="Direct PDF">Direct PDF</option>
+            </select>
+            <input name="author" placeholder="Author" />
+            <input name="publish_date" type="date" placeholder="Publish Date" />
+          </div>
+          <div class="grid-form">
+            <input name="title" placeholder="Title" required />
+            <select id="messagingEbookEditThumbnailSelect" name="thumbnail_asset_id">
+              <option value="">Thumbnail (Image + Article Banner)</option>
+            </select>
+          </div>
+          <input name="subtitle" placeholder="Subtitle" />
+          <div class="grid-form">
+            <input name="url" placeholder="URL (optional if PDF uploaded)" />
+            <input name="pdf_file" type="file" accept="application/pdf,.pdf" />
+          </div>
+          <p class="micro-copy">Leave the PDF field blank to keep the existing file.</p>
+          <textarea name="content" rows="8" placeholder="Content" required></textarea>
+          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
+          <select name="quality_score">
+            <option value="">Score</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <div></div>
+              <button type="submit">Update eBook</button>
+        </form>
+
+        <h3>Saved eBooks</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="messagingEbooksSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
+                <th><button id="messagingEbooksSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
+                <th><button id="messagingEbooksSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
+                <th><button id="messagingEbooksSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
+                <th><button id="messagingEbooksSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
+                <th><button id="messagingEbooksSortPdfBtn" type="button" class="tiny-btn">PDF</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingEbooksTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="messagingDescriptionsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Descriptions</h2>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+        </div>
+        <p>Description writing workspace placeholder.</p>
+      </section>
+      <section id="messagingTranscriptsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: Transcripts</h2>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+        </div>
+        <p>Transcript writing workspace placeholder.</p>
+      </section>
+      <section id="messagingCtasPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Messaging: CTAs</h2>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+        </div>
+        <p>CTA writing workspace placeholder.</p>
+      </section>

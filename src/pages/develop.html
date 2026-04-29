@@ -1,0 +1,1213 @@
+
+      <section id="developPage" class="app-page hidden">
+        <h2>Builder</h2>
+        <p>Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
+        <div class="develop-flow-map">
+          <button class="develop-flow-node develop-flow-node-top" type="button" onclick="App.setActivePage('developTemplatesPage')">
+            <span class="develop-flow-node-kicker">Structure</span>
+            <span class="develop-flow-node-title">Templates</span>
+          </button>
+          <button class="develop-flow-node develop-flow-node-upper-right" type="button" onclick="App.setActivePage('developFormsPage')">
+            <span class="develop-flow-node-kicker">Capture</span>
+            <span class="develop-flow-node-title">Forms</span>
+          </button>
+          <button class="develop-flow-node develop-flow-node-lower-right" type="button" onclick="App.setActivePage('developManageLandingPagesPage')">
+            <span class="develop-flow-node-kicker">Publish</span>
+            <span class="develop-flow-node-title">Pages</span>
+          </button>
+          <button class="develop-flow-node develop-flow-node-lower-left" type="button" onclick="App.setActivePage('developToolsPage')">
+            <span class="develop-flow-node-kicker">Extend</span>
+            <span class="develop-flow-node-title">Extensions</span>
+          </button>
+          <button class="develop-flow-node develop-flow-node-upper-left" type="button" onclick="App.setActivePage('developAgentsPage')">
+            <span class="develop-flow-node-kicker">Automate</span>
+            <span class="develop-flow-node-title">Agents</span>
+          </button>
+        </div>
+        <div class="page-heading-actions" style="justify-content:center; margin-top:1rem;">
+          <button type="button" onclick="App.setActivePage('developModulesPage')">Open Modules Library</button>
+        </div>
+      </section>
+      <section id="developModulesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Modules</h2>
+          <div class="page-heading-actions">
+            <button id="developModulesCreateBtn" type="button">Create Module</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Build reusable content modules for modular page layouts. The saved library is the important part; this studio is where we configure each module type as we develop it.</p>
+        <section class="develop-template-section">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developModulesEditorToggle"
+              class="accordion-header"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developModulesEditorBody"
+            >
+  <span class="accordion-title">Module Studio</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
+  </span>
+</button>
+          </div>
+          <div id="developModulesEditorBody" class="develop-template-section-body">
+            <form id="developModulesForm">
+              <input id="developModulesIdInput" type="hidden" />
+              <div class="develop-modules-studio-intro">
+                <label class="develop-modules-studio-row">
+                  <span>Module Name</span>
+                  <input id="developModulesNameInput" type="text" placeholder="Module name" />
+                </label>
+                <label class="develop-modules-studio-row">
+                  <span>Module Type</span>
+                  <select id="developModulesTypeSelect"></select>
+                </label>
+              </div>
+              <div id="developModulesTypeHelp" class="meta"></div>
+              <div id="developModulesSettingsFields" class="grid-form"></div>
+              <div class="develop-modules-studio-actions">
+                <div></div>
+              <button type="submit">Save Module</button>
+              </div>
+            </form>
+          </div>
+        </section>
+        <section class="develop-template-section">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developModulesLibraryToggle"
+              class="accordion-header"
+              type="button"
+              aria-expanded="true"
+              aria-controls="developModulesLibraryBody"
+            >
+  <span class="accordion-title">Saved Modules</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
+  </span>
+</button>
+          </div>
+          <div id="developModulesLibraryBody" class="develop-template-section-body">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Preview</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="developModulesTableBody">
+                  <tr><td colspan="5">No saved modules yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </section>
+      <section id="developThemesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Themes</h2>
+          <div class="page-heading-actions">
+            <button id="developThemesCreateBtn" type="button" onclick="App.develop.openThemesBuilder(); return false;">Create Theme</button>
+            <button type="button" onclick="App.develop.openThemesPage(); return false;">Back To Themes</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Create reusable named themes and persist color, style, and asset settings in Supabase.</p>
+        <section class="develop-themes-card">
+          <h3>Saved Themes</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Feature Image</th>
+                  <th>Name</th>
+                  <th>Palette</th>
+                  <th>Styles</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="developThemesTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+        <button id="developThemesBuilderToggleBtn" class="accordion-header" type="button" aria-expanded="false" aria-controls="developThemesBuilderPanel" style="margin-bottom: 10px;">
+          <span class="accordion-title">Theme Builder</span>
+          <span class="accordion-toggle">
+            <span class="accordion-arrow" aria-hidden="true">▾</span>
+          </span>
+        </button>
+        <section id="developThemesBuilderPanel" class="hidden">
+          <section class="develop-themes-toolbar">
+            <label for="developThemesThemeSelect">Saved Theme</label>
+            <select id="developThemesThemeSelect">
+              <option value="">Select Theme</option>
+            </select>
+            <label for="developThemesNameInput">Theme Name</label>
+            <input id="developThemesNameInput" name="theme_name" placeholder="Theme Name" />
+            <button id="developThemesNewBtn" type="button">New Theme</button>
+            <button id="developThemesSaveBtn" type="button">Save Theme</button>
+            <button id="developThemesDeleteBtn" type="button">Delete Theme</button>
+          </section>
+          <div id="developThemesStatusMsg" class="develop-themes-status hidden" role="status" aria-live="polite"></div>
+          <section class="develop-themes-columns">
+            <div class="develop-themes-side-stack">
+              <article class="develop-themes-card">
+                <h3>Palette</h3>
+                <div class="develop-themes-stack">
+                  <div class="develop-color-control">
+                    <label for="developThemesPrimaryColorInput" class="develop-color-control-label">
+                      <span class="develop-color-control-icon" aria-hidden="true"></span>
+                      Primary Color
+                    </label>
+                    <input id="developThemesPrimaryColorInput" name="themes_primary_color" type="color" value="#0b82d4" />
+                  </div>
+                  <div class="develop-color-control">
+                    <label for="developThemesBackgroundColorInput" class="develop-color-control-label">
+                      <span class="develop-color-control-icon" aria-hidden="true"></span>
+                      Background Color
+                    </label>
+                    <input id="developThemesBackgroundColorInput" name="themes_background_color" type="color" value="#f5fbff" />
+                  </div>
+                  <div class="develop-color-control">
+                    <label for="developThemesAccentColorInput" class="develop-color-control-label">
+                      <span class="develop-color-control-icon" aria-hidden="true"></span>
+                      Accent Color
+                    </label>
+                    <input id="developThemesAccentColorInput" name="themes_accent_color" type="color" value="#1a4f81" />
+                  </div>
+                </div>
+              </article>
+              <article class="develop-themes-card">
+                <h3>Styles</h3>
+                <div class="develop-themes-stack">
+                  <div class="form-row">
+                    <label for="developThemesBorderThicknessInput">Thickness</label>
+                    <input id="developThemesBorderThicknessInput" type="range" min="0" max="20" step="1" value="1" />
+                    <span id="developThemesBorderThicknessValue">1</span>
+                  </div>
+                  <div class="form-row">
+                    <label for="developThemesBorderRadiusInput">Radius</label>
+                    <input id="developThemesBorderRadiusInput" type="range" min="0" max="50" step="1" value="12" />
+                    <span id="developThemesBorderRadiusValue">12</span>
+                  </div>
+                  <div class="form-row">
+                    <label for="developThemesContainerBlurInput">Blur</label>
+                    <input id="developThemesContainerBlurInput" type="range" min="0" max="24" step="1" value="0" />
+                    <span id="developThemesContainerBlurValue">0</span>
+                  </div>
+                  <div class="form-row">
+                    <label for="developThemesContrastLevelInput">Contrast</label>
+                    <input id="developThemesContrastLevelInput" type="range" min="0" max="100" step="1" value="0" />
+                    <span id="developThemesContrastLevelValue">0</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+            <article class="develop-themes-card develop-themes-assets-card">
+              <h3>Assets</h3>
+              <div class="develop-themes-stack">
+                <div class="form-row develop-theme-asset-row">
+                  <label for="developThemesLogoWideSelect">Logo - Wide</label>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesLogoWideSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesLogoWidePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Logo - Wide</button>
+                    <div id="developThemesLogoWidePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
+                </div>
+                <div class="form-row develop-theme-asset-row">
+                  <label for="developThemesLogoSquareSelect">Logo - Square</label>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesLogoSquareSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesLogoSquarePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Logo - Square</button>
+                    <div id="developThemesLogoSquarePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
+                </div>
+                <div class="form-row develop-theme-asset-row">
+                  <label for="developThemesFeatureImageSelect">Feature</label>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesFeatureImageSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesFeatureImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Feature Image</button>
+                    <div id="developThemesFeatureImagePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
+                </div>
+                <div class="form-row develop-theme-asset-row">
+                  <label for="developThemesBackgroundImageSelect">Background</label>
+                  <div class="develop-theme-asset-field">
+                    <select id="developThemesBackgroundImageSelect" class="hidden">
+                      <option value="">None</option>
+                    </select>
+                    <button id="developThemesBackgroundImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Background Image</button>
+                    <div id="developThemesBackgroundImagePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+          <section class="develop-themes-card">
+            <h3>Preview</h3>
+            <div id="developThemesPreviewHost" class="develop-themes-preview-host"></div>
+          </section>
+        </section>
+      </section>
+      <section id="developManageLandingPagesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Pages</h2>
+          <div class="page-heading-actions">
+            <button id="developOpenCreateLandingPageBtn" type="button">Create Page</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="developLandingPagesSelectAllVisible" type="checkbox" aria-label="Select all visible pages" /></th>
+                <th><input id="developLandingPagesNameFilter" placeholder="Page Name" /></th>
+                <th>
+                  <select id="developLandingPagesTemplateFilter">
+                    <option value="">All Templates</option>
+                  </select>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th><button id="developLandingPagesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+              </tr>
+              <tr>
+                <th></th>
+                <th><button id="developLandingPagesSortNameBtn" type="button" class="tiny-btn">Name</button></th>
+                <th><button id="developLandingPagesSortTemplateBtn" type="button" class="tiny-btn">Template</button></th>
+                <th><button id="developLandingPagesSortHeadlineBtn" type="button" class="tiny-btn">Headline</button></th>
+                <th><button id="developLandingPagesSortFormBtn" type="button" class="tiny-btn">Form</button></th>
+                <th><button id="developLandingPagesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th class="develop-pages-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="developLandingPagesTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="developLandingPagesBulkEditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Bulk Edit Pages</h2>
+          <button id="developLandingPagesBackFromBulkEditBtn" type="button">Back To Pages</button>
+        </div>
+        <p id="developLandingPagesBulkEditSummary">No pages selected.</p>
+        <form id="developLandingPagesBulkEditForm" class="standard-form-grid">
+          
+            <label for="developLandingPagesBulkTemplateSelect">Template</label>
+            <select id="developLandingPagesBulkTemplateSelect" name="template_id">
+              <option value="">Leave Unchanged</option>
+            </select>
+          
+          <div class="develop-color-control">
+            <label for="developLandingPagesBulkPrimaryColorInput" class="develop-color-control-label">
+              <span class="develop-color-control-icon" aria-hidden="true"></span>
+              Primary Color
+            </label>
+            <label class="checkbox-row">
+              <input id="developLandingPagesBulkApplyPrimaryColor" name="apply_primary_color" type="checkbox" />
+              Apply Primary Color
+            </label>
+            <input id="developLandingPagesBulkPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
+          </div>
+          <div class="develop-color-control">
+            <label for="developLandingPagesBulkBackgroundColorInput" class="develop-color-control-label">
+              <span class="develop-color-control-icon" aria-hidden="true"></span>
+              Background Color
+            </label>
+            <label class="checkbox-row">
+              <input id="developLandingPagesBulkApplyBackgroundColor" name="apply_background_color" type="checkbox" />
+              Apply Background Color
+            </label>
+            <input id="developLandingPagesBulkBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
+          </div>
+          <div class="develop-color-control">
+            <label for="developLandingPagesBulkAccentColorInput" class="develop-color-control-label">
+              <span class="develop-color-control-icon" aria-hidden="true"></span>
+              Accent Color
+            </label>
+            <label class="checkbox-row">
+              <input id="developLandingPagesBulkApplyAccentColor" name="apply_accent_color" type="checkbox" />
+              Apply Accent Color
+            </label>
+            <input id="developLandingPagesBulkAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
+          </div>
+          <div></div>
+              <button type="submit">Apply To Selected Pages</button>
+        </form>
+      </section>
+      <section id="developLandingPagesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="developLandingPagesFormTitle">Builder: Create Page</h2>
+          <div class="page-heading-actions">
+            <button id="developLandingPageHeaderPreviewBtn" type="button">Preview</button>
+            <button id="developLandingPageHeaderSaveBtn" type="button">Save</button>
+            <button id="developLandingPageHeaderBackBtn" type="button">Back To Pages</button>
+          </div>
+        </div>
+        <div id="developLandingPagesModularHost"></div>
+        <form id="developLandingPagesForm" class="standard-form-grid">
+          <input id="developLandingPageIdInput" name="page_id" type="hidden" />
+          <div class="develop-landing-pages-grid">
+            <div class="develop-landing-pages-column">
+              <input id="developLandingPageNameInput" name="page_name" placeholder="Page Name" required />
+              <select id="developLandingTemplateSelect" name="template_id">
+                <option value="">Template</option>
+              </select>
+              <div class="develop-color-control">
+                <label for="developLandingPrimaryColorInput" class="develop-color-control-label">
+                  <span class="develop-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Primary Color
+                </label>
+                <input id="developLandingPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
+              </div>
+              <div class="develop-color-control">
+                <label for="developLandingBackgroundColorInput" class="develop-color-control-label">
+                  <span class="develop-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Background Color
+                </label>
+                <input id="developLandingBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
+              </div>
+              <div class="develop-color-control">
+                <label for="developLandingAccentColorInput" class="develop-color-control-label">
+                  <span class="develop-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Accent Color
+                </label>
+                <input id="developLandingAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
+              </div>
+              <select id="developLandingFormSelect" name="form_id">
+                <option value="">Form</option>
+              </select>
+              <select id="developLandingLeadMagnetSelect" name="lead_magnet_id">
+                <option value="">PDF</option>
+              </select>
+              <select id="developLandingCtaSelect" name="cta_id">
+                <option value="">CTA</option>
+              </select>
+            </div>
+            <div class="develop-landing-pages-column">
+              <select id="developLandingHeadlineSelect" name="headline_id">
+                <option value="">Headline</option>
+              </select>
+              <select id="developLandingPitchSelect" name="pitch_id">
+                <option value="">Pitch</option>
+              </select>
+              <select id="developLandingFeatureHeadlineSelect" name="feature_headline_id">
+                <option value="">Feature One Headline</option>
+              </select>
+              <select id="developLandingFeatureSubheadingSelect" name="feature_subheading_id">
+                <option value="">Feature One Sub-heading</option>
+              </select>
+              <select id="developLandingHighlightHeadlineSelect" name="highlight_headline_id">
+                <option value="">Feature Two Headline</option>
+              </select>
+              <select id="developLandingHighlightPitchSelect" name="highlight_pitch_id">
+                <option value="">Feature Two Pitch</option>
+              </select>
+              <select id="developLandingBodyHeadlineSelect" name="body_headline_id">
+                <option value="">Body Headline</option>
+              </select>
+              <select id="developLandingBodySubheadingSelect" name="body_subheading_id">
+                <option value="">Body Sub-heading</option>
+              </select>
+              <select id="developLandingBodyPitchSelect" name="body_pitch_id">
+                <option value="">Body Pitch</option>
+              </select>
+            </div>
+            <div class="develop-landing-pages-column">
+              <div class="develop-theme-asset-field">
+                <select id="developLandingBannerImageSelect" name="website_banner_image_id" class="hidden">
+                  <option value="">Website Banner Image</option>
+                </select>
+                <button id="developLandingBannerImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Website Banner Image</button>
+                <div id="developLandingBannerImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingBackgroundImageSelect" name="background_image_id" class="hidden">
+                  <option value="">Background Image</option>
+                </select>
+                <button id="developLandingBackgroundImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Background Image</button>
+                <div id="developLandingBackgroundImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingFeatureImageSelect" name="feature_image_id" class="hidden">
+                  <option value="">Feature Image</option>
+                </select>
+                <button id="developLandingFeatureImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Feature Image</button>
+                <div id="developLandingFeatureImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingHighlightImageSelect" name="highlight_image_id" class="hidden">
+                  <option value="">Highlight Image</option>
+                </select>
+                <button id="developLandingHighlightImagePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Highlight Image</button>
+                <div id="developLandingHighlightImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="develop-theme-asset-field">
+                <select id="developLandingLogoSquareSelect" name="logo_square_id" class="hidden">
+                  <option value="">Logo - Square</option>
+                </select>
+                <button id="developLandingLogoSquarePickerBtn" type="button" class="develop-theme-asset-picker-btn">Choose Logo - Square</button>
+                <div id="developLandingLogoSquarePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+            </div>
+          </div>
+          <div></div>
+              <button id="developLandingPagesSubmitBtn" type="submit">Save Page</button>
+        </form>
+      </section>
+      <section id="developLandingPagePreviewPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="developLandingPagePreviewTitle">Page Preview</h2>
+          <div class="page-heading-actions">
+            <button id="developLandingPagePreviewModeBtn" type="button">Edit Mode</button>
+            <button id="developLandingPagePreviewBackBtn" type="button">Back To Pages</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <div id="developLandingPagePreviewHost"></div>
+      </section>
+      <section id="developLandingPageVisualEditorPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="developLandingPageVisualEditorTitle">Visual Page Editor</h2>
+          <div class="page-heading-actions">
+            <button id="developLandingPageVisualModeBtn" type="button">Preview Mode</button>
+            <button id="developLandingPageVisualSaveBtn" type="button">Save All Changes</button>
+            <button id="developLandingPageVisualBackBtn" type="button">Back To Pages</button>
+          </div>
+        </div>
+        <div class="develop-visual-toolbar">
+          <label for="developLandingVisualThemeSelect">Theme</label>
+          <select id="developLandingVisualThemeSelect">
+            <option value="">Custom</option>
+          </select>
+          <label for="developLandingVisualTemplateSelect">Template</label>
+          <select id="developLandingVisualTemplateSelect">
+            <option value="">Template</option>
+          </select>
+        </div>
+        <div id="developLandingVisualSaveNotice" class="develop-save-notice hidden" role="status" aria-live="polite"></div>
+        <div id="developLandingPageVisualEditorHost"></div>
+      </section>
+      <section id="developLandingPageThankYouPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Thank You</h2>
+          <div class="page-heading-actions">
+            <button id="developLandingThankYouBackBtn" type="button">Back To Preview</button>
+            <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
+          </div>
+        </div>
+        <div id="developLandingThankYouHost"></div>
+      </section>
+      <section id="developFormsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Forms</h2>
+          <div class="page-heading-actions">
+            <button id="developOpenCreateFormBtn" type="button">Create Form</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Assemble reusable forms from a form template, PDF, CTA, and confirmation behavior. Save them for use throughout the platform.</p>
+        <div id="developFormEditorPanel" class="develop-form-editor-panel hidden">
+          <div class="page-heading-row">
+            <h3 id="developFormsEditorTitle">Create Form</h3>
+            <button id="developCancelFormEditBtn" type="button">Close</button>
+          </div>
+          <div class="develop-form-builder-layout">
+          <form id="developFormBuilderForm" class="standard-form-grid">
+            <input id="developFormIdInput" name="form_id" type="hidden" />
+            <input id="developFormNameInput" name="form_name" placeholder="Form Name" />
+            <select id="developFormTypeSelect" name="form_type">
+              <option value="squeeze-form">Squeeze Form</option>
+              <option value="short-form">Short Form</option>
+              <option value="long-form">Long Form</option>
+            </select>
+            <select id="developFormContactTypeSelect" name="contact_type">
+              <option value="lead">Lead</option>
+              <option value="prospect">Prospect</option>
+              <option value="subscriber">Subscriber</option>
+              <option value="member">Member</option>
+              <option value="partner">Partner</option>
+              <option value="other">Other</option>
+            </select>
+            <select id="developFormLeadMagnetTypeSelect" name="lead_magnet_type">
+              <option value="">Lead Magnet Type</option>
+            </select>
+            <select id="developFormLeadMagnetSelect" name="lead_magnet_id">
+              <option value="">Lead Magnet (Optional)</option>
+            </select>
+            <select id="developFormCtaSelect" name="cta_id">
+              <option value="">Call To Action</option>
+            </select>
+            <input id="developFormHeadingInput" name="heading" placeholder="Form Heading" />
+            <textarea id="developFormSuccessMessageInput" name="success_message" rows="3" placeholder="Success Confirmation Message"></textarea>
+            <textarea id="developFormErrorMessageInput" name="error_message" rows="3" placeholder="Error Confirmation Message"></textarea>
+            <div class="develop-color-control">
+              <label for="developFormAccentColorInput" class="develop-color-control-label">
+                <span class="develop-color-control-icon" aria-hidden="true"></span>
+                Form Color Scheme
+              </label>
+              <input id="developFormAccentColorInput" name="accent_color" type="color" value="#0b82d4" />
+            </div>
+            <label class="checkbox-row">
+              <input id="developFormMatchLandingColorInput" name="match_landing_color" type="checkbox" />
+              Match page color scheme
+            </label>
+            <div id="developFormLandingColorModeWrap" class="hidden">
+              <select id="developFormLandingColorModeSelect" name="landing_color_mode">
+                <option value="primary">Primary Color</option>
+                <option value="accent">Accent Color</option>
+              </select>
+            </div>
+            <label id="developFormUseLandingBackgroundWrap" class="checkbox-row hidden">
+              <input id="developFormUseLandingBackgroundInput" name="use_landing_background" type="checkbox" />
+              Add background color to form
+            </label>
+            <div id="developFormFieldsConfig" class="develop-form-config-list"></div>
+            <div></div>
+              <button type="submit">Save Form</button>
+          </form>
+          <div>
+            <h3>Form Preview</h3>
+            <div id="developFormPreviewHost"></div>
+          </div>
+          </div>
+        </div>
+        <div class="stack-form" style="margin-top: 2rem;">
+          <h3>Saved Forms</h3>
+          <table>
+            <thead>
+              <tr>
+                <th><button id="developFormsSortNameBtn" type="button" class="tiny-btn">Form Name</button></th>
+                <th><button id="developFormsSortTypeBtn" type="button" class="tiny-btn">Type</button></th>
+                <th><button id="developFormsSortLeadMagnetTypeBtn" type="button" class="tiny-btn">Lead Magnet Type</button></th>
+                <th><button id="developFormsSortLeadMagnetBtn" type="button" class="tiny-btn">Lead Magnet</button></th>
+                <th><button id="developFormsSortCtaBtn" type="button" class="tiny-btn">CTA</button></th>
+                <th><button id="developFormsSortContactTypeBtn" type="button" class="tiny-btn">Contact Type</button></th>
+                <th><button id="developFormsSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="developFormsTableBody">
+              <tr>
+                <td colspan="8">No saved forms yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section id="developAgentsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Agents</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.develop.openAgentsCreate(); return false;">Create Agent</button>
+            <button type="button" onclick="App.develop.openAgentsPage(); return false;">Back To Agents</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
+        <div class="table-wrap" style="margin-bottom: 1rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Action</th>
+                <th>Workspace</th>
+                <th>Type</th>
+                <th>Updated</th>
+                <th class="develop-agents-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="developAgentsTableBody"></tbody>
+          </table>
+        </div>
+        <div id="developAgentsBuilderPanel" class="card hidden" style="margin-bottom: 1rem;">
+        <form id="developAgentsForm">
+          <input type="hidden" name="agent_preset_id" id="developAgentPresetIdInput" />
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Agent Builder</h3>
+            <div></div>
+              <div class="page-heading-actions">
+              <button id="developAgentsSavePresetBtn" type="button">Save Agent</button>
+              <button id="developAgentsClonePresetBtn" type="button">Clone Agent</button>
+              <button type="button" onclick="App.develop.openAgentsPage(); return false;">Back To Agents</button>
+            </div>
+          </div>
+          <div class="grid-form">
+            <input name="agent_name" id="developAgentNameInput" placeholder="Agent name" />
+            <select name="action" id="agentsActionSelect">
+              <option value="agent_api_setup_orchestrator">agent_api_setup_orchestrator</option>
+              <option value="create_job">create_job</option>
+              <option value="preview_job">preview_job</option>
+              <option value="approve_job">approve_job</option>
+              <option value="execute_job">execute_job</option>
+              <option value="job_status">job_status</option>
+            </select>
+          </div>
+          <div class="grid-form">
+            <input name="job_id" placeholder="Job ID (required for preview/approve/execute/status)" />
+          </div>
+          <div class="grid-form">
+            <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
+            <input name="type" placeholder="Job Type" value="acquire.web" />
+          </div>
+          <div class="grid-form">
+            <input name="requested_by_user_id" placeholder="Requested By User ID" value="alphire-ui" />
+            <input name="requested_by_email" placeholder="Requested By Email" value="ops@alphire.ai" />
+          </div>
+          <textarea
+            name="payload_json"
+            rows="6"
+            placeholder='Payload JSON, e.g. {"source_urls":["https://example.com"],"max_pages":20}'
+          >{"source_urls":[],"max_pages":20}</textarea>
+          <div class="grid-form">
+            <select name="approval_decision">
+              <option value="APPROVE">APPROVE</option>
+              <option value="REJECT">REJECT</option>
+            </select>
+            <input name="approval_token" placeholder="Approval token (for execute_job)" />
+          </div>
+          <input name="approval_comment" placeholder="Approval comment" />
+          <label class="checkbox-row">
+            <input name="manual_confirmed" type="checkbox" />
+            I manually confirm this API action.
+          </label>
+          <div></div>
+              <button type="submit">Send Agent Request</button>
+        </form>
+        </div>
+        <h3>Request Preview</h3>
+        <pre id="agentsRequestPreview" class="code-box">{}</pre>
+        <h3>Response</h3>
+        <pre id="agentsResponsePreview" class="code-box">{}</pre>
+
+        <section class="docs-panel" style="margin-top: 1.25rem;">
+          <h3>Agent: API Setup Orchestrator</h3>
+          <p class="docs-intro">Run the orchestrator from Builder and track setup progress across all Promote channels.</p>
+          <div class="page-heading-actions" style="justify-content: flex-start; margin: 0 0 0.85rem 0;">
+            <button id="docsOrchestratorRunBtn" type="button">Run Orchestrator</button>
+            <button type="button" onclick="App.docsApiSetup.runOrchestrator()">Open Builder Form</button>
+            <button type="button" onclick="App.setActivePage('settingsApisPage')">Open Settings &gt; APIs</button>
+            <label class="checkbox-row" style="width:auto; margin-left: 0.65rem;">
+              <input id="docsOrchestratorIncompleteOnly" type="checkbox" />
+              Only incomplete steps
+            </label>
+            <button id="docsOrchestratorDownloadJsonBtn" type="button">Download JSON</button>
+            <button id="docsOrchestratorDownloadMdBtn" type="button">Download Markdown</button>
+          </div>
+          <p id="docsOrchestratorStatus" class="meta">No orchestrator run loaded.</p>
+          <div class="docs-panel" style="margin-bottom: 0.9rem;">
+            <h4 style="margin: 0 0 0.45rem;">Latest Run Summary</h4>
+            <div id="docsOrchestratorSummary" class="docs-kv-grid"></div>
+          </div>
+          <div class="table-wrap" style="margin-bottom: 0.9rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Provider</th>
+                  <th>Configured</th>
+                  <th>Manual Steps</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="docsOrchestratorChannelsBody"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Phase</th>
+                  <th>Agent-Owned Work</th>
+                  <th>Human-Minimum Work</th>
+                  <th>Output</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Inventory</td>
+                  <td>Scan provider schemas, current config completeness, and channel readiness.</td>
+                  <td>None</td>
+                  <td>Channel readiness matrix with missing fields.</td>
+                </tr>
+                <tr>
+                  <td>Preflight</td>
+                  <td>Generate exact per-provider forms/checklists and validation tests.</td>
+                  <td>None</td>
+                  <td>Actionable setup packet per channel.</td>
+                </tr>
+                <tr>
+                  <td>Credential Capture</td>
+                  <td>Validate formatting, normalize endpoints, and stage secure storage plan.</td>
+                  <td>Obtain external credentials/tokens where provider requires human login/2FA/captcha.</td>
+                  <td>Credential intake checklist and status.</td>
+                </tr>
+                <tr>
+                  <td>Verification</td>
+                  <td>Run status and smoke checks, classify failures, propose remediation.</td>
+                  <td>Approve/retry when provider-side approval gates are present.</td>
+                  <td>Pass/fail diagnostics + next actions.</td>
+                </tr>
+                <tr>
+                  <td>Handoff</td>
+                  <td>Emit final report: ready channels, blocked channels, required human follow-ups.</td>
+                  <td>Execute only unresolved external confirmation steps.</td>
+                  <td>Go-live readiness report.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </section>
+      <section id="developTemplatesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Templates</h2>
+          <div class="page-heading-actions">
+            <button id="developCreateModularPageTemplateBtn" type="button">Create Modular Template</button>
+            <button id="developCreatePageTemplateBtn" type="button">Create Template</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <div id="developEmailTemplatesPrimaryTableHost" class="develop-template-records-host"></div>
+        <div id="developTemplatesModularHost">
+        <section id="developPageTemplateEditorPanel" class="develop-template-section develop-template-editor">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developPageTemplateEditorToggle"
+              class="accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="developPageTemplateEditorBody"
+            >
+              <span id="developPageTemplateEditorTitle" class="accordion-title">Page: Modular</span>
+              <span class="accordion-toggle">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
+              </span>
+            </button>
+          </div>
+          <div id="developPageTemplateEditorBody" class="develop-template-section-body">
+            <p id="developPageTemplateEditorMeta" class="meta">Build landing-page templates as ordered sections with configurable layouts and module slots.</p>
+            <input id="developPageTemplateEditorIdInput" type="hidden" />
+            <div class="grid-form" style="margin-bottom:0.75rem;">
+              <input id="developPageTemplateEditorNameInput" type="text" placeholder="Template name" />
+              <div id="developPageTemplateEditorBaseTemplateWrap">
+                <select id="developPageTemplateEditorBaseTemplateSelect"></select>
+              </div>
+            </div>
+            <div id="developPageTemplateEditorTopActions" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button id="developPageTemplateEditorSaveBtnTop" type="button">Save Modular Template</button>
+              <button id="developPageTemplateEditorPreviewBtnTop" type="button">Preview Template</button>
+              <button id="developPageTemplateEditorCloseBtnTop" type="button">Close</button>
+            </div>
+            <div id="developPageTemplateEditorToolbar" class="develop-layout-toolbar" style="margin:0 0 0.9rem;">
+              <div class="develop-layout-toolbar-heading">Row Layouts</div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="1-5" title="Add 1-5 Row" aria-label="Add 1-5 Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--1-5"><span></span><span></span></span>
+              </div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="2-4" title="Add 2-4 Row" aria-label="Add 2-4 Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--2-4"><span></span><span></span></span>
+              </div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="2-2-2" title="Add 2-2-2 Row" aria-label="Add 2-2-2 Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--2-2-2"><span></span><span></span><span></span></span>
+              </div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="3-3" title="Add 3-3 Row" aria-label="Add 3-3 Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--3-3"><span></span><span></span></span>
+              </div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="4-2" title="Add 4-2 Row" aria-label="Add 4-2 Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--4-2"><span></span><span></span></span>
+              </div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="5-1" title="Add 5-1 Row" aria-label="Add 5-1 Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--5-1"><span></span><span></span></span>
+              </div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="1-4-1" title="Add 1-4-1 Row" aria-label="Add 1-4-1 Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--1-4-1"><span></span><span></span><span></span></span>
+              </div>
+              <div class="develop-layout-tile" role="button" tabindex="0" data-section-layout="6" title="Add Full Width Row" aria-label="Add Full Width Row">
+                <span class="develop-layout-toolbar-icon develop-layout-toolbar-icon--6"><span></span></span>
+              </div>
+            </div>
+            <div class="develop-page-template-workspace-heading">Workspace</div>
+            <div id="developPageTemplateEditorSections" class="develop-template-module-list"></div>
+            <div id="developPageTemplateEditorBottomActions" class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
+              <button id="developPageTemplateEditorSaveBtnBottom" type="button">Save Modular Template</button>
+              <button id="developPageTemplateEditorPreviewBtn" type="button">Preview Template</button>
+            </div>
+          </div>
+        </section>
+        </div>
+        <section id="developTemplateEditorPanel" class="develop-template-section develop-template-editor hidden">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developTemplateEditorToggle"
+              class="accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="developTemplateEditorBody"
+            >
+              <span id="developTemplateEditorTitle" class="accordion-title">Email: Modular</span>
+              <span class="accordion-toggle">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
+              </span>
+            </button>
+          </div>
+          <div id="developTemplateEditorBody" class="develop-template-section-body">
+            <p id="developTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
+            <input id="developTemplateEditorIdInput" type="hidden" />
+            <div class="grid-form" style="margin-bottom:0.75rem;">
+              <input id="developTemplateEditorNameInput" type="text" placeholder="Template name" />
+              <input id="developTemplateEditorSlugInput" type="text" placeholder="Slug (optional)" />
+              <input id="developTemplateEditorCtaInput" type="text" placeholder="CTA label" />
+            </div>
+            <input id="developTemplateEditorSummaryInput" type="text" placeholder="Summary: when to use this template." style="margin-bottom:0.75rem;" />
+            <input id="developTemplateEditorSubjectInput" type="text" placeholder="Default subject line" style="margin-bottom:0.75rem;" />
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button id="developTemplateEditorSaveBtnTop" type="button">Save Template</button>
+            </div>
+            <div id="developTemplateEditorToolbar" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button type="button" data-block-type="eyebrow">Add Eyebrow</button>
+              <button type="button" data-block-type="heading">Add Heading</button>
+              <button type="button" data-block-type="paragraph">Add Paragraph</button>
+              <button type="button" data-block-type="image">Add Image</button>
+              <button type="button" data-block-type="button">Add Button</button>
+              <button type="button" data-block-type="divider">Add Divider</button>
+              <button type="button" data-block-type="spacer">Add Spacer</button>
+            </div>
+            <div id="developTemplateEditorModules" class="develop-template-module-list"></div>
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
+              <button id="developTemplateEditorSaveBtnBottom" type="button">Save Template</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="develop-template-section hidden">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developFormsSectionToggle"
+              class="accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="developFormsSectionBody"
+            >
+  <span class="accordion-title">Forms</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
+  </span>
+</button>
+          </div>
+          <div id="developFormsSectionBody" class="develop-template-section-body">
+            <p>These are the reusable form templates used as the foundation for saved forms.</p>
+            <div id="developFormTemplatesTableHost" class="develop-template-records-host"></div>
+            <div id="developFormTemplatesLibrary" class="develop-template-library"></div>
+            <div id="developFormTemplatesPreviewHost"></div>
+          </div>
+        </section>
+
+        <section class="develop-template-section hidden">
+          <div class="develop-template-section-header-row">
+            <button
+              id="developEmailSectionToggle"
+              class="accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="developEmailSectionBody"
+            >
+  <span class="accordion-title">Email: Text</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
+  </span>
+</button>
+          </div>
+          <div id="developEmailSectionBody" class="develop-template-section-body">
+            <p>Choose an email template type to pair with a theme and campaign delivery.</p>
+            <form id="developEmailTemplateForm"  style="margin-bottom: 1.5rem;">
+              <input id="developEmailTemplateIdInput" name="template_id" type="hidden" />
+              <div></div>
+              <div class="page-heading-actions" style="justify-content:flex-start;">
+                <div></div>
+              <button id="developEmailTemplateSubmitBtnTop" type="submit">Save Template</button>
+                <button id="developEmailTemplateResetBtnTop" type="button">Reset</button>
+              </div>
+              <div class="grid-form">
+                <input id="developEmailTemplateNameInput" name="name" placeholder="Template name" />
+                <input id="developEmailTemplateSlugInput" name="slug" placeholder="Slug (optional)" />
+                <input id="developEmailTemplateCtaInput" name="cta" placeholder="CTA label" />
+              </div>
+              <input id="developEmailTemplateSummaryInput" name="summary" placeholder="Summary: when to use this template." />
+              <input id="developEmailTemplateSubjectInput" name="subject" placeholder="Default subject line" />
+              <input id="developEmailTemplateHeadingInput" name="heading" placeholder="Template heading" />
+              <textarea id="developEmailTemplateBodyInput" name="body" rows="4" placeholder="Describe the body structure, tone, and purpose."></textarea>
+              <div></div>
+              <div class="page-heading-actions">
+                <div></div>
+              <button id="developEmailTemplateSubmitBtn" type="submit">Save Template</button>
+                <button id="developEmailTemplateResetBtn" type="button">Reset</button>
+              </div>
+            </form>
+            <div id="developEmailTemplatesLibrary" class="develop-template-library"></div>
+            <div id="developEmailTemplatesPreviewHost"></div>
+          </div>
+        </section>
+
+      </section>
+      <section id="developToolsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Extensions</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
+        <div id="developExtensionsFeaturedGrid" class="develop-extensions-tree"></div>
+      </section>
+      <section id="developExtensionsManagerPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Extension Manager</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+          </div>
+        </div>
+        <p>Maintain a searchable extension repository with recursive parent-child taxonomy, definitions, and descriptive metadata.</p>
+        <form id="developExtensionManagerForm">
+          <input id="developExtensionIdInput" name="extension_id" type="hidden" />
+          <div class="grid-form">
+            <input id="developExtensionNameInput" name="name" placeholder="Extension name" />
+            <select id="developExtensionTypeSelect" name="extension_type">
+              <option value="">Extension Type</option>
+              <option value="manager">Manager</option>
+              <option value="utility">Utility</option>
+              <option value="generator">Generator</option>
+              <option value="connector">Connector</option>
+              <option value="workflow">Workflow</option>
+              <option value="automation">Automation</option>
+              <option value="analytics">Analytics</option>
+              <option value="catalog">Catalog</option>
+              <option value="custom">Custom</option>
+            </select>
+            <select id="developExtensionParentSelect" name="parent_id">
+              <option value="">Parent Extension (Optional)</option>
+            </select>
+            <select id="developExtensionStatusSelect" name="status">
+              <option value="active">Active</option>
+              <option value="draft">Draft</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+          <input id="developExtensionTagsInput" name="tags" placeholder="Tags (comma-separated)" />
+          <textarea id="developExtensionSummaryInput" name="summary" rows="3" placeholder="Summary: what this extension does and why it exists."></textarea>
+          <textarea id="developExtensionDefinitionInput" name="definition" rows="6" placeholder="Definition: describe the extension in detail, including taxonomy context, behavior, and intended use."></textarea>
+          <div></div>
+              <div class="page-heading-actions">
+            <div></div>
+              <button id="developExtensionSubmitBtn" type="submit">Save Extension</button>
+            <button id="developExtensionResetBtn" type="button">Reset</button>
+          </div>
+        </form>
+        <table>
+          <thead>
+            <tr>
+              <th><input id="developExtensionsFilterName" type="text" placeholder="Filter Name" /></th>
+              <th>
+                <select id="developExtensionsFilterType">
+                  <option value="">All Types</option>
+                </select>
+              </th>
+              <th></th>
+              <th>
+                <select id="developExtensionsFilterStatus">
+                  <option value="">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="draft">Draft</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </th>
+              <th><input id="developExtensionsFilterTags" type="text" placeholder="Filter Tags" /></th>
+              <th></th>
+            </tr>
+            <tr>
+              <th><button id="developExtensionsSortNameBtn" type="button">Name</button></th>
+              <th><button id="developExtensionsSortTypeBtn" type="button">Type</button></th>
+              <th><button id="developExtensionsSortTaxonomyBtn" type="button">Taxonomy</button></th>
+              <th><button id="developExtensionsSortStatusBtn" type="button">Status</button></th>
+              <th><button id="developExtensionsSortUpdatedBtn" type="button">Updated</button></th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="developExtensionsTableBody">
+            <tr>
+              <td colspan="6">No extensions yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section id="developExtensionIconBuilderPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Extension: Icon Builder</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
+          </div>
+        </div>
+        <h3>Icon Builder</h3>
+        <p>Generate a compact icon immediately for a message, asset, campaign, or other system object.</p>
+        <form id="iconBuilderForm">
+          <div class="grid-form">
+            <select name="object_type">
+              <option value="message">Message</option>
+              <option value="asset">Asset</option>
+              <option value="campaign">Campaign</option>
+              <option value="channel">Channel</option>
+              <option value="contact_segment">Contact Segment</option>
+              <option value="custom">Custom</option>
+            </select>
+            <input name="object_name" placeholder="Object name" />
+            <input name="category" placeholder="Category" />
+            <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
+          </div>
+          <textarea
+            name="object_summary"
+            rows="5"
+            placeholder="Describe the object, its purpose, tone, and what the icon should communicate."
+          ></textarea>
+          <div class="grid-form">
+            <select name="visual_style">
+              <option value="clean-flat">Clean Flat</option>
+              <option value="outlined-bold">Outlined Bold</option>
+              <option value="badge-minimal">Badge Minimal</option>
+              <option value="editorial-mark">Editorial Mark</option>
+            </select>
+            <input name="palette" placeholder="Preferred colors, e.g. blue, orange, white" />
+            <select name="destination">
+              <option value="menu-bar">Menu Bar</option>
+              <option value="table-list">Table List</option>
+              <option value="card-badge">Card Badge</option>
+            </select>
+            <input name="size" placeholder="Output size" value="64x64" />
+          </div>
+          <label class="checkbox-row">
+            <input name="manual_confirmed" type="checkbox" />
+            I manually confirm this API action.
+          </label>
+          <div></div>
+              <button type="submit">Create Icon Job</button>
+        </form>
+        <h3>Icon Request Preview</h3>
+        <pre id="iconBuilderRequestPreview" class="code-box">{}</pre>
+        <h3>Icon Response</h3>
+        <pre id="iconBuilderResponsePreview" class="code-box">{}</pre>
+        <div id="iconBuilderResultCard" class="icon-builder-result hidden">
+          <img id="iconBuilderResultImage" alt="Generated icon preview" />
+          <div class="icon-builder-result-meta">
+            <strong id="iconBuilderResultTitle">Generated Icon</strong>
+            <span id="iconBuilderResultCaption"></span>
+          </div>
+        </div>
+        <h3>General Tool Job</h3>
+        <form id="developToolsForm">
+          <div class="grid-form">
+            <select name="tool_name">
+              <option value="segmentation.build">segmentation.build</option>
+              <option value="buffer.queue">buffer.queue</option>
+              <option value="email.template.builder">email.template.builder</option>
+            </select>
+            <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
+          </div>
+          <textarea
+            name="input_json"
+            rows="6"
+            placeholder='Tool input JSON, e.g. {"segment_name":"Creator leads","rules":[{"field":"instagram","operator":"contains","value":"@"}]}'
+          >{"segment_name":"","rules":[]}</textarea>
+          <label class="checkbox-row">
+            <input name="manual_confirmed" type="checkbox" />
+            I manually confirm this API action.
+          </label>
+          <div></div>
+              <button type="submit">Create Tool Job</button>
+        </form>
+        <h3>Advanced Tool Runner</h3>
+        <p>Run generic internal tool jobs for extension-level operations that do not yet have dedicated UIs.</p>
+        <h3>Request Preview</h3>
+        <pre id="toolsRequestPreview" class="code-box">{}</pre>
+        <h3>Response</h3>
+        <pre id="toolsResponsePreview" class="code-box">{}</pre>
+      </section>
+      <section id="developExtensionScreenshotPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Extension: Screenshot</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
+          </div>
+        </div>
+        <p>Paste a website URL to create a `640x360` screenshot, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Screenshot`.</p>
+        <form id="developScreenshotForm">
+          <div class="grid-form">
+            <input name="url" placeholder="https://example.com" />
+            <input name="asset_name" placeholder="Asset name (optional)" />
+          </div>
+          <input name="tags" placeholder="Tags (comma-separated)" />
+          <div></div>
+              <button type="submit">Capture Screenshot</button>
+        </form>
+        <h3>Screenshot Response</h3>
+        <pre id="developScreenshotResponsePreview" class="code-box">{}</pre>
+        <div id="developScreenshotResultCard" class="icon-builder-result hidden">
+          <img id="developScreenshotResultImage" alt="Captured screenshot preview" />
+          <div class="icon-builder-result-meta">
+            <strong id="developScreenshotResultTitle">Captured Screenshot</strong>
+            <span id="developScreenshotResultCaption"></span>
+          </div>
+        </div>
+      </section>
+      <section id="developExtensionThumbnailPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Extension: Thumbnail</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
+          </div>
+        </div>
+        <p>Generate an image thumbnail from the first page of a PDF file location, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Thumbnail`.</p>
+        <form id="developThumbnailForm">
+          <div class="grid-form">
+            <input name="file_location" placeholder="PDF file location (https://...pdf)" />
+            <select id="developThumbnailSourceAssetSelect" name="source_asset_id">
+              <option value="">Source Asset (Optional)</option>
+            </select>
+          </div>
+          <div class="grid-form">
+            <input name="asset_name" placeholder="Thumbnail asset name (optional)" />
+            <input name="tags" placeholder="Tags (comma-separated)" />
+          </div>
+          <div></div>
+              <button type="submit">Generate Thumbnail</button>
+        </form>
+        <h3>Thumbnail Response</h3>
+        <pre id="developThumbnailResponsePreview" class="code-box">{}</pre>
+        <div id="developThumbnailResultCard" class="icon-builder-result hidden">
+          <img id="developThumbnailResultImage" alt="Generated PDF thumbnail preview" />
+          <div class="icon-builder-result-meta">
+            <strong id="developThumbnailResultTitle">Generated Thumbnail</strong>
+            <span id="developThumbnailResultCaption"></span>
+          </div>
+        </div>
+      </section>

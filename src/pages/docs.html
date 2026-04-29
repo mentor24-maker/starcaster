@@ -1,0 +1,602 @@
+
+      <section id="docsPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Documentation</h2>
+        </div>
+        <p class="docs-intro">This section is the system manual for the Alphire Promo Platform. The process map below mirrors the operating flow: acquire inputs, organize people and reach paths, prepare message and assets, build campaign infrastructure, execute, and then observe the result. Each stage links directly to its documentation page.</p>
+
+        <div class="docs-flow-infographic" aria-label="System workflow infographic">
+          <div class="docs-flow-row">
+            <button class="docs-flow-node docs-flow-node-intake" type="button" onclick="App.setActivePage('docsAcquirePage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Acquire Module</span>
+                <span class="docs-flow-node-title">Acquire</span>
+                <span class="docs-flow-node-meta">Source capture</span>
+              </span>
+              <span class="docs-flow-node-icon">IN</span>
+            </button>
+            <span class="docs-flow-arrow" aria-hidden="true">→</span>
+            <button class="docs-flow-node docs-flow-node-structure" type="button" onclick="App.setActivePage('docsContactsPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Organize</span>
+                <span class="docs-flow-node-title">Contacts</span>
+                <span class="docs-flow-node-meta">Audience records</span>
+              </span>
+              <span class="docs-flow-node-icon">DB</span>
+            </button>
+            <span class="docs-flow-arrow" aria-hidden="true">→</span>
+            <button class="docs-flow-node docs-flow-node-structure" type="button" onclick="App.setActivePage('docsChannelsPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Route</span>
+                <span class="docs-flow-node-title">Channels</span>
+                <span class="docs-flow-node-meta">Reach paths</span>
+              </span>
+              <span class="docs-flow-node-icon">AT</span>
+            </button>
+          </div>
+          <div class="docs-flow-drop" aria-hidden="true"></div>
+          <div class="docs-flow-row">
+            <button class="docs-flow-node docs-flow-node-build" type="button" onclick="App.setActivePage('docsMessagingPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Prepare</span>
+                <span class="docs-flow-node-title">Messaging</span>
+                <span class="docs-flow-node-meta">Copy library</span>
+              </span>
+              <span class="docs-flow-node-icon">TX</span>
+            </button>
+            <span class="docs-flow-arrow" aria-hidden="true">+</span>
+            <button class="docs-flow-node docs-flow-node-build" type="button" onclick="App.setActivePage('docsAssetsPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Prepare</span>
+                <span class="docs-flow-node-title">Assets</span>
+                <span class="docs-flow-node-meta">Media library</span>
+              </span>
+              <span class="docs-flow-node-icon">MD</span>
+            </button>
+            <span class="docs-flow-arrow" aria-hidden="true">→</span>
+            <button class="docs-flow-node docs-flow-node-build" type="button" onclick="App.setActivePage('docsDevelopPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Build</span>
+                <span class="docs-flow-node-title">Builder</span>
+                <span class="docs-flow-node-meta">Pages, forms, tools</span>
+              </span>
+              <span class="docs-flow-node-icon">BLD</span>
+            </button>
+          </div>
+          <div class="docs-flow-drop docs-flow-drop-secondary" aria-hidden="true"></div>
+          <div class="docs-flow-row">
+            <button class="docs-flow-node docs-flow-node-launch" type="button" onclick="App.setActivePage('docsCampaignsPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Assemble</span>
+                <span class="docs-flow-node-title">Campaigns</span>
+                <span class="docs-flow-node-meta">Launch-ready programs</span>
+              </span>
+              <span class="docs-flow-node-icon">GO</span>
+            </button>
+            <span class="docs-flow-arrow" aria-hidden="true">→</span>
+            <button class="docs-flow-node docs-flow-node-execute" type="button" onclick="App.setActivePage('docsEngagePage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Execute</span>
+                <span class="docs-flow-node-title">Engage</span>
+                <span class="docs-flow-node-meta">Outbound actions</span>
+              </span>
+              <span class="docs-flow-node-icon">OUT</span>
+            </button>
+            <span class="docs-flow-arrow" aria-hidden="true">→</span>
+            <button class="docs-flow-node docs-flow-node-measure" type="button" onclick="App.setActivePage('docsObservePage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Review</span>
+                <span class="docs-flow-node-title">Observe</span>
+                <span class="docs-flow-node-meta">Results and feedback</span>
+              </span>
+              <span class="docs-flow-node-icon">OBS</span>
+            </button>
+          </div>
+          <div class="docs-flow-support">
+            <div class="docs-flow-support-label">System Support</div>
+            <button class="docs-flow-node docs-flow-node-support docs-flow-node-wide" type="button" onclick="App.setActivePage('docsSettingsPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Configure</span>
+                <span class="docs-flow-node-title">Settings</span>
+                <span class="docs-flow-node-meta">Infrastructure and providers</span>
+              </span>
+              <span class="docs-flow-node-icon">SYS</span>
+            </button>
+            <button class="docs-flow-node docs-flow-node-support docs-flow-node-wide docs-flow-node-support-secondary" type="button" onclick="App.setActivePage('docsPage')">
+              <span class="docs-flow-node-copy">
+                <span class="docs-flow-node-kicker">Reference</span>
+                <span class="docs-flow-node-title">Docs</span>
+                <span class="docs-flow-node-meta">System map and manuals</span>
+              </span>
+              <span class="docs-flow-node-icon">DOC</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <div class="docs-kicker">Workflow</div>
+            <h3>End-to-End Sequence</h3>
+            <ul class="docs-list">
+              <li>Acquire gathers raw source material and structured scrape results.</li>
+              <li>Contacts converts records into a reusable audience database and saved segments.</li>
+              <li>Messaging, Assets, and Develop create the copy, media, pages, forms, and operational payloads that campaigns depend on.</li>
+              <li>Campaigns assembles those reusable pieces into launch-ready records for outbound execution.</li>
+              <li>Engage and Observe handle publishing, response, reporting, and audit visibility after launch.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <div class="docs-kicker">Shared Patterns</div>
+            <h3>How The UI Behaves</h3>
+            <ul class="docs-list">
+              <li>Each top-level menu can open a dedicated page or a submenu page that focuses on one workflow.</li>
+              <li>Most modules use in-page forms for create or update operations and tables for the saved records.</li>
+              <li>Several operational actions require a manual confirmation checkbox before an API request can be sent.</li>
+              <li>The app keeps the active page in browser storage so the same workspace view reopens on refresh.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <div class="docs-kicker">Core Data</div>
+            <h3>System Building Blocks</h3>
+            <ul class="docs-list">
+              <li>Contacts and segments are the shared audience primitives reused across campaigns.</li>
+              <li>Campaigns reference assets, messaging entries, pages, forms, and channels instead of duplicating them.</li>
+              <li>Settings centralizes database credentials, API providers, agent configuration, and environment variables.</li>
+              <li>Activity Log in Observe acts as the operational audit trail across multiple modules.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsAcquirePage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Acquire</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Acquire is the intake layer. It captures external source material before that data is normalized into contacts, messaging ideas, or reusable internal records.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Main Acquire Workspace</h3>
+            <ul class="docs-list">
+              <li>The main Acquire page supports the full job lifecycle: `create_job`, `preview_job`, `approve_job`, `execute_job`, and `job_status`.</li>
+              <li>Operators can define source URLs, paging depth, snippet size, request metadata, and an approval decision before sending the request.</li>
+              <li>Manual confirmation is required for API execution-sensitive actions.</li>
+              <li>The jobs table provides a live list of saved acquire jobs with stage, source URL, timestamps, and action controls.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Direct Ingest</h3>
+            <ul class="docs-list">
+              <li>Direct Ingest bypasses the approval workflow and runs an immediate page fetch plus parse operation.</li>
+              <li>Inputs include one source URL, a page cap, a body snippet length, and a separate manual confirmation checkbox.</li>
+              <li>The interface stores and displays completed ingest runs with success and failure counts.</li>
+              <li>Parsed Pages output lists page titles, extracted emails, extracted phones, and a snippet preview for quick review.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Channel-Specific Acquisition</h3>
+            <ul class="docs-list">
+              <li>YouTube has a dedicated submenu page and a linked comments view, making it the most developed source-specific acquisition connector in the current UI.</li>
+              <li>Instagram, TikTok, Facebook, X, Reddit, Quora, Substack, and Medium each have reserved acquire pages for future source-specific implementations.</li>
+              <li>The current structure makes Acquire the staging area for expanding new acquisition connectors without changing the top-level navigation model.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Operational Output</h3>
+            <ul class="docs-list">
+              <li>Advanced request and response JSON is exposed for inspection, which is useful for debugging workflow payloads.</li>
+              <li>Acquire output is intended to feed later workflows such as contact import, asset collection, and messaging development.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsContactsPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Contacts</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Contacts is the system of record for people and organizations. It supports direct data entry, CSV import, filtering, and segment creation for downstream targeting.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Contacts Grid</h3>
+            <ul class="docs-list">
+              <li>The default Contacts page lists records with searchable columns for name, company, email, website, YouTube, and Instagram.</li>
+              <li>Top actions open inline flows for adding a contact, importing CSVs, or moving into the exploration workflow.</li>
+              <li>This page acts as the primary maintenance surface for the audience database.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Add Contact</h3>
+            <ul class="docs-list">
+              <li>The add form supports both core identity fields and a broad set of social or publishing URLs.</li>
+              <li>Supported channels include website, YouTube, Instagram, TikTok, Facebook, X, BlueSky, Substack, Medium, and LinkedIn.</li>
+              <li>That structure makes the contact record useful as both a person record and a creator or brand profile.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>CSV Import And Mapping</h3>
+            <ul class="docs-list">
+              <li>CSV upload analyzes headers before import instead of forcing a blind upload.</li>
+              <li>The mapper allows per-column inclusion, target-key selection, type assignment, database status checks, and optional field creation.</li>
+              <li>A generated SQL helper can surface missing schema work before importing into `promo_leads`.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Explore And Segments</h3>
+            <ul class="docs-list">
+              <li>Explore Contacts adds broader filtering, sorting, record counts, and an inline save-to-segment action.</li>
+              <li>The Segments page is the reusable audience view for working with saved segment definitions and their resulting records.</li>
+              <li>Segments are shared dependencies for Campaigns and other targeting workflows.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsMessagingPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Messaging</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Messaging is the copy library. It organizes reusable content blocks by format so campaigns, pages, and publishing workflows can assemble messaging without rewriting from scratch.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Content Types</h3>
+            <ul class="docs-list">
+              <li>The module is organized into dedicated pages for Headlines, Sub-headings, Taglines, Pitches, Tweets, Posts, Articles, Descriptions, Transcripts, Comments, Hashtags, and Calls to Action.</li>
+              <li>The main Messaging page serves as a launcher into those specialized content libraries.</li>
+              <li>This structure is designed to keep copy modular so the same campaign can mix short-form and long-form assets.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Implemented Content Workflows</h3>
+            <ul class="docs-list">
+              <li>Articles, Tweets, Posts, Pitches, Comments, Hashtags, Headlines, Sub-headings, Taglines, Descriptions, Transcripts, and CTAs all have dedicated page shells with back-navigation into the core library.</li>
+              <li>The Articles and Tweets pages are the most substantial message-specific surfaces in the current interface.</li>
+              <li>Hashtags are exposed as reusable grouped assets for campaign assembly and social publishing support.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>System Role</h3>
+            <ul class="docs-list">
+              <li>Campaigns reference message records such as headlines, taglines, pitches, tweets, and CTAs.</li>
+              <li>Develop reuses messaging pieces when building pages and other conversion surfaces.</li>
+              <li>Engage can use stored social copy so outbound publishing stays consistent with campaign definitions.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsAssetsPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Assets</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Assets manages the media library used across campaigns, pages, and publishing. It combines upload flows, categorization, filtering, and preview tools in one workspace.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Library And Filtering</h3>
+            <ul class="docs-list">
+              <li>The main Assets table supports filtering by asset name, type, category, and tags.</li>
+              <li>Visible rows can be selected in bulk, enabling future bulk edit and delete actions when multiple assets are in focus.</li>
+              <li>Asset records store type, category, tags, size, and action controls.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Upload Workflows</h3>
+            <ul class="docs-list">
+              <li>The Add Assets panel supports both single-file and multi-file uploads.</li>
+              <li>Assets can be typed as Image, Video, Audio, or PDF before upload.</li>
+              <li>The current upload action is wired around Vercel Blob as the storage destination.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Asset Editing And Preview</h3>
+            <ul class="docs-list">
+              <li>The Add Asset page doubles as the asset edit surface with fields for name, type, category, and tags.</li>
+              <li>The preview panel can render image, video, audio, iframe, and text-based preview states.</li>
+              <li>Metadata such as file location, size, and dimensions is surfaced when available.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Categories And Type Shortcuts</h3>
+            <ul class="docs-list">
+              <li>The Categories page manages category taxonomies per asset type.</li>
+              <li>Dedicated create and edit pages support asset-category administration.</li>
+              <li>Image, Video, and Audio submenu pages are currently type-specific entry points reserved for specialized views.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsChannelsPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Channels</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Channels stores the destinations where campaigns and outbound actions will run. It is the credential registry for account-level publishing and outreach targets.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Channel Registry</h3>
+            <ul class="docs-list">
+              <li>The main Channels page lists each saved channel with channel name, user name, email, password field, and actions.</li>
+              <li>This gives operators one place to audit which outbound accounts are configured.</li>
+              <li>Campaigns reference these channel records to define where a campaign runs.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Create And Update</h3>
+            <ul class="docs-list">
+              <li>The create flow collects channel name, user name, email, and password.</li>
+              <li>The edit flow preserves the current password unless a replacement value is entered.</li>
+              <li>The page design implies channels are durable managed resources rather than one-off campaign settings.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Operational Role</h3>
+            <ul class="docs-list">
+              <li>Channels are prerequisites for campaign assembly and future multi-channel engagement features.</li>
+              <li>The Engage social workflow currently focuses on X, but Channels provides the generalized abstraction for more destinations.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsDevelopPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Develop</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Develop is the build layer. It creates the campaign infrastructure that sits between strategy and execution: pages, forms, templates, agents, and internal tool jobs.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Pages</h3>
+            <ul class="docs-list">
+              <li>The page builder combines templates, form selections, PDFs, messaging, and branded media into one page payload.</li>
+              <li>Operators can set primary, background, and accent colors directly in the builder.</li>
+              <li>The builder preview exposes the assembled configuration before use elsewhere.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Forms And Templates</h3>
+            <ul class="docs-list">
+              <li>The form builder supports squeeze, short, and long form variants with configurable labels, colors, and required fields.</li>
+              <li>Saved forms are listed in a reusable table, making them available to pages and campaigns.</li>
+              <li>The Templates page provides a reusable page template library plus a preview host.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Agents</h3>
+            <ul class="docs-list">
+              <li>The Agents page exposes operational agent actions including `create_job`, `preview_job`, `approve_job`, `execute_job`, and `job_status`.</li>
+              <li>It includes request and response previews so operators can inspect exact payloads sent to the agent backend.</li>
+              <li>Manual confirmation is required before sending sensitive agent actions.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Extensions</h3>
+            <ul class="docs-list">
+              <li>The Extensions page includes specialized extension utilities such as Icon Builder, plus a generic tool job runner for custom internal operations.</li>
+              <li>Icon Builder packages object details into a graphics-generation request so a small icon can be created for platform objects and navigation markers.</li>
+              <li>Tool execution is driven by either a guided form or a selected tool name plus JSON input, keeping the interface flexible for new operations.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsCampaignsPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Campaigns</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Campaigns is the assembly layer. It turns reusable records from other modules into deployable campaign definitions.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Mechanics</h3>
+            <ul class="docs-list">
+              <li>Campaign setup starts with a campaign name and a required channel selection.</li>
+              <li>Optional mechanics include segment, page, form object, and PDF references.</li>
+              <li>This separation keeps delivery mechanics distinct from content choices.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Content Assembly</h3>
+            <ul class="docs-list">
+              <li>Campaign content can attach a headline, blurb, pitch, tweet, CTA, primary image, primary video, and hashtag group.</li>
+              <li>Most selectors are intentionally wired to reusable library records from Messaging and Assets.</li>
+              <li>The campaign form is effectively the composition surface for a multi-module promotion package.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Saved Campaigns</h3>
+            <ul class="docs-list">
+              <li>Saved campaigns are shown in a tabular registry with key fields visible for quick auditing.</li>
+              <li>The page is designed to help operators compare campaign definitions before activation in Engage.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsEngagePage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Engage</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Engage is the execution layer. It is where campaigns are turned into outbound actions and channel-specific publishing workflows.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Engage Overview</h3>
+            <ul class="docs-list">
+              <li>The Engage top-level page frames outbound publishing, replies, and activation work after campaigns are assembled.</li>
+              <li>Submenu pages exist for Email, Social, Messaging, Comments, Discussion, Streaming, and Podcasts.</li>
+              <li>This keeps the top-level model broad enough for both direct outreach and public-channel execution.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Social Publishing</h3>
+            <ul class="docs-list">
+              <li>Engage: Social is an implemented queueing workflow focused on X.</li>
+              <li>Operators can compose posts, schedule optional publish times, monitor a character counter, queue content, or publish immediately.</li>
+              <li>A queue snapshot tracks scheduled, failed, and published counts plus connected account status.</li>
+              <li>The `Publish Due Posts` action flushes posts that are due now or overdue.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Execution Role</h3>
+            <ul class="docs-list">
+              <li>Engage consumes campaign definitions, channel credentials, and messaging assets rather than creating those records itself.</li>
+              <li>The non-social submenu pages are currently reserved for future workflow-specific implementations.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsObservePage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Observe</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Observe is the reporting and oversight layer. It is intended to answer what happened after outreach, publishing, and campaign execution.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Core Views</h3>
+            <ul class="docs-list">
+              <li>The Observe menu is organized into Dashboard, Reports, Analysis, and Activity Log.</li>
+              <li>Dashboard, Reports, and Analysis are current placeholders reserved for performance and analytics surfaces.</li>
+              <li>The navigation already separates real-time monitoring from structured reporting and deeper interpretation.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Activity Log</h3>
+            <ul class="docs-list">
+              <li>Activity Log is the implemented operational audit view.</li>
+              <li>Operators can filter by action family, view counts, refresh manually, and review the log grid in one place.</li>
+              <li>Supported filter groups include contacts, segments, campaigns, settings, OpenClaw, and acquire actions.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>System Role</h3>
+            <ul class="docs-list">
+              <li>Observe is the natural destination for future metrics tied to campaigns and engagement outcomes.</li>
+              <li>It closes the loop by providing oversight after the system moves from build to execution.</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section id="docsSettingsPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2>Docs: Settings</h2>
+          <button type="button" onclick="App.setActivePage('docsPage')">Back To Docs</button>
+        </div>
+        <p class="docs-intro">Settings centralizes platform configuration. It is the administrative layer for identity, infrastructure, provider access, and system-level credentials.</p>
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>General Structure</h3>
+            <ul class="docs-list">
+              <li>The Settings menu includes Profile, Agents, Database, APIs, and Env Config.</li>
+              <li>The top-level Settings page itself is currently a placeholder, while the submenu pages hold the operational settings workflows.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Database</h3>
+            <ul class="docs-list">
+              <li>Database settings manage the Supabase project URL, service role key, and the primary table names used by the app.</li>
+              <li>This page defines how the frontend points at contacts, contacts-grid, field-config, and acquire-related tables.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>APIs And Agents</h3>
+            <ul class="docs-list">
+              <li>API settings store provider credentials through a provider-aware dynamic form.</li>
+              <li>The configured providers table exposes status, update timing, and saved values visibility.</li>
+              <li>Settings: Agents is reserved for agent-specific platform configuration distinct from the Develop execution console.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Environment Configuration</h3>
+            <ul class="docs-list">
+              <li>Env Config is the infrastructure secret registry and masks sensitive values while showing whether variables are set.</li>
+              <li>Changes update runtime environment variables immediately and are designed to sync to Vercel for subsequent deployments.</li>
+              <li>This page is the single source of truth for operational credentials used across the platform.</li>
+            </ul>
+          </section>
+        </div>
+
+        <div class="docs-panel-grid">
+          <section class="docs-panel">
+            <h3>Meta Quickstart (No Guessing)</h3>
+            <ul class="docs-list">
+              <li>Use Graph API Explorer with <code>GET /me/accounts</code> to list Pages.</li>
+              <li>Choose the object where <code>name</code> matches your Page name.</li>
+              <li><strong>APP Meta &gt; Page ID</strong> = that object <code>id</code>.</li>
+              <li><strong>APP Meta &gt; Access Token</strong> = that object <code>access_token</code>.</li>
+              <li><code>paging</code> in the response is cursor metadata, not Page ID.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Instagram Account ID Mapping</h3>
+            <ul class="docs-list">
+              <li>Run <code>GET /{PAGE_ID}?fields=instagram_business_account</code>.</li>
+              <li><strong>APP Instagram &gt; Business Account ID</strong> = <code>instagram_business_account.id</code>.</li>
+              <li>Instagram posting requires a campaign primary image.</li>
+              <li>Default endpoint URL: <code>https://graph.facebook.com/v22.0</code>.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Meta Family (Facebook, Instagram, Threads)</h3>
+            <ul class="docs-list">
+              <li>Collect App ID and App Secret from Meta Developers.</li>
+              <li>Generate User Access Token and long-lived token in Graph API Explorer.</li>
+              <li>Capture Page ID and Instagram Business Account ID for IG publishing.</li>
+              <li>Use <code>meta</code> for consolidated setup or <code>instagram</code>/<code>threads</code> provider keys directly.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>OAuth Channels (LinkedIn, Pinterest, Reddit, Quora, Patreon)</h3>
+            <ul class="docs-list">
+              <li>Store app client ID/client secret first, then complete OAuth to obtain refresh token.</li>
+              <li>For Reddit comments, include a stable user-agent string and refresh token.</li>
+              <li>Quora and Patreon provider schemas are available in Settings &gt; APIs; publish routes are still planned.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Token/PWD Channels (Bluesky, Telegram, Substack, Medium, YouTube)</h3>
+            <ul class="docs-list">
+              <li>Bluesky: <code>identifier</code> + <code>app_password</code>.</li>
+              <li>Telegram: bot token from BotFather, plus chat ID for posting target.</li>
+              <li>Substack and Medium: publication/integration tokens as primary credentials.</li>
+              <li>YouTube key is currently used for Acquire workflows; Promote publishing is separate.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Operational Sequence</h3>
+            <ul class="docs-list">
+              <li>Step 1: Save credentials in Settings &gt; APIs.</li>
+              <li>Step 2: Run channel-specific status/diagnostics checks.</li>
+              <li>Step 3: Execute a one-recipient/one-post smoke test.</li>
+              <li>Step 4: Enable campaign-level publishing flow for that channel.</li>
+            </ul>
+          </section>
+        </div>
+
+      </section>
+      <section id="docsSettingsPlatformPage" class="app-page hidden docs-page">
+        <div class="page-heading-row">
+          <h2 id="docsSettingsPlatformTitle">Docs: Platform API Setup</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('docsSettingsPage')">Back To Settings Docs</button>
+            <button type="button" onclick="App.setActivePage('settingsApisPage')">Open Settings &gt; APIs</button>
+          </div>
+        </div>
+        <p id="docsSettingsPlatformIntro" class="docs-intro"></p>
+        <div class="docs-platform-detail-layout">
+          <section class="docs-panel">
+            <h3>Credential Form</h3>
+            <form id="docsPlatformApiForm">
+              
+                <label for="docsPlatformProviderKey">Provider</label>
+                <input id="docsPlatformProviderKey" name="provider_display" readonly />
+              
+              <div id="docsPlatformApiFields" class="stack-form"></div>
+              <div></div>
+              <button id="docsPlatformApiSaveBtn" type="submit">Save Platform Credentials</button>
+            </form>
+            <p id="docsPlatformApiStatus" class="meta"></p>
+          </section>
+          <section class="docs-panel">
+            <h3>Platform Documentation</h3>
+            <div id="docsPlatformDocsBody" class="docs-platform-docs-body"></div>
+          </section>
+        </div>
+      </section>
