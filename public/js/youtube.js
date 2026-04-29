@@ -4174,8 +4174,12 @@ App.youtube = (function () {
 
   async function refreshYoutubeResearchRuns(limit) {
     var safeLimit = Math.max(1, Math.min(Number(limit) || 20, 200));
-    var res = await api('/api/acquire/youtube-research-runs?limit=' + safeLimit);
-    state.acquireYoutubeResearch = Array.isArray(res.runs) ? res.runs : [];
+    try {
+      var res = await api('/api/acquire/youtube-research-runs?limit=' + safeLimit);
+      state.acquireYoutubeResearch = Array.isArray(res.runs) ? res.runs : [];
+    } catch (err) {
+      state.acquireYoutubeResearch = [];
+    }
     if (state.acquireYoutubeResearch.length) {
       await loadYoutubeResearchRun(state.acquireYoutubeResearch[0].run_id, { silent: true });
     } else {

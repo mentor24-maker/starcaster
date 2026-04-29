@@ -1,6 +1,19 @@
 # Application Official Style Guide & Core UI Conventions
 *Last Updated: 2026-04*
 
+## 0. Development Philosophy & Workflow
+
+### The Craftsman Mindset
+We are not a company trying to rush a product to market ASAP. We have the time, and the mandate, to act as skilled craftsmen. Our goal is to build a next-gen application in the most efficient and elegant way possible. Every cycle should be approached as if we are constructing a magnum opus. We must continuously look for opportunities to clean up, straighten up, streamline, and improve the application—from the deepest infrastructure up to the polished UX.
+
+### Workflow Protocols
+To preserve the integrity of our monolithic architecture and reduce frustrating revision cycles, all development must adhere to these strict disciplines:
+1. **Zero "Hacky" Edits**: We do not use brute-force or overly broad string-replacement scripts. All code modifications must use precise, line-targeted tools to prevent collateral damage.
+2. **Mandatory Discovery Phase**: Before writing any code, we must conduct thorough searches (`grep`, etc.) to trace execution paths and verify existing DOM structures. Assumptions are prohibited.
+3. **Planning Over Execution**: For anything non-trivial, we will pause and draft a structural Implementation Plan for review *before* altering code. This ensures alignment and prevents convoluted logic.
+4. **Surgical Precision**: Large files (like `devAgent.js` or `index.html`) are highly sensitive. Edits to these files must be treated as surgical procedures, deeply respecting the existing state, asynchronous flows, and monolithic nature of the code.
+
+
 ## 1. Global Component Paradigm: Buttons
 Never override native bare-metal `button { ... }` or `input { ... }` tags globally via CSS. Instead, map all native interactive elements hierarchically through explicit utility classes.
 *   **Primary Actions**: Use `<button class="btn btn-primary">`.

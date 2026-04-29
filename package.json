@@ -5,9 +5,10 @@
   "description": "Basic email marketing MVP",
   "main": "server.js",
   "scripts": {
-    "build": "esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx",
-    "dev": "esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx --watch & node server.js",
-    "start": "node server.js",
+    "build:html": "node scripts/build_html.js",
+    "build": "npm run build:html && esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx",
+    "dev": "npm run build:html && esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx --watch & node server.js",
+    "start": "npm run build:html && node server.js",
     "build:richtext": "node scripts/build_richtext_bundle.mjs",
     "import:contacts-csv:dry-run": "node scripts/import_contacts_csv_to_supabase.js",
     "import:contacts-csv:apply": "node scripts/import_contacts_csv_to_supabase.js --apply",
@@ -22,6 +23,7 @@
     "sync:dev-logs": "node scripts/sync_dev_logs.mjs"
   },
   "devDependencies": {
+    "cheerio": "^1.2.0",
     "dotenv": "^17.3.1",
     "esbuild": "^0.28.0"
   },

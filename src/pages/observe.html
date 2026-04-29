@@ -1,0 +1,135 @@
+
+      <section id="observePage" class="app-page hidden">
+        <h2>Observe</h2>
+        <p>Review outcomes, monitor activity, and analyze performance after campaigns go live.</p>
+      </section>
+      <section id="observeDashboardPage" class="app-page hidden">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--ink); padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
+          <h2>Observe: Cost & Burn-Rate Analytics</h2>
+          <button class="standard-btn" onclick="App.loadObserveReports()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            Refresh Estimates
+          </button>
+        </div>
+        
+        <div id="observeCfoDashboard">
+          <!-- Dynamically populated by App.loadObserveReports() -->
+          <p style="color: var(--muted); text-align: center; padding: 3rem;">Dashboard initializing...</p>
+        </div>
+      </section>
+      <section id="observeReportsPage" class="app-page hidden">
+        <h2>Observe: Reports</h2>
+        <p>Reports module placeholder.</p>
+      </section>
+      <section id="observeAnalysisPage" class="app-page hidden">
+        <h2>Observe: Analysis</h2>
+        <p>Analysis module placeholder.</p>
+      </section>
+      <section id="observeQuotasPage" class="app-page hidden">
+        <h2>Observe: API Quotas</h2>
+        <p>Monitor your active API integrations, test health status, and track limits.</p>
+        
+        <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
+          <!-- YouTube Data API -->
+          <div class="card card-hover">
+            <h3 style="margin-top: 0;">YouTube Data API v3</h3>
+            <p style="color: var(--muted); font-size: 0.9rem;">Provides video metadata, statistics, and comment threads for Research and Harvesting.</p>
+            
+            <div style="margin: 1.5rem 0;">
+              <div><strong>Status:</strong> <span id="quotaStatusYoutube" style="padding: 2px 6px; border-radius: 4px; font-weight: bold; background: #f1f5f9; color: #475569;">Unknown</span></div>
+              <div id="quotaErrorYoutube" style="margin-top: 8px; color: #d32f2f; font-size: 0.85rem; display: none;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+              <button type="button" class="tiny-btn icon-btn" id="pingYoutubeBtn" style="background: var(--ink); color: #fff; border: 1px solid var(--ink);" onclick="App.pingYoutubeQuota()">
+                <span class="icon-btn-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"></path><path d="M12 8V12L15 15"></path></svg></span> Ping Status
+              </button>
+              <a href="https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas" target="_blank" rel="noopener noreferrer" style="font-size: 0.85rem; text-decoration: underline; color: #2563eb;">Manage Quota ↗</a>
+            </div>
+          </div>
+          
+          <!-- OpenAI API -->
+          <div class="card card-hover">
+            <h3 style="margin-top: 0;">OpenAI API</h3>
+            <p style="color: var(--muted); font-size: 0.9rem;">Drives the platform's classification models, text generation, and agent intelligence.</p>
+            
+            <div style="margin: 1.5rem 0;">
+              <div><strong>Status:</strong> <span id="quotaStatusOpenai" style="padding: 2px 6px; border-radius: 4px; font-weight: bold; background: #f1f5f9; color: #475569;">Unknown</span></div>
+              <div id="quotaErrorOpenai" style="margin-top: 8px; color: #d32f2f; font-size: 0.85rem; display: none;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+              <button type="button" class="tiny-btn icon-btn" id="pingOpenaiBtn" style="background: var(--ink); color: #fff; border: 1px solid var(--ink);" onclick="App.pingOpenaiQuota()">
+                <span class="icon-btn-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"></path><path d="M12 8V12L15 15"></path></svg></span> Ping Status
+              </button>
+              <a href="https://platform.openai.com/account/limits" target="_blank" rel="noopener noreferrer" style="font-size: 0.85rem; text-decoration: underline; color: #2563eb;">Manage Quota ↗</a>
+            </div>
+          </div>
+          
+          <!-- Gemini API -->
+          <div class="card card-hover">
+            <h3 style="margin-top: 0;">Google Gemini API</h3>
+            <p style="color: var(--muted); font-size: 0.9rem;">Runs advanced logic processes and text-generation using Google's AI Studio.</p>
+            
+            <div style="margin: 1.5rem 0;">
+              <div><strong>Status:</strong> <span id="quotaStatusGemini" style="padding: 2px 6px; border-radius: 4px; font-weight: bold; background: #f1f5f9; color: #475569;">Unknown</span></div>
+              <div id="quotaErrorGemini" style="margin-top: 8px; color: #d32f2f; font-size: 0.85rem; display: none;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+              <button type="button" class="tiny-btn icon-btn" id="pingGeminiBtn" style="background: var(--ink); color: #fff; border: 1px solid var(--ink);" onclick="App.pingGeminiQuota()">
+                <span class="icon-btn-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"></path><path d="M12 8V12L15 15"></path></svg></span> Ping Status
+              </button>
+              <a href="https://aistudio.google.com/app/plan_information" target="_blank" rel="noopener noreferrer" style="font-size: 0.85rem; text-decoration: underline; color: #2563eb;">Manage Quota ↗</a>
+            </div>
+          </div>
+          
+          <!-- OpenClaw -->
+          <div class="card card-hover">
+            <h3 style="margin-top: 0;">OpenClaw (Local)</h3>
+            <p style="color: var(--muted); font-size: 0.9rem;">Browser-automation worker engine for scraping dynamic SPAs via locally hosted Chromium.</p>
+            
+            <div style="margin: 1.5rem 0;">
+              <div><strong>Status:</strong> <span id="quotaStatusOpenclaw" style="padding: 2px 6px; border-radius: 4px; font-weight: bold; background: #f1f5f9; color: #475569;">Unknown</span></div>
+              <div id="quotaErrorOpenclaw" style="margin-top: 8px; color: #d32f2f; font-size: 0.85rem; display: none;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+              <button type="button" class="tiny-btn icon-btn" id="pingOpenclawBtn" style="background: var(--ink); color: #fff; border: 1px solid var(--ink);" onclick="App.pingOpenclawQuota()">
+                <span class="icon-btn-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"></path><path d="M12 8V12L15 15"></path></svg></span> Ping Status
+              </button>
+              <a href="#" style="font-size: 0.85rem; text-decoration: underline; color: #2563eb;" onclick="App.setActivePage('apiSettingsPage'); return false;">Settings ↗</a>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="activityLogPage" class="app-page hidden">
+        <h2>Activity Log</h2>
+
+        <div class="section-toolbar" style="margin-top:0; margin-bottom:1rem;">
+          <span>
+            <select id="activityLogFilter" style="width:auto; display:inline-block; margin:0;">
+              <option value="">All actions</option>
+              <option value="contact">Contacts</option>
+              <option value="segment">Segments</option>
+              <option value="campaign">Campaigns</option>
+              <option value="promolead">Contacts</option>
+              <option value="settings">Settings</option>
+              <option value="openclaw">OpenClaw</option>
+              <option value="acquire">Acquire</option>
+            </select>
+            &nbsp;
+            <span id="activityLogCount" style="font-size:0.85rem; color:var(--muted);">—</span>
+            &nbsp;
+            <span id="activityLogSpinner" style="display:none; font-size:0.85rem;">⏳</span>
+          </span>
+          <button id="activityLogRefresh" style="width:auto;">↻ Refresh</button>
+        </div>
+
+        <div class="table-wrap">
+          <div id="activityLogGrid"></div>
+        </div>
+        <p id="activityLogEmpty" style="display:none; color:var(--muted); text-align:center; padding:2rem 0;">
+          No activity recorded yet. Actions you take in the platform will appear here.
+        </p>
+      </section>

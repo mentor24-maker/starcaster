@@ -1,0 +1,255 @@
+
+      <section id="devProjectsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Projects</h2>
+          <button id="devNewProjectBtn" class="primary-btn">+ New Project</button>
+        </div>
+        <div id="devProjectBrowserPanel" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+          <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+              <thead>
+                <tr><th style="text-align:left;">Project Name</th><th>Description</th><th style="text-align:center;">Status</th><th style="text-align:center;">Members</th><th style="text-align:center;">Tasks</th><th>Created</th><th style="text-align:center;">Actions</th></tr>
+              </thead>
+              <tbody id="devProjectBrowserTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="devProjectEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+          <h2 id="devProjectEditorHeader" style="margin-top: 0;">Project Details</h2>
+          <form id="devProjectEditorForm" class="standard-form-grid" style="max-width: 800px;">
+            <input type="hidden" id="devEditProjectId" />
+            <div class="form-group full-width">
+              <label for="devEditProjectName">Project Name</label>
+              <input type="text" id="devEditProjectName" required />
+            </div>
+            <div class="form-group full-width">
+              <label for="devEditProjectDesc">Description</label>
+              <textarea id="devEditProjectDesc" style="min-height: 120px;"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="devEditProjectStatus">Status</label>
+              <select id="devEditProjectStatus">
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Team Members</label>
+              <div id="devEditProjectMembersList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;"></div>
+              <select id="devEditProjectMemberSelect"></select>
+            </div>
+            <div class="form-group full-width" style="margin-top: 1.5rem; border-top: 1px solid var(--border-light); padding-top: 1.5rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                <label style="margin:0; font-size: 1.1rem; color: var(--text-primary);">Project Tasks</label>
+                <button type="button" class="secondary-btn tiny-btn" onclick="const pId = document.getElementById('devEditProjectId').value; if(pId) App.devAgent.createProjectTask(pId); else App.notify('Save the project first', true);">+ New Task</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                  <thead>
+                    <tr>
+                      <th style="width: 80px;">ID</th>
+                      <th>Title</th>
+                      <th>Status</th>
+                      <th>Priority</th>
+                      <th>Assignee</th>
+                      <th style="text-align: right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="devProjectTasksTableBody">
+                    <tr><td colspan="6" style="text-align:center; padding:1rem; opacity:0.7;">Save the project first to add tasks.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="form-actions full-width" style="margin-top: 1rem;">
+              <button type="submit" class="primary-btn">Save Project</button>
+              <button type="button" id="devCloseProjectEditorBtn" class="secondary-btn">Close</button>
+            </div>
+          </form>
+        </div>
+      </section>
+      <section id="devDashboardPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Dev Dashboard</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2rem; height: calc(100vh - 180px); min-height: 600px; margin-top: 1.5rem;">
+          
+          <div style="background: #e0f2fe; border-radius: 40px; padding: 2rem; display: flex; flex-direction: column; border: 2px solid #bae6fd; overflow-y: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; color: var(--text-primary);">Action Items</h3>
+            <ul id="devActionItemsList" class="dev-session-list" style="flex: 1; overflow-y: auto; list-style: none; padding-left: 0; margin-top: 0.5rem;">
+              <li class="dev-session-item" style="color: #666; font-style: italic;">No pending actions.</li>
+            </ul>
+          </div>
+
+          <div style="background: #e1f5fe; border-radius: 40px; padding: 2rem; display: flex; flex-direction: column; border: 2px solid #b3e5fc; overflow-y: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; color: var(--text-primary);">Tasks</h3>
+            <ul id="devTaskList" class="dev-session-list" style="flex: 1; overflow-y: auto; list-style: none; padding-left: 0; margin-top: 0.5rem;">
+              <li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>
+            </ul>
+          </div>
+
+          <div style="background: #e0f7fa; border-radius: 40px; padding: 2rem; display: flex; flex-direction: column; border: 2px solid #b2ebf2; overflow-y: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; color: var(--text-primary);">Forum</h3>
+            <ul id="devSessionList" class="dev-session-list" style="flex: 1; overflow-y: auto; list-style: none; padding-left: 0; margin-top: 0.5rem;">
+            </ul>
+          </div>
+
+          <div style="background: #e8eaf6; border-radius: 40px; padding: 2rem; display: flex; flex-direction: column; border: 2px solid #c5cae9; overflow-y: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; color: var(--text-primary);">Team</h3>
+            <ul id="devTeamList" class="dev-session-list" style="flex: 1; overflow-y: auto; list-style: none; padding-left: 0; margin-top: 0.5rem;">
+              <li class="dev-session-item" style="color: #666; font-style: italic;">No team members.</li>
+            </ul>
+          </div>
+
+          <div style="background: #e3f2fd; border-radius: 40px; padding: 2rem; display: flex; flex-direction: column; border: 2px solid #bbdefb; overflow-y: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; color: var(--text-primary);">Friction Log</h3>
+            <ul id="devFrictionSidebarList" class="dev-session-list" style="flex: 1; overflow-y: auto; list-style: none; padding-left: 0; margin-top: 0.5rem;">
+            </ul>
+          </div>
+
+          <div style="background: #e8f5e9; border-radius: 40px; padding: 2rem; display: flex; flex-direction: column; border: 2px solid #c8e6c9; overflow-y: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+              Git Status
+              <button id="devRefreshGitBtn" class="secondary-btn tiny-btn" onclick="App.devAgent.loadGitStatus()" style="padding: 0.1rem 0.5rem; font-size: 0.7rem;">Refresh</button>
+            </h3>
+            <div id="devGitStatusContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.9rem;">
+              <div style="color: #666; font-style: italic;">Loading git metrics...</div>
+            </div>
+          </div>
+
+
+        </div>
+      </section>
+      <section id="devTeamPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Team Members</h2>
+          <button id="devNewTeamBtn" class="primary-btn" onclick="App.contacts.openEditPage(null, 'devTeamPage')">+ Add Member (via Contacts)</button>
+        </div>
+        <div id="devTeamBrowserPanel" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+          <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+              <thead>
+                <tr><th style="text-align:left;">Member Name</th><th>Type</th><th>Role</th><th>Joined</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="devTeamBrowserTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="devTeamEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+           <!-- Editor functionality uses Contacts UI -->
+        </div>
+      </section>
+      <section id="devRolesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Roles & Permissions</h2>
+          <button id="devNewRoleBtn" class="primary-btn">+ New Role</button>
+        </div>
+        <div id="devRolesBrowserPanel" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+          <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+              <thead>
+                <tr><th style="text-align:left;">Role Name</th><th>Description</th></tr>
+              </thead>
+              <tbody id="devRolesBrowserTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="devRoleEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+          <h2 id="devRoleEditorHeader" style="margin-top: 0;">Role Details</h2>
+          <form id="devRoleEditorForm" class="standard-form-grid" style="max-width: 800px;">
+            <input type="hidden" id="devEditRoleId" />
+            <div class="form-group full-width">
+              <label for="devEditRoleName">Role Name</label>
+              <input type="text" id="devEditRoleName" required />
+            </div>
+            <div class="form-group full-width">
+              <label for="devEditRoleDesc">Description</label>
+              <textarea id="devEditRoleDesc" style="min-height: 120px;"></textarea>
+            </div>
+            <div class="form-actions full-width" style="margin-top: 1rem;">
+              <button type="submit" class="primary-btn">Save Role</button>
+              <button type="button" id="devCloseRoleEditorBtn" class="secondary-btn">Close</button>
+            </div>
+          </form>
+        </div>
+      </section>
+            <section id="devFrictionPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Friction Logs</h2>
+          <button id="devNewFrictionBtn" class="primary-btn" onclick="App.devAgent.openFrictionEditor()">+ New Log</button>
+        </div>
+        <div style="display: flex; flex-direction: row; gap: 2rem; padding: 2rem; height: calc(100vh - 120px); align-items: flex-start;">
+          <div style="flex: 1; min-width: 0;">
+            <div id="devFrictionEditorPanel" class="" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
+              <h2 id="devFrictionEditorHeader" style="margin-top: 0;">Friction Log Details</h2>
+              <form id="devFrictionEditorForm" class="standard-form-grid" style="max-width: 800px;">
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionTitle">Title</label>
+                  <input type="text" id="devEditFrictionTitle" required />
+                </div>
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionSection">Section</label>
+                  <select id="devEditFrictionSection">
+                    <option value="Acquire">Acquire</option>
+                    <option value="Contacts">Contacts</option>
+                    <option value="Channels">Channels</option>
+                    <option value="Messaging">Messaging</option>
+                    <option value="Assets">Assets</option>
+                    <option value="Builder">Builder</option>
+                    <option value="Campaigns">Campaigns</option>
+                    <option value="Promote">Promote</option>
+                    <option value="Engage">Engage</option>
+                    <option value="Observe">Observe</option>
+                    <option value="Training">Training</option>
+                    <option value="Settings">Settings</option>
+                    <option value="Help">Help</option>
+                    <option value="Dev">Dev</option>
+                  </select>
+                </div>
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionDesc">Payload / Description</label>
+                  <textarea id="devEditFrictionDesc" style="min-height: 120px;" required></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="rogerEditFrictionStatus">Status</label>
+                  <select id="devEditFrictionStatus">
+                    <option value="open">Open</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="documented">Documented</option>
+                  </select>
+                </div>
+                <div class="form-group full-width">
+                  <label for="rogerEditFrictionResolution">Resolution Notes</label>
+                  <textarea id="devEditFrictionResolution" style="min-height: 120px;"></textarea>
+                </div>
+                <div class="form-actions full-width" style="margin-top: 1rem;">
+                  <button type="submit" class="primary-btn">Save Changes</button>
+                  <button type="button" id="devCloseFrictionEditorBtn" class="secondary-btn">Close Editor</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div style="width: 400px; flex-shrink: 0; position: static; height: 100%;">
+            <aside class="dev-friction-sidebar" id="devFrictionSidebar">
+            <div class="dev-sidebar-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <div>
+                <h4 style="margin: 0; color: var(--text-color-secondary); font-size: 0.85rem; text-transform: uppercase;">HITL Friction Log</h4>
+                <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: #666;">Log manual payloads & data shuttles</p>
+              </div>
+              <button type="button" id="devFrictionCloseBtn" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem; line-height:1;">&times;</button>
+            </div>
+            <div style="padding: 1rem; border-bottom: 1px solid var(--border-light);">
+              <form id="devFrictionForm" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <textarea id="devFrictionInput" placeholder="Describe the manual intervention..." required style="min-height: 80px;"></textarea>
+                <button type="submit" class="primary-btn" style="width: 100%;">Log Friction</button>
+              </form>
+            </div>
+            <ul id="devFrictionList" class="dev-friction-log-list">
+              <!-- Logs populated here -->
+              <li class="dev-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>
+            </ul>
+          </aside>
+          </div>
+        </div>
+      </section>
