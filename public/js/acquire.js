@@ -2257,11 +2257,26 @@ App.acquire = (function () {
       const guidelinesLoaded = Boolean(trainingGuidelines);
       const contextExcerpt = contextLoaded ? trainingContext.slice(0, 260) : 'No shared training context loaded.';
       const guidelinesExcerpt = guidelinesLoaded ? trainingGuidelines.slice(0, 220) : 'No shared guidelines loaded.';
-      promptSummary.innerHTML =
-        `<strong>Training Context:</strong> ${contextLoaded ? 'Loaded' : 'Missing'}<br>` +
-        `<span>${contextExcerpt}</span><br><br>` +
-        `<strong>Guidelines:</strong> ${guidelinesLoaded ? 'Loaded' : 'Missing'}<br>` +
-        `<span>${guidelinesExcerpt}</span>`;
+      promptSummary.innerHTML = '';
+      const tCtxLabel = document.createElement('strong');
+      tCtxLabel.textContent = 'Training Context: ';
+      promptSummary.appendChild(tCtxLabel);
+      promptSummary.appendChild(document.createTextNode(contextLoaded ? 'Loaded' : 'Missing'));
+      promptSummary.appendChild(document.createElement('br'));
+      const tCtxVal = document.createElement('span');
+      tCtxVal.textContent = contextExcerpt;
+      promptSummary.appendChild(tCtxVal);
+      promptSummary.appendChild(document.createElement('br'));
+      promptSummary.appendChild(document.createElement('br'));
+      
+      const gLabel = document.createElement('strong');
+      gLabel.textContent = 'Guidelines: ';
+      promptSummary.appendChild(gLabel);
+      promptSummary.appendChild(document.createTextNode(guidelinesLoaded ? 'Loaded' : 'Missing'));
+      promptSummary.appendChild(document.createElement('br'));
+      const gVal = document.createElement('span');
+      gVal.textContent = guidelinesExcerpt;
+      promptSummary.appendChild(gVal);
       promptSummary.classList.toggle('is-missing', !contextLoaded && !guidelinesLoaded);
     }
     const categoryNames = getTrainingConfigNames('youtubeMinerCategoryConfigTable');
