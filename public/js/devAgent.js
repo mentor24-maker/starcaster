@@ -251,14 +251,24 @@ App.devAgent.init = async function() {
     try {
       if (pageId === 'devProjectsPage') {
         await App.devAgent.loadTasks(); // Keep sidebar loaded
-        setTimeout(() => App.devAgent.loadActionItems(), 50);
+        setTimeout(() => {
+          App.devAgent.showProjectBrowser();
+          App.devAgent.loadActionItems();
+        }, 50);
       } else if (pageId === 'devTasksPage') {
         await App.devAgent.loadTasks();
-        setTimeout(() => App.devAgent.showTaskBrowser(), 50);
+        if (devState.skipNextBrowserReset) {
+          devState.skipNextBrowserReset = false;
+        } else {
+          setTimeout(() => App.devAgent.showTaskBrowser(), 50);
+        }
       } else if (pageId === 'devDashboardPage') {
         await App.devAgent.loadTasks();
+        setTimeout(() => App.devAgent.loadDashboard(), 50);
         setTimeout(() => App.devAgent.loadActionItems(), 50);
         setTimeout(() => App.devAgent.loadGitStatus(), 50);
+        setTimeout(() => App.devAgent.loadSessions(), 50);
+        setTimeout(() => App.devAgent.loadTeam(), 50);
       } else if (pageId === 'devForumPage') {
         await App.devAgent.loadSessions();
         setTimeout(() => App.devAgent.restoreChatPanel(), 50);
@@ -527,17 +537,17 @@ App.devAgent.loadTasks = async function(projectId = null) {
     
     // Also refresh the dashboard if it's rendered
     if (typeof App.devAgent.loadDashboard === 'function') {
-      App.devAgent.loadActionItems();
+      App.devAgent.loadDashboard();
     }
   } catch (err) {
-    App.devAgent.renderErrorState('devTaskList', err, true);
+    console.error('loadSessions failed:', err); if (document.getElementById('devThreadsAccordionContainer')) document.getElementById('devThreadsAccordionContainer').innerHTML = '<div class="error-msg">' + err.message + '</div>'; if(document.getElementById('devSessionList')) document.getElementById('devSessionList').innerHTML = '<li class="error-msg">' + err.message + '</li>';
   }
 };
 
 App.devAgent.loadSessions = async function() { 
   App.devAgent.loadAllMessages();
-  const accordionContainer = document.getElementById('devSessionList');
-  const dashboardList = document.getElementById('devDashboardForumList');
+  const accordionContainer = document.getElementById('devThreadsAccordionContainer');
+  const dashboardList = document.getElementById('devSessionList');
   
   if (!accordionContainer && !dashboardList) return;
   
@@ -613,6 +623,7 @@ App.devAgent.createThreadAccordion = function(session) {
   container.style.borderRadius = '8px';
   container.style.background = 'var(--bg-card)';
   container.style.overflow = 'hidden';
+  container.style.flexShrink = '0';
 
   const header = document.createElement('div');
   header.className = 'dev-thread-accordion-header';
@@ -645,7 +656,7 @@ App.devAgent.createThreadAccordion = function(session) {
 App.devAgent.expandThreadAccordion = function(sessionId) {
   devState.activeSessionId = sessionId;
   
-  const container = document.getElementById('devSessionList');
+  const container = document.getElementById('devThreadsAccordionContainer');
   if (!container) return;
   
   const accordions = container.querySelectorAll('.dev-thread-accordion');
@@ -702,7 +713,7 @@ App.devAgent.expandThreadAccordion = function(sessionId) {
 };
 
 App.devAgent.collapseThreadAccordion = function(sessionId) {
-  const container = document.getElementById('devSessionList');
+  const container = document.getElementById('devThreadsAccordionContainer');
   if (!container) return;
   const acc = container.querySelector(`.dev-thread-accordion[data-session-id="${sessionId}"]`);
   if (acc) {
@@ -959,8 +970,8 @@ App.devAgent.loadHistory = async function(sessionId, customLogContainer = null) 
     // Evaluate constraints natively post-load
     App.devAgent.renderActiveCommand();
   } catch (err) {
-    devElements.log.innerHTML = `<div class="error-msg">Failed to load history. Error: ${err.message}<br><pre>${err.stack}</pre></div>`;
-    devElements.input.disabled = false;
+    if(targetLog) targetLog.innerHTML = `<div class="error-msg">Failed to load history. Error: ${err.message}<br><pre>${err.stack}</pre></div>`;
+    if (devElements.input) devElements.input.disabled = false;
   }
 };
 
@@ -1139,8 +1150,8 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
     return;
   }
 
-  if (devElements.log.querySelector('.empty-state')) {
-    devElements.log.innerHTML = '';
+  if (logContainer && logContainer.querySelector('.empty-state')) {
+    logContainer.innerHTML = '';
   }
 
   if (chat.id) {
@@ -2682,6 +2693,12 @@ window.addEventListener('DOMContentLoaded', () => {
     devTaskEditorForm.addEventListener('submit', App.devAgent.saveTaskEditor);
   }
   
+  const devTaskFilterInputs = ['devTaskFilterText', 'devTaskFilterStatus', 'devTaskFilterProject', 'devTaskFilterPriority'];
+  devTaskFilterInputs.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', App.devAgent.renderTasksTable);
+  });
+  
   // Team binding
   const devAddTeamMemberBtn = document.getElementById('devAddTeamMemberBtn');
   if (devAddTeamMemberBtn) {
@@ -2722,10 +2739,10 @@ App.devAgent.showTaskBrowser = async function() {
   const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
   const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
 
-  document.getElementById('devChatLog').classList.add('hidden');
-  document.getElementById('devChatForm').classList.add('hidden');
-  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const devChatLogEl = document.getElementById('devChatLog'); if (devChatLogEl) devChatLogEl.classList.add('hidden');
+  const devChatFormEl = document.getElementById('devChatForm'); if (devChatFormEl) devChatFormEl.classList.add('hidden');
+  const devChatMainHeaderEl = document.getElementById('devChatMainHeader'); if (devChatMainHeaderEl) devChatMainHeaderEl.classList.add('hidden');
+  const devPersistentOverlayEl = document.getElementById('devPersistentOverlay'); if (devPersistentOverlayEl) devPersistentOverlayEl.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const editorPanel = document.getElementById('devTaskEditorPanel'); if(editorPanel) editorPanel.classList.add('hidden');
   const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
@@ -2886,113 +2903,152 @@ App.devAgent.handleDrop = async function(e, newStatus) {
   }
 };
 
+App.devAgent.tasksSortKey = 'created_at';
+App.devAgent.tasksSortAsc = false;
+
+App.devAgent.sortTasks = function(key) {
+  if (App.devAgent.tasksSortKey === key) {
+    App.devAgent.tasksSortAsc = !App.devAgent.tasksSortAsc;
+  } else {
+    App.devAgent.tasksSortKey = key;
+    App.devAgent.tasksSortAsc = true;
+  }
+  App.devAgent.renderTasksTable();
+};
+
 App.devAgent.loadTasksTable = async function() {
   const tbody = document.getElementById('devTaskBrowserTable');
   if (tbody && window.supabaseClient) {
     tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">Loading tasks...</td></tr>';
     
-    let query = window.supabaseClient.from('dev_tasks').select('*, dev_projects(name)').order('created_at', { ascending: false });
+    const { data: tasks, error } = await window.supabaseClient.from('dev_tasks').select('*, dev_projects(name)').order('created_at', { ascending: false });
     
-    const statusFilter = document.getElementById('devTaskFilterStatus') ? document.getElementById('devTaskFilterStatus').value : 'all';
-    const projectFilter = document.getElementById('devTaskFilterProject') ? document.getElementById('devTaskFilterProject').value : 'all';
-    
-    if (statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
-    }
-    if (projectFilter !== 'all') {
-      query = query.eq('project_id', projectFilter);
-    }
-    
-    const { data: tasks, error } = await query;
     if (error) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Failed to fetch.</td></tr>';
       return;
     }
     
-    if (!tasks || tasks.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">No tasks found.</td></tr>';
-      return;
-    }
+    devState.allTasks = tasks || [];
     
-    tbody.innerHTML = '';
-    tasks.forEach(t => {
-      const projectName = t.dev_projects && t.dev_projects.name ? t.dev_projects.name : '-';
-      let assigneeName = App.devAgent.getAssigneeName(t.assignee);
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="text-align:left;"><strong>${t.title}</strong></td>
-        <td>${projectName}</td>
-        <td>${t.status || '-'}</td>
-        <td>${t.priority || '-'}</td>
-        <td>${assigneeName}</td>
-        <td>${new Date(t.created_at).toLocaleDateString()}</td>
-        <td style="text-align: center; white-space: nowrap; gap: 0.5rem; display: flex; justify-content: center;">
-          <button class="icon-btn" onclick="App.devAgent.openTaskEditor('${t.id}')" title="Edit Task">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-          </button>
-          <button class="icon-btn" onclick="App.devAgent.cloneTask('${t.id}')" title="Clone Task">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-          </button>
-          <button class="icon-btn danger-hover" onclick="App.devAgent.deleteTask('${t.id}')" title="Delete Task">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-          </button>
-        </td>
-      `;
-      tbody.appendChild(tr);
+    // Normalize data for easy sorting
+    devState.allTasks.forEach(t => {
+      t.project_name = t.dev_projects && t.dev_projects.name ? t.dev_projects.name : '';
+      t.assignee_name = App.devAgent.getAssigneeName(t.assignee) || '';
     });
+    
+    App.devAgent.renderTasksTable();
   }
 };
 
+App.devAgent.renderTasksTable = function() {
+  const tbody = document.getElementById('devTaskBrowserTable');
+  if (!tbody) return;
+  
+  if (!devState.allTasks) {
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">Loading tasks...</td></tr>';
+    return;
+  }
+  
+  const filterText = (document.getElementById('devTaskFilterText')?.value || '').toLowerCase();
+  const filterStatus = document.getElementById('devTaskFilterStatus')?.value || 'all';
+  const filterProject = document.getElementById('devTaskFilterProject')?.value || 'all';
+  const filterPriority = document.getElementById('devTaskFilterPriority')?.value || 'all';
+  
+  let filtered = devState.allTasks.filter(t => {
+    if (filterStatus !== 'all' && t.status !== filterStatus) return false;
+    if (filterProject !== 'all' && t.project_id !== filterProject) return false;
+    if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+    if (filterText) {
+      if (!((t.title && t.title.toLowerCase().includes(filterText)) ||
+            (t.project_name && t.project_name.toLowerCase().includes(filterText)) ||
+            (t.assignee_name && t.assignee_name.toLowerCase().includes(filterText)))) {
+        return false;
+      }
+    }
+    return true;
+  });
+  
+  const key = App.devAgent.tasksSortKey;
+  const asc = App.devAgent.tasksSortAsc;
+  
+  filtered.sort((a, b) => {
+    let valA = a[key] !== undefined ? a[key] : '';
+    let valB = b[key] !== undefined ? b[key] : '';
+    
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    
+    if (valA < valB) return asc ? -1 : 1;
+    if (valA > valB) return asc ? 1 : -1;
+    return 0;
+  });
+  
+  // Update UI icons
+  const keys = ['title', 'project_name', 'status', 'priority', 'assignee_name', 'created_at'];
+  keys.forEach(k => {
+    const el = document.getElementById(`sortIcon_task_${k}`);
+    if (el) {
+      if (k === key) {
+        el.textContent = asc ? ' ▲' : ' ▼';
+      } else {
+        el.textContent = '';
+      }
+    }
+  });
+
+  tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">No matching tasks found.</td></tr>';
+    return;
+  }
+  
+  filtered.forEach(t => {
+    const projectName = t.project_name || '-';
+    let assigneeName = t.assignee_name;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-family: monospace; font-size: 0.8em; color: var(--text-muted);">${t.id.substring(0,8)}</td>
+      <td style="text-align:left;"><strong>${t.title}</strong></td>
+      <td>${projectName}</td>
+      <td>${t.status || '-'}</td>
+      <td>${t.priority || '-'}</td>
+      <td>${assigneeName}</td>
+      <td>${new Date(t.created_at).toLocaleDateString()}</td>
+      <td style="text-align: center; white-space: nowrap; gap: 0.5rem; display: flex; justify-content: center;">
+        <button class="icon-btn" onclick="App.devAgent.openTaskEditor('${t.id}')" title="Edit Task">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+        <button class="icon-btn" onclick="App.devAgent.cloneTask('${t.id}')" title="Clone Task">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button class="icon-btn danger-hover" onclick="App.devAgent.deleteTask('${t.id}')" title="Delete Task">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+};
+
 App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
+  devState.skipNextBrowserReset = true;
   App.setActivePage('devTasksPage');
   devState.returnToProjectEditorId = returnToProjectId || null;
-  document.getElementById('devChatLog').classList.remove('hidden');
-  document.getElementById('devChatForm').classList.remove('hidden');
-  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.remove('hidden');
-  
-  // Reparent chat interface to task discussion container
-  const chatInterface = document.getElementById('devChatInterface');
-  const discContainer = document.getElementById('devTaskDiscussionContainer');
-  if (chatInterface && discContainer && chatInterface.parentElement !== discContainer) {
-    discContainer.appendChild(chatInterface);
-  }
-  
-  // Show Accordion headers explicitly (since they might have been hidden in restoreChatPanel)
-  const detailsBtn = document.getElementById('devTaskDetailsAccordionBtn'); 
-  if(detailsBtn) { detailsBtn.classList.remove('hidden'); detailsBtn.style.display = 'flex'; detailsBtn.setAttribute('aria-expanded', 'true'); }
-  const discBtn = document.getElementById('devTaskDiscussionAccordionBtn'); 
-  if(discBtn) { discBtn.classList.remove('hidden'); discBtn.style.display = 'flex'; discBtn.setAttribute('aria-expanded', 'true'); }
-  
-  const formWrapper = document.getElementById('devTaskEditorFormWrapper');
-  if(formWrapper) formWrapper.classList.remove('hidden');
-  
-  // Also ensure the bodies are handled.
-  // The panel is handled below. devChatLog and devChatForm are handled above.
-  // devChatMainActions removed from DOM
-  
-  // Hide general buttons inside task context
-  const newThreadBtn = document.getElementById('devNewSessionBtn'); if(newThreadBtn) newThreadBtn.classList.add('hidden');
-  
-  // Style Chat Input for Task Discussion
-  const chatInput = document.getElementById('devChatInput');
-  if (chatInput) {
-    chatInput.placeholder = 'Discuss Task';
-    chatInput.classList.add('task-discussion-input');
-  }
-
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const devPersistentOverlayEl = document.getElementById('devPersistentOverlay'); if (devPersistentOverlayEl) devPersistentOverlayEl.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const browserPanel = document.getElementById('devTaskBrowserPanel'); if(browserPanel) browserPanel.classList.add('hidden');
+  const kanban = document.getElementById('devDashboardKanban'); if(kanban) { kanban.classList.add('hidden'); kanban.style.display = 'none'; }
   const teamBrowserPanel = document.getElementById('devTeamBrowserPanel'); if(teamBrowserPanel) teamBrowserPanel.classList.add('hidden');
   const teamEditorPanel = document.getElementById('devTeamEditorPanel'); if(teamEditorPanel) teamEditorPanel.classList.add('hidden');
   const rolesBrowserPanel = document.getElementById('devRolesBrowserPanel'); if(rolesBrowserPanel) rolesBrowserPanel.classList.add('hidden');
   const roleEditorPanel = document.getElementById('devRoleEditorPanel'); if(roleEditorPanel) roleEditorPanel.classList.add('hidden');
-  
+
   const panel = document.getElementById('devTaskEditorPanel');
   if (panel) {
     panel.classList.remove('hidden');
     document.getElementById('devTaskEditorHeader').textContent = 'Loading...';
+
     
     // Default hide the new thread button until existing task is confirmed
     const newThreadBtn = document.getElementById('devTaskNewThreadBtn');
@@ -3033,7 +3089,9 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
       if (!taskId) {
         // NEW TASK MODE
         document.getElementById('devTaskEditorHeader').textContent = 'New Task';
-        document.getElementById('devActiveSessionTitle').textContent = `New Task`;
+        const viewProjBtn = document.getElementById('devTasksViewProjectBtn'); if(viewProjBtn) viewProjBtn.classList.add('hidden');
+        const sessionTitle = document.getElementById('devActiveSessionTitle');
+        if (sessionTitle) sessionTitle.textContent = `New Task`;
         document.getElementById('devEditTaskId').value = '';
         document.getElementById('devEditTaskTitle').value = '';
         document.getElementById('devEditTaskDesc').value = '';
@@ -3045,25 +3103,26 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
           projSelect.value = '';
         }
         
-        document.getElementById('devTaskProjectContext').innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Save the task to see project context.</p>`;
-        document.getElementById('devChatLog').innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic;">Save the task to start a discussion.</div>';
+        const projContext = document.getElementById('devTaskProjectContext');
+        if (projContext) projContext.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Save the task to see project context.</p>`;
         
-        const chatForm = document.getElementById('devChatForm');
-        if (chatForm) chatForm.classList.add('hidden');
+        const chatContainer = document.getElementById('devTaskChatContainer');
+        if (chatContainer) {
+          chatContainer.innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic; text-align: center;">Save the task to start a discussion.</div>';
+        }
         
         return; // Stop here for new tasks
       }
 
       // EXISTING TASK MODE
-      const chatForm = document.getElementById('devChatForm');
-      if (chatForm) chatForm.classList.remove('hidden');
       
       if (newThreadBtn) newThreadBtn.classList.remove('hidden');
 
       const { data: log, error } = await window.supabaseClient.from('dev_tasks').select('*').eq('id', taskId).single();
       if (error) throw error;
       document.getElementById('devTaskEditorHeader').textContent = 'Task Details';
-      document.getElementById('devActiveSessionTitle').textContent = `Task: ${log.title}`;
+      const sessionTitle = document.getElementById('devActiveSessionTitle');
+      if (sessionTitle) sessionTitle.textContent = `Task: ${log.title}`;
       
       // Lazy load a dev_session for this task if it doesn't exist
       if (!log.session_id) {
@@ -3109,16 +3168,52 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
            html += `<p style="font-size: 0.85rem; color: var(--text-muted);">No other tasks in this project.</p>`;
          }
          
-         document.getElementById('devTaskProjectContext').innerHTML = html;
+         const projContext = document.getElementById('devTaskProjectContext');
+         if (projContext) projContext.innerHTML = html;
       } else {
-         document.getElementById('devTaskProjectContext').innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Task does not belong to a project.</p>`;
+         const projContext = document.getElementById('devTaskProjectContext');
+         if (projContext) projContext.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Task does not belong to a project.</p>`;
       }
 
       // Load the session into the chat log
-      if (log.session_id) {
-         App.devAgent.selectSession(log.session_id, true); // true = isFromTaskEditor
-      } else {
-         document.getElementById('devChatLog').innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic;">Failed to initialize discussion thread.</div>';
+      const chatContainer = document.getElementById('devTaskChatContainer');
+      if (chatContainer) {
+        if (log.session_id) {
+           devState.activeSessionId = log.session_id; // Set active session for the chat form
+           chatContainer.innerHTML = '<div class="dev-chat-log" style="flex: 1; overflow-y: auto;"></div>';
+           
+           // Clone chat form template
+           const template = document.getElementById('devChatFormTemplate');
+           if (template) {
+             const formClone = template.content.cloneNode(true);
+             chatContainer.appendChild(formClone);
+             
+             // Bind form submit event
+             const form = chatContainer.querySelector('.dev-inline-chat-form');
+             if (form) {
+               form.addEventListener('submit', (e) => {
+                 e.preventDefault();
+                 App.devAgent.submitChat(form);
+               });
+               
+               // Bind file trigger
+               const fileTrigger = form.querySelector('.dev-file-trigger-btn');
+               const fileInput = form.querySelector('.dev-chat-file');
+               if (fileTrigger && fileInput) {
+                  fileTrigger.addEventListener('click', () => fileInput.click());
+                  fileInput.addEventListener('change', (e) => {
+                     if (App.devAgent.handleFileSelect) {
+                         App.devAgent.handleFileSelect(e, form);
+                     }
+                  });
+               }
+             }
+           }
+           
+           App.devAgent.loadHistory(log.session_id, chatContainer.querySelector('.dev-chat-log'));
+        } else {
+           chatContainer.innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic; text-align: center;">Failed to initialize discussion thread.</div>';
+        }
       }
 
       document.getElementById('devEditTaskId').value = log.id;
@@ -3129,6 +3224,11 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
       
       let projSel = document.getElementById('devEditTaskProject');
       if (projSel) projSel.value = log.project_id || '';
+      const viewProjBtn = document.getElementById('devTasksViewProjectBtn');
+      if (viewProjBtn) {
+        if (log.project_id) viewProjBtn.classList.remove('hidden');
+        else viewProjBtn.classList.add('hidden');
+      }
 
       // Ensure correct assignee is selected
       const assgSelExisting = document.getElementById('devEditTaskAssignee');
@@ -3284,10 +3384,10 @@ App.devAgent.showTeamBrowser = async function() {
   const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
   const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
 
-  document.getElementById('devChatLog').classList.add('hidden');
-  document.getElementById('devChatForm').classList.add('hidden');
-  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const devChatLogEl = document.getElementById('devChatLog'); if (devChatLogEl) devChatLogEl.classList.add('hidden');
+  const devChatFormEl = document.getElementById('devChatForm'); if (devChatFormEl) devChatFormEl.classList.add('hidden');
+  const devChatMainHeaderEl = document.getElementById('devChatMainHeader'); if (devChatMainHeaderEl) devChatMainHeaderEl.classList.add('hidden');
+  const devPersistentOverlayEl = document.getElementById('devPersistentOverlay'); if (devPersistentOverlayEl) devPersistentOverlayEl.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
   const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
@@ -3368,10 +3468,10 @@ App.devAgent.showTeamBrowser = async function() {
 };
 
 App.devAgent.openTeamEditor = async function() {
-  document.getElementById('devChatLog').classList.add('hidden');
-  document.getElementById('devChatForm').classList.add('hidden');
-  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const devChatLogEl = document.getElementById('devChatLog'); if (devChatLogEl) devChatLogEl.classList.add('hidden');
+  const devChatFormEl = document.getElementById('devChatForm'); if (devChatFormEl) devChatFormEl.classList.add('hidden');
+  const devChatMainHeaderEl = document.getElementById('devChatMainHeader'); if (devChatMainHeaderEl) devChatMainHeaderEl.classList.add('hidden');
+  const devPersistentOverlayEl = document.getElementById('devPersistentOverlay'); if (devPersistentOverlayEl) devPersistentOverlayEl.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
   const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
@@ -3467,10 +3567,10 @@ App.devAgent.showRolesBrowser = async function() {
   const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
   const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
 
-  document.getElementById('devChatLog').classList.add('hidden');
-  document.getElementById('devChatForm').classList.add('hidden');
-  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const devChatLogEl = document.getElementById('devChatLog'); if (devChatLogEl) devChatLogEl.classList.add('hidden');
+  const devChatFormEl = document.getElementById('devChatForm'); if (devChatFormEl) devChatFormEl.classList.add('hidden');
+  const devChatMainHeaderEl = document.getElementById('devChatMainHeader'); if (devChatMainHeaderEl) devChatMainHeaderEl.classList.add('hidden');
+  const devPersistentOverlayEl = document.getElementById('devPersistentOverlay'); if (devPersistentOverlayEl) devPersistentOverlayEl.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
   const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
@@ -3517,10 +3617,10 @@ App.devAgent.showRolesBrowser = async function() {
 };
 
 App.devAgent.openRoleEditor = async function(roleId = null) {
-  document.getElementById('devChatLog').classList.add('hidden');
-  document.getElementById('devChatForm').classList.add('hidden');
-  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const devChatLogEl = document.getElementById('devChatLog'); if (devChatLogEl) devChatLogEl.classList.add('hidden');
+  const devChatFormEl = document.getElementById('devChatForm'); if (devChatFormEl) devChatFormEl.classList.add('hidden');
+  const devChatMainHeaderEl = document.getElementById('devChatMainHeader'); if (devChatMainHeaderEl) devChatMainHeaderEl.classList.add('hidden');
+  const devPersistentOverlayEl = document.getElementById('devPersistentOverlay'); if (devPersistentOverlayEl) devPersistentOverlayEl.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const taskEditorPanel = document.getElementById('devTaskEditorPanel'); if(taskEditorPanel) taskEditorPanel.classList.add('hidden');
   const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
@@ -3707,10 +3807,10 @@ App.devAgent.selectModalContact = function(id, name) {
 
 
 App.devAgent.showProjectBrowser = async function() {
-  document.getElementById('devChatLog').classList.add('hidden');
-  document.getElementById('devChatForm').classList.add('hidden');
-  const header = document.getElementById('devChatMainHeader'); if(header) header.classList.add('hidden');
-  const overlay = document.getElementById('devPersistentOverlay'); if(overlay) overlay.classList.add('hidden');
+  const devChatLogEl = document.getElementById('devChatLog'); if (devChatLogEl) devChatLogEl.classList.add('hidden');
+  const devChatFormEl = document.getElementById('devChatForm'); if (devChatFormEl) devChatFormEl.classList.add('hidden');
+  const devChatMainHeaderEl = document.getElementById('devChatMainHeader'); if (devChatMainHeaderEl) devChatMainHeaderEl.classList.add('hidden');
+  const devPersistentOverlayEl = document.getElementById('devPersistentOverlay'); if (devPersistentOverlayEl) devPersistentOverlayEl.classList.add('hidden');
   const fricPanel = document.getElementById('devFrictionEditorPanel'); if(fricPanel) fricPanel.classList.add('hidden');
   const editorPanel = document.getElementById('devTaskEditorPanel'); if(editorPanel) editorPanel.classList.add('hidden');
   const taskBrowserPanel = document.getElementById('devTaskBrowserPanel'); if(taskBrowserPanel) taskBrowserPanel.classList.add('hidden');
@@ -3779,9 +3879,84 @@ App.devAgent.loadProjects = async function() {
   });
   
   if (!tbody) return;
-  tbody.innerHTML = '';
+  App.devAgent.renderProjects();
+};
+
+App.devAgent.projectsSortKey = 'created_at';
+App.devAgent.projectsSortAsc = false;
+
+App.devAgent.sortProjects = function(key) {
+  if (App.devAgent.projectsSortKey === key) {
+    App.devAgent.projectsSortAsc = !App.devAgent.projectsSortAsc;
+  } else {
+    App.devAgent.projectsSortKey = key;
+    App.devAgent.projectsSortAsc = true;
+  }
+  App.devAgent.renderProjects();
+};
+
+App.devAgent.renderProjects = function() {
+  const tbody = document.getElementById('devProjectBrowserTable');
+  if (!tbody) return;
   
-  devState.projects.forEach(proj => {
+  const filterText = (document.getElementById('devProjectFilterText')?.value || '').toLowerCase();
+  const filterStatus = document.getElementById('devProjectFilterStatus')?.value || 'all';
+  
+  let filtered = devState.projects.filter(proj => {
+    if (filterStatus !== 'all' && proj.status !== filterStatus) return false;
+    if (filterText) {
+      if (!((proj.name && proj.name.toLowerCase().includes(filterText)) ||
+            (proj.description && proj.description.toLowerCase().includes(filterText)))) {
+        return false;
+      }
+    }
+    return true;
+  });
+  
+  const key = App.devAgent.projectsSortKey;
+  const asc = App.devAgent.projectsSortAsc;
+  
+  filtered.sort((a, b) => {
+    let valA = a[key] !== undefined ? a[key] : '';
+    let valB = b[key] !== undefined ? b[key] : '';
+    
+    // Derived fields
+    if (key === 'members_count') {
+      valA = a.dev_project_members ? a.dev_project_members[0].count : 0;
+      valB = b.dev_project_members ? b.dev_project_members[0].count : 0;
+    } else if (key === 'tasks_count') {
+      valA = a.dev_tasks ? a.dev_tasks[0].count : 0;
+      valB = b.dev_tasks ? b.dev_tasks[0].count : 0;
+    }
+    
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    
+    if (valA < valB) return asc ? -1 : 1;
+    if (valA > valB) return asc ? 1 : -1;
+    return 0;
+  });
+  
+  // Update UI icons
+  const keys = ['name', 'description', 'status', 'members_count', 'tasks_count', 'created_at'];
+  keys.forEach(k => {
+    const el = document.getElementById(`sortIcon_proj_${k}`);
+    if (el) {
+      if (k === key) {
+        el.textContent = asc ? ' ▲' : ' ▼';
+      } else {
+        el.textContent = '';
+      }
+    }
+  });
+  
+  tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No matching projects.</td></tr>';
+    return;
+  }
+  
+  filtered.forEach(proj => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong>${proj.name}</strong></td>
@@ -3806,15 +3981,131 @@ App.devAgent.loadProjects = async function() {
   });
 };
 
+
+App.devAgent.currentProjectTasks = [];
+App.devAgent.projectTasksSortKey = 'created_at';
+App.devAgent.projectTasksSortAsc = false;
+
+App.devAgent.filterProjectTasks = function() {
+  App.devAgent.renderProjectTasks();
+};
+
+App.devAgent.sortProjectTasks = function(key) {
+  if (App.devAgent.projectTasksSortKey === key) {
+    App.devAgent.projectTasksSortAsc = !App.devAgent.projectTasksSortAsc;
+  } else {
+    App.devAgent.projectTasksSortKey = key;
+    App.devAgent.projectTasksSortAsc = true; // default to asc for new column
+  }
+  
+  // Update icons
+  ['title', 'status', 'priority', 'assignee'].forEach(k => {
+    const el = document.getElementById('devProjectTasksSort_' + k);
+    if (el) el.innerHTML = '';
+  });
+  
+  const activeIcon = document.getElementById('devProjectTasksSort_' + key);
+  if (activeIcon) {
+    activeIcon.innerHTML = App.devAgent.projectTasksSortAsc ? '▲' : '▼';
+  }
+  
+  App.devAgent.renderProjectTasks();
+};
+
+App.devAgent.renderProjectTasks = function() {
+  const taskTbody = document.getElementById('devProjectTasksTableBody');
+  if (!taskTbody) return;
+  
+  const titleFilter = (document.getElementById('devProjectTasksFilterTitle').value || '').toLowerCase();
+  const statusFilter = document.getElementById('devProjectTasksFilterStatus').value || 'all';
+  const priorityFilter = document.getElementById('devProjectTasksFilterPriority').value || 'all';
+  
+  let filtered = App.devAgent.currentProjectTasks.filter(t => {
+    if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+    if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
+    if (titleFilter && (!t.title || !t.title.toLowerCase().includes(titleFilter))) return false;
+    return true;
+  });
+  
+  const key = App.devAgent.projectTasksSortKey;
+  const asc = App.devAgent.projectTasksSortAsc;
+  
+  filtered.sort((a, b) => {
+    let valA = a[key] || '';
+    let valB = b[key] || '';
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    if (valA < valB) return asc ? -1 : 1;
+    if (valA > valB) return asc ? 1 : -1;
+    return 0;
+  });
+  
+  taskTbody.innerHTML = '';
+  
+  if (filtered.length === 0) {
+    taskTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666; font-style: italic;">No tasks match your filters.</td></tr>';
+    return;
+  }
+  
+  filtered.forEach(task => {
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', (e) => {
+      e.stopPropagation();
+      App.devAgent.openTaskEditor(task.id, task.project_id);
+    });
+    
+    tr.innerHTML = `
+      <td style="font-family: monospace; font-size: 0.8em; color: var(--text-muted);">${task.id.substring(0,8)}</td>
+      <td>${task.title || ''}</td>
+      <td><span class="badge badge-gray" style="text-transform: capitalize;">${(task.status || '').replace('_', ' ')}</span></td>
+      <td><span class="badge badge-gray" style="text-transform: capitalize;">${task.priority || ''}</span></td>
+      <td style="text-transform: capitalize;">${task.assignee || ''}</td>
+      <td style="text-align: right; white-space: nowrap;">
+        <button type="button" class="dev-action-btn edit-task-btn" title="Edit Task" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:4px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </button>
+        <button type="button" class="dev-action-btn del-task-btn" title="Delete Task" style="background:none; border:none; cursor:pointer; color:var(--accent-danger); padding:4px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </button>
+      </td>
+    `;
+    
+    const editBtn = tr.querySelector('.edit-task-btn');
+    const delBtn = tr.querySelector('.del-task-btn');
+    
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      App.devAgent.openTaskEditor(task.id, task.project_id);
+    });
+    
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (confirm('Are you sure you want to delete this task?')) {
+        try {
+          await window.supabaseClient.from('dev_tasks').delete().eq('id', task.id);
+          App.notify('Task deleted successfully', 'success');
+          App.devAgent.loadProjectTasks(task.project_id); // Reload the list
+          if (typeof App.devAgent.loadDashboard === 'function') App.devAgent.loadDashboard();
+        } catch (err) {
+          App.notify('Failed to delete task', 'error');
+        }
+      }
+    });
+    
+    taskTbody.appendChild(tr);
+  });
+};
+
 App.devAgent.loadProjectTasks = async function(projectId) {
-  const tbody = document.getElementById('devProjectTaskTableBody');
+  const tbody = document.getElementById('devProjectTasksTableBody');
   if (!tbody) return;
   if (!projectId) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem; opacity:0.7;">Save the project first to add tasks.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1rem; opacity:0.7;">Save the project first to add tasks.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem; opacity:0.7;">Loading tasks...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1rem; opacity:0.7;">Loading tasks...</td></tr>';
   try {
     const { data: tasks, error } = await window.supabaseClient
       .from('dev_tasks')
@@ -3822,35 +4113,15 @@ App.devAgent.loadProjectTasks = async function(projectId) {
       .eq('project_id', projectId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    if (!tasks || tasks.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem; opacity:0.7;">No tasks assigned to this project.</td></tr>';
-      return;
-    }
+    
+    App.devAgent.currentProjectTasks = tasks || [];
+    App.devAgent.renderProjectTasks();
 
-    tbody.innerHTML = '';
-    tasks.forEach(task => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><strong>${task.title || ''}</strong></td>
-        <td>${task.status || ''}</td>
-        <td>${task.priority || ''}</td>
-        <td>${task.assignee || ''}</td>
-        <td>${task.created_at ? new Date(task.created_at).toLocaleDateString() : ''}</td>
-        <td style="text-align:right; white-space:nowrap;">
-          <button class="icon-btn" onclick="App.devAgent.openTaskEditor('${task.id}', '${projectId}')" title="Edit Task">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-          </button>
-          <button class="icon-btn danger-hover" onclick="App.devAgent.deleteProjectTask('${task.id}', '${projectId}')" title="Delete Task">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-          </button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:1rem; color:red;">${err.message || 'Unable to load tasks'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:1rem; color:red;">${err.message || 'Unable to load tasks'}</td></tr>`;
   }
 };
+
 
 App.devAgent.createProjectTask = async function(projectId) {
   const title = prompt('Enter a title for the new Task:');
@@ -4158,12 +4429,25 @@ document.body.addEventListener('click', (e) => {
 if (typeof window.App !== 'undefined') {
   if (!window.App.manifests) window.App.manifests = [];
   window.App.manifests.push({
-    manifest: { id: 'devAgentModule', pagePrefixes: ['devDashboard', 'devTasks'] },
+    manifest: { id: 'devAgentModule', pagePrefixes: ['devDashboard', 'devTasks', 'devForum', 'devTeam', 'devRoles', 'devProjects'] },
     onPageActivated: function(pageId) {
+      const chatPanel = document.getElementById('devAllMessagesPanel');
       if (pageId === 'devDashboardPage') {
-        if (typeof App.devAgent.loadDashboard === 'function') App.devAgent.loadActionItems();
+        if (typeof App.devAgent.loadActionItems === 'function') App.devAgent.loadActionItems();
+        if (typeof App.devAgent.loadSessions === 'function') App.devAgent.loadSessions();
+        if (typeof App.devAgent.loadTeam === 'function') App.devAgent.loadTeam();
       } else if (pageId === 'devTasksPage') {
         if (typeof App.devAgent.loadTasksTable === 'function') App.devAgent.loadTasksTable();
+      } else if (pageId === 'devForumPage') {
+        if (typeof App.devAgent.loadSessions === 'function') App.devAgent.loadSessions();
+        const rightCol = document.getElementById('devForumRightColumn');
+        if (chatPanel && rightCol) rightCol.appendChild(chatPanel);
+      } else if (pageId === 'devTeamPage') {
+        if (typeof App.devAgent.showTeamBrowser === 'function') App.devAgent.showTeamBrowser();
+      } else if (pageId === 'devRolesPage') {
+        if (typeof App.devAgent.showRolesBrowser === 'function') App.devAgent.showRolesBrowser();
+      } else if (pageId === 'devProjectsPage') {
+        if (typeof App.devAgent.showProjectBrowser === 'function') App.devAgent.showProjectBrowser();
       }
     }
   });
@@ -4206,6 +4490,7 @@ App.devAgent.loadAllMessages = async function() {
   }
 
   const parseTargetAgent = (content) => {
+    if (!content) return '-';
     try {
       const match = content.match(/\`\`\`json\n([\s\S]*?)\n\`\`\`/);
       if (match) {
@@ -4217,12 +4502,13 @@ App.devAgent.loadAllMessages = async function() {
   };
 
   const parseMessageSnippet = (content) => {
+    if (!content) return '-';
     try {
       const match = content.match(/\`\`\`json\n([\s\S]*?)\n\`\`\`/);
       if (match) {
         const json = JSON.parse(match[1]);
         if (json.payload && json.payload.content) {
-            const txt = json.payload.content;
+            const txt = typeof json.payload.content === 'string' ? json.payload.content : JSON.stringify(json.payload.content);
             return txt.length > 100 ? txt.substring(0, 100) + '...' : txt;
         }
       }
@@ -4273,6 +4559,8 @@ App.devAgent.renderAllMessages = function() {
   tbody.innerHTML = '';
   filtered.forEach(m => {
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.onclick = () => App.devAgent.openMessageDetail(m);
     tr.innerHTML = `
       <td style="white-space: nowrap;">${new Date(m.created_at).toLocaleString()}</td>
       <td>${m.task_title}</td>
@@ -4282,6 +4570,65 @@ App.devAgent.renderAllMessages = function() {
     `;
     tbody.appendChild(tr);
   });
+};
+
+App.devAgent.openMessageDetail = function(msg) {
+  const tableContainer = document.getElementById('devAllMessagesTableContainer');
+  const detailContainer = document.getElementById('devMessageDetailContainer');
+  const header = document.getElementById('devAllMessagesHeader');
+  
+  if(tableContainer) {
+    tableContainer.style.display = 'none';
+    tableContainer.classList.add('hidden');
+  }
+  if(header) {
+    header.style.display = 'none';
+    header.classList.add('hidden');
+  }
+  
+  if(detailContainer) {
+    detailContainer.style.display = 'flex';
+    detailContainer.classList.remove('hidden');
+    
+    document.getElementById('devMessageDetailTitle').innerText = `Message from ${msg.sender}`;
+    
+    // Attempt to parse JSON payload to render nicely if it's a tool output/command
+    let contentHtml = ``;
+    try {
+      const parsed = JSON.parse(msg.message);
+      contentHtml = `<pre style="background:var(--bg-main); padding:1rem; border-radius:6px; overflow-x:auto; font-family:monospace; font-size:0.9rem; border:1px solid var(--border-light);">${JSON.stringify(parsed, null, 2)}</pre>`;
+    } catch(e) {
+      contentHtml = `<div style="white-space:pre-wrap; font-size:0.95rem; line-height:1.5;">${msg.message}</div>`;
+    }
+    
+    document.getElementById('devMessageDetailBody').innerHTML = `
+      <div style="margin-bottom:1.5rem; font-size:0.9rem; color:var(--text-muted); border-bottom:1px solid var(--border-light); padding-bottom:1rem;">
+        <div><strong>Task:</strong> ${msg.task_title}</div>
+        <div><strong>Date:</strong> ${new Date(msg.created_at).toLocaleString()}</div>
+        <div><strong>To:</strong> ${msg.receiver}</div>
+      </div>
+      ${contentHtml}
+    `;
+  }
+};
+
+App.devAgent.closeMessageDetail = function() {
+  const tableContainer = document.getElementById('devAllMessagesTableContainer');
+  const detailContainer = document.getElementById('devMessageDetailContainer');
+  const header = document.getElementById('devAllMessagesHeader');
+  
+  if(detailContainer) {
+    detailContainer.style.display = 'none';
+    detailContainer.classList.add('hidden');
+  }
+  if(tableContainer) {
+    tableContainer.style.display = 'block';
+    tableContainer.classList.remove('hidden');
+  }
+  if(header) {
+    header.style.display = 'flex';
+    header.classList.remove('hidden');
+  }
 };
 
 App.devAgent.sortAllMessages = function(key) {
@@ -4299,7 +4646,7 @@ App.devAgent.filterAllMessages = function() {
 };
 
 
-App.devAgent.currentTasksView = 'list';
+App.devAgent.currentTasksView = 'kanban';
 
 App.devAgent.toggleTasksView = function() {
   const browser = document.getElementById('devTaskBrowserPanel');
@@ -4334,7 +4681,7 @@ App.devAgent.toggleTasksView = function() {
       browser.style.display = 'flex';
     }
     if(btn) btn.innerText = 'Kanban View';
-    App.devAgent.loadTasksTable();
+    App.devAgent.loadTasksTable(); // Refresh table view
   }
 };
 
@@ -4343,22 +4690,50 @@ const oldShowTaskBrowser = App.devAgent.showTaskBrowser;
 App.devAgent.showTaskBrowser = function() {
   const btn = document.getElementById('devTasksToggleViewBtn');
   const kanban = document.getElementById('devDashboardKanban');
+  const browser = document.getElementById('devTaskBrowserPanel');
+  
   if (kanban && !kanban.classList.contains('hidden')) {
     // If we're coming out of the editor back to the browser, preserve kanban view if it was active
     const editor = document.getElementById('devTaskEditorPanel');
     if (editor) editor.classList.add('hidden');
+    App.devAgent.loadDashboard();
     return;
   }
   
   if (oldShowTaskBrowser) oldShowTaskBrowser.apply(this, arguments);
+  
   if (App.devAgent.currentTasksView === 'kanban') {
-     App.devAgent.currentTasksView = 'list';
+     if(btn) btn.innerText = 'List View';
+     if(browser) {
+       browser.classList.add('hidden');
+       browser.style.display = 'none';
+     }
+     if(kanban) {
+       kanban.classList.remove('hidden');
+       kanban.style.display = 'flex';
+     }
+     App.devAgent.loadDashboard();
+  } else {
      if(btn) btn.innerText = 'Kanban View';
      if(kanban) {
        kanban.classList.add('hidden');
        kanban.style.display = 'none';
      }
-     const browser = document.getElementById('devTaskBrowserPanel');
-     if(browser) browser.style.display = 'flex';
+     if(browser) {
+       browser.classList.remove('hidden');
+       browser.style.display = 'flex';
+     }
+     App.devAgent.loadTasksTable();
+  }
+};
+
+
+App.devAgent.viewTaskProject = function() {
+  const projId = document.getElementById('devEditTaskProject').value;
+  if (projId) {
+    if (App.setActivePage) App.setActivePage('devProjectsPage');
+    setTimeout(() => {
+      App.devAgent.openProjectEditor(projId);
+    }, 100);
   }
 };

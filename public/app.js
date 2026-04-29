@@ -158,7 +158,7 @@ if (App.els.topNav) {
       const matchesPrefix = pagePrefixes.some((prefix) => targetPage.startsWith(prefix));
       if (mod.manifest && (pageId === targetPage || matchesPrefix) &&
           typeof mod.onPageActivated === 'function') {
-        mod.onPageActivated();
+        mod.onPageActivated(targetPage);
       }
     }
   });
@@ -179,7 +179,23 @@ App.bootMainApp = function bootMainApp() {
     }
   }
 
-  App.setActivePage(App.getInitialPage(), { persist: false });
+  const initialPage = App.getInitialPage();
+  App.setActivePage(initialPage, { persist: false });
+  
+  // Trigger on-activation callbacks for the initial page
+  for (const mod of App.manifests) {
+    if (!mod || typeof mod !== 'object') continue;
+    const pageId = String(mod?.manifest?.pageId || '');
+    const pagePrefixes = Array.isArray(mod?.manifest?.pagePrefixes)
+      ? mod.manifest.pagePrefixes.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
+    const matchesPrefix = pagePrefixes.some((prefix) => initialPage.startsWith(prefix));
+    if (mod.manifest && (pageId === initialPage || matchesPrefix) &&
+        typeof mod.onPageActivated === 'function') {
+      mod.onPageActivated(initialPage);
+    }
+  }
+
   App.youtube.renderYoutubeAcquireResult();
   App.refresh().catch((err) => App.notify(err.message, true));
 };

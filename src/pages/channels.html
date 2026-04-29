@@ -1,0 +1,92 @@
+
+      <section id="channelsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Channels</h2>
+          <div class="page-heading-actions">
+            <button id="openAddChannelPageBtn" type="button" onclick="App.channels.openChannelsCreate(); return false;">Create Channel</button>
+            <button type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+          </div>
+        </div>
+        <section id="channelCreatePanel" class="hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row">
+            <h3>Create Channel</h3>
+            <button type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+          </div>
+          <form id="channelForm" class="standard-form-grid" onsubmit="App.channels.submitChannelCreate(event); return false;">
+            
+              <label for="channelNameInput">Channel</label>
+              <input id="channelNameInput" name="channel" required />
+            
+            
+              <label for="channelUserNameInput">User Name</label>
+              <input id="channelUserNameInput" name="user_name" required />
+            
+            
+              <label for="channelEmailInput">Email</label>
+              <input id="channelEmailInput" name="email" type="email" required />
+            
+            
+              <label for="channelPasswordInput">Password</label>
+              <input id="channelPasswordInput" name="password" type="password" required />
+            
+            <div></div>
+              <button type="submit">Save Channel</button>
+          </form>
+        </section>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th>User Name</th>
+                <th>Email</th>
+                <th>Password</th>
+                <th class="channels-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="channelsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="addChannelPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Add Channel</h2>
+          <button id="backToChannelsBtn" type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+        </div>
+        <p>The create form now opens inline on the main Channels page.</p>
+      </section>
+      <section id="editChannelPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Channel</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.channels.openChannelsCreate(); return false;">Create Channel</button>
+            <button id="backFromEditChannelBtn" type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+          </div>
+        </div>
+        <form id="channelEditForm" class="standard-form-grid" onsubmit="App.channels.submitChannelEdit(event); return false;">
+          <input id="channelEditId" name="id" type="hidden" />
+          
+            <label for="channelEditNameInput">Channel</label>
+            <input id="channelEditNameInput" name="channel" required />
+          
+          
+            <label for="channelEditUserNameInput">User Name</label>
+            <input id="channelEditUserNameInput" name="user_name" required />
+          
+          
+            <label for="channelEditEmailInput">Email</label>
+            <input id="channelEditEmailInput" name="email" type="email" required />
+          
+          
+            <label for="channelEditPasswordInput">Password</label>
+            <input
+              id="channelEditPasswordInput"
+              name="password"
+              type="password"
+             
+            />
+          
+          <div></div>
+              <button type="submit">Update Channel</button>
+        </form>
+      </section>

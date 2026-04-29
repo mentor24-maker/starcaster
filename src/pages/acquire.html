@@ -1,0 +1,1709 @@
+
+      <section id="acquirePage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Acquire</h2>
+          <div class="page-heading-actions" id="acquirePageActions"></div>
+        </div>
+        <div id="acquireHubBody" class="section-settings-shell" style="margin-top: 2rem;">
+          <div class="pod" onclick="App.setActivePage('acquireWebPage')">
+            <div class="pod-icon-col"><i data-lucide="globe"></i></div>
+            <div class="pod-content">
+              <h3>Web Domain</h3>
+              <p>Automated crawler fetching external site content.</p>
+            </div>
+          </div>
+          <div class="pod" onclick="App.setActivePage('acquireYoutubePage')">
+            <div class="pod-icon-col"><i data-lucide="youtube"></i></div>
+            <div class="pod-content">
+              <h3>YouTube</h3>
+              <p>Video indexing and transcript mining tools.</p>
+            </div>
+          </div>
+          <div class="pod" onclick="App.setActivePage('acquireRedditPage')">
+            <div class="pod-icon-col"><i data-lucide="message-square"></i></div>
+            <div class="pod-content">
+              <h3>Reddit</h3>
+              <p>Thread discovery and structured comment extraction.</p>
+            </div>
+          </div>
+          <div class="pod" onclick="App.setActivePage('acquireBlueskyPage')">
+            <div class="pod-icon-col"><i data-lucide="at-sign"></i></div>
+            <div class="pod-content">
+              <h3>BlueSky</h3>
+              <p>Rapid decentralised feed monitoring.</p>
+            </div>
+          </div>
+          <div class="pod" onclick="App.setActivePage('acquireInstagramPage')">
+            <div class="pod-icon-col"><i data-lucide="instagram"></i></div>
+            <div class="pod-content">
+              <h3>Instagram</h3>
+              <p>Basic meta ingestion via official endpoints.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="acquireWebPage" class="app-page hidden">
+        <h2>Acquire: Web</h2>
+        <form id="directAcquireForm" class="standard-form-grid">
+            <label for="directAcquireUrlInput">Website</label>
+            <input id="directAcquireUrlInput" name="source_url" aria-label="Website URL" placeholder="https://example.com" />
+          <div class="acquire-web-hero-options-row">
+            <details class="hanging-details" style="margin-top: 1.5rem;">
+                <summary>Advanced</summary>
+                <div class="standard-form-grid" style="margin-top: 1.5rem; width: 100%;">
+                  
+                  <label style="align-self: start; margin-top: 0.5rem;">Acquire</label>
+                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.65rem;">
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_social" type="checkbox" checked class="standard-form-checkbox" /> Social</label>
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_keywords" type="checkbox" checked class="standard-form-checkbox" /> Keywords</label>
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_hashtags" type="checkbox" checked class="standard-form-checkbox" /> Hashtags</label>
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_images" type="checkbox" checked class="standard-form-checkbox" /> Images</label>
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_pages" type="checkbox" checked class="standard-form-checkbox" /> Website Pages</label>
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_peer_sites" type="checkbox" class="standard-form-checkbox" /> Peer Sites</label>
+                  </div>
+
+                  <label for="directAcquireMaxPagesSelect">Pages to Harvest</label>
+                  <select id="directAcquireMaxPagesSelect" name="max_pages">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+
+                  <label for="directAcquirePeerSitesLimitSelect">Peer Sites Limit</label>
+                  <select id="directAcquirePeerSitesLimitSelect" name="peer_sites_limit">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+
+                  <label for="directAcquireImagesLimitSelect">Images to Harvest</label>
+                  <select id="directAcquireImagesLimitSelect" name="images_limit">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+
+                  <label for="directAcquireSnippetInput">Snippet Length</label>
+                  <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
+
+                  <label for="directAcquireKeywordExclusionsInput" style="align-self: start; margin-top: 0.5rem;">Exclusions</label>
+                  <textarea id="directAcquireKeywordExclusionsInput" name="keyword_exclusions" rows="4"></textarea>
+
+                </div>
+            </details>
+            </div>
+            <button id="directAcquireSubmitBtn" type="submit" class="acquire-web-harvest-btn">Harvest Website</button>
+            <div id="directAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite" style="width: 100%;">
+              <div id="directAcquireProgressText" class="asset-upload-progress-text">Harvesting website...</div>
+              <progress id="directAcquireProgressBar" max="100" value="8" style="width: 100%;"></progress>
+            </div>
+        </form>
+
+
+        <details id="directAcquireWebsitePeersPanel" class="card acquire-web-expandable-card" style="margin-top: 1rem;">
+          <summary class="acquire-web-expandable-summary">
+            <span>Website Peers</span>
+            <span id="directAcquireWebsitePeersCount" class="meta">0 saved</span>
+          </summary>
+          <div class="acquire-web-expandable-body">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Website Peers</h3>
+              <div class="page-heading-actions">
+                <button id="directAcquireWebsitePeersRefreshBtn" type="button" class="tiny-btn">Refresh</button>
+              </div>
+            </div>
+            <div id="directAcquireWebsitePeersMeta" class="meta" style="margin-bottom: 0.75rem;">No website peers saved yet.</div>
+            <form id="directAcquireWebsitePeerForm" class="standard-form-grid" style="margin-bottom: 1rem;">
+              <input type="hidden" id="directAcquireWebsitePeerId" name="id" />
+              
+                <label for="directAcquireWebsitePeerType">Site Type</label>
+                <select id="directAcquireWebsitePeerType" name="website_model"></select>
+              
+              
+                <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
+                <input id="directAcquireWebsitePeerSourceUrl" name="source_url" type="url" />
+              
+              
+                <label for="directAcquireWebsitePeerSiteUrl">Website URL</label>
+                <input id="directAcquireWebsitePeerSiteUrl" name="site_url" type="url" required />
+              
+              
+                <label for="directAcquireWebsitePeerTitle">Site Title</label>
+                <input id="directAcquireWebsitePeerTitle" name="title" type="text" />
+              
+              
+                <label for="directAcquireWebsitePeerModel">Scope</label>
+                <input id="directAcquireWebsitePeerModel" name="site_scope_display" type="text" value="Peer / Source is inferred automatically" readonly />
+              
+              
+                <label for="directAcquireWebsitePeerKeywords">Matched Keywords</label>
+                <textarea id="directAcquireWebsitePeerKeywords" name="matched_keywords" rows="2"></textarea>
+              
+              
+                <label for="directAcquireWebsitePeerSnippet">Snippet</label>
+                <textarea id="directAcquireWebsitePeerSnippet" name="snippet" rows="3"></textarea>
+              
+              
+                <label for="directAcquireWebsitePeerNotes">Notes</label>
+                <textarea id="directAcquireWebsitePeerNotes" name="notes" rows="3"></textarea>
+              
+              <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: center; margin-top: 0.75rem;">
+                <div></div>
+              <button id="directAcquireWebsitePeerSaveBtn" type="submit">Save Website</button>
+                <button id="directAcquireWebsitePeerCancelBtn" type="button" class="tiny-btn">Cancel</button>
+              </div>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Scope</th>
+                    <th>Site Type</th>
+                    <th>Domain</th>
+                    <th>Site</th>
+                    <th>Matched Keywords</th>
+                    <th>Source Website</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireWebsitePeersTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+
+        <div id="directAcquireResultsWrap" class="hidden">
+        <div class="acquire-web-results-grid">
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin:0;">Social</h3>
+              <div class="page-heading-actions">
+                <button id="directAcquireSaveContactBtn" type="button" class="tiny-btn" disabled>Save To Contacts</button>
+              </div>
+            </div>
+            <div id="directAcquireContactEmpty" class="meta">No contact data captured yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireContactTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+              <h3 style="margin:0;">Keywords</h3>
+              <div class="page-heading-actions" style="justify-content: flex-start;">
+                <div class="direct-acquire-inline-control"><strong>Topics:</strong>
+                  <details id="directAcquireKeywordTopicsDropdown" class="direct-acquire-dropdown">
+                    <summary id="directAcquireKeywordTopicsSummary">Topics</summary>
+                    <div id="directAcquireKeywordTopicsMenu" class="direct-acquire-dropdown-menu"></div>
+                  </details>
+                </div>
+                <div class="direct-acquire-inline-control"><strong>Exclusions:</strong> <select id="directAcquireKeywordBulkReason" aria-label="Exclusions">
+                    <option value="">Exclusions</option>
+                    <option value="brand">Brand</option>
+                    <option value="generic">Generic</option>
+                    <option value="navigational">Navigational</option>
+                    <option value="boilerplate">Boilerplate</option>
+                    <option value="location">Location</option>
+                    <option value="legal">Legal</option>
+                  </select></div>
+              </div>
+            </div>
+            <div id="directAcquireKeywordEmpty" class="meta">No keywords harvested yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 44px;"><input id="directAcquireKeywordSelectAll" type="checkbox" /></th>
+                    <th>Keyword</th>
+                    <th>Score</th>
+                    <th>Topics</th>
+                    <th>Exclude Reason</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireKeywordTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+              <h3 style="margin:0;">Hashtags</h3>
+              <div class="page-heading-actions" style="justify-content: flex-start;">
+                <label class="checkbox-row" style="margin: 0;">
+                  <input id="directAcquireHashtagSelectAll" type="checkbox" />
+                  Check All
+                </label>
+                <button id="directAcquireSaveHashtagsBtn" type="button" class="tiny-btn" disabled>Save Selected</button>
+              </div>
+            </div>
+            <div id="directAcquireHashtagEmpty" class="meta">No validated hashtags yet.</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:44px;"></th>
+                    <th>Hashtag</th>
+                    <th>Score</th>
+                    <th>Posts</th>
+                    <th>Sample Usage</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireHashtagTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="card" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+            <h3 style="margin:0;">Peer Sites</h3>
+          </div>
+          <div id="directAcquirePeerSitesMeta" class="meta">Peer sites not searched.</div>
+          <div id="directAcquirePeerSitesDiagnostics" class="meta" style="margin: 0.35rem 0 0.75rem;"></div>
+          <div id="directAcquirePeerSitesSuggestedWrap" class="hidden" style="margin: 0 0 0.75rem;">
+            <strong>Suggested Other Models:</strong>
+            <span id="directAcquirePeerSitesSuggested"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Domain</th>
+                  <th>Site</th>
+                  <th>Matched Keywords</th>
+                  <th>Snippet</th>
+                </tr>
+              </thead>
+              <tbody id="directAcquirePeerSitesTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+            <h3 style="margin:0;">Captured Images</h3>
+            <div class="page-heading-actions" style="justify-content: flex-start; flex-wrap: wrap;">
+              <label class="checkbox-row" style="margin: 0;">
+                <input id="directAcquireImageSelectAll" type="checkbox" />
+                Check All
+              </label>
+              <select id="directAcquireImageBulkCategory">
+                <option value="">Select Image Category</option>
+              </select>
+              <button id="directAcquireApplyImageCategoryBtn" type="button" class="tiny-btn">Apply To Checked</button>
+              <button id="directAcquireSaveImagesBtn" type="button" class="tiny-btn" disabled>Save Selected To Assets</button>
+            </div>
+          </div>
+          <div id="directAcquireImagesEmpty" class="meta">No images captured yet.</div>
+          <div id="directAcquireImageGallery" class="direct-acquire-image-gallery"></div>
+          <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
+            <button id="directAcquireImagesSeeMoreBtn" type="button" class="tiny-btn hidden">See More</button>
+          </div>
+        </section>
+
+        <h3>Website Pages</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>URL</th>
+                <th>Title</th>
+                <th>Emails</th>
+                <th>Phones</th>
+                <th>Snippet</th>
+              </tr>
+            </thead>
+            <tbody id="directAcquirePagesTable"></tbody>
+          </table>
+        </div>
+        <h3>Direct Ingest Runs</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Source</th>
+                <th>Succeeded</th>
+                <th>Failed</th>
+                <th>Finished</th>
+              </tr>
+            </thead>
+            <tbody id="directAcquireRunsTable"></tbody>
+          </table>
+        </div>
+        <pre id="directAcquireErrorsPreview" class="code-box hidden">{}</pre>
+        <details id="acquireAdvancedPanel">
+          <summary>Advanced Workflow</summary>
+          <p>Manual OpenClaw job controls for preview, approval, execution, and status checks.</p>
+          <form id="acquireForm">
+            <div class="grid-form">
+              <select name="action">
+                <option value="create_job">create_job</option>
+                <option value="preview_job">preview_job</option>
+                <option value="approve_job">approve_job</option>
+                <option value="execute_job">execute_job</option>
+                <option value="job_status">job_status</option>
+              </select>
+              <input
+                id="acquireJobIdInput"
+                name="job_id"
+                placeholder="Job ID (required for preview/approve/execute/status)"
+              />
+            </div>
+            <div class="grid-form">
+              <textarea
+                name="source_urls"
+                rows="3"
+                placeholder="Source URLs (one URL per line)"
+              >https://example.com</textarea>
+              <input name="max_pages" type="number" min="1" max="100" value="5" placeholder="Pages to Fetch" />
+            </div>
+            <details>
+              <summary>More Advanced Options</summary>
+              <div class="grid-form" style="margin-top: 0.75rem;">
+                <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
+                <input name="type" placeholder="Job Type" value="acquire.web" />
+              </div>
+              <div class="grid-form">
+                <input name="requested_by_user_id" placeholder="Requested By User ID" value="alphire-ui" />
+                <input name="requested_by_email" placeholder="Requested By Email" value="ops@alphire.ai" />
+              </div>
+              <div class="grid-form">
+                <input name="body_snippet_chars" type="number" min="100" max="5000" value="500" />
+                <select name="approval_decision">
+                  <option value="APPROVE">APPROVE</option>
+                  <option value="REJECT">REJECT</option>
+                </select>
+              </div>
+              <div class="grid-form">
+                <input
+                  id="acquireApprovalTokenInput"
+                  name="approval_token"
+                  placeholder="Approval token (required for execute_job)"
+                />
+                <label class="checkbox-row"><input id="acquireManualConfirmedInput" name="manual_confirmed" type="checkbox" /> I manually confirm this API action.</label>
+              </div>
+            </details>
+            <div></div>
+              <button type="submit">Send Acquire Request</button>
+          </form>
+          <div class="section-toolbar">
+            <h3>Existing Jobs</h3>
+            <button id="acquireRefreshJobsBtn" type="button" class="tiny-btn">Refresh Jobs</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Stage</th>
+                  <th>URL</th>
+                  <th>Updated</th>
+                  <th class="youtube-actions-heading">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="acquireJobsTable"></tbody>
+            </table>
+          </div>
+          <h3>Request Preview</h3>
+          <pre id="acquireRequestPreview" class="code-box">{}</pre>
+          <h3>Response</h3>
+          <pre id="acquireResponsePreview" class="code-box">{}</pre>
+        </details>
+        </div>
+      </section>
+      <section id="acquireSettingsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Acquire: Settings</h2>
+          <div class="page-heading-actions">
+            <button type="button" id="acquireSettingsBackBtn">Return to Acquire</button>
+          </div>
+        </div>
+        <p>Manage settings that apply across Acquire workflows. These are section-level controls, separate from app-wide settings.</p>
+        <div class="section-settings-shell">
+          <div class="section-settings-main">
+            <section class="card">
+              <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+                <h3 style="margin:0;">YouTube Ban Reasons</h3>
+              </div>
+              <p class="meta">These reasons appear in the YouTube Research and Repository ban dialogs.</p>
+              <form id="acquireYoutubeBanReasonForm" class="standard-form-grid" style="margin-top: 1rem;">
+                
+                  <label for="acquireYoutubeBanReasonInput">New Reason</label>
+                  <input id="acquireYoutubeBanReasonInput" type="text" />
+                
+                <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content:center; margin-top: 0.75rem;">
+                  <div></div>
+              <button type="submit">Add Reason</button>
+                </div>
+              </form>
+              <div class="table-wrap" style="margin-top: 1rem;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Reason</th>
+                      <th class="action-icons-heading">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="acquireYoutubeBanReasonsTable">
+                    <tr><td colspan="2">No ban reasons configured.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card" style="margin-top: 1rem;">
+              <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+                <h3 style="margin:0;">Website Search Defaults</h3>
+              </div>
+              <p class="meta">Admin-level default settings for the Advanced controls on Acquire: Web.</p>
+              <form id="acquireWebsiteDefaultsForm"  style="margin-top: 1rem;">
+                <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem;">
+                  <div class="stack-form" style="margin:0;">
+                    
+                      <label><input id="acquireSettingsAcquireSocial" type="checkbox" /> Acquire Social</label>
+                    
+                    
+                      <label><input id="acquireSettingsAcquireKeywords" type="checkbox" /> Keywords</label>
+                    
+                    
+                      <label><input id="acquireSettingsAcquireHashtags" type="checkbox" /> Hashtags</label>
+                    
+                    
+                      <label><input id="acquireSettingsAcquireImages" type="checkbox" /> Images</label>
+                    
+                    
+                      <label><input id="acquireSettingsAcquirePages" type="checkbox" /> Website Pages</label>
+                    
+                    
+                      <label><input id="acquireSettingsAcquirePeerSites" type="checkbox" /> Peer Sites</label>
+                    
+                  </div>
+                  <div class="stack-form" style="margin:0;">
+                    
+                      <label for="acquireSettingsMaxPages">Pages to Harvest</label>
+                      <select id="acquireSettingsMaxPages">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    
+                    
+                      <label for="acquireSettingsPeerSitesLimit">Peer Sites to Harvest</label>
+                      <select id="acquireSettingsPeerSitesLimit">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    
+                    
+                      <label for="acquireSettingsImagesLimit">Images to Harvest</label>
+                      <select id="acquireSettingsImagesLimit">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    
+                    
+                      <label for="acquireSettingsSnippetLength">Snippet Length</label>
+                      <input id="acquireSettingsSnippetLength" type="number" min="100" max="5000" step="50" />
+                    
+                  </div>
+                </div>
+                <div></div>
+              <div class="page-heading-actions" style="justify-content:center; margin-top: 0.75rem;">
+                  <div></div>
+              <button type="submit">Save Website Defaults</button>
+                </div>
+              </form>
+            </section>
+          </div>
+          <aside class="section-settings-nav">
+            <section class="card">
+              <h3 style="margin-top:0;">Section Settings</h3>
+              <div id="sectionSettingsNavList" class="section-settings-nav-list"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+      <section id="acquireYoutubePage" class="app-page hidden">
+        <div class="page-heading-row">
+        <h2>Acquire: YouTube</h2>
+        </div>
+        <section class="youtube-miner-panel">
+          <form id="youtubeCommentMinerForm" class="hidden" aria-hidden="true"></form>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeResearchBody" aria-expanded="true">
+              <span>Research</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeResearchBody" class="youtube-miner-collapsible-body">
+              <p>Research builds a candidate list of YouTube videos securely from your topics, hashtags, and keywords. Review those candidates here to explicitly save the best ones into the Target section below for processing.</p>
+              <form id="youtubeResearchForm" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                  <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" class="standard-form-checkbox" /> Use Messaging seeds (articles, tweets, hashtags)</label>
+                  <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked class="standard-form-checkbox" /> Include transcript in targeting handoff</label>
+                </div>
+                <div class="grid-form" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.85fr) minmax(0, 1fr); column-gap:2rem; align-items: start;">
+                  <div class="standard-form-grid youtube-research-left-column" style="margin:0;">
+                      <label for="youtubeResearchMessagingTopic">Topic</label>
+                      <select id="youtubeResearchMessagingTopic" name="messaging_category">
+                        <option value="">All Topics</option>
+                      </select>
+                      <label for="youtubeResearchHashtagSelect">Hashtag</label>
+                      <select id="youtubeResearchHashtagSelect" name="messaging_hashtag">
+                        <option value="">All Hashtags</option>
+                      </select>
+                      <label for="youtubeResearchManualPhrases">Keywords</label>
+                      <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="5"></textarea>
+                  </div>
+                  <div class="parameter-grid youtube-research-right-column" style="margin:0;">
+                      <label for="youtubeResearchMaxPhrases">Max Phrases</label>
+                      <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
+                      <label for="youtubeResearchVideosPerPhrase">Videos Per Phrase</label>
+                      <input id="youtubeResearchVideosPerPhrase" name="videos_per_phrase" type="number" min="1" max="10" value="3" />
+                      <label for="youtubeResearchDistilledLimit">Distilled Targets</label>
+                      <input id="youtubeResearchDistilledLimit" name="distilled_target_limit" type="number" min="1" max="200" value="30" />
+                      <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
+                      <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
+                  </div>
+                  <div class="youtube-research-stats-column" style="margin:0;">
+                    <div id="youtubeResearchSummary" class="muted">
+                      <table class="youtube-miner-stats-table"><tbody><tr><td>No research run yet.</td></tr></tbody></table>
+                    </div>
+                  </div>
+                </div>
+                <div class="page-heading-actions" style="justify-content: center; margin-top: 0.5rem;">
+                  <button type="submit" id="youtubeResearchSubmitBtn">Run Research</button>
+                </div>
+              </form>
+              <div class="youtube-research-bulk-bar" style="margin-top: 2.5rem;">
+                <label class="youtube-research-checkall">
+                  <input id="youtubeResearchSelectAllVisible" type="checkbox" aria-label="Select all visible research candidates" />
+                  <span>Check All</span>
+                </label>
+                <div class="youtube-research-bulk-actions">
+                  <button type="button" id="youtubeResearchBanSelectedBtn" disabled>Ban Video</button>
+                  <button type="button" id="youtubeResearchSendToTargetingBtn" disabled>Send Selected To Target</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th><button type="button" id="youtubeResearchSortTitleBtn" class="table-sort-btn">Video Title</button></th>
+                      <th><button type="button" id="youtubeResearchSortChannelBtn" class="table-sort-btn">Channel</button></th>
+                      <th class="numeric-col"><button type="button" id="youtubeResearchSortViewsBtn" class="table-sort-btn numeric-col">Views</button></th>
+                      <th class="numeric-col"><button type="button" id="youtubeResearchSortLikesBtn" class="table-sort-btn numeric-col">Likes</button></th>
+                      <th class="numeric-col"><button type="button" id="youtubeResearchSortCommentsBtn" class="table-sort-btn numeric-col">Comments</button></th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="youtubeResearchRunsTable">
+                    <tr><td colspan="7">No research candidates yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerRepositoryBody" aria-expanded="true">
+              <span>Target</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+            <div id="youtubeMinerRepositoryBody" class="youtube-miner-collapsible-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr class="contacts-filter-row">
+                      <th>
+                        <input id="youtubeRunsSelectAllVisible" type="checkbox" aria-label="Select all visible YouTube runs" />
+                      </th>
+                      <th>
+                        <div class="youtube-date-filter-wrap">
+                          <label class="youtube-date-filter-item">
+                            <span>From</span>
+                            <input id="youtubeRunsFromDate" type="date" />
+                          </label>
+                          <label class="youtube-date-filter-item">
+                            <span>To</span>
+                            <input id="youtubeRunsToDate" type="date" />
+                          </label>
+                        </div>
+                      </th>
+                      <th><input id="youtubeRunsTitleFilter" placeholder="Video Title" /></th>
+                      <th><input id="youtubeRunsChannelFilter" placeholder="Channel" /></th>
+                      <th>
+                        <select id="youtubeRunsTopicFilter">
+                          <option value="">Topics</option>
+                        </select>
+                      </th>
+                      <th>
+                        <input id="youtubeRunsHashtagsFilter" placeholder="Hashtags" />
+                      </th>
+                      <th>
+                        <select id="youtubeRunsTranscriptFilter">
+                          <option value="">All</option>
+                          <option value="found">Found</option>
+                          <option value="unavailable">Unavailable</option>
+                          <option value="failed">Failed</option>
+                        </select>
+                      </th>
+                      <th class="youtube-repository-bulk-actions-cell">
+                        <div class="youtube-repository-bulk-actions">
+                          <form id="youtubeRunsBulkTopicForm" style="display:inline-flex; align-items:center; gap:0.5rem; margin:0;">
+                            <label for="youtubeRunsBulkEditTopicSelect" style="white-space:nowrap; margin:0;">Change Topic to:</label>
+                            <select id="youtubeRunsBulkEditTopicSelect" name="topic" disabled>
+                              <option value="">Select...</option>
+                            </select>
+                          </form>
+                          <button id="youtubeMinerSendToTargetsBtn" type="button" class="primary-btn" disabled>Send Selected to Targets</button>
+                          <button id="youtubeRunsAugmentBtn" type="button" disabled>Augment Selected</button>
+                          <button id="youtubeRunsDiagnoseBtn" type="button" disabled>Diagnose Selected</button>
+                          <button id="youtubeRunsDeleteBtn" type="button" disabled>Delete Selected</button>
+                        </div>
+                      </th>
+                    </tr>
+                    <tr>
+                      <th></th>
+                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortCreatedBtn">Created</button></th>
+                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortTitleBtn">Video Title</button></th>
+                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortChannelBtn">Channel</button></th>
+                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortCategoryBtn">Topic</button></th>
+                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortHashtagsBtn">Hashtags</button></th>
+                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortTranscriptBtn">Transcript</button></th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="youtubeRunsTable"></tbody>
+                </table>
+              </div>
+              <details id="youtubeRepositoryDiagnosticsPanel" style="margin-top: 12px; margin-bottom: 2rem;">
+                <summary>Repository Diagnostics</summary>
+                <pre id="youtubeRepositoryDiagnosticsPreview" class="code-box">{}</pre>
+              </details>
+
+              <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--border);" />
+            </div>
+          </section>
+
+          <section class="youtube-miner-collapsible is-open">
+            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerContentBody" aria-expanded="true">
+              <span>Extract</span>
+              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+            </button>
+              <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
+              <h3 style="margin-bottom: 1rem;">Extraction Parameters</h3>
+              <div class="youtube-miner-training-grid">
+                <div class="youtube-miner-col-left">
+                  <div class="form-row">
+                    <label for="youtubeMinerTargets">Video/Channel Targets</label>
+                    <div class="youtube-miner-target-history-row" style="margin-bottom: 0.5rem; display: flex; gap: 8px;">
+                      <button type="button" id="youtubeMinerTargetSelectorBtn" class="primary-btn">Select Target from Repository</button>
+                    </div>
+                    <textarea id="youtubeMinerTargets" name="targets" form="youtubeCommentMinerForm" rows="3" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+                  </div>
+                </div>
+                <div class="youtube-miner-col-right">
+                  <div class="form-row">
+                    <label for="youtubeMinerIncludePhrases">Include Phrases</label>
+                    <input id="youtubeMinerIncludePhrases" name="include_phrases_text" form="youtubeCommentMinerForm" placeholder="wanting more, outgrowing, next level" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
+                    <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" form="youtubeCommentMinerForm" placeholder="first, lol, sub4sub" />
+                  </div>
+                  <div class="parameter-grid" style="margin-top: 1rem;">
+                    <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
+                    <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" form="youtubeCommentMinerForm" type="number" min="1" max="20" value="5" />
+                    <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
+                    <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" form="youtubeCommentMinerForm" type="number" min="1" max="500" value="100" />
+                    <label for="youtubeMinerMinScore">Minimum Score</label>
+                    <input id="youtubeMinerMinScore" name="min_score" form="youtubeCommentMinerForm" type="number" min="0" max="20" value="3" />
+                    <label for="youtubeMinerSortBy">Sort</label>
+                    <select id="youtubeMinerSortBy" name="sort_by" form="youtubeCommentMinerForm">
+                      <option value="relevance" selected>relevance</option>
+                      <option value="time">time</option>
+                    </select>
+                  </div>
+                  <div class="form-row checkbox-row youtube-miner-filter-checks">
+                    <label><input id="youtubeMinerIncludeReplies" name="include_replies" form="youtubeCommentMinerForm" type="checkbox" /> Include replies</label>
+                    <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" form="youtubeCommentMinerForm" type="checkbox" checked /> Exclude obvious noise</label>
+                  </div>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: flex-end; margin-top: 1rem; margin-bottom: 2rem;">
+                <button type="submit" id="youtubeCommentMinerSubmitBtn" form="youtubeCommentMinerForm" class="primary-btn">Acquire Content</button>
+              </div>
+              <hr style="background: var(--c-border); border: 0; height: 1px; margin-bottom: 2rem;" />
+
+              <div class="youtube-content-top-row">
+                <div class="youtube-content-filters-panel">
+                  <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
+                </div>
+
+                <section id="youtubeVideoDetailsSection" class="youtube-video-details-section youtube-video-details-inline">
+                  <div class="youtube-video-details-header">
+                    <h2 class="youtube-video-details-heading">Video Details</h2>
+                    <button id="youtubeDetailsTopBtn" type="button" class="youtube-top-btn" aria-label="Return to Top" title="Return to Top">&uarr;</button>
+                  </div>
+                  <h3 id="youtubeVideoTitleHeading" class="youtube-video-title-heading hidden">
+                    <a id="youtubeChannelLink" href="#" target="_blank" rel="noopener noreferrer"></a>
+                    <span id="youtubeHeadingDash" class="youtube-video-heading-dash"> - </span>
+                    <a id="youtubeVideoTitleLink" href="#" target="_blank" rel="noopener noreferrer"></a>
+                  </h3>
+
+                  <div class="youtube-upper-grid">
+                    <div class="youtube-upper-main">
+                      <div class="youtube-detail-block">
+                        <h4>Description</h4>
+                        <div id="youtubeDescriptionText" class="youtube-detail-text">No video loaded yet.</div>
+                      </div>
+
+                      <div class="youtube-detail-block">
+                        <h4>Hashtags</h4>
+                        <div id="youtubeHashtagsText" class="youtube-detail-text">-</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="youtube-detail-block">
+                    <h4>Transcript</h4>
+                    <div id="youtubeTranscriptPreview" class="youtube-detail-text youtube-transcript-text youtube-scroll-field">No transcript loaded yet.</div>
+                  </div>
+
+                  <div class="youtube-detail-block">
+                    <h4>Comment Meta</h4>
+                    <div id="youtubeCommentsPreview" class="youtube-detail-text">No comment metadata loaded for this video.</div>
+                  </div>
+                </section>
+
+                <aside class="youtube-content-media-panel">
+                  <div class="youtube-video-media-frame">
+                    <iframe id="youtubeVideoPlayer" class="youtube-video-player hidden" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                    <div id="youtubeVideoMediaEmpty" class="youtube-video-media-empty">No video loaded yet.</div>
+                  </div>
+                </aside>
+              </div>
+
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th colspan="8" class="youtube-comment-filter-row">
+                        <div class="youtube-comment-filter-grid">
+                          <div></div>
+                          <div><input id="youtubeMinerContentVideoFilter" type="text" placeholder="Video" /></div>
+                          <div><input id="youtubeMinerContentAuthorFilter" type="text" placeholder="Author" /></div>
+                          <div>
+                            <select id="youtubeMinerContentTopicFilter">
+                              <option value="">All Topics</option>
+                            </select>
+                          </div>
+                          <div><input id="youtubeMinerContentCommentFilter" type="text" placeholder="Comment" /></div>
+                          <div>
+                            <select id="youtubeMinerContentApproachFilter">
+                              <option value="">All Approaches</option>
+                            </select>
+                          </div>
+                          <div></div>
+                          <div></div>
+                        </div>
+                      </th>
+                    </tr>
+                    <tr>
+                      <th colspan="8" class="youtube-comment-bulk-actions-row">
+                        <div class="youtube-comment-bulk-controls">
+                          <div class="youtube-comment-bulk-checkall">
+                            <input id="youtubeCommentMinerSelectAllVisible" type="checkbox" aria-label="Select all visible comments" />
+                          </div>
+                          <div class="youtube-comment-bulk-actions">
+                          <button id="youtubeCommentMinerEditSelectedBtn" type="button" disabled>Edit Selected</button>
+                          <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled>Delete Selected</button>
+                          <button id="youtubeCommentMinerAddContactBtn" type="button" disabled>Add Contact</button>
+                          &nbsp;&nbsp;|&nbsp;&nbsp;
+                          <select id="youtubeCommentMinerAssignSelect" class="form-input" style="max-width: 150px; display: inline-block;">
+                            <option value="">-- Campaign --</option>
+                          </select>
+                          <select id="youtubeCommentMinerAssignTopicSelect" class="form-input" style="max-width: 150px; display: inline-block;">
+                            <option value="">-- Topic --</option>
+                          </select>
+                          <button id="youtubeCommentMinerAssignBtn" type="button" disabled>Assign</button>
+                          </div>
+                          <div></div>
+                        </div>
+                      </th>
+                    </tr>
+                    <tr>
+                      <th></th>
+                      <th>Video</th>
+                      <th>Author</th>
+                      <th>Topic</th>
+                      <th>Comment</th>
+                      <th>Approach</th>
+                      <th>Reply Draft</th>
+                      <th>Feedback</th>
+                    </tr>
+                  </thead>
+                  <tbody id="youtubeCommentMinerTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <details>
+          <summary>Advanced: Raw YouTube JSON result</summary>
+          <pre id="youtubeRawPreview" class="code-box">{}</pre>
+        </details>
+      </section>
+      <section id="askIzzyPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Ask Izzy</h2>
+        </div>
+        <p>Ask Izzy is the guided help and support area for navigating the platform, workflows, and setup decisions.</p>
+        <section class="youtube-miner-panel">
+          <p>Use this area as the launching point for assisted help experiences. For now, the platform documentation remains available under <strong>Help &gt; Docs</strong>.</p>
+          <div class="page-heading-actions" style="justify-content: flex-start;">
+            <button type="button" onclick="App.setActivePage('docsPage')">Open Docs</button>
+          </div>
+        </section>
+
+      </section>
+      <section id="editYoutubeRunPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit YouTube Run</h2>
+          <button id="backFromEditYoutubeRunBtn" type="button">Back To YouTube</button>
+        </div>
+        <div class="youtube-edit-run-layout">
+          <form id="youtubeRunEditForm" class="standard-form-grid">
+            <input id="youtubeRunEditId" name="run_id" type="hidden" />
+            
+              <label for="youtubeRunEditVideoUrl">Video URL</label>
+              <input id="youtubeRunEditVideoUrl" name="video_url" readonly />
+            
+            
+              <label for="youtubeRunEditTitle">Video Title</label>
+              <input id="youtubeRunEditTitle" name="title" />
+            
+            
+              <label for="youtubeRunEditTopic">Topic</label>
+              <select id="youtubeRunEditTopic" name="topic">
+                <option value="">Select Topic</option>
+              </select>
+            
+            
+              <label for="youtubeRunEditTags">Hashtags</label>
+              <input id="youtubeRunEditTags" name="tags" />
+            
+            <label id="youtubeRunEditCaptureWrap" class="checkbox-row hidden">
+              <input id="youtubeRunEditCaptureContact" name="capture_contact" type="checkbox" />
+              Capture Contact Details
+            </label>
+            <div></div>
+              <div class="page-heading-actions standard-form-grid-full">
+              <div></div>
+              <button type="submit">Save Changes</button>
+              <button id="youtubeRunEditTranscriptBtn" type="button" class="hidden">Acquire Transcript</button>
+            </div>
+          </form>
+          <aside class="youtube-content-media-panel youtube-edit-run-media-panel">
+            <div class="youtube-video-media-frame">
+              <iframe id="youtubeRunEditPlayer" class="youtube-video-player hidden" title="YouTube edit page video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+              <div id="youtubeRunEditPlayerEmpty" class="youtube-video-media-empty">No video loaded yet.</div>
+            </div>
+          </aside>
+        </div>
+      </section>
+      <section id="bulkEditYoutubeRunsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Bulk Edit YouTube Runs</h2>
+          <button id="backFromBulkEditYoutubeRunsBtn" type="button">Back To YouTube</button>
+        </div>
+        <p id="youtubeBulkEditSummary">No runs selected.</p>
+        <form id="youtubeBulkEditForm" class="standard-form-grid">
+          
+            <label for="youtubeBulkEditTopic">Topic</label>
+            <select id="youtubeBulkEditTopic" name="topic">
+              <option value="">Select Topic</option>
+            </select>
+          
+          
+            <label for="youtubeBulkEditTags">Hashtags</label>
+            <input id="youtubeBulkEditTags" name="tags" />
+          
+          <div></div>
+              <button type="submit">Apply To Selected Runs</button>
+        </form>
+      </section>
+      <section id="youtubeCommentsPage" class="app-page hidden">
+      <div class="page-heading-row">
+        <h2>YouTube Comments</h2>
+        <button type="button" id="commentsPageBackBtn">Back</button>
+      </div>
+
+      <!-- Video info -->
+      <div style="margin-bottom: 16px; padding: 12px; background: #f5f5f5; border-radius: 6px;">
+        <strong id="commentsPageVideoTitle">-</strong>
+        <span style="margin-left: 16px; color: #666;" id="commentsPageChannel"></span>
+        <span style="margin-left: 16px; color: #888; font-size: 0.9em;" id="commentsPageCount"></span>
+      </div>
+
+      <div id="commentsPageEmptyState" class="hidden" style="margin-bottom: 16px; padding: 12px; background: #fff8e8; border: 1px solid #ead9a7; border-radius: 6px;">
+        <p style="margin: 0 0 10px 0;">Open a YouTube comment run from Acquire to review the full comment list here.</p>
+        <div class="page-heading-actions" style="justify-content: flex-start;">
+          <button type="button" id="commentsPageOpenYoutubeBtn">Open Acquire: YouTube</button>
+        </div>
+      </div>
+
+      <!-- Comments table -->
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr class="contacts-filter-row">
+              <th>
+                <div class="youtube-date-filter-wrap">
+                  <label class="youtube-date-filter-item">
+                    <span>From</span>
+                    <input id="commentsFromDate" type="date" />
+                  </label>
+                  <label class="youtube-date-filter-item">
+                    <span>To</span>
+                    <input id="commentsToDate" type="date" />
+                  </label>
+                </div>
+              </th>
+              <th colspan="6">
+                <div class="youtube-comments-scheduler-row">
+                  <label class="youtube-comments-scheduler-field youtube-comments-scheduler-field-wide">
+                    <span>URL</span>
+                    <select id="commentsVideoUrlSelect">
+                      <option value="">Select Repository Video</option>
+                    </select>
+                  </label>
+                  <label class="youtube-comments-scheduler-field">
+                    <span>Frequency</span>
+                    <select id="commentsFrequencyInput">
+                      <option value="1" selected>1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                      <option value="5">5</option>
+                      <option value="6">6</option>
+                      <option value="7">7</option>
+                      <option value="8">8</option>
+                      <option value="9">9</option>
+                      <option value="10">10</option>
+                      <option value="11">11</option>
+                      <option value="12">12</option>
+                      <option value="13">13</option>
+                      <option value="14">14</option>
+                      <option value="15">15</option>
+                      <option value="16">16</option>
+                      <option value="17">17</option>
+                      <option value="18">18</option>
+                      <option value="19">19</option>
+                      <option value="20">20</option>
+                      <option value="21">21</option>
+                      <option value="22">22</option>
+                      <option value="23">23</option>
+                      <option value="24">24</option>
+                      <option value="25">25</option>
+                      <option value="26">26</option>
+                      <option value="27">27</option>
+                      <option value="28">28</option>
+                      <option value="29">29</option>
+                      <option value="30">30</option>
+                      <option value="31">31</option>
+                      <option value="32">32</option>
+                      <option value="33">33</option>
+                      <option value="34">34</option>
+                      <option value="35">35</option>
+                      <option value="36">36</option>
+                      <option value="37">37</option>
+                      <option value="38">38</option>
+                      <option value="39">39</option>
+                      <option value="40">40</option>
+                      <option value="41">41</option>
+                      <option value="42">42</option>
+                      <option value="43">43</option>
+                      <option value="44">44</option>
+                      <option value="45">45</option>
+                      <option value="46">46</option>
+                      <option value="47">47</option>
+                      <option value="48">48</option>
+                      <option value="49">49</option>
+                      <option value="50">50</option>
+                      <option value="51">51</option>
+                      <option value="52">52</option>
+                      <option value="53">53</option>
+                      <option value="54">54</option>
+                      <option value="55">55</option>
+                      <option value="56">56</option>
+                      <option value="57">57</option>
+                      <option value="58">58</option>
+                      <option value="59">59</option>
+                      <option value="60">60</option>
+                    </select>
+                  </label>
+                  <label class="youtube-comments-scheduler-field">
+                    <span>Timeframe</span>
+                    <select id="commentsTimeframeSelect">
+                      <option value="minute">Minute</option>
+                      <option value="hour">Hour</option>
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month" selected>Month</option>
+                      <option value="year">Year</option>
+                    </select>
+                  </label>
+                  <label class="youtube-comments-scheduler-field">
+                    <span>Max Posts</span>
+                    <select id="commentsMaxPostsSelect">
+                      <option value="1" selected>1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                      <option value="5">5</option>
+                      <option value="6">6</option>
+                      <option value="7">7</option>
+                      <option value="8">8</option>
+                      <option value="9">9</option>
+                      <option value="10">10</option>
+                      <option value="11">11</option>
+                      <option value="12">12</option>
+                      <option value="13">13</option>
+                      <option value="14">14</option>
+                      <option value="15">15</option>
+                      <option value="16">16</option>
+                      <option value="17">17</option>
+                      <option value="18">18</option>
+                      <option value="19">19</option>
+                      <option value="20">20</option>
+                    </select>
+                  </label>
+                  <label class="youtube-comments-scheduler-field">
+                    <span>Video/Comment Ratio</span>
+                    <select id="commentsVideoCommentRatioSelect">
+                      <option value="0/100">0% / 100%</option>
+                      <option value="10/90">10% / 90%</option>
+                      <option value="20/80">20% / 80%</option>
+                      <option value="30/70">30% / 70%</option>
+                      <option value="40/60">40% / 60%</option>
+                      <option value="50/50">50% / 50%</option>
+                      <option value="60/40">60% / 40%</option>
+                      <option value="70/30">70% / 30%</option>
+                      <option value="80/20">80% / 20%</option>
+                      <option value="90/10">90% / 10%</option>
+                      <option value="100/0">100% / 0%</option>
+                    </select>
+                  </label>
+                </div>
+                <div id="commentsScheduleSummary" class="youtube-comments-schedule-summary">Scheduled 1 time per month.</div>
+                <div id="commentsScheduleWarning" class="youtube-comments-schedule-warning hidden">Warning: this cadence is faster than once per hour.</div>
+                <div class="youtube-comments-schedule-summary">Scheduling runs automatically inside the selected date window. Scheduled send time may vary by plus or minus 10 hours when cadence spacing allows.</div>
+                <div id="commentsPostingStatus" class="youtube-comments-schedule-summary">Posting setup has not been checked yet.</div>
+                <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                  <button type="button" id="commentsSaveAgentBtn">Save & Enable Schedule</button>
+                  <button type="button" id="commentsCheckSetupBtn">Check Posting Setup</button>
+                  <button type="button" id="commentsRunDueBtn">Run Due Agents Now</button>
+                  <button type="button" id="commentsPostNowBtn">Post On Demand</button>
+                </div>
+                <div class="youtube-comments-agent-queue">
+                  <div class="youtube-comments-agent-queue-header">
+                    <strong>Scheduled Queue</strong>
+                    <button type="button" id="commentsRefreshQueueBtn" class="tiny-btn">Refresh Queue</button>
+                  </div>
+                  <div id="commentsAgentQueueSummary" class="youtube-comments-schedule-summary">No scheduled YouTube comment agents yet.</div>
+                  <div id="commentsAgentQueueList" class="youtube-comments-agent-queue-list"></div>
+                </div>
+                <details id="commentsDiagnosticsPanel" style="margin-top: 10px;">
+                  <summary style="cursor: pointer;">Show Diagnostics</summary>
+                  <pre id="commentsActionPreview" class="code-box" style="margin-top: 10px;">{}</pre>
+                </details>
+              </th>
+            </tr>
+            <tr>
+              <th>Date</th>
+              <th>Video Title</th>
+              <th>Author</th>
+              <th>Comment</th>
+              <th>Type</th>
+              <th>Likes</th>
+              <th>Replies</th>
+            </tr>
+          </thead>
+          <tbody id="commentsTable"></tbody>
+        </table>
+      </div>
+    </section>
+      <section id="youtubeTopicsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>YouTube Topics</h2>
+          <div class="page-heading-actions">
+            <button id="openCreateYoutubeTopicPageBtn" type="button">Create Topic</button>
+            <button id="backToYoutubePageBtn" type="button">Back To YouTube</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button id="youtubeTopicsSortCategory" type="button" class="tiny-btn">Topic</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="youtubeTopicsTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="createYoutubeTopicPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create YouTube Category</h2>
+          <button id="backToYoutubeTopicsBtn" type="button">Back To Categories</button>
+        </div>
+        <form id="youtubeTopicForm" class="standard-form-grid">
+          
+            <label for="youtubeTopicName">Topic</label>
+            <input id="youtubeTopicName" name="topic" required />
+          
+          <div></div>
+              <button type="submit">Save Category</button>
+        </form>
+      </section>
+      <section id="editYoutubeTopicPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit YouTube Category</h2>
+          <button id="backFromEditYoutubeTopicBtn" type="button">Back To Categories</button>
+        </div>
+        <form id="youtubeTopicEditForm" class="standard-form-grid">
+          <input id="youtubeTopicEditId" name="id" type="hidden" />
+          
+            <label for="youtubeTopicEditName">Topic</label>
+            <input id="youtubeTopicEditName" name="topic" required />
+          
+          <div></div>
+              <button type="submit">Update Category</button>
+        </form>
+      </section>
+      <section id="acquireInstagramPage" class="app-page hidden">
+        <h2>Acquire: Instagram</h2>
+        <p>Instagram acquire module placeholder.</p>
+      </section>
+      <section id="acquireTiktokPage" class="app-page hidden">
+        <h2>Acquire: Tiktok</h2>
+        <p>Tiktok acquire module placeholder.</p>
+      </section>
+      <section id="acquireFacebookPage" class="app-page hidden">
+        <h2>Acquire: Facebook</h2>
+        <p>Facebook acquire module placeholder.</p>
+      </section>
+      <section id="acquireXPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Acquire: X</h2>
+          <div class="page-heading-actions">
+            <button id="xHarvestRefreshBtn" type="button">Refresh Runs</button>
+          </div>
+        </div>
+        <p>Harvest recent X posts by query/hashtags, optionally include replies, and store runs for later analysis.</p>
+
+        <form id="xHarvestForm"  style="max-width: 980px;">
+          
+            <label for="xHarvestQuery">Query Keywords</label>
+            <input id="xHarvestQuery" name="query" />
+          
+          
+            <label for="xHarvestHashtags">Hashtags</label>
+            <input id="xHarvestHashtags" name="hashtags" />
+          
+          <div class="grid-form">
+            
+              <label for="xHarvestLang">Language</label>
+              <input id="xHarvestLang" name="lang" />
+            
+            
+              <label for="xHarvestMaxTweets">Max Posts</label>
+              <input id="xHarvestMaxTweets" name="max_tweets" type="number" min="10" max="100" value="25" />
+            
+          </div>
+          <div class="grid-form">
+            
+              <label for="xHarvestStartTime">Start Time (UTC)</label>
+              <input id="xHarvestStartTime" name="start_time" type="datetime-local" />
+            
+            
+              <label for="xHarvestEndTime">End Time (UTC)</label>
+              <input id="xHarvestEndTime" name="end_time" type="datetime-local" />
+            
+          </div>
+          <div class="grid-form">
+            
+              <label for="xHarvestIncludeReplies">Include Replies</label>
+              <input id="xHarvestIncludeReplies" name="include_replies" type="checkbox" checked />
+            
+            
+              <label for="xHarvestMaxRepliesPerTweet">Max Replies/Post</label>
+              <input id="xHarvestMaxRepliesPerTweet" name="max_replies_per_tweet" type="number" min="1" max="100" value="10" />
+            
+          </div>
+          <div class="grid-form">
+            <label class="checkbox-inline" for="xHarvestExcludeRetweets">
+              <input id="xHarvestExcludeRetweets" name="exclude_retweets" type="checkbox" checked />
+              Exclude Reposts
+            </label>
+            <label class="checkbox-inline" for="xHarvestExcludeReplies">
+              <input id="xHarvestExcludeReplies" name="exclude_replies" type="checkbox" />
+              Exclude Replies in Primary Search
+            </label>
+          </div>
+          <div></div>
+              <button type="submit">Run X Harvest</button>
+        </form>
+
+        <h3 style="margin-top: 1rem;">X Harvest Runs</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Created</th>
+                <th>Query</th>
+                <th>Posts</th>
+                <th>Replies</th>
+                <th>Errors</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="xHarvestRunsTable"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top: 1rem;">Run Detail</h3>
+        <h4 style="margin-top: 0.6rem;">Post Details</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody id="redditHarvestPostDetailsBody"></tbody>
+          </table>
+        </div>
+        <h4 style="margin-top: 0.8rem;">Posts + Comments</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Tweet ID</th>
+                <th>Author</th>
+                <th>Created</th>
+                <th>Text</th>
+              </tr>
+            </thead>
+            <tbody id="xHarvestItemsTable"></tbody>
+          </table>
+        </div>
+        <pre id="xHarvestRawPreview" class="mono-preview">{}</pre>
+      </section>
+      <section id="acquireRedditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Acquire: Reddit</h2>
+          <div class="page-heading-actions">
+            <button id="redditHarvestRefreshBtn" type="button">Refresh Runs</button>
+          </div>
+        </div>
+        <div class="deploy-test-banner">DEPLOY TEST MARKER: REDDIT V3 (2026-03-11)</div>
+        <p>Provide a subreddit link/name or specific post link. Reddit harvest is currently routed through OpenClaw browser automation (human-in-the-loop) and stored for later analysis.</p>
+
+        <div class="settings-card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Thread Discovery</h3>
+            <div class="page-heading-actions">
+              <button id="redditDiscoveryStatusBtn" type="button">Check Reddit Connection</button>
+            </div>
+          </div>
+          <p style="margin-top: 0;">Find and rank candidate Reddit threads directly before moving into harvesting or reply work.</p>
+          <form id="redditDiscoveryForm" class="standard-form-grid" style="max-width: 980px;">
+              <label for="redditDiscoveryTarget">Subreddit or URL</label>
+              <input id="redditDiscoveryTarget" name="target" required placeholder="/r/example" />
+              
+              <label for="redditDiscoverySourceMode">Source Mode</label>
+              <select id="redditDiscoverySourceMode" name="source_mode">
+                <option value="auto" selected>Auto</option>
+                <option value="oauth">OAuth</option>
+                <option value="public">Public JSON</option>
+              </select>
+              
+              <label for="redditDiscoverySort">Sort</label>
+              <select id="redditDiscoverySort" name="sort">
+                <option value="new">new</option>
+                <option value="hot">hot</option>
+                <option value="top">top</option>
+                <option value="rising">rising</option>
+              </select>
+              <label for="redditDiscoveryMaxPosts">Max Threads</label>
+              <input id="redditDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
+              
+              <label for="redditDiscoveryKeyword">Keyword Filter (optional)</label>
+              <input id="redditDiscoveryKeyword" name="keyword" />
+              
+              <label for="redditDiscoveryMinScore">Min Score</label>
+              <input id="redditDiscoveryMinScore" name="min_score" type="number" min="0" max="100000" value="0" />
+              <label for="redditDiscoveryMinComments">Min Comments</label>
+              <input id="redditDiscoveryMinComments" name="min_comments" type="number" min="0" max="100000" value="0" />
+              
+              <label for="redditDiscoveryStartTime">Start Date (optional)</label>
+              <input id="redditDiscoveryStartTime" name="start_time" type="date" />
+              
+              <label for="redditDiscoveryEndTime">End Date (optional)</label>
+              <input id="redditDiscoveryEndTime" name="end_time" type="date" />
+              
+              <div class="page-heading-actions" style="justify-content: flex-start; grid-column: 1 / -1;">
+                <button type="submit">Discover Threads</button>
+                <button type="button" id="redditDiscoveryUseTargetBtn">Copy Target To Harvest</button>
+              </div>
+            <div id="redditDiscoveryStatus" class="youtube-comments-schedule-summary">Reddit discovery is idle.</div>
+          </form>
+
+          <div class="table-wrap" style="margin-top: 1rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Score</th>
+                  <th>Subreddit</th>
+                  <th>Title</th>
+                  <th>Author</th>
+                  <th>Score</th>
+                  <th>Comments</th>
+                  <th>Created</th>
+                  <th>Why</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="redditDiscoveryTable"></tbody>
+            </table>
+          </div>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Discovery Diagnostics</summary>
+            <pre id="redditDiscoveryPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
+
+
+        <form id="redditHarvestForm"  style="max-width: 980px;">
+          
+            <label for="redditHarvestTarget">Subreddit or Post URL</label>
+            <input id="redditHarvestTarget" name="target" required />
+          
+          <div class="grid-form">
+            
+              <label for="redditHarvestMode">Mode</label>
+              <select id="redditHarvestMode" name="mode">
+                <option value="auto">Auto detect</option>
+                <option value="subreddit">Subreddit posts</option>
+                <option value="post">Single post + comments</option>
+              </select>
+            
+            
+              <label for="redditHarvestSourceMode">Source Mode</label>
+              <select id="redditHarvestSourceMode" name="source_mode">
+                <option value="openclaw" selected>OpenClaw Browser (human-in-the-loop)</option>
+              </select>
+            
+            
+              <label for="redditHarvestSort">Sort (subreddit mode)</label>
+              <select id="redditHarvestSort" name="sort">
+                <option value="new">new</option>
+                <option value="hot">hot</option>
+                <option value="top">top</option>
+                <option value="rising">rising</option>
+              </select>
+            
+          </div>
+          <div class="grid-form">
+            
+              <label for="redditHarvestMaxPosts">Max Posts</label>
+              <input id="redditHarvestMaxPosts" name="max_posts" type="number" min="1" max="500" value="100" />
+            
+            
+              <label for="redditHarvestMaxComments">Max Comments (total budget)</label>
+              <input id="redditHarvestMaxComments" name="max_comments" type="number" min="1" max="5000" value="500" />
+            
+          </div>
+          <div class="grid-form">
+            
+              <label for="redditHarvestKeyword">Keyword Filter (optional)</label>
+              <input id="redditHarvestKeyword" name="keyword" />
+            
+            
+              <label for="redditHarvestStartTime">Start Date (optional)</label>
+              <input id="redditHarvestStartTime" name="start_time" type="date" />
+            
+            
+              <label for="redditHarvestEndTime">End Date (optional)</label>
+              <input id="redditHarvestEndTime" name="end_time" type="date" />
+            
+          </div>
+          <label class="checkbox-inline" for="redditHarvestIncludeReplies">
+            <input id="redditHarvestIncludeReplies" name="include_replies" type="checkbox" checked />
+            Include nested replies (post mode)
+          </label>
+          <div></div>
+              <button type="submit">Run Reddit Harvest</button>
+          <!-- reddit-progress-v2 -->
+          <div id="redditHarvestProgressWrap" class="asset-upload-progress" aria-live="polite">
+            <div id="redditHarvestProgressText" class="asset-upload-progress-text">Idle — ready to run Reddit harvest.</div>
+            <progress id="redditHarvestProgressBar" max="100" value="0"></progress>
+          </div>
+        </form>
+
+        <h3 style="margin-top: 1rem;">Reddit Harvest Runs</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Created</th>
+                <th>Mode</th>
+                <th>Target/Subreddit</th>
+                <th>Posts</th>
+                <th>Comments</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="redditHarvestRunsTable"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top: 1rem;">Run Detail</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>ID</th>
+                <th>Author</th>
+                <th>Score</th>
+                <th>Text/Title</th>
+              </tr>
+            </thead>
+            <tbody id="redditHarvestItemsTable"></tbody>
+          </table>
+        </div>
+        <pre id="redditHarvestRawPreview" class="mono-preview">{}</pre>
+      </section>
+      <section id="acquireBlueskyPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Acquire: BlueSky</h2>
+          <div class="page-heading-actions">
+            <button id="blueskyPostingToggleBtn" type="button">Posting Operator</button>
+            <button id="blueskyDiscoveryStatusBtn" type="button">Check BlueSky Connection</button>
+            <button id="blueskyRefreshBtn" type="button">Refresh</button>
+          </div>
+        </div>
+        <p>Discover BlueSky posts, draft reply candidates, and stage posting workflows from a page that mirrors the Reddit acquisition flow.</p>
+
+        <div id="blueskyPostingPanel" class="settings-card bluesky-posting-panel hidden" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Posting Operator</h3>
+          </div>
+          <p style="margin-top: 0;">Check auth readiness now, then use this section for dry-run and live-post testing as the BlueSky posting workflow comes online.</p>
+          <form id="blueskyPostingForm" class="standard-form-grid" style="max-width: 980px;">
+            
+              <label for="blueskyPostingTarget">Post URL</label>
+              <input id="blueskyPostingTarget" name="target" />
+            
+            
+              <label for="blueskyPostingReplyText">Approved Reply</label>
+              <textarea id="blueskyPostingReplyText" name="reply_text" rows="4"></textarea>
+            
+            <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start;">
+              <button type="button" id="blueskyPostingStatusBtn">Check Posting Setup</button>
+              <div></div>
+              <button type="submit">Dry Run Posting Operator</button>
+            </div>
+            <div id="blueskyPostingStatus" class="youtube-comments-schedule-summary">BlueSky posting operator is idle.</div>
+          </form>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Posting Diagnostics</summary>
+            <pre id="blueskyPostingPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
+        <div class="acquire-workbench-layout" style="margin-bottom: 1rem;">
+          <div class="settings-card acquire-workbench-pane form-container-spacious">
+            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+              <h3 style="margin: 0;">Thread Discovery</h3>
+            </div>
+            <p style="margin-top: 0;">Find and rank candidate BlueSky posts before moving into reply drafting or posting work.</p>
+            <form id="blueskyDiscoveryForm" class="standard-form-grid">
+                <label for="blueskyDiscoveryTarget">Handle, Feed, or URL</label>
+                <input id="blueskyDiscoveryTarget" name="target" required placeholder="did:plc:..." />
+                
+                <label for="blueskyDiscoverySourceMode">Source Mode</label>
+                <select id="blueskyDiscoverySourceMode" name="source_mode">
+                  <option value="auto" selected>Auto</option>
+                  <option value="api">API</option>
+                  <option value="browser">OpenClaw Browser</option>
+                </select>
+                
+                <label for="blueskyDiscoverySort">Sort</label>
+                <select id="blueskyDiscoverySort" name="sort">
+                  <option value="new">new</option>
+                  <option value="top">top</option>
+                  <option value="engaging">engaging</option>
+                </select>
+                
+                <label for="blueskyDiscoveryMaxPosts">Max Posts</label>
+                <input id="blueskyDiscoveryMaxPosts" name="max_posts" type="number" min="1" max="100" value="20" />
+                
+                <label for="blueskyDiscoveryKeyword">Keyword Filter (optional)</label>
+                <input id="blueskyDiscoveryKeyword" name="keyword" />
+                
+                <label for="blueskyDiscoveryMinLikes">Min Likes</label>
+                <input id="blueskyDiscoveryMinLikes" name="min_likes" type="number" min="0" max="100000" value="0" />
+                
+                <label for="blueskyDiscoveryMinReplies">Min Replies</label>
+                <input id="blueskyDiscoveryMinReplies" name="min_replies" type="number" min="0" max="100000" value="0" />
+                
+                <label for="blueskyDiscoveryStartTime">Start Date (optional)</label>
+                <input id="blueskyDiscoveryStartTime" name="start_time" type="date" />
+                
+                <label for="blueskyDiscoveryEndTime">End Date (optional)</label>
+                <input id="blueskyDiscoveryEndTime" name="end_time" type="date" />
+                
+                <div class="page-heading-actions" style="justify-content: flex-start; grid-column: 1 / -1;">
+                  <button type="submit">Discover Threads</button>
+                  <button type="button" id="blueskyDiscoveryUseTargetBtn">Copy Target To Reply</button>
+                </div>
+              <div id="blueskyDiscoveryStatus" class="youtube-comments-schedule-summary">BlueSky discovery is idle.</div>
+            </form>
+          </div>
+        </div>
+
+        <div class="settings-card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Discovery Results</h3>
+          </div>
+          <div id="blueskyDiscoveryBulkActions" class="assets-bulk-action-row" style="margin-bottom: 0.75rem;">
+            <label for="blueskyDiscoveryBulkQuality" style="font-weight: 700;">Bulk Quality</label>
+            <select id="blueskyDiscoveryBulkQuality" aria-label="Bulk quality for selected BlueSky rows">
+              <option value="">Set quality...</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+            <button type="button" id="blueskyDiscoveryApplyBulkQualityBtn" class="tiny-btn">Apply To Selected</button>
+          </div>
+          <div class="table-wrap">
+            <table id="blueskyDiscoveryResultsTable">
+              <thead>
+                <tr>
+                  <th><input id="blueskyDiscoverySelectAllVisible" type="checkbox" aria-label="Select all visible BlueSky discovery rows" /></th>
+                  <th class="bluesky-discovery-metric-col bluesky-discovery-score-col">Score</th>
+                  <th>Author</th>
+                  <th class="bluesky-discovery-post-col">Post</th>
+                  <th class="bluesky-discovery-metric-col">Likes</th>
+                  <th class="bluesky-discovery-metric-col">Replies</th>
+                  <th class="bluesky-discovery-metric-col">Reposts</th>
+                  <th>Created</th>
+                  <th>Quality</th>
+                  <th>Why</th>
+                  <th class="bluesky-discovery-actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="blueskyDiscoveryTable"></tbody>
+            </table>
+          </div>
+          <h4 style="margin: 1rem 0 0.5rem 0;">Thread Replies</h4>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Author</th>
+                  <th>Reply</th>
+                  <th>Likes</th>
+                  <th>Replies</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody id="blueskyDiscoveryRepliesTable"></tbody>
+            </table>
+          </div>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Discovery Diagnostics</summary>
+            <pre id="blueskyDiscoveryPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
+        <div class="settings-card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0;">Reply Candidates</h3>
+          </div>
+          <div id="blueskyReplyPromptSummary" class="bluesky-prompt-summary">
+            BlueSky reply prompt diagnostics will appear here after generation.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Reply</th>
+                  <th>Tone</th>
+                  <th>Why It Fits</th>
+                </tr>
+              </thead>
+              <tbody id="blueskyReplyCandidatesTable"></tbody>
+            </table>
+          </div>
+          <details style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Show Reply Diagnostics</summary>
+            <pre id="blueskyReplyCandidatesPreview" class="mono-preview" style="margin-top: 0.75rem;">{}</pre>
+          </details>
+        </div>
+
+      </section>
+      <section id="acquireQuoraPage" class="app-page hidden">
+        <h2>Acquire: Quora</h2>
+        <p>Quora acquire module placeholder.</p>
+      </section>
+      <section id="acquireSubstackPage" class="app-page hidden">
+        <h2>Acquire: Substack</h2>
+        <p>Substack acquire module placeholder.</p>
+      </section>
+      <section id="acquireMediumPage" class="app-page hidden">
+        <h2>Acquire: Medium</h2>
+        <p>Medium acquire module placeholder.</p>
+      </section>
