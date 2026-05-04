@@ -23,8 +23,8 @@
         <div class="page-heading-row">
           <h2>Engage: Comments</h2>
           <div class="page-heading-actions">
-            <button id="engageCommentsStatusBtn" type="button">Check Reddit Connection</button>
-            <button id="engageCommentsOpenSettingsBtn" type="button">API Settings</button>
+            <button id="engageCommentsStatusBtn" type="button" class="btn">Check Reddit Connection</button>
+            <button id="engageCommentsOpenSettingsBtn" type="button" class="btn">API Settings</button>
           </div>
         </div>
         <p>Post a comment to a Reddit discussion by providing a post/comment URL or a Reddit thing ID.</p>
@@ -66,7 +66,7 @@
           <div></div>
               <div class="page-heading-actions standard-form-grid-full">
             <div></div>
-              <button id="engageCommentsSubmitBtn" type="submit">Post Comment</button>
+              <button id="engageCommentsSubmitBtn" type="submit" class="btn btn-primary">Post Comment</button>
           </div>
         </form>
         <p id="engageCommentsStatus" class="meta"></p>
@@ -110,9 +110,9 @@
               
               <div></div>
               <div class="page-heading-actions standard-form-grid-full">
-                <button id="promoteEmailSendNowBtn" type="button">Send Now</button>
-                <button id="promoteEmailScheduleBtn" type="button">Schedule</button>
-                <button id="promoteEmailDiagnosticsBtn" type="button">Run Diagnostics</button>
+                <button id="promoteEmailSendNowBtn" type="button" class="btn">Send Now</button>
+                <button id="promoteEmailScheduleBtn" type="button" class="btn">Schedule</button>
+                <button id="promoteEmailDiagnosticsBtn" type="button" class="btn">Run Diagnostics</button>
               </div>
             </form>
             <p id="promoteEmailStatus" class="meta"></p>
@@ -137,10 +137,10 @@
         <div class="page-heading-row">
           <h2>Promote: Social</h2>
           <div class="page-heading-actions">
-            <button id="engageSocialOpenYoutubeCommentsBtn" type="button">YouTube Comments</button>
-            <button id="engageSocialPublishDueBtn" type="button">Publish Due Posts</button>
-            <button id="engageSocialDiagnosticsBtn" type="button">Run Diagnostics</button>
-            <button id="engageSocialOpenSettingsBtn" type="button">API Settings</button>
+            <button id="engageSocialOpenYoutubeCommentsBtn" type="button" class="btn">YouTube Comments</button>
+            <button id="engageSocialPublishDueBtn" type="button" class="btn">Publish Due Posts</button>
+            <button id="engageSocialDiagnosticsBtn" type="button" class="btn">Run Diagnostics</button>
+            <button id="engageSocialOpenSettingsBtn" type="button" class="btn">API Settings</button>
           </div>
         </div>
         <p class="meta">Build a social drop from a Social campaign, choose platforms, review/edit each platform draft, then queue or publish.</p>
@@ -155,34 +155,38 @@
               <span id="engageSocialXStatus" class="status-pill status-warn">Checking…</span>
             </div>
 
-            <form id="engageSocialComposerForm">
+            <form id="engageSocialComposerForm" class="standard-form-grid">
               
                 <label for="engageSocialCampaignSelect">Social Campaign</label>
                 <select id="engageSocialCampaignSelect" name="campaignId" required>
                   <option value="">No content available</option>
                 </select>
               
-              
-                <h4 class="engage-social-section-title">Platforms</h4>
+              <div class="standard-form-grid-full">
+                <h4 class="engage-social-section-title" style="margin-bottom: 0.5rem;">Platforms</h4>
                 <div id="engageSocialPlatformList" class="grid-form" style="grid-template-columns: repeat(3, minmax(0, 1fr));"></div>
-              
-              <hr class="engage-social-section-divider" />
-              <h4 class="engage-social-section-title">Post</h4>
-              <div id="engageSocialPlatformEditors" class="stack-form" style="margin: 0;"></div>
-              <hr class="engage-social-section-divider" />
-              <div class="engage-social-meta-row">
-                
-                  <h4 class="engage-social-section-title">Schedule</h4>
-                  <input id="engageSocialSchedule" name="scheduled_for" type="datetime-local" />
-                
-                <div class="engage-social-counter-wrap">
-                  <span id="engageSocialCharCount" class="engage-social-counter">0 selected</span>
+              </div>
+              <div class="standard-form-grid-full">
+                <hr class="engage-social-section-divider" />
+                <h4 class="engage-social-section-title" style="margin-bottom: 0.5rem;">Post</h4>
+                <div id="engageSocialPlatformEditors" class="stack-form" style="margin: 0;"></div>
+                <hr class="engage-social-section-divider" />
+              </div>
+              <div class="standard-form-grid-full">
+                <div class="engage-social-meta-row">
+                  <div>
+                    <h4 class="engage-social-section-title" style="margin-bottom: 0.25rem;">Schedule</h4>
+                    <input id="engageSocialSchedule" name="scheduled_for" type="datetime-local" />
+                  </div>
+                  <div class="engage-social-counter-wrap">
+                    <span id="engageSocialCharCount" class="engage-social-counter">0 selected</span>
+                  </div>
                 </div>
               </div>
-              <div class="engage-social-action-row">
-                <div></div>
-              <button id="engageSocialQueueBtn" type="submit">Queue Selected</button>
-                <button id="engageSocialPublishNowBtn" type="button">Publish Now</button>
+              <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-end;">
+                <button id="engageSocialQueueBtn" type="submit" class="btn btn-primary">Queue Selected</button>
+                <button id="engageSocialPublishNowBtn" type="button" class="btn">Publish Now</button>
               </div>
             </form>
           </section>

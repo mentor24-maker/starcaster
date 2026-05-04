@@ -5,11 +5,11 @@
         <div class="cards">
           <article class="card">
             <h3>Topics</h3>
-            <button type="button" onclick="App.messaging.openTopicsLanding()">Open Topics</button>
+            <button type="button" onclick="App.messaging.openTopicsLanding()" class="btn">Open Topics</button>
           </article>
           <article class="card">
             <h3>Content</h3>
-            <button type="button" onclick="App.messaging.openContentLanding()">Open Content</button>
+            <button type="button" onclick="App.messaging.openContentLanding()" class="btn">Open Content</button>
           </article>
         </div>
       </section>
@@ -17,9 +17,9 @@
         <div class="page-heading-row">
           <h2>Messaging: Content</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openCreateContent(); return false;">Create Content</button>
-            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;">Formats</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openCreateContent(); return false;" class="btn">Create Content</button>
+            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;" class="btn">Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -38,7 +38,7 @@
                   </select>
                 </th>
                 <th class="contacts-go-cell">
-                  <button id="messagingContentFiltersGoBtn" type="button">Go</button>
+                  <button id="messagingContentFiltersGoBtn" type="button" class="btn">Go</button>
                 </th>
               </tr>
               <tr>
@@ -56,8 +56,8 @@
         <div class="page-heading-row">
           <h2>Messaging: Create Content</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Content</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Content</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div class="messaging-create-content-layout">
@@ -153,10 +153,10 @@
                 
               </div>
               <div id="messagingCreateContentActionsRow" class="page-heading-actions hidden" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingCreateContentGenerateBtn" type="button">Generate with AI</button>
-                <button id="messagingCreateContentSavePromptBtn" type="button">Save Prompt</button>
+                <button id="messagingCreateContentGenerateBtn" type="button" class="btn">Generate with AI</button>
+                <button id="messagingCreateContentSavePromptBtn" type="button" class="btn">Save Prompt</button>
                 <div></div>
-              <button id="messagingCreateContentSubmitBtn" type="submit" class="hidden">Save Content</button>
+              <button id="messagingCreateContentSubmitBtn" type="submit" class="btn btn-primary hidden">Save Content</button>
               </div>
             </form>
           </div>
@@ -164,7 +164,7 @@
             <div class="page-heading-row" style="margin-bottom: 8px;">
               <h3 style="margin: 0;">Generated Options</h3>
               <div class="page-heading-actions">
-                <button id="messagingCreateContentClearSuggestionsBtn" type="button">Clear Options</button>
+                <button id="messagingCreateContentClearSuggestionsBtn" type="button" class="btn">Clear Options</button>
               </div>
             </div>
             <div id="messagingCreateContentSuggestionsEmpty">
@@ -183,7 +183,7 @@
                 </table>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingCreateContentSaveSelectedBtn" type="button">Save Selected</button>
+                <button id="messagingCreateContentSaveSelectedBtn" type="button" class="btn">Save Selected</button>
               </div>
             </div>
             <div id="messagingCreateContentLongSuggestions" class="hidden">
@@ -200,18 +200,18 @@
                   <label><strong>Body:</strong></label>
                   <div>
                     <div class="messaging-richtext-toolbar">
-                      <button type="button" data-richtext-command="bold" title="Bold" aria-label="Bold"><strong>B</strong></button>
-                      <button type="button" data-richtext-command="italic" title="Italic" aria-label="Italic"><em>I</em></button>
-                      <button type="button" data-richtext-command="formatBlock" data-richtext-value="h3" title="Heading" aria-label="Heading"><strong>H3</strong></button>
-                      <button type="button" data-richtext-command="insertUnorderedList" title="Bullet List" aria-label="Bullet List">&bull;</button>
-                      <button type="button" data-richtext-command="removeFormat" title="Clear Formatting" aria-label="Clear Formatting">&#215;</button>
+                      <button type="button" data-richtext-command="bold" title="Bold" aria-label="Bold" class="btn"><strong>B</strong></button>
+                      <button type="button" data-richtext-command="italic" title="Italic" aria-label="Italic" class="btn"><em>I</em></button>
+                      <button type="button" data-richtext-command="formatBlock" data-richtext-value="h3" title="Heading" aria-label="Heading" class="btn"><strong>H3</strong></button>
+                      <button type="button" data-richtext-command="insertUnorderedList" title="Bullet List" aria-label="Bullet List" class="btn">&bull;</button>
+                      <button type="button" data-richtext-command="removeFormat" title="Clear Formatting" aria-label="Clear Formatting" class="btn">&#215;</button>
                     </div>
                     <div id="messagingCreateContentGeneratedBodyEditor" class="messaging-richtext-editor" contenteditable="true"></div>
                   </div>
                 </div>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingCreateContentSaveGeneratedBtn" type="button">Save Generated Draft</button>
+                <button id="messagingCreateContentSaveGeneratedBtn" type="button" class="btn">Save Generated Draft</button>
               </div>
               <div id="messagingCreateContentFeedbackWrap" class="stack-form labeled-form hidden" style="margin-top: 12px;">
                 <div class="form-row">
@@ -219,7 +219,7 @@
                   <textarea id="messagingCreateContentFeedback" rows="5" placeholder="Share what should change in the generated article so AI can revise it."></textarea>
                 </div>
                 <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                  <button id="messagingCreateContentReviseBtn" type="button">Revise with Feedback</button>
+                  <button id="messagingCreateContentReviseBtn" type="button" class="btn">Revise with Feedback</button>
                 </div>
               </div>
             </div>
@@ -230,14 +230,14 @@
         <div class="page-heading-row">
           <h2>Messaging: Formats</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('messagingContentTypesPage')">Manage Content Formats</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Content</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.setActivePage('messagingContentTypesPage')" class="btn">Manage Content Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Content</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div id="messagingContentFilterBar" class="messaging-content-filter hidden">
           <span id="messagingContentFilterLabel"></span>
-          <button id="messagingContentClearFilterBtn" type="button">Clear Filter</button>
+          <button id="messagingContentClearFilterBtn" type="button" class="btn">Clear Filter</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -257,8 +257,8 @@
         <div class="page-heading-row">
           <h2>Messaging: Content Formats</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;">Back To Formats</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openManageContentLanding(); return false;" class="btn">Back To Formats</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <p>Create a content format by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
@@ -279,8 +279,8 @@
           <div></div>
               <div class="page-heading-actions">
             <div></div>
-              <button id="messagingContentTypeSaveBtn" type="submit">Create Content Format</button>
-            <button id="messagingContentTypeCancelEditBtn" type="button" class="hidden">Cancel Edit</button>
+              <button id="messagingContentTypeSaveBtn" type="submit" class="btn btn-primary">Create Content Format</button>
+            <button id="messagingContentTypeCancelEditBtn" type="button" class="btn hidden">Cancel Edit</button>
           </div>
         </form>
 
@@ -288,9 +288,9 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingContentTypesSortLabelBtn" type="button" class="tiny-btn">Name</button></th>
-                <th><button id="messagingContentTypesSortFamilyBtn" type="button" class="tiny-btn">Family</button></th>
-                <th><button id="messagingContentTypesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th><button id="messagingContentTypesSortLabelBtn" type="button" class="btn">Name</button></th>
+                <th><button id="messagingContentTypesSortFamilyBtn" type="button" class="btn">Family</button></th>
+                <th><button id="messagingContentTypesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
                 <th>Enabled</th>
                 <th>Actions</th>
               </tr>
@@ -303,8 +303,8 @@
         <div class="page-heading-row">
           <h2>Messaging: Articles</h2>
           <div class="page-heading-actions">
-            <button id="messagingArticlesToggleFormBtn" type="button">Add Article</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="messagingArticlesToggleFormBtn" type="button" class="btn">Add Article</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingArticlesForm">
@@ -330,14 +330,14 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit">Save Article</button>
+              <button type="submit" class="btn btn-primary">Save Article</button>
         </form>
 
         <form id="messagingArticlesEditForm">
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit Article</h3>
-            <button id="messagingArticlesCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingArticlesCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <div class="grid-form messaging-articles-top-row">
             <select name="platform">
@@ -369,7 +369,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update Article</button>
+              <button type="submit" class="btn btn-primary">Update Article</button>
         </form>
 
         <h3>Saved Articles</h3>
@@ -377,11 +377,11 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingArticlesSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
-                <th><button id="messagingArticlesSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
-                <th><button id="messagingArticlesSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
-                <th><button id="messagingArticlesSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
-                <th><button id="messagingArticlesSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
+                <th><button id="messagingArticlesSortPublishBtn" type="button" class="btn">Publish Date</button></th>
+                <th><button id="messagingArticlesSortTitleBtn" type="button" class="btn">Title</button></th>
+                <th><button id="messagingArticlesSortPlatformBtn" type="button" class="btn">Platform</button></th>
+                <th><button id="messagingArticlesSortAuthorBtn" type="button" class="btn">Author</button></th>
+                <th><button id="messagingArticlesSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -393,8 +393,8 @@
         <div class="page-heading-row">
           <h2>Messaging: Tweets</h2>
           <div class="page-heading-actions">
-            <button id="messagingTweetsToggleFormBtn" type="button">Add Tweet</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="messagingTweetsToggleFormBtn" type="button" class="btn">Add Tweet</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div id="messagingTweetsWorkspace" class="messaging-create-content-layout hidden" style="margin-bottom: 18px;">
@@ -436,10 +436,10 @@
               
               <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingTweetsGenerateBtn" type="button">Generate with AI</button>
-                <button id="messagingTweetsSavePromptBtn" type="button">Save Prompt</button>
+                <button id="messagingTweetsGenerateBtn" type="button" class="btn">Generate with AI</button>
+                <button id="messagingTweetsSavePromptBtn" type="button" class="btn">Save Prompt</button>
                 <div></div>
-              <button id="messagingTweetsSubmitBtn" type="submit">Save Tweet</button>
+              <button id="messagingTweetsSubmitBtn" type="submit" class="btn btn-primary">Save Tweet</button>
               </div>
             </form>
           </div>
@@ -455,7 +455,7 @@
                   <option value="4">4</option>
                   <option value="5">5</option>
                 </select>
-                <button id="messagingTweetsClearSuggestionsBtn" type="button">Clear Options</button>
+                <button id="messagingTweetsClearSuggestionsBtn" type="button" class="btn">Clear Options</button>
               </div>
             </div>
             <div id="messagingTweetsSuggestionsEmpty">
@@ -475,7 +475,7 @@
                 </table>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingTweetsSaveSelectedBtn" type="button">Save Selected</button>
+                <button id="messagingTweetsSaveSelectedBtn" type="button" class="btn">Save Selected</button>
               </div>
             </div>
           </div>
@@ -485,7 +485,7 @@
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit Tweet</h3>
-            <button id="messagingTweetsCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingTweetsCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <select name="topic" data-messaging-topic-select="true">
             <option value="">Topic</option>
@@ -506,7 +506,7 @@
             <option value="">Image (optional)</option>
           </select>
           <div></div>
-              <button type="submit">Update Tweet</button>
+              <button type="submit" class="btn btn-primary">Update Tweet</button>
         </form>
 
         <h3>Saved Tweets</h3>
@@ -514,11 +514,11 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTweetsSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
-                <th><button id="messagingTweetsSortContentBtn" type="button" class="tiny-btn">Content</button></th>
-                <th><button id="messagingTweetsSortUrlBtn" type="button" class="tiny-btn">URL</button></th>
-                <th><button id="messagingTweetsSortHashtagsBtn" type="button" class="tiny-btn">Hashtags</button></th>
-                <th><button id="messagingTweetsSortImageBtn" type="button" class="tiny-btn">Image</button></th>
+                <th><button id="messagingTweetsSortCreatedBtn" type="button" class="btn">Created</button></th>
+                <th><button id="messagingTweetsSortContentBtn" type="button" class="btn">Content</button></th>
+                <th><button id="messagingTweetsSortUrlBtn" type="button" class="btn">URL</button></th>
+                <th><button id="messagingTweetsSortHashtagsBtn" type="button" class="btn">Hashtags</button></th>
+                <th><button id="messagingTweetsSortImageBtn" type="button" class="btn">Image</button></th>
                 <th>Score</th>
                 <th>Actions</th>
               </tr>
@@ -530,14 +530,14 @@
       <section id="messagingPostsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Posts</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
         </div>
         <p>Post writing workspace placeholder.</p>
       </section>
       <section id="messagingEmailsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Emails</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
         </div>
         <p>Email writing workspace placeholder.</p>
       </section>
@@ -545,9 +545,9 @@
         <div class="page-heading-row">
           <h2>Messaging: Pitches</h2>
           <div class="page-heading-actions">
-            <button id="openMessagingTopicsFromPitchesBtn" type="button">Topics</button>
-            <button id="messagingPitchesToggleFormBtn" type="button">Create Pitches</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="openMessagingTopicsFromPitchesBtn" type="button" class="btn">Topics</button>
+            <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
@@ -574,10 +574,10 @@
                 
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
-                  <button id="messagingPitchesCreatorGenerateBtn" type="button">Generate with AI</button>
-                  <button id="messagingPitchesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <button id="messagingPitchesCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
+                  <button id="messagingPitchesCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
                   <div></div>
-              <button id="messagingPitchesCreatorSubmitBtn" type="submit">Save Pitch</button>
+              <button id="messagingPitchesCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Pitch</button>
                 </div>
               </form>
             </div>
@@ -593,8 +593,8 @@
                     <option value="4">4</option>
                     <option value="5">5</option>
                   </select>
-                  <button id="messagingPitchesCreatorClearSuggestionsBtn" type="button">Clear</button>
-                  <button id="messagingPitchesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                  <button id="messagingPitchesCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
+                  <button id="messagingPitchesCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
                 </div>
               </div>
               <p id="messagingPitchesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review pitch options here.</p>
@@ -624,7 +624,7 @@
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit Pitch</h3>
-            <button id="messagingPitchCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingPitchCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <select id="messagingPitchEditTopicSelect" name="topic">
             <option value="">No Topic</option>
@@ -639,7 +639,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update Pitch</button>
+              <button type="submit" class="btn btn-primary">Update Pitch</button>
         </form>
 
         <h3>Saved Pitches</h3>
@@ -657,15 +657,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingPitchesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+                <th><button id="messagingPitchesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingPitchesSortTextBtn" type="button" class="tiny-btn">Pitch</button></th>
-                <th><button id="messagingPitchesSortTopicBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th><button id="messagingPitchesSortTextBtn" type="button" class="btn">Pitch</button></th>
+                <th><button id="messagingPitchesSortTopicBtn" type="button" class="btn">Topic</button></th>
                 <th>Score</th>
-                <th><button id="messagingPitchesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
-                <th><button id="messagingPitchesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th><button id="messagingPitchesSortCreatedBtn" type="button" class="btn">Created</button></th>
+                <th><button id="messagingPitchesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -676,7 +676,7 @@
       <section id="messagingPitchesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Bulk Edit Pitches</h2>
-          <button id="messagingPitchesBackFromBulkEditBtn" type="button">Back To Pitches</button>
+          <button id="messagingPitchesBackFromBulkEditBtn" type="button" class="btn">Back To Pitches</button>
         </div>
         <p id="messagingPitchesBulkEditSummary">No pitches selected.</p>
         <form id="messagingPitchesBulkEditForm">
@@ -687,13 +687,13 @@
             </select>
           </div>
           <div></div>
-              <button type="submit">Apply To Selected Pitches</button>
+              <button type="submit" class="btn btn-primary">Apply To Selected Pitches</button>
         </form>
       </section>
       <section id="messagingCommentsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Comments</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
         </div>
         <p>Comment writing workspace placeholder.</p>
       </section>
@@ -702,8 +702,8 @@
         <div class="page-heading-row">
           <h2>Messaging: Hashtags</h2>
           <div class="page-heading-actions">
-            <button id="messagingHashtagsToggleFormBtn" type="button">Add Hashtags</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="messagingHashtagsToggleFormBtn" type="button" class="btn">Add Hashtags</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingHashtagsForm" class="standard-form-grid">
@@ -712,7 +712,7 @@
             <option value="">Campaign (placeholder until campaigns are created)</option>
           </select>
           <div></div>
-              <button type="submit">Save Hashtags</button>
+              <button type="submit" class="btn btn-primary">Save Hashtags</button>
         </form>
 
         <h3>Hashtags By Campaign</h3>
@@ -726,9 +726,9 @@
         <div class="page-heading-row">
           <h2>Messaging: Headlines</h2>
           <div class="page-heading-actions">
-            <button id="openMessagingTopicsPageBtn" type="button">Topics</button>
-            <button id="messagingHeadlinesToggleFormBtn" type="button">Create Headlines</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="openMessagingTopicsPageBtn" type="button" class="btn">Topics</button>
+            <button id="messagingHeadlinesToggleFormBtn" type="button" class="btn">Create Headlines</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
 
@@ -754,10 +754,10 @@
                 
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
-                  <button id="messagingHeadlinesCreatorGenerateBtn" type="button">Generate with AI</button>
-                  <button id="messagingHeadlinesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <button id="messagingHeadlinesCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
+                  <button id="messagingHeadlinesCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
                   <div></div>
-              <button id="messagingHeadlinesCreatorSubmitBtn" type="submit">Save Headline</button>
+              <button id="messagingHeadlinesCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Headline</button>
                 </div>
               </form>
             </div>
@@ -773,8 +773,8 @@
                     <option value="4">4</option>
                     <option value="5">5</option>
                   </select>
-                  <button id="messagingHeadlinesCreatorClearSuggestionsBtn" type="button">Clear</button>
-                  <button id="messagingHeadlinesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                  <button id="messagingHeadlinesCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
+                  <button id="messagingHeadlinesCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
                 </div>
               </div>
               <p id="messagingHeadlinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review headline options here.</p>
@@ -804,7 +804,7 @@
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit Headline</h3>
-            <button id="messagingHeadlineCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingHeadlineCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <select id="messagingHeadlineEditTopicSelect" name="topic">
             <option value="">No Topic</option>
@@ -819,7 +819,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update Headline</button>
+              <button type="submit" class="btn btn-primary">Update Headline</button>
         </form>
 
         <div class="table-wrap">
@@ -843,16 +843,16 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingHeadlinesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+                <th><button id="messagingHeadlinesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingHeadlinesSortHeadlineBtn" type="button" class="tiny-btn">Headline</button></th>
-                <th><button id="messagingHeadlinesSortTopicBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th><button id="messagingHeadlinesSortHeadlineBtn" type="button" class="btn">Headline</button></th>
+                <th><button id="messagingHeadlinesSortTopicBtn" type="button" class="btn">Topic</button></th>
                 <th>Format</th>
                 <th>Score</th>
-                <th><button id="messagingHeadlinesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
-                <th><button id="messagingHeadlinesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th><button id="messagingHeadlinesSortCreatedBtn" type="button" class="btn">Created</button></th>
+                <th><button id="messagingHeadlinesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -863,7 +863,7 @@
       <section id="messagingHeadlinesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Bulk Edit Headlines</h2>
-          <button id="messagingHeadlinesBackFromBulkEditBtn" type="button">Back To Headlines</button>
+          <button id="messagingHeadlinesBackFromBulkEditBtn" type="button" class="btn">Back To Headlines</button>
         </div>
         <p id="messagingHeadlinesBulkEditSummary">No headlines selected.</p>
         <form id="messagingHeadlinesBulkEditForm" class="standard-form-grid">
@@ -874,19 +874,19 @@
             </select>
           
           <div></div>
-              <button type="submit">Apply To Selected Headlines</button>
+              <button type="submit" class="btn btn-primary">Apply To Selected Headlines</button>
         </form>
       </section>
       <section id="messagingTopicsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging Topics</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div class="messaging-topics-ai-toolbar">
-          <button id="messagingTopicsGenerateBtn" type="button">Generate AI Suggestions</button>
+          <button id="messagingTopicsGenerateBtn" type="button" class="btn">Generate AI Suggestions</button>
         </div>
         <div id="messagingTopicsProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
           <div id="messagingTopicsProgressText" class="asset-upload-progress-text">Reviewing website data and training context...</div>
@@ -900,7 +900,7 @@
                 <input id="messagingTopicsSelectAllSuggestions" type="checkbox" />
                 Check All
               </label>
-              <button id="messagingTopicsSaveSelectedBtn" type="button">Save Selected Topics</button>
+              <button id="messagingTopicsSaveSelectedBtn" type="button" class="btn">Save Selected Topics</button>
             </div>
           </div>
           <div id="messagingTopicsSuggestionsMeta" class="meta" style="margin-bottom: 0.8rem;"></div>
@@ -909,7 +909,7 @@
         <section id="messagingTopicCreatePanel" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
             <h3>Create Messaging Topic</h3>
-            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+            <button type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
           </div>
           <form id="messagingTopicForm" class="standard-form-grid" onsubmit="App.messaging.submitTopicCreate(event); return false;">
             
@@ -917,14 +917,14 @@
               <input id="messagingTopicName" name="topic" required />
             
             <div></div>
-              <button type="submit">Save Topic</button>
+              <button type="submit" class="btn btn-primary">Save Topic</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTopicsSortBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th><button id="messagingTopicsSortBtn" type="button" class="btn">Topic</button></th>
                 <th class="messaging-topics-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -936,8 +936,8 @@
         <div class="page-heading-row">
           <h2>Manage Messaging Topics</h2>
           <div class="page-heading-actions">
-            <button id="openCreateMessagingTopicPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
-            <button type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+            <button id="openCreateMessagingTopicPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
           </div>
         </div>
         <p>The Topics editor now lives on the main Topics page.</p>
@@ -945,7 +945,7 @@
       <section id="createMessagingTopicPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Messaging Topic</h2>
-          <button id="backToMessagingTopicsBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
+          <button id="backToMessagingTopicsBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
         </div>
         <p>The create form now opens inline on the main Topics page.</p>
       </section>
@@ -953,9 +953,9 @@
         <div class="page-heading-row">
           <h2>Edit Messaging Topic</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;">Create Topic</button>
-            <button id="backFromEditMessagingTopicBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;">Back To Topics</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button id="backFromEditMessagingTopicBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingTopicEditForm" class="standard-form-grid" onsubmit="App.messaging.submitTopicEdit(event); return false;">
@@ -965,21 +965,21 @@
             <input id="messagingTopicEditName" name="topic" required />
           
           <div></div>
-              <button type="submit">Update Topic</button>
+              <button type="submit" class="btn btn-primary">Update Topic</button>
         </form>
       </section>
       <section id="messagingTagsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging Tags</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <section id="messagingTagCreatePanel" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
             <h3>Create Messaging Tag</h3>
-            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
           </div>
           <form id="messagingTagForm" class="standard-form-grid" onsubmit="App.messaging.submitTagCreate(event); return false;">
             
@@ -987,14 +987,14 @@
               <input id="messagingTagName" name="tag" required />
             
             <div></div>
-              <button type="submit">Save Tag</button>
+              <button type="submit" class="btn btn-primary">Save Tag</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTagsSortBtn" type="button" class="tiny-btn">Tag</button></th>
+                <th><button id="messagingTagsSortBtn" type="button" class="btn">Tag</button></th>
                 <th class="messaging-topics-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -1006,8 +1006,8 @@
         <div class="page-heading-row">
           <h2>Manage Messaging Tags</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
-            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
           </div>
         </div>
         <p>The Tags editor now lives on the main Tags page.</p>
@@ -1015,7 +1015,7 @@
       <section id="createMessagingTagPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Messaging Tag</h2>
-          <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
+          <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
         </div>
         <p>The create form now opens inline on the main Tags page.</p>
       </section>
@@ -1023,9 +1023,9 @@
         <div class="page-heading-row">
           <h2>Edit Messaging Tag</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;">Create Tag</button>
-            <button type="button" onclick="App.messaging.openTagsPage(); return false;">Back To Tags</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingTagEditForm" class="standard-form-grid" onsubmit="App.messaging.submitTagEdit(event); return false;">
@@ -1035,16 +1035,16 @@
             <input id="messagingTagEditName" name="tag" required />
           
           <div></div>
-              <button type="submit">Update Tag</button>
+              <button type="submit" class="btn btn-primary">Update Tag</button>
         </form>
       </section>
       <section id="messagingSubheadingsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Sub-headings</h2>
           <div class="page-heading-actions">
-            <button id="openMessagingTopicsFromSubheadingsBtn" type="button">Topics</button>
-            <button id="messagingSubheadingsToggleFormBtn" type="button">Create Sub-headings</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="openMessagingTopicsFromSubheadingsBtn" type="button" class="btn">Topics</button>
+            <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
@@ -1071,10 +1071,10 @@
                 
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
-                  <button id="messagingSubheadingsCreatorGenerateBtn" type="button">Generate with AI</button>
-                  <button id="messagingSubheadingsCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <button id="messagingSubheadingsCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
+                  <button id="messagingSubheadingsCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
                   <div></div>
-              <button id="messagingSubheadingsCreatorSubmitBtn" type="submit">Save Sub-heading</button>
+              <button id="messagingSubheadingsCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Sub-heading</button>
                 </div>
               </form>
             </div>
@@ -1090,8 +1090,8 @@
                     <option value="4">4</option>
                     <option value="5">5</option>
                   </select>
-                  <button id="messagingSubheadingsCreatorClearSuggestionsBtn" type="button">Clear</button>
-                  <button id="messagingSubheadingsCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                  <button id="messagingSubheadingsCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
+                  <button id="messagingSubheadingsCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
                 </div>
               </div>
               <p id="messagingSubheadingsCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review sub-heading options here.</p>
@@ -1121,7 +1121,7 @@
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit Sub-heading</h3>
-            <button id="messagingSubheadingCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingSubheadingCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <select id="messagingSubheadingEditCategorySelect" name="topic">
             <option value="">No Topic</option>
@@ -1136,7 +1136,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update Sub-heading</button>
+              <button type="submit" class="btn btn-primary">Update Sub-heading</button>
         </form>
 
         <h3>Saved Sub-headings</h3>
@@ -1154,15 +1154,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingSubheadingsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+                <th><button id="messagingSubheadingsBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingSubheadingsSortTextBtn" type="button" class="tiny-btn">Sub-heading</button></th>
-                <th><button id="messagingSubheadingsSortCategoryBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th><button id="messagingSubheadingsSortTextBtn" type="button" class="btn">Sub-heading</button></th>
+                <th><button id="messagingSubheadingsSortCategoryBtn" type="button" class="btn">Topic</button></th>
                 <th>Score</th>
-                <th><button id="messagingSubheadingsSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
-                <th><button id="messagingSubheadingsSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th><button id="messagingSubheadingsSortCreatedBtn" type="button" class="btn">Created</button></th>
+                <th><button id="messagingSubheadingsSortUpdatedBtn" type="button" class="btn">Updated</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1173,7 +1173,7 @@
       <section id="messagingSubheadingsBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Bulk Edit Sub-headings</h2>
-          <button id="messagingSubheadingsBackFromBulkEditBtn" type="button">Back To Sub-headings</button>
+          <button id="messagingSubheadingsBackFromBulkEditBtn" type="button" class="btn">Back To Sub-headings</button>
         </div>
         <p id="messagingSubheadingsBulkEditSummary">No sub-headings selected.</p>
         <form id="messagingSubheadingsBulkEditForm" class="standard-form-grid">
@@ -1184,16 +1184,16 @@
             </select>
           
           <div></div>
-              <button type="submit">Apply To Selected Sub-headings</button>
+              <button type="submit" class="btn btn-primary">Apply To Selected Sub-headings</button>
         </form>
       </section>
       <section id="messagingTaglinesPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Taglines</h2>
           <div class="page-heading-actions">
-            <button id="openMessagingTopicsFromTaglinesBtn" type="button">Topics</button>
-            <button id="messagingTaglinesToggleFormBtn" type="button">Create Taglines</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="openMessagingTopicsFromTaglinesBtn" type="button" class="btn">Topics</button>
+            <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
@@ -1220,10 +1220,10 @@
                 
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
-                  <button id="messagingTaglinesCreatorGenerateBtn" type="button">Generate with AI</button>
-                  <button id="messagingTaglinesCreatorSavePromptBtn" type="button">Save Prompt</button>
+                  <button id="messagingTaglinesCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
+                  <button id="messagingTaglinesCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
                   <div></div>
-              <button id="messagingTaglinesCreatorSubmitBtn" type="submit">Save Tagline</button>
+              <button id="messagingTaglinesCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Tagline</button>
                 </div>
               </form>
             </div>
@@ -1239,8 +1239,8 @@
                     <option value="4">4</option>
                     <option value="5">5</option>
                   </select>
-                  <button id="messagingTaglinesCreatorClearSuggestionsBtn" type="button">Clear</button>
-                  <button id="messagingTaglinesCreatorSaveSelectedBtn" type="button">Save Selected</button>
+                  <button id="messagingTaglinesCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
+                  <button id="messagingTaglinesCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
                 </div>
               </div>
               <p id="messagingTaglinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review tagline options here.</p>
@@ -1270,7 +1270,7 @@
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit Tagline</h3>
-            <button id="messagingTaglineCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingTaglineCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <select id="messagingTaglineEditCategorySelect" name="topic">
             <option value="">No Topic</option>
@@ -1285,7 +1285,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update Tagline</button>
+              <button type="submit" class="btn btn-primary">Update Tagline</button>
         </form>
 
         <h3>Saved Taglines</h3>
@@ -1303,15 +1303,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingTaglinesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+                <th><button id="messagingTaglinesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingTaglinesSortTextBtn" type="button" class="tiny-btn">Tagline</button></th>
-                <th><button id="messagingTaglinesSortCategoryBtn" type="button" class="tiny-btn">Topic</button></th>
+                <th><button id="messagingTaglinesSortTextBtn" type="button" class="btn">Tagline</button></th>
+                <th><button id="messagingTaglinesSortCategoryBtn" type="button" class="btn">Topic</button></th>
                 <th>Score</th>
-                <th><button id="messagingTaglinesSortCreatedBtn" type="button" class="tiny-btn">Created</button></th>
-                <th><button id="messagingTaglinesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th><button id="messagingTaglinesSortCreatedBtn" type="button" class="btn">Created</button></th>
+                <th><button id="messagingTaglinesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1322,7 +1322,7 @@
       <section id="messagingTaglinesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Bulk Edit Taglines</h2>
-          <button id="messagingTaglinesBackFromBulkEditBtn" type="button">Back To Taglines</button>
+          <button id="messagingTaglinesBackFromBulkEditBtn" type="button" class="btn">Back To Taglines</button>
         </div>
         <p id="messagingTaglinesBulkEditSummary">No taglines selected.</p>
         <form id="messagingTaglinesBulkEditForm" class="standard-form-grid">
@@ -1333,15 +1333,15 @@
             </select>
           
           <div></div>
-              <button type="submit">Apply To Selected Taglines</button>
+              <button type="submit" class="btn btn-primary">Apply To Selected Taglines</button>
         </form>
       </section>
       <section id="messagingReportsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Reports</h2>
           <div class="page-heading-actions">
-            <button id="messagingReportsToggleFormBtn" type="button">Add Report</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="messagingReportsToggleFormBtn" type="button" class="btn">Add Report</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingReportsForm">
@@ -1370,14 +1370,14 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit">Save Report</button>
+              <button type="submit" class="btn btn-primary">Save Report</button>
         </form>
 
         <form id="messagingReportsEditForm">
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit Report</h3>
-            <button id="messagingReportsCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingReportsCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <div class="grid-form messaging-articles-top-row">
             <select name="platform">
@@ -1413,7 +1413,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update Report</button>
+              <button type="submit" class="btn btn-primary">Update Report</button>
         </form>
 
         <h3>Saved Reports</h3>
@@ -1421,12 +1421,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingReportsSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
-                <th><button id="messagingReportsSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
-                <th><button id="messagingReportsSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
-                <th><button id="messagingReportsSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
-                <th><button id="messagingReportsSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
-                <th><button id="messagingReportsSortPdfBtn" type="button" class="tiny-btn">PDF</button></th>
+                <th><button id="messagingReportsSortPublishBtn" type="button" class="btn">Publish Date</button></th>
+                <th><button id="messagingReportsSortTitleBtn" type="button" class="btn">Title</button></th>
+                <th><button id="messagingReportsSortPlatformBtn" type="button" class="btn">Platform</button></th>
+                <th><button id="messagingReportsSortAuthorBtn" type="button" class="btn">Author</button></th>
+                <th><button id="messagingReportsSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
+                <th><button id="messagingReportsSortPdfBtn" type="button" class="btn">PDF</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1438,8 +1438,8 @@
         <div class="page-heading-row">
           <h2>Messaging: White Papers</h2>
           <div class="page-heading-actions">
-            <button id="messagingWhitePapersToggleFormBtn" type="button">Add White Paper</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn">Add White Paper</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingWhitePapersForm">
@@ -1468,14 +1468,14 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit">Save White Paper</button>
+              <button type="submit" class="btn btn-primary">Save White Paper</button>
         </form>
 
         <form id="messagingWhitePapersEditForm">
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit White Paper</h3>
-            <button id="messagingWhitePapersCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingWhitePapersCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <div class="grid-form messaging-articles-top-row">
             <select name="platform">
@@ -1511,7 +1511,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update White Paper</button>
+              <button type="submit" class="btn btn-primary">Update White Paper</button>
         </form>
 
         <h3>Saved White Papers</h3>
@@ -1519,12 +1519,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingWhitePapersSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
-                <th><button id="messagingWhitePapersSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
-                <th><button id="messagingWhitePapersSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
-                <th><button id="messagingWhitePapersSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
-                <th><button id="messagingWhitePapersSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
-                <th><button id="messagingWhitePapersSortPdfBtn" type="button" class="tiny-btn">PDF</button></th>
+                <th><button id="messagingWhitePapersSortPublishBtn" type="button" class="btn">Publish Date</button></th>
+                <th><button id="messagingWhitePapersSortTitleBtn" type="button" class="btn">Title</button></th>
+                <th><button id="messagingWhitePapersSortPlatformBtn" type="button" class="btn">Platform</button></th>
+                <th><button id="messagingWhitePapersSortAuthorBtn" type="button" class="btn">Author</button></th>
+                <th><button id="messagingWhitePapersSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
+                <th><button id="messagingWhitePapersSortPdfBtn" type="button" class="btn">PDF</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1536,8 +1536,8 @@
         <div class="page-heading-row">
           <h2>Messaging: eBooks</h2>
           <div class="page-heading-actions">
-            <button id="messagingEbooksToggleFormBtn" type="button">Add eBook</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="messagingEbooksToggleFormBtn" type="button" class="btn">Add eBook</button>
+            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingEbooksForm">
@@ -1566,14 +1566,14 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit">Save eBook</button>
+              <button type="submit" class="btn btn-primary">Save eBook</button>
         </form>
 
         <form id="messagingEbooksEditForm">
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit eBook</h3>
-            <button id="messagingEbooksCancelEditBtn" type="button">Cancel Edit</button>
+            <button id="messagingEbooksCancelEditBtn" type="button" class="btn">Cancel Edit</button>
           </div>
           <div class="grid-form messaging-articles-top-row">
             <select name="platform">
@@ -1609,7 +1609,7 @@
             <option value="5">5</option>
           </select>
           <div></div>
-              <button type="submit">Update eBook</button>
+              <button type="submit" class="btn btn-primary">Update eBook</button>
         </form>
 
         <h3>Saved eBooks</h3>
@@ -1617,12 +1617,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingEbooksSortPublishBtn" type="button" class="tiny-btn">Publish Date</button></th>
-                <th><button id="messagingEbooksSortTitleBtn" type="button" class="tiny-btn">Title</button></th>
-                <th><button id="messagingEbooksSortPlatformBtn" type="button" class="tiny-btn">Platform</button></th>
-                <th><button id="messagingEbooksSortAuthorBtn" type="button" class="tiny-btn">Author</button></th>
-                <th><button id="messagingEbooksSortThumbnailBtn" type="button" class="tiny-btn">Thumbnail</button></th>
-                <th><button id="messagingEbooksSortPdfBtn" type="button" class="tiny-btn">PDF</button></th>
+                <th><button id="messagingEbooksSortPublishBtn" type="button" class="btn">Publish Date</button></th>
+                <th><button id="messagingEbooksSortTitleBtn" type="button" class="btn">Title</button></th>
+                <th><button id="messagingEbooksSortPlatformBtn" type="button" class="btn">Platform</button></th>
+                <th><button id="messagingEbooksSortAuthorBtn" type="button" class="btn">Author</button></th>
+                <th><button id="messagingEbooksSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
+                <th><button id="messagingEbooksSortPdfBtn" type="button" class="btn">PDF</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1633,21 +1633,21 @@
       <section id="messagingDescriptionsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Descriptions</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
         </div>
         <p>Description writing workspace placeholder.</p>
       </section>
       <section id="messagingTranscriptsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: Transcripts</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
         </div>
         <p>Transcript writing workspace placeholder.</p>
       </section>
       <section id="messagingCtasPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Messaging: CTAs</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
         </div>
         <p>CTA writing workspace placeholder.</p>
       </section>

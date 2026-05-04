@@ -175,7 +175,11 @@ App.bootMainApp = function bootMainApp() {
   for (const mod of App.manifests) {
     if (!mod || typeof mod !== 'object') continue;
     if (typeof mod.init === 'function') {
-      mod.init();
+      try {
+        mod.init();
+      } catch (err) {
+        console.error(`Module initialization failed:`, err);
+      }
     }
   }
 
@@ -192,11 +196,19 @@ App.bootMainApp = function bootMainApp() {
     const matchesPrefix = pagePrefixes.some((prefix) => initialPage.startsWith(prefix));
     if (mod.manifest && (pageId === initialPage || matchesPrefix) &&
         typeof mod.onPageActivated === 'function') {
-      mod.onPageActivated(initialPage);
+      try {
+        mod.onPageActivated(initialPage);
+      } catch (err) {
+        console.error(`Page activation failed:`, err);
+      }
     }
   }
 
-  App.youtube.renderYoutubeAcquireResult();
+  try {
+    App.youtube.renderYoutubeAcquireResult();
+  } catch (err) {
+    console.error(`Youtube render failed:`, err);
+  }
   App.refresh().catch((err) => App.notify(err.message, true));
 };
 

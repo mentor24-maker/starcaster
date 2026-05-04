@@ -533,11 +533,14 @@ App.assets = (function () {
     );
 
     const createBtn = document.getElementById('openCreateVideoToolBtn');
+    const inlineCreateBtn = document.getElementById('assetsInlineCreateVideoBtn');
     if (createBtn) {
-      if (activeType === 'Video' && !bulkMode) {
+      if ((activeType === 'Video' || !activeType) && !bulkMode) {
         createBtn.classList.remove('hidden');
+        if (inlineCreateBtn) inlineCreateBtn.classList.remove('hidden');
       } else {
         createBtn.classList.add('hidden');
+        if (inlineCreateBtn) inlineCreateBtn.classList.add('hidden');
       }
     }
   }
@@ -824,22 +827,23 @@ App.assets = (function () {
     }
 
     renderAssets();
+    prefillUploadFormsFromActiveFilters();
   }
 
   async function openAssetsLanding() {
     App.setActivePage('assetsPage');
     
-    const overview = byId('assetsOverviewSection');
-    const tbSection = byId('assetsTableSection');
+    const overview = document.getElementById('assetsOverviewSection');
+    const tbSection = document.getElementById('assetsTableSection');
     if(overview) overview.classList.remove('hidden');
     if(tbSection) tbSection.classList.add('hidden');
     
-    const panel = byId('assetUploadPanel');
+    const panel = document.getElementById('assetUploadPanel');
     if (panel) panel.classList.add('hidden');
     
-    const hdr = byId('assetsPageHeading');
+    const hdr = document.getElementById('assetsPageHeading');
     if(hdr) hdr.textContent = 'Assets';
-    const sub = byId('assetsPageSubtitle');
+    const sub = document.getElementById('assetsPageSubtitle');
     if(sub) sub.textContent = 'Manage the reusable media and physical files that support campaigns, pages, and publishing sequences.';
 
     const btns = document.querySelectorAll('.assets-header-action-btn');
@@ -876,12 +880,12 @@ App.assets = (function () {
       els.assetsFilterTags.value = '';
     }
     
-    const overview = byId('assetsOverviewSection');
-    const tbSection = byId('assetsTableSection');
+    const overview = document.getElementById('assetsOverviewSection');
+    const tbSection = document.getElementById('assetsTableSection');
     if(overview) overview.classList.add('hidden');
     if(tbSection) tbSection.classList.remove('hidden');
     
-    const hdr = byId('assetsPageHeading');
+    const hdr = document.getElementById('assetsPageHeading');
     const nextTypeSafe = String(assetType || 'All Assets').trim();
     if(hdr) hdr.textContent = `Assets: ${nextTypeSafe}`;
     

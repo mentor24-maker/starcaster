@@ -75,7 +75,7 @@ App.loadUsageReports = async function() {
           <div style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--muted);">
              <strong>${data.totalQueries}</strong> recent telemetry logs
           </div>
-          <div style="background: var(--bg-body); padding: 0.5rem; border-radius: 6px; font-size: 0.9rem;">
+          <div style="background: var(--bg-page); padding: 0.5rem; border-radius: var(--radius-input); font-size: 0.9rem;">
             ${typeList}
           </div>
         </div>
@@ -124,7 +124,7 @@ App.loadObserveReports = async function() {
                 <strong>${usageCount.toLocaleString()}</strong>
               </div>
             </div>
-            <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-body); border-radius: 6px; text-align: center;">
+            <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-page); border-radius: var(--radius-input); text-align: center;">
               <span style="font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 0.25rem;">Estimated Cost</span>
               <span style="font-size: 1.5rem; font-weight: bold; color: var(--ink);">$${estimatedCost.toFixed(4)}</span>
             </div>
@@ -134,7 +134,7 @@ App.loadObserveReports = async function() {
     }
 
     container.innerHTML = `
-      <div style="margin-bottom: 2rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 2rem; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+      <div style="margin-bottom: 2rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-container); padding: 2rem; text-align: center;">
         <h2 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Total Aggregate Burn</h2>
         <div style="font-size: 3.5rem; font-weight: 800; color: var(--ink); line-height: 1;">$${totalGlobalCost.toFixed(3)}</div>
         <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: var(--muted); max-width: 600px; margin-left: auto; margin-right: auto;">

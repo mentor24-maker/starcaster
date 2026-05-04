@@ -1892,7 +1892,7 @@ App.contacts = (function () {
                       valSel.appendChild(opt);
                     });
                     valSel.value = state.segmentContactsFilters[key].value;
-                 }).catch(() => { valSel.innerHTML = '<option value="">Error compiling choices</option>'; });
+                 }).catch(() => { valSel.textContent = ''; valSel.appendChild(new Option('Error compiling choices', '')); });
                  
                  valSel.addEventListener('change', () => {
                    state.segmentContactsFilters[key].value = valSel.value;
@@ -1922,7 +1922,7 @@ App.contacts = (function () {
                       valSel.appendChild(opt);
                     });
                     valSel.value = state.segmentContactsFilters[key].value;
-                 }).catch(() => { valSel.innerHTML = '<option value="">Error compiling choices</option>'; });
+                 }).catch(() => { valSel.textContent = ''; valSel.appendChild(new Option('Error compiling choices', '')); });
                  
                  valSel.addEventListener('change', () => {
                    state.segmentContactsFilters[key].value = valSel.value;
@@ -2481,7 +2481,12 @@ App.contacts = (function () {
 
     if (items.length === 0) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="5" class="meta" style="text-align:center;">No options found.</td>`;
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.className = 'meta';
+      td.style.textAlign = 'center';
+      td.textContent = 'No options found.';
+      tr.appendChild(td);
       tbody.appendChild(tr);
       return;
     }
@@ -2889,30 +2894,88 @@ App.contacts = (function () {
         .join('');
 
       const targetKey = normalizeKey(map.targetKey);
-      let dbStatus = '<span class="status-pill">unknown</span>';
+      let dbStatusText = 'unknown';
+      let dbStatusClass = 'status-pill';
       if (!map.include) {
-        dbStatus = '<span class="status-pill status-ok">skipped</span>';
+        dbStatusText = 'skipped';
+        dbStatusClass += ' status-ok';
       } else if (!targetKey) {
-        dbStatus = '<span class="status-pill status-bad">invalid key</span>';
+        dbStatusText = 'invalid key';
+        dbStatusClass += ' status-bad';
       } else if (!isStandardLeadColumn(targetKey) && (map.createField || existingCustom.has(targetKey))) {
-        dbStatus = '<span class="status-pill status-ok">custom field</span>';
+        dbStatusText = 'custom field';
+        dbStatusClass += ' status-ok';
       } else if (map.dbExists === true) {
-        dbStatus = '<span class="status-pill status-ok">exists</span>';
+        dbStatusText = 'exists';
+        dbStatusClass += ' status-ok';
       } else if (map.dbExists === false) {
-        dbStatus = '<span class="status-pill status-bad">missing in table</span>';
+        dbStatusText = 'missing in table';
+        dbStatusClass += ' status-bad';
       } else if (map.dbError) {
-        dbStatus = '<span class="status-pill status-warn">check failed</span>';
+        dbStatusText = 'check failed';
+        dbStatusClass += ' status-warn';
       }
 
-      tr.innerHTML = `
-        <td>${map.header}</td>
-        <td><input type="checkbox" data-idx="${idx}" data-field="include" ${map.include ? 'checked' : ''} /></td>
-        <td><input data-idx="${idx}" data-field="targetKey" value="${map.targetKey}" /></td>
-        <td><select data-idx="${idx}" data-field="type">${typeOptions}</select></td>
-        <td>${dbStatus}</td>
-        <td><input type="checkbox" data-idx="${idx}" data-field="createField" ${map.createField ? 'checked' : ''} /></td>
-        <td><input data-idx="${idx}" data-field="optionsText" value="${map.optionsText || ''}" placeholder="A,B,C" /></td>
-      `;
+      const tdHeader = document.createElement('td');
+      tdHeader.textContent = map.header;
+      tr.appendChild(tdHeader);
+
+      const tdInclude = document.createElement('td');
+      const cbInclude = document.createElement('input');
+      cbInclude.type = 'checkbox';
+      cbInclude.dataset.idx = idx;
+      cbInclude.dataset.field = 'include';
+      cbInclude.checked = !!map.include;
+      tdInclude.appendChild(cbInclude);
+      tr.appendChild(tdInclude);
+
+      const tdTargetKey = document.createElement('td');
+      const inTargetKey = document.createElement('input');
+      inTargetKey.dataset.idx = idx;
+      inTargetKey.dataset.field = 'targetKey';
+      inTargetKey.value = String(map.targetKey || '');
+      tdTargetKey.appendChild(inTargetKey);
+      tr.appendChild(tdTargetKey);
+
+      const tdType = document.createElement('td');
+      const selType = document.createElement('select');
+      selType.dataset.idx = idx;
+      selType.dataset.field = 'type';
+      ['text','number','boolean','date','select','multi_select'].forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        if (map.type === t) opt.selected = true;
+        selType.appendChild(opt);
+      });
+      tdType.appendChild(selType);
+      tr.appendChild(tdType);
+
+      const tdStatus = document.createElement('td');
+      const spStatus = document.createElement('span');
+      spStatus.className = dbStatusClass;
+      spStatus.textContent = dbStatusText;
+      tdStatus.appendChild(spStatus);
+      tr.appendChild(tdStatus);
+
+      const tdCreate = document.createElement('td');
+      const cbCreate = document.createElement('input');
+      cbCreate.type = 'checkbox';
+      cbCreate.dataset.idx = idx;
+      cbCreate.dataset.field = 'createField';
+      cbCreate.checked = !!map.createField;
+      tdCreate.appendChild(cbCreate);
+      tr.appendChild(tdCreate);
+
+      const tdOptions = document.createElement('td');
+      const inOptions = document.createElement('input');
+      inOptions.dataset.idx = idx;
+      inOptions.dataset.field = 'optionsText';
+      inOptions.value = String(map.optionsText || '');
+      inOptions.placeholder = 'A,B,C';
+      tdOptions.appendChild(inOptions);
+      tr.appendChild(tdOptions);
+
       els.csvMapperTable.appendChild(tr);
     });
 
@@ -2988,11 +3051,18 @@ App.contacts = (function () {
            contactsHtml += `<div style="padding: 0.3rem 0; border-bottom: 1px dotted var(--border-color);">${safeText(display)}${linkHtml}</div>`;
         });
         
-        document.getElementById('mashupSelectedContacts').innerHTML = contactsHtml;
+        const mashupContainer = document.getElementById('mashupSelectedContacts');
+        if (mashupContainer) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(contactsHtml, 'text/html');
+          mashupContainer.textContent = '';
+          Array.from(doc.body.childNodes).forEach((node) => mashupContainer.appendChild(node.cloneNode(true)));
+        }
         document.getElementById('mashupPersonalityName').value = '';
         
         const topicSelect = document.getElementById('mashupTopicFocus');
-        topicSelect.innerHTML = '<option value="">No Filter (Synthesize holistic voice profile)</option>';
+        topicSelect.textContent = '';
+        topicSelect.appendChild(new Option('No Filter (Synthesize holistic voice profile)', ''));
         if (state.availableTopics && state.availableTopics.length) {
             state.availableTopics.forEach(topic => {
                 const opt = document.createElement('option');
@@ -3029,17 +3099,41 @@ App.contacts = (function () {
          const currentlySelected = (document.getElementById('mashupSelectedTags').value || '').split(',').filter(Boolean);
          
          if (availableSystemTags.length === 0) {
-             tbody.innerHTML = '<tr><td style="padding: 1rem; color: var(--muted);">No tags available globally.</td></tr>';
+             const emptyRow = document.createElement('tr');
+             const emptyTd = document.createElement('td');
+             emptyTd.style.padding = '1rem';
+             emptyTd.style.color = 'var(--muted)';
+             emptyTd.textContent = 'No tags available globally.';
+             emptyRow.appendChild(emptyTd);
+             tbody.appendChild(emptyRow);
          } else {
              availableSystemTags.forEach(tag => {
                  const tagTitle = (typeof tag === 'string') ? tag : (tag.name || String(tag));
                  const row = document.createElement('tr');
-                 row.innerHTML = `<td style="padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
-                        <input type="checkbox" class="mashup-tag-checkbox" value="${escapeHtml(tagTitle)}" ${currentlySelected.includes(tagTitle) ? 'checked' : ''} />
-                        ${escapeHtml(tagTitle)}
-                    </label>
-                 </td>`;
+                 
+                 const td = document.createElement('td');
+                 td.style.padding = '0.5rem';
+                 td.style.borderBottom = '1px solid var(--border-color)';
+                 td.style.textAlign = 'left';
+                 
+                 const label = document.createElement('label');
+                 label.style.display = 'flex';
+                 label.style.alignItems = 'center';
+                 label.style.gap = '0.5rem';
+                 label.style.cursor = 'pointer';
+                 label.style.margin = '0';
+                 
+                 const checkbox = document.createElement('input');
+                 checkbox.type = 'checkbox';
+                 checkbox.className = 'mashup-tag-checkbox';
+                 checkbox.value = tagTitle;
+                 if (currentlySelected.includes(tagTitle)) checkbox.checked = true;
+                 
+                 label.appendChild(checkbox);
+                 label.appendChild(document.createTextNode(' ' + tagTitle));
+                 
+                 td.appendChild(label);
+                 row.appendChild(td);
                  tbody.appendChild(row);
              });
          }

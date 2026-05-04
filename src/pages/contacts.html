@@ -2,9 +2,9 @@
         <div class="page-heading-row">
           <h2>Contacts</h2>
           <div class="page-heading-actions">
-            <button id="openAddContactPageBtn" type="button">Add Contact</button>
-            <button id="importContactsToggleBtn" type="button">Import Contacts</button>
-            <button id="exploreContactsBtn" type="button">Explore Contacts</button>
+            <button id="openAddContactPageBtn" type="button" class="btn">Add Contact</button>
+            <button id="importContactsToggleBtn" type="button" class="btn">Import Contacts</button>
+            <button id="exploreContactsBtn" type="button" class="btn">Explore Contacts</button>
           </div>
         </div>
         <p>Capture, import, and maintain the contact database that you will later segment and target.</p>
@@ -15,7 +15,7 @@
             <label>Field Data (.csv)</label>
             <input id="csvFileInput" type="file" accept=".csv,text/csv" />
             <div></div>
-            <button type="submit">Analyze CSV</button>
+            <button type="submit" class="btn btn-primary">Analyze CSV</button>
           </form>
 
           <div id="csvMapperWrap" class="hidden">
@@ -37,7 +37,7 @@
               </table>
             </div>
             <textarea id="csvMissingSql" rows="5" class="hidden" readonly></textarea>
-            <button id="csvImportBtn" type="button">Import CSV to promo_leads</button>
+            <button id="csvImportBtn" type="button" class="btn btn-primary">Import CSV to promo_leads</button>
           </div>
         </section>
 
@@ -53,7 +53,7 @@
           <label>Segment Name</label>
           <input id="contactsCreateSegmentName" name="name" required />
           <div></div>
-          <button type="submit">Save Segment</button>
+          <button type="submit" class="btn btn-primary">Save Segment</button>
         </form>
 
       </section>
@@ -61,7 +61,7 @@
         <div class="page-heading-row">
           <h2>Contacts: Settings</h2>
           <div class="page-heading-actions">
-            <button type="button" id="contactsSettingsBackBtn">Return to Contacts</button>
+            <button type="button" id="contactsSettingsBackBtn" class="btn">Return to Contacts</button>
           </div>
         </div>
         <div class="section-settings-shell" style="display: grid; grid-template-columns: 25% 1fr 25%; gap: 1rem; align-items: start;">
@@ -75,7 +75,7 @@
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content:center; margin-top: 0.75rem;">
                   <div></div>
-              <button type="submit">Save Default Columns</button>
+              <button type="submit" class="btn btn-primary">Save Default Columns</button>
                 </div>
               </form>
             </section>
@@ -127,7 +127,7 @@
                 <input type="number" name="sort_order" value="0" required>
 
                 <div></div>
-                <button type="submit">Add Option</button>
+                <button type="submit" class="btn btn-primary">Add Option</button>
               </form>
             </section>
           </div>
@@ -144,8 +144,8 @@
         <div class="page-heading-row">
           <h2>Contacts: Peer Sites</h2>
           <div class="page-heading-actions">
-            <button id="contactsPeerSitesRefreshBtn" type="button">Refresh</button>
-            <button id="contactsPeerSitesBackBtn" type="button">Back To Contacts</button>
+            <button id="contactsPeerSitesRefreshBtn" type="button" class="btn">Refresh</button>
+            <button id="contactsPeerSitesBackBtn" type="button" class="btn">Back To Contacts</button>
           </div>
         </div>
         <div id="contactsPeerSitesMeta" class="meta" style="margin-bottom: 0.75rem;">No peer sites saved yet.</div>
@@ -175,9 +175,9 @@
           
           <div></div>
           <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 0.75rem;">
-            <button id="contactsPeerSiteSaveBtn" type="submit">Save Peer Site</button>
-            <button id="contactsPeerSiteCancelBtn" type="button" class="tiny-btn">Cancel</button>
-            <button id="contactsPeerSitesAcquireBtn" type="button" style="margin-left:auto;">Acquire Peer Sites</button>
+            <button id="contactsPeerSiteSaveBtn" type="submit" class="btn btn-primary">Save Peer Site</button>
+            <button id="contactsPeerSiteCancelBtn" type="button" class="btn">Cancel</button>
+            <button id="contactsPeerSitesAcquireBtn" type="button" style="margin-left:auto;" class="btn">Acquire Peer Sites</button>
           </div>
         </form>
         <div id="contactsPeerSitesAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite" style="margin-bottom: 1rem;">
@@ -192,7 +192,7 @@
                 <input id="contactsPeerSitesDiscoverySelectAll" type="checkbox" />
                 <span>Check All</span>
               </label>
-              <button id="contactsPeerSitesSaveSelectedBtn" type="button">Save Selected Peer Sites</button>
+              <button id="contactsPeerSitesSaveSelectedBtn" type="button" class="btn">Save Selected Peer Sites</button>
             </div>
           </div>
           <div id="contactsPeerSitesDiscoveryMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site candidates loaded yet.</div>
@@ -233,8 +233,8 @@
         <div class="page-heading-row">
           <h2>Contacts: Peer Site Details</h2>
           <div class="page-heading-actions">
-            <button id="contactsPeerSiteDetailsEditBtn" type="button">Edit Peer Site</button>
-            <button id="contactsPeerSiteDetailsBackBtn" type="button">Back To Peer Sites</button>
+            <button id="contactsPeerSiteDetailsEditBtn" type="button" class="btn">Edit Peer Site</button>
+            <button id="contactsPeerSiteDetailsBackBtn" type="button" class="btn">Back To Peer Sites</button>
           </div>
         </div>
         <div id="contactsPeerSiteDetailsMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site selected.</div>
@@ -333,15 +333,15 @@
         <div class="page-heading-row">
           <h2>Contact Personas</h2>
           <div class="page-heading-actions">
-            <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
-            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
-            <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
+            <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn">Create Persona</button>
+            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
+            <button type="button" onclick="App.setActivePage('contactsPage')" class="btn">Back To Contacts</button>
           </div>
         </div>
         <section id="contactPersonaCreatePanel" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
             <h3>Create Contact Persona</h3>
-            <button id="backToContactPersonasInlineBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+            <button id="backToContactPersonasInlineBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
           </div>
           <form id="contactPersonaForm" class="standard-form-grid" onsubmit="App.contactPersonas.submitCreateForm(event); return false;">
             <label for="contactPersonaName">Persona</label>
@@ -359,14 +359,14 @@
             <textarea id="contactPersonaDescription" name="description" rows="5"></textarea>
             
             <div></div>
-            <button type="submit">Save Persona</button>
+            <button type="submit" class="btn btn-primary">Save Persona</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
               <tr>
-                <th><button id="contactPersonasSortPersona" type="button" class="tiny-btn">Persona</button></th>
+                <th><button id="contactPersonasSortPersona" type="button" class="btn">Persona</button></th>
                 <th>Parent</th>
                 <th>Tags</th>
                 <th>Description</th>
@@ -381,8 +381,8 @@
         <div class="page-heading-row">
           <h2>Manage Contact Personas</h2>
           <div class="page-heading-actions">
-            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
-            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn">Create Persona</button>
+            <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
           </div>
         </div>
         <p>The Personas editor now lives on the main Personas page.</p>
@@ -390,7 +390,7 @@
       <section id="createContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Contact Persona</h2>
-          <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
+          <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
         </div>
         <p>The create form now opens inline on the main Personas page.</p>
       </section>
@@ -398,9 +398,9 @@
         <div class="page-heading-row">
           <h2>Edit Contact Persona</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;">Create Persona</button>
-            <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;">Back To Personas</button>
-            <button type="button" onclick="App.setActivePage('contactsPage')">Back To Contacts</button>
+            <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn">Create Persona</button>
+            <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
+            <button type="button" onclick="App.setActivePage('contactsPage')" class="btn">Back To Contacts</button>
           </div>
         </div>
         <form id="contactPersonaEditForm" class="standard-form-grid" onsubmit="App.contactPersonas.submitEditForm(event); return false;">
@@ -421,13 +421,13 @@
           <textarea id="contactPersonaEditDescription" name="description" rows="5"></textarea>
           
           <div></div>
-          <button type="submit">Update Persona</button>
+          <button type="submit" class="btn btn-primary">Update Persona</button>
         </form>
       </section>
       <section id="addContactPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Add Contact</h2>
-          <button id="backToContactsBtn" type="button">Back To Contacts</button>
+          <button id="backToContactsBtn" type="button" class="btn">Back To Contacts</button>
         </div>
         <form id="contactForm" class="standard-form-grid">
           <label>First Name</label>
@@ -473,16 +473,16 @@
           <input name="linkedin" />
           
           <div></div>
-          <button type="submit">Save Contact</button>
+          <button type="submit" class="btn btn-primary">Save Contact</button>
         </form>
       </section>
       <section id="viewContactPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>View Contact</h2>
           <div class="page-heading-actions">
-            <button id="editViewedContactBtn" type="button">Edit Contact</button>
-            <button id="cloneViewedContactBtn" type="button">Clone Contact</button>
-            <button id="backFromViewContactBtn" type="button">Back To Contacts</button>
+            <button id="editViewedContactBtn" type="button" class="btn">Edit Contact</button>
+            <button id="cloneViewedContactBtn" type="button" class="btn">Clone Contact</button>
+            <button id="backFromViewContactBtn" type="button" class="btn">Back To Contacts</button>
           </div>
         </div>
         <div id="viewContactDetails" class="contact-detail-grid"></div>
@@ -491,8 +491,8 @@
         <div class="page-heading-row">
           <h2>Edit Contact</h2>
           <div class="page-heading-actions">
-            <button id="cloneEditedContactBtn" type="button">Clone Contact</button>
-            <button id="backFromEditContactBtn" type="button">Back To Contacts</button>
+            <button id="cloneEditedContactBtn" type="button" class="btn">Clone Contact</button>
+            <button id="backFromEditContactBtn" type="button" class="btn">Back To Contacts</button>
           </div>
         </div>
         <form id="contactEditForm" class="standard-form-grid">
@@ -553,13 +553,13 @@
           <textarea name="notes" rows="5"></textarea>
           
           <div></div>
-          <button type="submit">Update Contact</button>
+          <button type="submit" class="btn btn-primary">Update Contact</button>
         </form>
       </section>
       <section id="cloneContactPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Clone Contact</h2>
-          <button id="backFromCloneContactBtn" type="button">Back To Contacts</button>
+          <button id="backFromCloneContactBtn" type="button" class="btn">Back To Contacts</button>
         </div>
         <form id="contactCloneForm" class="standard-form-grid">
           <label>First Name</label>
@@ -617,14 +617,14 @@
           <textarea name="notes" rows="5"></textarea>
 
           <div></div>
-          <button type="submit">Save Cloned Contact</button>
+          <button type="submit" class="btn btn-primary">Save Cloned Contact</button>
         </form>
       </section>
       <section id="contactsExplorePage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Explore Contacts</h2>
           <div class="page-heading-actions">
-            <button id="viewSegmentsBtn" type="button">View Segments</button>
+            <button id="viewSegmentsBtn" type="button" class="btn">View Segments</button>
           </div>
         </div>
         <p>Filter contacts by any visible field, sort by any column, then save a segment definition.</p>
@@ -642,7 +642,7 @@
           <label>Segment Name</label>
           <input id="createSegmentInlineName" name="name" required />
           <div></div>
-          <button type="submit">Create Segment</button>
+          <button type="submit" class="btn btn-primary">Create Segment</button>
         </form>
 
       </section>
@@ -650,8 +650,8 @@
         <div class="page-heading-row">
           <h2>Segments</h2>
           <div class="page-heading-actions">
-            <button id="createSegmentBtn" type="button" class="primary-btn">Create Segment</button>
-            <button id="returnToSegmentsBtn" type="button" class="hidden">Close Preview</button>
+            <button id="createSegmentBtn" type="button" class="btn btn-primary">Create Segment</button>
+            <button id="returnToSegmentsBtn" type="button" class="btn hidden">Close Preview</button>
           </div>
         </div>
         <p>View, edit, and manage all saved segments.</p>
@@ -676,8 +676,8 @@
         <div class="page-heading-row">
           <h2 id="segmentEditorHeading">Create Segment</h2>
           <div class="page-heading-actions">
-            <button id="cancelSegmentEditBtn" type="button">Cancel</button>
-            <button id="saveSegmentEditBtn" type="button" class="primary-btn">Save Segment</button>
+            <button id="cancelSegmentEditBtn" type="button" class="btn">Cancel</button>
+            <button id="saveSegmentEditBtn" type="button" class="btn btn-primary">Save Segment</button>
           </div>
         </div>
         <p>Define an audience boundary by configuring parameters specific to the segment type.</p>

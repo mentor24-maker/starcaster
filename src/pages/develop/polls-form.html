@@ -1,0 +1,44 @@
+<form id="pollForm" class="standard-form-grid">
+  <input type="hidden" id="pollEditId" name="id" />
+  
+  <label>Question *</label>
+  <input type="text" id="pollQuestion" name="question" required placeholder="What is your favorite color?" />
+  
+  <label>Category</label>
+  <input type="text" id="pollCategory" name="category" placeholder="General" />
+  
+  <div style="grid-column: 1 / -1; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Options</h3>
+    <div id="pollOptionsContainer" style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <!-- Options injected here -->
+    </div>
+    <button type="button" id="addPollOptionBtn" class="btn" style="margin-top: 1rem; font-size: 0.85rem;">+ Add Option</button>
+  </div>
+  
+  <div></div>
+  <button type="submit" class="btn btn-primary" id="savePollBtn" style="margin-top: 1.5rem;">Save Poll</button>
+</form>
+
+<!-- Import Polls CSV Modal is placed right here as a nested dialog, or it can be a separate include -->
+<dialog id="importPollsModal" class="develop-nested-modal-dialog">
+  <div class="develop-nested-modal-body" style="padding:1.5rem;max-width:600px;width:90vw;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
+      <h2 style="margin: 0;">Import Polls from CSV</h2>
+      <button type="button" id="closeImportPollsBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+    </div>
+    
+    <div style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--muted);">
+      Upload a CSV file to bulk import polls. The CSV should contain headers like <strong>ID, Category, Question, Option A, Option B</strong>.
+    </div>
+    
+    <form id="importPollsForm" class="standard-form-grid">
+      <label>CSV File *</label>
+      <input type="file" id="pollsCsvFile" accept=".csv" required />
+      
+      <div id="pollsCsvPreview" style="grid-column: 1/-1; font-size: 0.85rem; background: var(--bg-alt); padding: 1rem; border-radius: 6px; display: none;"></div>
+      
+      <div></div>
+      <button type="submit" class="btn btn-primary" id="uploadPollsCsvBtn">Import</button>
+    </form>
+  </div>
+</dialog>

@@ -74,14 +74,48 @@ function h(tag, props = {}, ...children) {
 App.components.DataGrid = function DataGrid(opts) {
   // ── State ──────────────────────────────────────────────────────────────
   let { columns = [], rows = [], emptyMessage = 'No data to display.',
-        filterable = true, sortable = true, onRowClick = null } = opts;
+        filterable = true, sortable = true, onRowClick = null,
+        selectable = false, bulkActions = [], rowKey = 'id' } = opts;
 
   let sortKey = null;
   let sortDir = 'asc';
   let filters = {};
+  let selectedIds = new Set();
 
   // ── Root element ───────────────────────────────────────────────────────
   const wrapper = h('div', { class: 'c-grid' + (opts.class ? ' ' + opts.class : '') });
+
+  // ── Bulk Actions Toolbar ───────────────────────────────────────────────
+  const toolbar = h('div', { class: 'c-grid__toolbar hidden', style: { padding: '0.75rem 1rem', background: 'var(--bg-alt)', border: '1px solid var(--border)', borderBottom: 'none', borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' } });
+  const toolbarText = h('span', { class: 'c-grid__toolbar-text', style: { fontWeight: '600' } });
+  const toolbarActions = h('div', { class: 'c-grid__toolbar-actions', style: { display: 'flex', gap: '0.5rem' } });
+  toolbar.appendChild(toolbarText);
+  toolbar.appendChild(toolbarActions);
+  wrapper.appendChild(toolbar);
+
+  function updateToolbar() {
+    if (!selectable) return;
+    if (selectedIds.size > 0) {
+      toolbar.classList.remove('hidden');
+      toolbarText.textContent = `${selectedIds.size} selected`;
+      toolbarActions.innerHTML = '';
+      for (const action of bulkActions) {
+        toolbarActions.appendChild(h('button', {
+          class: 'btn btn-sm' + (action.danger ? ' btn-danger' : (action.primary ? ' btn-primary' : '')),
+          onclick: () => action.onClick(Array.from(selectedIds), clearSelection)
+        }, action.label));
+      }
+    } else {
+      toolbar.classList.add('hidden');
+    }
+  }
+
+  function clearSelection() {
+    selectedIds.clear();
+    updateToolbar();
+    renderHeader(); // update check all box
+    renderBody();
+  }
 
   // ── Table ──────────────────────────────────────────────────────────────
   const table  = h('table', { class: 'c-grid__table' });
@@ -91,12 +125,15 @@ App.components.DataGrid = function DataGrid(opts) {
   table.appendChild(tbody);
   wrapper.appendChild(table);
 
-  function buildHeader() {
+  let checkAllCheckbox = null;
+
+  function renderHeader() {
     thead.innerHTML = '';
     
     // 1. Filter Row
     if (filterable) {
       const filterTr = h('tr', { class: 'table-filter-row' });
+      if (selectable) filterTr.appendChild(h('th')); // empty corner
       for (const col of columns) {
         const th = h('th');
         let filterControl;
@@ -127,15 +164,34 @@ App.components.DataGrid = function DataGrid(opts) {
 
     // 2. Headings Row
     const tr = h('tr');
+    
+    if (selectable) {
+      checkAllCheckbox = h('input', { 
+        type: 'checkbox',
+        onchange: (e) => {
+          const isChecked = e.target.checked;
+          const currentData = getFilteredSorted();
+          if (isChecked) {
+            currentData.forEach(row => selectedIds.add(row[rowKey]));
+          } else {
+            currentData.forEach(row => selectedIds.delete(row[rowKey]));
+          }
+          updateToolbar();
+          renderBody();
+        }
+      });
+      tr.appendChild(h('th', { class: 'c-grid__th', style: { width: '40px', textAlign: 'center' } }, checkAllCheckbox));
+    }
+
     for (const col of columns) {
       const isSorted = sortKey === col.key;
       const marker   = isSorted ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
       const th = h('th', {
-        class:   'c-grid__th' + (sortable ? ' c-grid__th--sortable' : ''),
-        onclick: sortable ? () => {
+        class:   'c-grid__th' + (sortable && col.sortable !== false ? ' c-grid__th--sortable' : ''),
+        onclick: sortable && col.sortable !== false ? () => {
           if (sortKey === col.key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
           else { sortKey = col.key; sortDir = 'asc'; }
-          buildHeader();
+          renderHeader();
           renderBody();
         } : null
       }, (col.label || col.key) + marker);
@@ -174,10 +230,16 @@ App.components.DataGrid = function DataGrid(opts) {
   function renderBody() {
     tbody.innerHTML = '';
     const data = getFilteredSorted();
+    
+    if (checkAllCheckbox) {
+      const allSelected = data.length > 0 && data.every(r => selectedIds.has(r[rowKey]));
+      checkAllCheckbox.checked = allSelected;
+      checkAllCheckbox.indeterminate = !allSelected && data.some(r => selectedIds.has(r[rowKey]));
+    }
 
     if (!data.length) {
       const tr = h('tr');
-      const td = h('td', { class: 'c-grid__empty', colspan: String(columns.length) }, emptyMessage);
+      const td = h('td', { class: 'c-grid__empty', colspan: String(columns.length + (selectable ? 1 : 0)) }, emptyMessage);
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
@@ -185,6 +247,36 @@ App.components.DataGrid = function DataGrid(opts) {
 
     for (const row of data) {
       const tr = h('tr', { class: 'c-grid__row' + (onRowClick ? ' c-grid__row--clickable' : '') });
+      
+      if (selectable) {
+        const isSelected = selectedIds.has(row[rowKey]);
+        if (isSelected) tr.classList.add('c-grid__row--selected');
+        
+        const cb = h('input', {
+          type: 'checkbox',
+          checked: isSelected,
+          onchange: (e) => {
+            if (e.target.checked) selectedIds.add(row[rowKey]);
+            else selectedIds.delete(row[rowKey]);
+            updateToolbar();
+            if (checkAllCheckbox) {
+              const allSelected = data.length > 0 && data.every(r => selectedIds.has(r[rowKey]));
+              checkAllCheckbox.checked = allSelected;
+              checkAllCheckbox.indeterminate = !allSelected && data.some(r => selectedIds.has(r[rowKey]));
+            }
+            if (isSelected !== e.target.checked) {
+              if (e.target.checked) tr.classList.add('c-grid__row--selected');
+              else tr.classList.remove('c-grid__row--selected');
+            }
+          }
+        });
+        
+        const td = h('td', { class: 'c-grid__td', style: { width: '40px', textAlign: 'center' } }, cb);
+        // Do not trigger row click if clicking checkbox cell
+        td.addEventListener('click', (e) => e.stopPropagation());
+        tr.appendChild(td);
+      }
+      
       if (onRowClick) tr.addEventListener('click', () => onRowClick(row));
       for (const col of columns) {
         const raw = row[col.key];
@@ -204,8 +296,9 @@ App.components.DataGrid = function DataGrid(opts) {
   }
 
   function render() {
-    buildHeader();
+    renderHeader();
     renderBody();
+    updateToolbar();
   }
 
   render();

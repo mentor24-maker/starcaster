@@ -49,9 +49,10 @@ function setSessionCookie(res, token, req) {
     `Expires=${expiresDate}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax'
+    'SameSite=None',
+    'Secure'
   ];
-  if (isSecureRequest(req)) parts.push('Secure');
+
   res.setHeader('Set-Cookie', parts.join('; '));
 }
 
@@ -61,9 +62,10 @@ function clearSessionCookie(res, req) {
     'Max-Age=0',
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    'SameSite=None',
+    'Secure'
   ];
-  if (isSecureRequest(req)) parts.push('Secure');
+
   res.setHeader('Set-Cookie', parts.join('; '));
 }
 

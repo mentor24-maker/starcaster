@@ -1,6 +1,15 @@
 {
   "users": [
     {
+      "id": "usr_1777742530162_tz8ppz",
+      "email": "test_1777742530159@example.com",
+      "name": "Test User",
+      "passwordHash": "b718d5399aa83a1dedfb3d458b75b65a:15b65858570965d1584b740b75852f87fab481b2c39fba52b29daa3f62500a01a38762a367dae37fc1ee0684b5e1cba0051cd9525b43c9cf5af64d962d1af5b8",
+      "role": "user",
+      "createdAt": "2026-05-02T17:22:10.161Z",
+      "updatedAt": "2026-05-02T17:22:10.161Z"
+    },
+    {
       "id": "usr_1775706441745_x2ixxu",
       "email": "mentor@mentor.com",
       "name": "Mentor",
@@ -22,7 +31,7 @@
       "id": "usr_1775686623037_webd6d",
       "email": "test@example.com",
       "name": "Test User",
-      "passwordHash": "11acc9f90a508d09a4c603879f1624d5:80d060fb8ff644341d4fa06066de7fd00efabb812f5c7c90b90431d9d3ce2156e33d6cf133ee90ccce9863163d4828869d372ed35a915a7946ec0802ac5eb651",
+      "passwordHash": "177f9065abacd53fb1642703884961f9:dfe8f99e81ecc9ba3090c822bc424dc656643db84c9b85b3921c83fc7b63e3202c4d430db0a7662fd70638bfa9801d24e166ed01bb61ce6d213aa054bba23fc9",
       "role": "owner",
       "createdAt": "2026-04-08T22:17:03.037Z",
       "updatedAt": "2026-04-08T22:17:03.037Z"

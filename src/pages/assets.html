@@ -3,9 +3,9 @@
         <div class="page-heading-row">
           <h2>Assets</h2>
           <div class="page-heading-actions">
-            <button id="openCreateVideoToolBtn" type="button" class="black-btn hidden" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
-            <button id="uploadAssetsBtn" type="button">Add Assets</button>
-            <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')">Manage Categories</button>
+            <button id="openCreateVideoToolBtn" type="button" class="btn btn-primary hidden" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
+            <button id="uploadAssetsBtn" type="button" class="btn">Add Assets</button>
+            <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')" class="btn">Manage Categories</button>
           </div>
         </div>
         <p>Manage the reusable media and PDFs that support campaigns, pages, and publishing.</p>
@@ -14,7 +14,10 @@
             <div class="stack-form" style="margin: 0;">
               <h3>Add Single Asset</h3>
               <form id="assetUploadForm" class="standard-form-grid">
+                <label for="assetUploadFile">File</label>
                 <input id="assetUploadFile" name="file" type="file" required />
+                
+                <label for="assetUploadType">Asset Type</label>
                 <select id="assetUploadType" name="asset_type" required>
                   <option value="">Select Asset Type</option>
                   <option value="Image">Image</option>
@@ -23,14 +26,22 @@
                   <option value="Lead Magnet">PDF</option>
                   <option value="Screenshot">Screenshot</option>
                 </select>
+                
+                <label for="assetUploadCategory">Category</label>
                 <select id="assetUploadCategory" name="category">
-                  <option value="">Select Topic</option>
+                  <option value="">Select Category</option>
                 </select>
-                <input id="assetUploadName" name="asset_name" placeholder="Asset Name (optional)" />
-                <input id="assetUploadTags" name="tags" placeholder="Tags (comma-separated)" />
+                
+                <label for="assetUploadName">Asset Name</label>
+                <input id="assetUploadName" name="asset_name" />
+                
+                <label for="assetUploadTags">Tags</label>
+                <input id="assetUploadTags" name="tags" />
+                
                 <div></div>
-              <button type="submit">Upload Asset(s)</button>
-                <div id="assetUploadProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+                <button type="submit" class="btn btn-primary">Upload Asset(s)</button>
+                
+                <div id="assetUploadProgressWrap" class="standard-form-grid-full asset-upload-progress hidden" aria-live="polite">
                   <div id="assetUploadProgressText" class="asset-upload-progress-text">Uploading...</div>
                   <progress id="assetUploadProgressBar" max="100" value="0"></progress>
                 </div>
@@ -39,7 +50,10 @@
             <div class="stack-form" style="margin: 0;">
               <h3>Add Multiple Assets</h3>
               <form id="assetMultiUploadForm" class="standard-form-grid">
+                <label for="assetMultiUploadFiles">Files</label>
                 <input id="assetMultiUploadFiles" name="files" type="file" multiple required />
+                
+                <label for="assetMultiUploadType">Asset Type</label>
                 <select id="assetMultiUploadType" name="asset_type" required>
                   <option value="">Select Asset Type</option>
                   <option value="Image">Image</option>
@@ -48,12 +62,16 @@
                   <option value="Lead Magnet">PDF</option>
                   <option value="Screenshot">Screenshot</option>
                 </select>
+                
+                <label for="assetMultiUploadCategory">Category</label>
                 <select id="assetMultiUploadCategory" name="category">
-                  <option value="">Select Topic</option>
+                  <option value="">Select Category</option>
                 </select>
+                
                 <div></div>
-              <button type="submit">Upload Asset(s)</button>
-                <div id="assetMultiUploadProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+                <button type="submit" class="btn btn-primary">Upload Asset(s)</button>
+                
+                <div id="assetMultiUploadProgressWrap" class="standard-form-grid-full asset-upload-progress hidden" aria-live="polite">
                   <div id="assetMultiUploadProgressText" class="asset-upload-progress-text">Uploading...</div>
                   <progress id="assetMultiUploadProgressBar" max="100" value="0"></progress>
                 </div>
@@ -86,22 +104,23 @@
                 <th><input id="assetsFilterTags" placeholder="Tags" /></th>
                 <th colspan="2">
                   <div id="assetsFilterActionRow" class="assets-bulk-action-row">
-                    <button id="assetsApplyFilterBtn" type="button" class="tiny-btn">Filter</button>
+                    <button id="assetsApplyFilterBtn" type="button" class="btn">Filter</button>
+                    <button id="assetsInlineCreateVideoBtn" type="button" class="btn btn-primary hidden" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
                   </div>
                   <div id="assetsBulkActionRow" class="assets-bulk-action-row hidden">
-                    <button id="assetsBulkEditBtn" type="button" class="tiny-btn" disabled>Edit All</button>
-                    <button id="assetsBulkDeleteBtn" type="button" class="tiny-btn" disabled>Delete All</button>
+                    <button id="assetsBulkEditBtn" type="button" class="btn" disabled>Edit All</button>
+                    <button id="assetsBulkDeleteBtn" type="button" class="btn" disabled>Delete All</button>
                   </div>
                 </th>
               </tr>
               <tr>
                 <th></th>
                 <th>Thumbnail</th>
-                <th><button id="assetsSortNameBtn" type="button" class="tiny-btn">Asset Name</button></th>
-                <th><button id="assetsSortTypeBtn" type="button" class="tiny-btn">Asset Type</button></th>
-                <th><button id="assetsSortCategoryBtn" type="button" class="tiny-btn">Category</button></th>
-                <th><button id="assetsSortTagsBtn" type="button" class="tiny-btn">Tags</button></th>
-                <th><button id="assetsSortSizeBtn" type="button" class="tiny-btn">Size</button></th>
+                <th><button id="assetsSortNameBtn" type="button" class="btn">Asset Name</button></th>
+                <th><button id="assetsSortTypeBtn" type="button" class="btn">Asset Type</button></th>
+                <th><button id="assetsSortCategoryBtn" type="button" class="btn">Category</button></th>
+                <th><button id="assetsSortTagsBtn" type="button" class="btn">Tags</button></th>
+                <th><button id="assetsSortSizeBtn" type="button" class="btn">Size</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -112,7 +131,7 @@
       <section id="addAssetPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2 id="assetFormTitle">Add Asset</h2>
-          <button id="backToAssetsBtn" type="button">Back To Assets</button>
+          <button id="backToAssetsBtn" type="button" class="btn">Back To Assets</button>
         </div>
         <div class="asset-edit-layout">
           <form id="assetForm" class="standard-form-grid">
@@ -151,7 +170,7 @@
               <input id="assetTagsInput" name="tags" />
             
             <div></div>
-              <button id="assetFormSubmitBtn" type="submit">Save Asset</button>
+              <button id="assetFormSubmitBtn" type="submit" class="btn btn-primary">Save Asset</button>
           </form>
           <aside class="asset-preview-panel">
             <div class="asset-preview-header">
@@ -189,15 +208,15 @@
         <div class="page-heading-row">
           <h2>Assets: Categories</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
-            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
-            <button type="button" onclick="App.assets.openAssetsLanding()">Back To Assets</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
+            <button type="button" onclick="App.assets.openAssetsLanding()" class="btn">Back To Assets</button>
           </div>
         </div>
         <section id="assetCategoryCreatePanel" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
             <h3>Create Topic</h3>
-            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
           </div>
           <form id="assetCategoryForm" class="standard-form-grid" onsubmit="App.assetCategories.submitCategoryCreate(event); return false;">
             
@@ -216,7 +235,7 @@
               <input id="assetCategoryName" name="category" required />
             
             <div></div>
-              <button type="submit">Save Category</button>
+              <button type="submit" class="btn btn-primary">Save Category</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
@@ -237,8 +256,8 @@
                 <th></th>
               </tr>
               <tr>
-                <th><button id="assetCategoriesSortType" type="button" class="tiny-btn">Asset Type</button></th>
-                <th><button id="assetCategoriesSortCategory" type="button" class="tiny-btn">Category Name</button></th>
+                <th><button id="assetCategoriesSortType" type="button" class="btn">Asset Type</button></th>
+                <th><button id="assetCategoriesSortCategory" type="button" class="btn">Category Name</button></th>
                 <th class="asset-categories-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -250,8 +269,8 @@
         <div class="page-heading-row">
           <h2>Manage Asset Categories</h2>
           <div class="page-heading-actions">
-            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
-            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
+            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
           </div>
         </div>
         <p>The Categories editor now lives on the main Categories page.</p>
@@ -259,7 +278,7 @@
       <section id="createAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Create Topic</h2>
-          <button id="backToAssetCategoriesBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
+          <button id="backToAssetCategoriesBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
         </div>
         <p>The create form now opens inline on the main Categories page.</p>
       </section>
@@ -267,9 +286,9 @@
         <div class="page-heading-row">
           <h2>Edit Asset Category</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;">Create Category</button>
-            <button id="backFromEditAssetCategoryBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;">Back To Categories</button>
-            <button type="button" onclick="App.assets.openAssetsLanding()">Back To Assets</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button id="backFromEditAssetCategoryBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
+            <button type="button" onclick="App.assets.openAssetsLanding()" class="btn">Back To Assets</button>
           </div>
         </div>
         <form id="assetCategoryEditForm" class="standard-form-grid" onsubmit="App.assetCategories.submitCategoryEdit(event); return false;">
@@ -290,7 +309,7 @@
             <input id="assetCategoryEditName" name="category" required />
           
           <div></div>
-              <button type="submit">Update Category</button>
+              <button type="submit" class="btn btn-primary">Update Category</button>
         </form>
       </section>
       <section id="assetsImagesPage" class="app-page hidden">
@@ -298,15 +317,21 @@
         <p>Images module placeholder.</p>
       </section>
       <section id="assetsVideoPage" class="app-page hidden">
-        <h2>Assets: Video</h2>
-        <p>Video module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Assets: Video</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn btn-primary" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
+            <button type="button" onclick="App.assets.openAssetsManager('Video'); return false;" class="btn">Manage Videos</button>
+          </div>
+        </div>
+        <p>Manage your video assets here. Click <strong>Create Video</strong> to open the Video Production Factory.</p>
       </section>
       <section id="assetsCreateVideoToolPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Video Production Factory</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetsVideo.closeCreateVideoTool(); return false;">Return to Videos</button>
-            <button type="button" class="black-btn" onclick="App.openAssetsLanding(); return false;">Return to Assets</button>
+            <button type="button" onclick="App.assetsVideo.closeCreateVideoTool(); return false;" class="btn">Return to Videos</button>
+            <button type="button" class="btn btn-primary" onclick="App.openAssetsLanding(); return false;">Return to Assets</button>
           </div>
         </div>
 
@@ -332,7 +357,7 @@
               </select>
             </div>
             <div class="form-group" style="display: flex; align-items: flex-end;">
-              <button type="button" class="black-btn full-width" onclick="App.assetsVideo.applyFilters()">Search & Curate</button>
+              <button type="button" class="btn btn-primary full-width" onclick="App.assetsVideo.applyFilters()">Search & Curate</button>
             </div>
           </div>
 
@@ -434,7 +459,7 @@
 
               <!-- ROW 5 -->
               <div class="form-group full-width" style="grid-column: 1 / -1; margin-top: 1rem;">
-                <button type="button" class="black-btn full-width" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
+                <button type="button" class="btn btn-primary full-width" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
               </div>
             </div>
 
@@ -460,7 +485,7 @@
                 </ul>
               </div>
               <div class="form-group full-width" style="margin-top: auto;">
-                <button type="button" class="black-btn full-width" onclick="App.assetsVideo.addToAssets()">Add to Assets</button>
+                <button type="button" class="btn btn-primary full-width" onclick="App.assetsVideo.addToAssets()">Add to Assets</button>
               </div>
             </div>
           </div>
@@ -476,13 +501,13 @@
               <!-- Checkboxes dynamically rendered here -->
             </div>
             <div class="form-group full-width" style="text-align: right; margin-top: 1rem;">
-              <button type="button" class="black-btn" onclick="App.assetsVideo.closeTopicModal()">Done</button>
+              <button type="button" class="btn btn-primary" onclick="App.assetsVideo.closeTopicModal()">Done</button>
             </div>
           </div>
         </div> <!-- End Curation Split Layout -->
 
         <div style="margin-bottom: 1rem; text-align: center;">
-          <button type="button" class="black-btn" onclick="App.assetsVideo.toggleStudioPanel('creationStudioWrap')" style="margin-top: -10px;">Proceed to Creation Studio ▼</button>
+          <button type="button" class="btn btn-primary" onclick="App.assetsVideo.toggleStudioPanel('creationStudioWrap')" style="margin-top: -10px;">Proceed to Creation Studio ▼</button>
         </div>
 
         </div> <!-- End Curation Collapsible Body -->
@@ -501,7 +526,7 @@
               <div>
                  <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Assemble Assets</h4>
                  <!-- Asset Picker Inline Module -->
-                 <div class="creation-asset-picker" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; background: var(--bg-card);">
+                 <div id="creationAssetSearchForm" class="creation-asset-picker" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; background: var(--bg-card);">
                    <!-- Row 1: Dropdowns -->
                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
                      <select id="creationRefAssetType" style="width: 100%;">
@@ -523,7 +548,7 @@
                    </div>
                    <!-- Row 3: Button -->
                    <div>
-                     <button type="button" class="black-btn" onclick="App.assetsVideo.searchCreationReferences()" style="width: 100%;">Find Assets</button>
+                     <button type="button" class="btn btn-primary" onclick="App.assetsVideo.searchCreationReferences()" style="width: 100%;">Find Assets</button>
                    </div>
                    
                    <div id="creationRefSearchResults" class="hidden" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); padding: 0.5rem; background: var(--bg-alt); border-radius: var(--radius); margin-top: 1rem;">
@@ -540,9 +565,15 @@
               <!-- RIGHT COLUMN: Produce Video -->
               <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                  <h4 style="margin-top: 0; margin-bottom: 0;">Produce Video</h4>
-                 <label for="videoCreationPrompt" style="color: var(--primary-color);">Describe the video</label>
+                 <label for="videoCreationDuration" style="color: var(--primary-color);">Target Duration</label>
+                 <select id="videoCreationDuration" style="width: 100%;">
+                   <option value="4">4 Seconds (Fast)</option>
+                   <option value="8">8 Seconds (Standard)</option>
+                   <option value="16">16 Seconds (Extended)</option>
+                 </select>
+                 <label for="videoCreationPrompt" style="color: var(--primary-color); margin-top: 0.5rem;">Describe the video</label>
                  <textarea id="videoCreationPrompt" style="flex: 1; resize: vertical; min-height: 200px;" placeholder="Describe the video generation sequences precisely..."></textarea>
-                 <button type="button" class="black-btn" onclick="App.assetsVideo.submitCreationPrompt()" style="width: 100%;">Generate Video</button>
+                 <button type="button" class="btn btn-primary" onclick="App.assetsVideo.submitCreationPrompt()" style="width: 100%;">Generate Video</button>
               </div>
 
             </div>
@@ -563,7 +594,7 @@
                   <input id="generationHistorySelectAll" type="checkbox" aria-label="Select all jobs" onchange="App.assetsVideo.toggleAllGenerations(this)" />
                 </div>
                 <div class="youtube-comment-bulk-actions">
-                  <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()">Delete Selected</button>
+                  <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()" class="btn">Delete Selected</button>
                   &nbsp;&nbsp;|&nbsp;&nbsp;
                   <select id="generationHistoryAssignTopicSelect" class="form-input" style="max-width: 150px; display: inline-block;">
                     <option value="">-- Topic --</option>

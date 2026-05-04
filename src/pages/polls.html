@@ -1,0 +1,89 @@
+<section id="pollsPage" class="app-page hidden">
+  <div class="page-heading-row">
+    <h2>Polls Management</h2>
+    <div class="page-actions">
+      <button type="button" class="btn btn-primary" id="openCreatePollBtn">Create Poll</button>
+    </div>
+  </div>
+
+  <div class="data-table-container">
+    <div class="table-actions-row">
+      <div class="table-filters">
+        <input type="text" id="pollsSearchInput" placeholder="Search polls..." class="hero-action-input" style="max-width: 300px;" />
+      </div>
+      <div class="table-actions">
+        <button type="button" class="btn" id="openImportPollsBtn" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">Import CSV</button>
+      </div>
+    </div>
+    
+    <table class="data-table" id="pollsTable">
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th style="width: 15%;">Category</th>
+          <th style="width: 25%;">Options</th>
+          <th style="width: 120px; text-align: center;">Created</th>
+          <th style="width: 80px; text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="pollsTableBody">
+        <!-- populated via js -->
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Create/Edit Poll Modal -->
+<div id="pollFormModal" class="c-modal__backdrop hidden" style="z-index: 10050;">
+  <div class="c-modal__dialog" style="max-width: 600px; padding: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
+      <h2 id="pollFormTitle" style="margin: 0;">Create Poll</h2>
+      <button type="button" id="closePollFormBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+    </div>
+    
+    <form id="pollForm" class="standard-form-grid">
+      <input type="hidden" id="pollEditId" name="id" />
+      
+      <label>Question *</label>
+      <input type="text" id="pollQuestion" name="question" required placeholder="What is your favorite color?" />
+      
+      <label>Category</label>
+      <input type="text" id="pollCategory" name="category" placeholder="General" />
+      
+      <div style="grid-column: 1 / -1; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Options</h3>
+        <div id="pollOptionsContainer" style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <!-- Options injected here -->
+        </div>
+        <button type="button" id="addPollOptionBtn" class="btn" style="margin-top: 1rem; font-size: 0.85rem;">+ Add Option</button>
+      </div>
+      
+      <div></div>
+      <button type="submit" class="btn btn-primary" id="savePollBtn" style="margin-top: 1.5rem;">Save Poll</button>
+    </form>
+  </div>
+</div>
+
+<!-- Import Polls CSV Modal -->
+<div id="importPollsModal" class="c-modal__backdrop hidden" style="z-index: 10050;">
+  <div class="c-modal__dialog" style="max-width: 600px; padding: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
+      <h2 style="margin: 0;">Import Polls from CSV</h2>
+      <button type="button" id="closeImportPollsBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+    </div>
+    
+    <div style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--muted);">
+      Upload a CSV file to bulk import polls. The CSV should contain headers like <strong>ID, Category, Question, Option A, Option B</strong>.
+    </div>
+    
+    <form id="importPollsForm" class="standard-form-grid">
+      <label>CSV File *</label>
+      <input type="file" id="pollsCsvFile" accept=".csv" required />
+      
+      <div id="pollsCsvPreview" style="grid-column: 1/-1; font-size: 0.85rem; background: var(--bg-alt); padding: 1rem; border-radius: 6px; display: none;"></div>
+      
+      <div></div>
+      <button type="submit" class="btn btn-primary" id="uploadPollsCsvBtn">Import</button>
+    </form>
+  </div>
+</div>

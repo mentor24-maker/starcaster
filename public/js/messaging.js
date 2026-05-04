@@ -1139,16 +1139,23 @@ App.messaging = (function () {
       valueTd.textContent = String(text || '').trim();
       tr.appendChild(valueTd);
       const qualityTd = document.createElement('td');
-      qualityTd.innerHTML = `
-        <select data-tweet-quality-index="${index}">
-          <option value="">-</option>
-          <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
-          <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
-          <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
-          <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
-          <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
-        </select>
-      `;
+      const select = document.createElement('select');
+      select.dataset.tweetQualityIndex = String(index);
+      
+      const optDash = document.createElement('option');
+      optDash.value = '';
+      optDash.textContent = '-';
+      select.appendChild(optDash);
+      
+      [1, 2, 3, 4, 5].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = String(val);
+        opt.textContent = String(val);
+        if (quality === val) opt.selected = true;
+        select.appendChild(opt);
+      });
+      
+      qualityTd.appendChild(select);
       tr.appendChild(qualityTd);
       tbody.appendChild(tr);
     });
@@ -3443,20 +3450,33 @@ App.messaging = (function () {
       const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
       const text = typeof option === 'object' && option ? option.headline || option.text || '' : option;
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" data-headline-creator-suggestion-index="${index}" /></td>
-        <td>${escapeHtml(String(text || ''))}</td>
-        <td>
-          <select data-headline-creator-quality-index="${index}">
-            <option value="">-</option>
-            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
-            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
-            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
-            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
-            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
-          </select>
-        </td>
-      `;
+      const cbTd = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.headlineCreatorSuggestionIndex = String(index);
+      cbTd.appendChild(cb);
+      tr.appendChild(cbTd);
+      
+      const textTd = document.createElement('td');
+      textTd.textContent = String(text || '');
+      tr.appendChild(textTd);
+      
+      const qualityTd = document.createElement('td');
+      const select = document.createElement('select');
+      select.dataset.headlineCreatorQualityIndex = String(index);
+      const optDash = document.createElement('option');
+      optDash.value = '';
+      optDash.textContent = '-';
+      select.appendChild(optDash);
+      [1, 2, 3, 4, 5].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = String(val);
+        opt.textContent = String(val);
+        if (quality === val) opt.selected = true;
+        select.appendChild(opt);
+      });
+      qualityTd.appendChild(select);
+      tr.appendChild(qualityTd);
       tbody.appendChild(tr);
     });
     if (checkAll) checkAll.checked = false;
@@ -3476,20 +3496,33 @@ App.messaging = (function () {
       const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
       const text = typeof option === 'object' && option ? option.tagline || option.text || '' : option;
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" data-tagline-creator-suggestion-index="${index}" /></td>
-        <td>${escapeHtml(String(text || ''))}</td>
-        <td>
-          <select data-tagline-creator-quality-index="${index}">
-            <option value="">-</option>
-            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
-            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
-            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
-            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
-            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
-          </select>
-        </td>
-      `;
+      const cbTd = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.taglineCreatorSuggestionIndex = String(index);
+      cbTd.appendChild(cb);
+      tr.appendChild(cbTd);
+      
+      const textTd = document.createElement('td');
+      textTd.textContent = String(text || '');
+      tr.appendChild(textTd);
+      
+      const qualityTd = document.createElement('td');
+      const select = document.createElement('select');
+      select.dataset.taglineCreatorQualityIndex = String(index);
+      const optDash = document.createElement('option');
+      optDash.value = '';
+      optDash.textContent = '-';
+      select.appendChild(optDash);
+      [1, 2, 3, 4, 5].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = String(val);
+        opt.textContent = String(val);
+        if (quality === val) opt.selected = true;
+        select.appendChild(opt);
+      });
+      qualityTd.appendChild(select);
+      tr.appendChild(qualityTd);
       tbody.appendChild(tr);
     });
     if (checkAll) checkAll.checked = false;
@@ -3509,20 +3542,33 @@ App.messaging = (function () {
       const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
       const text = typeof option === 'object' && option ? option.subheading || option.text || '' : option;
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" data-subheading-creator-suggestion-index="${index}" /></td>
-        <td>${escapeHtml(String(text || ''))}</td>
-        <td>
-          <select data-subheading-creator-quality-index="${index}">
-            <option value="">-</option>
-            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
-            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
-            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
-            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
-            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
-          </select>
-        </td>
-      `;
+      const cbTd = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.subheadingCreatorSuggestionIndex = String(index);
+      cbTd.appendChild(cb);
+      tr.appendChild(cbTd);
+      
+      const textTd = document.createElement('td');
+      textTd.textContent = String(text || '');
+      tr.appendChild(textTd);
+      
+      const qualityTd = document.createElement('td');
+      const select = document.createElement('select');
+      select.dataset.subheadingCreatorQualityIndex = String(index);
+      const optDash = document.createElement('option');
+      optDash.value = '';
+      optDash.textContent = '-';
+      select.appendChild(optDash);
+      [1, 2, 3, 4, 5].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = String(val);
+        opt.textContent = String(val);
+        if (quality === val) opt.selected = true;
+        select.appendChild(opt);
+      });
+      qualityTd.appendChild(select);
+      tr.appendChild(qualityTd);
       tbody.appendChild(tr);
     });
     if (checkAll) checkAll.checked = false;
@@ -3542,20 +3588,33 @@ App.messaging = (function () {
       const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
       const text = typeof option === 'object' && option ? option.pitch || option.text || '' : option;
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" data-pitch-creator-suggestion-index="${index}" /></td>
-        <td>${escapeHtml(String(text || ''))}</td>
-        <td>
-          <select data-pitch-creator-quality-index="${index}">
-            <option value="">-</option>
-            <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
-            <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
-            <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
-            <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
-            <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
-          </select>
-        </td>
-      `;
+      const cbTd = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.pitchCreatorSuggestionIndex = String(index);
+      cbTd.appendChild(cb);
+      tr.appendChild(cbTd);
+      
+      const textTd = document.createElement('td');
+      textTd.textContent = String(text || '');
+      tr.appendChild(textTd);
+      
+      const qualityTd = document.createElement('td');
+      const select = document.createElement('select');
+      select.dataset.pitchCreatorQualityIndex = String(index);
+      const optDash = document.createElement('option');
+      optDash.value = '';
+      optDash.textContent = '-';
+      select.appendChild(optDash);
+      [1, 2, 3, 4, 5].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = String(val);
+        opt.textContent = String(val);
+        if (quality === val) opt.selected = true;
+        select.appendChild(opt);
+      });
+      qualityTd.appendChild(select);
+      tr.appendChild(qualityTd);
       tbody.appendChild(tr);
     });
     if (checkAll) checkAll.checked = false;
@@ -4326,10 +4385,16 @@ App.messaging = (function () {
     tbody.innerHTML = '';
     currentCreateContentSuggestions.forEach((option, index) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" data-create-content-suggestion-index="${index}" /></td>
-        <td>${escapeHtml(String(option || ''))}</td>
-      `;
+      const cbTd = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.createContentSuggestionIndex = String(index);
+      cbTd.appendChild(cb);
+      tr.appendChild(cbTd);
+      
+      const textTd = document.createElement('td');
+      textTd.textContent = String(option || '');
+      tr.appendChild(textTd);
       tbody.appendChild(tr);
     });
     if (checkAll) checkAll.checked = false;
@@ -4907,7 +4972,7 @@ App.messaging = (function () {
         const a = document.createElement('a');
         a.href = '#';
         a.style.cssText = 'display:block; font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0;';
-        a.innerHTML = escapeHtml(name);
+        a.textContent = name;
         a.onclick = (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -4946,7 +5011,13 @@ App.messaging = (function () {
         const a = document.createElement('a');
         a.href = '#page=messagingContentPage';
         a.style.cssText = 'display:block; font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0;';
-        a.innerHTML = `${escapeHtml(t.name)} <span style="color:var(--text-muted); font-size: 0.85em; font-weight: normal;">(${t.count})</span>`;
+        a.textContent = `${t.name} `;
+        const span = document.createElement('span');
+        span.style.color = 'var(--text-muted)';
+        span.style.fontSize = '0.85em';
+        span.style.fontWeight = 'normal';
+        span.textContent = `(${t.count})`;
+        a.appendChild(span);
         a.onclick = (e) => {
            e.preventDefault();
            e.stopPropagation();
@@ -4967,7 +5038,11 @@ App.messaging = (function () {
       });
       
       if (topicRecords.length === 0) {
-        topicsDiv.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted);">No topics with content.</div>';
+        const div = document.createElement('div');
+        div.style.fontSize = '0.85rem';
+        div.style.color = 'var(--text-muted)';
+        div.textContent = 'No topics with content.';
+        topicsDiv.appendChild(div);
       }
     }
 
@@ -4980,7 +5055,7 @@ App.messaging = (function () {
         const a = document.createElement('a');
         a.href = '#';
         a.style.cssText = 'display:block; font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0;';
-        a.innerHTML = escapeHtml(name);
+        a.textContent = name;
         a.onclick = (e) => {
            e.preventDefault();
            e.stopPropagation();
@@ -5293,7 +5368,14 @@ App.messaging = (function () {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'messaging-content-node messaging-category-node';
-      button.innerHTML = `<span class="messaging-content-node-kicker">Topic</span><span class="messaging-content-node-title">${category}</span>`;
+      const kickerSpan = document.createElement('span');
+      kickerSpan.className = 'messaging-content-node-kicker';
+      kickerSpan.textContent = 'Topic';
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'messaging-content-node-title';
+      titleSpan.textContent = String(category);
+      button.appendChild(kickerSpan);
+      button.appendChild(titleSpan);
       button.addEventListener('click', function () {
         if (App.messaging && typeof App.messaging.openManageContentCategory === 'function') {
           App.messaging.openManageContentCategory(category);
@@ -5581,20 +5663,35 @@ App.messaging = (function () {
         const quality = Math.max(0, Math.min(Number(option?.quality_score || 0) || 0, 5));
         const text = typeof option === 'object' && option ? option[config.field] || option.text || '' : option;
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><input type="checkbox" data-simple-creator-key="${config.key}" data-simple-creator-index="${index}" /></td>
-          <td>${escapeHtml(String(text || ''))}</td>
-          <td>
-            <select data-simple-creator-quality-key="${config.key}" data-simple-creator-quality-index="${index}">
-              <option value="">-</option>
-              <option value="1" ${quality === 1 ? 'selected' : ''}>1</option>
-              <option value="2" ${quality === 2 ? 'selected' : ''}>2</option>
-              <option value="3" ${quality === 3 ? 'selected' : ''}>3</option>
-              <option value="4" ${quality === 4 ? 'selected' : ''}>4</option>
-              <option value="5" ${quality === 5 ? 'selected' : ''}>5</option>
-            </select>
-          </td>
-        `;
+        const cbTd = document.createElement('td');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.dataset.simpleCreatorKey = config.key;
+        cb.dataset.simpleCreatorIndex = String(index);
+        cbTd.appendChild(cb);
+        tr.appendChild(cbTd);
+        
+        const textTd = document.createElement('td');
+        textTd.textContent = String(text || '');
+        tr.appendChild(textTd);
+        
+        const qualityTd = document.createElement('td');
+        const select = document.createElement('select');
+        select.dataset.simpleCreatorQualityKey = config.key;
+        select.dataset.simpleCreatorQualityIndex = String(index);
+        const optDash = document.createElement('option');
+        optDash.value = '';
+        optDash.textContent = '-';
+        select.appendChild(optDash);
+        [1, 2, 3, 4, 5].forEach(val => {
+          const opt = document.createElement('option');
+          opt.value = String(val);
+          opt.textContent = String(val);
+          if (quality === val) opt.selected = true;
+          select.appendChild(opt);
+        });
+        qualityTd.appendChild(select);
+        tr.appendChild(qualityTd);
         tbody.appendChild(tr);
       });
       if (checkAll) checkAll.checked = false;

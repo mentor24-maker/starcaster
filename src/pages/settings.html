@@ -88,7 +88,7 @@
               
               <div class="profile-save-row">
                 <div></div>
-              <button type="submit">Save Profile</button>
+              <button type="submit" class="btn btn-primary">Save Profile</button>
               </div>
             </div>
             <div class="media-edit-sidebar">
@@ -106,9 +106,9 @@
         <div class="page-heading-row">
           <h2>Settings: Projects</h2>
           <div class="page-heading-actions">
-            <button id="settingsOpenCreateProjectBtn" type="button" onclick="App.settings.openProjectsCreate(); return false;">Create Project</button>
-            <button type="button" onclick="App.settings.openProjectsPage(); return false;">Back To Projects</button>
-            <button type="button" onclick="App.setActivePage('settingsPage')">Back To Settings</button>
+            <button id="settingsOpenCreateProjectBtn" type="button" onclick="App.settings.openProjectsCreate(); return false;" class="btn">Create Project</button>
+            <button type="button" onclick="App.settings.openProjectsPage(); return false;" class="btn">Back To Projects</button>
+            <button type="button" onclick="App.setActivePage('settingsPage')" class="btn">Back To Settings</button>
           </div>
         </div>
         <div id="settingsProjectsCreatePanel" class="card hidden" style="margin-bottom: 1rem;">
@@ -122,9 +122,9 @@
             <input id="settingsNewProjectDescription" placeholder="Optional description" />
           </div>
           <div class="page-heading-actions" style="justify-content:flex-start;">
-            <button id="settingsCreateProjectBtn" type="button">Save Project</button>
-            <button type="button" onclick="App.settings.openProjectsPage(); return false;">Back To Projects</button>
-            <button type="button" onclick="App.setActivePage('settingsPage')">Back To Settings</button>
+            <button id="settingsCreateProjectBtn" type="button" class="btn">Save Project</button>
+            <button type="button" onclick="App.settings.openProjectsPage(); return false;" class="btn">Back To Projects</button>
+            <button type="button" onclick="App.setActivePage('settingsPage')" class="btn">Back To Settings</button>
           </div>
         </div>
         <div class="table-wrap" style="margin-bottom: 1rem;">
@@ -228,7 +228,7 @@
             <input id="dbYoutubeRunsTable" name="youtube_harvest_runs_table" />
           
           <div></div>
-              <button type="submit">Save Database Connection</button>
+              <button type="submit" class="btn btn-primary">Save Database Connection</button>
         </form>
 
         <h3>Field Management</h3>
@@ -285,7 +285,7 @@
             <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Active field</label>
           
           <div></div>
-              <button type="submit">Create Field</button>
+              <button type="submit" class="btn btn-primary">Create Field</button>
         </form>
 
         <h3>Available Fields</h3>
@@ -308,8 +308,8 @@
         <div class="page-heading-row">
           <h2 id="settingsApisHeading">Settings: APIs</h2>
           <div class="page-heading-actions">
-            <button id="apiSettingsAllBtn" type="button">All APIs</button>
-            <button id="apiSettingsToggleBtn" type="button">Add API</button>
+            <button id="apiSettingsAllBtn" type="button" class="btn">All APIs</button>
+            <button id="apiSettingsToggleBtn" type="button" class="btn">Add API</button>
           </div>
         </div>
         <div class="api-setup-top-grid">
@@ -320,7 +320,7 @@
             <div id="connectionOpsChannelLabel" class="meta"></div>
             <div class="connection-ops-accordion">
               <section class="connection-ops-section">
-                <button type="button" class="accordion-header" data-ops-target="connectionOpsSetupLinksBody" aria-expanded="true">
+                <button type="button" class="btn accordion-header" data-ops-target="connectionOpsSetupLinksBody" aria-expanded="true">
   <span class="accordion-title">Setup Links</span>
   <span class="accordion-toggle">
     <span class="accordion-arrow" aria-hidden="true">▾</span>
@@ -332,7 +332,7 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="accordion-header" data-ops-target="connectionOpsStatusBody" aria-expanded="true">
+                <button type="button" class="btn accordion-header" data-ops-target="connectionOpsStatusBody" aria-expanded="true">
   <span class="accordion-title">Status</span>
   <span class="accordion-toggle">
     <span class="accordion-arrow" aria-hidden="true">▾</span>
@@ -345,7 +345,7 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="accordion-header" data-ops-target="connectionOpsGatesBody" aria-expanded="true">
+                <button type="button" class="btn accordion-header" data-ops-target="connectionOpsGatesBody" aria-expanded="true">
   <span class="accordion-title">Human Gates</span>
   <span class="accordion-toggle">
     <span class="accordion-arrow" aria-hidden="true">▾</span>
@@ -357,7 +357,7 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="accordion-header" data-ops-target="connectionOpsAttemptsLogBody" aria-expanded="true">
+                <button type="button" class="btn accordion-header" data-ops-target="connectionOpsAttemptsLogBody" aria-expanded="true">
   <span class="accordion-title">Log Attempts (Diagnostics)</span>
   <span class="accordion-toggle">
     <span class="accordion-arrow" aria-hidden="true">▾</span>
@@ -387,7 +387,7 @@
                       <textarea id="connectionOpsAttemptDetails" name="details" rows="5"></textarea>
                     
                     <div></div>
-              <button type="submit">Log Attempt</button>
+              <button type="submit" class="btn btn-primary">Log Attempt</button>
                   </form>
                   <div class="table-wrap" style="margin-top: 0.75rem;">
                     <table>
@@ -406,7 +406,7 @@
               </section>
 
               <section class="connection-ops-section">
-                <button type="button" class="accordion-header" data-ops-target="connectionOpsPlaybookWrapBody" aria-expanded="true">
+                <button type="button" class="btn accordion-header" data-ops-target="connectionOpsPlaybookWrapBody" aria-expanded="true">
   <span class="accordion-title">Blocker Playbook</span>
   <span class="accordion-toggle">
     <span class="accordion-arrow" aria-hidden="true">▾</span>
@@ -442,7 +442,7 @@
             
             <div id="apiFieldsContainer" class="stack-form"></div>
             <div></div>
-              <button type="submit">Save Credentials</button>
+              <button type="submit" class="btn btn-primary">Save Credentials</button>
           </form>
         </div>
 

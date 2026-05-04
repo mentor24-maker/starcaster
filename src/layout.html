@@ -1,18 +1,23 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Omni-channel Engagement Engine</title>
-    <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
-    <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
-    <link rel="stylesheet" href="/styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  </head>
-  <body>
-    <section id="authLanding" class="auth-landing hidden">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Omni-channel Engagement Engine</title>
+  <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+  <section id="authLanding" class="auth-landing hidden">
+    <div class="auth-content">
       <div class="auth-hero">
-        <img src="/images/logo_isit_app.png" alt="ISIT APP" class="auth-logo" />
+        <div class="auth-banner">
+          <img src="/images/glostar_banner_800x200.png" alt="STARGLOW by Alphire" />
+        </div>
         <h1>Omni-channel Engagement Engine</h1>
         <p>
           Engage with your followers and fans wherever they may be.
@@ -32,8 +37,10 @@
           <input name="password" type="password" required />
           <div></div>
           <div style="display: flex; justify-content: space-between; align-items: baseline;">
-            <button type="submit">Login</button>
-            <a href="#" id="authShowForgotPassword" style="font-size: 0.85rem; color: var(--muted); text-decoration: underline;">Forgot password?</a>
+            <button type="submit" class="btn btn-primary">Login</button>
+            <a href="#" id="authShowForgotPassword"
+              style="font-size: 0.85rem; color: var(--muted); text-decoration: underline; white-space: nowrap; margin-left: 1rem;">Forgot
+              password?</a>
           </div>
         </form>
         <form id="authRegisterForm" class="standard-form-grid hidden">
@@ -46,39 +53,40 @@
           <label>Confirm Password</label>
           <input name="confirm_password" type="password" required />
           <div></div>
-          <button type="submit">Create Account</button>
+          <button type="submit" class="btn btn-primary">Register</button>
         </form>
         <form id="authForgotPasswordForm" class="standard-form-grid hidden">
-          <p style="grid-column: 1/-1; color: var(--muted); font-size: 0.9rem;">Enter your email to receive a secure 6-digit password reset code.</p>
+          <p style="grid-column: 1/-1; color: var(--muted); font-size: 0.9rem;">Enter your email to receive a secure
+            6-digit password reset code.</p>
           <label>Email</label>
           <input name="email" type="email" required />
           <div></div>
           <button type="submit">Send Reset Code</button>
           <div style="grid-column: 1/-1; text-align: center; margin-top: 1rem;">
-            <a href="#" id="authCancelForgotPassword" style="font-size: 0.85rem; color: var(--muted); text-decoration: underline;">Back to login</a>
+            <a href="#" id="authCancelForgotPassword"
+              style="font-size: 0.85rem; color: var(--muted); text-decoration: underline;">Back to login</a>
           </div>
         </form>
         <form id="authResetPasswordForm" class="standard-form-grid hidden">
-          <p style="grid-column: 1/-1; color: var(--muted); font-size: 0.9rem;">Enter the 6-digit code dispatched to your email along with your new password.</p>
+          <p style="grid-column: 1/-1; color: var(--muted); font-size: 0.9rem;">Enter the 6-digit code dispatched to
+            your email along with your new password.</p>
           <label>6-Digit Code</label>
-          <input name="code" type="text" pattern="[0-9]{6}" maxlength="6" required placeholder="123456" style="letter-spacing: 4px; text-align: center; font-variant-numeric: tabular-nums;" />
+          <input name="code" type="text" pattern="[0-9]{6}" maxlength="6" required placeholder="123456"
+            style="letter-spacing: 4px; text-align: center; font-variant-numeric: tabular-nums;" />
           <label>New Password</label>
           <input name="new_password" type="password" minlength="8" required />
           <div></div>
           <button type="submit">Confirm Reset</button>
         </form>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <div id="appShell" class="hidden">
+  <div id="appShell" class="hidden">
     <header>
-      <img
-        src="/alphire_promo_platform_1920x280.png"
-        alt="Alphire Promo Platform"
-        class="brand-wordmark"
-        onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';"
-      />
-      <h1 id="brandFallback" class="brand-fallback">Alphire AI Agency</h1>
+      <img src="/images/glostar_banner_800x200.png" alt="STARGLOW by Alphire" class="brand-wordmark"
+        onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';" />
+      <h1 id="brandFallback" class="brand-fallback">STARGLOW by Alphire</h1>
       <div class="auth-header-meta">
         <div class="auth-user-menu">
           <a id="authWelcomeName" class="auth-welcome-name" href="#page=settingsProfilePage">Account</a>
@@ -87,7 +95,8 @@
           </div>
         </div>
       </div>
-      <button id="brandProfileButton" class="brand-profile-button" type="button" title="Projects" onclick="if(window.App&&typeof App.setActivePage==='function'){App.setActivePage('settingsProjectsPage');}">
+      <button id="brandProfileButton" class="brand-profile-button" type="button" title="Projects"
+        onclick="if(window.App&&typeof App.setActivePage==='function'){App.setActivePage('settingsProjectsPage');}">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
         <span id="brandProfileLabel">Projects</span>
       </button>
@@ -112,41 +121,55 @@
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link active" data-page="contactsPage">Contacts</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.contacts.openPeerSitesPage(); return false;" data-page="contactsPeerSitesPage">Peer Sites</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.contactPersonas.openPersonasPage(); return false;" data-page="contactsPersonasPage">Personas</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.contacts.openPeerSitesPage(); return false;"
+              data-page="contactsPeerSitesPage">Peer Sites</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.contactPersonas.openPersonasPage(); return false;"
+              data-page="contactsPersonasPage">Personas</a>
             <a href="#" class="menu-link submenu-link" data-page="contactsExplorePage">Explore</a>
             <a href="#" class="menu-link submenu-link" data-page="segmentsPage">Segments</a>
           </div>
         </li>
         <li class="menu-item"><a href="#" class="menu-link" data-page="channelsPage">Channels</a></li>
         <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" onclick="App.messaging.openContentLanding(); return false;" data-page="messagingContentPage">Messaging</a>
+          <a href="#" class="menu-link" onclick="App.messaging.openContentLanding(); return false;"
+            data-page="messagingContentPage">Messaging</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openManageContentLanding(); return false;">Formats</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openTopicsLanding(); return false;">Topics</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.messaging.openManageContentLanding(); return false;">Formats</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.messaging.openTopicsLanding(); return false;">Topics</a>
             <a href="#" class="menu-link submenu-link" onclick="App.messaging.openTagsPage(); return false;">Tags</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openContentLanding(); return false;">Content</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.messaging.openContentLanding(); return false;">Content</a>
           </div>
         </li>
         <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="assetsPage" onclick="App.assets.openAssetsLanding(); return false;">Assets</a>
+          <a href="#" class="menu-link" data-page="assetsPage"
+            onclick="App.assets.openAssetsLanding(); return false;">Assets</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.assetCategories.openCategoriesPage(); return false;">Categories</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Image'); return false;">Images</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Video'); return false;">Video</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Audio'); return false;">Audio</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.assets.openAssetsManager('Lead Magnet'); return false;">PDF</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.assetCategories.openCategoriesPage(); return false;">Categories</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.assets.openAssetsManager('Image'); return false;">Images</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.assets.openAssetsManager('Video'); return false;">Video</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.assets.openAssetsManager('Audio'); return false;">Audio</a>
+            <a href="#" class="menu-link submenu-link"
+              onclick="App.assets.openAssetsManager('Lead Magnet'); return false;">PDF</a>
           </div>
         </li>
         <li class="menu-item has-submenu">
           <a href="#" class="menu-link" data-page="developPage">Builder</a>
           <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.develop.openThemesPage(); return false;" data-page="developThemesPage">Themes</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.develop.openThemesPage(); return false;"
+              data-page="developThemesPage">Themes</a>
             <a href="#" class="menu-link submenu-link" data-page="developTemplatesPage">Templates</a>
             <a href="#" class="menu-link submenu-link" data-page="developModulesPage">Modules</a>
             <a href="#" class="menu-link submenu-link" data-page="developManageLandingPagesPage">Pages</a>
             <a href="#" class="menu-link submenu-link" data-page="developToolsPage">Extensions</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.develop.openAgentsPage(); return false;" data-page="developAgentsPage">Agents</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.develop.openAgentsPage(); return false;"
+              data-page="developAgentsPage">Agents</a>
           </div>
         </li>
         <li class="menu-item"><a href="#" class="menu-link" data-page="campaignsPage">Campaigns</a></li>
@@ -163,6 +186,16 @@
           </div>
         </li>
         <li class="menu-item has-submenu">
+          <a href="#" class="menu-link" data-page="observePage">Observe</a>
+          <div class="submenu">
+            <a href="#" class="menu-link submenu-link" data-page="observeDashboardPage">Dashboard</a>
+            <a href="#" class="menu-link submenu-link" data-page="observeReportsPage">Reports</a>
+            <a href="#" class="menu-link submenu-link" data-page="observeAnalysisPage">Analysis</a>
+            <a href="#" class="menu-link submenu-link" data-page="observeQuotasPage">API Quotas</a>
+            <a href="#" class="menu-link submenu-link" data-page="activityLogPage">Activity Log</a>
+          </div>
+        </li>
+        <li class="menu-item has-submenu">
           <a href="#" class="menu-link" data-page="engagePage">Engage</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" data-page="engageInboxPage">Inbox</a>
@@ -173,31 +206,24 @@
             <a href="#" class="menu-link submenu-link" data-page="engageDiscussionResponsesPage">Discussion</a>
           </div>
         </li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="observePage">Observe</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="observeDashboardPage">Dashboard</a>
-            <a href="#" class="menu-link submenu-link" data-page="observeReportsPage">Reports</a>
-            <a href="#" class="menu-link submenu-link" data-page="observeAnalysisPage">Analysis</a>
-            <a href="#" class="menu-link submenu-link" data-page="observeQuotasPage">API Quotas</a>
-            <a href="#" class="menu-link submenu-link" data-page="activityLogPage">Activity Log</a>
-          </div>
-        </li>
         <li class="menu-item menu-item-right-start has-submenu">
-          <a href="#" class="menu-link" data-page="trainingContextPage">Training</a>
+          <a href="#" class="menu-link" data-page="trainingKnowledgebasePage">Training</a>
           <div class="submenu">
+            <a href="#" class="menu-link submenu-link" data-page="trainingKnowledgebasePage">Knowledgebase</a>
             <a href="#" class="menu-link submenu-link" data-page="trainingContextPage">Context</a>
             <a href="#" class="menu-link submenu-link" data-page="trainingCategoriesPage">Topics</a>
             <a href="#" class="menu-link submenu-link" data-page="trainingAttributesPage">Attributes</a>
             <a href="#" class="menu-link submenu-link" data-page="trainingApproachesPage">Approaches</a>
             <a href="#" class="menu-link submenu-link" data-page="trainingRulesGuidesPage">Rules/Guides</a>
+            <a href="#" class="menu-link submenu-link" data-page="trainingFilesystemPage">Filesystem</a>
           </div>
         </li>
         <li class="menu-item menu-item-right has-submenu">
           <a href="#" class="menu-link" data-page="settingsPage">Settings</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" data-page="settingsProfilePage">Profile</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.settings.openProjectsPage(); return false;" data-page="settingsProjectsPage">Projects</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.settings.openProjectsPage(); return false;"
+              data-page="settingsProjectsPage">Projects</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsAgentsPage">Agents</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsDatabasePage">Database</a>
             <a href="#" class="menu-link submenu-link" data-page="settingsApisPage">APIs</a>
@@ -237,77 +263,103 @@
     </nav>
 
     <main>
-            <!-- INJECT_PAGES -->
+      <!-- INJECT_PAGES -->
     </main>
 
     <p id="message"></p>
-    </div>
+  </div>
 
-    <!-- YouTube Miner Target Selector Modal -->
-    <div id="youtubeMinerTargetSelectorModal" class="c-modal__backdrop hidden" style="z-index: 10050; display: none;">
-      <div class="c-modal__dialog" style="max-width: 900px; max-height: 85vh; width: 90vw; border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; overflow: hidden;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
-          <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">Select Video Target</h2>
-          <button type="button" id="youtubeMinerTargetSelectorCloseBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--ink);">×</button>
-        </div>
-        
-        <div style="margin-bottom: 1rem;">
-          <input type="text" id="youtubeMinerTargetSelectorFilter" class="hero-action-input" placeholder="Search by video title, URL, or topic..." style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border);" />
-        </div>
-        
-        <div id="youtubeMinerTargetSelectorGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; overflow-y: auto; flex: 1; padding: 0.5rem;">
-          <!-- Thumbnails injected dynamically -->
-        </div>
+  <!-- YouTube Miner Target Selector Modal -->
+  <div id="youtubeMinerTargetSelectorModal" class="c-modal__backdrop hidden" style="z-index: 10050; display: none;">
+    <div class="c-modal__dialog"
+      style="max-width: 900px; max-height: 85vh; width: 90vw; border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; overflow: hidden;">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
+        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">Select Video Target</h2>
+        <button type="button" id="youtubeMinerTargetSelectorCloseBtn"
+          style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--ink);">×</button>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <input type="text" id="youtubeMinerTargetSelectorFilter" class="hero-action-input"
+          placeholder="Search by video title, URL, or topic..."
+          style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border);" />
+      </div>
+
+      <div id="youtubeMinerTargetSelectorGrid"
+        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; overflow-y: auto; flex: 1; padding: 0.5rem;">
+        <!-- Thumbnails injected dynamically -->
       </div>
     </div>
+  </div>
 
-    <!-- Training Context Corpus Viewer Modal -->
-    <div id="trainingCorpusViewerModal" class="c-modal__backdrop hidden" style="z-index: 10050; display: none;">
-      <div class="c-modal__dialog" style="max-width: 900px; max-height: 85vh; width: 90vw; border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-card); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
-          <h2 id="trainingCorpusViewerTitle" style="margin: 0; font-size: 1.2rem; font-weight: 700;">Context Document</h2>
-          <button type="button" id="trainingCorpusViewerCloseBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-primary);">&times;</button>
-        </div>
-        <div style="flex: 1; overflow-y: auto;">
-          <pre id="trainingCorpusViewerContent" class="code-box" style="white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; padding: 1rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-light);"></pre>
+  <div id="trainingCorpusViewerModal" class="c-modal__backdrop hidden" style="z-index: 10050; display: none;">
+    <div class="c-modal__dialog"
+      style="max-width: 900px; max-height: 85vh; width: 90vw; border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; overflow: hidden; background: #ffffff; color: #000000; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 1rem;">
+        <h2 id="trainingCorpusViewerTitle" style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #000000;">
+          Context Document</h2>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button type="button" id="trainingCorpusViewerEditBtn" class="hidden"
+            style="background: transparent; border: 1px solid #e5e7eb; padding: 0.25rem 0.5rem; font-size: 0.85rem; cursor: pointer; border-radius: 4px; color: #000;">Edit</button>
+          <button type="button" id="trainingCorpusViewerSaveBtn" class="hidden"
+            style="background: var(--primary); color: #fff; border: none; padding: 0.25rem 0.5rem; font-size: 0.85rem; cursor: pointer; border-radius: 4px;">Save</button>
+          <button type="button" id="trainingCorpusViewerCloseBtn"
+            style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: #000000;">&times;</button>
         </div>
       </div>
+      <div id="trainingCorpusViewerDescriptionContainer" class="hidden"
+        style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.95rem;">
+        <strong style="display:block; margin-bottom:0.25rem;">AI File Summary:</strong>
+        <span id="trainingCorpusViewerDescription">Loading...</span>
+      </div>
+      <div style="flex: 1; overflow-y: auto; background: #ffffff; display: flex; flex-direction: column;">
+        <div id="trainingCorpusViewerContent"
+          style="white-space: pre-wrap; font-family: system-ui, -apple-system, sans-serif; font-size: 0.95rem; padding: 1rem; line-height: 1.5; color: #000000; flex: 1;">
+        </div>
+        <textarea id="trainingCorpusViewerTextarea" class="hidden"
+          style="width: 100%; flex: 1; min-height: 300px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 1rem; font-family: monospace; font-size: 0.9rem; resize: none; background: #fafafa;"></textarea>
+      </div>
     </div>
+  </div>
 
-    <!-- SDKs -->
-    <script src="/js/supabaseClient.js"></script>
-    <!-- Module order matters: core first, then features, then app (orchestrator) last -->
-    <script src="/js/utils.js"></script>
-    <script src="/js/core.js"></script>
-    <script src="/js/auth.js"></script>
-    <script src="/js/components.js"></script>
-    <script src="/js/contacts.js"></script>
-    <script src="/js/contactPersonas.js"></script>
-    <script src="/js/segments.js"></script>
-    <script src="/js/campaigns.js"></script>
-    <script src="/js/promoLeads.js"></script>
-    <script src="/js/settings.js"></script>
-    <script src="/js/acquire.js"></script>
-    <script src="/js/youtube.js?v=1.6"></script>
-    <script src="/js/youtubeComments.js"></script>
-    <script src="/js/messaging.js?v=1.4"></script>
-    <script src="/js/promoteEmail.js"></script>
-    <script src="/js/engageSocial.js"></script>
-    <script src="/js/engageComments.js"></script>
-    <script src="/js/docsApiSetup.js"></script>
-    <script src="/js/richtext-vendor.js"></script>
-    <script src="/js/richtext.js"></script>
-    <script src="/js/develop.js"></script>
-    <script src="/js/activityLog.js"></script>
-    <script src="/js/observe.js"></script>
-    <script src="/js/devAgent.js"></script>
-    <script src="/js/assets.js"></script>
-    <script src="/js/assetsVideo.js"></script>
-    <script src="/js/assetCategories.js"></script>
-    <script src="/js/channels.js"></script>
-    <script src="/js/envConfig.js"></script>
-    <script src="/js/training.js"></script>
-    <script src="/app.js"></script>
-    <script src="/bundle.js"></script>
-  </body>
+  <!-- SDKs -->
+
+  <!-- Module order matters: core first, then features, then app (orchestrator) last -->
+
+  <script src="/js/core.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/components.js"></script>
+  <script src="/js/contacts.js"></script>
+  <script src="/js/contactPersonas.js"></script>
+  <script src="/js/segments.js"></script>
+  <script src="/js/campaigns.js"></script>
+  <script src="/js/promoLeads.js"></script>
+  <script src="/js/settings.js"></script>
+  <script src="/js/acquire.js"></script>
+  <script src="/js/youtube.js?v=1.6"></script>
+  <script src="/js/youtubeComments.js"></script>
+  <script src="/js/messaging.js?v=1.4"></script>
+
+  <script src="/js/engageSocial.js"></script>
+  <script src="/js/engageComments.js"></script>
+
+  <script src="/js/richtext-vendor.js"></script>
+  <script src="/js/richtext.js"></script>
+  <script src="/js/develop.js?v=3"></script>
+  <script src="/js/polls.js"></script>
+  <script src="/js/activityLog.js"></script>
+  <script src="/js/observe.js"></script>
+  <script src="/js/devAgent.js"></script>
+  <script src="/js/assets.js?v=1.1"></script>
+  <script src="/js/assetsVideo.js?v=1.6"></script>
+  <script src="/js/assetCategories.js"></script>
+  <script src="/js/channels.js"></script>
+  <script src="/js/envConfig.js"></script>
+  <script src="/js/training.js"></script>
+  <script src="/app.js"></script>
+  <script src="/bundle.js"></script>
+</body>
+
 </html>

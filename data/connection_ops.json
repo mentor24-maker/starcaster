@@ -1,3 +1,13 @@
 {
-  "platforms": {}
+  "platforms": {
+    "x": {
+      "gates": {
+        "developer_app_ready": true,
+        "saved_credentials": true,
+        "auth_check_passed": false
+      },
+      "attempts": [],
+      "updatedAt": "2026-05-04T18:44:42.778Z"
+    }
+  }
 }

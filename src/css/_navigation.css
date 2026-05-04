@@ -1,0 +1,131 @@
+/* Navigation & Header */
+
+header {
+  padding: 0 1rem;
+  background: var(--btn-bg); /* Black */
+  border-bottom: 1px solid #333;
+  min-height: 154px;
+  display: flex;
+  align-items: center;
+}
+
+.brand-wordmark {
+  display: block;
+  height: 147px;
+  max-height: none;
+  width: auto;
+  object-fit: contain;
+}
+
+.brand-fallback {
+  display: none;
+  margin: 0;
+  color: var(--bg-page);
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.brand-profile-logo {
+  height: 60px;
+  width: auto;
+  border-radius: 4px;
+}
+
+.brand-profile-button {
+  margin-left: 1rem;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.7rem;
+  background: transparent;
+  color: var(--bg-page);
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.top-nav {
+  background: var(--btn-bg); /* Black */
+  border-bottom: 1px solid var(--btn-bg);
+  padding: 0;
+  position: relative;
+  z-index: 20;
+}
+
+.menu-root {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.menu-item {
+  position: relative;
+  border-right: 1px solid #333;
+}
+
+.menu-item:last-child {
+  border-right: none;
+}
+
+.menu-item-right-start {
+  margin-left: auto;
+  border-left: 1px solid #333;
+}
+
+.menu-item-right {
+  border-left: 1px solid #333;
+}
+
+.menu-link {
+  display: block;
+  padding: 0.8rem 1rem;
+  text-decoration: none;
+  color: var(--btn-text);
+  font-weight: 700;
+  line-height: 1;
+  font-size: 1.1rem;
+  transition: opacity 0.2s;
+}
+
+.menu-link:hover,
+.menu-link.active {
+  background: #222;
+  color: #fff;
+}
+
+.submenu {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  min-width: 180px;
+  background: var(--btn-bg);
+  border: 1px solid #333;
+  border-top: none;
+  border-radius: 0 0 var(--radius-input) var(--radius-input);
+  overflow: hidden;
+}
+
+.docs-menu-anchor .submenu,
+.menu-item-right .submenu {
+  left: auto;
+  right: 0;
+  min-width: 220px;
+}
+
+.submenu .submenu-link {
+  border-bottom: 1px solid #333;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.submenu .submenu-link:last-child {
+  border-bottom: none;
+}
+
+.menu-item.has-submenu:hover .submenu {
+  display: block;
+}
