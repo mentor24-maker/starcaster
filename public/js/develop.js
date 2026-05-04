@@ -215,6 +215,24 @@ App.develop = (function () {
       ],
     },
     {
+      value: 'poll',
+      label: 'Poll',
+      description: 'An interactive poll module that displays a question from your Polls database.',
+      starterName: 'Poll',
+      defaults: {
+        pollId: '',
+        submitLabel: 'Vote',
+        showResults: false,
+        backgroundColor: '#ffffff',
+      },
+      fields: [
+        { key: 'pollId', label: 'Select Poll', control: 'select', options: [] }, // We will populate this dynamically
+        { key: 'submitLabel', label: 'Submit Button Label', control: 'text', placeholder: 'Vote' },
+        { key: 'showResults', label: 'Show Results After Voting', control: 'checkbox' },
+        { key: 'backgroundColor', label: 'Background Color', control: 'color' },
+      ],
+    },
+    {
       value: 'form',
       label: 'Form',
       description: 'Embed or style a lead-capture form module with form selection and CTA settings.',
@@ -246,6 +264,7 @@ App.develop = (function () {
         altText: 'Image',
         linkUrl: '',
         maxWidth: 100,
+        maxWidthPx: 0,
         overlayOpacity: 0,
         aspectRatio: 'auto',
       },
@@ -255,6 +274,7 @@ App.develop = (function () {
         { key: 'altText', label: 'Alt Text', control: 'text', placeholder: 'Describe the image' },
         { key: 'linkUrl', label: 'Link URL', control: 'text', placeholder: 'https://...' },
         { key: 'maxWidth', label: 'Max Width %', control: 'number', min: 10, max: 100, step: 5 },
+        { key: 'maxWidthPx', label: 'Max Width px (Overrides %)', control: 'number', min: 0, max: 2000, step: 10 },
         { key: 'overlayOpacity', label: 'Overlay Opacity', control: 'number', min: 0, max: 100, step: 5 },
         { key: 'aspectRatio', label: 'Aspect Ratio', control: 'select', options: ['auto', '16:9', '4:3', '3:2', '1:1', '9:16'] },
       ],
@@ -341,6 +361,24 @@ App.develop = (function () {
         { key: 'maxWidth', label: 'Width', control: 'select', options: ['compact', 'standard', 'wide', 'full'] },
       ],
     },
+    {
+      value: 'pod',
+      label: 'Channel Pod',
+      description: 'A stylized 20px radius card with a brand logo, title, and description designed for the Acquire Hub.',
+      starterName: 'Channel Pod',
+      defaults: {
+        title: 'Channel Name',
+        description: 'Channel description text goes here.',
+        logoUrl: '/images/logos/web.svg',
+        targetPage: '',
+      },
+      fields: [
+        { key: 'title', label: 'Title', control: 'text', placeholder: 'Channel Name' },
+        { key: 'description', label: 'Description', control: 'textarea', rows: 2, placeholder: 'Brief description' },
+        { key: 'logoUrl', label: 'Logo URL', control: 'text', placeholder: '/images/logos/...' },
+        { key: 'targetPage', label: 'Target Page ID', control: 'text', placeholder: 'e.g., acquireWebPage' },
+      ],
+    },
   ];
   let selectedTemplateId = LANDING_TEMPLATES[0].id;
   let selectedFormTemplateId = FORM_TEMPLATES[0].id;
@@ -360,6 +398,7 @@ App.develop = (function () {
   };
   let savedForms = [];
   let savedModules = [];
+  let savedModuleClasses = [];
   let savedLandingPages = [];
   let savedPageTemplates = [];
   let modularPageTemplateDraft = null;
@@ -607,24 +646,47 @@ App.develop = (function () {
     const body = byId('developAgentsTableBody');
     if (!body) return;
     if (!savedAgents.length) {
-      body.innerHTML = '<tr><td colspan="6" class="meta">No saved agents yet.</td></tr>';
+      body.textContent = '';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 6;
+      td.className = 'meta';
+      td.textContent = 'No saved agents yet.';
+      tr.appendChild(td);
+      body.appendChild(tr);
       return;
     }
-    body.innerHTML = '';
+    body.textContent = '';
     savedAgents
       .slice()
       .sort((a, b) => String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || '')))
       .forEach((item) => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${safeText(item.name) || 'Untitled Agent'}</td>
-          <td>${safeText(item.action) || '-'}</td>
-          <td>${safeText(item.workspace_id) || '-'}</td>
-          <td>${safeText(item.type) || '-'}</td>
-          <td>${safeText(item.updatedAt) || '-'}</td>
-          <td class="develop-agents-actions-cell"></td>
-        `;
-        const actions = row.querySelector('.develop-agents-actions-cell');
+        
+        const tdName = document.createElement('td');
+        tdName.textContent = safeText(item.name) || 'Untitled Agent';
+        row.appendChild(tdName);
+        
+        const tdAction = document.createElement('td');
+        tdAction.textContent = safeText(item.action) || '-';
+        row.appendChild(tdAction);
+        
+        const tdWorkspace = document.createElement('td');
+        tdWorkspace.textContent = safeText(item.workspace_id) || '-';
+        row.appendChild(tdWorkspace);
+        
+        const tdType = document.createElement('td');
+        tdType.textContent = safeText(item.type) || '-';
+        row.appendChild(tdType);
+        
+        const tdUpdated = document.createElement('td');
+        tdUpdated.textContent = safeText(item.updatedAt) || '-';
+        row.appendChild(tdUpdated);
+        
+        const actions = document.createElement('td');
+        actions.className = 'develop-agents-actions-cell';
+        row.appendChild(actions);
+        
         if (actions) {
           actions.appendChild(App.makeIconButton('edit', 'Edit Agent', () => {
             populateAgentForm(item);
@@ -696,7 +758,7 @@ App.develop = (function () {
   function setSelectOptions(select, options, placeholder, currentValue) {
     if (!select) return;
     const desired = String(currentValue || '');
-    select.innerHTML = '';
+    select.textContent = '';
     const first = document.createElement('option');
     first.value = '';
     first.textContent = placeholder;
@@ -1075,17 +1137,26 @@ App.develop = (function () {
     if (button) button.textContent = asset ? `Change ${config.title}` : `Choose ${config.title}`;
     if (!preview) return;
     if (!asset) {
-      preview.innerHTML = 'No image selected';
+      preview.textContent = 'No image selected';
       return;
     }
     const imageUrl = toDirectAssetUrl(asset.location);
-    preview.innerHTML = `
-      ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(asset.assetName) || config.title}" />` : ''}
-      <div class="develop-theme-asset-preview-text">
-        <strong>${safeText(assetLabel(asset, config.title))}</strong>
-        <span>${safeText(asset.category) || 'Image'}</span>
-      </div>
-    `;
+    preview.textContent = '';
+    if (imageUrl) {
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.alt = safeText(asset.assetName) || config.title;
+      preview.appendChild(img);
+    }
+    const textDiv = document.createElement('div');
+    textDiv.className = 'develop-theme-asset-preview-text';
+    const strong = document.createElement('strong');
+    strong.textContent = safeText(assetLabel(asset, config.title));
+    const span = document.createElement('span');
+    span.textContent = safeText(asset.category) || 'Image';
+    textDiv.appendChild(strong);
+    textDiv.appendChild(span);
+    preview.appendChild(textDiv);
   }
 
   function renderLandingAssetPickerDisplay(selectId) {
@@ -1101,17 +1172,26 @@ App.develop = (function () {
     if (button) button.textContent = asset ? `Change ${config.title}` : `Choose ${config.title}`;
     if (!preview) return;
     if (!asset) {
-      preview.innerHTML = 'No image selected';
+      preview.textContent = 'No image selected';
       return;
     }
     const imageUrl = toDirectAssetUrl(asset.location);
-    preview.innerHTML = `
-      ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(asset.assetName) || config.title}" />` : ''}
-      <div class="develop-theme-asset-preview-text">
-        <strong>${safeText(assetLabel(asset, config.title))}</strong>
-        <span>${safeText(asset.category) || 'Image'}</span>
-      </div>
-    `;
+    preview.textContent = '';
+    if (imageUrl) {
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.alt = safeText(asset.assetName) || config.title;
+      preview.appendChild(img);
+    }
+    const textDiv = document.createElement('div');
+    textDiv.className = 'develop-theme-asset-preview-text';
+    const strong = document.createElement('strong');
+    strong.textContent = safeText(assetLabel(asset, config.title));
+    const span = document.createElement('span');
+    span.textContent = safeText(asset.category) || 'Image';
+    textDiv.appendChild(strong);
+    textDiv.appendChild(span);
+    preview.appendChild(textDiv);
   }
 
   function renderThemeAssetSelect(selectId, currentValue, placeholderLabel) {
@@ -1317,7 +1397,8 @@ App.develop = (function () {
       if (!imageUrl) return;
       const previewBody = document.createElement('div');
       previewBody.className = 'develop-theme-image-preview-modal-body';
-      previewBody.innerHTML = `
+      const pParser = new DOMParser();
+      const pDoc = pParser.parseFromString(`
         <div class="develop-theme-image-preview-stage">
           <img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />
         </div>
@@ -1325,7 +1406,9 @@ App.develop = (function () {
           <strong>${safeText(assetLabel(asset, config.title))}</strong>
           <span>${safeText(asset.category) || 'Image'}</span>
         </div>
-      `;
+      `, 'text/html');
+      previewBody.textContent = '';
+      Array.from(pDoc.body.childNodes).forEach(n => previewBody.appendChild(n.cloneNode(true)));
       previewModal = App.components.Modal({
         title: safeText(assetLabel(asset, config.title)) || config.title,
         body: previewBody,
@@ -1356,7 +1439,7 @@ App.develop = (function () {
         return haystack.includes(filter);
       });
       resultCount.textContent = `${assets.length} image${assets.length === 1 ? '' : 's'}`;
-      grid.innerHTML = '';
+      grid.textContent = '';
       if (!assets.length) {
         const empty = document.createElement('div');
         empty.className = 'meta';
@@ -1387,7 +1470,13 @@ App.develop = (function () {
 
         const heading = document.createElement('div');
         heading.className = 'develop-theme-picker-group-heading';
-        heading.innerHTML = `<strong>${label}</strong><span>${rows.length}</span>`;
+        heading.textContent = '';
+        const strong = document.createElement('strong');
+        strong.textContent = label;
+        const span = document.createElement('span');
+        span.textContent = rows.length;
+        heading.appendChild(strong);
+        heading.appendChild(span);
         section.appendChild(heading);
 
         const sectionGrid = document.createElement('div');
@@ -1398,38 +1487,62 @@ App.develop = (function () {
           card.className = `develop-theme-picker-card develop-theme-picker-card--${groupKey}${String(asset.id) === getValue() ? ' is-selected' : ''}`;
           const imageUrl = toDirectAssetUrl(asset.location);
           const dimensionLabel = getAssetDimensionLabel(asset);
-          card.innerHTML = `
-            <button type="button" class="develop-theme-picker-card-image-btn">
-              ${imageUrl ? `<img src="${imageUrl}" alt="${safeText(assetLabel(asset, config.title))}" />` : '<div class="develop-theme-table-thumb-empty">No Image</div>'}
-            </button>
-            <div class="develop-theme-picker-card-title">${safeText(assetLabel(asset, config.title))}</div>
-            <div class="develop-theme-picker-card-meta">${safeText(asset.category) || 'Image'}${dimensionLabel ? ` • ${dimensionLabel}` : ''}</div>
-            <div class="develop-theme-picker-card-actions">
-              <button type="button" class="tiny-btn develop-theme-picker-preview-btn">Preview</button>
-              <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Image</button>
-            </div>
-          `;
-          const imageBtn = card.querySelector('.develop-theme-picker-card-image-btn');
-          const previewBtn = card.querySelector('.develop-theme-picker-preview-btn');
-          const selectBtn = card.querySelector('.develop-theme-picker-select-btn');
+          
+          const imageBtn = document.createElement('button');
+          imageBtn.type = 'button';
+          imageBtn.className = 'develop-theme-picker-card-image-btn';
+          
+          if (imageUrl) {
+            const img = document.createElement('img');
+            img.src = imageUrl;
+            img.alt = safeText(assetLabel(asset, config.title));
+            imageBtn.appendChild(img);
+          } else {
+            const empty = document.createElement('div');
+            empty.className = 'develop-theme-table-thumb-empty';
+            empty.textContent = 'No Image';
+            imageBtn.appendChild(empty);
+          }
+
+          const titleDiv = document.createElement('div');
+          titleDiv.className = 'develop-theme-picker-card-title';
+          titleDiv.textContent = safeText(assetLabel(asset, config.title));
+
+          const metaDiv = document.createElement('div');
+          metaDiv.className = 'develop-theme-picker-card-meta';
+          metaDiv.textContent = `${safeText(asset.category) || 'Image'}${dimensionLabel ? ` • ${dimensionLabel}` : ''}`;
+
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'develop-theme-picker-card-actions';
+
+          const previewBtn = document.createElement('button');
+          previewBtn.type = 'button';
+          previewBtn.className = 'tiny-btn develop-theme-picker-preview-btn';
+          previewBtn.textContent = 'Preview';
+
+          const selectBtn = document.createElement('button');
+          selectBtn.type = 'button';
+          selectBtn.className = 'tiny-btn develop-theme-picker-select-btn';
+          selectBtn.textContent = 'Use Image';
+
+          actionsDiv.appendChild(previewBtn);
+          actionsDiv.appendChild(selectBtn);
+
+          card.appendChild(imageBtn);
+          card.appendChild(titleDiv);
+          card.appendChild(metaDiv);
+          card.appendChild(actionsDiv);
+
           const choose = () => {
             setValue(String(asset.id));
             afterChange(asset);
             if (modal) modal.close();
           };
-          if (imageBtn) {
-            imageBtn.addEventListener('click', () => {
-              openImagePreview(asset);
-            });
-          }
-          if (previewBtn) {
-            previewBtn.addEventListener('click', () => {
-              openImagePreview(asset);
-            });
-          }
-          if (selectBtn) {
-            selectBtn.addEventListener('click', choose);
-          }
+
+          imageBtn.addEventListener('click', choose);
+          previewBtn.addEventListener('click', () => openImagePreview(asset));
+          selectBtn.addEventListener('click', choose);
+
           sectionGrid.appendChild(card);
         });
 
@@ -1447,7 +1560,7 @@ App.develop = (function () {
       afterChange(null);
       if (modal) modal.close();
     });
-    uploadBtn.addEventListener('click', async () => {
+    const performUpload = async () => {
       const file = uploadInput.files && uploadInput.files[0];
       if (!file) {
         notify('Choose an image file first', true);
@@ -1455,8 +1568,10 @@ App.develop = (function () {
       }
       try {
         uploadBtn.disabled = true;
+        uploadInput.disabled = true;
+        notify('Uploading image...', false);
         const asset = await uploadHandler(file);
-        notify('Image uploaded');
+        notify('Image uploaded successfully!');
         if (asset?.id) {
           setValue(String(asset.id));
           afterChange(asset);
@@ -1467,8 +1582,13 @@ App.develop = (function () {
         notify(err.message || 'Could not upload image', true);
       } finally {
         uploadBtn.disabled = false;
+        uploadInput.disabled = false;
+        uploadInput.value = ''; // Reset input to allow selecting the same file again
       }
-    });
+    };
+
+    uploadInput.addEventListener('change', performUpload);
+    uploadBtn.addEventListener('click', performUpload);
 
     modal = App.components.Modal({
       title: `Choose ${config.title}`,
@@ -1551,7 +1671,7 @@ App.develop = (function () {
     let modal = null;
 
     const renderList = () => {
-      list.innerHTML = '';
+      list.textContent = '';
       const forms = Array.isArray(savedForms) ? savedForms.slice() : [];
       if (!forms.length) {
         const empty = document.createElement('div');
@@ -1564,14 +1684,29 @@ App.develop = (function () {
         const card = document.createElement('div');
         card.className = `develop-theme-picker-card${safeText(getValue()) === safeText(form.id) ? ' is-selected' : ''}`;
         const fieldCount = Array.isArray(form?.fields) ? form.fields.length : 0;
-        card.innerHTML = `
-          <div class="develop-theme-picker-card-title">${escapeHtml(safeText(form?.name) || safeText(form?.id) || 'Saved Form')}</div>
-          <div class="develop-theme-picker-card-meta">${escapeHtml(safeText(form?.formType) || 'Form')} · ${fieldCount} fields</div>
-          <div class="develop-theme-picker-card-actions">
-            <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Form</button>
-          </div>
-        `;
-        card.querySelector('.develop-theme-picker-select-btn')?.addEventListener('click', () => {
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'develop-theme-picker-card-title';
+        titleDiv.textContent = safeText(form?.name) || safeText(form?.id) || 'Saved Form';
+
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'develop-theme-picker-card-meta';
+        metaDiv.textContent = `${safeText(form?.formType) || 'Form'} · ${fieldCount} fields`;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'develop-theme-picker-card-actions';
+
+        const selectBtn = document.createElement('button');
+        selectBtn.type = 'button';
+        selectBtn.className = 'tiny-btn develop-theme-picker-select-btn';
+        selectBtn.textContent = 'Use Form';
+
+        actionsDiv.appendChild(selectBtn);
+
+        card.appendChild(titleDiv);
+        card.appendChild(metaDiv);
+        card.appendChild(actionsDiv);
+
+        selectBtn.addEventListener('click', () => {
           setValue(safeText(form.id));
           afterChange(form);
           modal?.close();
@@ -1623,7 +1758,7 @@ App.develop = (function () {
         ].join(' ').toLowerCase();
         return haystack.includes(filter);
       });
-      list.innerHTML = '';
+      list.textContent = '';
       if (!videos.length) {
         const empty = document.createElement('div');
         empty.className = 'meta';
@@ -1634,14 +1769,29 @@ App.develop = (function () {
       videos.forEach((asset) => {
         const card = document.createElement('div');
         card.className = `develop-theme-picker-card${safeText(getValue()) === safeText(asset.id) ? ' is-selected' : ''}`;
-        card.innerHTML = `
-          <div class="develop-theme-picker-card-title">${escapeHtml(assetLabel(asset, title))}</div>
-          <div class="develop-theme-picker-card-meta">${escapeHtml(safeText(asset.category) || 'Video')}</div>
-          <div class="develop-theme-picker-card-actions">
-            <button type="button" class="tiny-btn develop-theme-picker-select-btn">Use Video</button>
-          </div>
-        `;
-        card.querySelector('.develop-theme-picker-select-btn')?.addEventListener('click', () => {
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'develop-theme-picker-card-title';
+        titleDiv.textContent = assetLabel(asset, title);
+
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'develop-theme-picker-card-meta';
+        metaDiv.textContent = safeText(asset.category) || 'Video';
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'develop-theme-picker-card-actions';
+
+        const selectBtn = document.createElement('button');
+        selectBtn.type = 'button';
+        selectBtn.className = 'tiny-btn develop-theme-picker-select-btn';
+        selectBtn.textContent = 'Use Video';
+
+        actionsDiv.appendChild(selectBtn);
+
+        card.appendChild(titleDiv);
+        card.appendChild(metaDiv);
+        card.appendChild(actionsDiv);
+
+        selectBtn.addEventListener('click', () => {
           setValue(safeText(asset.id));
           afterChange(asset);
           modal?.close();
@@ -1829,7 +1979,7 @@ App.develop = (function () {
       const { columnsCount, rowsCount } = getDimensions();
       cells = normalizeDevelopTableContents(getValue(), columnsCount, rowsCount);
       summary.textContent = getDevelopTableContentsSummary(cells, columnsCount, rowsCount);
-      grid.innerHTML = '';
+      grid.textContent = '';
       cells.forEach((cell) => {
         const card = document.createElement('div');
         card.className = 'stack-form';
@@ -1843,7 +1993,10 @@ App.develop = (function () {
 
         const typeWrap = document.createElement('label');
         typeWrap.className = 'stack-form';
-        typeWrap.innerHTML = '<span>Content Type</span>';
+        typeWrap.textContent = '';
+        const tSpan = document.createElement('span');
+        tSpan.textContent = 'Content Type';
+        typeWrap.appendChild(tSpan);
         const typeSelect = document.createElement('select');
         [
           ['empty', 'Empty'],
@@ -1866,12 +2019,15 @@ App.develop = (function () {
         card.appendChild(detailHost);
 
         const renderDetails = () => {
-          detailHost.innerHTML = '';
+          detailHost.textContent = '';
           cell.cellType = safeText(typeSelect.value) || 'empty';
           if (cell.cellType === 'heading') {
             const levelWrap = document.createElement('label');
             levelWrap.className = 'stack-form';
-            levelWrap.innerHTML = '<span>Heading Level</span>';
+            levelWrap.textContent = '';
+            const lSpan = document.createElement('span');
+            lSpan.textContent = 'Heading Level';
+            levelWrap.appendChild(lSpan);
             const levelSelect = document.createElement('select');
             ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].forEach((item) => {
               const option = document.createElement('option');
@@ -1886,7 +2042,10 @@ App.develop = (function () {
             levelWrap.appendChild(levelSelect);
             const textWrap = document.createElement('label');
             textWrap.className = 'stack-form';
-            textWrap.innerHTML = '<span>Text</span>';
+            textWrap.textContent = '';
+            const tSpan2 = document.createElement('span');
+            tSpan2.textContent = 'Text';
+            textWrap.appendChild(tSpan2);
             const input = document.createElement('input');
             input.type = 'text';
             input.value = safeText(cell.text, 2000);
@@ -1902,7 +2061,10 @@ App.develop = (function () {
           if (cell.cellType === 'text') {
             const textWrap = document.createElement('label');
             textWrap.className = 'stack-form';
-            textWrap.innerHTML = '<span>Text</span>';
+            textWrap.textContent = '';
+            const s = document.createElement('span');
+            s.textContent = 'Text';
+            textWrap.appendChild(s);
             const input = document.createElement('textarea');
             input.rows = 4;
             input.value = safeText(cell.text, 10000);
@@ -2056,17 +2218,34 @@ App.develop = (function () {
       { label: 'Background', value: safeText(theme?.backgroundColor) },
       { label: 'Accent', value: safeText(theme?.accentColor) },
     ].filter((item) => item.value);
-    if (!colors.length) return '-';
-    return `
-      <div class="develop-theme-palette-cell">
-        ${colors.map((item) => `
-          <span class="develop-theme-palette-chip" title="${item.label}: ${item.value}">
-            <span class="develop-theme-palette-dot" style="background:${item.value};"></span>
-            <span>${item.value}</span>
-          </span>
-        `).join('')}
-      </div>
-    `;
+
+    if (!colors.length) {
+      const empty = document.createElement('span');
+      empty.textContent = '-';
+      return empty;
+    }
+
+    const container = document.createElement('div');
+    container.className = 'develop-theme-palette-cell';
+
+    colors.forEach(item => {
+      const chip = document.createElement('span');
+      chip.className = 'develop-theme-palette-chip';
+      chip.title = `${item.label}: ${item.value}`;
+      
+      const dot = document.createElement('span');
+      dot.className = 'develop-theme-palette-dot';
+      dot.style.background = item.value;
+      
+      const label = document.createElement('span');
+      label.textContent = item.value;
+      
+      chip.appendChild(dot);
+      chip.appendChild(label);
+      container.appendChild(chip);
+    });
+
+    return container;
   }
 
   function renderThemeStyleGlyph(theme) {
@@ -2074,12 +2253,22 @@ App.develop = (function () {
     const borderRadius = Math.max(0, Number(theme?.borderRadius || 0) || 0);
     const scaledRadius = Math.min(14, Math.round(borderRadius / 4));
     const borderWidth = borderThickness > 0 ? 1 : 0;
-    return `
-      <div class="develop-theme-style-cell">
-        <span class="develop-theme-style-glyph" style="border-width:${borderWidth}px;border-radius:${scaledRadius}px;"></span>
-        <span>B:${borderThickness} R:${borderRadius} Blur:${theme?.containerBlur ?? 0} C:${theme?.contrastLevel ?? 0}</span>
-      </div>
-    `;
+    
+    const container = document.createElement('div');
+    container.className = 'develop-theme-style-cell';
+    
+    const glyph = document.createElement('span');
+    glyph.className = 'develop-theme-style-glyph';
+    glyph.style.borderWidth = `${borderWidth}px`;
+    glyph.style.borderRadius = `${scaledRadius}px`;
+    
+    const label = document.createElement('span');
+    label.textContent = `B:${borderThickness} R:${borderRadius} Blur:${theme?.containerBlur ?? 0} C:${theme?.contrastLevel ?? 0}`;
+    
+    container.appendChild(glyph);
+    container.appendChild(label);
+    
+    return container;
   }
 
   function getThemePreviewMessagingContent() {
@@ -2115,7 +2304,8 @@ App.develop = (function () {
     const logoSquareUrl = logoSquareAsset ? toDirectAssetUrl(logoSquareAsset.location) : '';
     const featureUrl = featureAsset ? toDirectAssetUrl(featureAsset.location) : '';
     const backgroundUrl = backgroundAsset ? toDirectAssetUrl(backgroundAsset.location) : '';
-    host.innerHTML = `
+    const pParser = new DOMParser();
+    const pDoc = pParser.parseFromString(`
       <div class="develop-themes-preview-frame" style="${backgroundUrl ? `background-image:linear-gradient(rgba(7,33,66,0.18), rgba(7,33,66,0.18)), url('${backgroundUrl}');` : `background:${payload.backgroundColor};`}">
         <div class="develop-themes-preview-card" style="background:${payload.backgroundColor}; border:${payload.borderThickness}px solid ${payload.accentColor}; border-radius:${payload.borderRadius}px; backdrop-filter:blur(${payload.containerBlur}px);">
           <div class="develop-themes-preview-header">
@@ -2161,24 +2351,34 @@ App.develop = (function () {
           </div>
         </div>
       </div>
-    `;
+    `, 'text/html');
+    host.textContent = '';
+    Array.from(pDoc.body.childNodes).forEach(n => host.appendChild(n.cloneNode(true)));
   }
 
   function renderThemesInventory() {
     const tbody = byId('developThemesInventoryBody');
     const list = byId('developThemesConsolidationList');
     if (tbody) {
-      tbody.innerHTML = `
+      const p1 = new DOMParser();
+      const doc1 = p1.parseFromString(`<table><tbody>
         <tr><td>Palette</td><td>Primary / Background / Accent</td><td>Supabase Theme Record</td><td>Shared theme builder</td></tr>
         <tr><td>Container Styles</td><td>Border, Radius, Blur, Contrast</td><td>Supabase Theme Record</td><td>Shared theme builder</td></tr>
         <tr><td>Image Assets</td><td>Logo Wide, Logo Square, Feature, Background</td><td>Supabase Theme Record</td><td>Shared theme builder</td></tr>
-      `;
+      </tbody></table>`, 'text/html');
+      tbody.textContent = '';
+      const dTb = doc1.querySelector('tbody');
+      if (dTb) Array.from(dTb.childNodes).forEach(n => tbody.appendChild(n.cloneNode(true)));
     }
     if (list) {
-      list.innerHTML = `
+      const p2 = new DOMParser();
+      const doc2 = p2.parseFromString(`<ul>
         <li>Use Builder: Themes as the shared visual source of truth for campaigns and pages.</li>
         <li>Keep asset-driven visual references attached to each theme record.</li>
-      `;
+      </ul>`, 'text/html');
+      list.textContent = '';
+      const dUl = doc2.querySelector('ul');
+      if (dUl) Array.from(dUl.childNodes).forEach(n => list.appendChild(n.cloneNode(true)));
     }
   }
 
@@ -2209,7 +2409,7 @@ App.develop = (function () {
   function renderThemesTable() {
     const tbody = byId('developThemesTableBody');
     if (!tbody) return;
-    tbody.innerHTML = '';
+    tbody.textContent = '';
     if (!savedThemes.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
@@ -2225,17 +2425,33 @@ App.develop = (function () {
       featureTd.className = 'develop-theme-table-thumb';
       const featureAsset = (Array.isArray(state.assets) ? state.assets : []).find((item) => String(item.id) === safeText(theme.featureImageId));
       const featureUrl = featureAsset ? toDirectAssetUrl(featureAsset.location) : '';
-      featureTd.innerHTML = featureUrl ? `<img src="${featureUrl}" alt="Feature image" />` : '<div class="develop-theme-table-thumb-empty">None</div>';
+      if (featureUrl) {
+        const img = document.createElement('img');
+        img.src = featureUrl;
+        img.alt = 'Feature image';
+        featureTd.appendChild(img);
+      } else {
+        const empty = document.createElement('div');
+        empty.className = 'develop-theme-table-thumb-empty';
+        empty.textContent = 'None';
+        featureTd.appendChild(empty);
+      }
+      
       const nameTd = document.createElement('td');
       nameTd.textContent = safeText(theme.name) || '-';
+      
       const paletteTd = document.createElement('td');
-      paletteTd.innerHTML = renderThemePaletteSwatches(theme);
+      paletteTd.appendChild(renderThemePaletteSwatches(theme));
+      
       const stylesTd = document.createElement('td');
-      stylesTd.innerHTML = renderThemeStyleGlyph(theme);
+      stylesTd.appendChild(renderThemeStyleGlyph(theme));
+      
       const updatedTd = document.createElement('td');
       updatedTd.textContent = theme.updatedAt ? new Date(theme.updatedAt).toLocaleString() : '-';
+      
       const actionsTd = document.createElement('td');
       actionsTd.appendChild(buildThemeActions(theme));
+      
       tr.appendChild(featureTd);
       tr.appendChild(nameTd);
       tr.appendChild(paletteTd);
@@ -2531,7 +2747,7 @@ App.develop = (function () {
 
     const current = ensureFormBuilderState(byId('developFormTypeSelect')?.value || FORM_TEMPLATES[0].id);
     const template = getFormTemplateById(current.formType);
-    host.innerHTML = '';
+    host.textContent = '';
 
     template.fields.forEach((field) => {
       const row = document.createElement('div');
@@ -2572,7 +2788,7 @@ App.develop = (function () {
       ? landingPageColors.background
       : '';
 
-    host.innerHTML = '';
+    host.textContent = '';
     const card = document.createElement('div');
     card.className = 'develop-form-preview';
     card.style.borderColor = accentColor;
@@ -2723,7 +2939,7 @@ App.develop = (function () {
     const tbody = byId('developFormsTableBody');
     if (!tbody) return;
 
-    tbody.innerHTML = '';
+    tbody.textContent = '';
     if (!savedForms.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
@@ -2831,7 +3047,6 @@ App.develop = (function () {
     const typeSelect = byId('developModulesTypeSelect');
     if (idInput) idInput.value = '';
     if (nameInput) nameInput.value = '';
-    if (typeSelect) typeSelect.value = 'header';
     updateDevelopModuleTypeFields();
     if (nameInput) nameInput.focus();
   }
@@ -2911,9 +3126,13 @@ App.develop = (function () {
     if (!control || !field || !selectedOption) return;
     const nextContent = safeText(selectedOption.content, 20000);
     if (field.control === 'richtext') {
-      control.innerHTML = nextContent
-        ? `<p>${escapeHtml(nextContent).replace(/\n/g, '<br />')}</p>`
-        : '<p></p>';
+      control.textContent = '';
+      const cParser = new DOMParser();
+      const cDoc = cParser.parseFromString(
+        nextContent ? `<p>${escapeHtml(nextContent).replace(/\\n/g, '<br />')}</p>` : '<p></p>',
+        'text/html'
+      );
+      Array.from(cDoc.body.childNodes).forEach(n => control.appendChild(n.cloneNode(true)));
       return;
     }
     if ('value' in control) {
@@ -2924,7 +3143,7 @@ App.develop = (function () {
   function populateDevelopModuleTypeOptions() {
     const select = byId('developModulesTypeSelect');
     if (!select) return;
-    select.innerHTML = '';
+    select.textContent = '';
     MODULE_TYPE_DEFINITIONS.forEach((definition) => {
       const option = document.createElement('option');
       option.value = definition.value;
@@ -2938,7 +3157,7 @@ App.develop = (function () {
     const help = options.helpNode || null;
     const prefix = safeText(options.prefix) || 'developModuleField';
     const definition = getDevelopModuleTypeDefinition(type) || MODULE_TYPE_DEFINITIONS[0];
-    host.innerHTML = '';
+    host.textContent = '';
     host.className = 'grid-form';
     if (help) {
       help.textContent = safeText(definition.description, 500);
@@ -3038,7 +3257,7 @@ App.develop = (function () {
           const imageUrl = asset ? toDirectAssetUrl(asset.location) : '';
           chooseBtn.textContent = asset ? `Change ${pickerConfig.title}` : `Choose ${pickerConfig.title}`;
           status.textContent = asset ? assetLabel(asset, pickerConfig.title) : 'No image selected';
-          preview.innerHTML = '';
+          preview.textContent = '';
           if (imageUrl) {
             const img = document.createElement('img');
             img.src = imageUrl;
@@ -3153,7 +3372,7 @@ App.develop = (function () {
           const asset = getAssetById(selectedId);
           chooseBtn.textContent = asset ? `Change ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}` : `Choose ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}`;
           status.textContent = asset ? assetLabel(asset, safeText(field.pickerTitle) || safeText(field.label) || 'Video') : 'No video selected';
-          preview.innerHTML = '';
+          preview.textContent = '';
           const meta = document.createElement('span');
           meta.textContent = asset ? (safeText(asset.category) || 'Video asset') : 'No video selected';
           preview.appendChild(meta);
@@ -3225,7 +3444,7 @@ App.develop = (function () {
           const form = savedForms.find((item) => safeText(item.id) === selectedId) || null;
           chooseBtn.textContent = form ? `Change ${field.label}` : `Choose ${field.label}`;
           status.textContent = form ? (safeText(form.name) || safeText(form.id)) : 'No form selected';
-          preview.innerHTML = '';
+          preview.textContent = '';
           const meta = document.createElement('span');
           meta.textContent = form
             ? `${safeText(form.formType) || 'Form'} · ${Array.isArray(form.fields) ? form.fields.length : 0} fields`
@@ -3304,7 +3523,7 @@ App.develop = (function () {
           const normalized = normalizeDevelopTableContents(control.value, columnsCount, rowsCount);
           control.value = JSON.stringify(normalized);
           status.textContent = getDevelopTableContentsSummary(normalized, columnsCount, rowsCount);
-          preview.innerHTML = '';
+          preview.textContent = '';
           const meta = document.createElement('span');
           const configured = normalized.filter((cell) => safeText(cell?.cellType) !== 'empty').length;
           meta.textContent = configured
@@ -3362,7 +3581,10 @@ App.develop = (function () {
         editor.setAttribute('data-module-field-key', field.key);
         editor.setAttribute('data-module-field-control', field.control);
         editor.setAttribute('data-placeholder', field.placeholder || '');
-        editor.innerHTML = safeHtml(value) || '<p></p>';
+        const eParser = new DOMParser();
+        const eDoc = eParser.parseFromString(safeHtml(value) || '<p></p>', 'text/html');
+        editor.textContent = '';
+        Array.from(eDoc.body.childNodes).forEach(n => editor.appendChild(n.cloneNode(true)));
 
         [
           { label: 'B', command: 'bold' },
@@ -3432,6 +3654,126 @@ App.develop = (function () {
           control.appendChild(option);
         });
         control.value = safeText(value);
+      } else if (field.control === 'poll-options') {
+        control = document.createElement('input');
+        control.type = 'hidden';
+        control.value = safeText(value, 10000);
+        
+        const listContainer = document.createElement('div');
+        listContainer.style.display = 'flex';
+        listContainer.style.flexDirection = 'column';
+        listContainer.style.gap = '0.5rem';
+        listContainer.style.marginTop = '0.5rem';
+        
+        const updateControlValue = () => {
+          const inputs = Array.from(listContainer.querySelectorAll('.poll-option-dynamic-input'));
+          const vals = inputs.map(i => String(i.value || '').trim()).filter(Boolean);
+          control.value = vals.join(', ');
+        };
+
+        const createRow = (val = '') => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.gap = '0.5rem';
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'poll-option-dynamic-input';
+          input.value = val;
+          input.placeholder = field.placeholder || 'Option...';
+          input.addEventListener('input', updateControlValue);
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.innerHTML = '&times;';
+          remove.style.background = 'transparent';
+          remove.style.border = 'none';
+          remove.style.color = 'var(--danger)';
+          remove.style.cursor = 'pointer';
+          remove.addEventListener('click', () => { row.remove(); updateControlValue(); });
+          row.appendChild(input);
+          row.appendChild(remove);
+          return row;
+        };
+
+        const existing = String(control.value || '').split(',').map(s => s.trim()).filter(Boolean);
+        if (existing.length) existing.forEach(opt => listContainer.appendChild(createRow(opt)));
+        else { listContainer.appendChild(createRow('')); listContainer.appendChild(createRow('')); }
+        
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn';
+        addBtn.textContent = '+ Add Option';
+        addBtn.style.alignSelf = 'flex-start';
+        addBtn.addEventListener('click', () => listContainer.appendChild(createRow('')));
+        
+        listContainer.appendChild(addBtn);
+        wrap.appendChild(listContainer);
+
+      } else if (field.control === 'poll-csv-upload') {
+        control = document.createElement('input');
+        control.type = 'hidden';
+        control.value = '';
+        
+        const uploadWrap = document.createElement('div');
+        uploadWrap.style.display = 'flex';
+        uploadWrap.style.gap = '1rem';
+        uploadWrap.style.alignItems = 'center';
+        uploadWrap.style.marginTop = '0.5rem';
+        uploadWrap.style.padding = '1rem';
+        uploadWrap.style.background = 'var(--bg-alt)';
+        uploadWrap.style.borderRadius = '8px';
+        
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.csv';
+        fileInput.style.flex = '1';
+        
+        const importBtn = document.createElement('button');
+        importBtn.type = 'button';
+        importBtn.className = 'btn btn-primary';
+        importBtn.textContent = 'Import CSV';
+        
+        const status = document.createElement('div');
+        status.style.fontSize = '0.85rem';
+        status.style.color = 'var(--muted)';
+        status.style.marginTop = '0.5rem';
+        
+        importBtn.addEventListener('click', async () => {
+          const file = fileInput.files[0];
+          if (!file) { status.textContent = 'Please select a CSV file first.'; return; }
+          importBtn.textContent = 'Importing...';
+          importBtn.disabled = true;
+          try {
+            const text = await file.text();
+            const rawRows = App.parseCsv(text);
+            if (!rawRows || rawRows.length < 2) throw new Error('CSV must have a header row and at least one data row.');
+            const headers = rawRows[0].map(h => String(h || '').trim());
+            const rows = rawRows.slice(1).map(rowArr => {
+              const obj = {};
+              headers.forEach((h, i) => { obj[h] = rowArr[i]; });
+              return obj;
+            });
+            const res = await App.api('/api/polls/import', {
+              method: 'POST',
+              body: JSON.stringify({ rows })
+            });
+            status.textContent = `Successfully imported ${res.data?.count || 0} polls from ${file.name}`;
+            status.style.color = 'var(--success)';
+            fileInput.value = '';
+            if (typeof loadDevelopPolls === 'function') loadDevelopPolls();
+          } catch (err) {
+            status.textContent = 'Import failed: ' + err.message;
+            status.style.color = 'var(--danger)';
+          } finally {
+            importBtn.textContent = 'Import CSV';
+            importBtn.disabled = false;
+          }
+        });
+        
+        uploadWrap.appendChild(fileInput);
+        uploadWrap.appendChild(importBtn);
+        wrap.appendChild(uploadWrap);
+        wrap.appendChild(status);
+        
       } else if (field.control === 'color') {
         control = document.createElement('input');
         control.type = 'color';
@@ -3448,7 +3790,7 @@ App.develop = (function () {
         control = document.createElement('input');
         control.type = 'checkbox';
         control.checked = Boolean(value);
-        wrap.innerHTML = '';
+        wrap.textContent = '';
         wrap.appendChild(control);
         wrap.appendChild(label);
       } else {
@@ -3514,6 +3856,7 @@ App.develop = (function () {
       id: safeText(byId('developModulesIdInput')?.value),
       name: safeText(byId('developModulesNameInput')?.value),
       moduleType,
+      classId: safeText(byId('developModulesClassSelect')?.value) || null,
       settings: getDevelopModuleSettingsFromForm(moduleType),
     };
   }
@@ -3555,6 +3898,9 @@ App.develop = (function () {
     if (type === 'textarea') {
       return `${safeText(settings.content, 120).replace(/<[^>]+>/g, ' ') || getDevelopModuleContentSourceOptions('pitch').find((item) => item.value === safeText(settings.pitchId))?.label || 'No content set'} · ${safeText(settings.maxWidth) || 'full'}`;
     }
+    if (type === 'pod') {
+      return `${safeText(settings.title) || 'Channel Pod'} · ${safeText(settings.description, 60) || 'No description'}`;
+    }
     return safeText(module?.name) || '-';
   }
 
@@ -3578,84 +3924,121 @@ App.develop = (function () {
     updateDevelopModuleTypeFields(module.settings || {});
   }
 
-  function renderSavedModules() {
-    const tbody = byId('developModulesTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+  let savedModulesGrid = null;
+
+  function setupSavedModulesGrid() {
+    const mountPoint = byId('developModulesGridMountPoint');
+    if (!mountPoint) return;
+
     const modules = getCanonicalSavedModules(savedModules)
       .filter((module) => Boolean(getDevelopModuleTypeDefinition(module.moduleType)));
-    if (!modules.length) {
-      const row = document.createElement('tr');
-      const cell = document.createElement('td');
-      cell.colSpan = 5;
-      cell.textContent = 'No saved modules yet.';
-      row.appendChild(cell);
-      tbody.appendChild(row);
-      return;
-    }
 
-    modules.forEach((module) => {
-      const row = document.createElement('tr');
-      const nameTd = document.createElement('td');
-      const typeTd = document.createElement('td');
-      const previewTd = document.createElement('td');
-      const updatedTd = document.createElement('td');
-      const actionsTd = document.createElement('td');
+    if (!savedModulesGrid) {
+      savedModulesGrid = App.components.DataGrid({
+        columns: [
+          {
+            key: 'name',
+            label: 'Name',
+            render: (val, row) => {
+              const displayName = safeText(row.moduleType) === 'textarea' && safeText(row.name).toLowerCase() === 'textarea'
+                ? 'Text Block'
+                : safeText(row.name) || '-';
+              return displayName;
+            }
+          },
+          {
+            key: 'moduleType',
+            label: 'Type',
+            render: (val) => (getDevelopModuleTypeDefinition(val) || { label: safeText(val) || '-' }).label
+          },
+          {
+            key: 'preview',
+            label: 'Preview',
+            sortable: false,
+            render: (val, row) => getDevelopModulePreview(row)
+          },
+          {
+            key: 'updatedAt',
+            label: 'Updated',
+            render: (val) => val ? new Date(val).toLocaleString() : '-'
+          },
+          {
+            key: 'actions',
+            label: 'Actions',
+            sortable: false,
+            render: (val, row) => {
+              const div = document.createElement('div');
+              const editBtn = App.makeIconButton('edit', 'Edit Module', () => {
+                applyDevelopModuleToForm(row);
+                updateDevelopModuleTypeFields();
+                const modal = byId('developModulesModal');
+                if (modal) modal.showModal();
+                notify(`Editing module: ${safeText(row.name) || row.id}`);
+              });
+              const cloneBtn = App.makeIconButton('clone', 'Clone Module', async () => {
+                try {
+                  const payload = {
+                    name: safeText(row.name),
+                    moduleType: safeText(row.moduleType),
+                    settings: row && typeof row.settings === 'object' ? JSON.parse(JSON.stringify(row.settings)) : {},
+                  };
+                  await api('/api/develop/modules', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                  });
+                  await refresh();
+                  notify('Module cloned');
+                } catch (err) {
+                  notify(err.message, true);
+                }
+              }, { marginLeft: '8px' });
+              const deleteBtn = App.makeIconButton('delete', 'Delete Module', async () => {
+                if (!window.confirm(`Delete module "${safeText(row.name) || row.id}"?`)) return;
+                try {
+                  await api(`/api/develop/modules/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+                  await refresh();
+                  notify('Module deleted');
+                } catch (err) {
+                  notify(err.message, true);
+                }
+              }, { danger: true, marginLeft: '8px' });
 
-      const displayName = safeText(module.moduleType) === 'textarea' && safeText(module.name).toLowerCase() === 'textarea'
-        ? 'Text Block'
-        : safeText(module.name) || '-';
-      nameTd.textContent = displayName;
-      typeTd.textContent = (getDevelopModuleTypeDefinition(module.moduleType) || { label: safeText(module.moduleType) || '-' }).label;
-      previewTd.textContent = getDevelopModulePreview(module);
-      updatedTd.textContent = module.updatedAt ? new Date(module.updatedAt).toLocaleString() : '-';
-
-      const editBtn = App.makeIconButton('edit', 'Edit Module', () => {
-        applyDevelopModuleToForm(module);
-        updateDevelopModuleTypeFields();
-        setCollapsibleSectionExpanded('developModulesEditorToggle', 'developModulesEditorBody', true);
-        setCollapsibleSectionExpanded('developModulesLibraryToggle', 'developModulesLibraryBody', true);
-        notify(`Editing module: ${safeText(module.name) || module.id}`);
+              div.appendChild(editBtn);
+              div.appendChild(cloneBtn);
+              div.appendChild(deleteBtn);
+              return div;
+            }
+          }
+        ],
+        rows: modules,
+        emptyMessage: 'No saved modules yet.',
+        filterable: true,
+        sortable: true,
+        selectable: true,
+        bulkActions: [
+          {
+            label: 'Delete Selected',
+            danger: true,
+            onClick: async (selectedIds, clearSelection) => {
+              if (!confirm(`Are you sure you want to delete ${selectedIds.length} module(s)?`)) return;
+              try {
+                await Promise.all(selectedIds.map(id => api(`/api/develop/modules/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+                notify(`${selectedIds.length} module(s) deleted`);
+                clearSelection();
+                await refresh();
+              } catch (err) {
+                notify(err.message, true);
+              }
+            }
+          }
+        ]
       });
-      const cloneBtn = App.makeIconButton('clone', 'Clone Module', async () => {
-        try {
-          const payload = {
-            name: safeText(module.name),
-            moduleType: safeText(module.moduleType),
-            settings: module && typeof module.settings === 'object' ? JSON.parse(JSON.stringify(module.settings)) : {},
-          };
-          await api('/api/develop/modules', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
-          await refresh();
-          notify('Module cloned');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      }, { marginLeft: '8px' });
-      const deleteBtn = App.makeIconButton('delete', 'Delete Module', async () => {
-        if (!window.confirm(`Delete module "${safeText(module.name) || module.id}"?`)) return;
-        try {
-          await api(`/api/develop/modules/${encodeURIComponent(module.id)}`, { method: 'DELETE' });
-          await refresh();
-          notify('Module deleted');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
-
-      row.appendChild(nameTd);
-      row.appendChild(typeTd);
-      row.appendChild(previewTd);
-      row.appendChild(updatedTd);
-      row.appendChild(actionsTd);
-      tbody.appendChild(row);
-    });
+      mountPoint.appendChild(savedModulesGrid.el);
+    } else {
+      savedModulesGrid.update({ rows: modules });
+    }
   }
+
 
   async function loadSavedForms() {
     const result = await api('/api/develop/forms');
@@ -3691,6 +4074,91 @@ App.develop = (function () {
       savedModules = [];
     }
   }
+
+  async function loadSavedModuleClasses() {
+    try {
+      const result = await api('/api/develop/module-classes');
+      savedModuleClasses = Array.isArray(result.classes) ? result.classes : [];
+    } catch (_) {
+      savedModuleClasses = [];
+    }
+  }
+
+  function renderDevelopModuleClasses() {
+    const tbody = byId('developClassesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    if (!savedModuleClasses.length) {
+      tbody.innerHTML = '<tr><td colspan="3">No module classes created yet.</td></tr>';
+      return;
+    }
+
+    savedModuleClasses.forEach((cls) => {
+      const row = document.createElement('tr');
+      
+      const nameTd = document.createElement('td');
+      nameTd.textContent = cls.name;
+      
+      const createdTd = document.createElement('td');
+      createdTd.className = 'meta';
+      createdTd.textContent = cls.createdAt ? new Date(cls.createdAt).toLocaleDateString() : '';
+      
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'develop-agents-actions-cell';
+      
+      const editBtn = App.makeIconButton('edit', 'Edit Class', async () => {
+        const newName = window.prompt(`Rename module class "${safeText(cls.name)}":`, cls.name);
+        if (!newName || newName === cls.name) return;
+        try {
+          await api(`/api/develop/module-classes/${encodeURIComponent(cls.id)}`, { 
+            method: 'PATCH',
+            body: JSON.stringify({ name: newName })
+          });
+          await refresh();
+          notify('Module class renamed');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+
+      const deleteBtn = App.makeIconButton('delete', 'Delete Class', async () => {
+        if (!window.confirm(`Delete module class "${safeText(cls.name)}"?`)) return;
+        try {
+          await api(`/api/develop/module-classes/${encodeURIComponent(cls.id)}`, { method: 'DELETE' });
+          await refresh();
+          notify('Module class deleted');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { danger: true, marginLeft: '8px' });
+      
+      actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(deleteBtn);
+      
+      row.appendChild(nameTd);
+      row.appendChild(createdTd);
+      row.appendChild(actionsTd);
+      tbody.appendChild(row);
+    });
+  }
+
+  function populateDevelopModulesClassSelect() {
+    const select = byId('developModulesClassSelect');
+    if (!select) return;
+    const prev = select.value;
+    select.innerHTML = '<option value="">None</option>';
+    savedModuleClasses.forEach((cls) => {
+      const option = document.createElement('option');
+      option.value = cls.id;
+      option.textContent = cls.name;
+      select.appendChild(option);
+    });
+    if (prev) {
+      select.value = prev;
+    }
+  }
+
 
   function updateDevelopModuleTypeFields(settings = null) {
     const type = safeText(byId('developModulesTypeSelect')?.value) || 'header';
@@ -3888,7 +4356,7 @@ App.develop = (function () {
   function renderExtensionsLanding() {
     const host = byId('developExtensionsFeaturedGrid');
     if (!host) return;
-    host.innerHTML = '';
+    host.textContent = '';
     if (!savedExtensions.length) {
       const empty = document.createElement('div');
       empty.className = 'messaging-content-node';
@@ -4043,7 +4511,7 @@ App.develop = (function () {
     if (statusFilter) statusFilter.value = extensionTableState.filters.status;
     if (tagsFilter) tagsFilter.value = extensionTableState.filters.tags;
 
-    tbody.innerHTML = '';
+    tbody.textContent = '';
     const rows = getFilteredSortedExtensions();
     if (!rows.length) {
       const row = document.createElement('tr');
@@ -4369,7 +4837,7 @@ App.develop = (function () {
       wrap.dataset.filterFor = select.id;
       select.parentNode.insertBefore(wrap, select);
     }
-    wrap.innerHTML = '';
+    wrap.textContent = '';
 
     const rerender = () => {
       renderLandingPageBuilderSelect(select.id, key, select.dataset.placeholder || select.options[0]?.textContent || '');
@@ -4801,6 +5269,7 @@ App.develop = (function () {
     { value: 'image', label: 'Image', fieldKey: 'featureImageId' },
     { value: 'logo-wide', label: 'Logo - Wide', fieldKey: null },
     { value: 'logo-square', label: 'Logo - Square', fieldKey: 'logoSquareId' },
+    { value: 'poll', label: 'Poll', fieldKey: null },
     { value: 'spacer', label: 'Spacer', fieldKey: null },
     { value: 'text', label: 'Text', fieldKey: null },
   ];
@@ -5113,6 +5582,8 @@ App.develop = (function () {
         return 'Img';
       case 'video':
         return 'Vid';
+      case 'pod':
+        return 'Pod';
       case 'table':
         return 'Tbl';
       case 'textarea':
@@ -5175,6 +5646,9 @@ App.develop = (function () {
     if (type === 'cta') {
       const row = landingPageCtas.find((item) => String(item?.id) === String(module?.contentId));
       return safeText(row?.cta) || 'No CTA selected';
+    }
+    if (type === 'pod') {
+      return safeText(module?.settings?.title) || 'Channel Pod';
     }
     return safeText(module?.text) || 'No text set';
   }
@@ -5320,6 +5794,12 @@ App.develop = (function () {
       const form = savedForms.find((item) => String(item?.id) === linkedId);
       return { title: safeText(form?.heading) || 'Form', submitLabel: safeText(form?.submitLabel) || 'Submit Form', form };
     }
+    if (type === 'poll') {
+      return module?.settings || {};
+    }
+    if (type === 'pod') {
+      return module?.settings || {};
+    }
     if (type === 'button') {
       const ctaText = safeText(module?.settings?.label)
         || getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(module?.settings?.ctaId))?.content
@@ -5348,6 +5828,8 @@ App.develop = (function () {
         assetId: resolvedAssetId,
         assetName: asset ? assetLabel(asset, 'Image') : (safeText(module?.settings?.altText) || 'Image'),
         assetUrl: resolvedAssetUrl || manualImageUrl,
+        maxWidth: Number(module?.settings?.maxWidth),
+        maxWidthPx: Number(module?.settings?.maxWidthPx),
       };
     }
     if (type === 'video') {
@@ -5436,118 +5918,160 @@ App.develop = (function () {
             module.settings?.content,
             50000
           ) || '';
-          if (module.type === 'form') {
-            const formFields = Array.isArray(content?.form?.fields) && content.form.fields.length
-              ? content.form.fields
-              : [{ key: 'first_name', label: 'First Name', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'email', required: true }];
-            const runtimeFieldMarkup = formFields.map((field, fieldIndex) => `<input name="${safeText(field?.key) || `field_${fieldIndex}`}" type="${safeText(field?.type) || 'text'}" placeholder="${safeText(field?.label) || 'Field'}${field?.required ? ' *' : ''}"${field?.required ? ' required' : ''}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} />`).join('');
-            return `<aside${editable('develop-template-form-card')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}><h3>${escapeHtml(content?.title || titleText || 'Form')}</h3>${runtimeFieldMarkup}<button type="button">${escapeHtml(content?.submitLabel || 'Submit Form')}</button></aside>`;
-          }
-          if (module.type === 'button') {
-            const sizeMap = {
-              small: 'padding:0.55rem 1rem;font-size:0.92rem;',
-              medium: 'padding:0.8rem 1.35rem;font-size:1rem;',
-              large: 'padding:1rem 1.7rem;font-size:1.08rem;',
-            };
-            const align = ['left', 'center', 'right'].includes(safeText(content?.align)) ? safeText(content.align) : 'left';
-            const styleMode = safeText(content?.style) || 'solid';
-            const backgroundColor = safeText(content?.backgroundColor) || '#0b82d4';
-            const textColor = safeText(content?.textColor) || '#ffffff';
-            const radius = Number(content?.borderRadius) || 14;
-            let buttonStyle = `${sizeMap[safeText(content?.size)] || sizeMap.medium}border-radius:${radius}px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;`;
-            if (styleMode === 'outline') {
-              buttonStyle += `background:transparent;color:${textColor};border:2px solid ${backgroundColor};`;
-            } else if (styleMode === 'ghost') {
-              buttonStyle += `background:rgba(11,130,212,0.08);color:${backgroundColor};border:1px solid transparent;`;
-            } else if (styleMode === 'link') {
-              buttonStyle += `background:transparent;color:${backgroundColor};border:none;padding-left:0;padding-right:0;border-radius:0;`;
-            } else {
-              buttonStyle += `background:${backgroundColor};color:${textColor};border:1px solid ${backgroundColor};`;
+          const innerMarkup = (() => {
+            if (module.type === 'form') {
+              const formFields = Array.isArray(content?.form?.fields) && content.form.fields.length
+                ? content.form.fields
+                : [{ key: 'first_name', label: 'First Name', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'email', required: true }];
+              const runtimeFieldMarkup = formFields.map((field, fieldIndex) => `<input name="${safeText(field?.key) || `field_${fieldIndex}`}" type="${safeText(field?.type) || 'text'}" placeholder="${safeText(field?.label) || 'Field'}${field?.required ? ' *' : ''}"${field?.required ? ' required' : ''}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} />`).join('');
+              return `<aside${editable('develop-template-form-card')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}><h3>${escapeHtml(content?.title || titleText || 'Form')}</h3>${runtimeFieldMarkup}<button type="button">${escapeHtml(content?.submitLabel || 'Submit Form')}</button></aside>`;
             }
-            if (content?.fullWidth) buttonStyle += 'width:100%;';
-            const href = safeText(content?.linkUrl) || '#';
-            const targetAttrs = content?.openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : '';
-            return `<div class="develop-template-button-row" style="text-align:${align};"><a href="${escapeHtml(href)}"${targetAttrs}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} style="${buttonStyle}">${escapeHtml(content?.label || 'Learn More')}</a></div>`;
-          }
-          if (module.type === 'image' || module.type === 'logo-wide' || module.type === 'logo-square') {
-            const imageMarkup = content?.assetId
-              ? buildLandingAssetImage(content.assetId, content.assetName)
-              : (content?.assetUrl ? `<img src="${escapeHtml(content.assetUrl)}" alt="${escapeHtml(content.assetName || 'Image')}" />` : '');
-            return `<div${editable('develop-template-image-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${imageMarkup || escapeHtml(content?.assetName || 'Image')}</div>`;
-          }
-          if (module.type === 'video') {
-            const styleBits = [];
-            if (safeText(content?.aspectRatio).includes(':')) {
-              const [widthPart, heightPart] = safeText(content.aspectRatio).split(':');
-              const width = Number(widthPart) || 16;
-              const height = Number(heightPart) || 9;
-              styleBits.push(`aspect-ratio:${width}/${height};`);
+            if (module.type === 'poll') {
+              const question = safeText(content?.question) || 'Poll Question';
+              const optionsStr = safeText(content?.options) || 'Option A, Option B';
+              const options = optionsStr.split(',').map(o => String(o || '').trim()).filter(Boolean);
+              const submitLabel = safeText(content?.submitLabel) || 'Vote';
+              const bgColor = safeText(content?.backgroundColor) || '#ffffff';
+              const pollId = safeText(module.id);
+              const optionsMarkup = options.map((opt, idx) => `
+                <label class="develop-poll-option" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;cursor:pointer;">
+                  <input type="radio" name="poll_${pollId}" value="${escapeHtml(opt)}" required${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} />
+                  <span>${escapeHtml(opt)}</span>
+                </label>
+              `).join('');
+              return `<aside class="develop-template-poll-card" style="background:${escapeHtml(bgColor)};padding:2rem;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.05);"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}><h3 style="margin-top:0;margin-bottom:1.5rem;font-size:1.25rem;">${escapeHtml(question)}</h3><form class="develop-template-runtime-poll-form" data-poll-id="${pollId}"><div class="develop-poll-options">${optionsMarkup}</div><button type="submit" style="margin-top:1rem;width:100%;">${escapeHtml(submitLabel)}</button><div class="develop-poll-status" aria-live="polite" style="margin-top:1rem;font-size:0.9rem;"></div></form></aside>`;
             }
-            const videoMarkup = buildResponsiveVideoMarkup(content);
-            return `<div${editable('develop-template-video-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${styleBits.length ? ` style="${styleBits.join(' ')}"` : ''}>${videoMarkup}</div>`;
-          }
-          if (module.type === 'table') {
-            const columnsCount = Number(content?.columnsCount) || 3;
-            const rowsCount = Number(content?.rowsCount) || 4;
-            const cellMap = new Map((Array.isArray(content?.cells) ? content.cells : []).map((cell) => [`${cell.row}:${cell.column}`, cell]));
-            const rowMarkup = Array.from({ length: rowsCount }).map((_, rowIndex) => {
-              const tag = rowIndex === 0 ? 'th' : 'td';
-              const cellMarkup = Array.from({ length: columnsCount }).map((__, columnIndex) => {
-                const cell = cellMap.get(`${rowIndex}:${columnIndex}`) || { cellType: 'empty', text: '' };
-                let cellInner = '&nbsp;';
-                if (cell.cellType === 'heading') {
-                  const headingTag = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(safeText(cell.headingLevel).toLowerCase())
-                    ? safeText(cell.headingLevel).toLowerCase()
-                    : 'h3';
-                  cellInner = `<${headingTag}>${escapeHtml(safeText(cell.text) || 'Heading')}</${headingTag}>`;
-                } else if (cell.cellType === 'text') {
-                  cellInner = escapeHtml(safeText(cell.text) || '');
-                } else if (cell.cellType === 'image') {
-                  cellInner = cell.imageAssetId
-                    ? buildLandingAssetImage(cell.imageAssetId, assetLabel(getAssetById(cell.imageAssetId), 'Image'))
-                    : '<div class="develop-template-empty-slot">No image</div>';
-                } else if (cell.cellType === 'video') {
-                  const videoUrl = cell.videoAssetId ? getLandingPageAssetUrl(cell.videoAssetId) : '';
-                  cellInner = videoUrl
-                    ? buildResponsiveVideoMarkup({ assetUrl: videoUrl, assetName: 'Video', controls: true }, { className: 'develop-table-video' })
-                    : '<div class="develop-template-empty-slot">No video</div>';
-                }
-                const cellStyle = `padding:${Number(content?.cellPadding) || 14}px;border:${Number(content?.borderThickness) || 1}px solid ${escapeHtml(safeText(content?.borderColor) || '#d6e6f5')};`;
-                return `<${tag} style="${cellStyle}${rowIndex === 0 ? `background:${escapeHtml(safeText(content?.headerColor) || '#173c61')};color:${escapeHtml(safeText(content?.headerTextColor) || '#ffffff')};` : ''}">${cellInner}</${tag}>`;
+            if (module.type === 'button') {
+              const sizeMap = {
+                small: 'padding:0.55rem 1rem;font-size:0.92rem;',
+                medium: 'padding:0.8rem 1.35rem;font-size:1rem;',
+                large: 'padding:1rem 1.7rem;font-size:1.08rem;',
+              };
+              const align = ['left', 'center', 'right'].includes(safeText(content?.align)) ? safeText(content.align) : 'left';
+              const styleMode = safeText(content?.style) || 'solid';
+              const backgroundColor = safeText(content?.backgroundColor) || '#0b82d4';
+              const textColor = safeText(content?.textColor) || '#ffffff';
+              const radius = Number(content?.borderRadius) || 14;
+              let buttonStyle = `${sizeMap[safeText(content?.size)] || sizeMap.medium}border-radius:${radius}px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;`;
+              if (styleMode === 'outline') {
+                buttonStyle += `background:transparent;color:${textColor};border:2px solid ${backgroundColor};`;
+              } else if (styleMode === 'ghost') {
+                buttonStyle += `background:rgba(11,130,212,0.08);color:${backgroundColor};border:1px solid transparent;`;
+              } else if (styleMode === 'link') {
+                buttonStyle += `background:transparent;color:${backgroundColor};border:none;padding-left:0;padding-right:0;border-radius:0;`;
+              } else {
+                buttonStyle += `background:${backgroundColor};color:${textColor};border:1px solid ${backgroundColor};`;
+              }
+              if (content?.fullWidth) buttonStyle += 'width:100%;';
+              const href = safeText(content?.linkUrl) || '#';
+              const targetAttrs = content?.openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+              return `<div class="develop-template-button-row" style="text-align:${align};"><a href="${escapeHtml(href)}"${targetAttrs}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} style="${buttonStyle}">${escapeHtml(content?.label || 'Learn More')}</a></div>`;
+            }
+            if (module.type === 'image' || module.type === 'logo-wide' || module.type === 'logo-square') {
+              const styleBits = [];
+              if (content.maxWidthPx > 0) {
+                styleBits.push(`max-width:${content.maxWidthPx}px;`);
+              } else if (content.maxWidth > 0 && content.maxWidth < 100) {
+                styleBits.push(`max-width:${content.maxWidth}%;`);
+              }
+              const imageMarkup = content?.assetId
+                ? buildLandingAssetImage(content.assetId, content.assetName)
+                : (content?.assetUrl ? `<img src="${escapeHtml(content.assetUrl)}" alt="${escapeHtml(content.assetName || 'Image')}" />` : '');
+              return `<div${editable('develop-template-image-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${styleBits.length ? ` style="${styleBits.join(' ')}"` : ''}>${imageMarkup || escapeHtml(content?.assetName || 'Image')}</div>`;
+            }
+            if (module.type === 'video') {
+              const styleBits = [];
+              if (safeText(content?.aspectRatio).includes(':')) {
+                const [widthPart, heightPart] = safeText(content.aspectRatio).split(':');
+                const width = Number(widthPart) || 16;
+                const height = Number(heightPart) || 9;
+                styleBits.push(`aspect-ratio:${width}/${height};`);
+              }
+              const videoMarkup = buildResponsiveVideoMarkup(content);
+              return `<div${editable('develop-template-video-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${styleBits.length ? ` style="${styleBits.join(' ')}"` : ''}>${videoMarkup}</div>`;
+            }
+            if (module.type === 'table') {
+              const columnsCount = Number(content?.columnsCount) || 3;
+              const rowsCount = Number(content?.rowsCount) || 4;
+              const cellMap = new Map((Array.isArray(content?.cells) ? content.cells : []).map((cell) => [`${cell.row}:${cell.column}`, cell]));
+              const rowMarkup = Array.from({ length: rowsCount }).map((_, rowIndex) => {
+                const tag = rowIndex === 0 ? 'th' : 'td';
+                const cellMarkup = Array.from({ length: columnsCount }).map((__, columnIndex) => {
+                  const cell = cellMap.get(`${rowIndex}:${columnIndex}`) || { cellType: 'empty', text: '' };
+                  let cellInner = '&nbsp;';
+                  if (cell.cellType === 'heading') {
+                    const headingTag = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(safeText(cell.headingLevel).toLowerCase())
+                      ? safeText(cell.headingLevel).toLowerCase()
+                      : 'h3';
+                    cellInner = `<${headingTag}>${escapeHtml(safeText(cell.text) || 'Heading')}</${headingTag}>`;
+                  } else if (cell.cellType === 'text') {
+                    cellInner = escapeHtml(safeText(cell.text) || '');
+                  } else if (cell.cellType === 'image') {
+                    cellInner = cell.imageAssetId
+                      ? buildLandingAssetImage(cell.imageAssetId, assetLabel(getAssetById(cell.imageAssetId), 'Image'))
+                      : '<div class="develop-template-empty-slot">No image</div>';
+                  } else if (cell.cellType === 'video') {
+                    const videoUrl = cell.videoAssetId ? getLandingPageAssetUrl(cell.videoAssetId) : '';
+                    cellInner = videoUrl
+                      ? buildResponsiveVideoMarkup({ assetUrl: videoUrl, assetName: 'Video', controls: true }, { className: 'develop-table-video' })
+                      : '<div class="develop-template-empty-slot">No video</div>';
+                  }
+                  const cellStyle = `padding:${Number(content?.cellPadding) || 14}px;border:${Number(content?.borderThickness) || 1}px solid ${escapeHtml(safeText(content?.borderColor) || '#d6e6f5')};`;
+                  return `<${tag} style="${cellStyle}${rowIndex === 0 ? `background:${escapeHtml(safeText(content?.headerColor) || '#173c61')};color:${escapeHtml(safeText(content?.headerTextColor) || '#ffffff')};` : ''}">${cellInner}</${tag}>`;
+                }).join('');
+                const rowStyle = rowIndex > 0 && content?.striped && rowIndex % 2 === 1 ? ' style="background:rgba(11,130,212,0.06);"' : '';
+                return `<tr${rowStyle}>${cellMarkup}</tr>`;
               }).join('');
-              const rowStyle = rowIndex > 0 && content?.striped && rowIndex % 2 === 1 ? ' style="background:rgba(11,130,212,0.06);"' : '';
-              return `<tr${rowStyle}>${cellMarkup}</tr>`;
-            }).join('');
-            return `<div${editable('develop-template-table-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${content?.caption ? `<div class="develop-template-eyebrow">${escapeHtml(content.caption)}</div>` : ''}<table style="width:100%;border-collapse:collapse;">${rowMarkup}</table></div>`;
+              return `<div${editable('develop-template-table-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${content?.caption ? `<div class="develop-template-eyebrow">${escapeHtml(content.caption)}</div>` : ''}<table style="width:100%;border-collapse:collapse;">${rowMarkup}</table></div>`;
+            }
+            if (module.type === 'header') {
+              const headingLevel = safeText(module.settings?.headingLevel).toLowerCase();
+              const tag = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(headingLevel) ? headingLevel : 'h2';
+              const inlineStyle = [
+                module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
+                module.settings?.align ? `text-align:${safeText(module.settings.align)};` : '',
+              ].join('');
+              return `<${tag}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${inlineStyle ? ` style="${inlineStyle}"` : ''}>${escapeHtml(headerText || 'Heading')}</${tag}>`;
+            }
+            if (module.type === 'headline') return `<h3${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.headline)}</h3>`;
+            if (module.type === 'subheading') return `<h4${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</h4>`;
+            if (module.type === 'textarea') {
+              const inlineStyle = [
+                module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
+                module.settings?.backgroundColor ? `background:${safeText(module.settings.backgroundColor)};padding:0.5rem 0.75rem;border-radius:12px;` : '',
+                module.settings?.textAlign ? `text-align:${safeText(module.settings.textAlign)};` : '',
+              ].join('');
+              return `<div${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${inlineStyle ? ` style="${inlineStyle}"` : ''}>${textBlockHtml || '<p>No text set</p>'}</div>`;
+            }
+            if (module.type === 'pitch' || module.type === 'text') return `<p${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</p>`;
+            if (module.type === 'cta') return `<div class="develop-template-cta-row"><button type="button"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Call To Action')}</button></div>`;
+            if (module.type === 'eyebrow') return `<div${editable('develop-template-eyebrow')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.eyebrow)}</div>`;
+            if (module.type === 'spacer') return '<div style="height:1.25rem;"></div>';
+            return `<div class="meta"${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Module')}</div>`;
+          })();
+
+          let classString = '';
+          if (module.sourceModuleId) {
+            const sourceModule = getSavedModuleById(module.sourceModuleId);
+            if (sourceModule && sourceModule.classId) {
+              const cls = savedModuleClasses.find((c) => c.id === Number(sourceModule.classId) || String(c.id) === String(sourceModule.classId));
+              if (cls && cls.name) {
+                classString = ` develop-module-class-${slugify(cls.name)}`;
+              }
+            }
           }
-          if (module.type === 'header') {
-            const headingLevel = safeText(module.settings?.headingLevel).toLowerCase();
-            const tag = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(headingLevel) ? headingLevel : 'h2';
-            const inlineStyle = [
-              module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
-              module.settings?.align ? `text-align:${safeText(module.settings.align)};` : '',
-            ].join('');
-            return `<${tag}${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${inlineStyle ? ` style="${inlineStyle}"` : ''}>${escapeHtml(headerText || 'Heading')}</${tag}>`;
+
+          if (classString) {
+            return `<div class="develop-module-wrapper${classString}">${innerMarkup}</div>`;
           }
-          if (module.type === 'headline') return `<h3${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.headline)}</h3>`;
-          if (module.type === 'subheading') return `<h4${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</h4>`;
-          if (module.type === 'textarea') {
-            const inlineStyle = [
-              module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
-              module.settings?.backgroundColor ? `background:${safeText(module.settings.backgroundColor)};padding:0.5rem 0.75rem;border-radius:12px;` : '',
-              module.settings?.textAlign ? `text-align:${safeText(module.settings.textAlign)};` : '',
-            ].join('');
-            return `<div${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${inlineStyle ? ` style="${inlineStyle}"` : ''}>${textBlockHtml || '<p>No text set</p>'}</div>`;
-          }
-          if (module.type === 'pitch' || module.type === 'text') return `<p${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</p>`;
-          if (module.type === 'cta') return `<div class="develop-template-cta-row"><button type="button"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Call To Action')}</button></div>`;
-          if (module.type === 'eyebrow') return `<div${editable('develop-template-eyebrow')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.eyebrow)}</div>`;
-          if (module.type === 'spacer') return '<div style="height:1.25rem;"></div>';
-          return `<div class="meta"${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Module')}</div>`;
+          return innerMarkup;
         }).join('');
-        return `<div class="develop-modular-page-column develop-modular-page-column-${column}">${moduleMarkup}</div>`;
+        const containerSettings = getSectionContainerSettings(section, column);
+        const containerStyleStr = styleObjectToCssText(buildContainerStyle(containerSettings));
+        return `<div class="develop-modular-page-column develop-modular-page-column-${column}"${containerStyleStr ? ` style="${escapeHtml(containerStyleStr)}"` : ''}>${moduleMarkup}</div>`;
       }).join('');
-      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}">${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columns}</div></section>`;
+      const rowStyleStr = styleObjectToCssText(buildRowStyle(getSectionRowSettings(section)));
+      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}"${rowStyleStr ? ` style="${escapeHtml(rowStyleStr)}"` : ''}>${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columns}</div></section>`;
     }).join('');
     return `<div class="develop-template-canvas develop-modular-page-preview"${attr('backgroundImageId', 'Background Image', 'page-background')} style="${canvasStyles.join(' ')}">${sectionMarkup}</div>`;
   }
@@ -5758,6 +6282,73 @@ App.develop = (function () {
         }
       });
     });
+
+    host.querySelectorAll('.develop-template-runtime-poll-form').forEach((form) => {
+      const submitButton = form.querySelector('button[type="submit"]');
+      const status = form.querySelector('.develop-poll-status');
+      if (!submitButton) return;
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        submitButton.disabled = true;
+        if (status) {
+          status.textContent = 'Submitting...';
+          status.classList.remove('is-error', 'is-success');
+        }
+        try {
+          const formData = new FormData(form);
+          const pollId = safeText(form.getAttribute('data-poll-id'));
+          const vote = String(formData.get(`poll_${pollId}`) || '').trim();
+          if (!vote) throw new Error('Please select an option');
+          await api(`/api/develop/modules/${encodeURIComponent(pollId)}/poll-submit`, {
+            method: 'POST',
+            body: JSON.stringify({ vote }),
+          });
+          form.reset();
+          if (status) {
+            status.innerHTML = 'Thank you for your vote! Fetching results...';
+            status.classList.remove('is-error');
+            status.classList.add('is-success');
+            
+            try {
+              const res = await api(`/api/develop/modules/${encodeURIComponent(pollId)}/poll-results`);
+              const results = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+              if (results.length > 0) {
+                const total = res.total || results.reduce((acc, r) => acc + (r.count || 0), 0);
+                const resultsMarkup = results.map(r => {
+                  return `<div style="margin-bottom: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.2rem;">
+                      <span>${escapeHtml(r.option)}</span>
+                      <span>${r.percentage}% (${r.count})</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:rgba(0,0,0,0.1);border-radius:3px;overflow:hidden;">
+                      <div style="width:${r.percentage}%;height:100%;background:#0b82d4;border-radius:3px;"></div>
+                    </div>
+                  </div>`;
+                }).join('');
+                
+                const optionsContainer = form.querySelector('.develop-poll-options');
+                if (optionsContainer) optionsContainer.style.display = 'none';
+                submitButton.style.display = 'none';
+                
+                status.innerHTML = `<div style="margin-top: 1rem;">${resultsMarkup}</div><div style="margin-top: 0.5rem;font-size:0.8rem;opacity:0.7;text-align:center;">Total votes: ${total}</div>`;
+              } else {
+                status.textContent = 'Thank you for your vote! No results yet.';
+              }
+            } catch (err) {
+              status.textContent = 'Thank you for your vote!';
+            }
+          }
+        } catch (err) {
+          if (status) {
+            status.textContent = err.message || 'Could not submit vote';
+            status.classList.remove('is-success');
+            status.classList.add('is-error');
+          }
+        } finally {
+          submitButton.disabled = false;
+        }
+      });
+    });
   }
 
   function getActiveLandingPageVisualRecord() {
@@ -5909,7 +6500,7 @@ App.develop = (function () {
       const asset = getAssetById(currentValue);
       status.textContent = asset ? assetLabel(asset, label) : placeholder;
       const assetUrl = asset ? toDirectAssetUrl(asset.location) : '';
-      preview.innerHTML = '';
+      preview.textContent = '';
       if (assetUrl) {
         const img = document.createElement('img');
         img.src = assetUrl;
@@ -6164,7 +6755,7 @@ App.develop = (function () {
 
     wrap.appendChild(select);
     wrap.appendChild(closeBtn);
-    target.innerHTML = '';
+    target.textContent = '';
     target.appendChild(wrap);
     target.classList.add('develop-inline-image-editor-target');
   }
@@ -6222,7 +6813,7 @@ App.develop = (function () {
     });
     wrap.appendChild(closeBtn);
 
-    target.innerHTML = '';
+    target.textContent = '';
     target.appendChild(wrap);
     target.classList.add('develop-inline-image-editor-target');
   }
@@ -6594,7 +7185,10 @@ App.develop = (function () {
     const body = document.createElement('div');
     body.className = 'develop-template-records-card';
     if (!modularTemplates.all.length) {
-      body.innerHTML = '<div class="develop-template-records-empty">No modular page templates yet.</div>';
+      const empty = document.createElement('div');
+      empty.className = 'develop-template-records-empty';
+      empty.textContent = 'No modular page templates yet.';
+      body.appendChild(empty);
     } else {
       const intro = document.createElement('p');
       intro.className = 'meta';
@@ -6616,13 +7210,26 @@ App.develop = (function () {
           const updatedLabel = template.updatedAt
             ? new Date(template.updatedAt).toLocaleString()
             : (template.createdAt ? new Date(template.createdAt).toLocaleString() : 'Starter Template');
-          button.innerHTML = `
-            <span class="develop-template-picker-row__copy">
-              <span class="develop-template-picker-row__title">${escapeHtml(safeText(template.name) || 'Untitled Template')}</span>
-              <span class="develop-template-picker-row__meta">Base: ${escapeHtml(getBaseLandingTemplateById(template.templateId).name || 'Base Template')} · Updated: ${escapeHtml(updatedLabel)}</span>
-            </span>
-            <span class="develop-template-picker-row__action">Use Template</span>
-          `;
+          const copySpan = document.createElement('span');
+          copySpan.className = 'develop-template-picker-row__copy';
+          
+          const titleSpan = document.createElement('span');
+          titleSpan.className = 'develop-template-picker-row__title';
+          titleSpan.textContent = safeText(template.name) || 'Untitled Template';
+          
+          const metaSpan = document.createElement('span');
+          metaSpan.className = 'develop-template-picker-row__meta';
+          metaSpan.textContent = `Base: ${getBaseLandingTemplateById(template.templateId).name || 'Base Template'} · Updated: ${updatedLabel}`;
+          
+          copySpan.appendChild(titleSpan);
+          copySpan.appendChild(metaSpan);
+          
+          const actionSpan = document.createElement('span');
+          actionSpan.className = 'develop-template-picker-row__action';
+          actionSpan.textContent = 'Use Template';
+          
+          button.appendChild(copySpan);
+          button.appendChild(actionSpan);
           button.addEventListener('click', () => {
             const pageName = `${safeText(template.name) || 'Modular'} Page`;
             openModularPageTemplateEditor({
@@ -6693,7 +7300,10 @@ App.develop = (function () {
     activeLandingPagePreviewRecord = record;
     if (title) title.textContent = safeText(record.name) || (activeLandingPagePreviewMode === 'template' ? 'Template Preview' : 'Page Preview');
     if (modeBtn) modeBtn.disabled = false;
-    host.innerHTML = buildLandingPageMarkup(record);
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(buildLandingPageMarkup(record), 'text/html');
+    host.textContent = '';
+    Array.from(doc.body.childNodes).forEach(n => host.appendChild(n.cloneNode(true)));
     bindLandingImageFallbacks(host);
     applyLandingPageAutoFit(host);
     if (activeLandingPagePreviewMode !== 'template') {
@@ -6774,7 +7384,8 @@ App.develop = (function () {
     const downloadThumbUrl = getLeadMagnetThumbnailUrl(leadMagnetAsset);
     const displayLabel = hasLink ? (label || fallbackLabel || 'Open Lead Magnet') : 'Lead Magnet Unavailable';
 
-    host.innerHTML = `
+    const tParser = new DOMParser();
+    const tDoc = tParser.parseFromString(`
       <div class="develop-template-canvas develop-thankyou-canvas">
         <div class="develop-template-banner">${
           ctx?.bannerUrl
@@ -6801,7 +7412,9 @@ App.develop = (function () {
           </div>
         </div>
       </div>
-    `;
+    `, 'text/html');
+    host.textContent = '';
+    Array.from(tDoc.body.childNodes).forEach(n => host.appendChild(n.cloneNode(true)));
     bindLandingImageFallbacks(host);
   }
 
@@ -6847,12 +7460,15 @@ App.develop = (function () {
       modeBtn.textContent = landingPageVisualEditMode ? 'Display Mode' : 'Edit Mode';
     }
     if (!record) {
-      host.innerHTML = '';
+      host.textContent = '';
       syncLandingVisualChrome(null);
       return;
     }
     syncLandingVisualChrome(record);
-    host.innerHTML = buildLandingPageMarkup(record, { interactive: landingPageVisualEditMode });
+    const vParser = new DOMParser();
+    const vDoc = vParser.parseFromString(buildLandingPageMarkup(record, { interactive: landingPageVisualEditMode }), 'text/html');
+    host.textContent = '';
+    Array.from(vDoc.body.childNodes).forEach(n => host.appendChild(n.cloneNode(true)));
     bindLandingImageFallbacks(host);
     applyLandingPageAutoFit(host);
     if (!landingPageVisualEditMode) {
@@ -6972,7 +7588,7 @@ App.develop = (function () {
   function renderLandingPagesTable() {
     const tbody = byId('developLandingPagesTableBody');
     if (!tbody) return;
-    tbody.innerHTML = '';
+    tbody.textContent = '';
 
     const sortButtons = [
       ['developLandingPagesSortNameBtn', 'name', 'Name'],
@@ -7152,7 +7768,10 @@ App.develop = (function () {
     const template = getTemplateById(templateId);
     selectedTemplateId = template.id;
 
-    host.innerHTML = buildTemplatePreviewMarkup(template);
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(buildTemplatePreviewMarkup(template), 'text/html');
+    host.textContent = '';
+    Array.from(doc.body.childNodes).forEach(n => host.appendChild(n.cloneNode(true)));
   }
 
   function openCreateFormEditor() {
@@ -7189,7 +7808,10 @@ App.develop = (function () {
     if (!host) return;
     const template = getFormTemplateById(templateId);
     selectedFormTemplateId = template.id;
-    host.innerHTML = buildFormTemplatePreviewMarkup(template);
+    const fParser = new DOMParser();
+    const fDoc = fParser.parseFromString(buildFormTemplatePreviewMarkup(template), 'text/html');
+    host.textContent = '';
+    Array.from(fDoc.body.childNodes).forEach(n => host.appendChild(n.cloneNode(true)));
   }
 
   function buildEmailTemplatePreviewMarkup(template, options = {}) {
@@ -7250,7 +7872,10 @@ App.develop = (function () {
   function openEmailTemplatePreviewModal(template) {
     if (!template || !App.components || typeof App.components.Modal !== 'function') return;
     const body = document.createElement('div');
-    body.innerHTML = buildEmailTemplatePreviewMarkup(template, { sampleContent: true });
+    const eParser = new DOMParser();
+    const eDoc = eParser.parseFromString(buildEmailTemplatePreviewMarkup(template, { sampleContent: true }), 'text/html');
+    body.textContent = '';
+    Array.from(eDoc.body.childNodes).forEach(n => body.appendChild(n.cloneNode(true)));
     const modal = App.components.Modal({
       title: `${safeText(template.name) || 'Email Template'} Preview`,
       body,
@@ -7358,7 +7983,11 @@ App.develop = (function () {
     const textTemplates = getEmailTemplatesByKind('text');
     const template = textTemplates.find((item) => safeText(item.id) === safeText(templateId)) || textTemplates[0];
     selectedEmailTemplateId = safeText(template?.id);
-    host.innerHTML = template ? buildEmailTemplatePreviewMarkup(template) : '';
+    const e2Parser = new DOMParser();
+    const markup = template ? buildEmailTemplatePreviewMarkup(template) : '';
+    const e2Doc = e2Parser.parseFromString(markup, 'text/html');
+    host.textContent = '';
+    Array.from(e2Doc.body.childNodes).forEach(n => host.appendChild(n.cloneNode(true)));
   }
 
   function openCampaignBuilderWithEmailTemplate(templateId) {
@@ -7406,7 +8035,7 @@ App.develop = (function () {
   function renderTemplateRecordsTable(hostId, title, headers, rows) {
     const host = byId(hostId);
     if (!host) return;
-    host.innerHTML = '';
+    host.textContent = '';
     const card = document.createElement('div');
     card.className = 'develop-template-records-card';
     const heading = document.createElement('h4');
@@ -7489,13 +8118,13 @@ App.develop = (function () {
 
   function renderEmailTemplateTables() {
     const host = byId('developEmailTemplatesPrimaryTableHost');
-    if (host) host.innerHTML = '';
+    if (host) host.textContent = '';
   }
 
   function renderFormTemplateRecordsTable() {
     const host = byId('developFormTemplatesTableHost');
     if (host?.closest('.hidden')) {
-      host.innerHTML = '';
+      host.textContent = '';
       return;
     }
     const rows = savedForms.map((form) => {
@@ -7651,7 +8280,7 @@ App.develop = (function () {
   function renderPageTemplateRecordsTableHost(hostId) {
     const host = byId(hostId);
     if (!host) return;
-    host.innerHTML = '';
+    host.textContent = '';
     const card = document.createElement('div');
     card.className = 'develop-template-records-card';
     const heading = document.createElement('h4');
@@ -7669,28 +8298,44 @@ App.develop = (function () {
 
     const table = document.createElement('table');
     table.className = 'develop-template-records-table';
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Kind</th>
-          <th>Template</th>
-          <th>Updated</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    `;
+    const tbParser = new DOMParser();
+    const tbDoc = tbParser.parseFromString(`
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Kind</th>
+            <th>Template</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    `, 'text/html');
+    table.textContent = '';
+    const newTable = tbDoc.querySelector('table');
+    if (newTable) {
+      Array.from(newTable.childNodes).forEach(n => table.appendChild(n.cloneNode(true)));
+    }
     const tbody = table.querySelector('tbody');
     savedPageTemplates.forEach((page) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${safeText(page.name) || '-'}</td>
-        <td>${getPageTemplateKindLabel(page.templateKind)}</td>
-        <td>${getLandingPageTemplateName(page.templateId) || '-'}</td>
-        <td>${page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '-'}</td>
-        <td class="actions-cell"></td>
-      `;
+      const td1 = document.createElement('td');
+      td1.textContent = safeText(page.name) || '-';
+      const td2 = document.createElement('td');
+      td2.textContent = getPageTemplateKindLabel(page.templateKind);
+      const td3 = document.createElement('td');
+      td3.textContent = getLandingPageTemplateName(page.templateId) || '-';
+      const td4 = document.createElement('td');
+      td4.textContent = page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '-';
+      const td5 = document.createElement('td');
+      td5.className = 'actions-cell';
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      tr.appendChild(td3);
+      tr.appendChild(td4);
+      tr.appendChild(td5);
       const actionsCell = tr.querySelector('.actions-cell');
       if (actionsCell) actionsCell.appendChild(createPageTemplateActions(page));
       tbody.appendChild(tr);
@@ -7707,10 +8352,13 @@ App.develop = (function () {
   function renderEmailTemplateLibrary() {
     const host = byId('developEmailTemplatesLibrary');
     if (!host) return;
-    host.innerHTML = '';
+    host.textContent = '';
     const textTemplates = getEmailTemplatesByKind('text');
     if (!textTemplates.length) {
-      host.innerHTML = '<p class="meta">No email templates yet. Create one above to start building your library.</p>';
+      const meta = document.createElement('p');
+      meta.className = 'meta';
+      meta.textContent = 'No email templates yet. Create one above to start building your library.';
+      host.appendChild(meta);
       return;
     }
     textTemplates.forEach((template) => {
@@ -7720,13 +8368,16 @@ App.develop = (function () {
       copyWrap.className = 'develop-template-library-copy';
       const mediaWrap = document.createElement('div');
       mediaWrap.className = 'develop-template-library-media';
-      mediaWrap.innerHTML = `
+      const mParser = new DOMParser();
+      const mDoc = mParser.parseFromString(`
         <div class="develop-template-preview-frame" aria-hidden="true">
           <div class="develop-template-preview-scale">
             ${buildEmailTemplatePreviewMarkup(template)}
           </div>
         </div>
-      `;
+      `, 'text/html');
+      mediaWrap.textContent = '';
+      Array.from(mDoc.body.childNodes).forEach(n => mediaWrap.appendChild(n.cloneNode(true)));
       const title = document.createElement('h3');
       title.textContent = template.name;
       const summary = document.createElement('p');
@@ -7915,7 +8566,7 @@ App.develop = (function () {
     let draggedIndex = null;
     if (title) title.textContent = 'Email: Modular';
     if (meta) meta.textContent = 'Build the email as ordered blocks. Use move buttons to rearrange sections.';
-    host.innerHTML = '';
+    host.textContent = '';
 
     emailTemplateBlocksDraft.forEach((block, index) => {
       const item = document.createElement('div');
@@ -8095,10 +8746,18 @@ App.develop = (function () {
         const preview = document.createElement('div');
         preview.className = 'develop-template-module-span';
         preview.style.marginTop = '0.4rem';
+        preview.textContent = '';
         if (previewUrl) {
-          preview.innerHTML = `<img src="${previewUrl}" alt="${safeText(block.alt) || 'Email image'}" style="display:block;max-width:240px;max-height:160px;height:auto;width:auto;border-radius:10px;border:1px solid rgba(15,79,143,0.16);" />`;
+          const img = document.createElement('img');
+          img.src = previewUrl;
+          img.alt = safeText(block.alt) || 'Email image';
+          img.style.cssText = 'display:block;max-width:240px;max-height:160px;height:auto;width:auto;border-radius:10px;border:1px solid rgba(15,79,143,0.16);';
+          preview.appendChild(img);
         } else {
-          preview.innerHTML = '<div class="meta">No image selected yet.</div>';
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = 'No image selected yet.';
+          preview.appendChild(meta);
         }
 
         imageControls.appendChild(assetSelect);
@@ -8601,7 +9260,8 @@ App.develop = (function () {
     closeModularPageModulePicker();
     const panel = document.createElement('div');
     panel.className = 'develop-module-picker-panel';
-    panel.innerHTML = `
+    const pParser = new DOMParser();
+    const pDoc = pParser.parseFromString(`
       <div class="develop-module-picker-header">
         <div>
           <div class="develop-module-picker-title">Add Module</div>
@@ -8610,7 +9270,9 @@ App.develop = (function () {
         <button type="button" class="develop-module-picker-close" aria-label="Close module picker">Close</button>
       </div>
       <div class="develop-module-picker-grid"></div>
-    `;
+    `, 'text/html');
+    panel.textContent = '';
+    Array.from(pDoc.body.childNodes).forEach(n => panel.appendChild(n.cloneNode(true)));
     const closeBtn = panel.querySelector('.develop-module-picker-close');
     const grid = panel.querySelector('.develop-module-picker-grid');
     closeBtn?.addEventListener('click', () => {
@@ -8620,10 +9282,13 @@ App.develop = (function () {
       const tile = document.createElement('button');
       tile.type = 'button';
       tile.className = 'develop-module-picker-tile';
-      tile.innerHTML = `
+      const tParser = new DOMParser();
+      const tDoc = tParser.parseFromString(`
         <span class="develop-module-picker-icon">${escapeHtml(item.icon)}</span>
         <span class="develop-module-picker-label">${escapeHtml(item.label)}</span>
-      `;
+      `, 'text/html');
+      tile.textContent = '';
+      Array.from(tDoc.body.childNodes).forEach(n => tile.appendChild(n.cloneNode(true)));
       tile.addEventListener('pointerdown', (event) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         if (event.pointerType !== 'mouse') return;
@@ -8689,7 +9354,8 @@ App.develop = (function () {
     closeModularPageModuleEditor();
     const panel = document.createElement('div');
     panel.className = 'develop-module-editor-modal';
-    panel.innerHTML = `
+    const eParser = new DOMParser();
+    const eDoc = eParser.parseFromString(`
       <div class="develop-module-editor-modal__backdrop"></div>
       <div class="develop-module-editor-modal__dialog">
         <div class="develop-module-editor-modal__header">
@@ -8705,16 +9371,18 @@ App.develop = (function () {
             <input type="text" id="developPageModuleEditorNameInput" value="${escapeHtml(safeText(module.name, 255))}" />
           </label>
           <div id="developPageModuleEditorFields"></div>
-        </div>
-        <div class="develop-module-editor-modal__footer">
-          <button type="button" id="developPageModuleEditorRemoveBtn">Remove Module</button>
-          <div class="page-heading-actions" style="margin-left:auto;">
-            <button type="button" id="developPageModuleEditorCancelBtn">Cancel</button>
-            <button type="button" id="developPageModuleEditorSaveBtn">Save Module</button>
+          <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+            <button type="button" id="developPageModuleEditorRemoveBtn" class="btn" style="color: var(--danger);">Remove</button>
+            <div style="display: flex; gap: 0.75rem;">
+              <button type="button" id="developPageModuleEditorCancelBtn" class="btn">Cancel</button>
+              <button type="button" id="developPageModuleEditorSaveBtn" class="btn btn-primary">Save Module</button>
+            </div>
           </div>
         </div>
       </div>
-    `;
+    `, 'text/html');
+    panel.textContent = '';
+    Array.from(eDoc.body.childNodes).forEach(n => panel.appendChild(n.cloneNode(true)));
     document.body.appendChild(panel);
     renderDevelopModuleSettingsFieldsInto(
       panel.querySelector('#developPageModuleEditorFields'),
@@ -8818,7 +9486,8 @@ App.develop = (function () {
     closeModularRowEditor();
     const panel = document.createElement('div');
     panel.className = 'develop-module-editor-modal';
-    panel.innerHTML = `
+    const rParser = new DOMParser();
+    const rDoc = rParser.parseFromString(`
       <div class="develop-module-editor-modal__backdrop"></div>
       <div class="develop-module-editor-modal__dialog">
         <div class="develop-module-editor-modal__header">
@@ -8857,16 +9526,18 @@ App.develop = (function () {
             <div class="develop-container-editor-preview__label">Preview</div>
             <div id="developRowEditorPreviewBox" class="develop-container-editor-preview__box">Row preview</div>
           </div>
-        </div>
-        <div class="develop-module-editor-modal__footer">
-          <button type="button" id="developRowSettingsResetBtn">Reset</button>
-          <div class="page-heading-actions" style="margin-left:auto;">
-            <button type="button" id="developRowSettingsCancelBtn">Cancel</button>
-            <button type="button" id="developRowSettingsSaveBtn">Save Row</button>
+          <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+            <button type="button" id="developRowSettingsResetBtn" class="btn">Reset</button>
+            <div style="display: flex; gap: 0.75rem;">
+              <button type="button" id="developRowSettingsCancelBtn" class="btn">Cancel</button>
+              <button type="button" id="developRowSettingsSaveBtn" class="btn btn-primary">Save Row</button>
+            </div>
           </div>
         </div>
       </div>
-    `;
+    `, 'text/html');
+    panel.textContent = '';
+    Array.from(rDoc.body.childNodes).forEach(n => panel.appendChild(n.cloneNode(true)));
     document.body.appendChild(panel);
     const close = () => closeModularRowEditor();
     panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
@@ -8929,7 +9600,8 @@ App.develop = (function () {
       }));
     const panel = document.createElement('div');
     panel.className = 'develop-module-editor-modal';
-    panel.innerHTML = `
+    const cParser = new DOMParser();
+    const cDoc = cParser.parseFromString(`
       <div class="develop-module-editor-modal__backdrop"></div>
       <div class="develop-module-editor-modal__dialog">
         <div class="develop-module-editor-modal__header">
@@ -8977,16 +9649,18 @@ App.develop = (function () {
             <div class="develop-container-editor-preview__label">Preview</div>
             <div id="developContainerEditorPreviewBox" class="develop-container-editor-preview__box">Container preview</div>
           </div>
-        </div>
-        <div class="develop-module-editor-modal__footer">
-          <button type="button" id="developContainerSettingsResetBtn">Reset</button>
-          <div class="page-heading-actions" style="margin-left:auto;">
-            <button type="button" id="developContainerSettingsCancelBtn">Cancel</button>
-            <button type="button" id="developContainerSettingsSaveBtn">Save Container</button>
+          <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+            <button type="button" id="developContainerSettingsResetBtn" class="btn">Reset</button>
+            <div style="display: flex; gap: 0.75rem;">
+              <button type="button" id="developContainerSettingsCancelBtn" class="btn">Cancel</button>
+              <button type="button" id="developContainerSettingsSaveBtn" class="btn btn-primary">Save Container</button>
+            </div>
           </div>
         </div>
       </div>
-    `;
+    `, 'text/html');
+    panel.textContent = '';
+    Array.from(cDoc.body.childNodes).forEach(n => panel.appendChild(n.cloneNode(true)));
     document.body.appendChild(panel);
     const close = () => closeModularContainerEditor();
     panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
@@ -9119,7 +9793,7 @@ App.develop = (function () {
     if (!host || !modularPageTemplateDraft) return;
     if (title) title.textContent = modularPageEditorMode === 'page' ? '' : 'Page: Modular';
     if (meta) meta.textContent = modularPageEditorMode === 'page' ? '' : 'Drag row layouts into the workspace. Dropping a layout creates a row of empty cells.';
-    host.innerHTML = '';
+    host.textContent = '';
     host.className = 'develop-template-module-list develop-page-template-workspace';
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
     if (!sections.length) modularPageTemplateDraft.layoutSections = [];
@@ -9157,10 +9831,13 @@ App.develop = (function () {
     if (!normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).length) {
       const emptyState = document.createElement('div');
       emptyState.className = 'develop-page-template-workspace-empty';
-      emptyState.innerHTML = `
+      const esParser = new DOMParser();
+      const esDoc = esParser.parseFromString(`
         <div class="develop-page-template-workspace-empty-title">Workspace</div>
         <div class="develop-page-template-workspace-empty-copy">Drag a row layout from below into this workspace to start building your page.</div>
-      `;
+      `, 'text/html');
+      emptyState.textContent = '';
+      Array.from(esDoc.body.childNodes).forEach(n => emptyState.appendChild(n.cloneNode(true)));
       host.appendChild(emptyState);
     }
     normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections).forEach((section, sectionIndex) => {
@@ -9233,7 +9910,10 @@ App.develop = (function () {
       const rowEdit = document.createElement('button');
       rowEdit.type = 'button';
       rowEdit.className = 'develop-page-template-row-action';
-      rowEdit.innerHTML = getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon');
+      const reParser = new DOMParser();
+      const reDoc = reParser.parseFromString(getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon'), 'text/html');
+      rowEdit.textContent = '';
+      Array.from(reDoc.body.childNodes).forEach(n => rowEdit.appendChild(n.cloneNode(true)));
       rowEdit.title = `Edit ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
       rowEdit.addEventListener('click', (event) => {
         event.preventDefault();
@@ -9243,7 +9923,10 @@ App.develop = (function () {
       const rowDelete = document.createElement('button');
       rowDelete.type = 'button';
       rowDelete.className = 'develop-page-template-row-action develop-page-template-row-action--delete';
-      rowDelete.innerHTML = getBuilderInlineIconMarkup('trash', 'develop-builder-inline-icon');
+      const rdParser = new DOMParser();
+      const rdDoc = rdParser.parseFromString(getBuilderInlineIconMarkup('trash', 'develop-builder-inline-icon'), 'text/html');
+      rowDelete.textContent = '';
+      Array.from(rdDoc.body.childNodes).forEach(n => rowDelete.appendChild(n.cloneNode(true)));
       rowDelete.title = `Remove ${safeText(section.title) || `Row ${sectionIndex + 1}`}`;
       rowDelete.addEventListener('click', (event) => {
         event.preventDefault();
@@ -9275,7 +9958,10 @@ App.develop = (function () {
         const settingsBtn = document.createElement('button');
         settingsBtn.type = 'button';
         settingsBtn.className = 'develop-page-template-cell-settings';
-        settingsBtn.innerHTML = getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon');
+        const sbParser = new DOMParser();
+        const sbDoc = sbParser.parseFromString(getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon'), 'text/html');
+        settingsBtn.textContent = '';
+        Array.from(sbDoc.body.childNodes).forEach(n => settingsBtn.appendChild(n.cloneNode(true)));
         settingsBtn.title = 'Container settings';
         settingsBtn.addEventListener('click', async (event) => {
           event.preventDefault();
@@ -9291,7 +9977,8 @@ App.develop = (function () {
             pill.dataset.sectionIndex = String(sectionIndex);
             pill.dataset.column = columnId;
             pill.dataset.moduleIndex = String(originalIndex);
-            pill.innerHTML = `
+            const plParser = new DOMParser();
+            const plDoc = plParser.parseFromString(`
               <span class="develop-page-template-module-pill-icon">${escapeHtml(getModularModuleIcon(module.type))}</span>
               <span class="develop-page-template-module-pill-copy">
                 <span class="develop-page-template-module-pill-label">${escapeHtml(getModularModuleDisplayName(module))}</span>
@@ -9302,7 +9989,9 @@ App.develop = (function () {
                 <button type="button" class="develop-page-template-module-pill-action" title="Edit module" aria-label="Edit module">${getBuilderInlineIconMarkup('settings', 'develop-builder-inline-icon')}</button>
                 <button type="button" class="develop-page-template-module-pill-action develop-page-template-module-pill-action--delete" title="Remove module" aria-label="Remove module">${getBuilderInlineIconMarkup('trash', 'develop-builder-inline-icon')}</button>
               </span>
-            `;
+            `, 'text/html');
+            pill.textContent = '';
+            Array.from(plDoc.body.childNodes).forEach(n => pill.appendChild(n.cloneNode(true)));
             pill.addEventListener('click', (event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -9352,7 +10041,10 @@ App.develop = (function () {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'develop-page-template-cell-add';
-        addBtn.innerHTML = getBuilderInlineIconMarkup('plus', 'develop-builder-inline-icon');
+        const abParser = new DOMParser();
+        const abDoc = abParser.parseFromString(getBuilderInlineIconMarkup('plus', 'develop-builder-inline-icon'), 'text/html');
+        addBtn.textContent = '';
+        Array.from(abDoc.body.childNodes).forEach(n => addBtn.appendChild(n.cloneNode(true)));
         addBtn.title = 'Add module';
         addBtn.addEventListener('click', (event) => {
           event.preventDefault();
@@ -9429,6 +10121,19 @@ App.develop = (function () {
       if (type === 'cta') return `<div class="develop-template-cta-row"><button type="button">${contentLabel}</button></div>`;
       if (type === 'eyebrow') return `<div class="develop-template-eyebrow">${contentLabel}</div>`;
       if (type === 'spacer') return `<div style="height:1.25rem;"></div>`;
+      if (type === 'pod') {
+        const podData = buildModularPageModuleContent({}, module);
+        const clickAction = podData.targetPage ? `onclick="if(window.App && App.setActivePage) App.setActivePage('${escapeHtml(podData.targetPage)}');"` : '';
+        return `
+          <div class="pod card-hover" ${clickAction}>
+            <div class="pod-icon-col"><img src="${escapeHtml(podData.logoUrl)}" class="pod-logo" alt="${escapeHtml(podData.title)} Logo" /></div>
+            <div class="pod-content">
+              <h3>${escapeHtml(podData.title)}</h3>
+              <p>${escapeHtml(podData.description)}</p>
+            </div>
+          </div>
+        `;
+      }
       if (type === 'system-app') {
         const mountId = safeText(module.content || module.systemId);
         const liveMountId = `mount-${mountId}`;
@@ -9994,7 +10699,7 @@ App.develop = (function () {
   function renderFormTemplateLibrary() {
     const host = byId('developFormTemplatesLibrary');
     if (!host) return;
-    host.innerHTML = '';
+    host.textContent = '';
     FORM_TEMPLATES.forEach((template) => {
       const card = document.createElement('article');
       card.className = `develop-template-library-card${template.id === selectedFormTemplateId ? ' is-selected' : ''}`;
@@ -10002,13 +10707,16 @@ App.develop = (function () {
       copyWrap.className = 'develop-template-library-copy';
       const mediaWrap = document.createElement('div');
       mediaWrap.className = 'develop-template-library-media';
-      mediaWrap.innerHTML = `
+      const fParser = new DOMParser();
+      const fDoc = fParser.parseFromString(`
         <div class="develop-template-preview-frame" aria-hidden="true">
           <div class="develop-template-preview-scale">
             ${buildFormTemplatePreviewMarkup(template)}
           </div>
         </div>
-      `;
+      `, 'text/html');
+      mediaWrap.textContent = '';
+      Array.from(fDoc.body.childNodes).forEach(n => mediaWrap.appendChild(n.cloneNode(true)));
       const title = document.createElement('h3');
       title.textContent = template.name;
       const summary = document.createElement('p');
@@ -10106,7 +10814,7 @@ App.develop = (function () {
     const host = byId('developTemplatesLibrary');
     if (!host) return;
 
-    host.innerHTML = '';
+    host.textContent = '';
     LANDING_TEMPLATES.forEach((template) => {
       const card = document.createElement('article');
       card.className = `develop-template-library-card${template.id === selectedTemplateId ? ' is-selected' : ''}`;
@@ -10116,13 +10824,16 @@ App.develop = (function () {
 
       const mediaWrap = document.createElement('div');
       mediaWrap.className = 'develop-template-library-media';
-      mediaWrap.innerHTML = `
+      const lParser = new DOMParser();
+      const lDoc = lParser.parseFromString(`
         <div class="develop-template-preview-frame" aria-hidden="true">
           <div class="develop-template-preview-scale">
             ${buildTemplatePreviewMarkup(template, 'develop-template-canvas-mini')}
           </div>
         </div>
-      `;
+      `, 'text/html');
+      mediaWrap.textContent = '';
+      Array.from(lDoc.body.childNodes).forEach(n => mediaWrap.appendChild(n.cloneNode(true)));
 
       const title = document.createElement('h3');
       title.textContent = template.name;
@@ -10249,6 +10960,7 @@ App.develop = (function () {
     loadSavedAgents();
     await Promise.all([
       loadSavedForms(),
+      loadSavedModuleClasses(),
       loadSavedModules(),
       loadSavedThemes(),
       loadSavedEmailTemplates(),
@@ -10267,7 +10979,9 @@ App.develop = (function () {
     renderFormBuilderFieldConfig();
     renderFormBuilderPreview();
     renderSavedForms();
-    renderSavedModules();
+    renderDevelopModuleClasses();
+    populateDevelopModulesClassSelect();
+    setupSavedModulesGrid();
     renderThemesTable();
     syncThemesBuilder();
     renderThemesPreview();
@@ -10554,7 +11268,7 @@ App.develop = (function () {
     }
 
     if (landingPreviewAction && typeof App.makeIconButton === 'function') {
-      landingPreviewAction.innerHTML = '';
+      landingPreviewAction.textContent = '';
       landingPreviewAction.appendChild(
         App.makeIconButton('preview', 'Preview Page', () => {
           previewCurrentLandingPageForm();
@@ -10576,11 +11290,51 @@ App.develop = (function () {
 
     populateDevelopModuleTypeOptions();
 
+    const developManageClassesModal = byId('developManageClassesModal');
+    const developManageClassesBtn = byId('developManageClassesBtn');
+    const developManageClassesCloseBtn = byId('developManageClassesCloseBtn');
+    const developClassCreateForm = byId('developClassCreateForm');
+
+    if (developManageClassesBtn && developManageClassesModal) {
+      developManageClassesBtn.addEventListener('click', () => {
+        developManageClassesModal.showModal();
+        renderDevelopModuleClasses();
+      });
+    }
+
+    if (developManageClassesCloseBtn && developManageClassesModal) {
+      developManageClassesCloseBtn.addEventListener('click', () => {
+        developManageClassesModal.close();
+      });
+    }
+
+    if (developClassCreateForm) {
+      developClassCreateForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const input = byId('developClassNameInput');
+        const name = input ? input.value.trim() : '';
+        if (!name) return;
+        try {
+          await api('/api/develop/module-classes', {
+            method: 'POST',
+            body: JSON.stringify({ name })
+          });
+          if (input) input.value = '';
+          await refresh();
+          renderDevelopModuleClasses(); // Refresh modal table immediately
+          notify('Module class created');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
     if (developModulesCreateBtn) {
       developModulesCreateBtn.addEventListener('click', () => {
         resetDevelopModuleForm();
         updateDevelopModuleTypeFields();
-        setCollapsibleSectionExpanded('developModulesEditorToggle', 'developModulesEditorBody', true);
+        const modal = byId('developModulesModal');
+        if (modal) modal.showModal();
       });
     }
 
@@ -10599,7 +11353,6 @@ App.develop = (function () {
 
     bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: false });
     bindCollapsibleSection('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', { defaultExpanded: true });
-    bindCollapsibleSection('developModulesEditorToggle', 'developModulesEditorBody', { defaultExpanded: true });
     bindCollapsibleSection('developModulesLibraryToggle', 'developModulesLibraryBody', { defaultExpanded: true });
     bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
@@ -10676,11 +11429,25 @@ App.develop = (function () {
             : '/api/develop/modules';
           const method = id ? 'PATCH' : 'POST';
           await api(endpoint, { method, body: JSON.stringify(payload) });
+          
+          if (payload.moduleType === 'poll') {
+            try {
+              const q = safeText(payload.settings?.question);
+              const opts = safeText(payload.settings?.options).split(',').map(o => ({ label: o.trim() })).filter(o => o.label);
+              if (q && opts.length > 0) {
+                await api('/api/polls', { method: 'POST', body: JSON.stringify({ question: q, options: opts }) });
+              }
+            } catch (pollErr) {
+              console.error('Failed to dual-save poll to builder_polls:', pollErr);
+            }
+          }
+          
           notify(id ? 'Module updated' : 'Module created');
           resetDevelopModuleForm();
           updateDevelopModuleTypeFields();
           await refresh();
-          setCollapsibleSectionExpanded('developModulesLibraryToggle', 'developModulesLibraryBody', true);
+          const modal = byId('developModulesModal');
+          if (modal) modal.close();
         } catch (err) {
           notify(err.message || 'Could not save module', true);
         }
@@ -11013,6 +11780,8 @@ App.develop = (function () {
         if (modularPageEditorMode === 'page') {
           syncModularPageEditorPlacement();
           App.setActivePage('developManageLandingPagesPage');
+        } else if (modularPageEditorOptions && typeof modularPageEditorOptions.onClose === 'function') {
+          modularPageEditorOptions.onClose();
         }
       });
     }
@@ -11043,7 +11812,10 @@ App.develop = (function () {
       pageTemplateEditorToolbar.querySelectorAll('[data-section-layout]').forEach((tile) => {
         const layout = safeText(tile.getAttribute('data-section-layout'));
         if (!layout) return;
-        tile.innerHTML = buildModularPageLayoutIconMarkup(layout, 'develop-layout-toolbar-icon');
+        const tParser = new DOMParser();
+        const tDoc = tParser.parseFromString(buildModularPageLayoutIconMarkup(layout, 'develop-layout-toolbar-icon'), 'text/html');
+        tile.textContent = '';
+        Array.from(tDoc.body.childNodes).forEach(n => tile.appendChild(n.cloneNode(true)));
       });
     }
 
@@ -11795,6 +12567,8 @@ App.develop = (function () {
     openThemesPage,
     openThemesBuilder,
     openAgentsPage,
-    openAgentsCreate
+    openAgentsCreate,
+    openModularPageTemplateEditor,
+    buildModularPageTemplatePreviewMarkup
   };
 })();

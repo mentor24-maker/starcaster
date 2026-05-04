@@ -572,14 +572,39 @@
           label.style.overflow = 'hidden';
           label.style.textOverflow = 'ellipsis';
           label.style.paddingRight = '1rem';
-          label.textContent = `[${a.assetType || 'Asset'}] ${a.assetName || a.id}`;
+          
+          const typeText = document.createTextNode(`[${a.assetType || 'Asset'}] `);
+          label.appendChild(typeText);
+          
+          if (a.location) {
+             window.__genCache = window.__genCache || {};
+             window.__genCache[a.id] = a;
+             
+             const lnk = document.createElement('a');
+             if (a.location.startsWith('{')) {
+                 lnk.href = '#';
+                 lnk.onclick = (e) => {
+                     e.preventDefault();
+                     App.assetsVideo.openGenerationBlob(a.id);
+                 };
+             } else {
+                 lnk.href = a.location;
+                 lnk.target = '_blank';
+             }
+             lnk.style.color = 'var(--primary-color)';
+             lnk.textContent = a.assetName || a.id;
+             label.appendChild(lnk);
+          } else {
+             const nameText = document.createTextNode(a.assetName || a.id);
+             label.appendChild(nameText);
+          }
           
           const btnWrap = document.createElement('div');
           const attachBtn = document.createElement('button');
           attachBtn.type = 'button';
+          attachBtn.className = 'btn btn-primary';
           attachBtn.textContent = 'Attach';
-          attachBtn.style.width = '70px';
-          attachBtn.style.padding = '4px';
+          attachBtn.style.padding = '4px 8px';
           attachBtn.style.fontSize = '0.75rem';
           attachBtn.onclick = () => App.assetsVideo.attachCreationReference(a);
           
@@ -610,7 +635,6 @@
       instructions: ''
     });
     renderCreationReferences();
-    document.getElementById('creationRefSearchResults')?.classList.add('hidden');
   }
 
   function removeCreationReference(id) {
@@ -623,7 +647,7 @@
     if (ref) ref.instructions = value;
   }
 
-  function openVertexBlob(assetId) {
+  function openGenerationBlob(assetId) {
       const cache = window.__genCache && window.__genCache[assetId];
       if (!cache || !cache.location) return;
       try {
@@ -645,7 +669,7 @@
           window.open(blobUrl, '_blank');
       } catch (err) {
           console.error(err);
-          App.notify('Failed to decode native Vertex Veo MP4 stream.', true);
+          App.notify('Failed to decode native Fal MP4 stream.', true);
       }
   }
 
@@ -662,8 +686,7 @@
       return;
     }
 
-    // Force strictly explicitly hide the form picker module explicitly intrinsically matching layout logic
-    searchForm.classList.add('hidden');
+    searchForm.classList.remove('hidden');
     container.classList.remove('hidden');
 
     creationReferences.forEach(ref => {
@@ -692,7 +715,18 @@
          <div style="display: flex; gap: 1rem; align-items: center;">
             ${imgHtml}
             <div>
-               <strong style="display: block; font-size: 1rem; color: var(--primary-color);">${ref.assetName || 'Untitled Asset'}</strong>
+               <strong style="display: block; font-size: 1rem;">
+                  ${(() => {
+                     if (!ref.location) return `<span style="color: var(--primary-color);">${ref.assetName || 'Untitled Asset'}</span>`;
+                     window.__genCache = window.__genCache || {};
+                     window.__genCache[ref.id] = ref;
+                     if (ref.location.startsWith('{')) {
+                         return `<a href="#" onclick="App.assetsVideo.openGenerationBlob('${ref.id}'); return false;" style="color: var(--primary-color); text-decoration: none;">${ref.assetName || 'Untitled Asset'}</a>`;
+                     } else {
+                         return `<a href="${ref.location}" target="_blank" style="color: var(--primary-color); text-decoration: none;">${ref.assetName || 'Untitled Asset'}</a>`;
+                     }
+                  })()}
+               </strong>
                <span class="muted" style="font-size: 0.85rem; display: block; margin-top: 2px;">Format: ${ref.assetType || '-'} | Category: ${ref.category || '-'} | Topic: ${ref.topic || '-'}</span>
             </div>
          </div>
@@ -748,20 +782,22 @@
     const promptInput = document.getElementById('videoCreationPrompt');
     const titleInput = document.getElementById('videoCreationAssetName');
     const topicInput = document.getElementById('videoCreationTopic');
+    const durationInput = document.getElementById('videoCreationDuration');
     if (!promptInput) return;
     const promptText = String(promptInput.value || '').trim();
     if (!promptText) return App.notify('Please provide a directive prompt before initializing generation.', true);
 
     const assetName = titleInput ? String(titleInput.value || '').trim() : '';
     const topic = topicInput ? String(topicInput.value || '').trim() : '';
+    const duration = durationInput ? parseInt(durationInput.value, 10) || 4 : 4;
 
     try {
-      const payload = { assetName, topic, prompt: promptText, references: creationReferences };
+      const payload = { assetName, topic, prompt: promptText, references: creationReferences, duration };
       const data = await App.api('/api/assets/generate', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      App.notify(data.message || 'Video generation pipeline locked. Rendering asynchronously.', false);
+      App.notify('Video generation successfully started! Your request is now rendering in the cloud.', false);
       promptInput.value = '';
       if (titleInput) titleInput.value = '';
       creationReferences = [];
@@ -804,20 +840,28 @@
          const statusColor = asset.generationStatus === 'completed' ? 'limegreen' : (asset.generationStatus === 'processing' ? 'var(--primary-color)' : 'tomato');
          
          let actionHTML = '';
-         if (asset.generationStatus === 'completed' && asset.location) {
+          if (asset.generationStatus === 'completed' && asset.location) {
              let viewAction = `window.open('${asset.location}', '_blank')`;
-             if (asset.location.startsWith('{') && asset.location.includes('@type')) {
-                 viewAction = `App.assetsVideo.openVertexBlob('${asset.id}')`;
+             if (asset.location.startsWith('{')) {
+                 viewAction = `App.assetsVideo.openGenerationBlob('${asset.id}')`;
              }
              actionHTML = `<button type="button" class="white-btn tiny-btn" onclick="${viewAction}" style="margin-right: 8px;">View Resource</button>`;
-             actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
+             actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.deleteGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
          } else if (asset.generationStatus === 'processing') {
+             let isExtending = false;
+             if (Array.isArray(asset.tags)) {
+                 const curDurTag = asset.tags.find(t => String(t).startsWith('currentDuration:'));
+                 if (curDurTag && parseInt(curDurTag.split(':')[1], 10) > 0) isExtending = true;
+             }
+             const renderingLabel = isExtending ? 'Rendering (Extending)...' : 'Rendering...';
+
              actionHTML = `
                <span class="muted" style="font-size:0.8rem; display:inline-flex; align-items:center; gap:0.5rem; vertical-align:middle; margin-right: 8px;">
                  <span class="loader-spinner" style="border: 2px solid var(--border); border-top: 2px solid var(--primary-color); border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite;"></span>
-                 <span>Rendering...</span>
+                 <span>${renderingLabel}</span>
                </span>
-               <button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Cancel/Delete" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>
+               <button type="button" class="tiny-btn icon-btn" title="Cancel Job" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg></span></button>
+               <button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.deleteGeneration('${asset.id}')" style="margin-left: 4px;"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>
              `;
              
              // CRITICAL: Restart tracker organically out of schema caching loop!
@@ -852,7 +896,7 @@
                              if (progNode && vDiag.metadata) {
                                 const progCount = vDiag.metadata.progressPercent || vDiag.metadata.progressPercentage || '';
                                 if (progCount) {
-                                   progNode.title = `Vertex Engine: ${progCount}% Complete`;
+                                   progNode.title = `Fal Engine: ${progCount}% Complete`;
                                 }
                              }
                           }
@@ -883,9 +927,13 @@
                    }
                 }, 1000);
              }
+         } else if (asset.generationStatus === 'failed') {
+             const errorReason = asset.comments || 'Unknown error occurred.';
+             actionHTML = `<div class="muted" style="color:tomato; font-size: 0.8rem; margin-right: 8px; max-width: 200px; white-space: normal;">${errorReason}</div>`;
+             actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.deleteGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
          } else {
-             actionHTML = `<span class="muted" style="color:tomato; margin-right: 8px;">Failed Link</span>`;
-             actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.cancelGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
+             actionHTML = `<span class="muted" style="color:tomato; margin-right: 8px;">Unknown Status</span>`;
+             actionHTML += `<button type="button" class="tiny-btn icon-btn icon-btn-danger" title="Delete" onclick="App.assetsVideo.deleteGeneration('${asset.id}')"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.trash}</svg></span></button>`;
          }
          
          actionHTML += ` <button type="button" class="tiny-btn icon-btn" title="Clone" onclick="App.assetsVideo.cloneGeneration('${asset.id}')" style="margin-left:4px;"><span class="icon-btn-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.clone}</svg></span></button>`;
@@ -920,11 +968,20 @@
              }
          }
 
+         let titleHTML = `<span style="font-weight: 600;">${asset.assetName || 'Untitled LRO'}</span>`;
+         if (asset.location) {
+             if (asset.location.startsWith('{')) {
+                 titleHTML = `<a href="#" onclick="App.assetsVideo.openGenerationBlob('${asset.id}'); return false;" style="font-weight: 600; color: inherit;">${asset.assetName || 'Untitled LRO'}</a>`;
+             } else {
+                 titleHTML = `<a href="${asset.location}" target="_blank" style="font-weight: 600; color: inherit;">${asset.assetName || 'Untitled LRO'}</a>`;
+             }
+         }
+
          const safeName = (asset.assetName || 'Untitled LRO').replace(/'/g, "\\'").replace(/"/g, '&quot;');
          row.innerHTML = `
            <td style="text-align: center;"><input type="checkbox" name="genItem" value="${asset.id}" onchange="App.assetsVideo.updateBulkActionsGenerations()" /></td>
            <td>
-              <span style="font-weight: 600;">${asset.assetName || 'Untitled LRO'}</span>
+              ${titleHTML}
               <button type="button" class="tiny-btn icon-btn" title="Edit Name" onclick="App.assetsVideo.editGenerationName('${asset.id}', '${safeName}')" style="margin-left:8px; border:none; background:transparent;"><span class="icon-btn-glyph" style="opacity: 0.6;"><svg viewBox="0 0 24 24" aria-hidden="true">${App.ACTION_ICONS.edit}</svg></span></button>
            </td>
            <td style="font-size:0.85rem;" class="muted">${asset.topic || '-'}</td>
@@ -974,7 +1031,7 @@
    }
 
   async function cancelGeneration(assetId) {
-    if (!confirm('Are you sure you want to cancel this rendering job?')) return;
+    if (!confirm('Are you sure you want to send a cancellation signal to the Fal AI cloud engine?')) return;
     try {
       if (galleryPollers[assetId]) {
         clearInterval(galleryPollers[assetId]);
@@ -985,6 +1042,21 @@
         body: JSON.stringify({ id: assetId }) 
       });
       App.notify(res.message || 'Generation gracefully cancelled.');
+      renderGenerationHistory();
+    } catch (err) {
+      App.notify(err.message, true);
+    }
+  }
+
+  async function deleteGeneration(assetId) {
+    if (!confirm('Are you sure you want to permanently delete this video generation record from the database?')) return;
+    try {
+      if (galleryPollers[assetId]) {
+        clearInterval(galleryPollers[assetId]);
+        delete galleryPollers[assetId];
+      }
+      await App.api(`/api/assets/${assetId}`, { method: 'DELETE' });
+      App.notify('Generation record completely deleted.');
       renderGenerationHistory();
     } catch (err) {
       App.notify(err.message, true);
@@ -1149,13 +1221,14 @@
     removeCreationReference,
     renderGenerationHistory,
     cancelGeneration,
+    deleteGeneration,
     cloneGeneration,
     toggleAllGenerations,
     updateBulkActionsGenerations,
     deleteSelectedGenerations,
     assignTopicToSelectedGenerations,
     triggerAssignTopicBtn,
-    openVertexBlob,
+    openGenerationBlob,
     editGenerationName
   };
 

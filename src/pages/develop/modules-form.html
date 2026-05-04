@@ -1,0 +1,26 @@
+<form id="developModulesForm" class="standard-form-grid">
+  <input id="developModulesIdInput" type="hidden" />
+  
+  <label for="developModulesNameInput">Module Name</label>
+  <input id="developModulesNameInput" type="text" />
+  
+  <label for="developModulesTypeSelect">Module Type</label>
+  <div class="form-row-flex">
+    <select id="developModulesTypeSelect" style="flex:1;"></select>
+    <button id="developManageClassesBtn" type="button" class="btn">Manage Classes</button>
+  </div>
+
+  <label for="developModulesClassSelect">Module Class (Optional)</label>
+  <select id="developModulesClassSelect">
+    <option value="">None</option>
+  </select>
+  
+  <div class="standard-form-grid-full">
+    <div id="developModulesTypeHelp" class="meta"></div>
+  </div>
+  
+  <div id="developModulesSettingsFields" class="standard-form-grid-full grid-form"></div>
+  
+  <div></div>
+  <button type="submit" class="btn btn-primary">Save Module</button>
+</form>

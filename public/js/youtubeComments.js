@@ -166,12 +166,34 @@ App.youtubeComments = (function () {
 
       const meta = document.createElement('div');
       meta.className = 'youtube-comments-agent-card-meta';
-      meta.innerHTML = [
-        `<div><strong>Cadence:</strong> ${summarizeCadence(agent)}</div>`,
-        `<div><strong>Window:</strong> ${String(agent && agent.fromDate || '').trim() || '-'} to ${String(agent && agent.toDate || '').trim() || '-'}</div>`,
-        `<div><strong>Next Run:</strong> ${formatDateTime(agent && agent.nextRunAt)}</div>`,
-        `<div><strong>Progress:</strong> ${agentProgressText(agent)}</div>`,
-      ].join('');
+      const rowCadence = document.createElement('div');
+      const cadenceStrong = document.createElement('strong');
+      cadenceStrong.textContent = 'Cadence: ';
+      rowCadence.appendChild(cadenceStrong);
+      rowCadence.appendChild(document.createTextNode(summarizeCadence(agent)));
+
+      const rowWindow = document.createElement('div');
+      const windowStrong = document.createElement('strong');
+      windowStrong.textContent = 'Window: ';
+      rowWindow.appendChild(windowStrong);
+      rowWindow.appendChild(document.createTextNode(`${String(agent && agent.fromDate || '').trim() || '-'} to ${String(agent && agent.toDate || '').trim() || '-'}`));
+
+      const rowNextRun = document.createElement('div');
+      const nextRunStrong = document.createElement('strong');
+      nextRunStrong.textContent = 'Next Run: ';
+      rowNextRun.appendChild(nextRunStrong);
+      rowNextRun.appendChild(document.createTextNode(formatDateTime(agent && agent.nextRunAt)));
+
+      const rowProgress = document.createElement('div');
+      const progressStrong = document.createElement('strong');
+      progressStrong.textContent = 'Progress: ';
+      rowProgress.appendChild(progressStrong);
+      rowProgress.appendChild(document.createTextNode(agentProgressText(agent)));
+
+      meta.appendChild(rowCadence);
+      meta.appendChild(rowWindow);
+      meta.appendChild(rowNextRun);
+      meta.appendChild(rowProgress);
 
       const note = document.createElement('div');
       note.className = `youtube-comments-agent-card-note${status === 'error' ? ' is-error' : ''}`;
@@ -501,7 +523,15 @@ App.youtubeComments = (function () {
       renderCommentsTable();
     } catch (err) {
       notify(err.message, true);
-      if (tbody) tbody.innerHTML = `<tr><td colspan="7">Error loading comments: ${err.message}</td></tr>`;
+      if (tbody) {
+        tbody.innerHTML = '';
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 7;
+        td.textContent = `Error loading comments: ${err.message}`;
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
     }
   }
 

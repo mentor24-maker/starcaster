@@ -1,0 +1,50 @@
+/* ==========================================================================
+   TABLES
+   Standard data presentation with strict 2D contrast
+   ========================================================================== */
+
+.table-wrap {
+  overflow-x: auto;
+  width: 100%;
+  margin-top: 1rem;
+  border-radius: 10px; /* Internal radius for the wrapper if needed */
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-surface);
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  color: var(--ink-primary);
+  vertical-align: middle;
+}
+
+th {
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-weight: 700;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--ink-primary); /* Bold 2D header separator */
+}
+
+/* Hover effects for rows to make it dynamic */
+tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+tbody tr:hover {
+  background-color: var(--bg-page);
+}
+
+/* Filter Row style common in Contacts */
+.contacts-filter-row th, .table-filter-row th {
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border-light);
+}

@@ -1,25 +1,47 @@
 
+      <section id="trainingKnowledgebasePage" class="app-page hidden training-page">
+        <div class="page-heading-row">
+          <h2>Training: Knowledgebase</h2>
+          <div class="page-heading-actions">
+            <button id="trainingKnowledgebaseRefreshBtn" class="secondary-btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">⟳ Refresh Knowledge Items</button>
+          </div>
+        </div>
+        <p>A live visualization of the Agent Knowledge Items (KIs) currently governing system behavior.</p>
+        <section class="table-container" style="border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; background: var(--bg-card);">
+          <table class="data-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="background: var(--bg-hover);">
+              <tr>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">TITLE</th>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">SUMMARY</th>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">UPDATED</th>
+                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">PATH</th>
+              </tr>
+            </thead>
+            <tbody id="trainingKnowledgebaseTable">
+              <!-- Dynamically populated rows go here -->
+              <tr><td colspan="4" style="text-align:center; padding:2rem; opacity:0.6;">Loading Knowledge Items...</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
+
       <section id="trainingContextPage" class="app-page hidden training-page">
         <div class="page-heading-row">
           <h2>Training: Context</h2>
         </div>
         <p>Define the shared project narrative, positioning, and reference context used across channels.</p>
         
-        <!-- Legacy Response Injector -->
-        <section class="youtube-miner-panel" style="margin-bottom: 2rem;">
-          <div class="form-row">
+        <form class="standard-form-grid" style="margin-bottom: 2rem;">
             <label for="youtubeMinerResponseContext">
               Direct Reply Prompt Modifier (project themes, positioning, references)
             </label>
             <textarea
               id="youtubeMinerResponseContext"
               name="response_context"
-              form="youtubeCommentMinerForm"
               rows="3"
               placeholder="Example: Keep references moderate and relevant. Prefer encouraging, non-pushy replies..."
             ></textarea>
-          </div>
-        </section>
+        </form>
 
         <!-- New Tri-Agent Active Context Repository Dashboard -->
         <section style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.5rem;">
@@ -30,42 +52,35 @@
           <button id="refreshTrainingCorpusBtn" class="secondary-btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">⟳ Refresh Knowledge</button>
         </section>
 
-        <section id="trainingCorpusFilters" class="standard-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1rem; background: var(--bg-hover); padding: 1rem; border-radius: 6px;">
-          <div class="form-group">
-            <label>File Type</label>
+        <form id="trainingCorpusFilters" class="standard-form-grid" style="margin-bottom: 1rem; background: var(--bg-hover); padding: 1rem; border-radius: 6px;">
+            <label for="filterTrainingFileType">File Type</label>
             <select id="filterTrainingFileType">
               <option value="">All</option>
               <option value=".md">Markdown (.md)</option>
               <option value=".sql">SQL (.sql)</option>
               <option value=".js">Javascript (.js)</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Domain</label>
+          
+            <label for="filterTrainingDomain">Domain</label>
             <select id="filterTrainingDomain">
               <option value="">All</option>
               <option value="Architecture & Rules">Architecture & Rules</option>
               <option value="Friction Log">Friction Log</option>
               <option value="Agent Persona">Agent Persona</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Category</label>
+          
+            <label for="filterTrainingCategory">Category</label>
             <input type="text" id="filterTrainingCategory" placeholder="e.g. Alpha..." />
-          </div>
-          <div class="form-group">
-            <label>Title Query</label>
+          
+            <label for="filterTrainingSearch">Title Query</label>
             <input type="text" id="filterTrainingSearch" placeholder="Search titles..." />
-          </div>
-          <div class="form-group">
-            <label>Start Date</label>
+          
+            <label for="filterTrainingStartDate">Start Date</label>
             <input type="date" id="filterTrainingStartDate" />
-          </div>
-          <div class="form-group">
-            <label>End Date</label>
+          
+            <label for="filterTrainingEndDate">End Date</label>
             <input type="date" id="filterTrainingEndDate" />
-          </div>
-        </section>
+        </form>
 
         <section class="table-container" style="border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; background: var(--bg-card);">
           <table class="data-table" style="width: 100%; border-collapse: collapse;">
@@ -97,9 +112,9 @@
                 <label>Training Configuration: Topics</label>
               </div>
               <div class="youtube-miner-topic-toolbar-right">
-                <button type="button" id="youtubeMinerAddCategoryBtn">Add Topic</button>
-                <button type="button" id="youtubeMinerEditCheckedBtn">Edit Topics</button>
-                <button type="button" id="youtubeMinerDeleteCheckedBtn">Delete Topics</button>
+                <button type="button" id="youtubeMinerAddCategoryBtn" class="btn">Add Topic</button>
+                <button type="button" id="youtubeMinerEditCheckedBtn" class="btn">Edit Topics</button>
+                <button type="button" id="youtubeMinerDeleteCheckedBtn" class="btn">Delete Topics</button>
               </div>
             </div>
             <div class="table-wrap">
@@ -133,9 +148,9 @@
                 <label>Training Configuration: Attributes</label>
               </div>
               <div class="youtube-miner-topic-toolbar-right">
-                <button type="button" id="youtubeMinerAddAttributeBtn">Add Attribute</button>
-                <button type="button" id="youtubeMinerEditAttributesCheckedBtn">Edit Attributes</button>
-                <button type="button" id="youtubeMinerDeleteAttributesCheckedBtn">Delete Attributes</button>
+                <button type="button" id="youtubeMinerAddAttributeBtn" class="btn">Add Attribute</button>
+                <button type="button" id="youtubeMinerEditAttributesCheckedBtn" class="btn">Edit Attributes</button>
+                <button type="button" id="youtubeMinerDeleteAttributesCheckedBtn" class="btn">Delete Attributes</button>
               </div>
             </div>
             <div class="table-wrap">
@@ -169,9 +184,9 @@
                 <label>Training Configuration: Approaches</label>
               </div>
               <div class="youtube-miner-topic-toolbar-right">
-                <button type="button" id="youtubeMinerAddApproachBtn">Add Approach</button>
-                <button type="button" id="youtubeMinerEditApproachesCheckedBtn">Edit Approaches</button>
-                <button type="button" id="youtubeMinerDeleteApproachesCheckedBtn">Delete Approaches</button>
+                <button type="button" id="youtubeMinerAddApproachBtn" class="btn">Add Approach</button>
+                <button type="button" id="youtubeMinerEditApproachesCheckedBtn" class="btn">Edit Approaches</button>
+                <button type="button" id="youtubeMinerDeleteApproachesCheckedBtn" class="btn">Delete Approaches</button>
               </div>
             </div>
             <div class="table-wrap">
@@ -200,40 +215,36 @@
         <p>Define the tactical rules and stylistic guides that replies should follow across channels.</p>
         <section class="youtube-miner-panel">
           <div class="form-row youtube-miner-category-config">
-            <div class="youtube-miner-topic-header-row">
-              <div>
-                <label>Reply Mix Targets</label>
+            <div class="form-row youtube-miner-category-config">
+              <div class="youtube-miner-topic-header-row">
+                <div>
+                  <label>Reply Mix Targets</label>
+                </div>
               </div>
+              <div class="standard-form-grid">
+                  <label for="trainingExplicitIsitasPercent">Explicit ISITAS References %</label>
+                  <input id="trainingExplicitIsitasPercent" type="number" min="0" max="100" step="1" />
+                
+                  <label for="trainingSubtleFramingPercent">Subtle Shared Framing %</label>
+                  <input id="trainingSubtleFramingPercent" type="number" min="0" max="100" step="1" />
+                
+                  <label for="trainingGenericContextPercent">Generic/Context-First %</label>
+                  <input id="trainingGenericContextPercent" type="number" min="0" max="100" step="1" />
+                
+                  <label>Total</label>
+                  <div id="trainingReplyMixTotal" class="readonly-metric">100%</div>
+              </div>
+              <p class="field-help" style="margin-top: 1rem;">These targets shape how often reply generators use explicit ISITAS references versus subtle shared framing versus generic context-first replies.</p>
             </div>
-            <div class="form-grid two-col">
-              <div class="form-row">
-                <label for="trainingExplicitIsitasPercent">Explicit ISITAS References %</label>
-                <input id="trainingExplicitIsitasPercent" type="number" min="0" max="100" step="1" />
-              </div>
-              <div class="form-row">
-                <label for="trainingSubtleFramingPercent">Subtle Shared Framing %</label>
-                <input id="trainingSubtleFramingPercent" type="number" min="0" max="100" step="1" />
-              </div>
-              <div class="form-row">
-                <label for="trainingGenericContextPercent">Generic/Context-First %</label>
-                <input id="trainingGenericContextPercent" type="number" min="0" max="100" step="1" />
-              </div>
-              <div class="form-row">
-                <label>Total</label>
-                <div id="trainingReplyMixTotal" class="readonly-metric">100%</div>
-              </div>
-            </div>
-            <p class="field-help">These targets shape how often reply generators use explicit ISITAS references versus subtle shared framing versus generic context-first replies.</p>
-          </div>
           <div class="form-row youtube-miner-category-config">
             <div class="youtube-miner-topic-header-row">
               <div>
                 <label>Training Configuration: Rules/Guides</label>
               </div>
               <div class="youtube-miner-topic-toolbar-right">
-                <button type="button" id="youtubeMinerAddRuleGuideBtn">Add Row</button>
-                <button type="button" id="youtubeMinerEditRuleGuidesCheckedBtn">Edit Selected</button>
-                <button type="button" id="youtubeMinerDeleteRuleGuidesCheckedBtn">Delete Selected</button>
+                <button type="button" id="youtubeMinerAddRuleGuideBtn" class="btn">Add Row</button>
+                <button type="button" id="youtubeMinerEditRuleGuidesCheckedBtn" class="btn">Edit Selected</button>
+                <button type="button" id="youtubeMinerDeleteRuleGuidesCheckedBtn" class="btn">Delete Selected</button>
               </div>
             </div>
             <div class="table-wrap">
@@ -261,4 +272,21 @@
           </div>
         </section>
 
+      </section>
+      
+      <section id="trainingFilesystemPage" class="app-page hidden training-page">
+        <div class="page-heading-row">
+          <h2>Training: Filesystem</h2>
+          <div class="page-heading-actions">
+            <button id="trainingFilesystemRefreshBtn" class="secondary-btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">⟳ Refresh Tree</button>
+          </div>
+        </div>
+        <p>Explore the local project workspace hierarchy. Click any file to view its contents and AI-generated summary.</p>
+        
+        <div class="filesystem-tree-container" style="background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 6px; padding: 1rem; max-height: 70vh; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+          <ul id="trainingFilesystemRoot" style="list-style: none; padding-left: 0; margin: 0;">
+            <!-- Tree dynamically rendered here -->
+            <li style="opacity:0.6; padding: 1rem; text-align:center;">Loading Filesystem...</li>
+          </ul>
+        </div>
       </section>

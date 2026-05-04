@@ -6,8 +6,8 @@
   "main": "server.js",
   "scripts": {
     "build:html": "node scripts/build_html.js",
-    "build": "npm run build:html && esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx",
-    "dev": "npm run build:html && esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx --watch & node server.js",
+    "build": "npm run build:html && esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx && esbuild src/css/main.css --bundle --outfile=public/styles.css",
+    "dev": "npm run build:html && esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx --watch & esbuild src/css/main.css --bundle --outfile=public/styles.css --watch & node server.js",
     "start": "npm run build:html && node server.js",
     "build:richtext": "node scripts/build_richtext_bundle.mjs",
     "import:contacts-csv:dry-run": "node scripts/import_contacts_csv_to_supabase.js",
@@ -39,8 +39,9 @@
     "express": "^5.2.1",
     "google-auth-library": "^10.6.2",
     "imap-simple": "^5.1.0",
+    "jsdom": "^29.1.1",
     "mailparser": "^3.9.8",
-    "playwright": "^1.58.2",
+    "playwright": "^1.59.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }

@@ -3,120 +3,131 @@
         <h2>Builder</h2>
         <p>Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
         <div class="develop-flow-map">
-          <button class="develop-flow-node develop-flow-node-top" type="button" onclick="App.setActivePage('developTemplatesPage')">
+          <button class="btn develop-flow-node develop-flow-node-top" type="button" onclick="App.setActivePage('developTemplatesPage')">
             <span class="develop-flow-node-kicker">Structure</span>
             <span class="develop-flow-node-title">Templates</span>
           </button>
-          <button class="develop-flow-node develop-flow-node-upper-right" type="button" onclick="App.setActivePage('developFormsPage')">
+          <button class="btn develop-flow-node develop-flow-node-upper-right" type="button" onclick="App.setActivePage('developFormsPage')">
             <span class="develop-flow-node-kicker">Capture</span>
             <span class="develop-flow-node-title">Forms</span>
           </button>
-          <button class="develop-flow-node develop-flow-node-lower-right" type="button" onclick="App.setActivePage('developManageLandingPagesPage')">
+          <button class="btn develop-flow-node develop-flow-node-lower-right" type="button" onclick="App.setActivePage('developManageLandingPagesPage')">
             <span class="develop-flow-node-kicker">Publish</span>
             <span class="develop-flow-node-title">Pages</span>
           </button>
-          <button class="develop-flow-node develop-flow-node-lower-left" type="button" onclick="App.setActivePage('developToolsPage')">
+          <button class="btn develop-flow-node develop-flow-node-lower-left" type="button" onclick="App.setActivePage('developToolsPage')">
             <span class="develop-flow-node-kicker">Extend</span>
             <span class="develop-flow-node-title">Extensions</span>
           </button>
-          <button class="develop-flow-node develop-flow-node-upper-left" type="button" onclick="App.setActivePage('developAgentsPage')">
+          <button class="btn develop-flow-node develop-flow-node-upper-left" type="button" onclick="App.setActivePage('developAgentsPage')">
             <span class="develop-flow-node-kicker">Automate</span>
             <span class="develop-flow-node-title">Agents</span>
           </button>
         </div>
         <div class="page-heading-actions" style="justify-content:center; margin-top:1rem;">
-          <button type="button" onclick="App.setActivePage('developModulesPage')">Open Modules Library</button>
+          <button type="button" onclick="App.setActivePage('developModulesPage')" class="btn">Open Modules Library</button>
         </div>
       </section>
       <section id="developModulesPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Builder: Modules</h2>
           <div class="page-heading-actions">
-            <button id="developModulesCreateBtn" type="button">Create Module</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button id="developModulesCreateBtn" type="button" class="btn">Create Module</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <p>Build reusable content modules for modular page layouts. The saved library is the important part; this studio is where we configure each module type as we develop it.</p>
         <section class="develop-template-section">
           <div class="develop-template-section-header-row">
             <button
-              id="developModulesEditorToggle"
-              class="accordion-header"
-              type="button"
-              aria-expanded="true"
-              aria-controls="developModulesEditorBody"
-            >
-  <span class="accordion-title">Module Studio</span>
-  <span class="accordion-toggle">
-    <span class="accordion-arrow" aria-hidden="true">▾</span>
-  </span>
-</button>
-          </div>
-          <div id="developModulesEditorBody" class="develop-template-section-body">
-            <form id="developModulesForm">
-              <input id="developModulesIdInput" type="hidden" />
-              <div class="develop-modules-studio-intro">
-                <label class="develop-modules-studio-row">
-                  <span>Module Name</span>
-                  <input id="developModulesNameInput" type="text" placeholder="Module name" />
-                </label>
-                <label class="develop-modules-studio-row">
-                  <span>Module Type</span>
-                  <select id="developModulesTypeSelect"></select>
-                </label>
-              </div>
-              <div id="developModulesTypeHelp" class="meta"></div>
-              <div id="developModulesSettingsFields" class="grid-form"></div>
-              <div class="develop-modules-studio-actions">
-                <div></div>
-              <button type="submit">Save Module</button>
-              </div>
-            </form>
-          </div>
-        </section>
-        <section class="develop-template-section">
-          <div class="develop-template-section-header-row">
-            <button
               id="developModulesLibraryToggle"
-              class="accordion-header"
+              class="btn accordion-header"
               type="button"
               aria-expanded="true"
               aria-controls="developModulesLibraryBody"
             >
-  <span class="accordion-title">Saved Modules</span>
-  <span class="accordion-toggle">
-    <span class="accordion-arrow" aria-hidden="true">▾</span>
-  </span>
-</button>
+              <span class="accordion-title">Saved Modules</span>
+            </button>
           </div>
           <div id="developModulesLibraryBody" class="develop-template-section-body">
+            <include src="develop/modules-list.html" />
+          </div>
+        </section>
+
+        <section id="developPollsSection" class="develop-template-section hidden">
+          <div class="develop-template-section-header-row" style="display:flex; justify-content:space-between; align-items:center;">
+            <button
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="true"
+            >
+              <span class="accordion-title">Uploaded Polls</span>
+            </button>
+            <button id="openCreatePollBtn" type="button" class="btn" style="margin-right: 1rem;">Create Poll</button>
+          </div>
+          <div class="develop-template-section-body">
+            <include src="develop/polls-list.html" />
+          </div>
+        </section>
+
+        <dialog id="developModulesModal" class="develop-nested-modal-dialog">
+          <div class="develop-nested-modal-body" style="padding:1.5rem;max-width:800px;width:90vw;">
+            <div class="page-heading-row" style="margin-bottom:1rem;">
+              <h3 style="margin:0;">Module Studio</h3>
+              <button type="button" class="btn" onclick="document.getElementById('developModulesModal').close()">Close</button>
+            </div>
+            <include src="develop/modules-form.html" />
+          </div>
+        </dialog>
+
+        <dialog id="pollFormModal" class="develop-nested-modal-dialog">
+          <div class="develop-nested-modal-body" style="padding:1.5rem;max-width:800px;width:90vw;">
+            <div class="page-heading-row" style="margin-bottom:1rem;">
+              <h3 style="margin:0;">Poll Editor</h3>
+              <button type="button" id="closePollFormBtn" class="btn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <include src="develop/polls-form.html" />
+          </div>
+        </dialog>
+
+        <dialog id="developManageClassesModal" class="develop-nested-modal-dialog">
+          <div class="develop-nested-modal-body" style="padding:1.5rem;max-width:500px;">
+            <div class="page-heading-row" style="margin-bottom:1rem;">
+              <h3 style="margin:0;">Manage Module Classes</h3>
+              <button id="developManageClassesCloseBtn" type="button" class="btn">Close</button>
+            </div>
+            <form id="developClassCreateForm" class="standard-form-grid" style="margin-bottom:1.5rem;">
+              <label for="developClassNameInput">New Class Name</label>
+              <div class="form-row-flex">
+                <input id="developClassNameInput" type="text" style="flex:1;" required />
+                <button type="submit" class="btn btn-primary">Add Class</button>
+              </div>
+            </form>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Preview</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
+                    <th>Class Name</th>
+                    <th>Created</th>
+                    <th style="width:100px;">Actions</th>
                   </tr>
                 </thead>
-                <tbody id="developModulesTableBody">
-                  <tr><td colspan="5">No saved modules yet.</td></tr>
+                <tbody id="developClassesTableBody">
+                  <tr><td colspan="3">Loading classes...</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
-        </section>
+        </dialog>
 
       </section>
       <section id="developThemesPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Builder: Themes</h2>
           <div class="page-heading-actions">
-            <button id="developThemesCreateBtn" type="button" onclick="App.develop.openThemesBuilder(); return false;">Create Theme</button>
-            <button type="button" onclick="App.develop.openThemesPage(); return false;">Back To Themes</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button id="developThemesCreateBtn" type="button" onclick="App.develop.openThemesBuilder(); return false;" class="btn">Create Theme</button>
+            <button type="button" onclick="App.develop.openThemesPage(); return false;" class="btn">Back To Themes</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <p>Create reusable named themes and persist color, style, and asset settings in Supabase.</p>
@@ -138,23 +149,26 @@
             </table>
           </div>
         </section>
-        <button id="developThemesBuilderToggleBtn" class="accordion-header" type="button" aria-expanded="false" aria-controls="developThemesBuilderPanel" style="margin-bottom: 10px;">
+        <button id="developThemesBuilderToggleBtn" class="btn accordion-header" type="button" aria-expanded="false" aria-controls="developThemesBuilderPanel" style="margin-bottom: 10px;">
           <span class="accordion-title">Theme Builder</span>
           <span class="accordion-toggle">
             <span class="accordion-arrow" aria-hidden="true">▾</span>
           </span>
         </button>
         <section id="developThemesBuilderPanel" class="hidden">
-          <section class="develop-themes-toolbar">
+          <section class="standard-form-grid" style="margin-bottom: 1rem;">
             <label for="developThemesThemeSelect">Saved Theme</label>
             <select id="developThemesThemeSelect">
               <option value="">Select Theme</option>
             </select>
             <label for="developThemesNameInput">Theme Name</label>
-            <input id="developThemesNameInput" name="theme_name" placeholder="Theme Name" />
-            <button id="developThemesNewBtn" type="button">New Theme</button>
-            <button id="developThemesSaveBtn" type="button">Save Theme</button>
-            <button id="developThemesDeleteBtn" type="button">Delete Theme</button>
+            <input id="developThemesNameInput" name="theme_name" />
+            <div></div>
+            <div>
+              <button id="developThemesNewBtn" type="button" class="btn">New Theme</button>
+              <button id="developThemesSaveBtn" type="button" class="btn">Save Theme</button>
+              <button id="developThemesDeleteBtn" type="button" class="btn">Delete Theme</button>
+            </div>
           </section>
           <div id="developThemesStatusMsg" class="develop-themes-status hidden" role="status" aria-live="polite"></div>
           <section class="develop-themes-columns">
@@ -267,8 +281,8 @@
         <div class="page-heading-row">
           <h2>Builder: Pages</h2>
           <div class="page-heading-actions">
-            <button id="developOpenCreateLandingPageBtn" type="button">Create Page</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button id="developOpenCreateLandingPageBtn" type="button" class="btn">Create Page</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
@@ -286,15 +300,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="developLandingPagesBulkEditBtn" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+                <th><button id="developLandingPagesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="developLandingPagesSortNameBtn" type="button" class="tiny-btn">Name</button></th>
-                <th><button id="developLandingPagesSortTemplateBtn" type="button" class="tiny-btn">Template</button></th>
-                <th><button id="developLandingPagesSortHeadlineBtn" type="button" class="tiny-btn">Headline</button></th>
-                <th><button id="developLandingPagesSortFormBtn" type="button" class="tiny-btn">Form</button></th>
-                <th><button id="developLandingPagesSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th><button id="developLandingPagesSortNameBtn" type="button" class="btn">Name</button></th>
+                <th><button id="developLandingPagesSortTemplateBtn" type="button" class="btn">Template</button></th>
+                <th><button id="developLandingPagesSortHeadlineBtn" type="button" class="btn">Headline</button></th>
+                <th><button id="developLandingPagesSortFormBtn" type="button" class="btn">Form</button></th>
+                <th><button id="developLandingPagesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
                 <th class="develop-pages-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -305,7 +319,7 @@
       <section id="developLandingPagesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Bulk Edit Pages</h2>
-          <button id="developLandingPagesBackFromBulkEditBtn" type="button">Back To Pages</button>
+          <button id="developLandingPagesBackFromBulkEditBtn" type="button" class="btn">Back To Pages</button>
         </div>
         <p id="developLandingPagesBulkEditSummary">No pages selected.</p>
         <form id="developLandingPagesBulkEditForm" class="standard-form-grid">
@@ -315,7 +329,7 @@
               <option value="">Leave Unchanged</option>
             </select>
           
-          <div class="develop-color-control">
+          <div class="standard-form-grid-full develop-color-control">
             <label for="developLandingPagesBulkPrimaryColorInput" class="develop-color-control-label">
               <span class="develop-color-control-icon" aria-hidden="true"></span>
               Primary Color
@@ -326,7 +340,7 @@
             </label>
             <input id="developLandingPagesBulkPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
           </div>
-          <div class="develop-color-control">
+          <div class="standard-form-grid-full develop-color-control">
             <label for="developLandingPagesBulkBackgroundColorInput" class="develop-color-control-label">
               <span class="develop-color-control-icon" aria-hidden="true"></span>
               Background Color
@@ -337,7 +351,7 @@
             </label>
             <input id="developLandingPagesBulkBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
           </div>
-          <div class="develop-color-control">
+          <div class="standard-form-grid-full develop-color-control">
             <label for="developLandingPagesBulkAccentColorInput" class="develop-color-control-label">
               <span class="develop-color-control-icon" aria-hidden="true"></span>
               Accent Color
@@ -349,16 +363,16 @@
             <input id="developLandingPagesBulkAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
           </div>
           <div></div>
-              <button type="submit">Apply To Selected Pages</button>
+              <button type="submit" class="btn btn-primary">Apply To Selected Pages</button>
         </form>
       </section>
       <section id="developLandingPagesPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2 id="developLandingPagesFormTitle">Builder: Create Page</h2>
           <div class="page-heading-actions">
-            <button id="developLandingPageHeaderPreviewBtn" type="button">Preview</button>
-            <button id="developLandingPageHeaderSaveBtn" type="button">Save</button>
-            <button id="developLandingPageHeaderBackBtn" type="button">Back To Pages</button>
+            <button id="developLandingPageHeaderPreviewBtn" type="button" class="btn">Preview</button>
+            <button id="developLandingPageHeaderSaveBtn" type="button" class="btn">Save</button>
+            <button id="developLandingPageHeaderBackBtn" type="button" class="btn">Back To Pages</button>
           </div>
         </div>
         <div id="developLandingPagesModularHost"></div>
@@ -366,10 +380,14 @@
           <input id="developLandingPageIdInput" name="page_id" type="hidden" />
           <div class="develop-landing-pages-grid">
             <div class="develop-landing-pages-column">
-              <input id="developLandingPageNameInput" name="page_name" placeholder="Page Name" required />
+              <label for="developLandingPageNameInput">Page Name</label>
+              <input id="developLandingPageNameInput" name="page_name" required />
+              
+              <label for="developLandingTemplateSelect">Template</label>
               <select id="developLandingTemplateSelect" name="template_id">
                 <option value="">Template</option>
               </select>
+              
               <div class="develop-color-control">
                 <label for="developLandingPrimaryColorInput" class="develop-color-control-label">
                   <span class="develop-color-control-icon" aria-hidden="true"></span>
@@ -391,47 +409,73 @@
                 </label>
                 <input id="developLandingAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
               </div>
+              
+              <label for="developLandingFormSelect">Form</label>
               <select id="developLandingFormSelect" name="form_id">
                 <option value="">Form</option>
               </select>
+              
+              <label for="developLandingLeadMagnetSelect">Lead Magnet</label>
               <select id="developLandingLeadMagnetSelect" name="lead_magnet_id">
                 <option value="">PDF</option>
               </select>
+              
+              <label for="developLandingCtaSelect">Call To Action</label>
               <select id="developLandingCtaSelect" name="cta_id">
                 <option value="">CTA</option>
               </select>
             </div>
+            
             <div class="develop-landing-pages-column">
+              <label for="developLandingHeadlineSelect">Headline</label>
               <select id="developLandingHeadlineSelect" name="headline_id">
                 <option value="">Headline</option>
               </select>
+              
+              <label for="developLandingPitchSelect">Pitch</label>
               <select id="developLandingPitchSelect" name="pitch_id">
                 <option value="">Pitch</option>
               </select>
+              
+              <label for="developLandingFeatureHeadlineSelect">Feature One Headline</label>
               <select id="developLandingFeatureHeadlineSelect" name="feature_headline_id">
                 <option value="">Feature One Headline</option>
               </select>
+              
+              <label for="developLandingFeatureSubheadingSelect">Feature One Sub-heading</label>
               <select id="developLandingFeatureSubheadingSelect" name="feature_subheading_id">
                 <option value="">Feature One Sub-heading</option>
               </select>
+              
+              <label for="developLandingHighlightHeadlineSelect">Feature Two Headline</label>
               <select id="developLandingHighlightHeadlineSelect" name="highlight_headline_id">
                 <option value="">Feature Two Headline</option>
               </select>
+              
+              <label for="developLandingHighlightPitchSelect">Feature Two Pitch</label>
               <select id="developLandingHighlightPitchSelect" name="highlight_pitch_id">
                 <option value="">Feature Two Pitch</option>
               </select>
+              
+              <label for="developLandingBodyHeadlineSelect">Body Headline</label>
               <select id="developLandingBodyHeadlineSelect" name="body_headline_id">
                 <option value="">Body Headline</option>
               </select>
+              
+              <label for="developLandingBodySubheadingSelect">Body Sub-heading</label>
               <select id="developLandingBodySubheadingSelect" name="body_subheading_id">
                 <option value="">Body Sub-heading</option>
               </select>
+              
+              <label for="developLandingBodyPitchSelect">Body Pitch</label>
               <select id="developLandingBodyPitchSelect" name="body_pitch_id">
                 <option value="">Body Pitch</option>
               </select>
             </div>
+            
             <div class="develop-landing-pages-column">
               <div class="develop-theme-asset-field">
+                <label for="developLandingBannerImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Website Banner Image</label>
                 <select id="developLandingBannerImageSelect" name="website_banner_image_id" class="hidden">
                   <option value="">Website Banner Image</option>
                 </select>
@@ -439,6 +483,7 @@
                 <div id="developLandingBannerImagePreview" class="develop-theme-asset-preview">No image selected</div>
               </div>
               <div class="develop-theme-asset-field">
+                <label for="developLandingBackgroundImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Background Image</label>
                 <select id="developLandingBackgroundImageSelect" name="background_image_id" class="hidden">
                   <option value="">Background Image</option>
                 </select>
@@ -446,6 +491,7 @@
                 <div id="developLandingBackgroundImagePreview" class="develop-theme-asset-preview">No image selected</div>
               </div>
               <div class="develop-theme-asset-field">
+                <label for="developLandingFeatureImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Feature Image</label>
                 <select id="developLandingFeatureImageSelect" name="feature_image_id" class="hidden">
                   <option value="">Feature Image</option>
                 </select>
@@ -453,6 +499,7 @@
                 <div id="developLandingFeatureImagePreview" class="develop-theme-asset-preview">No image selected</div>
               </div>
               <div class="develop-theme-asset-field">
+                <label for="developLandingHighlightImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Highlight Image</label>
                 <select id="developLandingHighlightImageSelect" name="highlight_image_id" class="hidden">
                   <option value="">Highlight Image</option>
                 </select>
@@ -460,6 +507,7 @@
                 <div id="developLandingHighlightImagePreview" class="develop-theme-asset-preview">No image selected</div>
               </div>
               <div class="develop-theme-asset-field">
+                <label for="developLandingLogoSquareSelect" style="display:block;margin-bottom:4px;font-weight:600;">Logo - Square</label>
                 <select id="developLandingLogoSquareSelect" name="logo_square_id" class="hidden">
                   <option value="">Logo - Square</option>
                 </select>
@@ -469,16 +517,16 @@
             </div>
           </div>
           <div></div>
-              <button id="developLandingPagesSubmitBtn" type="submit">Save Page</button>
+              <button id="developLandingPagesSubmitBtn" type="submit" class="btn btn-primary">Save Page</button>
         </form>
       </section>
       <section id="developLandingPagePreviewPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2 id="developLandingPagePreviewTitle">Page Preview</h2>
           <div class="page-heading-actions">
-            <button id="developLandingPagePreviewModeBtn" type="button">Edit Mode</button>
-            <button id="developLandingPagePreviewBackBtn" type="button">Back To Pages</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button id="developLandingPagePreviewModeBtn" type="button" class="btn">Edit Mode</button>
+            <button id="developLandingPagePreviewBackBtn" type="button" class="btn">Back To Pages</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <div id="developLandingPagePreviewHost"></div>
@@ -487,9 +535,9 @@
         <div class="page-heading-row">
           <h2 id="developLandingPageVisualEditorTitle">Visual Page Editor</h2>
           <div class="page-heading-actions">
-            <button id="developLandingPageVisualModeBtn" type="button">Preview Mode</button>
-            <button id="developLandingPageVisualSaveBtn" type="button">Save All Changes</button>
-            <button id="developLandingPageVisualBackBtn" type="button">Back To Pages</button>
+            <button id="developLandingPageVisualModeBtn" type="button" class="btn">Preview Mode</button>
+            <button id="developLandingPageVisualSaveBtn" type="button" class="btn">Save All Changes</button>
+            <button id="developLandingPageVisualBackBtn" type="button" class="btn">Back To Pages</button>
           </div>
         </div>
         <div class="develop-visual-toolbar">
@@ -509,8 +557,8 @@
         <div class="page-heading-row">
           <h2>Thank You</h2>
           <div class="page-heading-actions">
-            <button id="developLandingThankYouBackBtn" type="button">Back To Preview</button>
-            <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')">Back To Pages</button>
+            <button id="developLandingThankYouBackBtn" type="button" class="btn">Back To Preview</button>
+            <button type="button" onclick="App.setActivePage('developManageLandingPagesPage')" class="btn">Back To Pages</button>
           </div>
         </div>
         <div id="developLandingThankYouHost"></div>
@@ -519,25 +567,30 @@
         <div class="page-heading-row">
           <h2>Builder: Forms</h2>
           <div class="page-heading-actions">
-            <button id="developOpenCreateFormBtn" type="button">Create Form</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button id="developOpenCreateFormBtn" type="button" class="btn">Create Form</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <p>Assemble reusable forms from a form template, PDF, CTA, and confirmation behavior. Save them for use throughout the platform.</p>
         <div id="developFormEditorPanel" class="develop-form-editor-panel hidden">
           <div class="page-heading-row">
             <h3 id="developFormsEditorTitle">Create Form</h3>
-            <button id="developCancelFormEditBtn" type="button">Close</button>
+            <button id="developCancelFormEditBtn" type="button" class="btn">Close</button>
           </div>
           <div class="develop-form-builder-layout">
           <form id="developFormBuilderForm" class="standard-form-grid">
             <input id="developFormIdInput" name="form_id" type="hidden" />
-            <input id="developFormNameInput" name="form_name" placeholder="Form Name" />
+            <label for="developFormNameInput">Form Name</label>
+            <input id="developFormNameInput" name="form_name" />
+            
+            <label for="developFormTypeSelect">Form Type</label>
             <select id="developFormTypeSelect" name="form_type">
               <option value="squeeze-form">Squeeze Form</option>
               <option value="short-form">Short Form</option>
               <option value="long-form">Long Form</option>
             </select>
+            
+            <label for="developFormContactTypeSelect">Contact Type</label>
             <select id="developFormContactTypeSelect" name="contact_type">
               <option value="lead">Lead</option>
               <option value="prospect">Prospect</option>
@@ -546,42 +599,67 @@
               <option value="partner">Partner</option>
               <option value="other">Other</option>
             </select>
+            
+            <label for="developFormLeadMagnetTypeSelect">Lead Magnet Type</label>
             <select id="developFormLeadMagnetTypeSelect" name="lead_magnet_type">
               <option value="">Lead Magnet Type</option>
             </select>
+            
+            <label for="developFormLeadMagnetSelect">Lead Magnet</label>
             <select id="developFormLeadMagnetSelect" name="lead_magnet_id">
               <option value="">Lead Magnet (Optional)</option>
             </select>
+            
+            <label for="developFormCtaSelect">Call To Action</label>
             <select id="developFormCtaSelect" name="cta_id">
               <option value="">Call To Action</option>
             </select>
-            <input id="developFormHeadingInput" name="heading" placeholder="Form Heading" />
-            <textarea id="developFormSuccessMessageInput" name="success_message" rows="3" placeholder="Success Confirmation Message"></textarea>
-            <textarea id="developFormErrorMessageInput" name="error_message" rows="3" placeholder="Error Confirmation Message"></textarea>
-            <div class="develop-color-control">
+            
+            <label for="developFormHeadingInput">Form Heading</label>
+            <input id="developFormHeadingInput" name="heading" />
+            
+            <label for="developFormSuccessMessageInput">Success Confirmation Message</label>
+            <textarea id="developFormSuccessMessageInput" name="success_message" rows="3"></textarea>
+            
+            <label for="developFormErrorMessageInput">Error Confirmation Message</label>
+            <textarea id="developFormErrorMessageInput" name="error_message" rows="3"></textarea>
+            
+            <div class="standard-form-grid-full develop-color-control">
               <label for="developFormAccentColorInput" class="develop-color-control-label">
                 <span class="develop-color-control-icon" aria-hidden="true"></span>
                 Form Color Scheme
               </label>
               <input id="developFormAccentColorInput" name="accent_color" type="color" value="#0b82d4" />
             </div>
-            <label class="checkbox-row">
-              <input id="developFormMatchLandingColorInput" name="match_landing_color" type="checkbox" />
-              Match page color scheme
-            </label>
-            <div id="developFormLandingColorModeWrap" class="hidden">
-              <select id="developFormLandingColorModeSelect" name="landing_color_mode">
-                <option value="primary">Primary Color</option>
-                <option value="accent">Accent Color</option>
-              </select>
+            
+            <div class="standard-form-grid-full">
+              <label class="checkbox-row">
+                <input id="developFormMatchLandingColorInput" name="match_landing_color" type="checkbox" />
+                Match page color scheme
+              </label>
             </div>
-            <label id="developFormUseLandingBackgroundWrap" class="checkbox-row hidden">
-              <input id="developFormUseLandingBackgroundInput" name="use_landing_background" type="checkbox" />
-              Add background color to form
-            </label>
-            <div id="developFormFieldsConfig" class="develop-form-config-list"></div>
+            
+            <div id="developFormLandingColorModeWrap" class="standard-form-grid-full hidden">
+              <div class="standard-form-grid" style="padding:0;">
+                <label for="developFormLandingColorModeSelect">Color Mode</label>
+                <select id="developFormLandingColorModeSelect" name="landing_color_mode">
+                  <option value="primary">Primary Color</option>
+                  <option value="accent">Accent Color</option>
+                </select>
+              </div>
+            </div>
+            
+            <div id="developFormUseLandingBackgroundWrap" class="standard-form-grid-full hidden">
+              <label class="checkbox-row">
+                <input id="developFormUseLandingBackgroundInput" name="use_landing_background" type="checkbox" />
+                Add background color to form
+              </label>
+            </div>
+            
+            <div id="developFormFieldsConfig" class="standard-form-grid-full develop-form-config-list"></div>
+            
             <div></div>
-              <button type="submit">Save Form</button>
+              <button type="submit" class="btn btn-primary">Save Form</button>
           </form>
           <div>
             <h3>Form Preview</h3>
@@ -594,13 +672,13 @@
           <table>
             <thead>
               <tr>
-                <th><button id="developFormsSortNameBtn" type="button" class="tiny-btn">Form Name</button></th>
-                <th><button id="developFormsSortTypeBtn" type="button" class="tiny-btn">Type</button></th>
-                <th><button id="developFormsSortLeadMagnetTypeBtn" type="button" class="tiny-btn">Lead Magnet Type</button></th>
-                <th><button id="developFormsSortLeadMagnetBtn" type="button" class="tiny-btn">Lead Magnet</button></th>
-                <th><button id="developFormsSortCtaBtn" type="button" class="tiny-btn">CTA</button></th>
-                <th><button id="developFormsSortContactTypeBtn" type="button" class="tiny-btn">Contact Type</button></th>
-                <th><button id="developFormsSortUpdatedBtn" type="button" class="tiny-btn">Updated</button></th>
+                <th><button id="developFormsSortNameBtn" type="button" class="btn">Form Name</button></th>
+                <th><button id="developFormsSortTypeBtn" type="button" class="btn">Type</button></th>
+                <th><button id="developFormsSortLeadMagnetTypeBtn" type="button" class="btn">Lead Magnet Type</button></th>
+                <th><button id="developFormsSortLeadMagnetBtn" type="button" class="btn">Lead Magnet</button></th>
+                <th><button id="developFormsSortCtaBtn" type="button" class="btn">CTA</button></th>
+                <th><button id="developFormsSortContactTypeBtn" type="button" class="btn">Contact Type</button></th>
+                <th><button id="developFormsSortUpdatedBtn" type="button" class="btn">Updated</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -616,9 +694,9 @@
         <div class="page-heading-row">
           <h2>Builder: Agents</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.develop.openAgentsCreate(); return false;">Create Agent</button>
-            <button type="button" onclick="App.develop.openAgentsPage(); return false;">Back To Agents</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button type="button" onclick="App.develop.openAgentsCreate(); return false;" class="btn">Create Agent</button>
+            <button type="button" onclick="App.develop.openAgentsPage(); return false;" class="btn">Back To Agents</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
@@ -638,58 +716,75 @@
           </table>
         </div>
         <div id="developAgentsBuilderPanel" class="card hidden" style="margin-bottom: 1rem;">
-        <form id="developAgentsForm">
+        <form id="developAgentsForm" class="standard-form-grid">
           <input type="hidden" name="agent_preset_id" id="developAgentPresetIdInput" />
-          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+          
+          <div class="standard-form-grid-full page-heading-row" style="margin-bottom: 0.75rem;">
             <h3 style="margin:0;">Agent Builder</h3>
-            <div></div>
-              <div class="page-heading-actions">
-              <button id="developAgentsSavePresetBtn" type="button">Save Agent</button>
-              <button id="developAgentsClonePresetBtn" type="button">Clone Agent</button>
-              <button type="button" onclick="App.develop.openAgentsPage(); return false;">Back To Agents</button>
+            <div class="page-heading-actions">
+              <button id="developAgentsSavePresetBtn" type="button" class="btn">Save Agent</button>
+              <button id="developAgentsClonePresetBtn" type="button" class="btn">Clone Agent</button>
+              <button type="button" onclick="App.develop.openAgentsPage(); return false;" class="btn">Back To Agents</button>
             </div>
           </div>
-          <div class="grid-form">
-            <input name="agent_name" id="developAgentNameInput" placeholder="Agent name" />
-            <select name="action" id="agentsActionSelect">
-              <option value="agent_api_setup_orchestrator">agent_api_setup_orchestrator</option>
-              <option value="create_job">create_job</option>
-              <option value="preview_job">preview_job</option>
-              <option value="approve_job">approve_job</option>
-              <option value="execute_job">execute_job</option>
-              <option value="job_status">job_status</option>
-            </select>
-          </div>
-          <div class="grid-form">
-            <input name="job_id" placeholder="Job ID (required for preview/approve/execute/status)" />
-          </div>
-          <div class="grid-form">
-            <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
-            <input name="type" placeholder="Job Type" value="acquire.web" />
-          </div>
-          <div class="grid-form">
-            <input name="requested_by_user_id" placeholder="Requested By User ID" value="alphire-ui" />
-            <input name="requested_by_email" placeholder="Requested By Email" value="ops@alphire.ai" />
-          </div>
+          
+          <label for="developAgentNameInput">Agent Name</label>
+          <input name="agent_name" id="developAgentNameInput" />
+          
+          <label for="agentsActionSelect">Action</label>
+          <select name="action" id="agentsActionSelect">
+            <option value="agent_api_setup_orchestrator">agent_api_setup_orchestrator</option>
+            <option value="create_job">create_job</option>
+            <option value="preview_job">preview_job</option>
+            <option value="approve_job">approve_job</option>
+            <option value="execute_job">execute_job</option>
+            <option value="job_status">job_status</option>
+          </select>
+          
+          <label for="developAgentJobIdInput">Job ID</label>
+          <input id="developAgentJobIdInput" name="job_id" placeholder="Required for preview/approve/execute/status" />
+          
+          <label for="developAgentWorkspaceIdInput">Workspace ID</label>
+          <input id="developAgentWorkspaceIdInput" name="workspace_id" value="alphire-main" />
+          
+          <label for="developAgentTypeInput">Job Type</label>
+          <input id="developAgentTypeInput" name="type" value="acquire.web" />
+          
+          <label for="developAgentRequestedByUserInput">Requested By User ID</label>
+          <input id="developAgentRequestedByUserInput" name="requested_by_user_id" value="alphire-ui" />
+          
+          <label for="developAgentRequestedByEmailInput">Requested By Email</label>
+          <input id="developAgentRequestedByEmailInput" name="requested_by_email" value="ops@alphire.ai" />
+          
+          <label for="developAgentPayloadJsonInput">Payload JSON</label>
           <textarea
+            id="developAgentPayloadJsonInput"
             name="payload_json"
             rows="6"
-            placeholder='Payload JSON, e.g. {"source_urls":["https://example.com"],"max_pages":20}'
+            placeholder='{"source_urls":["https://example.com"],"max_pages":20}'
           >{"source_urls":[],"max_pages":20}</textarea>
-          <div class="grid-form">
-            <select name="approval_decision">
-              <option value="APPROVE">APPROVE</option>
-              <option value="REJECT">REJECT</option>
-            </select>
-            <input name="approval_token" placeholder="Approval token (for execute_job)" />
+          
+          <label for="developAgentApprovalDecisionSelect">Approval Decision</label>
+          <select id="developAgentApprovalDecisionSelect" name="approval_decision">
+            <option value="APPROVE">APPROVE</option>
+            <option value="REJECT">REJECT</option>
+          </select>
+          
+          <label for="developAgentApprovalTokenInput">Approval Token</label>
+          <input id="developAgentApprovalTokenInput" name="approval_token" placeholder="For execute_job" />
+          
+          <label for="developAgentApprovalCommentInput">Approval Comment</label>
+          <input id="developAgentApprovalCommentInput" name="approval_comment" />
+          
+          <div class="standard-form-grid-full">
+            <label class="checkbox-row">
+              <input id="developAgentManualConfirmedInput" name="manual_confirmed" type="checkbox" />
+              I manually confirm this API action.
+            </label>
           </div>
-          <input name="approval_comment" placeholder="Approval comment" />
-          <label class="checkbox-row">
-            <input name="manual_confirmed" type="checkbox" />
-            I manually confirm this API action.
-          </label>
+          
           <div></div>
-              <button type="submit">Send Agent Request</button>
+          <button type="submit" class="btn btn-primary">Send Agent Request</button>
         </form>
         </div>
         <h3>Request Preview</h3>
@@ -701,15 +796,15 @@
           <h3>Agent: API Setup Orchestrator</h3>
           <p class="docs-intro">Run the orchestrator from Builder and track setup progress across all Promote channels.</p>
           <div class="page-heading-actions" style="justify-content: flex-start; margin: 0 0 0.85rem 0;">
-            <button id="docsOrchestratorRunBtn" type="button">Run Orchestrator</button>
-            <button type="button" onclick="App.docsApiSetup.runOrchestrator()">Open Builder Form</button>
-            <button type="button" onclick="App.setActivePage('settingsApisPage')">Open Settings &gt; APIs</button>
+            <button id="docsOrchestratorRunBtn" type="button" class="btn">Run Orchestrator</button>
+            <button type="button" onclick="App.docsApiSetup.runOrchestrator()" class="btn">Open Builder Form</button>
+            <button type="button" onclick="App.setActivePage('settingsApisPage')" class="btn">Open Settings &gt; APIs</button>
             <label class="checkbox-row" style="width:auto; margin-left: 0.65rem;">
               <input id="docsOrchestratorIncompleteOnly" type="checkbox" />
               Only incomplete steps
             </label>
-            <button id="docsOrchestratorDownloadJsonBtn" type="button">Download JSON</button>
-            <button id="docsOrchestratorDownloadMdBtn" type="button">Download Markdown</button>
+            <button id="docsOrchestratorDownloadJsonBtn" type="button" class="btn">Download JSON</button>
+            <button id="docsOrchestratorDownloadMdBtn" type="button" class="btn">Download Markdown</button>
           </div>
           <p id="docsOrchestratorStatus" class="meta">No orchestrator run loaded.</p>
           <div class="docs-panel" style="margin-bottom: 0.9rem;">
@@ -781,9 +876,9 @@
         <div class="page-heading-row">
           <h2>Builder: Templates</h2>
           <div class="page-heading-actions">
-            <button id="developCreateModularPageTemplateBtn" type="button">Create Modular Template</button>
-            <button id="developCreatePageTemplateBtn" type="button">Create Template</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button id="developCreateModularPageTemplateBtn" type="button" class="btn">Create Modular Template</button>
+            <button id="developCreatePageTemplateBtn" type="button" class="btn">Create Template</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <div id="developEmailTemplatesPrimaryTableHost" class="develop-template-records-host"></div>
@@ -792,7 +887,7 @@
           <div class="develop-template-section-header-row">
             <button
               id="developPageTemplateEditorToggle"
-              class="accordion-header"
+              class="btn accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developPageTemplateEditorBody"
@@ -813,9 +908,9 @@
               </div>
             </div>
             <div id="developPageTemplateEditorTopActions" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-              <button id="developPageTemplateEditorSaveBtnTop" type="button">Save Modular Template</button>
-              <button id="developPageTemplateEditorPreviewBtnTop" type="button">Preview Template</button>
-              <button id="developPageTemplateEditorCloseBtnTop" type="button">Close</button>
+              <button id="developPageTemplateEditorSaveBtnTop" type="button" class="btn">Save Modular Template</button>
+              <button id="developPageTemplateEditorPreviewBtnTop" type="button" class="btn">Preview Template</button>
+              <button id="developPageTemplateEditorCloseBtnTop" type="button" class="btn">Close</button>
             </div>
             <div id="developPageTemplateEditorToolbar" class="develop-layout-toolbar" style="margin:0 0 0.9rem;">
               <div class="develop-layout-toolbar-heading">Row Layouts</div>
@@ -847,8 +942,8 @@
             <div class="develop-page-template-workspace-heading">Workspace</div>
             <div id="developPageTemplateEditorSections" class="develop-template-module-list"></div>
             <div id="developPageTemplateEditorBottomActions" class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
-              <button id="developPageTemplateEditorSaveBtnBottom" type="button">Save Modular Template</button>
-              <button id="developPageTemplateEditorPreviewBtn" type="button">Preview Template</button>
+              <button id="developPageTemplateEditorSaveBtnBottom" type="button" class="btn">Save Modular Template</button>
+              <button id="developPageTemplateEditorPreviewBtn" type="button" class="btn">Preview Template</button>
             </div>
           </div>
         </section>
@@ -857,7 +952,7 @@
           <div class="develop-template-section-header-row">
             <button
               id="developTemplateEditorToggle"
-              class="accordion-header"
+              class="btn accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developTemplateEditorBody"
@@ -879,20 +974,20 @@
             <input id="developTemplateEditorSummaryInput" type="text" placeholder="Summary: when to use this template." style="margin-bottom:0.75rem;" />
             <input id="developTemplateEditorSubjectInput" type="text" placeholder="Default subject line" style="margin-bottom:0.75rem;" />
             <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-              <button id="developTemplateEditorSaveBtnTop" type="button">Save Template</button>
+              <button id="developTemplateEditorSaveBtnTop" type="button" class="btn">Save Template</button>
             </div>
             <div id="developTemplateEditorToolbar" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-              <button type="button" data-block-type="eyebrow">Add Eyebrow</button>
-              <button type="button" data-block-type="heading">Add Heading</button>
-              <button type="button" data-block-type="paragraph">Add Paragraph</button>
-              <button type="button" data-block-type="image">Add Image</button>
-              <button type="button" data-block-type="button">Add Button</button>
-              <button type="button" data-block-type="divider">Add Divider</button>
-              <button type="button" data-block-type="spacer">Add Spacer</button>
+              <button type="button" data-block-type="eyebrow" class="btn">Add Eyebrow</button>
+              <button type="button" data-block-type="heading" class="btn">Add Heading</button>
+              <button type="button" data-block-type="paragraph" class="btn">Add Paragraph</button>
+              <button type="button" data-block-type="image" class="btn">Add Image</button>
+              <button type="button" data-block-type="button" class="btn">Add Button</button>
+              <button type="button" data-block-type="divider" class="btn">Add Divider</button>
+              <button type="button" data-block-type="spacer" class="btn">Add Spacer</button>
             </div>
             <div id="developTemplateEditorModules" class="develop-template-module-list"></div>
             <div class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
-              <button id="developTemplateEditorSaveBtnBottom" type="button">Save Template</button>
+              <button id="developTemplateEditorSaveBtnBottom" type="button" class="btn">Save Template</button>
             </div>
           </div>
         </section>
@@ -901,7 +996,7 @@
           <div class="develop-template-section-header-row">
             <button
               id="developFormsSectionToggle"
-              class="accordion-header"
+              class="btn accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developFormsSectionBody"
@@ -924,7 +1019,7 @@
           <div class="develop-template-section-header-row">
             <button
               id="developEmailSectionToggle"
-              class="accordion-header"
+              class="btn accordion-header"
               type="button"
               aria-expanded="false"
               aria-controls="developEmailSectionBody"
@@ -937,28 +1032,38 @@
           </div>
           <div id="developEmailSectionBody" class="develop-template-section-body">
             <p>Choose an email template type to pair with a theme and campaign delivery.</p>
-            <form id="developEmailTemplateForm"  style="margin-bottom: 1.5rem;">
+            <form id="developEmailTemplateForm" class="standard-form-grid" style="margin-bottom: 1.5rem;">
               <input id="developEmailTemplateIdInput" name="template_id" type="hidden" />
-              <div></div>
-              <div class="page-heading-actions" style="justify-content:flex-start;">
-                <div></div>
-              <button id="developEmailTemplateSubmitBtnTop" type="submit">Save Template</button>
-                <button id="developEmailTemplateResetBtnTop" type="button">Reset</button>
+              <div class="standard-form-grid-full page-heading-actions" style="justify-content:flex-start;">
+                <button id="developEmailTemplateSubmitBtnTop" type="submit" class="btn btn-primary">Save Template</button>
+                <button id="developEmailTemplateResetBtnTop" type="button" class="btn">Reset</button>
               </div>
-              <div class="grid-form">
-                <input id="developEmailTemplateNameInput" name="name" placeholder="Template name" />
-                <input id="developEmailTemplateSlugInput" name="slug" placeholder="Slug (optional)" />
-                <input id="developEmailTemplateCtaInput" name="cta" placeholder="CTA label" />
-              </div>
-              <input id="developEmailTemplateSummaryInput" name="summary" placeholder="Summary: when to use this template." />
-              <input id="developEmailTemplateSubjectInput" name="subject" placeholder="Default subject line" />
-              <input id="developEmailTemplateHeadingInput" name="heading" placeholder="Template heading" />
-              <textarea id="developEmailTemplateBodyInput" name="body" rows="4" placeholder="Describe the body structure, tone, and purpose."></textarea>
+              
+              <label for="developEmailTemplateNameInput">Template Name</label>
+              <input id="developEmailTemplateNameInput" name="name" />
+              
+              <label for="developEmailTemplateSlugInput">Slug</label>
+              <input id="developEmailTemplateSlugInput" name="slug" />
+              
+              <label for="developEmailTemplateCtaInput">CTA Label</label>
+              <input id="developEmailTemplateCtaInput" name="cta" />
+              
+              <label for="developEmailTemplateSummaryInput">Summary</label>
+              <input id="developEmailTemplateSummaryInput" name="summary" />
+              
+              <label for="developEmailTemplateSubjectInput">Default Subject Line</label>
+              <input id="developEmailTemplateSubjectInput" name="subject" />
+              
+              <label for="developEmailTemplateHeadingInput">Template Heading</label>
+              <input id="developEmailTemplateHeadingInput" name="heading" />
+              
+              <label for="developEmailTemplateBodyInput">Body Structure</label>
+              <textarea id="developEmailTemplateBodyInput" name="body" rows="4"></textarea>
+              
               <div></div>
               <div class="page-heading-actions">
-                <div></div>
-              <button id="developEmailTemplateSubmitBtn" type="submit">Save Template</button>
-                <button id="developEmailTemplateResetBtn" type="button">Reset</button>
+                <button id="developEmailTemplateSubmitBtn" type="submit" class="btn btn-primary">Save Template</button>
+                <button id="developEmailTemplateResetBtn" type="button" class="btn">Reset</button>
               </div>
             </form>
             <div id="developEmailTemplatesLibrary" class="develop-template-library"></div>
@@ -971,8 +1076,8 @@
         <div class="page-heading-row">
           <h2>Builder: Extensions</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')" class="btn">Manage Extensions</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <p>Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
@@ -982,44 +1087,56 @@
         <div class="page-heading-row">
           <h2>Builder: Extension Manager</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
-            <button type="button" onclick="App.setActivePage('developPage')">Back To Builder</button>
+            <button type="button" onclick="App.setActivePage('developToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
         <p>Maintain a searchable extension repository with recursive parent-child taxonomy, definitions, and descriptive metadata.</p>
-        <form id="developExtensionManagerForm">
+        <form id="developExtensionManagerForm" class="standard-form-grid">
           <input id="developExtensionIdInput" name="extension_id" type="hidden" />
-          <div class="grid-form">
-            <input id="developExtensionNameInput" name="name" placeholder="Extension name" />
-            <select id="developExtensionTypeSelect" name="extension_type">
-              <option value="">Extension Type</option>
-              <option value="manager">Manager</option>
-              <option value="utility">Utility</option>
-              <option value="generator">Generator</option>
-              <option value="connector">Connector</option>
-              <option value="workflow">Workflow</option>
-              <option value="automation">Automation</option>
-              <option value="analytics">Analytics</option>
-              <option value="catalog">Catalog</option>
-              <option value="custom">Custom</option>
-            </select>
-            <select id="developExtensionParentSelect" name="parent_id">
-              <option value="">Parent Extension (Optional)</option>
-            </select>
-            <select id="developExtensionStatusSelect" name="status">
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-          <input id="developExtensionTagsInput" name="tags" placeholder="Tags (comma-separated)" />
-          <textarea id="developExtensionSummaryInput" name="summary" rows="3" placeholder="Summary: what this extension does and why it exists."></textarea>
-          <textarea id="developExtensionDefinitionInput" name="definition" rows="6" placeholder="Definition: describe the extension in detail, including taxonomy context, behavior, and intended use."></textarea>
+          
+          <label for="developExtensionNameInput">Extension Name</label>
+          <input id="developExtensionNameInput" name="name" />
+          
+          <label for="developExtensionTypeSelect">Extension Type</label>
+          <select id="developExtensionTypeSelect" name="extension_type">
+            <option value="">Extension Type</option>
+            <option value="manager">Manager</option>
+            <option value="utility">Utility</option>
+            <option value="generator">Generator</option>
+            <option value="connector">Connector</option>
+            <option value="workflow">Workflow</option>
+            <option value="automation">Automation</option>
+            <option value="analytics">Analytics</option>
+            <option value="catalog">Catalog</option>
+            <option value="custom">Custom</option>
+          </select>
+          
+          <label for="developExtensionParentSelect">Parent Extension</label>
+          <select id="developExtensionParentSelect" name="parent_id">
+            <option value="">Parent Extension (Optional)</option>
+          </select>
+          
+          <label for="developExtensionStatusSelect">Status</label>
+          <select id="developExtensionStatusSelect" name="status">
+            <option value="active">Active</option>
+            <option value="draft">Draft</option>
+            <option value="archived">Archived</option>
+          </select>
+          
+          <label for="developExtensionTagsInput">Tags</label>
+          <input id="developExtensionTagsInput" name="tags" />
+          
+          <label for="developExtensionSummaryInput">Summary</label>
+          <textarea id="developExtensionSummaryInput" name="summary" rows="3"></textarea>
+          
+          <label for="developExtensionDefinitionInput">Definition</label>
+          <textarea id="developExtensionDefinitionInput" name="definition" rows="6"></textarea>
+          
           <div></div>
-              <div class="page-heading-actions">
-            <div></div>
-              <button id="developExtensionSubmitBtn" type="submit">Save Extension</button>
-            <button id="developExtensionResetBtn" type="button">Reset</button>
+          <div class="page-heading-actions">
+            <button id="developExtensionSubmitBtn" type="submit" class="btn btn-primary">Save Extension</button>
+            <button id="developExtensionResetBtn" type="button" class="btn">Reset</button>
           </div>
         </form>
         <table>
@@ -1044,11 +1161,11 @@
               <th></th>
             </tr>
             <tr>
-              <th><button id="developExtensionsSortNameBtn" type="button">Name</button></th>
-              <th><button id="developExtensionsSortTypeBtn" type="button">Type</button></th>
-              <th><button id="developExtensionsSortTaxonomyBtn" type="button">Taxonomy</button></th>
-              <th><button id="developExtensionsSortStatusBtn" type="button">Status</button></th>
-              <th><button id="developExtensionsSortUpdatedBtn" type="button">Updated</button></th>
+              <th><button id="developExtensionsSortNameBtn" type="button" class="btn">Name</button></th>
+              <th><button id="developExtensionsSortTypeBtn" type="button" class="btn">Type</button></th>
+              <th><button id="developExtensionsSortTaxonomyBtn" type="button" class="btn">Taxonomy</button></th>
+              <th><button id="developExtensionsSortStatusBtn" type="button" class="btn">Status</button></th>
+              <th><button id="developExtensionsSortUpdatedBtn" type="button" class="btn">Updated</button></th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1063,52 +1180,65 @@
         <div class="page-heading-row">
           <h2>Extension: Icon Builder</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
-            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
+            <button type="button" onclick="App.setActivePage('developToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')" class="btn">Manage Extensions</button>
           </div>
         </div>
         <h3>Icon Builder</h3>
         <p>Generate a compact icon immediately for a message, asset, campaign, or other system object.</p>
-        <form id="iconBuilderForm">
-          <div class="grid-form">
-            <select name="object_type">
-              <option value="message">Message</option>
-              <option value="asset">Asset</option>
-              <option value="campaign">Campaign</option>
-              <option value="channel">Channel</option>
-              <option value="contact_segment">Contact Segment</option>
-              <option value="custom">Custom</option>
-            </select>
-            <input name="object_name" placeholder="Object name" />
-            <input name="category" placeholder="Category" />
-            <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
+        <form id="iconBuilderForm" class="standard-form-grid">
+          <label for="iconBuilderObjectTypeSelect">Object Type</label>
+          <select id="iconBuilderObjectTypeSelect" name="object_type">
+            <option value="message">Message</option>
+            <option value="asset">Asset</option>
+            <option value="campaign">Campaign</option>
+            <option value="channel">Channel</option>
+            <option value="contact_segment">Contact Segment</option>
+            <option value="custom">Custom</option>
+          </select>
+          
+          <label for="iconBuilderObjectNameInput">Object Name</label>
+          <input id="iconBuilderObjectNameInput" name="object_name" />
+          
+          <label for="iconBuilderCategoryInput">Category</label>
+          <input id="iconBuilderCategoryInput" name="category" />
+          
+          <label for="iconBuilderWorkspaceIdInput">Workspace ID</label>
+          <input id="iconBuilderWorkspaceIdInput" name="workspace_id" value="alphire-main" />
+          
+          <label for="iconBuilderObjectSummaryInput">Object Summary</label>
+          <textarea id="iconBuilderObjectSummaryInput" name="object_summary" rows="5"></textarea>
+          
+          <label for="iconBuilderVisualStyleSelect">Visual Style</label>
+          <select id="iconBuilderVisualStyleSelect" name="visual_style">
+            <option value="clean-flat">Clean Flat</option>
+            <option value="outlined-bold">Outlined Bold</option>
+            <option value="badge-minimal">Badge Minimal</option>
+            <option value="editorial-mark">Editorial Mark</option>
+          </select>
+          
+          <label for="iconBuilderPaletteInput">Preferred Colors</label>
+          <input id="iconBuilderPaletteInput" name="palette" />
+          
+          <label for="iconBuilderDestinationSelect">Destination</label>
+          <select id="iconBuilderDestinationSelect" name="destination">
+            <option value="menu-bar">Menu Bar</option>
+            <option value="table-list">Table List</option>
+            <option value="card-badge">Card Badge</option>
+          </select>
+          
+          <label for="iconBuilderSizeInput">Output Size</label>
+          <input id="iconBuilderSizeInput" name="size" value="64x64" />
+          
+          <div class="standard-form-grid-full">
+            <label class="checkbox-row">
+              <input name="manual_confirmed" type="checkbox" />
+              I manually confirm this API action.
+            </label>
           </div>
-          <textarea
-            name="object_summary"
-            rows="5"
-            placeholder="Describe the object, its purpose, tone, and what the icon should communicate."
-          ></textarea>
-          <div class="grid-form">
-            <select name="visual_style">
-              <option value="clean-flat">Clean Flat</option>
-              <option value="outlined-bold">Outlined Bold</option>
-              <option value="badge-minimal">Badge Minimal</option>
-              <option value="editorial-mark">Editorial Mark</option>
-            </select>
-            <input name="palette" placeholder="Preferred colors, e.g. blue, orange, white" />
-            <select name="destination">
-              <option value="menu-bar">Menu Bar</option>
-              <option value="table-list">Table List</option>
-              <option value="card-badge">Card Badge</option>
-            </select>
-            <input name="size" placeholder="Output size" value="64x64" />
-          </div>
-          <label class="checkbox-row">
-            <input name="manual_confirmed" type="checkbox" />
-            I manually confirm this API action.
-          </label>
+          
           <div></div>
-              <button type="submit">Create Icon Job</button>
+          <button type="submit" class="btn btn-primary">Create Icon Job</button>
         </form>
         <h3>Icon Request Preview</h3>
         <pre id="iconBuilderRequestPreview" class="code-box">{}</pre>
@@ -1122,26 +1252,29 @@
           </div>
         </div>
         <h3>General Tool Job</h3>
-        <form id="developToolsForm">
-          <div class="grid-form">
-            <select name="tool_name">
-              <option value="segmentation.build">segmentation.build</option>
-              <option value="buffer.queue">buffer.queue</option>
-              <option value="email.template.builder">email.template.builder</option>
-            </select>
-            <input name="workspace_id" placeholder="Workspace ID" value="alphire-main" />
+        <form id="developToolsForm" class="standard-form-grid">
+          <label for="developToolsNameSelect">Tool Name</label>
+          <select id="developToolsNameSelect" name="tool_name">
+            <option value="segmentation.build">segmentation.build</option>
+            <option value="buffer.queue">buffer.queue</option>
+            <option value="email.template.builder">email.template.builder</option>
+          </select>
+          
+          <label for="developToolsWorkspaceIdInput">Workspace ID</label>
+          <input id="developToolsWorkspaceIdInput" name="workspace_id" value="alphire-main" />
+          
+          <label for="developToolsInputJson">Tool Input JSON</label>
+          <textarea id="developToolsInputJson" name="input_json" rows="6">{"segment_name":"","rules":[]}</textarea>
+          
+          <div class="standard-form-grid-full">
+            <label class="checkbox-row">
+              <input name="manual_confirmed" type="checkbox" />
+              I manually confirm this API action.
+            </label>
           </div>
-          <textarea
-            name="input_json"
-            rows="6"
-            placeholder='Tool input JSON, e.g. {"segment_name":"Creator leads","rules":[{"field":"instagram","operator":"contains","value":"@"}]}'
-          >{"segment_name":"","rules":[]}</textarea>
-          <label class="checkbox-row">
-            <input name="manual_confirmed" type="checkbox" />
-            I manually confirm this API action.
-          </label>
+          
           <div></div>
-              <button type="submit">Create Tool Job</button>
+          <button type="submit" class="btn btn-primary">Create Tool Job</button>
         </form>
         <h3>Advanced Tool Runner</h3>
         <p>Run generic internal tool jobs for extension-level operations that do not yet have dedicated UIs.</p>
@@ -1154,19 +1287,23 @@
         <div class="page-heading-row">
           <h2>Extension: Screenshot</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
-            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
+            <button type="button" onclick="App.setActivePage('developToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')" class="btn">Manage Extensions</button>
           </div>
         </div>
         <p>Paste a website URL to create a `640x360` screenshot, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Screenshot`.</p>
-        <form id="developScreenshotForm">
-          <div class="grid-form">
-            <input name="url" placeholder="https://example.com" />
-            <input name="asset_name" placeholder="Asset name (optional)" />
-          </div>
-          <input name="tags" placeholder="Tags (comma-separated)" />
+        <form id="developScreenshotForm" class="standard-form-grid">
+          <label for="developScreenshotUrlInput">URL</label>
+          <input id="developScreenshotUrlInput" name="url" />
+          
+          <label for="developScreenshotAssetNameInput">Asset Name (optional)</label>
+          <input id="developScreenshotAssetNameInput" name="asset_name" />
+          
+          <label for="developScreenshotTagsInput">Tags (comma-separated)</label>
+          <input id="developScreenshotTagsInput" name="tags" />
+          
           <div></div>
-              <button type="submit">Capture Screenshot</button>
+          <button type="submit" class="btn btn-primary">Capture Screenshot</button>
         </form>
         <h3>Screenshot Response</h3>
         <pre id="developScreenshotResponsePreview" class="code-box">{}</pre>
@@ -1182,24 +1319,28 @@
         <div class="page-heading-row">
           <h2>Extension: Thumbnail</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('developToolsPage')">Back To Extensions</button>
-            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')">Manage Extensions</button>
+            <button type="button" onclick="App.setActivePage('developToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.setActivePage('developExtensionsManagerPage')" class="btn">Manage Extensions</button>
           </div>
         </div>
         <p>Generate an image thumbnail from the first page of a PDF file location, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Thumbnail`.</p>
-        <form id="developThumbnailForm">
-          <div class="grid-form">
-            <input name="file_location" placeholder="PDF file location (https://...pdf)" />
-            <select id="developThumbnailSourceAssetSelect" name="source_asset_id">
-              <option value="">Source Asset (Optional)</option>
-            </select>
-          </div>
-          <div class="grid-form">
-            <input name="asset_name" placeholder="Thumbnail asset name (optional)" />
-            <input name="tags" placeholder="Tags (comma-separated)" />
-          </div>
+        <form id="developThumbnailForm" class="standard-form-grid">
+          <label for="developThumbnailLocationInput">PDF File Location</label>
+          <input id="developThumbnailLocationInput" name="file_location" />
+          
+          <label for="developThumbnailSourceAssetSelect">Source Asset</label>
+          <select id="developThumbnailSourceAssetSelect" name="source_asset_id">
+            <option value="">Source Asset (Optional)</option>
+          </select>
+          
+          <label for="developThumbnailAssetNameInput">Thumbnail Asset Name (optional)</label>
+          <input id="developThumbnailAssetNameInput" name="asset_name" />
+          
+          <label for="developThumbnailTagsInput">Tags (comma-separated)</label>
+          <input id="developThumbnailTagsInput" name="tags" />
+          
           <div></div>
-              <button type="submit">Generate Thumbnail</button>
+          <button type="submit" class="btn btn-primary">Generate Thumbnail</button>
         </form>
         <h3>Thumbnail Response</h3>
         <pre id="developThumbnailResponsePreview" class="code-box">{}</pre>

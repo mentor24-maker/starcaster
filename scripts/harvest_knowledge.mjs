@@ -22,17 +22,27 @@ if (!SUPABASE_URL || !SUPABASE_KEY || !OPENAI_KEY) {
 // Clean key formatting string escaping issues from CI copies
 const cleanServiceKey = SUPABASE_KEY.replace(/\\n/g, '').trim();
 
-function getFilesByExt(dir, extArray, fileList = []) {
-  if (!fs.existsSync(dir)) return fileList;
-  const files = fs.readdirSync(dir);
+function getFilesByExt(dirPath, extArray, fileList = []) {
+  if (!fs.existsSync(dirPath)) return fileList;
+  const stat = fs.statSync(dirPath);
+  if (!stat.isDirectory()) {
+    const ext = path.extname(dirPath).toLowerCase();
+    if (extArray.includes(ext)) {
+      fileList.push(dirPath);
+    }
+    return fileList;
+  }
+  const files = fs.readdirSync(dirPath);
   for (const file of files) {
-    const stat = fs.statSync(path.join(dir, file));
-    if (stat.isDirectory()) {
-      getFilesByExt(path.join(dir, file), extArray, fileList);
+    if (file === 'node_modules' || file === '.git') continue;
+    const fullPath = path.join(dirPath, file);
+    const childStat = fs.statSync(fullPath);
+    if (childStat.isDirectory()) {
+      getFilesByExt(fullPath, extArray, fileList);
     } else {
       const ext = path.extname(file).toLowerCase();
       if (extArray.includes(ext)) {
-        fileList.push(path.join(dir, file));
+        fileList.push(fullPath);
       }
     }
   }
@@ -97,12 +107,37 @@ function chunkText(text, maxChars = 3500) {
   return chunks;
 }
 
+async function clearSupabaseCorpus() {
+  console.log("🧹 Wiping previous knowledge records...");
+  const req = await fetch(`${SUPABASE_URL}/rest/v1/training_corpus?id=not.is.null`, {
+    method: 'DELETE',
+    headers: {
+      'apikey': cleanServiceKey,
+      'Authorization': `Bearer ${cleanServiceKey}`
+    }
+  });
+  if (!req.ok) {
+    const errorText = await req.text();
+    console.error(`Warning: Could not clear previous corpus (${req.status}): ${errorText}`);
+  }
+}
+
 async function run() {
   console.log("🧠 Core Tri-Agent Context Harvester Initiated...");
 
-  // Explicitly targeting the documentation hierarchy as a proof of concept.
+  await clearSupabaseCorpus();
+
+  const os = await import('os');
   const targetDirs = [
-    { dir: path.resolve(__dirname, '../docs'), type: 'Architecture & Rules', exts: ['.md', '.sql'] }
+    { dir: path.resolve(__dirname, '../docs'), type: 'Architecture & Rules', exts: ['.md', '.sql'] },
+    { dir: path.join(os.homedir(), '.gemini/antigravity/knowledge'), type: 'Knowledge Item', exts: ['.md'] },
+    { dir: path.resolve(__dirname, '../public/js'), type: 'Frontend Logic', exts: ['.js'] },
+    { dir: path.resolve(__dirname, '../routes'), type: 'Backend API', exts: ['.js'] },
+    { dir: path.resolve(__dirname, '../lib'), type: 'Backend Logic', exts: ['.js'] },
+    { dir: path.resolve(__dirname, '../src/pages'), type: 'Frontend HTML', exts: ['.html'] },
+    { dir: path.resolve(__dirname, '../src/layout.html'), type: 'Frontend HTML', exts: ['.html'] },
+    { dir: path.resolve(__dirname, '../server.js'), type: 'Server Logic', exts: ['.js'] },
+    { dir: path.resolve(__dirname, '../app.js'), type: 'Frontend Logic', exts: ['.js'] }
   ];
 
   let totalUploaded = 0;
@@ -119,7 +154,6 @@ async function run() {
       
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        // Demarcate large files explicitly in database
         const recordTitle = chunks.length > 1 ? `${filename} (Part ${i+1})` : filename;
         
         try {

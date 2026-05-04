@@ -2068,7 +2068,8 @@ App.acquire = (function () {
       const popQualityLabel = document.createElement('label');
       popQualityLabel.textContent = 'Quality (1-5)';
       const popQualitySelect = document.createElement('select');
-      popQualitySelect.innerHTML = '<option value="0">0 (unset)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>';
+      popQualitySelect.appendChild(new Option('0 (unset)', '0'));
+      for (let i = 1; i <= 5; i++) popQualitySelect.appendChild(new Option(String(i), String(i)));
       popQualitySelect.value = String(Number(feedback.quality || 0));
       popQualityRow.appendChild(popQualityLabel);
       popQualityRow.appendChild(popQualitySelect);
@@ -2368,7 +2369,8 @@ App.acquire = (function () {
       const qualityLabel = document.createElement('label');
       qualityLabel.textContent = 'Quality (1-5)';
       const popQuality = document.createElement('select');
-      popQuality.innerHTML = '<option value="0">0 (unset)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>';
+      popQuality.appendChild(new Option('0 (unset)', '0'));
+      for (let i = 1; i <= 5; i++) popQuality.appendChild(new Option(String(i), String(i)));
       popQuality.value = String(feedback.quality || 0);
       qualityRow.appendChild(qualityLabel);
       qualityRow.appendChild(popQuality);
@@ -3031,12 +3033,52 @@ App.acquire = (function () {
       let payload;
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) payload = JSON.parse(saved);
+        if (saved) {
+          payload = JSON.parse(saved);
+          if (payload && payload.layoutSections && (payload.layoutSections[0]?.modules?.[0]?.type === 'system-app' || payload.layoutSections.length === 1)) {
+            payload = null;
+            localStorage.removeItem(STORAGE_KEY);
+          }
+        }
       } catch (err) {}
-      if (!payload || !payload.layoutSections) {
+      if (!payload || !payload.layoutSections || payload.layoutSections[0]?.modules?.[0]?.type === 'system-app' || payload.layoutSections.length === 1) {
         payload = {
           layoutSections: [
-            { layout: '12', title: 'Acquire Hub', collapsed: false, modules: [{ type: 'system-app', systemId: 'acquire-hub-panel', column: 'col1' }] }
+            {
+              layout: '3-3', title: 'Row 1', collapsed: false,
+              modules: [
+                { type: 'pod', column: 'col1', settings: { title: 'Web Domain', description: 'Automated crawler fetching external site content.', logoUrl: '/images/logos/web.svg', targetPage: 'acquireWebPage' } },
+                { type: 'pod', column: 'col2', settings: { title: 'YouTube', description: 'Video indexing and transcript mining tools.', logoUrl: '/images/logos/youtube.svg', targetPage: 'acquireYoutubePage' } }
+              ]
+            },
+            {
+              layout: '3-3', title: 'Row 2', collapsed: false,
+              modules: [
+                { type: 'pod', column: 'col1', settings: { title: 'BlueSky', description: 'Rapid decentralised feed monitoring.', logoUrl: '/images/logos/bluesky.svg', targetPage: 'acquireBlueskyPage' } },
+                { type: 'pod', column: 'col2', settings: { title: 'Instagram', description: 'Basic meta ingestion via official endpoints.', logoUrl: '/images/logos/instagram.svg', targetPage: 'acquireInstagramPage' } }
+              ]
+            },
+            {
+              layout: '3-3', title: 'Row 3', collapsed: false,
+              modules: [
+                { type: 'pod', column: 'col1', settings: { title: 'TikTok', description: 'Short-form video discovery and trending topic extraction.', logoUrl: '/images/logos/tiktok.svg', targetPage: 'acquireTiktokPage' } },
+                { type: 'pod', column: 'col2', settings: { title: 'Facebook', description: 'Group and page interaction ingestion and analysis.', logoUrl: '/images/logos/facebook.svg', targetPage: 'acquireFacebookPage' } }
+              ]
+            },
+            {
+              layout: '3-3', title: 'Row 4', collapsed: false,
+              modules: [
+                { type: 'pod', column: 'col1', settings: { title: 'X (Twitter)', description: 'Real-time microblog monitoring and sentiment tracking.', logoUrl: '/images/logos/x.svg', targetPage: 'acquireXPage' } },
+                { type: 'pod', column: 'col2', settings: { title: 'Quora', description: 'Question and answer platform scraping for niche expertise.', logoUrl: '/images/logos/quora.svg', targetPage: 'acquireQuoraPage' } }
+              ]
+            },
+            {
+              layout: '3-3', title: 'Row 5', collapsed: false,
+              modules: [
+                { type: 'pod', column: 'col1', settings: { title: 'Substack', description: 'Long-form newsletter ingestion and audience analysis.', logoUrl: '/images/logos/substack.svg', targetPage: 'acquireSubstackPage' } },
+                { type: 'pod', column: 'col2', settings: { title: 'Medium', description: 'Article extraction and topic clustering for written content.', logoUrl: '/images/logos/medium.svg', targetPage: 'acquireMediumPage' } }
+              ]
+            }
           ]
         };
       }
@@ -3046,32 +3088,12 @@ App.acquire = (function () {
         const heading = targetWrap.querySelector('.page-heading-row');
         const hubBody = targetWrap.querySelector('#acquireHubBody');
         
-        targetWrap.innerHTML = App.develop.buildModularPageTemplatePreviewMarkup(payload);
+        targetWrap.textContent = '';
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(App.develop.buildModularPageTemplatePreviewMarkup(payload), 'text/html');
+        Array.from(doc.body.childNodes).forEach(node => targetWrap.appendChild(node.cloneNode(true)));
         
         if (heading) {
-          const actionRow = heading.querySelector('.page-heading-actions');
-          if (actionRow) {
-            const editBtn = document.createElement('button');
-            editBtn.type = 'button';
-            editBtn.className = 'tiny-btn';
-            editBtn.innerHTML = '<i data-lucide="layout-template"></i> Edit Hub UI';
-            editBtn.addEventListener('click', () => {
-              App.develop.openModularPageTemplateEditor(payload, {
-                mode: 'template',
-                onSave: (newPayload) => {
-                  try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newPayload));
-                    App.notify('Acquire Hub layout saved locally. Refreshed required.', false);
-                    setTimeout(() => window.location.reload(), 800);
-                  } catch (e) {
-                    App.notify('Could not save local config', true);
-                  }
-                }
-              });
-            });
-            actionRow.appendChild(editBtn);
-            if (window.lucide) window.lucide.createIcons({ root: editBtn });
-          }
           targetWrap.insertBefore(heading, targetWrap.firstChild);
         }
         
@@ -3087,6 +3109,75 @@ App.acquire = (function () {
     if (acquirePageActions && !acquirePageActions.dataset.bound) {
       acquirePageActions.dataset.bound = 'true';
       acquirePageActions.innerHTML = '';
+      
+      if (App.develop && typeof App.develop.openModularPageTemplateEditor === 'function') {
+        const editBtn = App.makeIconButton('edit', 'Edit Hub UI', function () {
+          const STORAGE_KEY = 'alphire:acquire-hub:layout';
+          let payload;
+          try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) payload = JSON.parse(saved);
+          } catch (err) {}
+          if (!payload || !payload.layoutSections || payload.layoutSections[0]?.modules?.[0]?.type === 'system-app' || payload.layoutSections.length === 1) {
+            payload = {
+              layoutSections: [
+                {
+                  layout: '3-3', title: 'Row 1', collapsed: false,
+                  modules: [
+                    { type: 'pod', column: 'col1', settings: { title: 'Web Domain', description: 'Automated crawler fetching external site content.', logoUrl: '/images/logos/web.svg', targetPage: 'acquireWebPage' } },
+                    { type: 'pod', column: 'col2', settings: { title: 'YouTube', description: 'Video indexing and transcript mining tools.', logoUrl: '/images/logos/youtube.svg', targetPage: 'acquireYoutubePage' } }
+                  ]
+                },
+                {
+                  layout: '3-3', title: 'Row 2', collapsed: false,
+                  modules: [
+                    { type: 'pod', column: 'col1', settings: { title: 'BlueSky', description: 'Rapid decentralised feed monitoring.', logoUrl: '/images/logos/bluesky.svg', targetPage: 'acquireBlueskyPage' } },
+                    { type: 'pod', column: 'col2', settings: { title: 'Instagram', description: 'Basic meta ingestion via official endpoints.', logoUrl: '/images/logos/instagram.svg', targetPage: 'acquireInstagramPage' } }
+                  ]
+                },
+                {
+                  layout: '3-3', title: 'Row 3', collapsed: false,
+                  modules: [
+                    { type: 'pod', column: 'col1', settings: { title: 'TikTok', description: 'Short-form video discovery and trending topic extraction.', logoUrl: '/images/logos/tiktok.svg', targetPage: 'acquireTiktokPage' } },
+                    { type: 'pod', column: 'col2', settings: { title: 'Facebook', description: 'Group and page interaction ingestion and analysis.', logoUrl: '/images/logos/facebook.svg', targetPage: 'acquireFacebookPage' } }
+                  ]
+                },
+                {
+                  layout: '3-3', title: 'Row 4', collapsed: false,
+                  modules: [
+                    { type: 'pod', column: 'col1', settings: { title: 'X (Twitter)', description: 'Real-time microblog monitoring and sentiment tracking.', logoUrl: '/images/logos/x.svg', targetPage: 'acquireXPage' } },
+                    { type: 'pod', column: 'col2', settings: { title: 'Quora', description: 'Question and answer platform scraping for niche expertise.', logoUrl: '/images/logos/quora.svg', targetPage: 'acquireQuoraPage' } }
+                  ]
+                },
+                {
+                  layout: '3-3', title: 'Row 5', collapsed: false,
+                  modules: [
+                    { type: 'pod', column: 'col1', settings: { title: 'Substack', description: 'Long-form newsletter ingestion and audience analysis.', logoUrl: '/images/logos/substack.svg', targetPage: 'acquireSubstackPage' } },
+                    { type: 'pod', column: 'col2', settings: { title: 'Medium', description: 'Article extraction and topic clustering for written content.', logoUrl: '/images/logos/medium.svg', targetPage: 'acquireMediumPage' } }
+                  ]
+                }
+              ]
+            };
+          }
+
+          App.develop.openModularPageTemplateEditor(payload, {
+            mode: 'template',
+            targetPage: 'developTemplatesPage',
+            onClose: () => { App.setActivePage('acquirePage'); },
+            onSave: (newPayload) => {
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(newPayload));
+                App.notify('Acquire Hub layout saved locally. Refresh required.', false);
+                setTimeout(() => window.location.reload(), 800);
+              } catch (e) {
+                App.notify('Could not save local config', true);
+              }
+            }
+          });
+        });
+        acquirePageActions.appendChild(editBtn);
+      }
+      
       const settingsBtn = App.makeIconButton('settings', 'Acquire Settings', function () {
         App.setActivePage('acquireSettingsPage');
       });

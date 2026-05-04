@@ -3,14 +3,14 @@
         <div class="page-heading-row">
           <h2>Campaigns</h2>
           <div class="page-heading-actions">
-            <button id="campaignToggleRulesBtn" type="button">Channel Rules</button>
-            <button id="campaignToggleFormBtn" type="button">Add Campaign</button>
+            <button id="campaignToggleRulesBtn" type="button" class="btn">Channel Rules</button>
+            <button id="campaignToggleFormBtn" type="button" class="btn">Add Campaign</button>
           </div>
         </div>
-        <section id="campaignChannelRulesPanel" class="stack-form hidden" style="border: 1px solid #b7cde6; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+        <section id="campaignChannelRulesPanel" class="stack-form hidden" style="border: 1px solid var(--border-light); border-radius: var(--radius-container); background: var(--bg-surface); padding: 1.5rem; margin-bottom: 1rem;">
           <h3 style="margin: 0;">Channel Field Rules</h3>
           <p class="meta" style="margin-top: 0.35rem;">Choose a channel, then define which fields are shown and which mechanics fields are required.</p>
-          <div class="form-row">
+          <div class="standard-form-grid">
             <label for="campaignRulesChannelSelect">Channel</label>
             <select id="campaignRulesChannelSelect"></select>
           </div>
@@ -29,8 +29,8 @@
             <div id="campaignRulesVisibleContentList" class="grid-form" style="grid-template-columns: repeat(2, minmax(0, 1fr));"></div>
           </div>
           <div class="page-heading-actions" style="justify-content: flex-start;">
-            <button id="campaignRulesSaveBtn" type="button">Save Rules</button>
-            <button id="campaignRulesResetBtn" type="button">Reset Defaults</button>
+            <button id="campaignRulesSaveBtn" type="button" class="btn">Save Rules</button>
+            <button id="campaignRulesResetBtn" type="button" class="btn">Reset Defaults</button>
           </div>
         </section>
         <form id="campaignForm" style="margin-bottom: 2rem;">
@@ -212,7 +212,7 @@
           </div>
 
           <div class="page-heading-actions" style="justify-content: center; margin-top: 1.5rem;">
-            <button id="campaignSubmitBtn" type="submit">Create Campaign</button>
+            <button id="campaignSubmitBtn" type="submit" class="btn btn-primary">Create Campaign</button>
           </div>
         </form>
 
@@ -260,13 +260,13 @@
                 <th></th>
               </tr>
               <tr>
-                <th><button id="campaignSortNameBtn" type="button" class="tiny-btn">Campaign Name</button></th>
-                <th><button id="campaignSortStatusBtn" type="button" class="tiny-btn">Status</button></th>
-                <th><button id="campaignSortSegmentBtn" type="button" class="tiny-btn">Segment</button></th>
-                <th><button id="campaignSortChannelBtn" type="button" class="tiny-btn">Channel</button></th>
-                <th><button id="campaignSortTemplateBtn" type="button" class="tiny-btn">Template</button></th>
-                <th><button id="campaignSortPageBtn" type="button" class="tiny-btn">Page</button></th>
-                <th><button id="campaignSortSubjectBtn" type="button" class="tiny-btn">Subject</button></th>
+                <th><button id="campaignSortNameBtn" type="button" class="btn">Campaign Name</button></th>
+                <th><button id="campaignSortStatusBtn" type="button" class="btn">Status</button></th>
+                <th><button id="campaignSortSegmentBtn" type="button" class="btn">Segment</button></th>
+                <th><button id="campaignSortChannelBtn" type="button" class="btn">Channel</button></th>
+                <th><button id="campaignSortTemplateBtn" type="button" class="btn">Template</button></th>
+                <th><button id="campaignSortPageBtn" type="button" class="btn">Page</button></th>
+                <th><button id="campaignSortSubjectBtn" type="button" class="btn">Subject</button></th>
                 <th>Actions</th>
               </tr>
             </thead>
