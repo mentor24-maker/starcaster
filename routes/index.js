@@ -44,6 +44,7 @@ const observe     = require('./observe');
 const roger       = require('./devAgent');
 const personas    = require('./personas');
 const tasks       = require('./tasks');
+const polls       = require('./polls');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -65,6 +66,7 @@ const ROUTE_MODULES = [
   roger,
   personas,
   tasks,
+  polls,
 ];
 
 function maskSecret(value) {
@@ -118,7 +120,7 @@ function logRegistry() {
 // ---------------------------------------------------------------------------
 
 async function handleRequest(req, res) {
-  setCors(res);
+  setCors(res, req);
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -140,10 +142,12 @@ async function handleRequest(req, res) {
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);
+  
   req.authUser = authUser || null;
   req.projectContext = null;
 
   if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !authUser) {
+
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
 

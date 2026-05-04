@@ -35,6 +35,12 @@ const {
   updateModule,
   deleteModule,
 } = require('../lib/developModulesStore');
+const {
+  listDevelopModuleClasses,
+  createDevelopModuleClass,
+  updateDevelopModuleClass,
+  deleteDevelopModuleClass,
+} = require('../lib/developModuleClassesStore');
 const { createIcon } = require('../lib/developIconStore');
 const { createAsset, rowToAsset } = require('../lib/assetsStore');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
@@ -55,6 +61,7 @@ const {
   saveManagerConfig,
 } = require('../lib/developExtensionsManagerStore');
 const { listContacts, createContact, updateContact, rowToContact } = require('../lib/ContactsStore');
+const { savePollSubmission, getPollResults } = require('../lib/pollSubmissionsStore');
 
 let playwrightChromium = null;
 function getChromium() {
@@ -326,10 +333,26 @@ async function handle(req, res, pathname, method) {
     const module = await createModule({
       name,
       moduleType,
+      classId: body.classId || body.class_id,
       settings: body && typeof body.settings === 'object' ? body.settings : {},
     }, scope);
-    if (!module) return sendErr(res, 500, 'Could not create module'), true;
     return sendOk(res, 201, module, { module }), true;
+  }
+
+  if (pathname === '/api/develop/module-classes' && requestMethod === 'GET') {
+    const result = await listDevelopModuleClasses(5000, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load module classes'), true;
+    const classes = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, classes, { classes }, { total: classes.length }), true;
+  }
+
+  if (pathname === '/api/develop/module-classes' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createDevelopModuleClass({ name }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create module class'), true;
+    return sendOk(res, 201, result.data, { class: result.data }), true;
   }
 
   if (pathname === '/api/develop/email-templates' && requestMethod === 'POST') {
@@ -384,6 +407,7 @@ async function handle(req, res, pathname, method) {
     const module = await updateModule(moduleMatch[1], {
       name: String(body.name || '').trim(),
       moduleType: String(body.moduleType || body.module_type || '').trim(),
+      classId: body.classId !== undefined ? body.classId : body.class_id,
       settings: body && typeof body.settings === 'object' ? body.settings : {},
     }, scope);
     if (!module) return sendErr(res, 500, 'Could not update module'), true;
@@ -394,6 +418,20 @@ async function handle(req, res, pathname, method) {
     const ok = await deleteModule(moduleMatch[1], scope);
     if (!ok) return sendErr(res, 500, 'Could not delete module'), true;
     return sendOk(res, 200, { id: moduleMatch[1] }, { module: { id: moduleMatch[1] } }), true;
+  }
+
+  const classMatch = pathname.match(/^\/api\/develop\/module-classes\/([^/]+)$/);
+  if (classMatch && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const result = await updateDevelopModuleClass(classMatch[1], { name: String(body.name || '').trim() }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update module class'), true;
+    return sendOk(res, 200, result.data, { class: result.data }), true;
+  }
+
+  if (classMatch && requestMethod === 'DELETE') {
+    const result = await deleteDevelopModuleClass(classMatch[1], scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete module class'), true;
+    return sendOk(res, 200, result.data, { class: result.data }), true;
   }
 
   if (pathname === '/api/develop/icon-builder' && requestMethod === 'POST') {
@@ -984,6 +1022,52 @@ async function handle(req, res, pathname, method) {
     
     // Return 202 Accepted immediately so the UI doesn't hang
     return sendOk(res, 202, { message: 'Training harvest initiated in background.' }), true;
+  }
+
+  const pollSubmitMatch = String(pathname || '').match(/^\/api\/develop\/modules\/([^/]+)\/poll-submit\/?$/);
+  if (pollSubmitMatch && requestMethod === 'POST') {
+    const pollId = decodeURIComponent(pollSubmitMatch[1] || '').trim();
+    if (!pollId) return sendErr(res, 400, 'poll id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const body = await parseJsonBody(req);
+    const vote = String(body.vote || '').trim();
+    if (!vote) return sendErr(res, 400, 'vote is required', { code: 'VALIDATION_ERROR' }), true;
+
+    try {
+      const submission = await savePollSubmission(pollId, vote);
+      return sendOk(res, 201, submission, { submission }), true;
+    } catch (err) {
+      return sendErr(res, 500, err.message || 'Could not save poll submission'), true;
+    }
+  }
+
+  const pollResultsMatch = String(pathname || '').match(/^\/api\/develop\/modules\/([^/]+)\/poll-results\/?$/);
+  if (pollResultsMatch && requestMethod === 'GET') {
+    const pollId = decodeURIComponent(pollResultsMatch[1] || '').trim();
+    if (!pollId) return sendErr(res, 400, 'poll id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    try {
+      const results = await getPollResults(pollId);
+      
+      // Calculate aggregate results
+      const aggregates = {};
+      let totalVotes = 0;
+      for (const row of results) {
+        const vote = row.vote;
+        aggregates[vote] = (aggregates[vote] || 0) + 1;
+        totalVotes++;
+      }
+      
+      const summary = Object.keys(aggregates).map(option => ({
+        option,
+        count: aggregates[option],
+        percentage: totalVotes > 0 ? Math.round((aggregates[option] / totalVotes) * 100) : 0
+      })).sort((a, b) => b.count - a.count);
+
+      return sendOk(res, 200, summary, { total: totalVotes, results: summary }), true;
+    } catch (err) {
+      return sendErr(res, 500, err.message || 'Could not fetch poll results'), true;
+    }
   }
 
   return false;

@@ -10,7 +10,8 @@
     "routes": "Express router handlers",
     "lib": "Backend controllers, database access layers, and utilities",
     "scripts": "Maintenance, migration, and cron scripts",
-    "docs": "Documentation and SQL schemas"
+    "docs": "Documentation and SQL schemas",
+    "src": "Raw HTML source components (e.g. src/pages/*.html) which are compiled into public/index.html"
   },
-  "architecturalNotes": "This project DOES NOT use React, Vue, Next.js, or TypeScript. Frontend views are rendered via vanilla HTML in /public/index.html and managed via imperative DOM manipulation in /public/js/*. Backend views are served natively by Express."
+  "architecturalNotes": "This project DOES NOT use React, Vue, Next.js, or TypeScript. Frontend views are built from modular components in /src/pages/*.html. Run `npm run build:html` to compile them into the final /public/index.html. Frontend logic is managed via imperative DOM manipulation in /public/js/*. Backend views are served natively by Express."
 }

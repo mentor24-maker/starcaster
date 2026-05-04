@@ -1,0 +1,90 @@
+{
+  "modules": [
+    {
+      "id": "dmod_1777860269991_x09b58",
+      "projectId": "proj_1777836112136_d76m7o",
+      "ownerUserId": "usr_1773098194686_wp7vz5",
+      "name": "Poll: Would You Rather",
+      "classId": null,
+      "moduleType": "poll",
+      "settings": {
+        "pollId": "",
+        "submitLabel": "Vote",
+        "showResults": false,
+        "backgroundColor": "#ffffff"
+      },
+      "createdAt": "2026-05-04T02:04:29.991Z",
+      "updatedAt": "2026-05-04T02:04:29.991Z"
+    },
+    {
+      "id": "dmod_1777851030184_r2k367",
+      "projectId": "proj_1777836112136_d76m7o",
+      "ownerUserId": "usr_1773098194686_wp7vz5",
+      "name": "Poll: Would You Rather",
+      "classId": null,
+      "moduleType": "poll",
+      "settings": {
+        "pollId": "",
+        "submitLabel": "Vote",
+        "showResults": false,
+        "backgroundColor": "#ffffff"
+      },
+      "createdAt": "2026-05-03T23:30:30.184Z",
+      "updatedAt": "2026-05-03T23:30:30.184Z"
+    },
+    {
+      "id": "dmod_1777848436813_078fp7",
+      "projectId": "proj_1777836112136_d76m7o",
+      "ownerUserId": "usr_1773098194686_wp7vz5",
+      "name": "Poll: Would You Rather",
+      "classId": null,
+      "moduleType": "poll",
+      "settings": {
+        "question": "What is your favorite?",
+        "options": "Option A, Option B, Option C",
+        "csvUpload": "",
+        "submitLabel": "Vote",
+        "showResults": false,
+        "backgroundColor": "#ffffff"
+      },
+      "createdAt": "2026-05-03T22:47:16.813Z",
+      "updatedAt": "2026-05-03T22:47:16.813Z"
+    },
+    {
+      "id": "dmod_1777848364194_357xa9",
+      "projectId": "proj_1777836112136_d76m7o",
+      "ownerUserId": "usr_1773098194686_wp7vz5",
+      "name": "Poll: Would You Rather",
+      "classId": null,
+      "moduleType": "poll",
+      "settings": {
+        "question": "What is your favorite?",
+        "options": "Option A, Option B, Option C",
+        "csvUpload": "",
+        "submitLabel": "Choose",
+        "showResults": false,
+        "backgroundColor": "#ffffff"
+      },
+      "createdAt": "2026-05-03T22:46:04.193Z",
+      "updatedAt": "2026-05-03T22:46:04.193Z"
+    },
+    {
+      "id": "dmod_1777848222483_od0741",
+      "projectId": "proj_1777836112136_d76m7o",
+      "ownerUserId": "usr_1773098194686_wp7vz5",
+      "name": "Poll: Would You Rather",
+      "classId": null,
+      "moduleType": "poll",
+      "settings": {
+        "question": "What is your favorite?",
+        "options": "Option A, Option B, Option C",
+        "csvUpload": "",
+        "submitLabel": "Vote",
+        "showResults": false,
+        "backgroundColor": "#ffffff"
+      },
+      "createdAt": "2026-05-03T22:43:42.483Z",
+      "updatedAt": "2026-05-03T22:43:42.483Z"
+    }
+  ]
+}

@@ -19,9 +19,9 @@ const { sbQuery, tableConfig } = require('../lib/supabase');
 const { listYoutubeVideos } = require('../lib/acquire/YoutubeVideosStore');
 
 // Google Vertex SDK
-let vertexVeo = null;
+let falGenerator = null;
 try {
-  vertexVeo = require('../lib/vendor/vertexVeo');
+  falGenerator = require('../lib/vendor/fal');
 } catch (e) {
   console.warn('Vertex SDK not configured locally:', e.message);
 }
@@ -143,13 +143,14 @@ async function handle(req, res, pathname, method) {
     const customName = String(body.assetName || '').trim();
     const topic = String(body.topic || '').trim();
     const references = Array.isArray(body.references) ? body.references : [];
+    const duration = parseInt(body.duration, 10) || 4;
 
     if (!promptText) {
       return sendErr(res, 400, 'Prompt string required to initialize generation pipeline.', { code: 'INVALID_PROMPT' }), true;
     }
     
-    if (!vertexVeo) {
-      return sendErr(res, 503, 'Vertex AI Veo integration is missing or improperly mapped in backend.', { code: 'SDK_NOT_FOUND' }), true;
+    if (!falGenerator) {
+      return sendErr(res, 503, 'Fal AI integration is missing or improperly mapped in backend.', { code: 'SDK_NOT_FOUND' }), true;
     }
 
     try {
@@ -183,16 +184,19 @@ async function handle(req, res, pathname, method) {
           }
       }
 
-      // 1. Fire asynchronous job natively to Google Cloud
-      const generationJob = await vertexVeo.generateVideo(promptText, references, primaryImage);
+      // 1. Fire asynchronous job natively to Fal.ai
+      const initialRunDuration = Math.min(8, duration);
+      const generationJob = await falGenerator.generateVideo(promptText, references, primaryImage, initialRunDuration);
       const { logUsage } = require('../lib/observeStore');
-      logUsage('vertex_veo', 'video_generation_job', 1, scope);
+      logUsage('fal_ai', 'video_generation_job', 1, scope);
 
       const resolvedName = customName || `Generated Video: ${promptText.substring(0, 30)}...`;
 
       // 2. Instantiate standalone DB Row capturing the queued event
       const explicitTags = references.map(r => `ref:${r.id}`);
       explicitTags.push(`startTime:${Date.now()}`);
+      explicitTags.push(`targetDuration:${duration}`);
+      explicitTags.push(`currentDuration:0`);
 
       const dbPayload = {
         assetName: resolvedName,
@@ -207,7 +211,7 @@ async function handle(req, res, pathname, method) {
       
       const result = await createAsset(dbPayload, scope);
       if (!result.ok) {
-         console.error('Failed to log Veo generation in DB:', result.error);
+         console.error('Failed to log Fal generation in DB:', result.error);
          return sendErr(res, 500, 'Generation fired but failed database synchronization.', { code: 'DB_SYNC_FAIL' }), true;
       }
       
@@ -216,13 +220,13 @@ async function handle(req, res, pathname, method) {
         status: 'queued',
         jobId: generationJob.jobId,
         asset: rowToAsset(created),
-        message: 'Google Cloud Veo initialization successful. Asset rendering async in the cloud.'
+        message: 'Fal.ai initialization successful. Asset rendering async in the cloud.'
       }), true;
 
     } catch (err) {
       console.error('Vertex Gen Error:', err);
-      // Pass the physical mechanical error dynamically explicitly down so the UI doesn't hide it
-      return sendErr(res, 500, `Vertex Execution Failed: ${err.message}`, { code: 'VERTEX_FAIL' }), true;
+      console.error('LRO Engine crash natively:', err);
+      return sendErr(res, 500, 'Fal Execution Failed: ' + (err.message || err.toString()), { code: 'SDK_CRASH' }), true;
     }
   }
 
@@ -245,43 +249,85 @@ async function handle(req, res, pathname, method) {
     if (target.generationStatus === 'processing') {
        try {
           if (target.generationJobId) {
-             const statusData = await vertexVeo.getLROStatus(target.generationJobId);
+             const statusData = await falGenerator.getLROStatus(target.generationJobId);
              target._vertexDiagnostic = statusData; 
              
              if (statusData.error) {
-                 await updateAsset(target.id, { generationStatus: 'failed', comments: 'Vertex Error: ' + JSON.stringify(statusData.error) }, scope);
+                 await updateAsset(target.id, { generationStatus: 'failed', comments: 'Fal Error: ' + JSON.stringify(statusData.error) }, scope);
                  target.generationStatus = 'failed';
              } else if (statusData.done) {
                  // Try to gracefully extract the response GCS or base64 layout natively.
-                 // Pending explicit Vertex physical response schema shape capture.
                  let locationVal = 'https://vjs.zencdn.net/v/oceans.mp4'; 
+                 let videoBase64 = null;
                  try {
                      if (statusData.response) {
                         locationVal = JSON.stringify(statusData.response);
+                        if (statusData.response.videos && statusData.response.videos[0]) {
+                           videoBase64 = statusData.response.videos[0].bytesBase64Encoded;
+                        }
                      }
                  } catch (e) {}
 
                  const existingTags = target.tags || [];
-                 const updatedTags = existingTags.filter(t => !String(t).startsWith('endTime:'));
-                 updatedTags.push(`endTime:${Date.now()}`);
-
-                 const updated = await updateAsset(target.id, {
-                     generationStatus: 'completed',
-                     location: locationVal,
-                     tags: updatedTags
-                 }, scope);
+                 let targetDuration = 4;
+                 let currentDuration = 0;
                  
-                 if (updated.ok) {
-                    const raw = Array.isArray(updated.data) ? updated.data[0] : updated.data;
-                    target = rowToAsset(raw);
+                 existingTags.forEach(t => {
+                    if (String(t).startsWith('targetDuration:')) targetDuration = parseInt(String(t).split(':')[1], 10) || 4;
+                    if (String(t).startsWith('currentDuration:')) currentDuration = parseInt(String(t).split(':')[1], 10) || 0;
+                 });
+                 
+                 // We always submit 8-second chunks for multi-step renders.
+                 currentDuration += 8;
+                 
+                 const updatedTags = existingTags.filter(t => !String(t).startsWith('currentDuration:') && !String(t).startsWith('endTime:'));
+                 updatedTags.push(`currentDuration:${currentDuration}`);
+                 
+                 if (currentDuration < targetDuration && videoBase64) {
+                    // LOOP: Spawn extend job automatically
+                    try {
+                       const nextDuration = Math.min(8, targetDuration - currentDuration);
+                       let promptText = (target.comments || '').replace('Generative Prompt Instructions: \n', '');
+                       const nextJob = await falGenerator.generateVideo(promptText, [], { bytesBase64Encoded: videoBase64, mimeType: 'video/mp4' }, nextDuration);
+                       
+                       const updated = await updateAsset(target.id, {
+                           generationJobId: nextJob.jobId,
+                           generationStatus: 'processing',
+                           tags: updatedTags
+                       }, scope);
+                       
+                       if (updated.ok) {
+                          const raw = Array.isArray(updated.data) ? updated.data[0] : updated.data;
+                          target = rowToAsset(raw);
+                       }
+                    } catch (loopErr) {
+                       console.error('Failed to automatically loop video generation:', loopErr);
+                       await updateAsset(target.id, { generationStatus: 'failed', comments: 'Auto-Loop Error: ' + (loopErr.message || 'Unknown Crash') }, scope);
+                       target.generationStatus = 'failed';
+                       target.comments = 'Auto-Loop Error: ' + (loopErr.message || 'Unknown Crash');
+                    }
+                 } else {
+                     // FINISHED: Entire chain completed.
+                     updatedTags.push(`endTime:${Date.now()}`);
+
+                     const updated = await updateAsset(target.id, {
+                         generationStatus: 'completed',
+                         location: locationVal,
+                         tags: updatedTags
+                     }, scope);
+                     
+                     if (updated.ok) {
+                        const raw = Array.isArray(updated.data) ? updated.data[0] : updated.data;
+                        target = rowToAsset(raw);
+                     }
                  }
              }
           }
        } catch (err) {
          console.warn("LRO GET check natively threw API rejection:", err.message || err);
-         await updateAsset(target.id, { generationStatus: 'failed', comments: 'Vertex Error: ' + (err.message || 'Unknown Crash') }, scope);
+         await updateAsset(target.id, { generationStatus: 'failed', comments: 'Fal Error: ' + (err.message || 'Unknown Crash') }, scope);
          target.generationStatus = 'failed';
-         target.comments = 'Vertex Error: ' + (err.message || 'Unknown Crash');
+         target.comments = 'Fal Error: ' + (err.message || 'Unknown Crash');
        }
     }
 
@@ -289,11 +335,8 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/assets/generate/cancel' && requestMethod === 'POST') {
-    const bodyString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
-    let bodyObj = {};
-    try { bodyObj = JSON.parse(bodyString); } catch (e) {}
-    
-    const assetId = Number(bodyObj.id || parsedUrl.searchParams.get('id') || 0);
+    const body = await parseJsonBody(req);
+    const assetId = Number(body.id || parsedUrl.searchParams.get('id') || 0);
 
     if (!assetId || assetId <= 0) {
       return sendErr(res, 400, 'Valid asset id conceptually required to cancel Vertex job natively.', { code: 'INVALID_ID' }), true;
@@ -307,9 +350,11 @@ async function handle(req, res, pathname, method) {
 
     if (target && target.generationJobId) {
        try {
-          await vertexVeo.cancelLRO(target.generationJobId);
+          if (falGenerator && falGenerator.cancelLRO) {
+             await falGenerator.cancelLRO(target.generationJobId);
+          }
        } catch (err) {
-          console.warn("Vertex Cancel payload violently rejected natively. Database will still execute shutdown.", err);
+          console.warn("Fal Cancel payload violently rejected natively. Database will still execute shutdown.", err);
        }
     }
 

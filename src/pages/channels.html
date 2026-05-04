@@ -3,14 +3,14 @@
         <div class="page-heading-row">
           <h2>Channels</h2>
           <div class="page-heading-actions">
-            <button id="openAddChannelPageBtn" type="button" onclick="App.channels.openChannelsCreate(); return false;">Create Channel</button>
-            <button type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+            <button id="openAddChannelPageBtn" type="button" onclick="App.channels.openChannelsCreate(); return false;" class="btn">Create Channel</button>
+            <button type="button" onclick="App.channels.openChannelsPage(); return false;" class="btn">Back To Channels</button>
           </div>
         </div>
         <section id="channelCreatePanel" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
             <h3>Create Channel</h3>
-            <button type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+            <button type="button" onclick="App.channels.openChannelsPage(); return false;" class="btn">Back To Channels</button>
           </div>
           <form id="channelForm" class="standard-form-grid" onsubmit="App.channels.submitChannelCreate(event); return false;">
             
@@ -23,14 +23,14 @@
             
             
               <label for="channelEmailInput">Email</label>
-              <input id="channelEmailInput" name="email" type="email" required />
+              <input id="channelEmailInput" name="email" type="email" />
             
             
               <label for="channelPasswordInput">Password</label>
-              <input id="channelPasswordInput" name="password" type="password" required />
+              <input id="channelPasswordInput" name="password" type="password" />
             
             <div></div>
-              <button type="submit">Save Channel</button>
+              <button type="submit" class="btn btn-primary">Save Channel</button>
           </form>
         </section>
         <div class="table-wrap">
@@ -51,7 +51,7 @@
       <section id="addChannelPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Add Channel</h2>
-          <button id="backToChannelsBtn" type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+          <button id="backToChannelsBtn" type="button" onclick="App.channels.openChannelsPage(); return false;" class="btn">Back To Channels</button>
         </div>
         <p>The create form now opens inline on the main Channels page.</p>
       </section>
@@ -59,8 +59,8 @@
         <div class="page-heading-row">
           <h2>Edit Channel</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.channels.openChannelsCreate(); return false;">Create Channel</button>
-            <button id="backFromEditChannelBtn" type="button" onclick="App.channels.openChannelsPage(); return false;">Back To Channels</button>
+            <button type="button" onclick="App.channels.openChannelsCreate(); return false;" class="btn">Create Channel</button>
+            <button id="backFromEditChannelBtn" type="button" onclick="App.channels.openChannelsPage(); return false;" class="btn">Back To Channels</button>
           </div>
         </div>
         <form id="channelEditForm" class="standard-form-grid" onsubmit="App.channels.submitChannelEdit(event); return false;">
@@ -87,6 +87,6 @@
             />
           
           <div></div>
-              <button type="submit">Update Channel</button>
+              <button type="submit" class="btn btn-primary">Update Channel</button>
         </form>
       </section>

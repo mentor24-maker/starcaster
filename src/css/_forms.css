@@ -1,0 +1,38 @@
+input, textarea, select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-input);
+  padding: 0.8rem 1rem;
+  color: var(--ink-primary);
+  font-family: inherit;
+  font-size: 1.1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--ink-primary);
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.form-group label {
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--ink-primary);
+}
+.standard-form-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 1rem;
+  align-items: center;
+}
+.standard-form-grid > label {
+  text-align: right;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}

@@ -30,10 +30,10 @@ async function handle(req, res, pathname, method) {
     const channelType = String(body.channelType || body.channel_type || 'organic').trim();
     const contactId = body.contactId || body.contact_id || null;
 
+    const password = String(body.password || '').trim();
+
     if (!channel) return sendErr(res, 400, 'channel is required', { code: 'VALIDATION_ERROR' }), true;
     if (!userName) return sendErr(res, 400, 'userName is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!email) return sendErr(res, 400, 'email is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!password) return sendErr(res, 400, 'password is required', { code: 'VALIDATION_ERROR' }), true;
 
     const result = await createChannel({ channel, channelType, contactId, userName, email, password }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;

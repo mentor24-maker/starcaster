@@ -117,10 +117,17 @@ App.devAgent.init = async function() {
         await navigator.clipboard.writeText(fullText.trim());
         const svg = devCopySessionBtn.querySelector('svg');
         if (svg) {
-          const originalHTML = svg.innerHTML;
-          svg.innerHTML = '<polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2"></polyline>';
+          const originalNodes = Array.from(svg.childNodes);
+          svg.textContent = '';
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '20 6 9 17 4 12');
+          polyline.setAttribute('fill', 'none');
+          polyline.setAttribute('stroke', 'currentColor');
+          polyline.setAttribute('stroke-width', '2');
+          svg.appendChild(polyline);
           setTimeout(() => {
-            svg.innerHTML = originalHTML;
+            svg.textContent = '';
+            originalNodes.forEach(n => svg.appendChild(n));
           }, 2000);
         }
       } catch (err) {}
@@ -161,10 +168,17 @@ App.devAgent.init = async function() {
         
         const svg = devSaveSessionBtn.querySelector('svg');
         if (svg) {
-          const originalHTML = svg.innerHTML;
-          svg.innerHTML = '<polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2"></polyline>';
+          const originalNodes = Array.from(svg.childNodes);
+          svg.textContent = '';
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '20 6 9 17 4 12');
+          polyline.setAttribute('fill', 'none');
+          polyline.setAttribute('stroke', 'currentColor');
+          polyline.setAttribute('stroke-width', '2');
+          svg.appendChild(polyline);
           setTimeout(() => {
-            svg.innerHTML = originalHTML;
+            svg.textContent = '';
+            originalNodes.forEach(n => svg.appendChild(n));
           }, 2000);
         }
       } catch (err) {
@@ -189,7 +203,12 @@ App.devAgent.init = async function() {
       if (!session) return;
       
       const currentName = session.name;
-      titleEl.innerHTML = `<input type="text" class="session-title-edit" value="${currentName}" />`;
+      titleEl.textContent = '';
+      const sessionInput = document.createElement('input');
+      sessionInput.type = 'text';
+      sessionInput.className = 'session-title-edit';
+      sessionInput.value = currentName;
+      titleEl.appendChild(sessionInput);
       titleEl.classList.add('editing');
       
       const input = titleEl.querySelector('input');
@@ -299,9 +318,16 @@ App.devAgent.init = async function() {
     
     const message = err.message || err.toString() || 'Unknown error occurred.';
     if (isInline) {
-      el.innerHTML = `<li class="error-msg" style="padding: 1rem; color: #dc2626;">Failed to load: ${message}</li>`;
+      const li = document.createElement('li');
+      li.className = 'error-msg';
+      li.style.padding = '1rem';
+      li.style.color = '#dc2626';
+      li.textContent = `Failed to load: ${message}`;
+      el.textContent = '';
+      el.appendChild(li);
     } else {
-      el.innerHTML = `
+      const parser = new DOMParser();
+      const safeHtml = `
         <div class="page-heading-row"><h2>Error Loading Section</h2></div>
         <div style="padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--accent-warning); background: rgba(245, 158, 11, 0.05); margin: 1rem;">
           <h3 style="color: var(--accent-warning); margin-top: 0; display: flex; align-items: center; gap: 0.5rem;">
@@ -312,9 +338,13 @@ App.devAgent.init = async function() {
             </svg>
             Error Details
           </h3>
-          <p style="color: var(--text-color-secondary);">${message}</p>
+          <p style="color: var(--text-color-secondary);"></p>
         </div>
       `;
+      const doc = parser.parseFromString(safeHtml, 'text/html');
+      doc.body.querySelector('p').textContent = message;
+      el.textContent = '';
+      Array.from(doc.body.childNodes).forEach(n => el.appendChild(n.cloneNode(true)));
     }
   };
 
@@ -326,18 +356,18 @@ App.devAgent.init = async function() {
       }
     } else if (pageId === 'devProjectsPage') {
       const el = document.getElementById('devProjectBrowserTable');
-      if (el) el.innerHTML = '';
+      if (el) el.textContent = '';
       if (App.devAgent.closeProjectEditor) App.devAgent.closeProjectEditor();
     } else if (pageId === 'devTasksPage') {
       const el = document.getElementById('devTaskBrowserTable');
-      if (el) el.innerHTML = '';
+      if (el) el.textContent = '';
       if (App.devAgent.closeTaskEditor) App.devAgent.closeTaskEditor();
     } else if (pageId === 'devTeamPage') {
       const el = document.getElementById('devTeamBrowserTable');
-      if (el) el.innerHTML = '';
+      if (el) el.textContent = '';
     } else if (pageId === 'devRolesPage') {
       const el = document.getElementById('devRolesBrowserTable');
-      if (el) el.innerHTML = '';
+      if (el) el.textContent = '';
     }
     
     if (devElements.activeSessionTitle && devElements.activeSessionTitle.classList.contains('editing')) {
@@ -351,7 +381,12 @@ App.devAgent.loadGitStatus = async function() {
   const container = document.getElementById('devGitStatusContainer');
   if (!container) return;
   
-  container.innerHTML = '<div style="color: #666; font-style: italic;">Loading git metrics...</div>';
+  container.textContent = '';
+  const loadingDiv = document.createElement('div');
+  loadingDiv.style.color = '#666';
+  loadingDiv.style.fontStyle = 'italic';
+  loadingDiv.textContent = 'Loading git metrics...';
+  container.appendChild(loadingDiv);
   
   try {
     const res = await fetch('/api/develop/devAgent/git-status');
@@ -373,39 +408,55 @@ App.devAgent.loadGitStatus = async function() {
         } catch(e) { return dateStr; }
       };
       
-      container.innerHTML = `
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`
         <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
           <span style="color: #555; font-weight: 500;">Branch:</span>
-          <span style="font-family: monospace; background: #e2e8f0; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">${d.currentBranch}</span>
+          <span style="font-family: monospace; background: #e2e8f0; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem;" class="branch-val"></span>
         </div>
         <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
           <span style="color: #555; font-weight: 500;">Last Commit:</span>
-          <span style="font-size: 0.85rem;">${formatDate(d.lastCommitDate)}</span>
+          <span style="font-size: 0.85rem;" class="commit-val"></span>
         </div>
         <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
           <span style="color: #555; font-weight: 500;">Last Push:</span>
-          <span style="font-size: 0.85rem;">${formatDate(d.lastPushDate)}</span>
+          <span style="font-size: 0.85rem;" class="push-val"></span>
         </div>
         <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
           <span style="color: #555; font-weight: 500;">Unpushed Commits:</span>
-          <span style="font-weight: bold; color: ${unpushedColor};">${d.unpushedCommits}</span>
+          <span style="font-weight: bold;" class="unpushed-val"></span>
         </div>
         <div style="display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
           <span style="color: #555; font-weight: 500;">Uncommitted Files:</span>
-          <span style="font-weight: bold; color: ${uncommittedColor};">${d.uncommittedFiles}</span>
+          <span style="font-weight: bold;" class="uncommitted-val"></span>
         </div>
-      `;
+      `, 'text/html');
+      doc.body.querySelector('.branch-val').textContent = String(d.currentBranch);
+      doc.body.querySelector('.commit-val').textContent = formatDate(d.lastCommitDate);
+      doc.body.querySelector('.push-val').textContent = formatDate(d.lastPushDate);
+      doc.body.querySelector('.unpushed-val').textContent = String(d.unpushedCommits);
+      doc.body.querySelector('.unpushed-val').style.color = unpushedColor;
+      doc.body.querySelector('.uncommitted-val').textContent = String(d.uncommittedFiles);
+      doc.body.querySelector('.uncommitted-val').style.color = uncommittedColor;
+      
+      container.textContent = '';
+      Array.from(doc.body.childNodes).forEach(n => container.appendChild(n.cloneNode(true)));
     } else {
       throw new Error(data.error || 'Unknown error');
     }
   } catch (err) {
     console.error('Failed to load git status:', err);
-    container.innerHTML = `<div style="color: #dc2626;">Failed to load metrics: ${err.message}</div>`;
+    container.textContent = '';
+    const errDiv = document.createElement('div');
+    errDiv.style.color = '#dc2626';
+    errDiv.textContent = `Failed to load metrics: ${err.message}`;
+    container.appendChild(errDiv);
   }
 };
 
 App.devAgent.loadActionItems = async function() {
   if (!devElements.actionItemsList) return;
+  if (!window.supabaseClient) return;
   
   try {
     const res = await window.supabaseClient
@@ -420,18 +471,28 @@ App.devAgent.loadActionItems = async function() {
     devState.actionItemsState = res.data || [];
   } catch (err) {
     console.error('Failed to load action items', err);
-    devElements.actionItemsList.innerHTML = '<li class="dev-session-item error-msg">Failed to load actions.</li>';
+    devElements.actionItemsList.textContent = '';
+    const errLi = document.createElement('li');
+    errLi.className = 'dev-session-item error-msg';
+    errLi.textContent = 'Failed to load actions.';
+    devElements.actionItemsList.appendChild(errLi);
     return;
   }
   
   const pendingItems = devState.actionItemsState;
   
   if (pendingItems.length === 0) {
-    devElements.actionItemsList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No pending actions.</li>';
+    devElements.actionItemsList.textContent = '';
+    const noneLi = document.createElement('li');
+    noneLi.className = 'dev-session-item';
+    noneLi.style.color = '#666';
+    noneLi.style.fontStyle = 'italic';
+    noneLi.textContent = 'No pending actions.';
+    devElements.actionItemsList.appendChild(noneLi);
     return;
   }
   
-  devElements.actionItemsList.innerHTML = '';
+  devElements.actionItemsList.textContent = '';
   
   pendingItems.forEach(item => {
     const li = document.createElement('li');
@@ -446,7 +507,14 @@ App.devAgent.loadActionItems = async function() {
     let displayTitle = item.title ? item.title : typeLabel;
     
     li.title = displayTitle; // Add hover text
-    li.innerHTML = `<span style="color: var(--accent-warning); font-weight: bold; margin-right: 4px;">&bull;</span>${displayTitle}`;
+    li.textContent = '';
+    const bulletSpan = document.createElement('span');
+    bulletSpan.style.color = 'var(--accent-warning)';
+    bulletSpan.style.fontWeight = 'bold';
+    bulletSpan.style.marginRight = '4px';
+    bulletSpan.textContent = '•';
+    li.appendChild(bulletSpan);
+    li.appendChild(document.createTextNode(displayTitle));
     
     li.addEventListener('click', () => {
       if (App.devAgent.openTaskEditor) {
@@ -460,8 +528,17 @@ App.devAgent.loadActionItems = async function() {
 
 App.devAgent.loadTasks = async function(projectId = null) {
   if (!devElements.taskList) return;
+  if (!window.supabaseClient) {
+    devElements.taskList.innerHTML = '<li class="dev-session-item" style="color:#dc2626; font-style:italic;">Supabase Client Not Initialized.</li>';
+    return;
+  }
   try {
-    devElements.taskList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    devElements.taskList.textContent = '';
+    const loadLi = document.createElement('li');
+    loadLi.style.padding = '1rem';
+    loadLi.style.opacity = '0.7';
+    loadLi.textContent = 'Loading...';
+    devElements.taskList.appendChild(loadLi);
     
     let query = window.supabaseClient
       .from('dev_tasks')
@@ -474,10 +551,14 @@ App.devAgent.loadTasks = async function(projectId = null) {
     
     const res = await query.order('created_at', { ascending: false });
       
-    devElements.taskList.innerHTML = '';
+    devElements.taskList.textContent = '';
     
     if (res.error) {
-      devElements.taskList.innerHTML = `<li class="error-msg">Failed to load tasks</li>`;
+      devElements.taskList.textContent = '';
+      const errLi2 = document.createElement('li');
+      errLi2.className = 'error-msg';
+      errLi2.textContent = 'Failed to load tasks';
+      devElements.taskList.appendChild(errLi2);
       return;
     }
     
@@ -485,7 +566,13 @@ App.devAgent.loadTasks = async function(projectId = null) {
     devState.tasks = tasks;
     
     if (tasks.length === 0) {
-      devElements.taskList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No active tasks.</li>';
+      devElements.taskList.textContent = '';
+      const noTasksLi = document.createElement('li');
+      noTasksLi.className = 'dev-session-item';
+      noTasksLi.style.color = '#666';
+      noTasksLi.style.fontStyle = 'italic';
+      noTasksLi.textContent = 'No active tasks.';
+      devElements.taskList.appendChild(noTasksLi);
       return;
     }
 
@@ -493,7 +580,8 @@ App.devAgent.loadTasks = async function(projectId = null) {
       const li = document.createElement('li');
       li.className = 'dev-session-item';
       li.dataset.taskId = task.id;
-      const shortTitle = task.title.length > 25 ? task.title.substring(0,25) + '...' : task.title;
+      const taskTitle = task.title || 'Untitled';
+      const shortTitle = taskTitle.length > 25 ? taskTitle.substring(0,25) + '...' : taskTitle;
       
       const statusColors = {
         backlog: '#9ca3af',
@@ -505,30 +593,62 @@ App.devAgent.loadTasks = async function(projectId = null) {
       const badgeColor = statusColors[task.status] || '#9ca3af';
       const statusLabel = (task.status || 'unknown').replace('_', ' ').toUpperCase();
 
-      let timerHtml = '';
+      let timerNode = null;
       if (task.timer_active && task.estimated_completion_time) {
         const now = new Date();
         const est = new Date(task.estimated_completion_time);
         const diffMs = est - now;
+        timerNode = document.createElement('span');
+        timerNode.style.fontSize = '0.6rem';
+        timerNode.style.marginRight = '4px';
+        timerNode.style.padding = '0.15rem 0.4rem';
+        timerNode.style.borderRadius = '10px';
+        timerNode.style.whiteSpace = 'nowrap';
+        
         if (diffMs > 0) {
           const diffMins = Math.ceil(diffMs / 60000);
-          timerHtml = `<span style="font-size:0.6rem; margin-right:4px; padding:0.15rem 0.4rem; border-radius:10px; background:#1f2937; color:#f3f4f6; border:1px solid #374151; white-space:nowrap;" title="Time until agent evaluation">⏱ ${diffMins}m</span>`;
+          timerNode.style.background = '#1f2937';
+          timerNode.style.color = '#f3f4f6';
+          timerNode.style.border = '1px solid #374151';
+          timerNode.title = 'Time until agent evaluation';
+          timerNode.textContent = `⏱ ${diffMins}m`;
         } else {
-          timerHtml = `<span style="font-size:0.6rem; margin-right:4px; padding:0.15rem 0.4rem; border-radius:10px; background:#7f1d1d; color:#fca5a5; border:1px solid #991b1b; white-space:nowrap;">⏱ Expired</span>`;
+          timerNode.style.background = '#7f1d1d';
+          timerNode.style.color = '#fca5a5';
+          timerNode.style.border = '1px solid #991b1b';
+          timerNode.textContent = '⏱ Expired';
         }
       }
 
-      li.innerHTML = `
+      const parser = new DOMParser();
+      const htmlStr = `
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-right: 0.5rem; margin-bottom: 2px;">
-          <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${task.title.replace(/"/g, '&quot;')}">
-            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${badgeColor}; margin-right:6px;"></span> ${shortTitle}
+          <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" class="task-title-span">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;" class="task-badge-span"></span> <span class="task-short-title-span"></span>
           </span>
-          <div style="display:flex; align-items:center;">
-            ${timerHtml}
-            <span style="font-size:0.6rem; padding:0.15rem 0.4rem; border-radius:10px; background:${badgeColor}22; color:${badgeColor}; border:1px solid ${badgeColor}44; white-space:nowrap; font-weight:600;">${statusLabel}</span>
+          <div style="display:flex; align-items:center;" class="task-status-container">
+            <span class="status-label-span" style="font-size:0.6rem; padding:0.15rem 0.4rem; border-radius:10px; white-space:nowrap; font-weight:600;"></span>
           </div>
         </div>
       `;
+      const doc = parser.parseFromString(htmlStr, 'text/html');
+      const titleSpan = doc.body.querySelector('.task-title-span');
+      titleSpan.title = taskTitle;
+      doc.body.querySelector('.task-badge-span').style.background = badgeColor;
+      doc.body.querySelector('.task-short-title-span').textContent = shortTitle;
+      
+      const statusLabelSpan = doc.body.querySelector('.status-label-span');
+      statusLabelSpan.style.background = badgeColor + '22';
+      statusLabelSpan.style.color = badgeColor;
+      statusLabelSpan.style.border = '1px solid ' + badgeColor + '44';
+      statusLabelSpan.textContent = statusLabel;
+      
+      if (timerNode) {
+        doc.body.querySelector('.task-status-container').insertBefore(timerNode, statusLabelSpan);
+      }
+      
+      li.textContent = '';
+      Array.from(doc.body.childNodes).forEach(n => li.appendChild(n.cloneNode(true)));
       li.addEventListener('click', () => {
         App.devAgent.openTaskEditor(task.id);
       });
@@ -540,7 +660,15 @@ App.devAgent.loadTasks = async function(projectId = null) {
       App.devAgent.loadDashboard();
     }
   } catch (err) {
-    console.error('loadSessions failed:', err); if (document.getElementById('devThreadsAccordionContainer')) document.getElementById('devThreadsAccordionContainer').innerHTML = '<div class="error-msg">' + err.message + '</div>'; if(document.getElementById('devSessionList')) document.getElementById('devSessionList').innerHTML = '<li class="error-msg">' + err.message + '</li>';
+    console.error('loadTasks failed:', err); 
+    if (devElements.taskList) {
+       devElements.taskList.textContent = '';
+       const listErr = document.createElement('li');
+       listErr.className = 'error-msg';
+       listErr.style.color = '#dc2626';
+       listErr.textContent = err.message;
+       devElements.taskList.appendChild(listErr);
+    }
   }
 };
 
@@ -552,25 +680,69 @@ App.devAgent.loadSessions = async function() {
   if (!accordionContainer && !dashboardList) return;
   
   try {
-    if (dashboardList) dashboardList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
-    if (accordionContainer) accordionContainer.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666; font-style: italic;">Loading threads...</div>';
+    if (dashboardList) {
+      dashboardList.textContent = '';
+      const loadLi = document.createElement('li');
+      loadLi.style.padding = '1rem';
+      loadLi.style.opacity = '0.7';
+      loadLi.textContent = 'Loading...';
+      dashboardList.appendChild(loadLi);
+    }
+    if (accordionContainer) {
+      accordionContainer.textContent = '';
+      const loadDiv = document.createElement('div');
+      loadDiv.style.padding = '1rem';
+      loadDiv.style.textAlign = 'center';
+      loadDiv.style.color = '#666';
+      loadDiv.style.fontStyle = 'italic';
+      loadDiv.textContent = 'Loading threads...';
+      accordionContainer.appendChild(loadDiv);
+    }
     
     const res = await App.api('/api/develop/devAgent/sessions');
     
-    if (dashboardList) dashboardList.innerHTML = '';
-    if (accordionContainer) accordionContainer.innerHTML = '';
+    if (dashboardList) dashboardList.textContent = '';
+    if (accordionContainer) accordionContainer.textContent = '';
     
     if (res.error) {
-      if (dashboardList) dashboardList.innerHTML = `<li class="error-msg">Failed to load</li>`;
-      if (accordionContainer) accordionContainer.innerHTML = `<div class="error-msg">Failed to load</div>`;
+      if (dashboardList) {
+        dashboardList.textContent = '';
+        const errLi = document.createElement('li');
+        errLi.className = 'error-msg';
+        errLi.textContent = 'Failed to load';
+        dashboardList.appendChild(errLi);
+      }
+      if (accordionContainer) {
+        accordionContainer.textContent = '';
+        const errDiv = document.createElement('div');
+        errDiv.className = 'error-msg';
+        errDiv.textContent = 'Failed to load';
+        accordionContainer.appendChild(errDiv);
+      }
       return;
     }
     
     devState.sessions = res.sessions || res.data || [];
     
     if (devState.sessions.length === 0) {
-      if (dashboardList) dashboardList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No active discussions.</li>';
-      if (accordionContainer) accordionContainer.innerHTML = '<div style="color: #666; font-style: italic; text-align: center;">No active discussions.</div>';
+      if (dashboardList) {
+        dashboardList.textContent = '';
+        const noLi = document.createElement('li');
+        noLi.className = 'dev-session-item';
+        noLi.style.color = '#666';
+        noLi.style.fontStyle = 'italic';
+        noLi.textContent = 'No active discussions.';
+        dashboardList.appendChild(noLi);
+      }
+      if (accordionContainer) {
+        accordionContainer.textContent = '';
+        const noDiv = document.createElement('div');
+        noDiv.style.color = '#666';
+        noDiv.style.fontStyle = 'italic';
+        noDiv.style.textAlign = 'center';
+        noDiv.textContent = 'No active discussions.';
+        accordionContainer.appendChild(noDiv);
+      }
       return;
     }
 
@@ -583,9 +755,11 @@ App.devAgent.loadSessions = async function() {
         const li = document.createElement('li');
         li.className = 'dev-session-item';
         li.dataset.sessionId = session.id;
-        li.innerHTML = `
-          <div class="dev-session-item-title">${session.name || 'Untitled Thread'}</div>
-        `;
+        li.textContent = '';
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'dev-session-item-title';
+        titleDiv.textContent = session.name || 'Untitled Thread';
+        li.appendChild(titleDiv);
         li.addEventListener('click', () => {
           if (App.setActivePage) App.setActivePage('devForumPage');
           App.devAgent.expandThreadAccordion(session.id);
@@ -633,7 +807,16 @@ App.devAgent.createThreadAccordion = function(session) {
   header.style.justifyContent = 'space-between';
   header.style.alignItems = 'center';
   header.style.background = 'var(--bg-input)';
-  header.innerHTML = `<h3 style="margin:0; font-size: 1.05rem;">${session.name}</h3><span class="dev-accordion-icon">▼</span>`;
+  header.textContent = '';
+  const h3 = document.createElement('h3');
+  h3.style.margin = '0';
+  h3.style.fontSize = '1.05rem';
+  h3.textContent = session.name;
+  const icon = document.createElement('span');
+  icon.className = 'dev-accordion-icon';
+  icon.textContent = '▼';
+  header.appendChild(h3);
+  header.appendChild(icon);
   
   const body = document.createElement('div');
   body.className = 'dev-thread-accordion-body hidden';
@@ -669,7 +852,12 @@ App.devAgent.expandThreadAccordion = function(sessionId) {
       
       // Load history into this accordion if it's not already loaded
       if (!body.querySelector('.dev-chat-log')) {
-        body.innerHTML = '<div class="dev-chat-log" style="max-height: 400px; overflow-y: auto;"></div>';
+        body.textContent = '';
+        const chatLog = document.createElement('div');
+        chatLog.className = 'dev-chat-log';
+        chatLog.style.maxHeight = '400px';
+        chatLog.style.overflowY = 'auto';
+        body.appendChild(chatLog);
         
         // Clone chat form template
         const template = document.getElementById('devChatFormTemplate');
@@ -748,7 +936,7 @@ App.devAgent.loadPendingCommands = async function() {
     // Remove the "No pending actions" item if loadActionItems inserted it and we have commands to add
     const pendingItems = devState.actionItemsState;
     if (pendingItems.length === 0) {
-      listEl.innerHTML = '';
+      listEl.textContent = '';
     }
     
     commands.forEach(cmdObj => {
@@ -766,7 +954,14 @@ App.devAgent.loadPendingCommands = async function() {
       const applyTitle = (tName) => {
         let finalTitle = "Approval Required";
         if (tName) finalTitle += `: ${tName}`;
-        li.innerHTML = `<span style="color: var(--accent-warning); font-weight: bold; margin-right: 4px;">&bull;</span>${finalTitle}`;
+        li.textContent = '';
+        const bulletSpan = document.createElement('span');
+        bulletSpan.style.color = 'var(--accent-warning)';
+        bulletSpan.style.fontWeight = 'bold';
+        bulletSpan.style.marginRight = '4px';
+        bulletSpan.textContent = '•';
+        li.appendChild(bulletSpan);
+        li.appendChild(document.createTextNode(finalTitle));
         li.title = finalTitle;
       };
       
@@ -801,7 +996,12 @@ App.devAgent.loadPendingCommands = async function() {
     });
     
   } catch(err) {
-    listEl.innerHTML = `<li class="error-msg" style="font-size: 0.8rem;">Error loading actions</li>`;
+    listEl.textContent = '';
+    const errLi = document.createElement('li');
+    errLi.className = 'error-msg';
+    errLi.style.fontSize = '0.8rem';
+    errLi.textContent = 'Error loading actions';
+    listEl.appendChild(errLi);
   }
 };
 
@@ -865,7 +1065,8 @@ App.devAgent.toggleTaskLinkDropdown = async function() {
   
   if (select.classList.contains('hidden')) {
     // Populate dropdown
-    select.innerHTML = '<option value="">Select Task...</option>';
+    select.textContent = '';
+    select.appendChild(new Option('Select Task...', ''));
     if (devState.tasks && devState.tasks.length > 0) {
       devState.tasks.forEach(task => {
         const opt = document.createElement('option');
@@ -909,15 +1110,23 @@ App.devAgent.loadHistory = async function(sessionId, customLogContainer = null) 
   const targetLog = customLogContainer || devElements.log;
   if (!targetLog || !sessionId) return;
   try {
-    targetLog.innerHTML = '<div class="loading-spinner">Loading chat history...</div>';
+    targetLog.textContent = '';
+    const spinner = document.createElement('div');
+    spinner.className = 'loading-spinner';
+    spinner.textContent = 'Loading chat history...';
+    targetLog.appendChild(spinner);
     if (devElements.input) devElements.input.disabled = true;
     const res = await App.api(`/api/develop/devAgent/history?sessionId=${sessionId}&limit=1000&_t=${Date.now()}`);
-    targetLog.innerHTML = '';
+    targetLog.textContent = '';
     if (devElements.input) devElements.input.disabled = false;
     
     if (res.error) {
       console.error('[devAgent] loadHistory API error:', res.error);
-      targetLog.innerHTML = `<div class="error-msg">Could not load chats: ${res.error.message || res.error}</div>`;
+      targetLog.textContent = '';
+      const errDiv = document.createElement('div');
+      errDiv.className = 'error-msg';
+      errDiv.textContent = `Could not load chats: ${res.error.message || res.error}`;
+      targetLog.appendChild(errDiv);
       return;
     }
     
@@ -935,7 +1144,12 @@ App.devAgent.loadHistory = async function(sessionId, customLogContainer = null) 
     devState.localVersionId = Math.max(devState.localVersionId || 0, maxVersion);
 
     if (chats.length === 0) {
-      targetLog.innerHTML = '<div class="dev-chat-item dev-chat-system" style="opacity: 0.5;">No message history.</div>';
+      targetLog.textContent = '';
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'dev-chat-item dev-chat-system';
+      emptyDiv.style.opacity = '0.5';
+      emptyDiv.textContent = 'No message history.';
+      targetLog.appendChild(emptyDiv);
     } else {
       App.devAgent.activePendingCommand = null;
       chats.forEach(chat => {
@@ -970,7 +1184,18 @@ App.devAgent.loadHistory = async function(sessionId, customLogContainer = null) 
     // Evaluate constraints natively post-load
     App.devAgent.renderActiveCommand();
   } catch (err) {
-    if(targetLog) targetLog.innerHTML = `<div class="error-msg">Failed to load history. Error: ${err.message}<br><pre>${err.stack}</pre></div>`;
+    if(targetLog) {
+      targetLog.textContent = '';
+      const errDiv = document.createElement('div');
+      errDiv.className = 'error-msg';
+      errDiv.textContent = `Failed to load history. Error: ${err.message}`;
+      const br = document.createElement('br');
+      const pre = document.createElement('pre');
+      pre.textContent = err.stack;
+      errDiv.appendChild(br);
+      errDiv.appendChild(pre);
+      targetLog.appendChild(errDiv);
+    }
     if (devElements.input) devElements.input.disabled = false;
   }
 };
@@ -1074,10 +1299,14 @@ App.devAgent.copyCodeBlock = async function(btn) {
     // Provide a visual checkmark feedback
     const svg = btn.querySelector('svg');
     if (svg) {
-      const originalHTML = svg.innerHTML;
-      svg.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
+      const originalNodes = Array.from(svg.childNodes);
+      svg.textContent = '';
+      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      polyline.setAttribute('points', '20 6 9 17 4 12');
+      svg.appendChild(polyline);
       setTimeout(() => {
-        svg.innerHTML = originalHTML;
+        svg.textContent = '';
+        originalNodes.forEach(n => svg.appendChild(n));
       }, 2000);
     }
   } catch(e) {
@@ -1127,12 +1356,15 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
     spinner.className = 'dev-chat-bubble-wrapper ' + chat.role;
     spinner.id = 'devChatNode_' + chat.id;
     spinner.dataset.status = 'processing';
-    spinner.innerHTML = `
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`
       <div class="dev-chat-avatar ${chat.role}" style="background-image: url('/images/${chat.role}.png');"></div>
       <div class="dev-chat-content-col">
         <div class="dev-chat-bubble ${chat.role} loading">Agent is processing objective...</div>
       </div>
-    `;
+    `, 'text/html');
+    spinner.textContent = '';
+    Array.from(doc.body.childNodes).forEach(n => spinner.appendChild(n.cloneNode(true)));
 
     const outerWrapper = document.createElement('div');
     outerWrapper.className = 'dev-chat-thread-block';
@@ -1151,7 +1383,7 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
   }
 
   if (logContainer && logContainer.querySelector('.empty-state')) {
-    logContainer.innerHTML = '';
+    logContainer.textContent = '';
   }
 
   if (chat.id) {
@@ -1303,11 +1535,12 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
 
   const copyBtnId = `copyChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
   const linkBtnId = `linkChat_${chat.id || Math.random().toString(36).substr(2, 9)}`;
-  header.innerHTML = `
+  const parser = new DOMParser();
+  const safeHeaderHtml = `
     <div><strong>${author}</strong> <span class="chat-time">${dateStr}</span></div>
     <div class="dev-copy-btn-container">
       ${editBtnHTML}
-      <button class="dev-copy-btn" title="Reply to Message" style="margin-right: 4px;" onclick="App.devAgent.toggleInlineReply(${chat.id}, this)">
+      <button class="dev-copy-btn" title="Reply to Message" style="margin-right: 4px;" onclick="App.devAgent.toggleInlineReply(${chat.id || null}, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -1327,6 +1560,9 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
       </button>
     </div>
   `;
+  const doc = parser.parseFromString(safeHeaderHtml, 'text/html');
+  header.textContent = '';
+  Array.from(doc.body.childNodes).forEach(n => header.appendChild(n.cloneNode(true)));
   
   const content = document.createElement('div');
   content.className = 'dev-chat-content';
@@ -1394,12 +1630,13 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
     }
     
     const versionStr = parsedTriAgent.state?.state_version_id ? `v${parsedTriAgent.state.state_version_id}` : '';
-    header.innerHTML = `
+    const parserHead = new DOMParser();
+    const docHead = parserHead.parseFromString(`
       <div style="flex: 1; display:flex; align-items:center;"><strong>${author}</strong> <span class="chat-time" style="margin-left: 0.5rem">${dateStr}</span></div>
       <div style="flex: 1; text-align: center; color: rgba(0,0,0,0.5); font-family: monospace; font-weight: bold; font-size: 0.85rem;">${versionStr ? '[' + versionStr + ']' : ''}</div>
       <div style="flex: 1; justify-content: flex-end;" class="dev-copy-btn-container">
         ${editBtnHTML}
-        <button class="dev-copy-btn" title="Reply to Message" style="margin-right: 4px;" onclick="App.devAgent.toggleInlineReply(${chat.id}, this)">
+        <button class="dev-copy-btn" title="Reply to Message" style="margin-right: 4px;" onclick="App.devAgent.toggleInlineReply(${chat.id || null}, this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -1418,14 +1655,19 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
           </svg>
         </button>
       </div>
-    `;
+    `, 'text/html');
+    header.textContent = '';
+    Array.from(docHead.body.childNodes).forEach(n => header.appendChild(n.cloneNode(true)));
 
-    content.innerHTML = finalUI + `
+    const parserContent = new DOMParser();
+    const docContent = parserContent.parseFromString(finalUI + `
       <details style="margin-top:12px; font-size:0.75rem; color:#888; background:rgba(0,0,0,0.02); padding:4px 8px; border-radius:4px;">
         <summary style="cursor:pointer; user-select:none;">TriAgentState Protocol Wrapper (${versionStr})</summary>
         <pre style="margin-top:5px; white-space:pre-wrap; word-break:break-all; tab-size:2;">${JSON.stringify(parsedTriAgent.state, null, 2)}</pre>
       </details>
-    `;
+    `, 'text/html');
+    content.textContent = '';
+    Array.from(docContent.body.childNodes).forEach(n => content.appendChild(n.cloneNode(true)));
     
     // Rewrite internal chat.content so the summary extractor later on uses human-readable text
     chat.content = parsedTriAgent.payload.content; 
@@ -1456,11 +1698,12 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
             let prompt = chat.raw_content || chat.content || '';
             try {
               await navigator.clipboard.writeText(prompt);
-              const originalHtml = handoffBtn.innerHTML;
-              handoffBtn.innerHTML = 'Copied! Paste to IDE';
+              const originalNodes = Array.from(handoffBtn.childNodes);
+              handoffBtn.textContent = 'Copied! Paste to IDE';
               handoffBtn.style.background = 'var(--accent-success)';
               setTimeout(() => {
-                handoffBtn.innerHTML = originalHtml;
+                handoffBtn.textContent = '';
+                originalNodes.forEach(n => handoffBtn.appendChild(n));
                 handoffBtn.style.background = 'var(--accent-warning)';
               }, 3000);
             } catch(err) {
@@ -1471,16 +1714,38 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
       }, 0);
     }
     
-    content.innerHTML = finalUI;
+    const parserFinalUI = new DOMParser();
+    const docFinalUI = parserFinalUI.parseFromString(finalUI, 'text/html');
+    content.textContent = '';
+    Array.from(docFinalUI.body.childNodes).forEach(n => content.appendChild(n.cloneNode(true)));
   }
 
   if (chat.attachment_url) {
     const attachWrap = document.createElement('div');
     attachWrap.className = 'dev-chat-attachment';
     if (chat.attachment_url.includes('image/') || chat.attachment_url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i)) {
-      attachWrap.innerHTML = `<a href="${chat.attachment_url}" target="_blank"><img src="${chat.attachment_url}" style="max-width:100%; border-radius:4px; margin-top:8px; display:block;" alt="Attached" /></a>`;
+      const a = document.createElement('a');
+      a.href = chat.attachment_url;
+      a.target = '_blank';
+      const img = document.createElement('img');
+      img.src = chat.attachment_url;
+      img.style.maxWidth = '100%';
+      img.style.borderRadius = '4px';
+      img.style.marginTop = '8px';
+      img.style.display = 'block';
+      img.alt = 'Attached';
+      a.appendChild(img);
+      attachWrap.appendChild(a);
     } else {
-      attachWrap.innerHTML = `<a href="${chat.attachment_url}" target="_blank" download="attachment" class="primary-btn" style="display:inline-block; margin-top:8px;">Download File attachment</a>`;
+      const a2 = document.createElement('a');
+      a2.href = chat.attachment_url;
+      a2.target = '_blank';
+      a2.download = 'attachment';
+      a2.className = 'primary-btn';
+      a2.style.display = 'inline-block';
+      a2.style.marginTop = '8px';
+      a2.textContent = 'Download File attachment';
+      attachWrap.appendChild(a2);
     }
     content.appendChild(attachWrap);
   }
@@ -1514,7 +1779,10 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
     b.classList.add('expanded');
     this.closest('.dev-chat-bubble-wrapper').classList.add('expanded');
   };
-  summaryNode.innerHTML = `<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <span style="color:#2563eb; margin-left:8px; font-family:monospace; font-weight:bold;">[+]</span>`;
+  const parserSummary = new DOMParser();
+  const docSummary = parserSummary.parseFromString(`<strong>${dateStr} - ${author}:</strong> ${plainTextSummary} <span style="color:#2563eb; margin-left:8px; font-family:monospace; font-weight:bold;">[+]</span>`, 'text/html');
+  summaryNode.textContent = '';
+  Array.from(docSummary.body.childNodes).forEach(n => summaryNode.appendChild(n.cloneNode(true)));
 
   // Make header clickable to collapse
   header.style.cursor = 'pointer';
@@ -1527,7 +1795,13 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
   };
   
   // Inject the [-] into the header display
-  header.firstElementChild.innerHTML = `<span style="color:#2563eb; margin-right:8px; font-family:monospace; font-weight:bold;">[-]</span>` + header.firstElementChild.innerHTML;
+  const minusSpan = document.createElement('span');
+  minusSpan.style.color = '#2563eb';
+  minusSpan.style.marginRight = '8px';
+  minusSpan.style.fontFamily = 'monospace';
+  minusSpan.style.fontWeight = 'bold';
+  minusSpan.textContent = '[-]';
+  header.firstElementChild.insertBefore(minusSpan, header.firstElementChild.firstChild);
 
   bubble.appendChild(summaryNode);
   bubble.appendChild(header);
@@ -1565,10 +1839,14 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
         await navigator.clipboard.writeText(chat.content || '');
         const svg = copyBtn.querySelector('svg');
         if (svg) {
-          const originalHTML = svg.innerHTML;
-          svg.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
+          const originalNodes = Array.from(svg.childNodes);
+          svg.textContent = '';
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '20 6 9 17 4 12');
+          svg.appendChild(polyline);
           setTimeout(() => {
-            svg.innerHTML = originalHTML;
+            svg.textContent = '';
+            originalNodes.forEach(n => svg.appendChild(n));
           }, 2000);
         }
       } catch (err) {}
@@ -1593,13 +1871,16 @@ App.devAgent.toggleInlineReply = function(chatId, btn) {
   replyBox = document.createElement('div');
   replyBox.id = 'devInlineReply_' + chatId;
   replyBox.className = 'dev-inline-reply-box';
-  replyBox.innerHTML = `
+  const parserReply = new DOMParser();
+  const docReply = parserReply.parseFromString(`
     <textarea id="devInlineReplyInput_${chatId}" placeholder="Write a reply..." class="form-input" style="width:100%; min-height:60px; margin-bottom:8px; border-radius: var(--radius-md); padding: 8px;"></textarea>
     <div style="display:flex; justify-content:flex-end; gap:8px;">
       <button class="secondary-btn" onclick="document.getElementById('devInlineReply_${chatId}').remove();">Cancel</button>
       <button class="primary-btn" onclick="App.devAgent.submitInlineReply(${chatId})">Reply</button>
     </div>
-  `;
+  `, 'text/html');
+  replyBox.textContent = '';
+  Array.from(docReply.body.childNodes).forEach(n => replyBox.appendChild(n.cloneNode(true)));
   container.insertBefore(replyBox, container.firstChild);
   document.getElementById('devInlineReplyInput_' + chatId).focus();
 };
@@ -1693,7 +1974,7 @@ App.devAgent.initSupabaseRealtime = function(sessionId) {
 
 App.devAgent.renderStagedFiles = function() {
   if (!devElements.attachmentsContainer) return;
-  devElements.attachmentsContainer.innerHTML = '';
+  devElements.attachmentsContainer.textContent = '';
   if (devState.stagedFiles.length === 0) return;
   
   devState.stagedFiles.forEach(fileObj => {
@@ -1704,11 +1985,14 @@ App.devAgent.renderStagedFiles = function() {
     row.style.fontSize = '0.85rem';
     row.style.color = '#6b7280';
     
-    row.innerHTML = `
+    const parserRow = new DOMParser();
+    const docRow = parserRow.parseFromString(`
       <span>Attached:</span>
       <a href="${fileObj.base64}" download="${fileObj.name}" target="_blank" style="text-decoration:underline; color: var(--accent);">${fileObj.name}</a>
       <a href="#" title="Remove attachment" style="color: #ef4444; font-size:18px; font-weight:bold; cursor:pointer; text-decoration:none; margin-left:8px;" onclick="event.preventDefault(); App.devAgent.removeStagedFile('${fileObj.id}');">&times;</a>
-    `;
+    `, 'text/html');
+    row.textContent = '';
+    Array.from(docRow.body.childNodes).forEach(n => row.appendChild(n.cloneNode(true)));
     devElements.attachmentsContainer.appendChild(row);
   });
 };
@@ -1833,17 +2117,61 @@ App.devAgent.editChat = function(chatId, btn) {
     editableText = p.data.payload.content || '';
   }
 
-  contentDiv.dataset.originalHtml = contentDiv.innerHTML;
-  
-  contentDiv.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <textarea id="editChatText_${chatId}" style="width:100%; min-height:100px; padding:10px; border-radius:4px; border:1px solid #ccc; background:var(--bg-input); color:var(--text-primary); font-family:inherit;">${editableText}</textarea>
-      <div style="display:flex; gap:8px; justify-content:flex-end;">
-         <button class="secondary-btn" onclick="const p=this.closest('.dev-chat-content'); p.innerHTML=p.dataset.originalHtml;">Cancel</button>
-         <button class="primary-btn" onclick="App.devAgent.saveChatEdit(${chatId}, this)">Save Changes</button>
-      </div>
-    </div>
-  `;
+  Array.from(contentDiv.childNodes).forEach(n => {
+    if (n.nodeType === Node.ELEMENT_NODE) n.style.display = 'none';
+    else if (n.nodeType === Node.TEXT_NODE) {
+      const span = document.createElement('span');
+      span.textContent = n.textContent;
+      span.style.display = 'none';
+      contentDiv.replaceChild(span, n);
+    }
+  });
+
+  const editorWrap = document.createElement('div');
+  editorWrap.style.display = 'flex';
+  editorWrap.style.flexDirection = 'column';
+  editorWrap.style.gap = '8px';
+  editorWrap.className = 'dev-chat-editor-wrap';
+
+  const ta = document.createElement('textarea');
+  ta.id = `editChatText_${chatId}`;
+  ta.style.width = '100%';
+  ta.style.minHeight = '100px';
+  ta.style.padding = '10px';
+  ta.style.borderRadius = '4px';
+  ta.style.border = '1px solid #ccc';
+  ta.style.background = 'var(--bg-input)';
+  ta.style.color = 'var(--text-primary)';
+  ta.style.fontFamily = 'inherit';
+  ta.value = editableText;
+
+  const btnRow = document.createElement('div');
+  btnRow.style.display = 'flex';
+  btnRow.style.gap = '8px';
+  btnRow.style.justifyContent = 'flex-end';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'secondary-btn';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = () => {
+    editorWrap.remove();
+    Array.from(contentDiv.childNodes).forEach(n => {
+      if (n.nodeType === Node.ELEMENT_NODE && !n.classList.contains('dev-chat-editor-wrap')) {
+        n.style.display = '';
+      }
+    });
+  };
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'primary-btn';
+  saveBtn.textContent = 'Save Changes';
+  saveBtn.onclick = function() { App.devAgent.saveChatEdit(chatId, this); };
+
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(saveBtn);
+  editorWrap.appendChild(ta);
+  editorWrap.appendChild(btnRow);
+  contentDiv.appendChild(editorWrap);
 };
 
 App.devAgent.saveChatEdit = async function(chatId, btn) {
@@ -1891,7 +2219,8 @@ App.devAgent.renderActiveCommand = function() {
 
   if (App.devAgent.activePendingCommand) {
     const rawContentHTML = App.devAgent.formatMarkdown(App.devAgent.activePendingCommand.content);
-    overlay.innerHTML = `
+    const parserOverlay = new DOMParser();
+    const docOverlay = parserOverlay.parseFromString(`
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="24" height="24">
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -1907,11 +2236,13 @@ App.devAgent.renderActiveCommand = function() {
         <button type="button" class="primary-btn" onclick="App.devAgent.sendProtocolAction('CONFIRM', '${App.devAgent.activePendingCommand.hash}', this)" style="background:#10b981; border:none; flex:1;">CONFIRM</button>
         <button type="button" class="secondary-btn" onclick="App.devAgent.sendProtocolAction('DENY', '${App.devAgent.activePendingCommand.hash}', this)" style="flex:1; background:rgba(0,0,0,0.05);">DENY</button>
       </div>
-    `;
+    `, 'text/html');
+    overlay.textContent = '';
+    Array.from(docOverlay.body.childNodes).forEach(n => overlay.appendChild(n.cloneNode(true)));
     overlay.classList.remove('hidden');
     chatForm.classList.add('dev-overlay-active');
   } else {
-    overlay.innerHTML = '';
+    overlay.textContent = '';
     overlay.classList.add('hidden');
     chatForm.classList.remove('dev-overlay-active');
   }
@@ -2243,7 +2574,13 @@ App.devAgent.generateGlossary = function() {
   const uniqueTerms = Object.keys(frequency).sort((a, b) => frequency[b] - frequency[a]);
   const topTerms = uniqueTerms.slice(0, 40).sort();
 
-  select.innerHTML = '<option value="" disabled selected>Keywords</option>';
+  select.textContent = '';
+  const defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.disabled = true;
+  defaultOpt.selected = true;
+  defaultOpt.textContent = 'Keywords';
+  select.appendChild(defaultOpt);
   topTerms.forEach(term => {
     const opt = document.createElement('option');
     opt.value = term;
@@ -2400,18 +2737,21 @@ App.devAgentFriction = {
 
       if (error) throw error;
 
-      if (this.elements.list) this.elements.list.innerHTML = '';
-      if (this.elements.leftSidebarList) this.elements.leftSidebarList.innerHTML = '';
+      if (this.elements.list) this.elements.list.textContent = '';
+      if (this.elements.leftSidebarList) this.elements.leftSidebarList.textContent = '';
 
       if (data && data.length > 0) {
         data.forEach(log => {
           // Right drawer generic render
           const li = document.createElement('li');
           li.className = 'dev-friction-item ' + (log.status === 'resolved' ? 'resolved' : '');
-          li.innerHTML = `
+          const parserLi = new DOMParser();
+          const docLi = parserLi.parseFromString(`
             <div><strong>${log.title || 'New Friction Log'}</strong> - ${log.status.toUpperCase()}</div>
             <div style="font-size:0.8rem; margin-top:0.2rem;">${log.description.substring(0,60)}...</div>
-          `;
+          `, 'text/html');
+          li.textContent = '';
+          Array.from(docLi.body.childNodes).forEach(n => li.appendChild(n.cloneNode(true)));
           if (this.elements.list) this.elements.list.appendChild(li);
 
           // Left Sidebar render with inline editing structure
@@ -2464,13 +2804,38 @@ App.devAgentFriction = {
           }
         });
       } else {
-        if (this.elements.list) this.elements.list.innerHTML = '<li class="dev-friction-item"><div style="color: #666; font-style: italic; text-align: center;">No unresolved friction logs.</div></li>';
-        if (this.elements.leftSidebarList) this.elements.leftSidebarList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">Nothing logged.</li>';
+        if (this.elements.list) {
+          this.elements.list.textContent = '';
+          const emptyLi = document.createElement('li');
+          emptyLi.className = 'dev-friction-item';
+          const emptyDiv = document.createElement('div');
+          emptyDiv.style.color = '#666';
+          emptyDiv.style.fontStyle = 'italic';
+          emptyDiv.style.textAlign = 'center';
+          emptyDiv.textContent = 'No unresolved friction logs.';
+          emptyLi.appendChild(emptyDiv);
+          this.elements.list.appendChild(emptyLi);
+        }
+        if (this.elements.leftSidebarList) {
+          this.elements.leftSidebarList.textContent = '';
+          const emptyLi2 = document.createElement('li');
+          emptyLi2.className = 'dev-session-item';
+          emptyLi2.style.color = '#666';
+          emptyLi2.style.fontStyle = 'italic';
+          emptyLi2.textContent = 'Nothing logged.';
+          this.elements.leftSidebarList.appendChild(emptyLi2);
+        }
       }
     } catch (e) {
       console.error("Failed to load friction logs", e);
       if (this.elements.leftSidebarList) {
-        this.elements.leftSidebarList.innerHTML = `<li class="dev-session-item" style="color: red; font-size:0.75rem;">Error: ${e.message}</li>`;
+        this.elements.leftSidebarList.textContent = '';
+        const errLi = document.createElement('li');
+        errLi.className = 'dev-session-item';
+        errLi.style.color = 'red';
+        errLi.style.fontSize = '0.75rem';
+        errLi.textContent = `Error: ${e.message}`;
+        this.elements.leftSidebarList.appendChild(errLi);
       }
     }
   },
@@ -2739,7 +3104,11 @@ App.devAgent.showTaskBrowser = async function() {
   const projSelect = document.getElementById('devTaskFilterProject');
   if (projSelect && window.supabaseClient && projSelect.options.length <= 1) {
     const { data: projects } = await window.supabaseClient.from('dev_projects').select('id, name').order('name');
-    projSelect.innerHTML = '<option value="all">All Projects</option>';
+    projSelect.textContent = '';
+    const optAll = document.createElement('option');
+    optAll.value = 'all';
+    optAll.textContent = 'All Projects';
+    projSelect.appendChild(optAll);
     if (projects) {
       projects.forEach(p => {
         const opt = document.createElement('option');
@@ -2802,7 +3171,7 @@ App.devAgent.loadDashboard = async function() {
   Object.values(columns).forEach(col => {
     if (!col.el) return;
     if (col.count) col.count.textContent = col.tasks.length;
-    col.el.innerHTML = '';
+    col.el.textContent = '';
     col.tasks.forEach(t => {
       const projectName = t.dev_projects && t.dev_projects.name ? t.dev_projects.name : '-';
       let assigneeName = App.devAgent.getAssigneeName(t.assignee);
@@ -2814,7 +3183,8 @@ App.devAgent.loadDashboard = async function() {
       card.onclick = () => App.devAgent.openTaskEditor(t.id);
       card.ondragstart = (e) => App.devAgent.handleDragStart(e, t.id);
       
-      card.innerHTML = `
+      const parserCard = new DOMParser();
+      const docCard = parserCard.parseFromString(`
         <div class="kanban-card-title">${t.title}</div>
         <div class="kanban-card-meta">
           <span title="Project">📌 ${projectName}</span>
@@ -2824,7 +3194,9 @@ App.devAgent.loadDashboard = async function() {
           <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
           ${assigneeName}
         </div>
-      `;
+      `, 'text/html');
+      card.textContent = '';
+      Array.from(docCard.body.childNodes).forEach(n => card.appendChild(n.cloneNode(true)));
       col.el.appendChild(card);
     });
   });
@@ -2898,12 +3270,29 @@ App.devAgent.sortTasks = function(key) {
 App.devAgent.loadTasksTable = async function() {
   const tbody = document.getElementById('devTaskBrowserTable');
   if (tbody && window.supabaseClient) {
-    tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">Loading tasks...</td></tr>';
+    tbody.textContent = '';
+    const loadingTr = document.createElement('tr');
+    const loadingTd = document.createElement('td');
+    loadingTd.colSpan = 7;
+    loadingTd.style.padding = '1rem';
+    loadingTd.style.opacity = '0.7';
+    loadingTd.style.textAlign = 'center';
+    loadingTd.textContent = 'Loading tasks...';
+    loadingTr.appendChild(loadingTd);
+    tbody.appendChild(loadingTr);
     
     const { data: tasks, error } = await window.supabaseClient.from('dev_tasks').select('*, dev_projects(name)').order('created_at', { ascending: false });
     
     if (error) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Failed to fetch.</td></tr>';
+      tbody.textContent = '';
+      const errTr = document.createElement('tr');
+      const errTd = document.createElement('td');
+      errTd.colSpan = 7;
+      errTd.style.textAlign = 'center';
+      errTd.style.color = 'red';
+      errTd.textContent = 'Failed to fetch.';
+      errTr.appendChild(errTd);
+      tbody.appendChild(errTr);
       return;
     }
     
@@ -2924,7 +3313,16 @@ App.devAgent.renderTasksTable = function() {
   if (!tbody) return;
   
   if (!devState.allTasks) {
-    tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">Loading tasks...</td></tr>';
+    tbody.textContent = '';
+    const loadingTr2 = document.createElement('tr');
+    const loadingTd2 = document.createElement('td');
+    loadingTd2.colSpan = 7;
+    loadingTd2.style.padding = '1rem';
+    loadingTd2.style.opacity = '0.7';
+    loadingTd2.style.textAlign = 'center';
+    loadingTd2.textContent = 'Loading tasks...';
+    loadingTr2.appendChild(loadingTd2);
+    tbody.appendChild(loadingTr2);
     return;
   }
   
@@ -2975,9 +3373,17 @@ App.devAgent.renderTasksTable = function() {
     }
   });
 
-  tbody.innerHTML = '';
+  tbody.textContent = '';
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="padding:1rem; opacity:0.7; text-align:center;">No matching tasks found.</td></tr>';
+    const emptyTr = document.createElement('tr');
+    const emptyTd = document.createElement('td');
+    emptyTd.colSpan = 7;
+    emptyTd.style.padding = '1rem';
+    emptyTd.style.opacity = '0.7';
+    emptyTd.style.textAlign = 'center';
+    emptyTd.textContent = 'No matching tasks found.';
+    emptyTr.appendChild(emptyTd);
+    tbody.appendChild(emptyTr);
     return;
   }
   
@@ -2986,15 +3392,54 @@ App.devAgent.renderTasksTable = function() {
     let assigneeName = t.assignee_name;
 
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="font-family: monospace; font-size: 0.8em; color: var(--text-muted);">${t.id.substring(0,8)}</td>
-      <td style="text-align:left;"><strong>${t.title}</strong></td>
-      <td>${projectName}</td>
-      <td>${t.status || '-'}</td>
-      <td>${t.priority || '-'}</td>
-      <td>${assigneeName}</td>
-      <td>${new Date(t.created_at).toLocaleDateString()}</td>
-      <td style="text-align: center; white-space: nowrap; gap: 0.5rem; display: flex; justify-content: center;">
+    tr.textContent = '';
+    
+    const tdId = document.createElement('td');
+    tdId.style.fontFamily = 'monospace';
+    tdId.style.fontSize = '0.8em';
+    tdId.style.color = 'var(--text-muted)';
+    tdId.textContent = t.id.substring(0,8);
+    tr.appendChild(tdId);
+    
+    const tdTitle = document.createElement('td');
+    tdTitle.style.textAlign = 'left';
+    tdTitle.style.whiteSpace = 'nowrap';
+    tdTitle.style.overflow = 'hidden';
+    tdTitle.style.textOverflow = 'ellipsis';
+    const strongTitle = document.createElement('strong');
+    strongTitle.textContent = t.title;
+    tdTitle.appendChild(strongTitle);
+    tr.appendChild(tdTitle);
+    
+    const tdProj = document.createElement('td');
+    tdProj.textContent = projectName;
+    tr.appendChild(tdProj);
+    
+    const tdStatus = document.createElement('td');
+    tdStatus.textContent = t.status || '-';
+    tr.appendChild(tdStatus);
+    
+    const tdPrio = document.createElement('td');
+    tdPrio.textContent = t.priority || '-';
+    tr.appendChild(tdPrio);
+    
+    const tdAss = document.createElement('td');
+    tdAss.textContent = assigneeName;
+    tr.appendChild(tdAss);
+    
+    const tdDate = document.createElement('td');
+    tdDate.textContent = new Date(t.created_at).toLocaleDateString();
+    tr.appendChild(tdDate);
+    
+    const tdActions = document.createElement('td');
+    tdActions.style.textAlign = 'center';
+    tdActions.style.whiteSpace = 'nowrap';
+    tdActions.style.gap = '0.5rem';
+    tdActions.style.display = 'flex';
+    tdActions.style.justifyContent = 'center';
+    
+    const parserSvg = new DOMParser();
+    const docBtns = parserSvg.parseFromString(`
         <button class="icon-btn" onclick="App.devAgent.openTaskEditor('${t.id}')" title="Edit Task">
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
         </button>
@@ -3004,8 +3449,9 @@ App.devAgent.renderTasksTable = function() {
         <button class="icon-btn danger-hover" onclick="App.devAgent.deleteTask('${t.id}')" title="Delete Task">
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
         </button>
-      </td>
-    `;
+    `, 'text/html');
+    Array.from(docBtns.body.childNodes).forEach(n => tdActions.appendChild(n.cloneNode(true)));
+    tr.appendChild(tdActions);
     tbody.appendChild(tr);
   });
 };
@@ -3037,7 +3483,11 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
       const { data: projects } = await window.supabaseClient.from('dev_projects').select('id, name').order('name');
       const projSelect = document.getElementById('devEditTaskProject');
       if (projSelect) {
-        projSelect.innerHTML = '<option value="">-- No Project --</option>';
+        projSelect.textContent = '';
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = '-- No Project --';
+        projSelect.appendChild(defaultOpt);
         if (projects) {
           projects.forEach(p => {
             const opt = document.createElement('option');
@@ -3051,7 +3501,11 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
       // Populate Assignee Dropdown dynamically
       const assgSel = document.getElementById('devEditTaskAssignee');
       if (assgSel) {
-        assgSel.innerHTML = '<option value="">-- Select Assignee --</option>';
+        assgSel.textContent = '';
+        const defaultAssg = document.createElement('option');
+        defaultAssg.value = '';
+        defaultAssg.textContent = '-- Select Assignee --';
+        assgSel.appendChild(defaultAssg);
         try {
           const coreTeam = ['mentor', 'roger', 'angie', 'archie'];
           coreTeam.forEach(id => {
@@ -3083,11 +3537,25 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
         }
         
         const projContext = document.getElementById('devTaskProjectContext');
-        if (projContext) projContext.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Save the task to see project context.</p>`;
+        if (projContext) {
+          projContext.textContent = '';
+          const pEl = document.createElement('p');
+          pEl.style.color = 'var(--text-muted)';
+          pEl.style.fontStyle = 'italic';
+          pEl.textContent = 'Save the task to see project context.';
+          projContext.appendChild(pEl);
+        }
         
         const chatContainer = document.getElementById('devTaskChatContainer');
         if (chatContainer) {
-          chatContainer.innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic; text-align: center;">Save the task to start a discussion.</div>';
+          chatContainer.textContent = '';
+          const infoDiv = document.createElement('div');
+          infoDiv.style.padding = '2rem';
+          infoDiv.style.color = 'var(--text-muted)';
+          infoDiv.style.fontStyle = 'italic';
+          infoDiv.style.textAlign = 'center';
+          infoDiv.textContent = 'Save the task to start a discussion.';
+          chatContainer.appendChild(infoDiv);
         }
         
         return; // Stop here for new tasks
@@ -3148,10 +3616,22 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
          }
          
          const projContext = document.getElementById('devTaskProjectContext');
-         if (projContext) projContext.innerHTML = html;
+         if (projContext) {
+           const parserHtml = new DOMParser();
+           const docHtml = parserHtml.parseFromString(html, 'text/html');
+           projContext.textContent = '';
+           Array.from(docHtml.body.childNodes).forEach(n => projContext.appendChild(n.cloneNode(true)));
+         }
       } else {
          const projContext = document.getElementById('devTaskProjectContext');
-         if (projContext) projContext.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Task does not belong to a project.</p>`;
+         if (projContext) {
+           projContext.textContent = '';
+           const errP = document.createElement('p');
+           errP.style.color = 'var(--text-muted)';
+           errP.style.fontStyle = 'italic';
+           errP.textContent = 'Task does not belong to a project.';
+           projContext.appendChild(errP);
+         }
       }
 
       // Load the session into the chat log
@@ -3159,7 +3639,12 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
       if (chatContainer) {
         if (log.session_id) {
            devState.activeSessionId = log.session_id; // Set active session for the chat form
-           chatContainer.innerHTML = '<div class="dev-chat-log" style="flex: 1; overflow-y: auto;"></div>';
+           chatContainer.textContent = '';
+           const logDiv = document.createElement('div');
+           logDiv.className = 'dev-chat-log';
+           logDiv.style.flex = '1';
+           logDiv.style.overflowY = 'auto';
+           chatContainer.appendChild(logDiv);
            
            // Clone chat form template
            const template = document.getElementById('devChatFormTemplate');
@@ -3191,7 +3676,14 @@ App.devAgent.openTaskEditor = async function(taskId, returnToProjectId = null) {
            
            App.devAgent.loadHistory(log.session_id, chatContainer.querySelector('.dev-chat-log'));
         } else {
-           chatContainer.innerHTML = '<div style="padding: 2rem; color: var(--text-muted); font-style: italic; text-align: center;">Failed to initialize discussion thread.</div>';
+           chatContainer.textContent = '';
+           const failDiv = document.createElement('div');
+           failDiv.style.padding = '2rem';
+           failDiv.style.color = 'var(--text-muted)';
+           failDiv.style.fontStyle = 'italic';
+           failDiv.style.textAlign = 'center';
+           failDiv.textContent = 'Failed to initialize discussion thread.';
+           chatContainer.appendChild(failDiv);
         }
       }
 
@@ -3307,16 +3799,26 @@ App.devAgent.loadTeam = async function() {
   const teamList = document.getElementById('devTeamList');
   if (!teamList) return;
   try {
-    teamList.innerHTML = '<li style="padding: 1rem; opacity: 0.7;">Loading...</li>';
+    teamList.textContent = '';
+    const loadLi = document.createElement('li');
+    loadLi.style.padding = '1rem';
+    loadLi.style.opacity = '0.7';
+    loadLi.textContent = 'Loading...';
+    teamList.appendChild(loadLi);
+    
     const res = await window.supabaseClient
       .from('dev_team')
       .select('*')
       .order('created_at', { ascending: true });
       
-    teamList.innerHTML = '';
+    teamList.textContent = '';
     
     if (res.error) {
-      teamList.innerHTML = `<li class="error-msg">Failed to load team</li>`;
+      teamList.textContent = '';
+      const errLi = document.createElement('li');
+      errLi.className = 'error-msg';
+      errLi.textContent = 'Failed to load team';
+      teamList.appendChild(errLi);
       return;
     }
     
@@ -3332,7 +3834,13 @@ App.devAgent.loadTeam = async function() {
     devState.teamData = { members: teamMembers, contactMap: contactMap };
     
     if (teamMembers.length === 0) {
-      teamList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No team members.</li>';
+      teamList.textContent = '';
+      const noLi = document.createElement('li');
+      noLi.className = 'dev-session-item';
+      noLi.style.color = '#666';
+      noLi.style.fontStyle = 'italic';
+      noLi.textContent = 'No team members.';
+      teamList.appendChild(noLi);
       return;
     }
 
@@ -3355,7 +3863,11 @@ App.devAgent.loadTeam = async function() {
       teamList.appendChild(li);
     });
   } catch (e) {
-    teamList.innerHTML = `<li class="error-msg">Error loading team.</li>`;
+    teamList.textContent = '';
+    const errorLi = document.createElement('li');
+    errorLi.className = 'error-msg';
+    errorLi.textContent = 'Error loading team.';
+    teamList.appendChild(errorLi);
   }
 };
 
@@ -3378,22 +3890,63 @@ App.devAgent.showTeamBrowser = async function() {
   if (browserPanel) browserPanel.classList.remove('hidden');
   
   const tbody = document.getElementById('devTeamBrowserTable');
-  if (tbody && window.supabaseClient) {
-    tbody.innerHTML = '<tr><td colspan="4" style="padding:1rem; opacity:0.7;">Loading team...</td></tr>';
+  if (!tbody) return;
+  if (!window.supabaseClient) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding: 2rem; text-align: center; color: #dc2626; font-style: italic;">Supabase Client Not Initialized. Please refresh or check Dev Agent configuration.</td></tr>';
+    return;
+  }
+  
+  try {
+    tbody.textContent = '';
+    const loadTr = document.createElement('tr');
+    const loadTd = document.createElement('td');
+    loadTd.colSpan = 5;
+    loadTd.style.padding = '1rem';
+    loadTd.style.opacity = '0.7';
+    loadTd.textContent = 'Loading team...';
+    loadTr.appendChild(loadTd);
+    tbody.appendChild(loadTr);
+    
     const { data: teamMembers, error } = await window.supabaseClient.from('dev_team').select('*').order('created_at', { ascending: false });
     if (error) {
-      tbody.innerHTML = '<tr><td colspan="4">Failed to fetch.</td></tr>';
+      tbody.textContent = '';
+      const errTr = document.createElement('tr');
+      const errTd = document.createElement('td');
+      errTd.colSpan = 5;
+      errTd.textContent = 'Failed to fetch.';
+      errTr.appendChild(errTd);
+      tbody.appendChild(errTr);
       return;
     }
     
-    const contactsRes = await App.api('/api/contacts');
-    const contacts = contactsRes.data || [];
+    let contacts = [];
+    try {
+      const contactsRes = await App.api('/api/contacts');
+      contacts = contactsRes.data || [];
+    } catch (apiErr) {
+      console.warn('Could not fetch contacts for team map:', apiErr);
+    }
+    
     const contactMap = {};
     contacts.forEach(c => {
       contactMap[c.id] = `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || c.id;
     });
 
-    tbody.innerHTML = '';
+    tbody.textContent = '';
+    if (!teamMembers || teamMembers.length === 0) {
+      const noTr = document.createElement('tr');
+      const noTd = document.createElement('td');
+      noTd.colSpan = 5;
+      noTd.style.textAlign = 'center';
+      noTd.style.padding = '2rem';
+      noTd.style.color = '#666';
+      noTd.style.fontStyle = 'italic';
+      noTd.textContent = 'No team members.';
+      noTr.appendChild(noTd);
+      tbody.appendChild(noTr);
+      return;
+    }
+    
     teamMembers.forEach(t => {
       const contact = contacts.find(c => c.id === t.contact_id) || {};
       const fullName = contactMap[t.contact_id] || 'Unknown Member';
@@ -3403,13 +3956,20 @@ App.devAgent.showTeamBrowser = async function() {
       
       const nameTd = document.createElement('td');
       nameTd.style.textAlign = 'left';
-      nameTd.innerHTML = `<strong>${fullName}</strong>`;
+      nameTd.textContent = '';
+      const strongName = document.createElement('strong');
+      strongName.textContent = fullName;
+      nameTd.appendChild(strongName);
       
       const typeTd = document.createElement('td');
-      typeTd.innerHTML = `<span class="badge ${cType === 'Agent' ? 'badge-blue' : 'badge-gray'}">${cType}</span>`;
+      typeTd.textContent = '';
+      const badgeSpan = document.createElement('span');
+      badgeSpan.className = `badge ${cType === 'Agent' ? 'badge-blue' : 'badge-gray'}`;
+      badgeSpan.textContent = cType;
+      typeTd.appendChild(badgeSpan);
       
       const roleTd = document.createElement('td');
-      roleTd.textContent = t.role;
+      roleTd.textContent = t.role || 'Unassigned';
       
       const dateTd = document.createElement('td');
       dateTd.textContent = new Date(t.created_at).toLocaleDateString();
@@ -3428,11 +3988,29 @@ App.devAgent.showTeamBrowser = async function() {
         actionsTd.appendChild(cloneBtn);
         actionsTd.appendChild(deleteBtn);
       } else {
-        actionsTd.innerHTML = `
-          <button type="button" class="secondary-btn tiny-btn" onclick="window.location.hash = '#page=viewContactPage&id=${encodeURIComponent(t.contact_id)}'">View</button>
-          <button type="button" class="secondary-btn tiny-btn" onclick="window.location.hash = '#page=editContactPage&id=${encodeURIComponent(t.contact_id)}'">Edit</button>
-          <button type="button" class="secondary-btn tiny-btn" onclick="App.devAgent.deleteTeamMember('${t.id}')">Remove</button>
-        `;
+        actionsTd.textContent = '';
+        
+        const viewBtn2 = document.createElement('button');
+        viewBtn2.type = 'button';
+        viewBtn2.className = 'secondary-btn tiny-btn';
+        viewBtn2.textContent = 'View';
+        viewBtn2.onclick = () => { window.location.hash = `#page=viewContactPage&id=${encodeURIComponent(t.contact_id)}`; };
+        
+        const editBtn2 = document.createElement('button');
+        editBtn2.type = 'button';
+        editBtn2.className = 'secondary-btn tiny-btn';
+        editBtn2.textContent = 'Edit';
+        editBtn2.onclick = () => { window.location.hash = `#page=editContactPage&id=${encodeURIComponent(t.contact_id)}`; };
+        
+        const removeBtn2 = document.createElement('button');
+        removeBtn2.type = 'button';
+        removeBtn2.className = 'secondary-btn tiny-btn';
+        removeBtn2.textContent = 'Remove';
+        removeBtn2.onclick = () => App.devAgent.deleteTeamMember(t.id);
+        
+        actionsTd.appendChild(viewBtn2);
+        actionsTd.appendChild(editBtn2);
+        actionsTd.appendChild(removeBtn2);
       }
 
       tr.appendChild(nameTd);
@@ -3443,6 +4021,9 @@ App.devAgent.showTeamBrowser = async function() {
       
       tbody.appendChild(tr);
     });
+  } catch (err) {
+    console.error('showTeamBrowser failed:', err);
+    tbody.innerHTML = `<tr><td colspan="5" style="padding: 2rem; text-align: center; color: #dc2626; font-style: italic;">Render Error: ${err.message}</td></tr>`;
   }
 };
 
@@ -3470,11 +4051,19 @@ App.devAgent.openTeamEditor = async function() {
     // Populate Roles dropdown
     const roleSelect = document.getElementById('devEditTeamRole');
     if (roleSelect && window.supabaseClient) {
-      roleSelect.innerHTML = '<option value="">Loading roles...</option>';
+      roleSelect.textContent = '';
+      const loadOpt = document.createElement('option');
+      loadOpt.value = '';
+      loadOpt.textContent = 'Loading roles...';
+      roleSelect.appendChild(loadOpt);
       try {
         const { data: roles, error } = await window.supabaseClient.from('dev_roles').select('*').order('role_name', { ascending: true });
         if (error) throw error;
-        roleSelect.innerHTML = '<option value="">Select Role...</option>';
+        roleSelect.textContent = '';
+        const selOpt = document.createElement('option');
+        selOpt.value = '';
+        selOpt.textContent = 'Select Role...';
+        roleSelect.appendChild(selOpt);
         roles.forEach(r => {
           const opt = document.createElement('option');
           opt.value = r.role_name;
@@ -3482,7 +4071,11 @@ App.devAgent.openTeamEditor = async function() {
           roleSelect.appendChild(opt);
         });
       } catch (err) {
-        roleSelect.innerHTML = '<option value="">Failed to load roles</option>';
+        roleSelect.textContent = '';
+        const errOpt = document.createElement('option');
+        errOpt.value = '';
+        errOpt.textContent = 'Failed to load roles';
+        roleSelect.appendChild(errOpt);
       }
     }
   }
@@ -3561,17 +4154,46 @@ App.devAgent.showRolesBrowser = async function() {
   if (browserPanel) browserPanel.classList.remove('hidden');
   
   const tbody = document.getElementById('devRolesBrowserTable');
-  if (tbody && window.supabaseClient) {
-    tbody.innerHTML = '<tr><td colspan="4" style="padding:1rem; opacity:0.7;">Loading roles...</td></tr>';
+  if (!tbody) return;
+  if (!window.supabaseClient) {
+    tbody.innerHTML = '<tr><td colspan="4" style="padding: 2rem; text-align: center; color: #dc2626; font-style: italic;">Supabase Client Not Initialized. Please refresh or check Dev Agent configuration.</td></tr>';
+    return;
+  }
+  
+  try {
+    tbody.textContent = '';
+    const rLoadTr = document.createElement('tr');
+    const rLoadTd = document.createElement('td');
+    rLoadTd.colSpan = 4;
+    rLoadTd.style.padding = '1rem';
+    rLoadTd.style.opacity = '0.7';
+    rLoadTd.textContent = 'Loading roles...';
+    rLoadTr.appendChild(rLoadTd);
+    tbody.appendChild(rLoadTr);
+
     const { data: roles, error } = await window.supabaseClient.from('dev_roles').select('*').order('created_at', { ascending: false });
     if (error) {
-      tbody.innerHTML = '<tr><td colspan="4">Failed to fetch roles.</td></tr>';
+      tbody.textContent = '';
+      const rErrTr = document.createElement('tr');
+      const rErrTd = document.createElement('td');
+      rErrTd.colSpan = 4;
+      rErrTd.textContent = 'Failed to fetch roles.';
+      rErrTr.appendChild(rErrTd);
+      tbody.appendChild(rErrTr);
       return;
     }
     
-    tbody.innerHTML = '';
-    if (roles.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="padding:1rem; opacity:0.7; text-align:center;">No roles found.</td></tr>';
+    tbody.textContent = '';
+    if (!roles || roles.length === 0) {
+      const noRoleTr = document.createElement('tr');
+      const noRoleTd = document.createElement('td');
+      noRoleTd.colSpan = 4;
+      noRoleTd.style.padding = '1rem';
+      noRoleTd.style.opacity = '0.7';
+      noRoleTd.style.textAlign = 'center';
+      noRoleTd.textContent = 'No roles found.';
+      noRoleTr.appendChild(noRoleTd);
+      tbody.appendChild(noRoleTr);
       return;
     }
     
@@ -3579,19 +4201,39 @@ App.devAgent.showRolesBrowser = async function() {
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
       tr.addEventListener('click', (e) => {
-        if (e.target.tagName.toLowerCase() === 'button') return;
+        if (e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) return;
         App.devAgent.openRoleEditor(r.id);
       });
-      tr.innerHTML = `
-        <td style="text-align:left;"><strong>${r.role_name}</strong></td>
-        <td>${r.description || ''}</td>
-        <td>${new Date(r.created_at).toLocaleDateString()}</td>
-        <td>
-          <button type="button" class="secondary-btn tiny-btn" onclick="App.devAgent.deleteRole('${r.id}')">Delete</button>
-        </td>
-      `;
+      const tdName = document.createElement('td');
+      tdName.style.textAlign = 'left';
+      const sName = document.createElement('strong');
+      sName.textContent = r.role_name || r.name || 'Unnamed Role';
+      tdName.appendChild(sName);
+      
+      const tdDesc = document.createElement('td');
+      tdDesc.textContent = r.description || '';
+      
+      const tdDate = document.createElement('td');
+      tdDate.textContent = new Date(r.created_at).toLocaleDateString();
+      
+      const tdActions = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'secondary-btn tiny-btn';
+      delBtn.textContent = 'Delete';
+      delBtn.onclick = (e) => { e.stopPropagation(); App.devAgent.deleteRole(r.id); };
+      tdActions.appendChild(delBtn);
+      
+      tr.textContent = '';
+      tr.appendChild(tdName);
+      tr.appendChild(tdDesc);
+      tr.appendChild(tdDate);
+      tr.appendChild(tdActions);
       tbody.appendChild(tr);
     });
+  } catch (err) {
+    console.error('showRolesBrowser failed:', err);
+    tbody.innerHTML = `<tr><td colspan="4" style="padding: 2rem; text-align: center; color: #dc2626; font-style: italic;">Render Error: ${err.message}</td></tr>`;
   }
 };
 
@@ -3701,14 +4343,35 @@ App.devAgent.openContactSelectorModal = async function() {
     document.getElementById('devContactSelectorEntityType').value = 'All';
     
     const tbody = document.getElementById('devContactSelectorTableBody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">Loading contacts...</td></tr>';
+    if (tbody) {
+      tbody.textContent = '';
+      const tLoadTr = document.createElement('tr');
+      const tLoadTd = document.createElement('td');
+      tLoadTd.colSpan = 4;
+      tLoadTd.style.textAlign = 'center';
+      tLoadTd.style.padding = '2rem';
+      tLoadTd.textContent = 'Loading contacts...';
+      tLoadTr.appendChild(tLoadTd);
+      tbody.appendChild(tLoadTr);
+    }
     
     try {
       const res = await App.api('/api/contacts');
       App.devAgent.modalContacts = res.data || [];
       App.devAgent.filterModalContacts();
     } catch (e) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem; color:red;">Failed to load contacts.</td></tr>';
+      if (tbody) {
+        tbody.textContent = '';
+        const tErrTr = document.createElement('tr');
+        const tErrTd = document.createElement('td');
+        tErrTd.colSpan = 4;
+        tErrTd.style.textAlign = 'center';
+        tErrTd.style.padding = '2rem';
+        tErrTd.style.color = 'red';
+        tErrTd.textContent = 'Failed to load contacts.';
+        tErrTr.appendChild(tErrTd);
+        tbody.appendChild(tErrTr);
+      }
     }
   }
 };
@@ -3749,10 +4412,17 @@ App.devAgent.filterModalContacts = function() {
   const tbody = document.getElementById('devContactSelectorTableBody');
   if (!tbody) return;
   
-  tbody.innerHTML = '';
+  tbody.textContent = '';
   
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">No contacts found.</td></tr>';
+    const tNoTr = document.createElement('tr');
+    const tNoTd = document.createElement('td');
+    tNoTd.colSpan = 4;
+    tNoTd.style.textAlign = 'center';
+    tNoTd.style.padding = '2rem';
+    tNoTd.textContent = 'No contacts found.';
+    tNoTr.appendChild(tNoTd);
+    tbody.appendChild(tNoTr);
     return;
   }
   
@@ -3761,15 +4431,40 @@ App.devAgent.filterModalContacts = function() {
     const fullName = `${c.first_name || c.firstName || ''} ${c.middle_name || c.middleName || ''} ${c.last_name || c.lastName || ''}`.replace(/\s+/g, ' ').trim() || c.email || c.id;
     const cType = c.entity_type || c.entityType || 'Human';
     
-    tr.innerHTML = `
-      <td style="text-align:left;"><strong>${fullName}</strong></td>
-      <td style="text-align:left;">${c.email || ''}</td>
-      <td>${c.company || ''}</td>
-      <td><span class="badge ${cType === 'Agent' ? 'badge-blue' : 'badge-gray'}">${cType}</span></td>
-      <td style="text-align:center;">
-        <button type="button" class="secondary-btn tiny-btn" onclick="App.devAgent.selectModalContact('${c.id}', '${fullName.replace(/'/g, "\\'")}')">Select</button>
-      </td>
-    `;
+    const tNameTd = document.createElement('td');
+    tNameTd.style.textAlign = 'left';
+    const sName = document.createElement('strong');
+    sName.textContent = fullName;
+    tNameTd.appendChild(sName);
+    
+    const tEmailTd = document.createElement('td');
+    tEmailTd.style.textAlign = 'left';
+    tEmailTd.textContent = c.email || '';
+    
+    const tCompTd = document.createElement('td');
+    tCompTd.textContent = c.company || '';
+    
+    const tTypeTd = document.createElement('td');
+    const badgeSp = document.createElement('span');
+    badgeSp.className = `badge ${cType === 'Agent' ? 'badge-blue' : 'badge-gray'}`;
+    badgeSp.textContent = cType;
+    tTypeTd.appendChild(badgeSp);
+    
+    const tActTd = document.createElement('td');
+    tActTd.style.textAlign = 'center';
+    const selBtn = document.createElement('button');
+    selBtn.type = 'button';
+    selBtn.className = 'secondary-btn tiny-btn';
+    selBtn.textContent = 'Select';
+    selBtn.onclick = () => { App.devAgent.selectModalContact(c.id, fullName.replace(/'/g, "\\'")); };
+    tActTd.appendChild(selBtn);
+    
+    tr.textContent = '';
+    tr.appendChild(tNameTd);
+    tr.appendChild(tEmailTd);
+    tr.appendChild(tCompTd);
+    tr.appendChild(tTypeTd);
+    tr.appendChild(tActTd);
     tbody.appendChild(tr);
   });
 };
@@ -3809,11 +4504,30 @@ App.devAgent.showProjectBrowser = async function() {
 App.devAgent.loadProjects = async function() {
   if (!window.supabaseClient) return;
   const tbody = document.getElementById('devProjectBrowserTable');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+  if (tbody) {
+    tbody.textContent = '';
+    const loadTr = document.createElement('tr');
+    const loadTd = document.createElement('td');
+    loadTd.colSpan = 6;
+    loadTd.style.textAlign = 'center';
+    loadTd.textContent = 'Loading...';
+    loadTr.appendChild(loadTd);
+    tbody.appendChild(loadTr);
+  }
   
   const { data, error } = await window.supabaseClient.from('dev_projects').select('*, dev_project_members(count), dev_tasks(count)').order('created_at', { ascending: false });
   if (error) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Error loading projects</td></tr>';
+    if (tbody) {
+      tbody.textContent = '';
+      const errTr = document.createElement('tr');
+      const errTd = document.createElement('td');
+      errTd.colSpan = 6;
+      errTd.style.textAlign = 'center';
+      errTd.style.color = 'red';
+      errTd.textContent = 'Error loading projects';
+      errTr.appendChild(errTd);
+      tbody.appendChild(errTr);
+    }
     return;
   }
   
@@ -3823,7 +4537,11 @@ App.devAgent.loadProjects = async function() {
   const taskProjectSelect = document.getElementById('devEditTaskProject');
   if (taskProjectSelect) {
      const currentVal = taskProjectSelect.value;
-     taskProjectSelect.innerHTML = '<option value="">-- No Project --</option>';
+     taskProjectSelect.textContent = '';
+     const nullOpt = document.createElement('option');
+     nullOpt.value = '';
+     nullOpt.textContent = '-- No Project --';
+     taskProjectSelect.appendChild(nullOpt);
      devState.projects.forEach(p => {
        const opt = document.createElement('option');
        opt.value = p.id;
@@ -3834,11 +4552,28 @@ App.devAgent.loadProjects = async function() {
   }
   
   const projList = document.getElementById('devProjectList');
-  if (projList) projList.innerHTML = '';
+  if (projList) projList.textContent = '';
   
   if (devState.projects.length === 0) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No active projects.</td></tr>';
-    if (projList) projList.innerHTML = '<li class="dev-session-item" style="color: #666; font-style: italic;">No active projects.</li>';
+    if (tbody) {
+      tbody.textContent = '';
+      const noneTr = document.createElement('tr');
+      const noneTd = document.createElement('td');
+      noneTd.colSpan = 6;
+      noneTd.style.textAlign = 'center';
+      noneTd.textContent = 'No active projects.';
+      noneTr.appendChild(noneTd);
+      tbody.appendChild(noneTr);
+    }
+    if (projList) {
+      projList.textContent = '';
+      const noneLi = document.createElement('li');
+      noneLi.className = 'dev-session-item';
+      noneLi.style.color = '#666';
+      noneLi.style.fontStyle = 'italic';
+      noneLi.textContent = 'No active projects.';
+      projList.appendChild(noneLi);
+    }
     return;
   }
   
@@ -3848,8 +4583,18 @@ App.devAgent.loadProjects = async function() {
       const li = document.createElement('li');
       li.className = 'dev-session-item';
       li.dataset.projectId = proj.id;
-      const shortTitle = proj.name.length > 25 ? proj.name.substring(0,25) + '...' : proj.name;
-      li.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent-info, #3b82f6); margin-right:6px;"></span> ${shortTitle}`;
+      const projName = proj.name || 'Untitled';
+      const shortTitle = projName.length > 25 ? projName.substring(0,25) + '...' : projName;
+      li.textContent = '';
+      const dotSp = document.createElement('span');
+      dotSp.style.display = 'inline-block';
+      dotSp.style.width = '8px';
+      dotSp.style.height = '8px';
+      dotSp.style.borderRadius = '50%';
+      dotSp.style.background = 'var(--accent-info, #3b82f6)';
+      dotSp.style.marginRight = '6px';
+      li.appendChild(dotSp);
+      li.appendChild(document.createTextNode(' ' + shortTitle));
       li.addEventListener('click', () => {
         App.devAgent.openProjectEditor(proj.id);
       });
@@ -3901,11 +4646,11 @@ App.devAgent.renderProjects = function() {
     
     // Derived fields
     if (key === 'members_count') {
-      valA = a.dev_project_members ? a.dev_project_members[0].count : 0;
-      valB = b.dev_project_members ? b.dev_project_members[0].count : 0;
+      valA = a.dev_project_members?.[0]?.count || 0;
+      valB = b.dev_project_members?.[0]?.count || 0;
     } else if (key === 'tasks_count') {
-      valA = a.dev_tasks ? a.dev_tasks[0].count : 0;
-      valB = b.dev_tasks ? b.dev_tasks[0].count : 0;
+      valA = a.dev_tasks?.[0]?.count || 0;
+      valB = b.dev_tasks?.[0]?.count || 0;
     }
     
     if (typeof valA === 'string') valA = valA.toLowerCase();
@@ -3929,9 +4674,15 @@ App.devAgent.renderProjects = function() {
     }
   });
   
-  tbody.innerHTML = '';
+  tbody.textContent = '';
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No matching projects.</td></tr>';
+    const noTr = document.createElement('tr');
+    const noTd = document.createElement('td');
+    noTd.colSpan = 7;
+    noTd.style.textAlign = 'center';
+    noTd.textContent = 'No matching projects.';
+    noTr.appendChild(noTd);
+    tbody.appendChild(noTr);
     return;
   }
   
@@ -3941,14 +4692,15 @@ App.devAgent.renderProjects = function() {
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     };
     const tr = document.createElement('tr');
-    const safeName = escapeHTML(proj.name);
+    const safeName = escapeHTML(proj.name || 'Untitled');
     const safeDesc = escapeHTML(proj.description || '');
-    tr.innerHTML = `
+    const parserProj = new DOMParser();
+    const docProj = parserProj.parseFromString(`
       <td><strong>${safeName}</strong></td>
       <td style="max-width: 350px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${safeDesc}">${safeDesc}</td>
       <td><span class="badge">${escapeHTML(proj.status)}</span></td>
-      <td>${proj.dev_project_members ? proj.dev_project_members[0].count : 0}</td>
-      <td>${proj.dev_tasks ? proj.dev_tasks[0].count : 0}</td>
+      <td>${proj.dev_project_members?.[0]?.count || 0}</td>
+      <td>${proj.dev_tasks?.[0]?.count || 0}</td>
       <td>${new Date(proj.created_at).toLocaleDateString()}</td>
       <td style="text-align: center; white-space: nowrap; gap: 0.5rem; display: flex; justify-content: center;">
         <button class="icon-btn" onclick="App.devAgent.openProjectEditor('${proj.id}')" title="Edit Project">
@@ -3961,7 +4713,68 @@ App.devAgent.renderProjects = function() {
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
         </button>
       </td>
-    `;
+    `, 'text/html');
+    tr.textContent = '';
+    
+    // We cannot just cloneNode on body children because they are TDs and parser puts them into body but might strip tr/td.
+    // Let's create the TDs safely.
+    
+    const tdName = document.createElement('td');
+    const sName = document.createElement('strong');
+    sName.textContent = proj.name || '';
+    tdName.appendChild(sName);
+    
+    const tdDesc = document.createElement('td');
+    tdDesc.style.maxWidth = '350px';
+    tdDesc.style.whiteSpace = 'nowrap';
+    tdDesc.style.overflow = 'hidden';
+    tdDesc.style.textOverflow = 'ellipsis';
+    tdDesc.title = proj.description || '';
+    tdDesc.textContent = proj.description || '';
+    
+    const tdStat = document.createElement('td');
+    const bStat = document.createElement('span');
+    bStat.className = 'badge';
+    bStat.textContent = proj.status || '';
+    tdStat.appendChild(bStat);
+    
+    const tdMems = document.createElement('td');
+    tdMems.textContent = proj.dev_project_members?.[0]?.count || 0;
+    
+    const tdTasks = document.createElement('td');
+    tdTasks.textContent = proj.dev_tasks?.[0]?.count || 0;
+    
+    const tdDate = document.createElement('td');
+    tdDate.textContent = new Date(proj.created_at).toLocaleDateString();
+    
+    const tdActs = document.createElement('td');
+    tdActs.style.textAlign = 'center';
+    tdActs.style.whiteSpace = 'nowrap';
+    tdActs.style.gap = '0.5rem';
+    tdActs.style.display = 'flex';
+    tdActs.style.justifyContent = 'center';
+    
+    const actsParser = new DOMParser();
+    const actsDoc = actsParser.parseFromString(`
+        <button class="icon-btn" onclick="App.devAgent.openProjectEditor('${proj.id}')" title="Edit Project">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+        <button class="icon-btn" onclick="App.devAgent.cloneProject('${proj.id}')" title="Clone Project">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button class="icon-btn danger-hover" onclick="App.devAgent.deleteProject('${proj.id}')" title="Delete Project">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </button>
+    `, 'text/html');
+    Array.from(actsDoc.body.childNodes).forEach(n => tdActs.appendChild(n.cloneNode(true)));
+    
+    tr.appendChild(tdName);
+    tr.appendChild(tdDesc);
+    tr.appendChild(tdStat);
+    tr.appendChild(tdMems);
+    tr.appendChild(tdTasks);
+    tr.appendChild(tdDate);
+    tr.appendChild(tdActs);
     tbody.appendChild(tr);
   });
 };
@@ -3986,12 +4799,12 @@ App.devAgent.sortProjectTasks = function(key) {
   // Update icons
   ['title', 'status', 'priority', 'assignee'].forEach(k => {
     const el = document.getElementById('devProjectTasksSort_' + k);
-    if (el) el.innerHTML = '';
+    if (el) el.textContent = '';
   });
   
   const activeIcon = document.getElementById('devProjectTasksSort_' + key);
   if (activeIcon) {
-    activeIcon.innerHTML = App.devAgent.projectTasksSortAsc ? '▲' : '▼';
+    activeIcon.textContent = App.devAgent.projectTasksSortAsc ? '▲' : '▼';
   }
   
   App.devAgent.renderProjectTasks();
@@ -4001,9 +4814,9 @@ App.devAgent.renderProjectTasks = function() {
   const taskTbody = document.getElementById('devProjectTasksTableBody');
   if (!taskTbody) return;
   
-  const titleFilter = (document.getElementById('devProjectTasksFilterTitle').value || '').toLowerCase();
-  const statusFilter = document.getElementById('devProjectTasksFilterStatus').value || 'all';
-  const priorityFilter = document.getElementById('devProjectTasksFilterPriority').value || 'all';
+  const titleFilter = (document.getElementById('devProjectTasksFilterTitle')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('devProjectTasksFilterStatus')?.value || 'all';
+  const priorityFilter = document.getElementById('devProjectTasksFilterPriority')?.value || 'all';
   
   let filtered = App.devAgent.currentProjectTasks.filter(t => {
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;
@@ -4025,10 +4838,18 @@ App.devAgent.renderProjectTasks = function() {
     return 0;
   });
   
-  taskTbody.innerHTML = '';
+  taskTbody.textContent = '';
   
   if (filtered.length === 0) {
-    taskTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666; font-style: italic;">No tasks match your filters.</td></tr>';
+    const pNoTr = document.createElement('tr');
+    const pNoTd = document.createElement('td');
+    pNoTd.colSpan = 5;
+    pNoTd.style.textAlign = 'center';
+    pNoTd.style.color = '#666';
+    pNoTd.style.fontStyle = 'italic';
+    pNoTd.textContent = 'No tasks match your filters.';
+    pNoTr.appendChild(pNoTd);
+    taskTbody.appendChild(pNoTr);
     return;
   }
   
@@ -4045,21 +4866,60 @@ App.devAgent.renderProjectTasks = function() {
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     };
     
-    tr.innerHTML = `
-      <td style="font-family: monospace; font-size: 0.8em; color: var(--text-muted);">${task.id.substring(0,8)}</td>
-      <td style="max-width: 350px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(task.title || '')}">${escapeHTML(task.title || '')}</td>
-      <td><span class="badge badge-gray" style="text-transform: capitalize;">${escapeHTML(task.status || '').replace('_', ' ')}</span></td>
-      <td><span class="badge badge-gray" style="text-transform: capitalize;">${escapeHTML(task.priority || '')}</span></td>
-      <td style="text-transform: capitalize;">${escapeHTML(task.assignee || '')}</td>
-      <td style="text-align: right; white-space: nowrap;">
+    const tTd1 = document.createElement('td');
+    tTd1.style.fontFamily = 'monospace';
+    tTd1.style.fontSize = '0.8em';
+    tTd1.style.color = 'var(--text-muted)';
+    tTd1.textContent = task.id.substring(0,8);
+    
+    const tTd2 = document.createElement('td');
+    tTd2.style.maxWidth = '350px';
+    tTd2.style.whiteSpace = 'nowrap';
+    tTd2.style.overflow = 'hidden';
+    tTd2.style.textOverflow = 'ellipsis';
+    tTd2.title = task.title || '';
+    tTd2.textContent = task.title || '';
+    
+    const tTd3 = document.createElement('td');
+    const b3 = document.createElement('span');
+    b3.className = 'badge badge-gray';
+    b3.style.textTransform = 'capitalize';
+    b3.textContent = (task.status || '').replace('_', ' ');
+    tTd3.appendChild(b3);
+    
+    const tTd4 = document.createElement('td');
+    const b4 = document.createElement('span');
+    b4.className = 'badge badge-gray';
+    b4.style.textTransform = 'capitalize';
+    b4.textContent = task.priority || '';
+    tTd4.appendChild(b4);
+    
+    const tTd5 = document.createElement('td');
+    tTd5.style.textTransform = 'capitalize';
+    tTd5.textContent = task.assignee || '';
+    
+    const tTd6 = document.createElement('td');
+    tTd6.style.textAlign = 'right';
+    tTd6.style.whiteSpace = 'nowrap';
+    
+    const actsP = new DOMParser();
+    const actsD = actsP.parseFromString(`
         <button type="button" class="dev-action-btn edit-task-btn" title="Edit Task" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:4px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
         </button>
         <button type="button" class="dev-action-btn del-task-btn" title="Delete Task" style="background:none; border:none; cursor:pointer; color:var(--accent-danger); padding:4px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
         </button>
-      </td>
-    `;
+    `, 'text/html');
+    Array.from(actsD.body.childNodes).forEach(n => tTd6.appendChild(n.cloneNode(true)));
+    
+    tr.textContent = '';
+    tr.appendChild(tTd1);
+    tr.appendChild(tTd2);
+    tr.appendChild(tTd3);
+    tr.appendChild(tTd4);
+    tr.appendChild(tTd5);
+    tr.appendChild(tTd6);
     
     const editBtn = tr.querySelector('.edit-task-btn');
     const delBtn = tr.querySelector('.del-task-btn');
@@ -4090,12 +4950,37 @@ App.devAgent.renderProjectTasks = function() {
 App.devAgent.loadProjectTasks = async function(projectId) {
   const tbody = document.getElementById('devProjectTasksTableBody');
   if (!tbody) return;
+  
+  if (!window.supabaseClient) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding: 1rem; text-align: center; color: #dc2626; font-style: italic;">Supabase Client Not Initialized.</td></tr>';
+    return;
+  }
+  
   if (!projectId) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1rem; opacity:0.7;">Save the project first to add tasks.</td></tr>';
+    tbody.textContent = '';
+    const pNoTr = document.createElement('tr');
+    const pNoTd = document.createElement('td');
+    pNoTd.colSpan = 5;
+    pNoTd.style.textAlign = 'center';
+    pNoTd.style.padding = '1rem';
+    pNoTd.style.opacity = '0.7';
+    pNoTd.textContent = 'Save the project first to add tasks.';
+    pNoTr.appendChild(pNoTd);
+    tbody.appendChild(pNoTr);
     return;
   }
 
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1rem; opacity:0.7;">Loading tasks...</td></tr>';
+  tbody.textContent = '';
+  const pLoadTr = document.createElement('tr');
+  const pLoadTd = document.createElement('td');
+  pLoadTd.colSpan = 5;
+  pLoadTd.style.textAlign = 'center';
+  pLoadTd.style.padding = '1rem';
+  pLoadTd.style.opacity = '0.7';
+  pLoadTd.textContent = 'Loading tasks...';
+  pLoadTr.appendChild(pLoadTd);
+  tbody.appendChild(pLoadTr);
+  
   try {
     const { data: tasks, error } = await window.supabaseClient
       .from('dev_tasks')
@@ -4108,7 +4993,16 @@ App.devAgent.loadProjectTasks = async function(projectId) {
     App.devAgent.renderProjectTasks();
 
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:1rem; color:red;">${err.message || 'Unable to load tasks'}</td></tr>`;
+    tbody.textContent = '';
+    const pErrTr = document.createElement('tr');
+    const pErrTd = document.createElement('td');
+    pErrTd.colSpan = 5;
+    pErrTd.style.textAlign = 'center';
+    pErrTd.style.padding = '1rem';
+    pErrTd.style.color = 'red';
+    pErrTd.textContent = err.message || 'Unable to load tasks';
+    pErrTr.appendChild(pErrTd);
+    tbody.appendChild(pErrTr);
   }
 };
 
@@ -4152,7 +5046,7 @@ App.devAgent.openProjectEditor = async function(id = null) {
   document.getElementById('devEditProjectId').value = id || '';
   
   const memberList = document.getElementById('devEditProjectMembersList');
-  if (memberList) memberList.innerHTML = '';
+  if (memberList) memberList.textContent = '';
 
   await App.devAgent.loadProjectTasks(id);
   App.devAgent.loadTasks(id); // Update the left panel to only show this project's tasks
@@ -4200,7 +5094,15 @@ App.devAgent.openProjectEditor = async function(id = null) {
         members.forEach(m => {
           const badge = document.createElement('span');
           badge.className = 'badge badge-blue';
-          badge.innerHTML = `${m.contacts ? m.contacts.first_name + ' ' + m.contacts.last_name : m.contact_id} <span style="cursor:pointer; margin-left:4px;" onclick="App.devAgent.removeProjectMember('${m.id}', '${id}')">&times;</span>`;
+          badge.textContent = '';
+          badge.appendChild(document.createTextNode(m.contacts ? m.contacts.first_name + ' ' + m.contacts.last_name : m.contact_id));
+          const remSpan = document.createElement('span');
+          remSpan.style.cursor = 'pointer';
+          remSpan.style.marginLeft = '4px';
+          remSpan.textContent = '×';
+          remSpan.onclick = () => App.devAgent.removeProjectMember(m.id, id);
+          badge.appendChild(document.createTextNode(' '));
+          badge.appendChild(remSpan);
           memberList.appendChild(badge);
         });
       }
@@ -4210,7 +5112,11 @@ App.devAgent.openProjectEditor = async function(id = null) {
   // load available team members into select
   const memberSelect = document.getElementById('devEditProjectMemberSelect');
   if (memberSelect) {
-     memberSelect.innerHTML = '<option value="">-- Add Team Member --</option>';
+     memberSelect.textContent = '';
+     const defOpt = document.createElement('option');
+     defOpt.value = '';
+     defOpt.textContent = '-- Add Team Member --';
+     memberSelect.appendChild(defOpt);
      const { data: team } = await window.supabaseClient.from('dev_team').select('*, contacts(*)');
      if (team) {
        team.forEach(t => {
@@ -4530,18 +5436,43 @@ App.devAgent.renderAllMessages = function() {
     return 0;
   });
 
-  tbody.innerHTML = '';
+  tbody.textContent = '';
   filtered.forEach(m => {
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.onclick = () => App.devAgent.openMessageDetail(m);
-    tr.innerHTML = `
-      <td style="white-space: nowrap;">${new Date(m.created_at).toLocaleString()}</td>
-      <td>${m.task_title}</td>
-      <td style="text-transform: capitalize;"><strong>${m.sender}</strong></td>
-      <td>${m.receiver}</td>
-      <td style="color: #666; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${m.message.replace(/"/g, '&quot;')}">${m.message}</td>
-    `;
+    
+    const dtTd = document.createElement('td');
+    dtTd.style.whiteSpace = 'nowrap';
+    dtTd.textContent = new Date(m.created_at).toLocaleString();
+    
+    const taskTd = document.createElement('td');
+    taskTd.textContent = m.task_title;
+    
+    const sendTd = document.createElement('td');
+    sendTd.style.textTransform = 'capitalize';
+    const strongSend = document.createElement('strong');
+    strongSend.textContent = m.sender;
+    sendTd.appendChild(strongSend);
+    
+    const recvTd = document.createElement('td');
+    recvTd.textContent = m.receiver;
+    
+    const msgTd = document.createElement('td');
+    msgTd.style.color = '#666';
+    msgTd.style.maxWidth = '300px';
+    msgTd.style.whiteSpace = 'nowrap';
+    msgTd.style.overflow = 'hidden';
+    msgTd.style.textOverflow = 'ellipsis';
+    msgTd.title = m.message;
+    msgTd.textContent = m.message;
+    
+    tr.appendChild(dtTd);
+    tr.appendChild(taskTd);
+    tr.appendChild(sendTd);
+    tr.appendChild(recvTd);
+    tr.appendChild(msgTd);
+    
     tbody.appendChild(tr);
   });
 };
@@ -4575,14 +5506,21 @@ App.devAgent.openMessageDetail = function(msg) {
       contentHtml = `<div style="white-space:pre-wrap; font-size:0.95rem; line-height:1.5;">${msg.message}</div>`;
     }
     
-    document.getElementById('devMessageDetailBody').innerHTML = `
+    const msgHtmlStr = `
       <div style="margin-bottom:1.5rem; font-size:0.9rem; color:var(--text-muted); border-bottom:1px solid var(--border-light); padding-bottom:1rem;">
-        <div><strong>Task:</strong> ${msg.task_title}</div>
+        <div><strong>Task:</strong> ${msg.task_title || ''}</div>
         <div><strong>Date:</strong> ${new Date(msg.created_at).toLocaleString()}</div>
-        <div><strong>To:</strong> ${msg.receiver}</div>
+        <div><strong>To:</strong> ${msg.receiver || ''}</div>
       </div>
       ${contentHtml}
     `;
+    const pDetail = new DOMParser();
+    const dDoc = pDetail.parseFromString(msgHtmlStr, 'text/html');
+    const msgDetailBody = document.getElementById('devMessageDetailBody');
+    if (msgDetailBody) {
+      msgDetailBody.textContent = '';
+      Array.from(dDoc.body.childNodes).forEach(n => msgDetailBody.appendChild(n.cloneNode(true)));
+    }
   }
 };
 

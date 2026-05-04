@@ -1,100 +1,86 @@
-# APP / StarGlow System Architecture
+# Alphire Promo / StarGlow System Architecture
 
-This document provides a comprehensive overview of the Alphire Promo (App/StarGlow) frontend architecture. It is intended for AI agents (like custom GPTs) and developers to quickly understand the core design patterns, state management, routing, and module interactions.
+This document provides a comprehensive overview of the application infrastructure and codebase for Alphire Promo. It serves as the primary source of truth for AI agents and developers to understand the core design patterns, state management, module interactions, and security requirements.
 
-## 1. High-Level Overview
+## 1. High-Level Architecture
 
-The system is built as a **Single Page Application (SPA)** using purely **Vanilla JavaScript, HTML5, and CSS3**. It avoids heavy reactive frameworks (like React, Vue, or Angular) in favor of direct DOM manipulation and an explicit centralized state model.
+The system is a hybrid web application featuring a lightweight frontend interacting with a Node.js/Express backend and a Supabase-managed database.
 
-- **Global Namespace:** `window.App` is the root namespace for all properties, state, and modules.
-- **Backend/API:** Powered by **Supabase** for database interactions (`window.supabaseClient`) and custom backend endpoints.
-- **Component Styling:** Relies on standardized CSS variables and utility classes (e.g., `.app-page`, `.standard-form-grid`, `.data-table`).
-
----
-
-## 2. Global Application State (`App.state`)
-
-All dynamic data rendered in the UI is stored in `App.state` inside `public/js/core.js`. This serves as the single source of truth.
-
-- **Routing:** `App.state.activePage` stores the current page ID.
-- **Entities:** Collections like `contacts`, `segments`, `campaigns`, `projects`, and `promoLeads` are stored here as arrays of objects.
-- **Filters/Sorts:** Global filter and sort criteria (e.g., `leadSort`, `contactsFilters`) are preserved in state, allowing users to navigate away and return without losing their place.
+*   **Frontend:** Pure Vanilla JavaScript Single Page Application (SPA). Avoids heavy reactive frameworks for core pages to maximize performance and direct DOM control.
+*   **Backend:** Node.js Express server (`server.js`) for API routes, background tasks, and agent integrations (Vertex AI, Playwright).
+*   **Database & Auth:** Powered by **Supabase**. Direct database interactions use `window.supabaseClient`, secured by backend Row Level Security (RLS).
+*   **Storage:** Vercel Blob (`@vercel/blob`) handles file and media storage.
+*   **Rich Text Subsystem:** A focused React + Tiptap bundle (`react-entry.js`) is used exclusively for rich text editors, compiled separately via `esbuild`.
 
 ---
 
-## 3. DOM Caching (`App.els`)
+## 2. Frontend HTML & Build Process
 
-To avoid repeated `document.getElementById` calls, the application caches critical DOM elements in `App.els` at initialization. Modules access elements using `App.els.myElementId`.
+To ensure maintainability, the application's HTML is modularized rather than living in a monolithic file.
+
+*   **Source Files:** The main structure lives in `src/layout.html`, with individual views located in `src/pages/*.html` (e.g., `messaging.html`, `develop.html`).
+*   **Build Script:** Do **NOT** edit `public/index.html` directly. Run `npm run build:html` to compile the source templates into the final `public/index.html` file.
+*   **Automation:** The HTML build script automatically runs when invoking `npm run dev` or `npm start`.
+
+---
+
+## 3. Global Application State & DOM
+
+The application relies on explicit, centralized state management rather than implicit reactive binding.
+
+*   **Namespace (`window.App`):** The root namespace for all logic, state, and modules.
+*   **State (`App.state`):** Located in `core.js`, this acts as the single source of truth for dynamic data, entities (contacts, projects, leads), UI filters, and routing context.
+*   **DOM Caching (`App.els`):** Critical DOM elements are cached at initialization to prevent redundant `document.getElementById` queries. Access them via `App.els.elementId`.
 
 ---
 
 ## 4. Routing & Navigation
 
-Navigation is driven by **URL Hashes** (`#page=contactsPage`).
+Routing is purely client-side, driven by URL hashes (e.g., `#page=contactsPage`).
 
-### How Routing Works (`App.setActivePage`):
-1. **Hash Change:** The system listens for `hashchange` and `popstate` events.
-2. **Page Toggling:** Every "page" is a `div` with the class `.app-page`. `App.setActivePage(pageId)` iterates through all `.app-page` elements and toggles the `.hidden` utility class, ensuring only the target page is visible.
-3. **Menu Highlighting:** Updates `.menu-link` elements to reflect the active navigation state.
-4. **Lifecycle Hooks:** Modules can register `onPageActivated` callbacks in their manifests. When a page is activated, the router invokes these hooks, allowing modules to fetch data, reset forms, or update UI layouts dynamically.
+*   **Page Toggling:** Every view is a `div` marked with `.app-page`. `App.setActivePage(pageId)` manages visibility by toggling the `.hidden` utility class, ensuring only the active page renders.
+*   **Lifecycle Hooks:** Modules register `onPageActivated` callbacks in their manifests. The router calls these hooks upon navigation to fetch necessary data and prepare the UI layout dynamically.
 
 ---
 
 ## 5. Network & API Interfacing
 
-### The `App.api()` Wrapper
-All interactions with internal backend routes pass through `App.api(path, options)`. 
+All internal backend communications are routed through a standardized wrapper to enforce consistent envelope handling.
 
-**Key Features:**
-- **Standardized Envelope:** Automatically unwraps `{ ok, data, error, meta }` envelopes.
-- **Error Handling:** On `ok: false`, it throws a structured JavaScript `Error` that the calling module can catch and display via `App.notify()`.
-- **Project Context:** Automatically injects the `X-Project-ID` header from `App.state.currentProjectId` for multi-tenant or multi-project operations.
-
-### Supabase Integration
-For direct database access, the system uses the standard Supabase JS client (`window.supabaseClient`), primarily utilizing `select`, `insert`, `update`, and `delete` operations based on Row Level Security (RLS) defined in the backend.
+*   **`App.api(path, options)`:** Automatically unwraps standard `{ ok, data, error, meta }` responses.
+*   **Error Handling:** Unsuccessful responses (`ok: false`) throw structured JavaScript `Error` objects, which modules catch to trigger UI alerts via `App.notify()`.
+*   **Project Context:** Multi-tenant operations are supported seamlessly; the wrapper automatically injects the `X-Project-ID` header from `App.state.currentProjectId`.
 
 ---
 
-## 6. Module Structure
+## 6. Security Mandate: Zero \`innerHTML\`
 
-The application functionality is logically partitioned into discrete files (e.g., `devAgent.js`, `contacts.js`, `campaigns.js`), each extending the `App` namespace.
+The project strictly enforces a **"Zero \`innerHTML\`"** policy to eliminate DOM-based Cross-Site Scripting (XSS) vulnerabilities. 
 
-### Common Module Patterns:
-- **Initialization:** Modules often define a startup routine (e.g., `App.devAgent.init()`) that binds event listeners to elements in `App.els`.
-- **Data Loading:** Methods like `loadContacts()` or `loadProjects()`:
-  1. Fetch data via `supabaseClient` or `App.api()`.
-  2. Update `App.state`.
-  3. Re-render the respective table or UI element (e.g., `tbody.innerHTML = ...`).
-- **Form Handling:** Submissions prevent default (`e.preventDefault()`), gather data from `document.getElementById()`, execute the API/Supabase call, and then invoke the data loading method to refresh the UI.
-
-### Key Modules:
-- `core.js`: Bootstrapping, state, routing, DOM refs, and API wrappers.
-- `auth.js`: Supabase authentication lifecycle (Login, Register, Logout).
-- `contacts.js`: CRM logic, table rendering, complex filtering.
-- `devAgent.js`: Development Task & Project tracking. Implements advanced UI features like dynamic reparenting of the Chat/Discussion interface into specific task context panels.
+**Rules:**
+1.  **Never** use `element.innerHTML = '...'` to inject strings or dynamic markup.
+2.  **Clearing Nodes:** To clear an element, use `element.textContent = ''` instead of `element.innerHTML = ''`.
+3.  **Building Safe DOM:** Use standard API methods (`document.createElement`, `textContent`) for simple dynamic rendering.
+4.  **Complex Templates:** When rendering large template strings, use the shared "Secure DOM Builder" utilities provided in `core.js`:
+    *   `App.ui.parseHTML(htmlString)`: Safely parses an HTML string and returns a `DocumentFragment`.
+    *   `App.ui.setSecureHTML(element, htmlString)`: Safely replaces the content of an element with parsed nodes.
 
 ---
 
 ## 7. UI / UX Design Patterns
 
-### Layouts
-- **`.standard-form-grid`:** A two-column responsive CSS Grid used for almost all forms. Inputs span full or half widths using `.full-width` or `.half-width` classes.
-- **`.data-table`:** Standard styling for tabular data, complete with hover states and aligned action columns.
-- **`.badge`:** Used for statuses and tags.
-
-### Dynamic Elements
-- **Modals/Panels:** The UI heavily utilizes sliding side panels and modals. These are activated by removing the `.hidden` class from an overlay or panel container.
-- **Icons:** Inline SVG icons are preferred over font libraries. Standard SVG paths are cached in `App.ACTION_ICONS` (`core.js`) and rendered using `App.makeInlineIcon()` or `App.makeIconButton()`.
-
-### Reparenting / Contextual UI
-Advanced modules like `devAgent.js` use **DOM Reparenting** (via `appendChild`) to move shared interface elements (like global chat) into contextual areas (like a Task Editor's discussion accordion) and back out again without losing state or event listeners.
+*   **CSS System:** Built on standardized CSS variables and utility classes. 
+    *   `.standard-form-grid`: A two-column responsive CSS Grid for all application forms. Use `.full-width` and `.half-width` inside it.
+    *   `.data-table`: Enforces consistent styling, hover states, and alignments for tabular data.
+*   **Inline SVG Icons:** Instead of external icon fonts, standard SVG paths are cached in `App.ACTION_ICONS` (`core.js`). Render them safely using `App.makeInlineIcon()` and `App.makeIconButton()`.
+*   **Contextual UI (Reparenting):** Advanced UI modules (e.g., Development Task tracking in `devAgent.js`) utilize DOM reparenting (`appendChild`) to seamlessly move shared interfaces (like the global chat) into targeted contextual views without losing event listeners or state.
 
 ---
 
-## 8. Development Guidelines
+## 8. Development Workflow Rules
 
-When modifying or extending the APP/StarGlow system, adhere to these rules:
-1. **No Frameworks:** Stick to Vanilla JS. Use `document.createElement` and template literals for rendering.
-2. **State Syncing:** Do not mutate the DOM manually without updating `App.state` if the data needs to persist or be read by other components.
-3. **Idempotent Rendering:** Rendering functions (like `loadTable`) should completely wipe (`innerHTML = ''`) and rebuild the UI segment based on the current state.
-4. **Use Established Patterns:** When creating a new form, use `.standard-form-grid`. For tables, use `.data-table` and `<thead>/<tbody>` patterns. Use SVG icons from `App.ACTION_ICONS`.
+When extending the system, follow these core principles:
+1.  **Respect the HTML Build:** Always edit `src/pages/*.html` and rebuild, never the compiled `index.html`.
+2.  **Vanilla JS First:** Stick strictly to vanilla JavaScript for UI features. Do not introduce Vue/React components into the main app (except for the isolated Tiptap editor).
+3.  **Idempotent Rendering:** Data-driven rendering functions (e.g., `loadTable`) should entirely wipe and rebuild the UI segment from `App.state`.
+4.  **Security First:** Adhere strictly to the Secure DOM Builders and avoid `innerHTML` string interpolation completely.

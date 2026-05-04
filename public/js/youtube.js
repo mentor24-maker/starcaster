@@ -294,8 +294,10 @@ App.youtube = (function () {
   function sanitizeRationaleHtml(input) {
     var raw = String(input || '');
     if (!raw) return '';
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(raw, 'text/html');
     var root = document.createElement('div');
-    root.innerHTML = raw;
+    Array.from(doc.body.childNodes).forEach(function(node) { root.appendChild(node); });
     var allowed = {
       B: true,
       STRONG: true,
@@ -618,13 +620,24 @@ App.youtube = (function () {
     modal.style.display = 'flex';
     
     var gridEl = document.getElementById('youtubeMinerTargetSelectorGrid');
-    if (gridEl) gridEl.innerHTML = '<p>Loading targeted repository videos...</p>';
+    if (gridEl) {
+      gridEl.textContent = '';
+      var p = document.createElement('p');
+      p.textContent = 'Loading targeted repository videos...';
+      gridEl.appendChild(p);
+    }
     
     try {
       allTargetRepositoryVideos = getFilteredYoutubeRuns();
       renderTargetSelectorGrid('');
     } catch (err) {
-      if (gridEl) gridEl.innerHTML = '<p style="color:red;">Error loading filtered target videos.</p>';
+      if (gridEl) {
+        gridEl.textContent = '';
+        var errP = document.createElement('p');
+        errP.style.color = 'red';
+        errP.textContent = 'Error loading filtered target videos.';
+        gridEl.appendChild(errP);
+      }
       notify(err.message, true);
     }
   }
@@ -645,7 +658,10 @@ App.youtube = (function () {
     }
     
     if (!vids.length) {
-      gridEl.innerHTML = '<p>No matching videos found in repository.</p>';
+      gridEl.textContent = '';
+      var pMsg = document.createElement('p');
+      pMsg.textContent = 'No matching videos found in repository.';
+      gridEl.appendChild(pMsg);
       return;
     }
     
@@ -1149,7 +1165,8 @@ App.youtube = (function () {
     var select = document.getElementById('youtubeResearchMessagingTopic');
     if (!select) return;
     var current = safeText(selectedTopic || select.value);
-    select.innerHTML = '<option value="">All Topics</option>';
+    select.textContent = '';
+    select.appendChild(new Option('All Topics', ''));
     var rows = toArray(topics).slice().sort(function(a, b) {
       return getYoutubeResearchTopicValue(a).localeCompare(getYoutubeResearchTopicValue(b));
     });
@@ -1176,7 +1193,8 @@ App.youtube = (function () {
       tags = tags.concat(collectTagsFromRecord(record));
     });
     tags = Array.from(new Set(tags)).sort();
-    select.innerHTML = '<option value="">All Hashtags</option>';
+    select.textContent = '';
+    select.appendChild(new Option('All Hashtags', ''));
     tags.forEach(function(tag) {
       var opt = document.createElement('option');
       opt.value = tag;
@@ -1583,7 +1601,8 @@ App.youtube = (function () {
           var nameSelect = document.createElement('select');
           nameSelect.className = 'yt-miner-config-name';
           var currentVal = safeText(row && row.name);
-          nameSelect.innerHTML = '<option value="">Select Messaging Topic...</option>';
+          nameSelect.textContent = '';
+          nameSelect.appendChild(new Option('Select Messaging Topic...', ''));
           var messagingTopics = App.messaging && typeof App.messaging.getTopics === 'function' ? App.messaging.getTopics() : [];
           messagingTopics.forEach(function(item) {
              var topicName = safeText(item && (item.topic || item.category));
@@ -1615,7 +1634,11 @@ App.youtube = (function () {
         var rationaleRich = document.createElement('div');
         rationaleRich.className = 'yt-miner-config-rationale-rich yt-miner-cat-rationale-rich';
         rationaleRich.contentEditable = 'true';
-        rationaleRich.innerHTML = sanitizeRationaleHtml(safeText(row && row.rationale));
+        var safeHtmlStr = sanitizeRationaleHtml(safeText(row && row.rationale));
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(safeHtmlStr, 'text/html');
+        rationaleRich.textContent = '';
+        Array.from(doc.body.childNodes).forEach(function(node) { rationaleRich.appendChild(node.cloneNode(true)); });
         rationaleWrap.appendChild(makeYoutubeRteToolbar(rationaleRich));
         rationaleWrap.appendChild(rationaleRich);
         rationaleTd.appendChild(rationaleWrap);
@@ -1638,7 +1661,14 @@ App.youtube = (function () {
       } else {
         nameTd.textContent = safeText(row && row.name) || '-';
         var rationaleHtml = sanitizeRationaleHtml(safeText(row && row.rationale));
-        rationaleTd.innerHTML = rationaleHtml || '-';
+        if (!rationaleHtml) {
+          rationaleTd.textContent = '-';
+        } else {
+          rationaleTd.textContent = '';
+          var parser = new DOMParser();
+          var doc = parser.parseFromString(rationaleHtml, 'text/html');
+          Array.from(doc.body.childNodes).forEach(function(node) { rationaleTd.appendChild(node.cloneNode(true)); });
+        }
         rankTd.textContent = String(Math.max(1, Math.min(Number(row && row.value_rank) || 3, 5)));
         tagsTd.textContent = toArray(row && (row.match_hashtags || row.match_tags)).join(', ') || '-';
       }
@@ -3137,7 +3167,10 @@ App.youtube = (function () {
     ];
     bits.forEach(function(pair) {
       var p = document.createElement('p');
-      p.innerHTML = '<strong>' + escapeHtml(pair[0]) + ':</strong> ' + escapeHtml(pair[1]);
+      var strong = document.createElement('strong');
+      strong.textContent = String(pair[0]) + ':';
+      p.appendChild(strong);
+      p.appendChild(document.createTextNode(' ' + String(pair[1])));
       meta.appendChild(p);
     });
     wrap.appendChild(meta);
@@ -3273,7 +3306,9 @@ App.youtube = (function () {
     var qualityLabel = document.createElement('label');
     qualityLabel.textContent = 'Quality (1-5)';
     var qualityInput = document.createElement('select');
-    qualityInput.innerHTML = '<option value="0">0 (unset)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>';
+    qualityInput.textContent = '';
+    qualityInput.appendChild(new Option('0 (unset)', '0'));
+    for (var i = 1; i <= 5; i++) qualityInput.appendChild(new Option(String(i), String(i)));
     qualityInput.value = String(feedback.quality || 0);
     qualityRow.appendChild(qualityLabel);
     qualityRow.appendChild(qualityInput);
@@ -3653,7 +3688,8 @@ App.youtube = (function () {
         return a.localeCompare(b);
       });
       var previousValue = safeText(topicInput.value);
-      topicInput.innerHTML = '<option value="">All Topics</option>';
+      topicInput.textContent = '';
+      topicInput.appendChild(new Option('All Topics', ''));
       topics.forEach(function(cat) {
         var option = document.createElement('option');
         option.value = cat;
@@ -3669,7 +3705,8 @@ App.youtube = (function () {
         return a.localeCompare(b);
       });
       var previousApproach = safeText(approachInput.value);
-      approachInput.innerHTML = '<option value="">All Approaches</option>';
+      approachInput.textContent = '';
+      approachInput.appendChild(new Option('All Approaches', ''));
       approaches.forEach(function(approach) {
         var option = document.createElement('option');
         option.value = approach;
@@ -3705,13 +3742,17 @@ App.youtube = (function () {
     var reviewedCount = comments.reduce(function(count, row) {
       return count + (feedbackHasReview(readFeedback(row)) ? 1 : 0);
     }, 0);
-    summaryEl.innerHTML = '<table class="youtube-miner-stats-table"><tbody>' +
+    var safeHtmlStr = '<table class="youtube-miner-stats-table"><tbody>' +
       '<tr><td>Videos harvested</td><td>' + harvestedVideos + '</td></tr>' +
       '<tr><td>Raw comments</td><td>' + totalRaw + '</td></tr>' +
       '<tr><td>Filtered comments</td><td>' + totalFiltered + '</td></tr>' +
       '<tr><td>Visible rows</td><td>' + comments.length + '</td></tr>' +
       '<tr><td>Reviewed</td><td>' + reviewedCount + '</td></tr>' +
       '</tbody></table>';
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(safeHtmlStr, 'text/html');
+    summaryEl.textContent = '';
+    Array.from(doc.body.childNodes).forEach(function(node) { summaryEl.appendChild(node.cloneNode(true)); });
 
     if (metaEl) {
       metaEl.textContent = App.prettyJson({
@@ -3810,7 +3851,11 @@ App.youtube = (function () {
       var commentText = document.createElement('div');
       var fullCommentText = safeText(row && row.text) || '-';
       commentText.className = 'youtube-miner-comment-text is-truncated';
-      commentText.innerHTML = highlightFilterMatch(truncateText(fullCommentText, 200) || '-', commentFilterQuery);
+      var safeHtmlStr = highlightFilterMatch(truncateText(fullCommentText, 200) || '-', commentFilterQuery);
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(safeHtmlStr, 'text/html');
+      commentText.textContent = '';
+      Array.from(doc.body.childNodes).forEach(function(node) { commentText.appendChild(node.cloneNode(true)); });
       commentText.title = fullCommentText;
       commentTd.appendChild(commentText);
 
@@ -3989,12 +4034,16 @@ App.youtube = (function () {
       var stats = youtubeResearchLastResult?.stats || {};
       var research = youtubeResearchLastResult?.research || {};
       if (!youtubeResearchLastResult) {
-        summaryEl.innerHTML = '<div class="youtube-research-summary-container">' +
+        var safeHtmlStr = '<div class="youtube-research-summary-container">' +
           '<h3 class="youtube-research-summary-headline">Research Status</h3>' +
           '<table class="youtube-miner-stats-table"><tbody><tr><td>No research run yet.</td></tr></tbody></table>' +
           '</div>';
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(safeHtmlStr, 'text/html');
+        summaryEl.textContent = '';
+        Array.from(doc.body.childNodes).forEach(function(node) { summaryEl.appendChild(node.cloneNode(true)); });
       } else {
-        summaryEl.innerHTML = '<div class="youtube-research-summary-container">' +
+        var safeHtmlStr2 = '<div class="youtube-research-summary-container">' +
           '<h3 class="youtube-research-summary-headline">Research run complete</h3>' +
           '<table class="youtube-miner-stats-table"><tbody>' +
           '<tr><td>Phrases</td><td>' + String(Number(research.phrases?.length || stats.phrase_count || 0) || 0) + '</td></tr>' +
@@ -4003,6 +4052,10 @@ App.youtube = (function () {
           '<tr><td>Candidate videos</td><td>' + String(Number(research.distilled_count || stats.distilled_target_count || 0) || 0) + '</td></tr>' +
           '</tbody></table>' +
           '</div>';
+        var parser2 = new DOMParser();
+        var doc2 = parser2.parseFromString(safeHtmlStr2, 'text/html');
+        summaryEl.textContent = '';
+        Array.from(doc2.body.childNodes).forEach(function(node) { summaryEl.appendChild(node.cloneNode(true)); });
       }
     }
     renderYoutubeResearchRunsTable();
@@ -4330,7 +4383,8 @@ App.youtube = (function () {
     var label = document.createElement('label');
     label.textContent = 'Ban Reason';
     var select = document.createElement('select');
-    select.innerHTML = '<option value=\"\">Select reason</option>';
+    select.textContent = '';
+    select.appendChild(new Option('Select reason', ''));
     getYoutubeBanReasonOptions().forEach(function(optionData) {
       var option = document.createElement('option');
       option.value = optionData.value;
@@ -4400,7 +4454,16 @@ App.youtube = (function () {
       ['youtubeRunsSortTranscriptBtn', 'transcript', 'Transcript'],
     ].forEach(function(entry) {
       var btn = document.getElementById(entry[0]);
-      if (btn) btn.innerHTML = entry[2] + (sortKey === entry[1] ? (sortDir === 'asc' ? ' <span style="font-size: 0.65em;">▲</span>' : ' <span style="font-size: 0.65em;">▼</span>') : '');
+      if (btn) {
+        btn.textContent = '';
+        btn.appendChild(document.createTextNode(entry[2]));
+        if (sortKey === entry[1]) {
+          var span = document.createElement('span');
+          span.style.fontSize = '0.65em';
+          span.textContent = sortDir === 'asc' ? ' ▲' : ' ▼';
+          btn.appendChild(span);
+        }
+      }
     });
 
     if (!runs.length) {
@@ -4720,7 +4783,12 @@ App.youtube = (function () {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (sortBtn) {
-      sortBtn.innerHTML = 'Topic' + (topicTableState.sort.dir === 'asc' ? ' <span style="font-size: 0.65em;">▲</span>' : ' <span style="font-size: 0.65em;">▼</span>');
+      sortBtn.textContent = '';
+      sortBtn.appendChild(document.createTextNode('Topic'));
+      var span = document.createElement('span');
+      span.style.fontSize = '0.65em';
+      span.textContent = topicTableState.sort.dir === 'asc' ? ' ▲' : ' ▼';
+      sortBtn.appendChild(span);
     }
 
     getSortedYoutubeTopics().forEach(function(item) {
@@ -5345,10 +5413,14 @@ App.youtube = (function () {
           youtubeResearchLastResult = null;
           var summaryEl = document.getElementById('youtubeResearchSummary');
           if (summaryEl) {
-            summaryEl.innerHTML = '<div class="youtube-research-summary-container">' +
+            var safeHtmlStr = '<div class="youtube-research-summary-container">' +
               '<h3 class="youtube-research-summary-headline" style="color:var(--muted)">Researching...</h3>' +
               '<table class="youtube-miner-stats-table"><tbody><tr><td>Please wait, discovering targets...</td></tr></tbody></table>' +
               '</div>';
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(safeHtmlStr, 'text/html');
+            summaryEl.textContent = '';
+            Array.from(doc.body.childNodes).forEach(function(node) { summaryEl.appendChild(node.cloneNode(true)); });
           }
           
           var res = await api('/api/acquire/youtube-research', {
@@ -5374,10 +5446,14 @@ App.youtube = (function () {
           
           var summaryEl = document.getElementById('youtubeResearchSummary');
           if (summaryEl) {
-            summaryEl.innerHTML = '<div class="youtube-research-summary-container" style="border-color:#f7c6c6; background:#fff2f2;">' +
+            var safeHtmlStrErr = '<div class="youtube-research-summary-container" style="border-color:#f7c6c6; background:#fff2f2;">' +
               '<h3 class="youtube-research-summary-headline" style="color:#d32f2f">Research Failed</h3>' +
-              '<div style="font-size: 0.95rem; line-height: 1.5;">' + htmlMsg + '</div>' +
+              '<p style="color:#d32f2f">' + htmlMsg + '</p>' +
               '</div>';
+            var parserErr = new DOMParser();
+            var docErr = parserErr.parseFromString(safeHtmlStrErr, 'text/html');
+            summaryEl.textContent = '';
+            Array.from(docErr.body.childNodes).forEach(function(node) { summaryEl.appendChild(node.cloneNode(true)); });
           }
         } finally {
           if (youtubeResearchSubmitBtn) youtubeResearchSubmitBtn.disabled = false;
@@ -5685,7 +5761,8 @@ App.youtube = (function () {
       var assignSelect = document.getElementById('youtubeCommentMinerAssignSelect');
       if (assignSelect) {
         var prevValue = assignSelect.value;
-        assignSelect.innerHTML = '<option value="">-- Campaign --</option>';
+        assignSelect.textContent = '';
+        assignSelect.appendChild(new Option('-- Campaign --', ''));
         var campaigns = Array.isArray(res && res.campaigns) ? res.campaigns : [];
         campaigns.forEach(function(c) {
           var opt = document.createElement('option');
