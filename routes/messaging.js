@@ -753,16 +753,6 @@ async function handle(req, res, pathname, method) {
     deleteFn: deleteMessagingComment,
   })) return true;
 
-  if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
-    path: '/api/messaging/hashtags',
-    field: 'hashtag',
-    singularKey: 'hashtag',
-    pluralKey: 'hashtags',
-    listFn: listMessagingHashtags,
-    createFn: createMessagingHashtag,
-    updateFn: updateMessagingHashtag,
-    deleteFn: deleteMessagingHashtag,
-  })) return true;
 
   if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
     path: '/api/messaging/ctas',
@@ -834,6 +824,20 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 201, result.data, { hashtags: result.data }, { total: result.data.length }), true;
   }
+
+  // handleSimpleTextResource for hashtags placed AFTER the dedicated GET/POST
+  // handlers above so that bulk creation with campaign_id is handled first.
+  // This block only catches PATCH/PUT/DELETE for /api/messaging/hashtags/:id.
+  if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
+    path: '/api/messaging/hashtags',
+    field: 'hashtag',
+    singularKey: 'hashtag',
+    pluralKey: 'hashtags',
+    listFn: listMessagingHashtags,
+    createFn: createMessagingHashtag,
+    updateFn: updateMessagingHashtag,
+    deleteFn: deleteMessagingHashtag,
+  })) return true;
 
   if (pathname === '/api/messaging/formats' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);

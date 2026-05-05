@@ -4,9 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Omni-channel Engagement Engine</title>
-  <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
+  <title>StarCaster</title>
+  <link rel="icon" type="image/png" sizes="512x512" href="/images/favicon_alphire_512x512.png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/images/favicon_alphire_512x512.png" />
   <link rel="stylesheet" href="/styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -16,9 +16,9 @@
     <div class="auth-content">
       <div class="auth-hero">
         <div class="auth-banner">
-          <img src="/images/glostar_banner_800x200.png" alt="STARGLOW by Alphire" />
+          <img src="/images/logo_starcaster_1920x300.png" alt="StarCaster by Alphire" />
         </div>
-        <h1>Omni-channel Engagement Engine</h1>
+        <h1>StarCaster</h1>
         <p>
           Engage with your followers and fans wherever they may be.
         </p>
@@ -61,7 +61,7 @@
           <label>Email</label>
           <input name="email" type="email" required />
           <div></div>
-          <button type="submit">Send Reset Code</button>
+          <button type="submit" class="btn btn-primary">Send Reset Code</button>
           <div style="grid-column: 1/-1; text-align: center; margin-top: 1rem;">
             <a href="#" id="authCancelForgotPassword"
               style="font-size: 0.85rem; color: var(--muted); text-decoration: underline;">Back to login</a>
@@ -76,7 +76,7 @@
           <label>New Password</label>
           <input name="new_password" type="password" minlength="8" required />
           <div></div>
-          <button type="submit">Confirm Reset</button>
+          <button type="submit" class="btn btn-primary">Confirm Reset</button>
         </form>
       </div>
     </div>
@@ -84,9 +84,9 @@
 
   <div id="appShell" class="hidden">
     <header>
-      <img src="/images/glostar_banner_800x200.png" alt="STARGLOW by Alphire" class="brand-wordmark"
+      <img src="/images/logo_starcaster_1920x300.png" alt="StarCaster by Alphire" class="brand-wordmark"
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';" />
-      <h1 id="brandFallback" class="brand-fallback">STARGLOW by Alphire</h1>
+      <h1 id="brandFallback" class="brand-fallback">StarCaster by Alphire</h1>
       <div class="auth-header-meta">
         <div class="auth-user-menu">
           <a id="authWelcomeName" class="auth-welcome-name" href="#page=settingsProfilePage">Account</a>

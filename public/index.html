@@ -4,9 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Omni-channel Engagement Engine</title>
-  <link rel="icon" type="image/png" sizes="512x512" href="/favicon_alphire_512x512.png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="/favicon_alphire_512x512.png" />
+  <title>StarCaster</title>
+  <link rel="icon" type="image/png" sizes="512x512" href="/images/favicon_alphire_512x512.png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/images/favicon_alphire_512x512.png" />
   <link rel="stylesheet" href="/styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -16,9 +16,9 @@
     <div class="auth-content">
       <div class="auth-hero">
         <div class="auth-banner">
-          <img src="/images/glostar_banner_800x200.png" alt="STARGLOW by Alphire" />
+          <img src="/images/logo_starcaster_1920x300.png" alt="StarCaster by Alphire" />
         </div>
-        <h1>Omni-channel Engagement Engine</h1>
+        <h1>StarCaster</h1>
         <p>
           Engage with your followers and fans wherever they may be.
         </p>
@@ -61,7 +61,7 @@
           <label>Email</label>
           <input name="email" type="email" required />
           <div></div>
-          <button type="submit">Send Reset Code</button>
+          <button type="submit" class="btn btn-primary">Send Reset Code</button>
           <div style="grid-column: 1/-1; text-align: center; margin-top: 1rem;">
             <a href="#" id="authCancelForgotPassword"
               style="font-size: 0.85rem; color: var(--muted); text-decoration: underline;">Back to login</a>
@@ -76,7 +76,7 @@
           <label>New Password</label>
           <input name="new_password" type="password" minlength="8" required />
           <div></div>
-          <button type="submit">Confirm Reset</button>
+          <button type="submit" class="btn btn-primary">Confirm Reset</button>
         </form>
       </div>
     </div>
@@ -84,9 +84,9 @@
 
   <div id="appShell" class="hidden">
     <header>
-      <img src="/images/glostar_banner_800x200.png" alt="STARGLOW by Alphire" class="brand-wordmark"
+      <img src="/images/logo_starcaster_1920x300.png" alt="StarCaster by Alphire" class="brand-wordmark"
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';" />
-      <h1 id="brandFallback" class="brand-fallback">STARGLOW by Alphire</h1>
+      <h1 id="brandFallback" class="brand-fallback">StarCaster by Alphire</h1>
       <div class="auth-header-meta">
         <div class="auth-user-menu">
           <a id="authWelcomeName" class="auth-welcome-name" href="#page=settingsProfilePage">Account</a>
@@ -842,8 +842,8 @@
                   <thead>
                     <tr>
                       <th></th>
-                      <th><button type="button" id="youtubeResearchSortTitleBtn" class="table-sort-btn">Video Title</button></th>
-                      <th><button type="button" id="youtubeResearchSortChannelBtn" class="table-sort-btn">Channel</button></th>
+                      <th id="youtubeResearchSortTitleBtn">Video Title</th>
+                      <th id="youtubeResearchSortChannelBtn">Channel</th>
                       <th class="numeric-col"><button type="button" id="youtubeResearchSortViewsBtn" class="table-sort-btn numeric-col">Views</button></th>
                       <th class="numeric-col"><button type="button" id="youtubeResearchSortLikesBtn" class="table-sort-btn numeric-col">Likes</button></th>
                       <th class="numeric-col"><button type="button" id="youtubeResearchSortCommentsBtn" class="table-sort-btn numeric-col">Comments</button></th>
@@ -918,12 +918,12 @@
                     </tr>
                     <tr>
                       <th></th>
-                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortCreatedBtn">Created</button></th>
-                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortTitleBtn">Video Title</button></th>
-                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortChannelBtn">Channel</button></th>
-                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortCategoryBtn">Topic</button></th>
-                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortHashtagsBtn">Hashtags</button></th>
-                      <th><button type="button" class="table-sort-btn" id="youtubeRunsSortTranscriptBtn">Transcript</button></th>
+                      <th id="youtubeRunsSortCreatedBtn">Created</th>
+                      <th id="youtubeRunsSortTitleBtn">Video Title</th>
+                      <th id="youtubeRunsSortChannelBtn">Channel</th>
+                      <th id="youtubeRunsSortCategoryBtn">Topic</th>
+                      <th id="youtubeRunsSortHashtagsBtn">Hashtags</th>
+                      <th id="youtubeRunsSortTranscriptBtn">Transcript</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -1401,7 +1401,7 @@
           <table>
             <thead>
               <tr>
-                <th><button id="youtubeTopicsSortCategory" type="button" class="btn">Topic</button></th>
+                <th id="youtubeTopicsSortCategory">Topic</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -2052,11 +2052,11 @@
               <tr>
                 <th></th>
                 <th>Thumbnail</th>
-                <th><button id="assetsSortNameBtn" type="button" class="btn">Asset Name</button></th>
-                <th><button id="assetsSortTypeBtn" type="button" class="btn">Asset Type</button></th>
-                <th><button id="assetsSortCategoryBtn" type="button" class="btn">Category</button></th>
-                <th><button id="assetsSortTagsBtn" type="button" class="btn">Tags</button></th>
-                <th><button id="assetsSortSizeBtn" type="button" class="btn">Size</button></th>
+                <th id="assetsSortNameBtn">Asset Name</th>
+                <th id="assetsSortTypeBtn">Asset Type</th>
+                <th id="assetsSortCategoryBtn">Category</th>
+                <th id="assetsSortTagsBtn">Tags</th>
+                <th id="assetsSortSizeBtn">Size</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -2192,8 +2192,8 @@
                 <th></th>
               </tr>
               <tr>
-                <th><button id="assetCategoriesSortType" type="button" class="btn">Asset Type</button></th>
-                <th><button id="assetCategoriesSortCategory" type="button" class="btn">Category Name</button></th>
+                <th id="assetCategoriesSortType">Asset Type</th>
+                <th id="assetCategoriesSortCategory">Category Name</th>
                 <th class="asset-categories-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -2570,7 +2570,7 @@
           <h2>Campaigns</h2>
           <div class="page-heading-actions">
             <button id="campaignToggleRulesBtn" type="button" class="btn">Channel Rules</button>
-            <button id="campaignToggleFormBtn" type="button" class="btn">Add Campaign</button>
+            <button id="campaignCreateBtn" type="button" class="btn" onclick="App.setActivePage('campaignCreatePage'); return false;">Create Campaign</button>
           </div>
         </div>
         <section id="campaignChannelRulesPanel" class="stack-form hidden" style="border: 1px solid var(--border-light); border-radius: var(--radius-container); background: var(--bg-surface); padding: 1.5rem; margin-bottom: 1rem;">
@@ -2599,7 +2599,73 @@
             <button id="campaignRulesResetBtn" type="button" class="btn">Reset Defaults</button>
           </div>
         </section>
-        <form id="campaignForm" style="margin-bottom: 2rem;">
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="campaignFilterName" placeholder="Name" /></th>
+                <th>
+                  <select id="campaignFilterStatus">
+                    <option value="">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="pending">Pending</option>
+                    <option value="paused">Paused</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="ready">Ready</option>
+                    <option value="active">Active</option>
+                    <option value="complete">Complete</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="sent">Sent</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterSegment">
+                    <option value="">All Segments</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterChannel">
+                    <option value="">All Channels</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterTemplate">
+                    <option value="">All Templates</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterPage">
+                    <option value="">All Pages</option>
+                  </select>
+                </th>
+                <th><input id="campaignFilterSubject" placeholder="Subject" /></th>
+                <th><button id="campaignFilterBtn" type="button" class="btn">Filter</button></th>
+              </tr>
+              <tr>
+                <th id="campaignSortNameBtn">Campaign Name</th>
+                <th id="campaignSortStatusBtn">Status</th>
+                <th id="campaignSortSegmentBtn">Segment</th>
+                <th id="campaignSortChannelBtn">Channel</th>
+                <th id="campaignSortTemplateBtn">Template</th>
+                <th id="campaignSortPageBtn">Page</th>
+                <th id="campaignSortSubjectBtn">Subject</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="campaignCards"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="campaignCreatePage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Campaign</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.setActivePage('campaignsPage'); return false;">Back To Campaigns</button>
+          </div>
+        </div>
+        <form id="campaignForm">
           <input id="campaignIdInput" name="campaignId" type="hidden" />
           <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
             <div class="stack-form" style="margin: 0;">
@@ -2609,7 +2675,19 @@
                 <label for="campaignNameInput"><strong>Campaign Name:</strong></label>
                 <input id="campaignNameInput" name="name" required />
               
-                <input name="status" id="campaignStatusInput" type="hidden" value="pending" />
+                <label for="campaignStatusSelect"><strong>Status:</strong></label>
+                <select name="status" id="campaignStatusSelect">
+                  <option value="draft">Draft</option>
+                  <option value="pending" selected>Pending</option>
+                  <option value="paused">Paused</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="ready">Ready</option>
+                  <option value="active">Active</option>
+                  <option value="complete">Complete</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="sent">Sent</option>
+                </select>
+
                 <label for="campaignChannelSelect"><strong>Channel:</strong></label>
                 <select name="channelId" id="campaignChannelSelect" required>
                   <option value="">Channel</option>
@@ -2646,133 +2724,163 @@
             <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Content</h3>
               <p id="campaignContentChannelHint" class="meta">Select a channel to load content fields.</p>
-              <div id="campaignContentConditional" class="standard-form-grid" style="margin: 0; display: none;">
-                
-                  <label for="campaignTopicSelect"><strong>Topics:</strong></label>
-                  <select name="topicId" id="campaignTopicSelect">
-                    <option value="">Topics</option>
-                  </select>
-                
-                
-                  <label for="campaignHeadlineSelect"><strong>Headline:</strong></label>
-                  <select name="headlineId" id="campaignHeadlineSelect">
-                    <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
-                  </select>
-                
-                
-                  <label for="campaignEmailSelect"><strong>Email Body:</strong></label>
-                  <select name="emailId" id="campaignEmailSelect">
-                    <option value="">Email Body</option>
-                  </select>
-                
-                
-                  <label for="campaignSubjectLineSelect"><strong>Subject Line:</strong></label>
-                  <select name="subjectLineId" id="campaignSubjectLineSelect">
-                    <option value="">Subject Line</option>
-                  </select>
-                
-                
-                  <label for="campaignBlurbSelect"><strong>Blurb:</strong></label>
-                  <select name="blurbId" id="campaignBlurbSelect">
-                    <option value="">Blurb (reserved)</option>
-                  </select>
-                
-                
-                  <label for="campaignPitchSelect"><strong>Pitch:</strong></label>
-                  <select name="pitchId" id="campaignPitchSelect">
-                    <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
-                  </select>
-                
-                
-                  <label for="campaignSubheadingSelect"><strong>Sub-heading:</strong></label>
-                  <select name="subheadingId" id="campaignSubheadingSelect">
-                    <option value="">Sub-heading</option>
-                  </select>
-                
-                
-                  <label for="campaignTaglineSelect"><strong>Tagline:</strong></label>
-                  <select name="taglineId" id="campaignTaglineSelect">
-                    <option value="">Tagline</option>
-                  </select>
-                
-                
-                  <label for="campaignArticleSelect"><strong>Article:</strong></label>
-                  <select name="articleId" id="campaignArticleSelect">
-                    <option value="">Article</option>
-                  </select>
-                
-                
-                  <label for="campaignReportSelect"><strong>Report:</strong></label>
-                  <select name="reportId" id="campaignReportSelect">
-                    <option value="">Report</option>
-                  </select>
-                
-                
-                  <label for="campaignWhitePaperSelect"><strong>White Paper:</strong></label>
-                  <select name="whitePaperId" id="campaignWhitePaperSelect">
-                    <option value="">White Paper</option>
-                  </select>
-                
-                
-                  <label for="campaignEbookSelect"><strong>eBook:</strong></label>
-                  <select name="ebookId" id="campaignEbookSelect">
-                    <option value="">eBook</option>
-                  </select>
-                
-                
-                  <label for="campaignPostSelect"><strong>Post:</strong></label>
-                  <select name="postId" id="campaignPostSelect">
-                    <option value="">Post</option>
-                  </select>
-                
-                
-                  <label for="campaignDescriptionSelect"><strong>Description:</strong></label>
-                  <select name="descriptionId" id="campaignDescriptionSelect">
-                    <option value="">Description</option>
-                  </select>
-                
-                
-                  <label for="campaignTranscriptSelect"><strong>Transcript:</strong></label>
-                  <select name="transcriptId" id="campaignTranscriptSelect">
-                    <option value="">Transcript</option>
-                  </select>
-                
-                
-                  <label for="campaignCommentSelect"><strong>Comment:</strong></label>
-                  <select name="commentId" id="campaignCommentSelect">
-                    <option value="">Comment</option>
-                  </select>
-                
-                
-                  <label for="campaignTweetSelect"><strong>Tweet:</strong></label>
-                  <select name="tweetId" id="campaignTweetSelect">
-                    <option value="">Tweet (optional)</option>
-                  </select>
-                
-                
-                  <label for="campaignCtaSelect"><strong>CTA:</strong></label>
-                  <select name="ctaId" id="campaignCtaSelect">
-                    <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
-                  </select>
-                
-                
-                  <label for="campaignPrimaryImageSelect"><strong>Primary Image:</strong></label>
-                  <select name="primaryImageId" id="campaignPrimaryImageSelect">
-                    <option value="">Primary Image</option>
-                  </select>
-                
-                
-                  <label for="campaignPrimaryVideoSelect"><strong>Primary Video:</strong></label>
-                  <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
-                    <option value="">Primary Video (optional)</option>
-                  </select>
-                
-                
-                  <label for="campaignHashtagGroupSelect"><strong>Hashtags:</strong></label>
-                  <select name="hashtagsText" id="campaignHashtagGroupSelect">
-                    <option value="">Hashtags</option>
-                  </select>
-                
+              <div id="campaignContentConditional" style="margin: 0; display: none;">
+
+                  <div class="campaign-content-row" data-field-id="campaignTopicSelect">
+                    <label for="campaignTopicSelect"><strong>Topics:</strong></label>
+                    <select name="topicId" id="campaignTopicSelect">
+                      <option value="">Topics</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignHeadlineSelect">
+                    <label for="campaignHeadlineSelect"><strong>Headline:</strong></label>
+                    <select name="headlineId" id="campaignHeadlineSelect">
+                      <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignEmailSelect">
+                    <label for="campaignEmailSelect"><strong>Email Body:</strong></label>
+                    <select name="emailId" id="campaignEmailSelect">
+                      <option value="">Email Body</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignSubjectLineSelect">
+                    <label for="campaignSubjectLineSelect"><strong>Subject Line:</strong></label>
+                    <select name="subjectLineId" id="campaignSubjectLineSelect">
+                      <option value="">Subject Line</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignBlurbSelect">
+                    <label for="campaignBlurbSelect"><strong>Blurb:</strong></label>
+                    <select name="blurbId" id="campaignBlurbSelect">
+                      <option value="">Blurb (reserved)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPitchSelect">
+                    <label for="campaignPitchSelect"><strong>Pitch:</strong></label>
+                    <select name="pitchId" id="campaignPitchSelect">
+                      <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignSubheadingSelect">
+                    <label for="campaignSubheadingSelect"><strong>Sub-heading:</strong></label>
+                    <select name="subheadingId" id="campaignSubheadingSelect">
+                      <option value="">Sub-heading</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignTaglineSelect">
+                    <label for="campaignTaglineSelect"><strong>Tagline:</strong></label>
+                    <select name="taglineId" id="campaignTaglineSelect">
+                      <option value="">Tagline</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignArticleSelect">
+                    <label for="campaignArticleSelect"><strong>Article:</strong></label>
+                    <select name="articleId" id="campaignArticleSelect">
+                      <option value="">Article</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignReportSelect">
+                    <label for="campaignReportSelect"><strong>Report:</strong></label>
+                    <select name="reportId" id="campaignReportSelect">
+                      <option value="">Report</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignWhitePaperSelect">
+                    <label for="campaignWhitePaperSelect"><strong>White Paper:</strong></label>
+                    <select name="whitePaperId" id="campaignWhitePaperSelect">
+                      <option value="">White Paper</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignEbookSelect">
+                    <label for="campaignEbookSelect"><strong>eBook:</strong></label>
+                    <select name="ebookId" id="campaignEbookSelect">
+                      <option value="">eBook</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPostSelect">
+                    <label for="campaignPostSelect"><strong>Post:</strong></label>
+                    <select name="postId" id="campaignPostSelect">
+                      <option value="">Post</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignDescriptionSelect">
+                    <label for="campaignDescriptionSelect"><strong>Description:</strong></label>
+                    <select name="descriptionId" id="campaignDescriptionSelect">
+                      <option value="">Description</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignTranscriptSelect">
+                    <label for="campaignTranscriptSelect"><strong>Transcript:</strong></label>
+                    <select name="transcriptId" id="campaignTranscriptSelect">
+                      <option value="">Transcript</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignCommentSelect">
+                    <label for="campaignCommentSelect"><strong>Comment:</strong></label>
+                    <select name="commentId" id="campaignCommentSelect">
+                      <option value="">Comment</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignTweetSelect">
+                    <label for="campaignTweetSelect"><strong>Tweet:</strong></label>
+                    <select name="tweetId" id="campaignTweetSelect">
+                      <option value="">Tweet (optional)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignCtaSelect">
+                    <label for="campaignCtaSelect"><strong>CTA:</strong></label>
+                    <select name="ctaId" id="campaignCtaSelect">
+                      <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPrimaryImageSelect">
+                    <label for="campaignPrimaryImageSelect"><strong>Primary Image:</strong></label>
+                    <select name="primaryImageId" id="campaignPrimaryImageSelect">
+                      <option value="">Primary Image</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPrimaryVideoSelect">
+                    <label for="campaignPrimaryVideoSelect"><strong>Primary Video:</strong></label>
+                    <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
+                      <option value="">Primary Video (optional)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignHashtagGroupSelect">
+                    <label for="campaignHashtagGroupSelect"><strong>Hashtags:</strong></label>
+                    <select name="hashtagsText" id="campaignHashtagGroupSelect">
+                      <option value="">Hashtags</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignLeadMagnetSelect">
+                    <label for="campaignLeadMagnetSelect"><strong>Lead Magnet:</strong></label>
+                    <select name="leadMagnetId" id="campaignLeadMagnetSelect">
+                      <option value="">Lead Magnet</option>
+                    </select>
+                  </div>
+
+                <button id="campaignAddContentBtn" type="button" class="btn" style="margin-top: 0.75rem;">Add Content</button>
               </div>
             </div>
           </div>
@@ -2781,64 +2889,6 @@
             <button id="campaignSubmitBtn" type="submit" class="btn btn-primary">Create Campaign</button>
           </div>
         </form>
-
-        <div id="campaignsReactRoot"></div>
-
-        <h3>Legacy Saved Campaigns</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr class="table-filter-row">
-                <th><input id="campaignFilterName" placeholder="Name" /></th>
-                <th>
-                  <select id="campaignFilterStatus">
-                    <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="paused">Paused</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="ready">Ready</option>
-                    <option value="complete">Complete</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="sent">Sent</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterSegment">
-                    <option value="">All Segments</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterChannel">
-                    <option value="">All Channels</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterTemplate">
-                    <option value="">All Templates</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterPage">
-                    <option value="">All Pages</option>
-                  </select>
-                </th>
-                <th><input id="campaignFilterSubject" placeholder="Subject" /></th>
-                <th></th>
-              </tr>
-              <tr>
-                <th><button id="campaignSortNameBtn" type="button" class="btn">Campaign Name</button></th>
-                <th><button id="campaignSortStatusBtn" type="button" class="btn">Status</button></th>
-                <th><button id="campaignSortSegmentBtn" type="button" class="btn">Segment</button></th>
-                <th><button id="campaignSortChannelBtn" type="button" class="btn">Channel</button></th>
-                <th><button id="campaignSortTemplateBtn" type="button" class="btn">Template</button></th>
-                <th><button id="campaignSortPageBtn" type="button" class="btn">Page</button></th>
-                <th><button id="campaignSortSubjectBtn" type="button" class="btn">Subject</button></th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="campaignCards"></tbody>
-          </table>
-        </div>
       </section>
       <!-- INJECTED PAGE: channels.html -->
 
@@ -3302,7 +3352,7 @@
           <table>
             <thead>
               <tr>
-                <th><button id="contactPersonasSortPersona" type="button" class="btn">Persona</button></th>
+                <th id="contactPersonasSortPersona">Persona</th>
                 <th>Parent</th>
                 <th>Tags</th>
                 <th>Description</th>
@@ -4234,15 +4284,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="developLandingPagesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="developLandingPagesBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="developLandingPagesSortNameBtn" type="button" class="btn">Name</button></th>
-                <th><button id="developLandingPagesSortTemplateBtn" type="button" class="btn">Template</button></th>
-                <th><button id="developLandingPagesSortHeadlineBtn" type="button" class="btn">Headline</button></th>
-                <th><button id="developLandingPagesSortFormBtn" type="button" class="btn">Form</button></th>
-                <th><button id="developLandingPagesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="developLandingPagesSortNameBtn">Name</th>
+                <th id="developLandingPagesSortTemplateBtn">Template</th>
+                <th id="developLandingPagesSortHeadlineBtn">Headline</th>
+                <th id="developLandingPagesSortFormBtn">Form</th>
+                <th id="developLandingPagesSortUpdatedBtn">Updated</th>
                 <th class="develop-pages-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -4606,13 +4656,13 @@
           <table>
             <thead>
               <tr>
-                <th><button id="developFormsSortNameBtn" type="button" class="btn">Form Name</button></th>
-                <th><button id="developFormsSortTypeBtn" type="button" class="btn">Type</button></th>
-                <th><button id="developFormsSortLeadMagnetTypeBtn" type="button" class="btn">Lead Magnet Type</button></th>
-                <th><button id="developFormsSortLeadMagnetBtn" type="button" class="btn">Lead Magnet</button></th>
-                <th><button id="developFormsSortCtaBtn" type="button" class="btn">CTA</button></th>
-                <th><button id="developFormsSortContactTypeBtn" type="button" class="btn">Contact Type</button></th>
-                <th><button id="developFormsSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="developFormsSortNameBtn">Form Name</th>
+                <th id="developFormsSortTypeBtn">Type</th>
+                <th id="developFormsSortLeadMagnetTypeBtn">Lead Magnet Type</th>
+                <th id="developFormsSortLeadMagnetBtn">Lead Magnet</th>
+                <th id="developFormsSortCtaBtn">CTA</th>
+                <th id="developFormsSortContactTypeBtn">Contact Type</th>
+                <th id="developFormsSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -5095,11 +5145,11 @@
               <th></th>
             </tr>
             <tr>
-              <th><button id="developExtensionsSortNameBtn" type="button" class="btn">Name</button></th>
-              <th><button id="developExtensionsSortTypeBtn" type="button" class="btn">Type</button></th>
-              <th><button id="developExtensionsSortTaxonomyBtn" type="button" class="btn">Taxonomy</button></th>
-              <th><button id="developExtensionsSortStatusBtn" type="button" class="btn">Status</button></th>
-              <th><button id="developExtensionsSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+              <th id="developExtensionsSortNameBtn">Name</th>
+              <th id="developExtensionsSortTypeBtn">Type</th>
+              <th id="developExtensionsSortTaxonomyBtn">Taxonomy</th>
+              <th id="developExtensionsSortStatusBtn">Status</th>
+              <th id="developExtensionsSortUpdatedBtn">Updated</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -5292,7 +5342,7 @@
         <div class="page-heading-row">
           <h2>Documentation</h2>
         </div>
-        <p class="docs-intro">This section is the system manual for the Alphire Promo Platform. The process map below mirrors the operating flow: acquire inputs, organize people and reach paths, prepare message and assets, build campaign infrastructure, execute, and then observe the result. Each stage links directly to its documentation page.</p>
+        <p class="docs-intro">This section is the system manual for StarCaster by Alphire. The process map below mirrors the operating flow: acquire inputs, organize people and reach paths, prepare message and assets, build campaign infrastructure, execute, and then observe the result. Each stage links directly to its documentation page.</p>
 
         <div class="docs-flow-infographic" aria-label="System workflow infographic">
           <div class="docs-flow-row">
@@ -5889,6 +5939,7 @@
           </section>
         </div>
       </section>
+
       <!-- INJECTED PAGE: engage.html -->
 
       <section id="engagePage" class="app-page hidden">
@@ -6440,9 +6491,9 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingContentTypesSortLabelBtn" type="button" class="btn">Name</button></th>
-                <th><button id="messagingContentTypesSortFamilyBtn" type="button" class="btn">Family</button></th>
-                <th><button id="messagingContentTypesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingContentTypesSortLabelBtn">Name</th>
+                <th id="messagingContentTypesSortFamilyBtn">Family</th>
+                <th id="messagingContentTypesSortUpdatedBtn">Updated</th>
                 <th>Enabled</th>
                 <th>Actions</th>
               </tr>
@@ -6529,11 +6580,11 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingArticlesSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingArticlesSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingArticlesSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingArticlesSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingArticlesSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
+                <th id="messagingArticlesSortPublishBtn">Publish Date</th>
+                <th id="messagingArticlesSortTitleBtn">Title</th>
+                <th id="messagingArticlesSortPlatformBtn">Platform</th>
+                <th id="messagingArticlesSortAuthorBtn">Author</th>
+                <th id="messagingArticlesSortThumbnailBtn">Thumbnail</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -6666,11 +6717,11 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTweetsSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingTweetsSortContentBtn" type="button" class="btn">Content</button></th>
-                <th><button id="messagingTweetsSortUrlBtn" type="button" class="btn">URL</button></th>
-                <th><button id="messagingTweetsSortHashtagsBtn" type="button" class="btn">Hashtags</button></th>
-                <th><button id="messagingTweetsSortImageBtn" type="button" class="btn">Image</button></th>
+                <th id="messagingTweetsSortCreatedBtn">Created</th>
+                <th id="messagingTweetsSortContentBtn">Content</th>
+                <th id="messagingTweetsSortUrlBtn">URL</th>
+                <th id="messagingTweetsSortHashtagsBtn">Hashtags</th>
+                <th id="messagingTweetsSortImageBtn">Image</th>
                 <th>Score</th>
                 <th>Actions</th>
               </tr>
@@ -6809,15 +6860,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingPitchesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingPitchesBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingPitchesSortTextBtn" type="button" class="btn">Pitch</button></th>
-                <th><button id="messagingPitchesSortTopicBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingPitchesSortTextBtn">Pitch</th>
+                <th id="messagingPitchesSortTopicBtn">Topic</th>
                 <th>Score</th>
-                <th><button id="messagingPitchesSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingPitchesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingPitchesSortCreatedBtn">Created</th>
+                <th id="messagingPitchesSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -6995,16 +7046,16 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingHeadlinesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingHeadlinesBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingHeadlinesSortHeadlineBtn" type="button" class="btn">Headline</button></th>
-                <th><button id="messagingHeadlinesSortTopicBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingHeadlinesSortHeadlineBtn">Headline</th>
+                <th id="messagingHeadlinesSortTopicBtn">Topic</th>
                 <th>Format</th>
                 <th>Score</th>
-                <th><button id="messagingHeadlinesSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingHeadlinesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingHeadlinesSortCreatedBtn">Created</th>
+                <th id="messagingHeadlinesSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -7076,7 +7127,15 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTopicsSortBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingTopicsSortBtn">Topic</th>
+                <th class="stat-col-header">Contacts</th>
+                <th class="stat-col-header">Channels</th>
+                <th class="stat-col-header">Messages</th>
+                <th class="stat-col-header">Assets</th>
+                <th class="stat-col-header">Campaigns</th>
+                <th class="stat-col-header">Segments</th>
+                <th class="stat-col-header">Pages</th>
+                <th class="stat-col-header">Reports</th>
                 <th class="messaging-topics-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -7146,7 +7205,7 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTagsSortBtn" type="button" class="btn">Tag</button></th>
+                <th id="messagingTagsSortBtn">Tag</th>
                 <th class="messaging-topics-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -7306,15 +7365,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingSubheadingsBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingSubheadingsBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingSubheadingsSortTextBtn" type="button" class="btn">Sub-heading</button></th>
-                <th><button id="messagingSubheadingsSortCategoryBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingSubheadingsSortTextBtn">Sub-heading</th>
+                <th id="messagingSubheadingsSortCategoryBtn">Topic</th>
                 <th>Score</th>
-                <th><button id="messagingSubheadingsSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingSubheadingsSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingSubheadingsSortCreatedBtn">Created</th>
+                <th id="messagingSubheadingsSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -7455,15 +7514,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingTaglinesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingTaglinesBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingTaglinesSortTextBtn" type="button" class="btn">Tagline</button></th>
-                <th><button id="messagingTaglinesSortCategoryBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingTaglinesSortTextBtn">Tagline</th>
+                <th id="messagingTaglinesSortCategoryBtn">Topic</th>
                 <th>Score</th>
-                <th><button id="messagingTaglinesSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingTaglinesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingTaglinesSortCreatedBtn">Created</th>
+                <th id="messagingTaglinesSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -7573,12 +7632,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingReportsSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingReportsSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingReportsSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingReportsSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingReportsSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
-                <th><button id="messagingReportsSortPdfBtn" type="button" class="btn">PDF</button></th>
+                <th id="messagingReportsSortPublishBtn">Publish Date</th>
+                <th id="messagingReportsSortTitleBtn">Title</th>
+                <th id="messagingReportsSortPlatformBtn">Platform</th>
+                <th id="messagingReportsSortAuthorBtn">Author</th>
+                <th id="messagingReportsSortThumbnailBtn">Thumbnail</th>
+                <th id="messagingReportsSortPdfBtn">PDF</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -7671,12 +7730,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingWhitePapersSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingWhitePapersSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingWhitePapersSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingWhitePapersSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingWhitePapersSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
-                <th><button id="messagingWhitePapersSortPdfBtn" type="button" class="btn">PDF</button></th>
+                <th id="messagingWhitePapersSortPublishBtn">Publish Date</th>
+                <th id="messagingWhitePapersSortTitleBtn">Title</th>
+                <th id="messagingWhitePapersSortPlatformBtn">Platform</th>
+                <th id="messagingWhitePapersSortAuthorBtn">Author</th>
+                <th id="messagingWhitePapersSortThumbnailBtn">Thumbnail</th>
+                <th id="messagingWhitePapersSortPdfBtn">PDF</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -7769,12 +7828,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingEbooksSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingEbooksSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingEbooksSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingEbooksSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingEbooksSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
-                <th><button id="messagingEbooksSortPdfBtn" type="button" class="btn">PDF</button></th>
+                <th id="messagingEbooksSortPublishBtn">Publish Date</th>
+                <th id="messagingEbooksSortTitleBtn">Title</th>
+                <th id="messagingEbooksSortPlatformBtn">Platform</th>
+                <th id="messagingEbooksSortAuthorBtn">Author</th>
+                <th id="messagingEbooksSortThumbnailBtn">Thumbnail</th>
+                <th id="messagingEbooksSortPdfBtn">PDF</th>
                 <th>Actions</th>
               </tr>
             </thead>
