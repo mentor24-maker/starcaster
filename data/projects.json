@@ -1,6 +1,15 @@
 {
   "projects": [
     {
+      "id": "proj_1777999786372_u4gs6n",
+      "name": "Normie",
+      "slug": "normie",
+      "description": "",
+      "created_by_user_id": "usr_1777999727946_cvwduc",
+      "created_at": "2026-05-05T16:49:46.372Z",
+      "updated_at": "2026-05-05T16:49:46.372Z"
+    },
+    {
       "id": "proj_1775686623082_wqea0n",
       "name": "Default Project",
       "slug": "default-project",
@@ -11,6 +20,13 @@
     }
   ],
   "memberships": [
+    {
+      "project_id": "proj_1777999786372_u4gs6n",
+      "user_id": "usr_1777999727946_cvwduc",
+      "role": "owner",
+      "status": "active",
+      "created_at": "2026-05-05T16:49:46.372Z"
+    },
     {
       "project_id": "proj_1775686623082_wqea0n",
       "user_id": "usr_1775686623037_webd6d",

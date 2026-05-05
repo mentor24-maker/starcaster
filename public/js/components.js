@@ -1,6 +1,6 @@
 /**
  * public/js/components.js
- * Reusable UI component library for the Alphire Promo Platform.
+ * Reusable UI component library for StarCaster by Alphire.
  *
  * ── Components ────────────────────────────────────────────────────────────────
  *

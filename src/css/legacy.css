@@ -975,6 +975,40 @@ button[type="submit"] {
   white-space: nowrap;
 }
 
+/* --- Campaign content row: label + select + delete icon --- */
+.campaign-content-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.campaign-content-row label {
+  text-align: right;
+}
+
+.campaign-content-row.user-hidden {
+  display: none;
+}
+
+.campaign-content-row .content-remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-muted, #888);
+  font-size: 1.1rem;
+  padding: 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.campaign-content-row .content-remove-btn:hover {
+  color: #c0392b;
+  background-color: rgba(192, 57, 43, 0.1);
+}
+
 .hidden {
   display: none !important;
 }
@@ -8393,22 +8427,8 @@ table {
   overflow-x: auto;
 }
 
-.table-sort-btn {
-  width: auto;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  border-radius: 0;
-  font: inherit;
-  font-weight: 700;
-  text-align: left;
-}
-
-.table-sort-btn.numeric-col {
-  text-align: right;
-}
+/* .table-sort-btn removed — column headers are now plain <th> elements.
+   See _tables.css for canonical CRUD table styles. */
 
 .numeric-col {
   text-align: right;

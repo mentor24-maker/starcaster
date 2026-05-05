@@ -288,9 +288,9 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingContentTypesSortLabelBtn" type="button" class="btn">Name</button></th>
-                <th><button id="messagingContentTypesSortFamilyBtn" type="button" class="btn">Family</button></th>
-                <th><button id="messagingContentTypesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingContentTypesSortLabelBtn">Name</th>
+                <th id="messagingContentTypesSortFamilyBtn">Family</th>
+                <th id="messagingContentTypesSortUpdatedBtn">Updated</th>
                 <th>Enabled</th>
                 <th>Actions</th>
               </tr>
@@ -377,11 +377,11 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingArticlesSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingArticlesSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingArticlesSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingArticlesSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingArticlesSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
+                <th id="messagingArticlesSortPublishBtn">Publish Date</th>
+                <th id="messagingArticlesSortTitleBtn">Title</th>
+                <th id="messagingArticlesSortPlatformBtn">Platform</th>
+                <th id="messagingArticlesSortAuthorBtn">Author</th>
+                <th id="messagingArticlesSortThumbnailBtn">Thumbnail</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -514,11 +514,11 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTweetsSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingTweetsSortContentBtn" type="button" class="btn">Content</button></th>
-                <th><button id="messagingTweetsSortUrlBtn" type="button" class="btn">URL</button></th>
-                <th><button id="messagingTweetsSortHashtagsBtn" type="button" class="btn">Hashtags</button></th>
-                <th><button id="messagingTweetsSortImageBtn" type="button" class="btn">Image</button></th>
+                <th id="messagingTweetsSortCreatedBtn">Created</th>
+                <th id="messagingTweetsSortContentBtn">Content</th>
+                <th id="messagingTweetsSortUrlBtn">URL</th>
+                <th id="messagingTweetsSortHashtagsBtn">Hashtags</th>
+                <th id="messagingTweetsSortImageBtn">Image</th>
                 <th>Score</th>
                 <th>Actions</th>
               </tr>
@@ -657,15 +657,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingPitchesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingPitchesBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingPitchesSortTextBtn" type="button" class="btn">Pitch</button></th>
-                <th><button id="messagingPitchesSortTopicBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingPitchesSortTextBtn">Pitch</th>
+                <th id="messagingPitchesSortTopicBtn">Topic</th>
                 <th>Score</th>
-                <th><button id="messagingPitchesSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingPitchesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingPitchesSortCreatedBtn">Created</th>
+                <th id="messagingPitchesSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -843,16 +843,16 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingHeadlinesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingHeadlinesBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingHeadlinesSortHeadlineBtn" type="button" class="btn">Headline</button></th>
-                <th><button id="messagingHeadlinesSortTopicBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingHeadlinesSortHeadlineBtn">Headline</th>
+                <th id="messagingHeadlinesSortTopicBtn">Topic</th>
                 <th>Format</th>
                 <th>Score</th>
-                <th><button id="messagingHeadlinesSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingHeadlinesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingHeadlinesSortCreatedBtn">Created</th>
+                <th id="messagingHeadlinesSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -924,7 +924,15 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTopicsSortBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingTopicsSortBtn">Topic</th>
+                <th class="stat-col-header">Contacts</th>
+                <th class="stat-col-header">Channels</th>
+                <th class="stat-col-header">Messages</th>
+                <th class="stat-col-header">Assets</th>
+                <th class="stat-col-header">Campaigns</th>
+                <th class="stat-col-header">Segments</th>
+                <th class="stat-col-header">Pages</th>
+                <th class="stat-col-header">Reports</th>
                 <th class="messaging-topics-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -994,7 +1002,7 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingTagsSortBtn" type="button" class="btn">Tag</button></th>
+                <th id="messagingTagsSortBtn">Tag</th>
                 <th class="messaging-topics-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -1154,15 +1162,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingSubheadingsBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingSubheadingsBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingSubheadingsSortTextBtn" type="button" class="btn">Sub-heading</button></th>
-                <th><button id="messagingSubheadingsSortCategoryBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingSubheadingsSortTextBtn">Sub-heading</th>
+                <th id="messagingSubheadingsSortCategoryBtn">Topic</th>
                 <th>Score</th>
-                <th><button id="messagingSubheadingsSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingSubheadingsSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingSubheadingsSortCreatedBtn">Created</th>
+                <th id="messagingSubheadingsSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1303,15 +1311,15 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="messagingTaglinesBulkEditBtn" type="button" class="btn" disabled>Edit Selected</button></th>
+                <th id="messagingTaglinesBulkEditBtn">Edit Selected</th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="messagingTaglinesSortTextBtn" type="button" class="btn">Tagline</button></th>
-                <th><button id="messagingTaglinesSortCategoryBtn" type="button" class="btn">Topic</button></th>
+                <th id="messagingTaglinesSortTextBtn">Tagline</th>
+                <th id="messagingTaglinesSortCategoryBtn">Topic</th>
                 <th>Score</th>
-                <th><button id="messagingTaglinesSortCreatedBtn" type="button" class="btn">Created</button></th>
-                <th><button id="messagingTaglinesSortUpdatedBtn" type="button" class="btn">Updated</button></th>
+                <th id="messagingTaglinesSortCreatedBtn">Created</th>
+                <th id="messagingTaglinesSortUpdatedBtn">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1421,12 +1429,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingReportsSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingReportsSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingReportsSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingReportsSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingReportsSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
-                <th><button id="messagingReportsSortPdfBtn" type="button" class="btn">PDF</button></th>
+                <th id="messagingReportsSortPublishBtn">Publish Date</th>
+                <th id="messagingReportsSortTitleBtn">Title</th>
+                <th id="messagingReportsSortPlatformBtn">Platform</th>
+                <th id="messagingReportsSortAuthorBtn">Author</th>
+                <th id="messagingReportsSortThumbnailBtn">Thumbnail</th>
+                <th id="messagingReportsSortPdfBtn">PDF</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1519,12 +1527,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingWhitePapersSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingWhitePapersSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingWhitePapersSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingWhitePapersSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingWhitePapersSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
-                <th><button id="messagingWhitePapersSortPdfBtn" type="button" class="btn">PDF</button></th>
+                <th id="messagingWhitePapersSortPublishBtn">Publish Date</th>
+                <th id="messagingWhitePapersSortTitleBtn">Title</th>
+                <th id="messagingWhitePapersSortPlatformBtn">Platform</th>
+                <th id="messagingWhitePapersSortAuthorBtn">Author</th>
+                <th id="messagingWhitePapersSortThumbnailBtn">Thumbnail</th>
+                <th id="messagingWhitePapersSortPdfBtn">PDF</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1617,12 +1625,12 @@
           <table>
             <thead>
               <tr>
-                <th><button id="messagingEbooksSortPublishBtn" type="button" class="btn">Publish Date</button></th>
-                <th><button id="messagingEbooksSortTitleBtn" type="button" class="btn">Title</button></th>
-                <th><button id="messagingEbooksSortPlatformBtn" type="button" class="btn">Platform</button></th>
-                <th><button id="messagingEbooksSortAuthorBtn" type="button" class="btn">Author</button></th>
-                <th><button id="messagingEbooksSortThumbnailBtn" type="button" class="btn">Thumbnail</button></th>
-                <th><button id="messagingEbooksSortPdfBtn" type="button" class="btn">PDF</button></th>
+                <th id="messagingEbooksSortPublishBtn">Publish Date</th>
+                <th id="messagingEbooksSortTitleBtn">Title</th>
+                <th id="messagingEbooksSortPlatformBtn">Platform</th>
+                <th id="messagingEbooksSortAuthorBtn">Author</th>
+                <th id="messagingEbooksSortThumbnailBtn">Thumbnail</th>
+                <th id="messagingEbooksSortPdfBtn">PDF</th>
                 <th>Actions</th>
               </tr>
             </thead>
