@@ -1,6 +1,758 @@
 {
   "runs": [
     {
+      "run_id": "dhrun_1777940619753_kuyh008t",
+      "source_url": "https://www.normie.one/",
+      "max_pages": 10,
+      "peer_sites_limit": 20,
+      "images_limit": 20,
+      "body_snippet_chars": 600,
+      "pages_total": 1,
+      "pages_succeeded": 1,
+      "pages_failed": 0,
+      "started_at": "2026-05-05T00:23:39.753Z",
+      "finished_at": "2026-05-05T00:23:39.979Z",
+      "capture_contact_data": true,
+      "keyword_exclusions": [],
+      "contact_summary": {
+        "website": "https://www.normie.one/",
+        "emails": [],
+        "phones": [],
+        "youtube": [],
+        "instagram": [],
+        "tiktok": [],
+        "facebook": [],
+        "x": [],
+        "bluesky": [],
+        "linkedin": [],
+        "patreon": [],
+        "substack": [],
+        "medium": [],
+        "telegram": [],
+        "discord": [],
+        "whatsapp": []
+      },
+      "contact_labels": [
+        [
+          "Website",
+          "https://www.normie.one/"
+        ]
+      ],
+      "image_summary": {
+        "images": []
+      },
+      "keyword_summary": {
+        "top_keywords": [
+          {
+            "keyword": "sequential polling",
+            "score": 35.5
+          },
+          {
+            "keyword": "live results",
+            "score": 34.5
+          },
+          {
+            "keyword": "polling experience",
+            "score": 33.5
+          },
+          {
+            "keyword": "curiosity pulse",
+            "score": 41
+          },
+          {
+            "keyword": "previous question",
+            "score": 31.5
+          },
+          {
+            "keyword": "interactive polls",
+            "score": 25
+          },
+          {
+            "keyword": "real time results",
+            "score": 24
+          },
+          {
+            "keyword": "question sequence",
+            "score": 23
+          },
+          {
+            "keyword": "polling platform",
+            "score": 22
+          },
+          {
+            "keyword": "audience engagement",
+            "score": 21
+          },
+          {
+            "keyword": "survey experience",
+            "score": 20
+          },
+          {
+            "keyword": "live feedback",
+            "score": 19
+          },
+          {
+            "keyword": "dynamic polling",
+            "score": 18
+          },
+          {
+            "keyword": "question progression",
+            "score": 17
+          },
+          {
+            "keyword": "poll insights",
+            "score": 16
+          },
+          {
+            "keyword": "user participation",
+            "score": 15
+          },
+          {
+            "keyword": "collective responses",
+            "score": 14
+          },
+          {
+            "keyword": "polling interface",
+            "score": 13
+          },
+          {
+            "keyword": "engagement platform",
+            "score": 12
+          },
+          {
+            "keyword": "interactive surveys",
+            "score": 11
+          }
+        ],
+        "ai_ranked": true,
+        "ai_error": ""
+      },
+      "hashtag_summary": {
+        "hashtags": [
+          {
+            "hashtag": "#sp",
+            "keyword": "sequential polling",
+            "evidence_score": 145,
+            "posts_count": 15,
+            "author_count": 10,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#audienceengagement",
+            "keyword": "audience engagement",
+            "evidence_score": 140,
+            "posts_count": 15,
+            "author_count": 13,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#lr",
+            "keyword": "live results",
+            "evidence_score": 129.5,
+            "posts_count": 15,
+            "author_count": 5,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#qs",
+            "keyword": "question sequence",
+            "evidence_score": 124,
+            "posts_count": 15,
+            "author_count": 10,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#rtr",
+            "keyword": "real time results",
+            "evidence_score": 120.5,
+            "posts_count": 14,
+            "author_count": 13,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#pp",
+            "keyword": "polling platform",
+            "evidence_score": 120,
+            "posts_count": 15,
+            "author_count": 6,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#pe",
+            "keyword": "polling experience",
+            "evidence_score": 120,
+            "posts_count": 14,
+            "author_count": 5,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#ip",
+            "keyword": "interactive polls",
+            "evidence_score": 112.2,
+            "posts_count": 15,
+            "author_count": 7,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#pq",
+            "keyword": "previous question",
+            "evidence_score": 109.3,
+            "posts_count": 15,
+            "author_count": 3,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#ae",
+            "keyword": "audience engagement",
+            "evidence_score": 105.8,
+            "posts_count": 15,
+            "author_count": 3,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#liveresults",
+            "keyword": "live results",
+            "evidence_score": 97.8,
+            "posts_count": 15,
+            "author_count": 1,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#realtimeresults",
+            "keyword": "real time results",
+            "evidence_score": 45.2,
+            "posts_count": 3,
+            "author_count": 3,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#interactivepolls",
+            "keyword": "interactive polls",
+            "evidence_score": 44.1,
+            "posts_count": 4,
+            "author_count": 1,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          }
+        ],
+        "provider": "bluesky",
+        "configured": true,
+        "error": ""
+      },
+      "peer_summary": {
+        "peers": [],
+        "enabled": true,
+        "configured": true,
+        "provider": "google_custom_search",
+        "searched_keywords": [
+          "sequential polling",
+          "live results",
+          "polling experience",
+          "curiosity pulse",
+          "previous question",
+          "interactive polls",
+          "real time results",
+          "question sequence",
+          "polling platform",
+          "audience engagement"
+        ],
+        "raw_results_count": 0,
+        "unique_domains_count": 0,
+        "suggested_models": [],
+        "errors": [
+          "sequential polling: This project does not have the access to Custom Search JSON API.",
+          "live results: This project does not have the access to Custom Search JSON API.",
+          "polling experience: This project does not have the access to Custom Search JSON API.",
+          "curiosity pulse: This project does not have the access to Custom Search JSON API.",
+          "previous question: This project does not have the access to Custom Search JSON API.",
+          "interactive polls: This project does not have the access to Custom Search JSON API.",
+          "real time results: This project does not have the access to Custom Search JSON API.",
+          "question sequence: This project does not have the access to Custom Search JSON API.",
+          "polling platform: This project does not have the access to Custom Search JSON API.",
+          "audience engagement: This project does not have the access to Custom Search JSON API."
+        ],
+        "error": ""
+      },
+      "keyword_labels": [
+        [
+          "sequential polling",
+          35.5
+        ],
+        [
+          "live results",
+          34.5
+        ],
+        [
+          "polling experience",
+          33.5
+        ],
+        [
+          "curiosity pulse",
+          41
+        ],
+        [
+          "previous question",
+          31.5
+        ],
+        [
+          "interactive polls",
+          25
+        ],
+        [
+          "real time results",
+          24
+        ],
+        [
+          "question sequence",
+          23
+        ],
+        [
+          "polling platform",
+          22
+        ],
+        [
+          "audience engagement",
+          21
+        ],
+        [
+          "survey experience",
+          20
+        ],
+        [
+          "live feedback",
+          19
+        ],
+        [
+          "dynamic polling",
+          18
+        ],
+        [
+          "question progression",
+          17
+        ],
+        [
+          "poll insights",
+          16
+        ],
+        [
+          "user participation",
+          15
+        ],
+        [
+          "collective responses",
+          14
+        ],
+        [
+          "polling interface",
+          13
+        ],
+        [
+          "engagement platform",
+          12
+        ],
+        [
+          "interactive surveys",
+          11
+        ]
+      ],
+      "pages": [
+        {
+          "url": "https://www.normie.one/",
+          "title": "Normie Polls",
+          "meta_desc": "Sequential polling experience with live results from the previous question.",
+          "meta_keywords": [],
+          "headings": [
+            "Curiosity with a pulse."
+          ],
+          "body_snippet": "Normie Polls Personality Polls Explore what people believe. Discover where you align. And keep answering questions designed to spark awareness and perspective. Knowledge Awareness Growth Curiosity with a pulse. Loading polls... Why It Feels Different Instead of isolated polls, the experience becomes a guided sequence that builds curiosity and reflection one question at a time.",
+          "emails": [],
+          "phones": [],
+          "image_urls": [],
+          "social_links": [],
+          "links_count": 0,
+          "fetched_at": "2026-05-05T00:23:39.979Z"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "run_id": "dhrun_1777940531528_g08znoit",
+      "source_url": "https://www.normie.one/",
+      "max_pages": 10,
+      "peer_sites_limit": 20,
+      "images_limit": 20,
+      "body_snippet_chars": 600,
+      "pages_total": 1,
+      "pages_succeeded": 1,
+      "pages_failed": 0,
+      "started_at": "2026-05-05T00:22:11.528Z",
+      "finished_at": "2026-05-05T00:22:12.059Z",
+      "capture_contact_data": true,
+      "keyword_exclusions": [],
+      "contact_summary": {
+        "website": "https://www.normie.one/",
+        "emails": [],
+        "phones": [],
+        "youtube": [],
+        "instagram": [],
+        "tiktok": [],
+        "facebook": [],
+        "x": [],
+        "bluesky": [],
+        "linkedin": [],
+        "patreon": [],
+        "substack": [],
+        "medium": [],
+        "telegram": [],
+        "discord": [],
+        "whatsapp": []
+      },
+      "contact_labels": [
+        [
+          "Website",
+          "https://www.normie.one/"
+        ]
+      ],
+      "image_summary": {
+        "images": []
+      },
+      "keyword_summary": {
+        "top_keywords": [
+          {
+            "keyword": "sequential polling",
+            "score": 35.5
+          },
+          {
+            "keyword": "live results",
+            "score": 34.5
+          },
+          {
+            "keyword": "polling experience",
+            "score": 33.5
+          },
+          {
+            "keyword": "curiosity pulse",
+            "score": 41
+          },
+          {
+            "keyword": "previous question",
+            "score": 31.5
+          },
+          {
+            "keyword": "sequential polling experience",
+            "score": 31.6
+          },
+          {
+            "keyword": "live polling results",
+            "score": 24
+          },
+          {
+            "keyword": "interactive polls",
+            "score": 23
+          },
+          {
+            "keyword": "real time results",
+            "score": 22
+          },
+          {
+            "keyword": "poll questions",
+            "score": 21
+          },
+          {
+            "keyword": "polling platform",
+            "score": 20
+          },
+          {
+            "keyword": "online polling",
+            "score": 19
+          },
+          {
+            "keyword": "question sequence",
+            "score": 18
+          },
+          {
+            "keyword": "poll results",
+            "score": 17
+          },
+          {
+            "keyword": "interactive polling",
+            "score": 16
+          },
+          {
+            "keyword": "poll experience",
+            "score": 15
+          },
+          {
+            "keyword": "live feedback",
+            "score": 14
+          },
+          {
+            "keyword": "poll data",
+            "score": 13
+          },
+          {
+            "keyword": "survey questions",
+            "score": 12
+          },
+          {
+            "keyword": "question polling",
+            "score": 11
+          }
+        ],
+        "ai_ranked": true,
+        "ai_error": ""
+      },
+      "hashtag_summary": {
+        "hashtags": [
+          {
+            "hashtag": "#sp",
+            "keyword": "sequential polling",
+            "evidence_score": 145,
+            "posts_count": 15,
+            "author_count": 10,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#spe",
+            "keyword": "sequential polling experience",
+            "evidence_score": 140.6,
+            "posts_count": 14,
+            "author_count": 11,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#lr",
+            "keyword": "live results",
+            "evidence_score": 129.5,
+            "posts_count": 15,
+            "author_count": 5,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#pe",
+            "keyword": "polling experience",
+            "evidence_score": 120,
+            "posts_count": 14,
+            "author_count": 5,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#rtr",
+            "keyword": "real time results",
+            "evidence_score": 118.5,
+            "posts_count": 14,
+            "author_count": 13,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#lpr",
+            "keyword": "live polling results",
+            "evidence_score": 116.2,
+            "posts_count": 14,
+            "author_count": 11,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#ip",
+            "keyword": "interactive polls",
+            "evidence_score": 110.2,
+            "posts_count": 15,
+            "author_count": 7,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#pq",
+            "keyword": "previous question",
+            "evidence_score": 109.3,
+            "posts_count": 15,
+            "author_count": 3,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#liveresults",
+            "keyword": "live results",
+            "evidence_score": 97.8,
+            "posts_count": 15,
+            "author_count": 1,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#cp",
+            "keyword": "curiosity pulse",
+            "evidence_score": 48.1,
+            "posts_count": 1,
+            "author_count": 1,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#realtimeresults",
+            "keyword": "real time results",
+            "evidence_score": 43.2,
+            "posts_count": 3,
+            "author_count": 3,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#interactivepolls",
+            "keyword": "interactive polls",
+            "evidence_score": 42.1,
+            "posts_count": 4,
+            "author_count": 1,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          },
+          {
+            "hashtag": "#pollquestions",
+            "keyword": "poll questions",
+            "evidence_score": 32.7,
+            "posts_count": 2,
+            "author_count": 1,
+            "sample_usage": "",
+            "platform": "Bluesky"
+          }
+        ],
+        "provider": "bluesky",
+        "configured": true,
+        "error": ""
+      },
+      "peer_summary": {
+        "peers": [],
+        "enabled": false,
+        "configured": false,
+        "provider": "google_custom_search",
+        "searched_keywords": [],
+        "raw_results_count": 0,
+        "unique_domains_count": 0,
+        "suggested_models": [],
+        "errors": [],
+        "error": ""
+      },
+      "keyword_labels": [
+        [
+          "sequential polling",
+          35.5
+        ],
+        [
+          "live results",
+          34.5
+        ],
+        [
+          "polling experience",
+          33.5
+        ],
+        [
+          "curiosity pulse",
+          41
+        ],
+        [
+          "previous question",
+          31.5
+        ],
+        [
+          "sequential polling experience",
+          31.6
+        ],
+        [
+          "live polling results",
+          24
+        ],
+        [
+          "interactive polls",
+          23
+        ],
+        [
+          "real time results",
+          22
+        ],
+        [
+          "poll questions",
+          21
+        ],
+        [
+          "polling platform",
+          20
+        ],
+        [
+          "online polling",
+          19
+        ],
+        [
+          "question sequence",
+          18
+        ],
+        [
+          "poll results",
+          17
+        ],
+        [
+          "interactive polling",
+          16
+        ],
+        [
+          "poll experience",
+          15
+        ],
+        [
+          "live feedback",
+          14
+        ],
+        [
+          "poll data",
+          13
+        ],
+        [
+          "survey questions",
+          12
+        ],
+        [
+          "question polling",
+          11
+        ]
+      ],
+      "pages": [
+        {
+          "url": "https://www.normie.one/",
+          "title": "Normie Polls",
+          "meta_desc": "Sequential polling experience with live results from the previous question.",
+          "meta_keywords": [],
+          "headings": [
+            "Curiosity with a pulse."
+          ],
+          "body_snippet": "Normie Polls Personality Polls Explore what people believe. Discover where you align. And keep answering questions designed to spark awareness and perspective. Knowledge Awareness Growth Curiosity with a pulse. Loading polls... Why It Feels Different Instead of isolated polls, the experience becomes a guided sequence that builds curiosity and reflection one question at a time.",
+          "emails": [],
+          "phones": [],
+          "image_urls": [],
+          "social_links": [],
+          "links_count": 0,
+          "fetched_at": "2026-05-05T00:22:12.059Z"
+        }
+      ],
+      "errors": []
+    },
+    {
       "run_id": "dhrun_1771443533238_mblvvghp",
       "source_url": "https://isitas.org/",
       "max_pages": 5,

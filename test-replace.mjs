@@ -1,3 +1,0 @@
-const str = \`hello
-foo
-\`

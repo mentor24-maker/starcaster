@@ -1,6 +1,15 @@
 {
   "users": [
     {
+      "id": "usr_1777999727946_cvwduc",
+      "email": "mentor24@gmail.com",
+      "name": "Dane",
+      "passwordHash": "f175796d76924f96b9f229f79f764af1:66131ce5d787e6e4a01eace03a53976d70db3b07117e13244046aac18072db107705d52fb03b9e00fcd1df4113f4358230adaf9e4502395c13fe9769fa609310",
+      "role": "user",
+      "createdAt": "2026-05-05T16:48:47.946Z",
+      "updatedAt": "2026-05-05T16:48:47.946Z"
+    },
+    {
       "id": "usr_1777742530162_tz8ppz",
       "email": "test_1777742530159@example.com",
       "name": "Test User",

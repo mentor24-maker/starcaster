@@ -4,7 +4,74 @@ This document outlines structural UI mandates that must be strictly observed whe
 
 ---
 
-## 1. Data Tables
+## 1. CRUD Data Tables
+
+All data-display and CRUD tables across the application share a single canonical style defined in `src/css/_tables.css`. **Do not create per-module header classes.**
+
+### Column Header Styling (CRITICAL — Engraved Rule)
+
+Column headers are **plain `<th>` elements** inside `<thead>`. **Never place a `<button>`, `<a>`, or any other element inside a `<th>`.**
+
+| Property | Value |
+|---|---|
+| Background | `#000` (solid black) |
+| Text color | `#fff` (white) |
+| Font weight | `700` (bold) |
+| Text alignment | `text-align: left` (all columns except Actions) |
+| Cursor | `pointer` (indicates sortable) |
+| Hover background | `#b8e0ff` (light blue) |
+| Hover text color | `#0b3d7a` (dark blue) |
+
+The **Actions** column header (always the last `<th>`) is `text-align: center`.
+
+### How Sorting Works
+
+Sortable column headers receive their `id` directly on the `<th>` element. JavaScript attaches a `click` handler to the `<th>` by its `id`, toggles sort direction, and appends a `▲` or `▼` indicator to the header's `textContent`.
+
+```html
+<!-- ✅ CORRECT: ID on the th, no child elements -->
+<th id="campaignSortNameBtn">Campaign Name</th>
+
+<!-- ❌ WRONG: Button inside th -->
+<th><button id="campaignSortNameBtn" class="btn">Campaign Name</button></th>
+```
+
+### Filter Row
+
+Filter rows sit above the header row, use the `.table-filter-row` class on their `<tr>`, and have a light background (`var(--bg-page)`) instead of black.
+
+### Actions Column
+
+Use the `.actions-col` utility class on both the `<th>` and `<td>` of the Actions column for consistent centered, shrink-to-fit sizing. **Do not create per-module actions-heading classes** (e.g. no `.messaging-topics-actions-heading`, `.contacts-actions-heading`, etc.).
+
+### CSS Blueprint (src/css/_tables.css)
+```css
+thead tr:not(.table-filter-row) th {
+  background: #000;
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: none;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+thead tr:not(.table-filter-row) th:hover {
+  background: #b8e0ff;
+  color: #0b3d7a;
+}
+
+thead tr:not(.table-filter-row) th:last-child {
+  text-align: center;
+}
+
+.actions-col {
+  text-align: center;
+  white-space: nowrap;
+  width: 1%;
+}
+```
 
 - **Always Make Columns Sortable:** Every CRUD or data-display HTML table implemented must allow column sorting by clicking on standard string/date table headers (`<th>`). State tracking for the active `sortColumn` and `sortDirection` must be implemented alongside an indicator logic natively.
 - **Binary Metadata Toggles:** Do not render long, blank text inputs as inline filters for boolean logic. Example: Use a single `"Has [Network]"` checkbox to filter boolean conditions, rather than forcing the user to type `https...`.

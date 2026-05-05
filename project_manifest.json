@@ -1,6 +1,6 @@
 {
-  "projectName": "alphire-promo",
-  "description": "Public promotional website and project management portal. Multi-tenant architecture serving the public site and internal admin tools.",
+  "projectName": "starcaster",
+  "description": "StarCaster by Alphire. Multi-tenant architecture serving the public site and internal admin tools.",
   "primaryStack": "Vanilla JS",
   "backend": "Node/Express",
   "styling": "CSS3",

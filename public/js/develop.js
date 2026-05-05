@@ -7992,18 +7992,11 @@ App.develop = (function () {
 
   function openCampaignBuilderWithEmailTemplate(templateId) {
     const nextTemplateId = safeText(templateId) || safeText(savedEmailTemplates[0]?.id);
-    App.setActivePage('campaignsPage');
+    App.setActivePage('campaignCreatePage');
     setTimeout(() => {
-      const toggleBtn = byId('campaignToggleFormBtn');
-      const form = byId('campaignForm');
-      if (form && form.classList.contains('hidden') && toggleBtn) {
-        toggleBtn.click();
-      }
-      setTimeout(() => {
-        const select = byId('campaignEmailTemplateSelect');
-        if (select) select.value = nextTemplateId;
-      }, 120);
-    }, 50);
+      const select = byId('campaignEmailTemplateSelect');
+      if (select) select.value = nextTemplateId;
+    }, 120);
   }
 
   function openModularEmailTemplateEditor(template) {

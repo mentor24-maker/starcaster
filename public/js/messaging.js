@@ -462,9 +462,9 @@ App.messaging = (function () {
         <div class="page-heading-row">
           <h2>Messaging: ${config.pluralLabel}</h2>
           <div class="page-heading-actions">
-            <button id="${ids.categoryBtnId}" type="button">Topics</button>
-            <button id="${ids.toggleBtnId}" type="button">Create ${config.pluralLabel}</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
+            <button id="${ids.categoryBtnId}" type="button" class="btn">Topics</button>
+            <button id="${ids.toggleBtnId}" type="button" class="btn">Create ${config.pluralLabel}</button>
+            <button type="button" class="btn" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
         </div>
 
@@ -489,9 +489,9 @@ App.messaging = (function () {
                   </div>
                 </div>
                 <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                  <button id="${ids.creatorGenerateBtnId}" type="button">Generate with AI</button>
-                  <button id="${ids.creatorSavePromptBtnId}" type="button">Save Prompt</button>
-                  <button id="${ids.creatorSubmitBtnId}" type="submit">Save ${config.singularLabel}</button>
+                  <button id="${ids.creatorGenerateBtnId}" type="button" class="btn">Generate with AI</button>
+                  <button id="${ids.creatorSavePromptBtnId}" type="button" class="btn">Save Prompt</button>
+                  <button id="${ids.creatorSubmitBtnId}" type="submit" class="btn btn-primary">Save ${config.singularLabel}</button>
                 </div>
               </form>
             </div>
@@ -507,8 +507,8 @@ App.messaging = (function () {
                     <option value="4">4</option>
                     <option value="5">5</option>
                   </select>
-                  <button id="${ids.creatorClearSuggestionsBtnId}" type="button">Clear</button>
-                  <button id="${ids.creatorSaveSelectedBtnId}" type="button">Save Selected</button>
+                  <button id="${ids.creatorClearSuggestionsBtnId}" type="button" class="btn">Clear</button>
+                  <button id="${ids.creatorSaveSelectedBtnId}" type="button" class="btn">Save Selected</button>
                 </div>
               </div>
               <p id="${ids.creatorSuggestionsEmptyId}" style="margin-top: 0;">Generate with AI to review ${config.singularLower} options here.</p>
@@ -538,7 +538,7 @@ App.messaging = (function () {
           <input name="id" type="hidden" />
           <div class="page-heading-row">
             <h3>Edit ${config.singularLabel}</h3>
-            <button id="${ids.cancelEditBtnId}" type="button">Cancel Edit</button>
+            <button id="${ids.cancelEditBtnId}" type="button" class="btn">Cancel Edit</button>
           </div>
           <select id="${ids.editCategorySelectId}" name="topic" data-messaging-topic-select="true">
             <option value="">No Topic</option>
@@ -553,7 +553,7 @@ App.messaging = (function () {
             <option value="4">4</option>
             <option value="5">5</option>
           </select>
-          <button type="submit">Update ${config.singularLabel}</button>
+          <button type="submit" class="btn btn-primary">Update ${config.singularLabel}</button>
         </form>
 
         <div class="table-wrap">
@@ -576,16 +576,16 @@ App.messaging = (function () {
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="${ids.bulkEditBtnId}" type="button" class="tiny-btn" disabled>Edit Selected</button></th>
+                <th><button id="${ids.bulkEditBtnId}" type="button" class="btn tiny-btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
-                <th><button id="${ids.sortTextBtnId}" type="button" class="tiny-btn">${config.singularLabel}</button></th>
-                <th><button id="${ids.sortCategoryBtnId}" type="button" class="tiny-btn">Topic</button></th>
+                <th id="${ids.sortTextBtnId}">${config.singularLabel}</th>
+                <th id="${ids.sortCategoryBtnId}">Topic</th>
                 <th>Format</th>
                 <th>Score</th>
-                <th><button id="${ids.sortCreatedBtnId}" type="button" class="tiny-btn">Created</button></th>
-                <th><button id="${ids.sortUpdatedBtnId}" type="button" class="tiny-btn">Updated</button></th>
+                <th id="${ids.sortCreatedBtnId}">Created</th>
+                <th id="${ids.sortUpdatedBtnId}">Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -600,7 +600,7 @@ App.messaging = (function () {
     return `
         <div class="page-heading-row">
           <h2>Bulk Edit ${config.pluralLabel}</h2>
-          <button id="${ids.bulkBackBtnId}" type="button">Back To ${config.pluralLabel}</button>
+          <button id="${ids.bulkBackBtnId}" type="button" class="btn">Back To ${config.pluralLabel}</button>
         </div>
         <p id="${ids.bulkSummaryId}">No ${config.pluralLower} selected.</p>
         <form id="${ids.bulkEditFormId}" class="stack-form labeled-form">
@@ -610,7 +610,7 @@ App.messaging = (function () {
               <option value="">No Topic</option>
             </select>
           </div>
-          <button type="submit">Apply To Selected ${config.pluralLabel}</button>
+          <button type="submit" class="btn btn-primary">Apply To Selected ${config.pluralLabel}</button>
         </form>
     `;
   }
@@ -1141,12 +1141,12 @@ App.messaging = (function () {
       const qualityTd = document.createElement('td');
       const select = document.createElement('select');
       select.dataset.tweetQualityIndex = String(index);
-      
+
       const optDash = document.createElement('option');
       optDash.value = '';
       optDash.textContent = '-';
       select.appendChild(optDash);
-      
+
       [1, 2, 3, 4, 5].forEach(val => {
         const opt = document.createElement('option');
         opt.value = String(val);
@@ -1154,7 +1154,7 @@ App.messaging = (function () {
         if (quality === val) opt.selected = true;
         select.appendChild(opt);
       });
-      
+
       qualityTd.appendChild(select);
       tr.appendChild(qualityTd);
       tbody.appendChild(tr);
@@ -1230,7 +1230,7 @@ App.messaging = (function () {
       });
       const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
       if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
-      await refreshMessagingPrompts().catch(function () {});
+      await refreshMessagingPrompts().catch(function () { });
       renderTweetSavedPromptOptions(promptId ? String(promptId) : '');
       notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
     } catch (err) {
@@ -2887,7 +2887,7 @@ App.messaging = (function () {
       notify(`Could not load messaging topics: ${err.message}`, true);
     });
     window.setTimeout(function () {
-      refreshMessagingTopics().catch(function () {});
+      refreshMessagingTopics().catch(function () { });
     }, 250);
     return false;
   }
@@ -2946,14 +2946,14 @@ App.messaging = (function () {
     if (!columns || !wrap) return;
     currentMessagingTopicSuggestions = Array.isArray(groups)
       ? groups.map((group, groupIndex) => ({
-          label: cleanText(group?.label || `Group ${groupIndex + 1}`),
-          topics: Array.isArray(group?.topics)
-            ? group.topics.map((topic, topicIndex) => ({
-                id: `topic-suggestion-${groupIndex}-${topicIndex}`,
-                topic: cleanText(topic),
-              })).filter((row) => row.topic)
-            : [],
-        })).filter((group) => group.topics.length)
+        label: cleanText(group?.label || `Group ${groupIndex + 1}`),
+        topics: Array.isArray(group?.topics)
+          ? group.topics.map((topic, topicIndex) => ({
+            id: `topic-suggestion-${groupIndex}-${topicIndex}`,
+            topic: cleanText(topic),
+          })).filter((row) => row.topic)
+          : [],
+      })).filter((group) => group.topics.length)
       : [];
     columns.innerHTML = '';
     if (!currentMessagingTopicSuggestions.length) {
@@ -3105,7 +3105,7 @@ App.messaging = (function () {
       notify(`Could not load messaging tags: ${err.message}`, true);
     });
     window.setTimeout(function () {
-      refreshMessagingTags().catch(function () {});
+      refreshMessagingTags().catch(function () { });
     }, 250);
     return false;
   }
@@ -3149,9 +3149,9 @@ App.messaging = (function () {
 
   async function openCreateContent() {
     App.setActivePage('messagingCreateContentPage');
-    await refreshMessagingFormats().catch(function () {});
+    await refreshMessagingFormats().catch(function () { });
     await refreshMessagingTopics();
-    await refreshMessagingPrompts().catch(function () {});
+    await refreshMessagingPrompts().catch(function () { });
     await loadThumbnailOptions();
     renderCreateContentFormatOptions();
     await renderCreateContentTopicOptions();
@@ -3456,11 +3456,11 @@ App.messaging = (function () {
       cb.dataset.headlineCreatorSuggestionIndex = String(index);
       cbTd.appendChild(cb);
       tr.appendChild(cbTd);
-      
+
       const textTd = document.createElement('td');
       textTd.textContent = String(text || '');
       tr.appendChild(textTd);
-      
+
       const qualityTd = document.createElement('td');
       const select = document.createElement('select');
       select.dataset.headlineCreatorQualityIndex = String(index);
@@ -3502,11 +3502,11 @@ App.messaging = (function () {
       cb.dataset.taglineCreatorSuggestionIndex = String(index);
       cbTd.appendChild(cb);
       tr.appendChild(cbTd);
-      
+
       const textTd = document.createElement('td');
       textTd.textContent = String(text || '');
       tr.appendChild(textTd);
-      
+
       const qualityTd = document.createElement('td');
       const select = document.createElement('select');
       select.dataset.taglineCreatorQualityIndex = String(index);
@@ -3548,11 +3548,11 @@ App.messaging = (function () {
       cb.dataset.subheadingCreatorSuggestionIndex = String(index);
       cbTd.appendChild(cb);
       tr.appendChild(cbTd);
-      
+
       const textTd = document.createElement('td');
       textTd.textContent = String(text || '');
       tr.appendChild(textTd);
-      
+
       const qualityTd = document.createElement('td');
       const select = document.createElement('select');
       select.dataset.subheadingCreatorQualityIndex = String(index);
@@ -3594,11 +3594,11 @@ App.messaging = (function () {
       cb.dataset.pitchCreatorSuggestionIndex = String(index);
       cbTd.appendChild(cb);
       tr.appendChild(cbTd);
-      
+
       const textTd = document.createElement('td');
       textTd.textContent = String(text || '');
       tr.appendChild(textTd);
-      
+
       const qualityTd = document.createElement('td');
       const select = document.createElement('select');
       select.dataset.pitchCreatorQualityIndex = String(index);
@@ -3644,7 +3644,7 @@ App.messaging = (function () {
       });
       const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
       if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
-      await refreshMessagingPrompts().catch(function () {});
+      await refreshMessagingPrompts().catch(function () { });
       renderHeadlinesCreatorSavedPromptOptions(promptId ? String(promptId) : '');
       notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
     } catch (err) {
@@ -3680,7 +3680,7 @@ App.messaging = (function () {
       });
       const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
       if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
-      await refreshMessagingPrompts().catch(function () {});
+      await refreshMessagingPrompts().catch(function () { });
       renderTaglinesCreatorSavedPromptOptions(promptId ? String(promptId) : '');
       notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
     } catch (err) {
@@ -3716,7 +3716,7 @@ App.messaging = (function () {
       });
       const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
       if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
-      await refreshMessagingPrompts().catch(function () {});
+      await refreshMessagingPrompts().catch(function () { });
       renderSubheadingsCreatorSavedPromptOptions(promptId ? String(promptId) : '');
       notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
     } catch (err) {
@@ -3752,7 +3752,7 @@ App.messaging = (function () {
       });
       const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
       if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
-      await refreshMessagingPrompts().catch(function () {});
+      await refreshMessagingPrompts().catch(function () { });
       renderPitchesCreatorSavedPromptOptions(promptId ? String(promptId) : '');
       notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
     } catch (err) {
@@ -4391,7 +4391,7 @@ App.messaging = (function () {
       cb.dataset.createContentSuggestionIndex = String(index);
       cbTd.appendChild(cb);
       tr.appendChild(cbTd);
-      
+
       const textTd = document.createElement('td');
       textTd.textContent = String(option || '');
       tr.appendChild(textTd);
@@ -4561,7 +4561,7 @@ App.messaging = (function () {
       });
       const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
       if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
-      await refreshMessagingPrompts().catch(function () {});
+      await refreshMessagingPrompts().catch(function () { });
       renderCreateContentSavedPromptOptions(promptId ? String(promptId) : '');
       notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
     } catch (err) {
@@ -4991,19 +4991,19 @@ App.messaging = (function () {
     const topicsDiv = document.getElementById('messagingOverviewTopicsList');
     if (topicsDiv) {
       topicsDiv.innerHTML = '';
-      
+
       const topicRecords = (currentMessagingTopics || []).map(item => {
         const topicName = String(item.topic || item.category || '').trim();
         const topicLower = topicName.toLowerCase();
-        const messagesCount = 
+        const messagesCount =
           (currentWhitePapers || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
           (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
           (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
           simpleContentConfigs.reduce((acc, config) => {
-              const configItems = simpleContentState[config.key]?.items || [];
-              return acc + configItems.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
+            const configItems = simpleContentState[config.key]?.items || [];
+            return acc + configItems.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
           }, 0);
-         return { name: topicName, count: messagesCount };
+        return { name: topicName, count: messagesCount };
       }).filter(t => t.count > 0).slice(0, 15);
 
       topicRecords.forEach(t => {
@@ -5019,24 +5019,24 @@ App.messaging = (function () {
         span.textContent = `(${t.count})`;
         a.appendChild(span);
         a.onclick = (e) => {
-           e.preventDefault();
-           e.stopPropagation();
-           activeMessagingContentCategory = '';
-           const formatSel = document.getElementById('messagingContentFormatFilter');
-           if (formatSel) formatSel.value = '';
-           const textFilter = document.getElementById('messagingContentTextFilter');
-           if (textFilter) textFilter.value = '';
-           
-           const topicSel = document.getElementById('messagingContentTopicFilter');
-           if (topicSel) topicSel.value = t.name;
-           
-           App.setActivePage('messagingContentPage');
-           renderMessagingContentLibraryTable();
+          e.preventDefault();
+          e.stopPropagation();
+          activeMessagingContentCategory = '';
+          const formatSel = document.getElementById('messagingContentFormatFilter');
+          if (formatSel) formatSel.value = '';
+          const textFilter = document.getElementById('messagingContentTextFilter');
+          if (textFilter) textFilter.value = '';
+
+          const topicSel = document.getElementById('messagingContentTopicFilter');
+          if (topicSel) topicSel.value = t.name;
+
+          App.setActivePage('messagingContentPage');
+          renderMessagingContentLibraryTable();
         };
         row.appendChild(a);
         topicsDiv.appendChild(row);
       });
-      
+
       if (topicRecords.length === 0) {
         const div = document.createElement('div');
         div.style.fontSize = '0.85rem';
@@ -5057,9 +5057,9 @@ App.messaging = (function () {
         a.style.cssText = 'display:block; font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0;';
         a.textContent = name;
         a.onclick = (e) => {
-           e.preventDefault();
-           e.stopPropagation();
-           openMessagingTagEditForm(item);
+          e.preventDefault();
+          e.stopPropagation();
+          openMessagingTagEditForm(item);
         };
         row.appendChild(a);
         tagsDiv.appendChild(row);
@@ -5571,11 +5571,15 @@ App.messaging = (function () {
 
   async function refreshSimpleContent(config) {
     const ids = getSimpleContentIds(config);
-    const tbody = document.getElementById(ids.tableId);
-    if (!tbody) return;
     try {
       const res = await api(`${config.endpoint}?limit=5000`);
-      renderSimpleContentTable(config, Array.isArray(res[config.responseKey]) ? res[config.responseKey] : []);
+      const items = Array.isArray(res[config.responseKey]) ? res[config.responseKey] : [];
+      const stateForType = simpleContentState[config.key];
+      if (stateForType) stateForType.items = items.slice();
+      const tbody = document.getElementById(ids.tableId);
+      if (tbody) {
+        renderSimpleContentTable(config, items);
+      }
     } catch (err) {
       notify(`Could not load ${config.pluralLower}: ${err.message}`, true);
     }
@@ -5670,11 +5674,11 @@ App.messaging = (function () {
         cb.dataset.simpleCreatorIndex = String(index);
         cbTd.appendChild(cb);
         tr.appendChild(cbTd);
-        
+
         const textTd = document.createElement('td');
         textTd.textContent = String(text || '');
         tr.appendChild(textTd);
-        
+
         const qualityTd = document.createElement('td');
         const select = document.createElement('select');
         select.dataset.simpleCreatorQualityKey = config.key;
@@ -5714,7 +5718,7 @@ App.messaging = (function () {
       categoriesBtn.addEventListener('click', async function () {
         try {
           await refreshMessagingTopics();
-        } catch (_) {}
+        } catch (_) { }
         App.setActivePage('messagingManageCategoriesPage');
       });
     }
@@ -5812,7 +5816,7 @@ App.messaging = (function () {
           });
           const promptId = Number(result?.prompt?.id || result?.data?.id || 0) || null;
           if (promptIdInput) promptIdInput.value = promptId ? String(promptId) : '';
-          await refreshMessagingPrompts().catch(function () {});
+          await refreshMessagingPrompts().catch(function () { });
           renderCreatorSavedPromptOptions(promptId ? String(promptId) : '');
           notify(promptId ? `Prompt saved (#${promptId})` : 'Prompt saved');
         } catch (err) {
@@ -6085,7 +6089,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 2;
+      td.colSpan = 10;
       td.textContent = 'No messaging topics yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -6094,81 +6098,77 @@ App.messaging = (function () {
 
     rows.forEach((item) => {
       const tr = document.createElement('tr');
-      
+
       const topicName = String(item.topic || item.category || '').trim();
       const topicLower = topicName.toLowerCase();
-      
-      const contactsCount = (countsRef.contacts || []).filter(c => 
-          String(c.comments_topic || '').toLowerCase() === topicLower || 
-          String(c.topic || '').toLowerCase() === topicLower
+
+      const contactsCount = (countsRef.contacts || []).filter(c =>
+        String(c.comments_topic || '').toLowerCase() === topicLower ||
+        String(c.topic || '').toLowerCase() === topicLower
       ).length;
 
-      const channelsCount = (countsRef.channels || []).filter(c => 
-          String(c.topic || '').toLowerCase() === topicLower
-      ).length;
-      
-      const assetsCount = (countsRef.assets || []).filter(a => 
-          String(a.topic || '').toLowerCase() === topicLower
-      ).length;
-      
-      const campaignsCount = (countsRef.campaigns || []).filter(c => 
-          String(c.topic || '').toLowerCase() === topicLower
+      const channelsCount = (countsRef.channels || []).filter(c =>
+        String(c.topic || '').toLowerCase() === topicLower
       ).length;
 
-      const segmentsCount = (countsRef.segments || []).filter(s => 
-          String(s.name || s.topic || '').toLowerCase().includes(topicLower)
+      const assetsCount = (countsRef.assets || []).filter(a =>
+        String(a.topic || '').toLowerCase() === topicLower
       ).length;
 
-      const pagesCount = (countsRef.developLandingPages || []).filter(p => 
-          String(p.name || p.topic || '').toLowerCase().includes(topicLower)
+      const campaignsCount = (countsRef.campaigns || []).filter(c =>
+        String(c.topic || '').toLowerCase() === topicLower
       ).length;
 
-      const reportsCount = (currentReports || []).filter(r => 
-          String(r.topic || r.category || '').toLowerCase() === topicLower
+      const segmentsCount = (countsRef.segments || []).filter(s =>
+        String(s.name || s.topic || '').toLowerCase().includes(topicLower)
       ).length;
 
-      const messagesCount = 
-          (currentWhitePapers || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-          (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-          (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-          simpleContentConfigs.reduce((acc, config) => {
-              const items = simpleContentState[config.key]?.items || [];
-              return acc + items.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
-          }, 0);
+      const pagesCount = (countsRef.developLandingPages || []).filter(p =>
+        String(p.name || p.topic || '').toLowerCase().includes(topicLower)
+      ).length;
+
+      const reportsCount = (currentReports || []).filter(r =>
+        String(r.topic || r.category || '').toLowerCase() === topicLower
+      ).length;
+
+      const messagesCount =
+        (currentWhitePapers || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+        (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+        (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
+        simpleContentConfigs.reduce((acc, config) => {
+          const items = simpleContentState[config.key]?.items || [];
+          return acc + items.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
+        }, 0);
 
       const categoryTd = document.createElement('td');
       categoryTd.textContent = topicName || '-';
       tr.appendChild(categoryTd);
 
       const drawStat = (count, pageId, filterInputId) => {
-          const td = document.createElement('td');
-          td.style.textAlign = 'center';
-          if (count > 0) {
-              const a = document.createElement('a');
-              a.href = '#';
-              a.textContent = count;
-              a.style.fontSize = '1.3em';
-              a.style.fontWeight = 'bold';
-              a.onclick = (e) => {
-                  e.preventDefault();
-                  if (pageId === 'contactsPage') {
-                      window.App.state.segmentContactsFilters = { comments_topic: { mode: 'contains', value: topicName } };
-                  } else if (filterInputId) {
-                      const input = document.getElementById(filterInputId);
-                      if (input) {
-                          input.value = topicName;
-                          input.dispatchEvent(new Event('input', { bubbles: true }));
-                      }
-                  }
-                  App.setActivePage(pageId);
-              };
-              td.appendChild(a);
-          } else {
-              td.textContent = '0';
-              td.style.color = 'var(--border-color)';
-              td.style.fontSize = '1.3em';
-          }
-          return td;
+        const td = document.createElement('td');
+        td.className = count > 0 ? 'stat-col' : 'stat-col stat-col--zero';
+        if (count > 0) {
+          const a = document.createElement('a');
+          a.href = '#';
+          a.textContent = count;
+          a.onclick = (e) => {
+            e.preventDefault();
+            if (pageId === 'contactsPage') {
+              window.App.state.segmentContactsFilters = { comments_topic: { mode: 'contains', value: topicName } };
+            } else if (filterInputId) {
+              const input = document.getElementById(filterInputId);
+              if (input) {
+                input.value = topicName;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            }
+            App.setActivePage(pageId);
+          };
+          td.appendChild(a);
+        } else {
+          td.textContent = '0';
+        }
+        return td;
       };
 
       tr.appendChild(drawStat(contactsCount, 'contactsPage', null)); // filter set actively above
@@ -6210,11 +6210,11 @@ App.messaging = (function () {
         ? res.topics
         : Array.isArray(res?.categories)
           ? res.categories
-        : Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-            ? res
-            : [];
+          : Array.isArray(res?.data)
+            ? res.data
+            : Array.isArray(res)
+              ? res
+              : [];
       console.log('[DEBUG] Fetched messaging topics:', categories.length);
       renderMessagingTopicsTable(categories);
       console.log('[DEBUG] Dispatching messaging:topicsUpdated event');
@@ -6593,7 +6593,7 @@ App.messaging = (function () {
     });
   }
 
-async function saveTweetFromForm(form) {
+  async function saveTweetFromForm(form) {
     const formData = new FormData(form);
     const payload = {
       topic: String(formData.get('topic') || formData.get('category') || '').trim(),
@@ -6911,7 +6911,7 @@ async function saveTweetFromForm(form) {
       openMessagingTopicsFromSubheadingsBtn.addEventListener('click', async function () {
         try {
           await refreshMessagingTopics();
-        } catch (_) {}
+        } catch (_) { }
         App.setActivePage('messagingManageCategoriesPage');
       });
     }
@@ -6993,7 +6993,7 @@ async function saveTweetFromForm(form) {
       openMessagingTopicsFromTaglinesBtn.addEventListener('click', async function () {
         try {
           await refreshMessagingTopics();
-        } catch (_) {}
+        } catch (_) { }
         App.setActivePage('messagingManageCategoriesPage');
       });
     }
@@ -7012,7 +7012,7 @@ async function saveTweetFromForm(form) {
       openMessagingTopicsFromPitchesBtn.addEventListener('click', async function () {
         try {
           await refreshMessagingTopics();
-        } catch (_) {}
+        } catch (_) { }
         App.setActivePage('messagingManageCategoriesPage');
       });
     }
@@ -8319,7 +8319,7 @@ async function saveTweetFromForm(form) {
         closeTweetEditForm();
         tweetsWorkspace.classList.toggle('hidden', !isHidden);
         if (isHidden) {
-          refreshMessagingPrompts().catch(function () {}).finally(function () {
+          refreshMessagingPrompts().catch(function () { }).finally(function () {
             renderTweetSavedPromptOptions();
           });
           clearTweetSuggestions();
@@ -8478,13 +8478,13 @@ async function saveTweetFromForm(form) {
     manifest: { id: 'messaging', label: 'Messaging', pageId: 'messagingContentPage', pagePrefixes: ['messaging'] },
     init,
     refreshTopics: refreshMessagingTopics,
-    getTopics: function() { 
+    getTopics: function () {
       var raw = Array.isArray(currentMessagingTopics) ? currentMessagingTopics.slice() : [];
-      return raw.sort(function(a, b) { 
+      return raw.sort(function (a, b) {
         var aStr = String(a.topic || a.category || '').toLowerCase();
         var bStr = String(b.topic || b.category || '').toLowerCase();
         return aStr.localeCompare(bStr);
-      }); 
+      });
     },
     openCategoriesLanding,
     openTopicsLanding,

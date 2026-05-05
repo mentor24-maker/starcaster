@@ -4,7 +4,7 @@
           <h2>Campaigns</h2>
           <div class="page-heading-actions">
             <button id="campaignToggleRulesBtn" type="button" class="btn">Channel Rules</button>
-            <button id="campaignToggleFormBtn" type="button" class="btn">Add Campaign</button>
+            <button id="campaignCreateBtn" type="button" class="btn" onclick="App.setActivePage('campaignCreatePage'); return false;">Create Campaign</button>
           </div>
         </div>
         <section id="campaignChannelRulesPanel" class="stack-form hidden" style="border: 1px solid var(--border-light); border-radius: var(--radius-container); background: var(--bg-surface); padding: 1.5rem; margin-bottom: 1rem;">
@@ -33,7 +33,73 @@
             <button id="campaignRulesResetBtn" type="button" class="btn">Reset Defaults</button>
           </div>
         </section>
-        <form id="campaignForm" style="margin-bottom: 2rem;">
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="campaignFilterName" placeholder="Name" /></th>
+                <th>
+                  <select id="campaignFilterStatus">
+                    <option value="">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="pending">Pending</option>
+                    <option value="paused">Paused</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="ready">Ready</option>
+                    <option value="active">Active</option>
+                    <option value="complete">Complete</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="sent">Sent</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterSegment">
+                    <option value="">All Segments</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterChannel">
+                    <option value="">All Channels</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterTemplate">
+                    <option value="">All Templates</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="campaignFilterPage">
+                    <option value="">All Pages</option>
+                  </select>
+                </th>
+                <th><input id="campaignFilterSubject" placeholder="Subject" /></th>
+                <th><button id="campaignFilterBtn" type="button" class="btn">Filter</button></th>
+              </tr>
+              <tr>
+                <th id="campaignSortNameBtn">Campaign Name</th>
+                <th id="campaignSortStatusBtn">Status</th>
+                <th id="campaignSortSegmentBtn">Segment</th>
+                <th id="campaignSortChannelBtn">Channel</th>
+                <th id="campaignSortTemplateBtn">Template</th>
+                <th id="campaignSortPageBtn">Page</th>
+                <th id="campaignSortSubjectBtn">Subject</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="campaignCards"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="campaignCreatePage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Create Campaign</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.setActivePage('campaignsPage'); return false;">Back To Campaigns</button>
+          </div>
+        </div>
+        <form id="campaignForm">
           <input id="campaignIdInput" name="campaignId" type="hidden" />
           <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
             <div class="stack-form" style="margin: 0;">
@@ -43,7 +109,19 @@
                 <label for="campaignNameInput"><strong>Campaign Name:</strong></label>
                 <input id="campaignNameInput" name="name" required />
               
-                <input name="status" id="campaignStatusInput" type="hidden" value="pending" />
+                <label for="campaignStatusSelect"><strong>Status:</strong></label>
+                <select name="status" id="campaignStatusSelect">
+                  <option value="draft">Draft</option>
+                  <option value="pending" selected>Pending</option>
+                  <option value="paused">Paused</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="ready">Ready</option>
+                  <option value="active">Active</option>
+                  <option value="complete">Complete</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="sent">Sent</option>
+                </select>
+
                 <label for="campaignChannelSelect"><strong>Channel:</strong></label>
                 <select name="channelId" id="campaignChannelSelect" required>
                   <option value="">Channel</option>
@@ -80,133 +158,163 @@
             <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Content</h3>
               <p id="campaignContentChannelHint" class="meta">Select a channel to load content fields.</p>
-              <div id="campaignContentConditional" class="standard-form-grid" style="margin: 0; display: none;">
-                
-                  <label for="campaignTopicSelect"><strong>Topics:</strong></label>
-                  <select name="topicId" id="campaignTopicSelect">
-                    <option value="">Topics</option>
-                  </select>
-                
-                
-                  <label for="campaignHeadlineSelect"><strong>Headline:</strong></label>
-                  <select name="headlineId" id="campaignHeadlineSelect">
-                    <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
-                  </select>
-                
-                
-                  <label for="campaignEmailSelect"><strong>Email Body:</strong></label>
-                  <select name="emailId" id="campaignEmailSelect">
-                    <option value="">Email Body</option>
-                  </select>
-                
-                
-                  <label for="campaignSubjectLineSelect"><strong>Subject Line:</strong></label>
-                  <select name="subjectLineId" id="campaignSubjectLineSelect">
-                    <option value="">Subject Line</option>
-                  </select>
-                
-                
-                  <label for="campaignBlurbSelect"><strong>Blurb:</strong></label>
-                  <select name="blurbId" id="campaignBlurbSelect">
-                    <option value="">Blurb (reserved)</option>
-                  </select>
-                
-                
-                  <label for="campaignPitchSelect"><strong>Pitch:</strong></label>
-                  <select name="pitchId" id="campaignPitchSelect">
-                    <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
-                  </select>
-                
-                
-                  <label for="campaignSubheadingSelect"><strong>Sub-heading:</strong></label>
-                  <select name="subheadingId" id="campaignSubheadingSelect">
-                    <option value="">Sub-heading</option>
-                  </select>
-                
-                
-                  <label for="campaignTaglineSelect"><strong>Tagline:</strong></label>
-                  <select name="taglineId" id="campaignTaglineSelect">
-                    <option value="">Tagline</option>
-                  </select>
-                
-                
-                  <label for="campaignArticleSelect"><strong>Article:</strong></label>
-                  <select name="articleId" id="campaignArticleSelect">
-                    <option value="">Article</option>
-                  </select>
-                
-                
-                  <label for="campaignReportSelect"><strong>Report:</strong></label>
-                  <select name="reportId" id="campaignReportSelect">
-                    <option value="">Report</option>
-                  </select>
-                
-                
-                  <label for="campaignWhitePaperSelect"><strong>White Paper:</strong></label>
-                  <select name="whitePaperId" id="campaignWhitePaperSelect">
-                    <option value="">White Paper</option>
-                  </select>
-                
-                
-                  <label for="campaignEbookSelect"><strong>eBook:</strong></label>
-                  <select name="ebookId" id="campaignEbookSelect">
-                    <option value="">eBook</option>
-                  </select>
-                
-                
-                  <label for="campaignPostSelect"><strong>Post:</strong></label>
-                  <select name="postId" id="campaignPostSelect">
-                    <option value="">Post</option>
-                  </select>
-                
-                
-                  <label for="campaignDescriptionSelect"><strong>Description:</strong></label>
-                  <select name="descriptionId" id="campaignDescriptionSelect">
-                    <option value="">Description</option>
-                  </select>
-                
-                
-                  <label for="campaignTranscriptSelect"><strong>Transcript:</strong></label>
-                  <select name="transcriptId" id="campaignTranscriptSelect">
-                    <option value="">Transcript</option>
-                  </select>
-                
-                
-                  <label for="campaignCommentSelect"><strong>Comment:</strong></label>
-                  <select name="commentId" id="campaignCommentSelect">
-                    <option value="">Comment</option>
-                  </select>
-                
-                
-                  <label for="campaignTweetSelect"><strong>Tweet:</strong></label>
-                  <select name="tweetId" id="campaignTweetSelect">
-                    <option value="">Tweet (optional)</option>
-                  </select>
-                
-                
-                  <label for="campaignCtaSelect"><strong>CTA:</strong></label>
-                  <select name="ctaId" id="campaignCtaSelect">
-                    <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
-                  </select>
-                
-                
-                  <label for="campaignPrimaryImageSelect"><strong>Primary Image:</strong></label>
-                  <select name="primaryImageId" id="campaignPrimaryImageSelect">
-                    <option value="">Primary Image</option>
-                  </select>
-                
-                
-                  <label for="campaignPrimaryVideoSelect"><strong>Primary Video:</strong></label>
-                  <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
-                    <option value="">Primary Video (optional)</option>
-                  </select>
-                
-                
-                  <label for="campaignHashtagGroupSelect"><strong>Hashtags:</strong></label>
-                  <select name="hashtagsText" id="campaignHashtagGroupSelect">
-                    <option value="">Hashtags</option>
-                  </select>
-                
+              <div id="campaignContentConditional" style="margin: 0; display: none;">
+
+                  <div class="campaign-content-row" data-field-id="campaignTopicSelect">
+                    <label for="campaignTopicSelect"><strong>Topics:</strong></label>
+                    <select name="topicId" id="campaignTopicSelect">
+                      <option value="">Topics</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignHeadlineSelect">
+                    <label for="campaignHeadlineSelect"><strong>Headline:</strong></label>
+                    <select name="headlineId" id="campaignHeadlineSelect">
+                      <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignEmailSelect">
+                    <label for="campaignEmailSelect"><strong>Email Body:</strong></label>
+                    <select name="emailId" id="campaignEmailSelect">
+                      <option value="">Email Body</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignSubjectLineSelect">
+                    <label for="campaignSubjectLineSelect"><strong>Subject Line:</strong></label>
+                    <select name="subjectLineId" id="campaignSubjectLineSelect">
+                      <option value="">Subject Line</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignBlurbSelect">
+                    <label for="campaignBlurbSelect"><strong>Blurb:</strong></label>
+                    <select name="blurbId" id="campaignBlurbSelect">
+                      <option value="">Blurb (reserved)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPitchSelect">
+                    <label for="campaignPitchSelect"><strong>Pitch:</strong></label>
+                    <select name="pitchId" id="campaignPitchSelect">
+                      <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignSubheadingSelect">
+                    <label for="campaignSubheadingSelect"><strong>Sub-heading:</strong></label>
+                    <select name="subheadingId" id="campaignSubheadingSelect">
+                      <option value="">Sub-heading</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignTaglineSelect">
+                    <label for="campaignTaglineSelect"><strong>Tagline:</strong></label>
+                    <select name="taglineId" id="campaignTaglineSelect">
+                      <option value="">Tagline</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignArticleSelect">
+                    <label for="campaignArticleSelect"><strong>Article:</strong></label>
+                    <select name="articleId" id="campaignArticleSelect">
+                      <option value="">Article</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignReportSelect">
+                    <label for="campaignReportSelect"><strong>Report:</strong></label>
+                    <select name="reportId" id="campaignReportSelect">
+                      <option value="">Report</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignWhitePaperSelect">
+                    <label for="campaignWhitePaperSelect"><strong>White Paper:</strong></label>
+                    <select name="whitePaperId" id="campaignWhitePaperSelect">
+                      <option value="">White Paper</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignEbookSelect">
+                    <label for="campaignEbookSelect"><strong>eBook:</strong></label>
+                    <select name="ebookId" id="campaignEbookSelect">
+                      <option value="">eBook</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPostSelect">
+                    <label for="campaignPostSelect"><strong>Post:</strong></label>
+                    <select name="postId" id="campaignPostSelect">
+                      <option value="">Post</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignDescriptionSelect">
+                    <label for="campaignDescriptionSelect"><strong>Description:</strong></label>
+                    <select name="descriptionId" id="campaignDescriptionSelect">
+                      <option value="">Description</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignTranscriptSelect">
+                    <label for="campaignTranscriptSelect"><strong>Transcript:</strong></label>
+                    <select name="transcriptId" id="campaignTranscriptSelect">
+                      <option value="">Transcript</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignCommentSelect">
+                    <label for="campaignCommentSelect"><strong>Comment:</strong></label>
+                    <select name="commentId" id="campaignCommentSelect">
+                      <option value="">Comment</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignTweetSelect">
+                    <label for="campaignTweetSelect"><strong>Tweet:</strong></label>
+                    <select name="tweetId" id="campaignTweetSelect">
+                      <option value="">Tweet (optional)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignCtaSelect">
+                    <label for="campaignCtaSelect"><strong>CTA:</strong></label>
+                    <select name="ctaId" id="campaignCtaSelect">
+                      <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPrimaryImageSelect">
+                    <label for="campaignPrimaryImageSelect"><strong>Primary Image:</strong></label>
+                    <select name="primaryImageId" id="campaignPrimaryImageSelect">
+                      <option value="">Primary Image</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignPrimaryVideoSelect">
+                    <label for="campaignPrimaryVideoSelect"><strong>Primary Video:</strong></label>
+                    <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
+                      <option value="">Primary Video (optional)</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignHashtagGroupSelect">
+                    <label for="campaignHashtagGroupSelect"><strong>Hashtags:</strong></label>
+                    <select name="hashtagsText" id="campaignHashtagGroupSelect">
+                      <option value="">Hashtags</option>
+                    </select>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignLeadMagnetSelect">
+                    <label for="campaignLeadMagnetSelect"><strong>Lead Magnet:</strong></label>
+                    <select name="leadMagnetId" id="campaignLeadMagnetSelect">
+                      <option value="">Lead Magnet</option>
+                    </select>
+                  </div>
+
+                <button id="campaignAddContentBtn" type="button" class="btn" style="margin-top: 0.75rem;">Add Content</button>
               </div>
             </div>
           </div>
@@ -215,62 +323,4 @@
             <button id="campaignSubmitBtn" type="submit" class="btn btn-primary">Create Campaign</button>
           </div>
         </form>
-
-        <div id="campaignsReactRoot"></div>
-
-        <h3>Legacy Saved Campaigns</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr class="table-filter-row">
-                <th><input id="campaignFilterName" placeholder="Name" /></th>
-                <th>
-                  <select id="campaignFilterStatus">
-                    <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="paused">Paused</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="ready">Ready</option>
-                    <option value="complete">Complete</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="sent">Sent</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterSegment">
-                    <option value="">All Segments</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterChannel">
-                    <option value="">All Channels</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterTemplate">
-                    <option value="">All Templates</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="campaignFilterPage">
-                    <option value="">All Pages</option>
-                  </select>
-                </th>
-                <th><input id="campaignFilterSubject" placeholder="Subject" /></th>
-                <th></th>
-              </tr>
-              <tr>
-                <th><button id="campaignSortNameBtn" type="button" class="btn">Campaign Name</button></th>
-                <th><button id="campaignSortStatusBtn" type="button" class="btn">Status</button></th>
-                <th><button id="campaignSortSegmentBtn" type="button" class="btn">Segment</button></th>
-                <th><button id="campaignSortChannelBtn" type="button" class="btn">Channel</button></th>
-                <th><button id="campaignSortTemplateBtn" type="button" class="btn">Template</button></th>
-                <th><button id="campaignSortPageBtn" type="button" class="btn">Page</button></th>
-                <th><button id="campaignSortSubjectBtn" type="button" class="btn">Subject</button></th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="campaignCards"></tbody>
-          </table>
-        </div>
       </section>

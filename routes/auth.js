@@ -127,7 +127,7 @@ async function handle(req, res, pathname, method) {
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; padding: 2rem;">
         <h2>Password Reset Code</h2>
-        <p>A password reset was requested for your Alphire Promo account. If this was not you, please ignore this email securely.</p>
+        <p>A password reset was requested for your StarCaster account from Alphire. If this was not you, please ignore this email securely.</p>
         <div style="margin: 2rem 0; padding: 1.5rem; background: #f3f4f6; text-align: center; border-radius: 8px;">
           <h1 style="margin:0; font-size: 2.5rem; letter-spacing: 4px; color: #111827;">${otp}</h1>
         </div>
@@ -137,7 +137,7 @@ async function handle(req, res, pathname, method) {
 
     const mail = await sendEmail({
       to: email,
-      subject: 'Security: Alphire Account Password Reset',
+      subject: 'Security: StarCaster Account Password Reset',
       html: htmlBody
     });
 

@@ -241,6 +241,16 @@ App.campaigns = (function () {
   function setFieldVisible(id, visible) {
     const el = byId(id);
     if (!el) return;
+    // Check for campaign content row wrapper first
+    const contentRow = el.closest('.campaign-content-row');
+    if (contentRow) {
+      // Channel profile visibility is stored as a data attribute
+      contentRow.dataset.channelVisible = visible ? '1' : '0';
+      // Show only if BOTH channel-visible AND not user-hidden
+      const userHidden = contentRow.classList.contains('user-hidden');
+      contentRow.style.display = (visible && !userHidden) ? '' : 'none';
+      return;
+    }
     const container = el.closest('.form-row');
     if (container) {
       container.style.display = visible ? '' : 'none';
@@ -826,17 +836,68 @@ App.campaigns = (function () {
     renderCampaigns();
   }
 
+  function getFilterValues() {
+    return {
+      name: (byId('campaignFilterName')?.value || '').trim().toLowerCase(),
+      status: byId('campaignFilterStatus')?.value || '',
+      segment: byId('campaignFilterSegment')?.value || '',
+      channel: byId('campaignFilterChannel')?.value || '',
+      template: byId('campaignFilterTemplate')?.value || '',
+      page: byId('campaignFilterPage')?.value || '',
+      subject: (byId('campaignFilterSubject')?.value || '').trim().toLowerCase(),
+    };
+  }
+
   function renderCampaigns() {
     const tbody = byId('campaignCards');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const rows = Array.isArray(state.campaigns) ? state.campaigns : [];
-    if (!rows.length) {
+    const allRows = Array.isArray(state.campaigns) ? state.campaigns : [];
+    if (!allRows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 8;
       td.textContent = 'No campaigns yet.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    // Apply filters
+    const f = getFilterValues();
+    const rows = allRows.filter(campaign => {
+      const config = parseCampaignConfig(campaign);
+      if (f.name && !(campaign.name || '').toLowerCase().includes(f.name)) return false;
+      if (f.status && (campaign.status || '') !== f.status) return false;
+      if (f.segment) {
+        const segId = String(config?.segmentId || campaign.segmentId || '');
+        if (segId !== f.segment) return false;
+      }
+      if (f.channel) {
+        const chId = String(config?.channelId || '');
+        if (chId !== f.channel) return false;
+      }
+      if (f.template) {
+        const tmplId = String(config?.emailTemplateId || '');
+        if (tmplId !== f.template) return false;
+      }
+      if (f.page) {
+        const pgId = String(config?.landingPageId || '');
+        if (pgId !== f.page) return false;
+      }
+      if (f.subject) {
+        const subj = (config?.subjectLineLabel || campaign.subject || config?.headlineLabel || '').toLowerCase();
+        if (!subj.includes(f.subject)) return false;
+      }
+      return true;
+    });
+
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 8;
+      td.textContent = 'No matching campaigns.';
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
@@ -914,10 +975,10 @@ App.campaigns = (function () {
   }
 
   function setCampaignFormMode(isEditing) {
-    const toggleBtn = byId('campaignToggleFormBtn');
     const submitBtn = byId('campaignSubmitBtn');
+    const heading = document.querySelector('#campaignCreatePage h2');
     if (submitBtn) submitBtn.textContent = isEditing ? 'Update Campaign' : 'Create Campaign';
-    if (toggleBtn) toggleBtn.textContent = isEditing ? 'Hide Form' : 'Add Campaign';
+    if (heading) heading.textContent = isEditing ? 'Edit Campaign' : 'Create Campaign';
   }
 
   function applySelectValue(select, value) {
@@ -933,11 +994,8 @@ App.campaigns = (function () {
   }
 
   function ensureCampaignFormVisible() {
-    const form = byId('campaignForm');
-    if (!form) return;
-    form.classList.remove('hidden');
-    if (typeof form.scrollIntoView === 'function') {
-      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof App !== 'undefined' && App.setActivePage) {
+      App.setActivePage('campaignCreatePage');
     }
   }
 
@@ -1015,8 +1073,103 @@ App.campaigns = (function () {
     return safeText(option?.textContent);
   }
 
+  // --- Campaign content row: delete icons + Add Content restore button ---
+
+  function updateAddContentBtnVisibility() {
+    const addBtn = byId('campaignAddContentBtn');
+    if (!addBtn) return;
+    const rows = document.querySelectorAll('#campaignContentConditional .campaign-content-row');
+    const hasHidden = Array.from(rows).some(r => r.classList.contains('user-hidden'));
+    addBtn.style.display = hasHidden ? '' : 'none';
+  }
+
+  function hideContentRow(row) {
+    row.classList.add('user-hidden');
+    row.style.display = 'none';
+    // Clear the select value so hidden fields don't submit stale data
+    const select = row.querySelector('select');
+    if (select) select.value = '';
+    updateAddContentBtnVisibility();
+  }
+
+  function showContentRow(row) {
+    row.classList.remove('user-hidden');
+    // Only show if channel profile also wants it visible
+    const channelVisible = row.dataset.channelVisible !== '0';
+    row.style.display = channelVisible ? '' : 'none';
+    updateAddContentBtnVisibility();
+  }
+
+  function initCampaignContentRowControls() {
+    const contentWrap = byId('campaignContentConditional');
+    if (!contentWrap) return;
+
+    // Inject delete icon into each content row
+    const rows = contentWrap.querySelectorAll('.campaign-content-row');
+    rows.forEach(row => {
+      // Skip if already has a delete button
+      if (row.querySelector('.content-remove-btn')) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'content-remove-btn';
+      btn.title = 'Remove this content type';
+      btn.textContent = '✕';
+      btn.addEventListener('click', () => hideContentRow(row));
+      row.appendChild(btn);
+    });
+
+    // Wire "Add Content" button
+    const addBtn = byId('campaignAddContentBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => showAddContentPicker(addBtn));
+      // Initially hidden until something is removed
+      addBtn.style.display = 'none';
+    }
+  }
+
+  function showAddContentPicker(anchorBtn) {
+    // Remove any existing picker
+    const existing = document.getElementById('campaignAddContentPicker');
+    if (existing) { existing.remove(); return; }
+
+    const rows = document.querySelectorAll('#campaignContentConditional .campaign-content-row.user-hidden');
+    if (!rows.length) return;
+
+    const picker = document.createElement('div');
+    picker.id = 'campaignAddContentPicker';
+    picker.style.cssText = 'background:#fff; border:1px solid var(--border,#ccc); border-radius:6px; padding:0.5rem; margin-top:0.5rem; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-width:300px;';
+
+    rows.forEach(row => {
+      const label = row.querySelector('label');
+      const labelText = label ? label.textContent.replace(/:$/, '').trim() : row.dataset.fieldId;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'btn';
+      item.style.cssText = 'display:block; width:100%; text-align:left; margin-bottom:4px; font-size:0.85rem;';
+      item.textContent = labelText;
+      item.addEventListener('click', () => {
+        showContentRow(row);
+        // Remove picker after selection
+        const p = document.getElementById('campaignAddContentPicker');
+        if (p) p.remove();
+      });
+      picker.appendChild(item);
+    });
+
+    // Insert picker right after the Add Content button
+    anchorBtn.insertAdjacentElement('afterend', picker);
+
+    // Close picker on outside click
+    function closeOnOutsideClick(e) {
+      if (!picker.contains(e.target) && e.target !== anchorBtn) {
+        picker.remove();
+        document.removeEventListener('click', closeOnOutsideClick, true);
+      }
+    }
+    setTimeout(() => document.addEventListener('click', closeOnOutsideClick, true), 0);
+  }
+
   function init() {
-    const toggleBtn = byId('campaignToggleFormBtn');
     const rulesToggleBtn = byId('campaignToggleRulesBtn');
     const form = byId('campaignForm');
     const rulesChannelSelect = byId('campaignRulesChannelSelect');
@@ -1027,6 +1180,18 @@ App.campaigns = (function () {
     if (contentArea) {
       contentArea.addEventListener('change', updateCampaignFieldGlows);
     }
+
+    // --- Content row delete icons + Add Content button ---
+    initCampaignContentRowControls();
+
+    // --- Filter bar ---
+    const filterBtn = byId('campaignFilterBtn');
+    if (filterBtn) filterBtn.addEventListener('click', renderCampaigns);
+    // Enter key in text filter inputs triggers filter
+    ['campaignFilterName', 'campaignFilterSubject'].forEach(id => {
+      const el = byId(id);
+      if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); renderCampaigns(); } });
+    });
 
     if (rulesToggleBtn) {
       rulesToggleBtn.addEventListener('click', async () => {
@@ -1042,24 +1207,6 @@ App.campaigns = (function () {
     }
     if (rulesResetBtn) {
       rulesResetBtn.addEventListener('click', resetChannelRules);
-    }
-
-    if (toggleBtn && form) {
-      toggleBtn.addEventListener('click', async () => {
-        const isHidden = form.classList.contains('hidden');
-        form.classList.toggle('hidden', !isHidden);
-        toggleBtn.textContent = isHidden ? 'Hide Form' : 'Add Campaign';
-        if (!isHidden) {
-          editingCampaignId = '';
-          const idInput = byId('campaignIdInput');
-          if (idInput) idInput.value = '';
-          setCampaignFormMode(false);
-          applyCampaignChannelProfile('');
-        }
-        if (isHidden) {
-          await loadBuilderSources();
-        }
-      });
     }
 
     if (form) {
@@ -1190,8 +1337,9 @@ App.campaigns = (function () {
           if (idInput) idInput.value = '';
           setCampaignFormMode(false);
           renderBuilderSelects();
-          form.classList.add('hidden');
-          if (toggleBtn) toggleBtn.textContent = 'Add Campaign';
+          if (typeof App !== 'undefined' && App.setActivePage) {
+            App.setActivePage('campaignsPage');
+          }
           notify(isEditing ? 'Campaign updated' : 'Campaign created');
           await loadBuilderSources();
         } catch (err) {
@@ -1202,7 +1350,7 @@ App.campaigns = (function () {
   }
 
   return {
-    manifest: { id: 'campaigns', label: 'Campaigns', pageId: 'campaignsPage' },
+    manifest: { id: 'campaigns', label: 'Campaigns', pageId: 'campaignsPage', secondaryPages: ['campaignCreatePage'] },
     init,
     refresh: loadBuilderSources,
     renderCampaigns,

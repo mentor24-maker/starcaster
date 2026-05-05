@@ -587,6 +587,570 @@
         "generic_context_percent": 10,
         "updated_at": ""
       }
+    },
+    "usr_1777999727946_cvwduc": {
+      "categories": [
+        {
+          "id": "cat_mmnw90xw_01d54",
+          "name": "socioeconomic",
+          "rationale": "Describes struggle, friction, or need for help.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "pain_point",
+            "solution_seeking"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmnw90xw_oridb",
+          "name": "metacrisis",
+          "rationale": "Shows openness to change or leveling up.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "growth_openness"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmnw90xw_rnghb",
+          "name": "ai alignment",
+          "rationale": "Direct question or asks for direction.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "question"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmnw90xw_msvvm",
+          "name": "nonduality",
+          "rationale": "Positive feedback and appreciation.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "positive_signal"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmnw90xw_3xr9r",
+          "name": "new earth",
+          "rationale": "Mentions scam/fake/bot/trust concerns.",
+          "value_rank": 1,
+          "match_hashtags": [
+            "trust_risk"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmnw90xw_wbf0d",
+          "name": "crypto",
+          "rationale": "ISITAS will be blockchain based with our own native crypto token economy. Indeed, ISITAS has the potential to save the crypto space by giving it a worthy purpose and a platform on which to build some actual value on which a crypto project could be based.",
+          "value_rank": 1,
+          "match_hashtags": [],
+          "sort_order": 5,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmpbr14s_qetj2",
+          "name": "post-labor economics",
+          "rationale": "How are humans going to earn a living when AI and robotics can surpass our performance?",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 6,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmpg0r42_iaqlz",
+          "name": "game theory",
+          "rationale": "The ISIT Game is a collaborative, infinite game designed to harness the power of swarm intelligence to solve the greatest challenges facing humanity including AI Alignment, post-labor economics, wealth inequality, war and violence, climate change, and more. Game theory is one of the most powerful forces in the universe, and this project has tapped into it directly.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 7,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmpqvzd5_u3qee",
+          "name": "channeling",
+          "rationale": "Channeling spiritual messages about personal or societal events.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "belief"
+          ],
+          "sort_order": 8,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmpqwrp6_3n7mx",
+          "name": "spirituality",
+          "rationale": "Expressing belief in spirituality as the ultimate solution to problems.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 9,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmrzp56w_j8sfh",
+          "name": "general",
+          "rationale": "Low-actionability baseline. Deprioritize unless paired with strong attributes.",
+          "value_rank": 1,
+          "match_hashtags": [],
+          "sort_order": 10,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mms1rl18_vjtyf",
+          "name": "current events",
+          "rationale": "Just commenting on/complaining about current events with no solution-orientation.",
+          "value_rank": 2,
+          "match_hashtags": [],
+          "sort_order": 11,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmsjbc57_vokus",
+          "name": "Universal Basic Income (UBI)",
+          "rationale": "Interested in equity, sustainability, basic human needs, and related issues.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 12,
+          "updated_at": ""
+        },
+        {
+          "id": "cat_mmwlovik_ueplt",
+          "name": "politics",
+          "rationale": "Overtly discussing politics, taking sides, and advocating for political solutions. We generally want to avoid overtly political discussion at this point.",
+          "value_rank": 1,
+          "match_hashtags": [],
+          "sort_order": 13,
+          "updated_at": ""
+        }
+      ],
+      "attributes": [
+        {
+          "id": "attr_mmpe1khf_uj1g8",
+          "name": "motivated",
+          "rationale": "Ready to act now. Prioritize with specific, low-friction next steps.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "growth_openness",
+            "purchase_intent",
+            "identity_shift"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpe1khf_abjin",
+          "name": "self-involved",
+          "rationale": "Focuses on self-image/status over substance. Telling us about all their plans to do something important one day, but meanwhile they have many obstacles in their way which they are happy to share about with random strangers in Youtube comments.",
+          "value_rank": 2,
+          "match_hashtags": [
+            "narcissist"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpe1khf_eoicu",
+          "name": "pessimistic",
+          "rationale": "Language indicates defeatism/cynicism. Sees doom and gloom ahead.",
+          "value_rank": 1,
+          "match_hashtags": [
+            "pain_point"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpe1khf_4q9uw",
+          "name": "fan",
+          "rationale": "High affinity and goodwill. Useful for rapport and lightweight engagement.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "positive_signal"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpe1khf_55knt",
+          "name": "introvert",
+          "rationale": "Reflective communication style. Prefer thoughtful prompts over hard push.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "question",
+            "growth_openness"
+          ],
+          "sort_order": 4,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpe70a5_gyd3l",
+          "name": "Goal-oriented",
+          "rationale": "We are currently seeking people who are serious about actually doing something to solve the problems of the world. It seems like the majority just want to talk about the issues endlessly, but the people who are actually offering solutions are few and far between. We're looking for signals from people who are willing to take action if they only know how.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "#goals"
+          ],
+          "sort_order": 5,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpe7sju_an16k",
+          "name": "attention seeker",
+          "rationale": "They are just showing off how smart or creative they are, trying to impress people.",
+          "value_rank": 2,
+          "match_hashtags": [],
+          "sort_order": 6,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpeb5cu_zezwl",
+          "name": "chosen one",
+          "rationale": "Compelling sense of purpose. Feelings of being special. Gifted. Crystal children. Light workers.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 7,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpebzr1_d4b0j",
+          "name": "suspicious",
+          "rationale": "Expressing distrust of authorities or others in general. Tendency toward conspiracy theories.",
+          "value_rank": 1,
+          "match_hashtags": [],
+          "sort_order": 8,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpec28y_mo0i1",
+          "name": "shallow",
+          "rationale": "Repeating surface level commentary just for the sake of participating and going along with the crowd.",
+          "value_rank": 1,
+          "match_hashtags": [],
+          "sort_order": 9,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpeecbg_xi6vu",
+          "name": "solution-oriented",
+          "rationale": "Interested in getting to actual solutions, even if they don't know what they are yet.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 10,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpeeqij_cz4eu",
+          "name": "optimistic",
+          "rationale": "Sees a brighter future ahead. People are basically good. We are capable of solving our problems.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 11,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpegjah_7c1e3",
+          "name": "engaged",
+          "rationale": "Makes comments about how they have actually done things or are doing things in the real world to proactively solve problems, not just talking about it.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "active",
+            "activism",
+            "doer"
+          ],
+          "sort_order": 12,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpelzbf_9dci6",
+          "name": "intelligent",
+          "rationale": "Offers original, well-thought out and articulated thoughts that add new information or clarify confusion.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 13,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmpemgzt_chwri",
+          "name": "funny",
+          "rationale": "",
+          "value_rank": 4,
+          "match_hashtags": [],
+          "sort_order": 14,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmqqbs4g_amxc0",
+          "name": "analytical",
+          "rationale": "Focusing on the details. Looking at the mechanics of the situation.",
+          "value_rank": 3,
+          "match_hashtags": [],
+          "sort_order": 15,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mms1wyfy_mxelt",
+          "name": "npc",
+          "rationale": "Non-performing character. Not saying anything of significance.",
+          "value_rank": 1,
+          "match_hashtags": [],
+          "sort_order": 16,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mms1xxsm_i4syd",
+          "name": "bitter",
+          "rationale": "Negative overall attitude",
+          "value_rank": 1,
+          "match_hashtags": [],
+          "sort_order": 17,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmwmpb4q_4qtuh",
+          "name": "clever",
+          "rationale": "Pithy quips. Getting straight to the key point. Noticing a different angle.",
+          "value_rank": 4,
+          "match_hashtags": [],
+          "sort_order": 18,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmxngi3d_cumph",
+          "name": "frustrated",
+          "rationale": "",
+          "value_rank": 4,
+          "match_hashtags": [],
+          "sort_order": 19,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmxnh3y8_v5w21",
+          "name": "anxious",
+          "rationale": "",
+          "value_rank": 2,
+          "match_hashtags": [],
+          "sort_order": 20,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmzr9z0w_ogmuo",
+          "name": "promoter",
+          "rationale": "",
+          "value_rank": 3,
+          "match_hashtags": [],
+          "sort_order": 21,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mmzra4vy_qxm83",
+          "name": "clueless",
+          "rationale": "",
+          "value_rank": 3,
+          "match_hashtags": [],
+          "sort_order": 22,
+          "updated_at": ""
+        },
+        {
+          "id": "attr_mn0v1bo4_sj27b",
+          "name": "ai",
+          "rationale": "",
+          "value_rank": 3,
+          "match_hashtags": [],
+          "sort_order": 23,
+          "updated_at": ""
+        }
+      ],
+      "approaches": [
+        {
+          "id": "approach_mmpe1khf_inzgr",
+          "name": "ignore",
+          "rationale": "Skip low-signal/noise comments to conserve effort for actionable conversations.",
+          "value_rank": 5,
+          "match_hashtags": [
+            "noise"
+          ],
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpe1khf_c5csw",
+          "name": "encourage",
+          "rationale": "Affirm momentum and reinforce identity shift. Best for growth-oriented or positive comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "growth_openness",
+            "positive_signal",
+            "identity_shift"
+          ],
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpe1khf_ys3o2",
+          "name": "intrigue",
+          "rationale": "Use curiosity/open loops to continue conversation when intent is emerging but not explicit.",
+          "value_rank": 3,
+          "match_hashtags": [
+            "solution_seeking"
+          ],
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpe1khf_825gl",
+          "name": "inquire",
+          "rationale": "Lead with a clarifying question to diagnose context before advising. Best for pain/question comments.",
+          "value_rank": 4,
+          "match_hashtags": [
+            "question",
+            "pain_point"
+          ],
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpei8aj_qxmx2",
+          "name": "respond",
+          "rationale": "React to some specific point they made or question they asked.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 4,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpeimp9_mqi6m",
+          "name": "quip",
+          "rationale": "Say something short and clever that ties what they said in with the video",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 5,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpej2ec_f4pen",
+          "name": "agree",
+          "rationale": "Validate their position or statements with solid reasoning, and throw in a compliment",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 6,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpejmfz_040j8",
+          "name": "relate",
+          "rationale": "Give an example that makes their point, share a similar experience, empathize.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 7,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmpffmqp_eqx70",
+          "name": "invitation",
+          "rationale": "Tell them they are the kind of people we are looking for and invite them to discover ISITAS.",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 8,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmwmpt5h_znc4k",
+          "name": "compliment",
+          "rationale": "",
+          "value_rank": 5,
+          "match_hashtags": [],
+          "sort_order": 9,
+          "updated_at": ""
+        },
+        {
+          "id": "approach_mmwmss14_zcqxo",
+          "name": "like",
+          "rationale": "",
+          "value_rank": 3,
+          "match_hashtags": [],
+          "sort_order": 10,
+          "updated_at": ""
+        }
+      ],
+      "rulesGuides": [
+        {
+          "id": "ruleguide_mosv4qgc_01",
+          "type": "rule",
+          "text": "Never reuse the exact same reply text across comments",
+          "enabled": true,
+          "sort_order": 0,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mosv4qgc_02",
+          "type": "rule",
+          "text": "Usually anchor response to the specific comment text",
+          "enabled": true,
+          "sort_order": 1,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mosv4qgc_03",
+          "type": "rule",
+          "text": "Don't ask pointless follow up questions as if we are working on a project together",
+          "enabled": true,
+          "sort_order": 2,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mosv4qgc_04",
+          "type": "rule",
+          "text": "Avoid generic coaching templates",
+          "enabled": true,
+          "sort_order": 3,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mosv4qgc_05",
+          "type": "rule",
+          "text": "Tie the comment into the reference video if it works",
+          "enabled": true,
+          "sort_order": 4,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mosv4qgc_06",
+          "type": "rule",
+          "text": "Don't shoehorn in keywords - every statement should be coherent",
+          "enabled": true,
+          "sort_order": 5,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mosv4qgc_07",
+          "type": "rule",
+          "text": "Refer it to ISITAS, the ISIT Construct, OR the ISIT Game, as appropriate",
+          "enabled": true,
+          "sort_order": 6,
+          "updated_at": ""
+        },
+        {
+          "id": "ruleguide_mosv4qgc_08",
+          "type": "rule",
+          "text": "Capitalize sentences. (except for every now and then to simulate human error)",
+          "enabled": true,
+          "sort_order": 7,
+          "updated_at": ""
+        }
+      ],
+      "settings": {
+        "explicit_isitas_percent": 50,
+        "subtle_shared_framing_percent": 40,
+        "generic_context_percent": 10,
+        "updated_at": ""
+      }
     }
   }
 }
