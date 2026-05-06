@@ -826,6 +826,12 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/engage/social/x/status' && requestMethod === 'GET') {
     const creds = xClient.getXCredentials();
+    const mask = (val) => {
+      const s = String(val || '');
+      if (!s) return '(empty)';
+      if (s.length <= 8) return `${s.slice(0, 2)}...(${s.length} chars)`;
+      return `${s.slice(0, 4)}...${s.slice(-4)} (${s.length} chars)`;
+    };
     const payload = {
       configured: xClient.isConfigured(),
       accountName: creds.accountName || '',
@@ -833,6 +839,12 @@ async function handle(req, res, pathname, method) {
       hasApiSecret: Boolean(creds.apiSecret),
       hasAccessToken: Boolean(creds.accessToken),
       hasAccessTokenSecret: Boolean(creds.accessTokenSecret),
+      preview: {
+        apiKey: mask(creds.apiKey),
+        apiSecret: mask(creds.apiSecret),
+        accessToken: mask(creds.accessToken),
+        accessTokenSecret: mask(creds.accessTokenSecret),
+      },
     };
     return sendOk(res, 200, payload, payload), true;
   }
