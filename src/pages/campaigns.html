@@ -96,6 +96,7 @@
         <div class="page-heading-row">
           <h2>Create Campaign</h2>
           <div class="page-heading-actions">
+            <button id="campaignPreviewBtn" type="button" class="btn">Preview</button>
             <button type="button" class="btn" onclick="App.setActivePage('campaignsPage'); return false;">Back To Campaigns</button>
           </div>
         </div>
@@ -301,10 +302,12 @@
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignHashtagGroupSelect">
-                    <label for="campaignHashtagGroupSelect"><strong>Hashtags:</strong></label>
-                    <select name="hashtagsText" id="campaignHashtagGroupSelect">
-                      <option value="">Hashtags</option>
-                    </select>
+                    <label for="campaignHashtagPickerBtn"><strong>Hashtags:</strong></label>
+                    <div class="campaign-hashtag-picker">
+                      <input type="hidden" name="hashtagsText" id="campaignHashtagGroupSelect" />
+                      <button id="campaignHashtagPickerBtn" type="button" class="btn">Choose Hashtags</button>
+                      <div id="campaignHashtagSummary" class="campaign-hashtag-summary">No hashtags selected</div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignLeadMagnetSelect">

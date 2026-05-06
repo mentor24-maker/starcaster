@@ -120,6 +120,7 @@ const CAMPAIGN_CREATE_SCHEMA = {
   subject:   { type: 'string', required: true, minLength: 1, maxLength: 500 },
   content:   { type: 'string', required: true, minLength: 1 },
   segmentId: { type: 'string', required: false, default: '' },
+  status:    { type: 'string', required: false, maxLength: 100, default: 'pending' },
 };
 
 const CAMPAIGN_UPDATE_SCHEMA = {

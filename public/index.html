@@ -2662,6 +2662,7 @@
         <div class="page-heading-row">
           <h2>Create Campaign</h2>
           <div class="page-heading-actions">
+            <button id="campaignPreviewBtn" type="button" class="btn">Preview</button>
             <button type="button" class="btn" onclick="App.setActivePage('campaignsPage'); return false;">Back To Campaigns</button>
           </div>
         </div>
@@ -2867,10 +2868,12 @@
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignHashtagGroupSelect">
-                    <label for="campaignHashtagGroupSelect"><strong>Hashtags:</strong></label>
-                    <select name="hashtagsText" id="campaignHashtagGroupSelect">
-                      <option value="">Hashtags</option>
-                    </select>
+                    <label for="campaignHashtagPickerBtn"><strong>Hashtags:</strong></label>
+                    <div class="campaign-hashtag-picker">
+                      <input type="hidden" name="hashtagsText" id="campaignHashtagGroupSelect" />
+                      <button id="campaignHashtagPickerBtn" type="button" class="btn">Choose Hashtags</button>
+                      <div id="campaignHashtagSummary" class="campaign-hashtag-summary">No hashtags selected</div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignLeadMagnetSelect">
@@ -2890,6 +2893,7 @@
           </div>
         </form>
       </section>
+
       <!-- INJECTED PAGE: channels.html -->
 
       <section id="channelsPage" class="app-page hidden">
@@ -6078,91 +6082,40 @@
       </section>
       <section id="engageSocialPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Promote: Social</h2>
+          <h2>Engage: Social</h2>
           <div class="page-heading-actions">
-            <button id="engageSocialOpenYoutubeCommentsBtn" type="button" class="btn">YouTube Comments</button>
+            <button id="engageSocialTestConnectionBtn" type="button" class="btn">Test Connection</button>
             <button id="engageSocialPublishDueBtn" type="button" class="btn">Publish Due Posts</button>
-            <button id="engageSocialDiagnosticsBtn" type="button" class="btn">Run Diagnostics</button>
             <button id="engageSocialOpenSettingsBtn" type="button" class="btn">API Settings</button>
           </div>
         </div>
-        <p class="meta">Build a social drop from a Social campaign, choose platforms, review/edit each platform draft, then queue or publish.</p>
 
-        <div class="engage-social-layout">
-          <section class="engage-social-panel">
-            <div class="engage-social-channel-bar">
-              <div>
-                <div class="engage-social-eyebrow">Publisher Status</div>
-                <div class="engage-social-channel-name">Social Platforms</div>
-              </div>
-              <span id="engageSocialXStatus" class="status-pill status-warn">Checking…</span>
-            </div>
+        <div class="standard-form-grid" style="max-width: 600px; margin-top: 1.5rem;">
 
-            <form id="engageSocialComposerForm" class="standard-form-grid">
-              
-                <label for="engageSocialCampaignSelect">Social Campaign</label>
-                <select id="engageSocialCampaignSelect" name="campaignId" required>
-                  <option value="">No content available</option>
-                </select>
-              
-              <div class="standard-form-grid-full">
-                <h4 class="engage-social-section-title" style="margin-bottom: 0.5rem;">Platforms</h4>
-                <div id="engageSocialPlatformList" class="grid-form" style="grid-template-columns: repeat(3, minmax(0, 1fr));"></div>
-              </div>
-              <div class="standard-form-grid-full">
-                <hr class="engage-social-section-divider" />
-                <h4 class="engage-social-section-title" style="margin-bottom: 0.5rem;">Post</h4>
-                <div id="engageSocialPlatformEditors" class="stack-form" style="margin: 0;"></div>
-                <hr class="engage-social-section-divider" />
-              </div>
-              <div class="standard-form-grid-full">
-                <div class="engage-social-meta-row">
-                  <div>
-                    <h4 class="engage-social-section-title" style="margin-bottom: 0.25rem;">Schedule</h4>
-                    <input id="engageSocialSchedule" name="scheduled_for" type="datetime-local" />
-                  </div>
-                  <div class="engage-social-counter-wrap">
-                    <span id="engageSocialCharCount" class="engage-social-counter">0 selected</span>
-                  </div>
-                </div>
-              </div>
-              <div></div>
-              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-end;">
-                <button id="engageSocialQueueBtn" type="submit" class="btn btn-primary">Queue Selected</button>
-                <button id="engageSocialPublishNowBtn" type="button" class="btn">Publish Now</button>
-              </div>
-            </form>
-          </section>
+          <label for="engageSocialCampaignSelect"><strong>Campaign:</strong></label>
+          <select id="engageSocialCampaignSelect" required>
+            <option value="">Select a Complete campaign</option>
+          </select>
 
-          <aside class="engage-social-panel engage-social-side-panel">
-            <div id="engageSocialCampaignImageWrap" class="engage-social-campaign-image hidden">
-              <img id="engageSocialCampaignImage" alt="Campaign image preview" />
-            </div>
-            <div class="engage-social-eyebrow">Queue Snapshot</div>
-            <div class="engage-social-stats-grid">
-              <div class="engage-social-stat-card">
-                <span class="engage-social-stat-label">Scheduled</span>
-                <strong id="engageSocialScheduledCount">0</strong>
-              </div>
-              <div class="engage-social-stat-card">
-                <span class="engage-social-stat-label">Failed</span>
-                <strong id="engageSocialFailedCount">0</strong>
-              </div>
-              <div class="engage-social-stat-card">
-                <span class="engage-social-stat-label">Published</span>
-                <strong id="engageSocialPublishedCount">0</strong>
-              </div>
-              <div class="engage-social-stat-card">
-                <span class="engage-social-stat-label">Account</span>
-                <strong id="engageSocialAccountName">-</strong>
-              </div>
-            </div>
-            <p class="engage-social-note">Use <strong>Publish Due Posts</strong> to flush anything scheduled for now or earlier. This MVP keeps the queue in the app and publishes on demand.</p>
-          </aside>
+          <label for="engageSocialScheduleAt"><strong>Schedule:</strong></label>
+          <input id="engageSocialScheduleAt" type="datetime-local" />
+
+          <div></div>
+          <div class="page-heading-actions" style="justify-content: flex-start; gap: 0.75rem;">
+            <button id="engageSocialSendNowBtn" type="button" class="btn btn-primary">Send Now</button>
+            <button id="engageSocialScheduleBtn" type="button" class="btn">Schedule</button>
+          </div>
+
         </div>
 
-        <h3>Queue &amp; History</h3>
-        <pre id="engageSocialDiagnosticsPreview" class="code-box">{}</pre>
+        <p id="engageSocialStatus" class="meta" style="margin-top: 1rem;"></p>
+
+        <div id="engageSocialDiagnosticsWrap" class="hidden" style="margin-top: 1.5rem;">
+          <h3>Connection Diagnostics</h3>
+          <pre id="engageSocialDiagnosticsPreview" class="code-box">{}</pre>
+        </div>
+
+        <h3 style="margin-top: 2rem;">Queue &amp; History</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -6200,6 +6153,7 @@
         <h2>Promote: Podcasts</h2>
         <p>Podcasts promotion module placeholder.</p>
       </section>
+
       <!-- INJECTED PAGE: messaging.html -->
 
       <section id="messagingPage" class="app-page hidden">
@@ -9192,7 +9146,7 @@
   <script src="/js/youtubeComments.js"></script>
   <script src="/js/messaging.js?v=1.4"></script>
 
-  <script src="/js/engageSocial.js"></script>
+  <script src="/js/engageSocial.js?v=3"></script>
   <script src="/js/engageComments.js"></script>
 
   <script src="/js/richtext-vendor.js"></script>
