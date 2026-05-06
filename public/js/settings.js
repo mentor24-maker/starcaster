@@ -572,6 +572,23 @@ App.settings = (function () {
       input.value = String(state.apiFormValues[field.key] || '');
       row.appendChild(label);
       row.appendChild(input);
+      // Add Show/Hide toggle for secret fields
+      if (field.secret && !isMultiline) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.textContent = 'Show';
+        toggleBtn.style.cssText = 'margin-left:8px; padding:4px 10px; font-size:0.8rem; cursor:pointer; border:1px solid #555; border-radius:4px; background:#333; color:#ccc;';
+        toggleBtn.addEventListener('click', () => {
+          if (input.type === 'password') {
+            input.type = 'text';
+            toggleBtn.textContent = 'Hide';
+          } else {
+            input.type = 'password';
+            toggleBtn.textContent = 'Show';
+          }
+        });
+        row.appendChild(toggleBtn);
+      }
       els.apiFieldsContainer.appendChild(row);
     });
     renderApiProviderHelp(provider);

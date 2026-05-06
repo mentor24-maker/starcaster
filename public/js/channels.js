@@ -202,6 +202,19 @@ App.channels = (function () {
   function renderChannels() {
     if (!els.channelsTable) return;
     els.channelsTable.innerHTML = '';
+
+    // Project context check
+    const projectId = App.state?.currentProjectId || '';
+    if (!projectId && activeFilteredChannelType) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.style.cssText = 'text-align:center; padding:1.5rem; color:#888;';
+      td.textContent = 'Select a project to view project-specific channels.';
+      tr.appendChild(td);
+      els.channelsTable.appendChild(tr);
+      return;
+    }
     
     let activeSet = state.channels || [];
     if (activeFilteredChannelType) {
