@@ -3,6 +3,19 @@ window.App = window.App || {};
 App.campaigns = (function () {
   const { state, els, api, notify } = App;
   const CHANNEL_RULES_STORAGE_KEY = 'campaignChannelRules.v1';
+  const TWEET_CHARACTER_LIMIT = 280;
+  const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
+  const CAMPAIGN_STATUSES = [
+    { value: 'draft', label: 'Draft' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'paused', label: 'Paused' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'ready', label: 'Ready' },
+    { value: 'active', label: 'Active' },
+    { value: 'complete', label: 'Complete' },
+    { value: 'scheduled', label: 'Scheduled' },
+    { value: 'sent', label: 'Sent' },
+  ];
   const MECHANIC_RULE_FIELDS = [
     { id: 'campaignEmailTemplateSelect', label: 'Template' },
     { id: 'campaignThemeSelect', label: 'Theme' },
@@ -56,6 +69,8 @@ App.campaigns = (function () {
   let builderForms = [];
   let editingCampaignId = '';
   let channelRulesState = loadChannelRulesState();
+  let selectedCampaignHashtagIds = new Set();
+  let hiddenCampaignContentFieldIds = new Set();
 
   function byId(id) {
     return document.getElementById(id);
@@ -63,6 +78,20 @@ App.campaigns = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  function normalizeCampaignStatus(value) {
+    const key = safeText(value).toLowerCase().replace(/[\s-]+/g, '_');
+    return CAMPAIGN_STATUSES.some((status) => status.value === key) ? key : 'pending';
+  }
+
+  function campaignStatusLabel(value) {
+    const key = normalizeCampaignStatus(value);
+    return CAMPAIGN_STATUSES.find((status) => status.value === key)?.label || 'Pending';
+  }
+
+  function campaignStatusValue(campaign, config = parseCampaignConfig(campaign)) {
+    return normalizeCampaignStatus(config?.status || campaign?.status);
   }
 
   function uniqueIds(values) {
@@ -96,6 +125,31 @@ App.campaigns = (function () {
 
   function contentFieldIds() {
     return CONTENT_RULE_FIELDS.map((item) => item.id);
+  }
+
+  function contentRowFieldIds() {
+    return Array.from(document.querySelectorAll('#campaignContentConditional .campaign-content-row'))
+      .map((row) => safeText(row?.dataset?.fieldId))
+      .filter(Boolean);
+  }
+
+  function resetCampaignContentRows() {
+    document.querySelectorAll('#campaignContentConditional .campaign-content-row').forEach((row) => {
+      row.classList.remove('user-hidden');
+    });
+    hiddenCampaignContentFieldIds = new Set();
+  }
+
+  function setHiddenCampaignContentFieldIds(ids) {
+    const validIds = new Set(contentRowFieldIds());
+    hiddenCampaignContentFieldIds = new Set(
+      (Array.isArray(ids) ? ids : []).map((id) => safeText(id)).filter((id) => id && (!validIds.size || validIds.has(id)))
+    );
+    document.querySelectorAll('#campaignContentConditional .campaign-content-row').forEach((row) => {
+      const fieldId = safeText(row?.dataset?.fieldId);
+      row.classList.toggle('user-hidden', hiddenCampaignContentFieldIds.has(fieldId));
+    });
+    updateAddContentBtnVisibility();
   }
 
   function visibleMechanicsForProfile(profile) {
@@ -187,6 +241,401 @@ App.campaigns = (function () {
     if (desired && Array.from(select.options).some((option) => option.value === desired)) {
       select.value = desired;
     }
+  }
+
+  function hashtagText(row) {
+    return safeText(row?.hashtag || row?.tag || row?.text || row?.label || row?.name || row?.content);
+  }
+
+  function hashtagId(row) {
+    return safeText(row?.id);
+  }
+
+  function findById(rows, id) {
+    const desired = safeText(id);
+    if (!desired) return null;
+    return (Array.isArray(rows) ? rows : []).find((row) => safeText(row?.id) === desired) || null;
+  }
+
+  function contentFieldIsActive(id) {
+    const row = byId(id)?.closest('.campaign-content-row');
+    return !!row && row.style.display !== 'none' && !row.classList.contains('user-hidden');
+  }
+
+  function characterCount(value) {
+    return Array.from(String(value || '')).length;
+  }
+
+  function normalizeProjectUrl(value) {
+    const raw = safeText(value);
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/.*)?$/i.test(raw)) return `https://${raw}`;
+    return '';
+  }
+
+  function activeProject() {
+    const currentId = safeText(state.currentProjectId);
+    const projects = Array.isArray(state.projects) ? state.projects : [];
+    return projects.find((project) => safeText(project?.id) === currentId)
+      || (safeText(state.currentProject?.id) === currentId ? state.currentProject : null)
+      || state.currentProject
+      || null;
+  }
+
+  async function ensureCampaignProjectContext() {
+    try {
+      const current = await api('/api/projects/current', { method: 'GET' });
+      const project = current.project || current.currentProject || null;
+      const projects = Array.isArray(current.projects) ? current.projects : [];
+      if (project?.id) {
+        state.currentProject = project;
+        state.currentProjectId = safeText(project.id);
+        window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', state.currentProjectId);
+      }
+      if (projects.length) state.projects = projects;
+    } catch (_) {}
+
+    if (!safeText(state.profile?.website)) {
+      try {
+        const profileRes = await api('/api/settings/profile', { method: 'GET' });
+        const profile = profileRes.profile || profileRes.data || {};
+        if (profile && typeof profile === 'object') state.profile = { ...(state.profile || {}), ...profile };
+      } catch (_) {}
+    }
+  }
+
+  function campaignProjectUrl() {
+    const project = activeProject();
+    const projectUrl = PROJECT_URL_FIELDS
+      .map((field) => normalizeProjectUrl(project?.[field]))
+      .find(Boolean);
+    if (projectUrl) return projectUrl;
+    return normalizeProjectUrl(state.profile?.website);
+  }
+
+  function appendCtaUrl(ctaText) {
+    const text = safeText(ctaText);
+    if (!text) return '';
+    const projectUrl = campaignProjectUrl();
+    if (!projectUrl || text.includes(projectUrl)) return text;
+    return `${text} ${projectUrl}`;
+  }
+
+  function hashtagTimestamp(row) {
+    const time = Date.parse(row?.created_at || row?.updated_at || '');
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function rankedHashtagRows(limit = 40) {
+    const seen = new Set();
+    return (Array.isArray(builderHashtags) ? builderHashtags : [])
+      .filter((row) => hashtagId(row) && hashtagText(row))
+      .slice()
+      .sort((a, b) => {
+        const scoreDiff = (Number(b?.quality_score || 0) || 0) - (Number(a?.quality_score || 0) || 0);
+        if (scoreDiff) return scoreDiff;
+        const timeDiff = hashtagTimestamp(b) - hashtagTimestamp(a);
+        if (timeDiff) return timeDiff;
+        return (Number(b?.id || 0) || 0) - (Number(a?.id || 0) || 0);
+      })
+      .filter((row) => {
+        const key = hashtagText(row).toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, limit);
+  }
+
+  function selectedHashtagRows() {
+    const selected = Array.from(selectedCampaignHashtagIds);
+    if (!selected.length) return [];
+    const byId = new Map((Array.isArray(builderHashtags) ? builderHashtags : []).map((row) => [hashtagId(row), row]));
+    return selected.map((id) => byId.get(id)).filter(Boolean);
+  }
+
+  function setSelectedCampaignHashtagIds(ids) {
+    selectedCampaignHashtagIds = new Set((Array.isArray(ids) ? ids : []).map((id) => safeText(id)).filter(Boolean));
+    renderCampaignHashtagPicker();
+  }
+
+  function campaignHashtagIdsFromConfig(config) {
+    const direct = Array.isArray(config?.hashtagIds)
+      ? config.hashtagIds
+      : Array.isArray(config?.selectedHashtagIds)
+        ? config.selectedHashtagIds
+        : [];
+    if (direct.length) return direct;
+
+    const legacyGroupId = safeText(config?.hashtagGroupId);
+    if (!legacyGroupId) return [];
+    return (Array.isArray(builderHashtags) ? builderHashtags : [])
+      .filter((row) => safeText(row?.campaign_id) === legacyGroupId)
+      .map((row) => hashtagId(row))
+      .filter(Boolean);
+  }
+
+  function renderCampaignHashtagPicker() {
+    const hidden = byId('campaignHashtagGroupSelect');
+    const summary = byId('campaignHashtagSummary');
+    const button = byId('campaignHashtagPickerBtn');
+    const available = rankedHashtagRows(40);
+    const selectedRows = selectedHashtagRows();
+    const selectedTexts = selectedRows.map(hashtagText).filter(Boolean);
+
+    if (hidden) hidden.value = selectedTexts.join(' ');
+    if (summary) {
+      summary.textContent = selectedTexts.length ? selectedTexts.join(' ') : 'No hashtags selected';
+      summary.title = selectedTexts.join(' ');
+    }
+    if (button) {
+      button.disabled = available.length === 0;
+      button.textContent = available.length
+        ? selectedTexts.length
+          ? `Edit Hashtags (${selectedTexts.length})`
+          : 'Choose Hashtags'
+        : 'No Hashtags Available';
+    }
+  }
+
+  function openCampaignHashtagPicker() {
+    const modalFactory = App?.components?.Modal;
+    if (!modalFactory) {
+      notify('Hashtag picker is unavailable', true);
+      return;
+    }
+    const rows = rankedHashtagRows(40);
+    if (!rows.length) {
+      notify('No hashtags available yet', true);
+      return;
+    }
+
+    const draftIds = new Set(selectedCampaignHashtagIds);
+    const body = document.createElement('div');
+    const list = document.createElement('div');
+    list.className = 'campaign-hashtag-modal-list';
+    rows.forEach((row) => {
+      const id = hashtagId(row);
+      const textValue = hashtagText(row);
+      const option = document.createElement('div');
+      option.className = 'campaign-hashtag-modal-option';
+      option.title = textValue;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = id;
+      checkbox.checked = draftIds.has(id);
+      checkbox.setAttribute('aria-label', textValue);
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) draftIds.add(id);
+        else draftIds.delete(id);
+      });
+      checkbox.addEventListener('click', (event) => {
+        event.stopPropagation();
+      });
+
+      const text = document.createElement('span');
+      text.className = 'campaign-hashtag-modal-text';
+      text.textContent = textValue;
+
+      option.addEventListener('click', () => {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      option.appendChild(checkbox);
+      option.appendChild(text);
+      list.appendChild(option);
+    });
+    body.appendChild(list);
+
+    const modal = modalFactory({
+      title: 'Select Hashtags',
+      body,
+      dialogClass: 'campaign-hashtag-modal',
+      bodyClass: 'campaign-hashtag-modal-body',
+      actions: [
+        {
+          label: 'Clear',
+          onClick: () => {
+            setSelectedCampaignHashtagIds([]);
+            updateCampaignFieldGlows();
+            modal.close();
+          },
+        },
+        { label: 'Cancel', onClick: () => modal.close() },
+        {
+          label: 'Apply',
+          primary: true,
+          onClick: () => {
+            setSelectedCampaignHashtagIds(Array.from(draftIds));
+            updateCampaignFieldGlows();
+            modal.close();
+          },
+        },
+      ],
+    });
+    modal.open();
+  }
+
+  function campaignPreviewChannelKind() {
+    const channelSelect = byId('campaignChannelSelect');
+    const channelText = `${selectedOptionText(channelSelect)} ${safeText(channelSelect?.value)}`.toLowerCase();
+    if (channelText.includes('twitter') || /\bx\b/.test(channelText)) return 'tweet';
+    return 'tweet';
+  }
+
+  function buildCampaignTweetPreview() {
+    const tweetRow = contentFieldIsActive('campaignTweetSelect')
+      ? findById(builderTweets, byId('campaignTweetSelect')?.value)
+      : null;
+    const taglineRow = contentFieldIsActive('campaignTaglineSelect')
+      ? findById(builderTaglines, byId('campaignTaglineSelect')?.value)
+      : null;
+    const ctaRow = contentFieldIsActive('campaignCtaSelect')
+      ? findById(builderCtas, byId('campaignCtaSelect')?.value)
+      : null;
+    const baseParts = [
+      safeText(tweetRow?.content || selectedOptionTextIfValue(byId('campaignTweetSelect'))),
+      safeText(taglineRow?.tagline || selectedOptionTextIfValue(byId('campaignTaglineSelect'))),
+    ].filter(Boolean);
+    const ctaText = appendCtaUrl(ctaRow?.cta || selectedOptionTextIfValue(byId('campaignCtaSelect')));
+    const originalHashtags = selectedHashtagRows().map(hashtagText).filter(Boolean);
+    let hashtags = originalHashtags.slice();
+    let includeCta = !!ctaText;
+
+    const compose = () => [
+      ...baseParts,
+      includeCta ? ctaText : '',
+      hashtags.length ? hashtags.join(' ') : '',
+    ].filter(Boolean).join('\n\n');
+
+    let text = compose();
+    while (hashtags.length && characterCount(text) > TWEET_CHARACTER_LIMIT) {
+      hashtags = hashtags.slice(0, -1);
+      text = compose();
+    }
+    if (includeCta && characterCount(text) > TWEET_CHARACTER_LIMIT) {
+      includeCta = false;
+      text = compose();
+    }
+
+    const count = characterCount(text);
+    return {
+      text,
+      count,
+      limit: TWEET_CHARACTER_LIMIT,
+      delta: TWEET_CHARACTER_LIMIT - count,
+      removedHashtagCount: originalHashtags.length - hashtags.length,
+      ctaDropped: !!ctaText && !includeCta,
+    };
+  }
+
+  function buildCampaignPreviewAsset() {
+    if (contentFieldIsActive('campaignPrimaryImageSelect')) {
+      const image = findById(state.assets, byId('campaignPrimaryImageSelect')?.value);
+      if (image) return { type: 'image', asset: image, url: assetPreviewUrl(image) };
+    }
+    if (contentFieldIsActive('campaignPrimaryVideoSelect')) {
+      const video = findById(state.assets, byId('campaignPrimaryVideoSelect')?.value);
+      if (video) return { type: 'video', asset: video, url: assetPreviewUrl(video) };
+    }
+    return null;
+  }
+
+  async function openCampaignPreview() {
+    if (!App?.components?.Modal) {
+      notify('Preview modal is unavailable', true);
+      return;
+    }
+    await ensureCampaignProjectContext();
+    const kind = campaignPreviewChannelKind();
+    const body = document.createElement('div');
+
+    if (kind === 'tweet') {
+      const preview = buildCampaignTweetPreview();
+      const text = preview.text;
+      const media = buildCampaignPreviewAsset();
+      const shell = document.createElement('div');
+      shell.className = 'campaign-preview-tweet-shell';
+
+      const header = document.createElement('div');
+      header.className = 'campaign-preview-tweet-header';
+      const avatar = document.createElement('div');
+      avatar.className = 'campaign-preview-tweet-avatar';
+      avatar.textContent = 'S';
+      const account = document.createElement('div');
+      const name = document.createElement('div');
+      name.className = 'campaign-preview-tweet-name';
+      name.textContent = 'Starcaster';
+      const handle = document.createElement('div');
+      handle.className = 'campaign-preview-tweet-handle';
+      handle.textContent = '@starcaster';
+      account.appendChild(name);
+      account.appendChild(handle);
+      header.appendChild(avatar);
+      header.appendChild(account);
+      shell.appendChild(header);
+
+      const textEl = document.createElement('div');
+      textEl.className = text ? 'campaign-preview-tweet-text' : 'campaign-preview-empty';
+      textEl.textContent = text || 'Choose tweet content, a tagline, CTA, or hashtags to preview this post.';
+      shell.appendChild(textEl);
+
+      if (media) {
+        const mediaWrap = document.createElement('div');
+        mediaWrap.className = 'campaign-preview-tweet-media';
+        if (media.type === 'image' && media.url) {
+          const img = document.createElement('img');
+          img.src = media.url;
+          img.alt = safeText(media.asset?.assetName) || 'Campaign image';
+          mediaWrap.appendChild(img);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'campaign-preview-tweet-media-placeholder';
+          placeholder.textContent = `${safeText(media.asset?.assetName) || 'Selected media'} will be attached.`;
+          mediaWrap.appendChild(placeholder);
+        }
+        shell.appendChild(mediaWrap);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'campaign-preview-tweet-meta';
+      meta.style.marginTop = '12px';
+      meta.textContent = `${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      shell.appendChild(meta);
+
+      const countEl = document.createElement('div');
+      countEl.className = `campaign-preview-tweet-count ${preview.delta < 0 ? 'is-over' : 'is-under'}`;
+      const statusText = preview.delta >= 0
+        ? `${preview.delta} under limit`
+        : `${Math.abs(preview.delta)} over limit`;
+      const trimNotes = [
+        preview.removedHashtagCount ? `${preview.removedHashtagCount} hashtag${preview.removedHashtagCount === 1 ? '' : 's'} removed` : '',
+        preview.ctaDropped ? 'CTA dropped' : '',
+      ].filter(Boolean).join(' · ');
+      countEl.textContent = `${preview.count}/${preview.limit} characters · ${statusText}${trimNotes ? ` · ${trimNotes}` : ''}`;
+      shell.appendChild(countEl);
+
+      const footer = document.createElement('div');
+      footer.className = 'campaign-preview-tweet-footer';
+      ['Reply', 'Repost', 'Like', 'Share'].forEach((item) => {
+        const span = document.createElement('span');
+        span.textContent = item;
+        footer.appendChild(span);
+      });
+      shell.appendChild(footer);
+      body.appendChild(shell);
+    }
+
+    const modal = App.components.Modal({
+      title: 'Campaign Preview',
+      body,
+      dialogClass: 'campaign-preview-modal',
+      bodyClass: 'campaign-preview-modal-body',
+      actions: [{ label: 'Close', primary: true, onClick: () => modal.close() }],
+    });
+    modal.open();
   }
 
   function channelLabel(channel) {
@@ -609,27 +1058,7 @@ App.campaigns = (function () {
       currentValues.taglineId
     );
 
-    const hashtagGroups = [];
-    const grouped = new Map();
-    builderHashtags.forEach((row) => {
-      const key = String(row.campaign_id || '');
-      if (!key) return;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key).push(row);
-    });
-    Array.from(grouped.entries()).forEach(([campaignId, rows]) => {
-      const linked = channels.find(() => false); // intentional no-op; keeps structure explicit
-      const campaign = (Array.isArray(state.campaigns) ? state.campaigns : []).find((item) => String(item.id) === campaignId);
-      const name = safeText(campaign?.name) || `Campaign ${campaignId}`;
-      hashtagGroups.push({ value: campaignId, label: `${name} (${rows.length} hashtag${rows.length === 1 ? '' : 's'})` });
-      void linked;
-    });
-    setSelectOptions(
-      byId('campaignHashtagGroupSelect'),
-      hashtagGroups,
-      hashtagGroups.length ? 'Hashtag Group' : 'Hashtag Group (create hashtags first)',
-      currentValues.hashtagGroupId
-    );
+    renderCampaignHashtagPicker();
 
     setSelectOptions(
       byId('campaignCtaSelect'),
@@ -869,7 +1298,7 @@ App.campaigns = (function () {
     const rows = allRows.filter(campaign => {
       const config = parseCampaignConfig(campaign);
       if (f.name && !(campaign.name || '').toLowerCase().includes(f.name)) return false;
-      if (f.status && (campaign.status || '') !== f.status) return false;
+      if (f.status && campaignStatusValue(campaign, config) !== f.status) return false;
       if (f.segment) {
         const segId = String(config?.segmentId || campaign.segmentId || '');
         if (segId !== f.segment) return false;
@@ -918,7 +1347,7 @@ App.campaigns = (function () {
       tr.appendChild(nameTd);
 
       const statusTd = document.createElement('td');
-      statusTd.textContent = safeText(campaign.status) || '-';
+      statusTd.textContent = campaignStatusLabel(campaignStatusValue(campaign, config));
       tr.appendChild(statusTd);
 
       const segmentTd = document.createElement('td');
@@ -1019,11 +1448,12 @@ App.campaigns = (function () {
     const form = byId('campaignForm');
     if (!form || !campaign) return;
     const config = parseCampaignConfig(campaign) || {};
+    resetCampaignContentRows();
     editingCampaignId = cloneMode ? '' : safeText(campaign.id);
     const idInput = byId('campaignIdInput');
     if (idInput) idInput.value = editingCampaignId;
     form.elements.name.value = cloneMode ? `${safeText(campaign.name)} Copy`.trim() : safeText(campaign.name);
-    form.elements.status.value = safeText(campaign.status) || 'pending';
+    form.elements.status.value = campaignStatusValue(campaign, config);
     applySelectValue(byId('campaignChannelSelect'), config.channelId);
     applyTopicValue(byId('campaignTopicSelect'), config.topicId, config.topicLabel);
     applySelectValue(byId('campaignSegmentSelect'), config.segmentId || campaign.segmentId);
@@ -1049,9 +1479,9 @@ App.campaigns = (function () {
     applySelectValue(byId('campaignCtaSelect'), config.ctaId);
     applySelectValue(byId('campaignPrimaryImageSelect'), config.primaryImageId);
     applySelectValue(byId('campaignPrimaryVideoSelect'), config.primaryVideoId);
-    const hashtagsField = byId('campaignHashtagGroupSelect');
-    if (hashtagsField) hashtagsField.value = safeText(config.hashtagGroupId || '');
+    setSelectedCampaignHashtagIds(campaignHashtagIdsFromConfig(config));
     applyCampaignChannelProfile(config.channelId);
+    setHiddenCampaignContentFieldIds(config.hiddenContentFieldIds);
     setCampaignFormMode(!cloneMode);
     ensureCampaignFormVisible();
     updateCampaignFieldGlows();
@@ -1073,6 +1503,10 @@ App.campaigns = (function () {
     return safeText(option?.textContent);
   }
 
+  function selectedOptionTextIfValue(select) {
+    return safeText(select?.value) ? selectedOptionText(select) : '';
+  }
+
   // --- Campaign content row: delete icons + Add Content restore button ---
 
   function updateAddContentBtnVisibility() {
@@ -1084,15 +1518,22 @@ App.campaigns = (function () {
   }
 
   function hideContentRow(row) {
+    const fieldId = safeText(row?.dataset?.fieldId);
+    if (fieldId) hiddenCampaignContentFieldIds.add(fieldId);
     row.classList.add('user-hidden');
     row.style.display = 'none';
     // Clear the select value so hidden fields don't submit stale data
     const select = row.querySelector('select');
     if (select) select.value = '';
+    if (row.dataset.fieldId === 'campaignHashtagGroupSelect') {
+      setSelectedCampaignHashtagIds([]);
+    }
     updateAddContentBtnVisibility();
   }
 
   function showContentRow(row) {
+    const fieldId = safeText(row?.dataset?.fieldId);
+    if (fieldId) hiddenCampaignContentFieldIds.delete(fieldId);
     row.classList.remove('user-hidden');
     // Only show if channel profile also wants it visible
     const channelVisible = row.dataset.channelVisible !== '0';
@@ -1171,6 +1612,7 @@ App.campaigns = (function () {
 
   function init() {
     const rulesToggleBtn = byId('campaignToggleRulesBtn');
+    const previewBtn = byId('campaignPreviewBtn');
     const form = byId('campaignForm');
     const rulesChannelSelect = byId('campaignRulesChannelSelect');
     const rulesSaveBtn = byId('campaignRulesSaveBtn');
@@ -1199,6 +1641,9 @@ App.campaigns = (function () {
         toggleRulesPanel();
       });
     }
+    if (previewBtn) {
+      previewBtn.addEventListener('click', openCampaignPreview);
+    }
     if (rulesChannelSelect) {
       rulesChannelSelect.addEventListener('change', renderChannelRulesEditor);
     }
@@ -1221,6 +1666,10 @@ App.campaigns = (function () {
         topicSelect.addEventListener('change', function () {
           renderBuilderSelects();
         });
+      }
+      const hashtagPickerBtn = byId('campaignHashtagPickerBtn');
+      if (hashtagPickerBtn) {
+        hashtagPickerBtn.addEventListener('click', openCampaignHashtagPicker);
       }
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1246,17 +1695,22 @@ App.campaigns = (function () {
         const transcriptSelect = byId('campaignTranscriptSelect');
         const commentSelect = byId('campaignCommentSelect');
         const tweetSelect = byId('campaignTweetSelect');
-        const hashtagSelect = byId('campaignHashtagGroupSelect');
         const ctaSelect = byId('campaignCtaSelect');
         const imageSelect = byId('campaignPrimaryImageSelect');
         const videoSelect = byId('campaignPrimaryVideoSelect');
         const leadMagnetSelect = byId('campaignLeadMagnetSelect');
+        const selectedHashtagsText = selectedHashtagRows().map(hashtagText).filter(Boolean).join(' ');
+        const selectedStatus = normalizeCampaignStatus(form.elements.status?.value);
 
         const payload = {
           name: safeText(form.elements.name?.value),
+          status: selectedStatus,
           subject: selectedOptionText(subjectLineSelect) || selectedOptionText(headlineSelect) || safeText(form.elements.name?.value),
           content: JSON.stringify({
             builder: 'campaign-v1',
+            status: selectedStatus,
+            statusLabel: campaignStatusLabel(selectedStatus),
+            hiddenContentFieldIds: Array.from(hiddenCampaignContentFieldIds),
             channelId: safeText(channelSelect?.value),
             channelLabel: selectedOptionText(channelSelect),
             topicId: safeText(topicSelect?.value),
@@ -1307,8 +1761,10 @@ App.campaigns = (function () {
             primaryImageLabel: selectedOptionText(imageSelect),
             primaryVideoId: safeText(videoSelect?.value),
             primaryVideoLabel: selectedOptionText(videoSelect),
-            hashtagGroupId: safeText(hashtagSelect?.value),
-            hashtagGroupLabel: selectedOptionText(hashtagSelect),
+            hashtagGroupId: '',
+            hashtagGroupLabel: selectedHashtagsText,
+            hashtagIds: Array.from(selectedCampaignHashtagIds),
+            hashtagsText: selectedHashtagsText,
             leadMagnetId: safeText(leadMagnetSelect?.value),
             leadMagnetLabel: selectedOptionText(leadMagnetSelect),
           }),
@@ -1326,12 +1782,24 @@ App.campaigns = (function () {
 
         try {
           const isEditing = Boolean(editingCampaignId);
+          let saveResult = null;
           if (editingCampaignId) {
-            await api(`/api/campaigns/${encodeURIComponent(editingCampaignId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+            saveResult = await api(`/api/campaigns/${encodeURIComponent(editingCampaignId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
           } else {
-            await api('/api/campaigns', { method: 'POST', body: JSON.stringify(payload) });
+            saveResult = await api('/api/campaigns', { method: 'POST', body: JSON.stringify(payload) });
+          }
+          const savedCampaign = saveResult?.campaign || saveResult?.data;
+          if (savedCampaign && savedCampaign.id) {
+            savedCampaign.status = selectedStatus;
+            const rows = Array.isArray(state.campaigns) ? state.campaigns.slice() : [];
+            const existingIndex = rows.findIndex((campaign) => String(campaign.id) === String(savedCampaign.id));
+            if (existingIndex >= 0) rows[existingIndex] = { ...rows[existingIndex], ...savedCampaign };
+            else rows.unshift(savedCampaign);
+            state.campaigns = rows;
           }
           form.reset();
+          setSelectedCampaignHashtagIds([]);
+          resetCampaignContentRows();
           editingCampaignId = '';
           const idInput = byId('campaignIdInput');
           if (idInput) idInput.value = '';
