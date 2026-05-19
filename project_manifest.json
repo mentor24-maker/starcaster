@@ -1,17 +1,30 @@
 {
   "projectName": "starcaster",
-  "description": "StarCaster by Alphire. Multi-tenant architecture serving the public site and internal admin tools.",
-  "primaryStack": "Vanilla JS",
-  "backend": "Node/Express",
-  "styling": "CSS3",
+  "productName": "StarCaster",
+  "company": "Alphire",
+  "repositoryPath": "/Users/mentor/WebApps/starcaster",
+  "description": "StarCaster by Alphire — multi-tenant platform for influencers and creators to establish web presence, promote content, and engage organically across social channels (comments, likes, shares, posts, articles, video).",
+  "primaryStack": "Vanilla JS SPA + limited React island",
+  "backend": "Node.js (server.js local, Vercel serverless api/[...slug].js)",
+  "styling": "CSS3 (src/css/ → public/styles.css; no Tailwind)",
   "database": "Supabase (PostgreSQL)",
-  "keyDirectories": {
-    "public": "Static assets, CSS, and frontend JavaScript (e.g. /public/js/devAgent.js)",
-    "routes": "Express router handlers",
-    "lib": "Backend controllers, database access layers, and utilities",
-    "scripts": "Maintenance, migration, and cron scripts",
-    "docs": "Documentation and SQL schemas",
-    "src": "Raw HTML source components (e.g. src/pages/*.html) which are compiled into public/index.html"
+  "referenceProject": {
+    "name": "Normie",
+    "path": "/Users/mentor/WebApps/normie",
+    "role": "Primary test case / tenant for end-to-end StarCaster flows"
   },
-  "architecturalNotes": "This project DOES NOT use React, Vue, Next.js, or TypeScript. Frontend views are built from modular components in /src/pages/*.html. Run `npm run build:html` to compile them into the final /public/index.html. Frontend logic is managed via imperative DOM manipulation in /public/js/*. Backend views are served natively by Express."
+  "keyDirectories": {
+    "public": "Built static assets, JS modules (window.App), React bundle for Campaigns",
+    "src": "HTML partials (pages/), CSS sources, layout.html — run npm run build:html",
+    "routes": "API route modules (shared dispatcher in routes/index.js)",
+    "lib": "Stores, Supabase access, config, project scoping, AI helpers",
+    "scripts": "Build, migrations, imports, maintenance",
+    "docs": "AI_AGENT_HANDOFF.md (canon), UI_STANDARDS.md, SQL setup files",
+    "ai-daemon": "Separate agent service — not the main app server"
+  },
+  "architecturalNotes": "Vanilla JS/HTML monolith is the default for new UI. Edit src/pages/*.html then npm run build:html — do not hand-edit public/index.html for structure. React is used only for Active Campaigns (react-entry.js → public/bundle.js). API keys: lib/config.js env vars for infrastructure; Settings UI for provider APIs. See docs/AI_AGENT_HANDOFF.md and .cursorrules.",
+  "agentEntryPoints": [
+    "docs/AI_AGENT_HANDOFF.md",
+    ".cursorrules"
+  ]
 }

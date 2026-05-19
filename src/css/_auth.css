@@ -1,51 +1,86 @@
 /* Authentication & Landing Page */
 
 .auth-landing {
+  --auth-brand-width: 52.5rem;
+  --auth-text-width: min(43.75rem, 100%); /* 700px cap; shrinks with column on small screens */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 2rem 1.25rem;
+  padding: 2rem 1.25rem 4.5rem;
   background: #000000;
-}
-
-.auth-banner {
-  width: 100%;
-  text-align: left;
-  margin-bottom: 2rem;
-}
-
-.auth-banner img {
-  max-width: 100%;
-  height: auto;
+  box-sizing: border-box;
 }
 
 .auth-content {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4rem;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 1400px;
   margin-left: auto;
   margin-right: auto;
 }
 
-.auth-hero h1 {
-  margin: 0.6rem 0 0.9rem;
-  font-size: 3rem;
-  line-height: 1.1;
+.auth-banner {
+  width: 100%;
+  text-align: left;
+  margin: 0 0 2rem;
+}
+
+.auth-banner img {
+  width: min(100%, var(--auth-brand-width));
+  max-width: 100%;
+  height: auto;
+}
+
+.auth-main {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 460px);
+  column-gap: 4rem;
+  align-items: start;
+}
+
+.auth-copy-column {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  max-width: var(--auth-brand-width);
+  width: 100%;
+}
+
+.auth-headline {
+  margin: 0;
+  font-size: clamp(1.55rem, 2.5vw, 2.45rem);
+  line-height: 1.15;
   color: #ffffff;
+}
+
+.auth-headline-line1 {
   white-space: nowrap;
 }
 
-.auth-hero p {
-  margin: 0;
-  max-width: 52ch;
-  font-size: 1.8rem;
-  line-height: 1.6;
+.auth-intro-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: min(43.75rem, 100cqw);
+  font-size: 1.2rem;
+  line-height: 1.55;
   color: #cccccc;
-  white-space: nowrap;
+}
+
+.auth-intro-body p {
+  margin: 0;
+}
+
+.auth-intro-closer {
+  margin: 0;
+  max-width: min(43.75rem, 100cqw);
+  font-size: clamp(1.35rem, 2.1vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.4;
+  color: #e5e7eb;
 }
 
 .auth-logo {
@@ -61,6 +96,7 @@
   justify-self: center;
   width: 100%;
   max-width: 460px;
+  box-sizing: border-box;
 }
 
 .auth-card h2 {
@@ -93,7 +129,7 @@
 }
 
 .auth-mode-toggle button:not(.active):hover {
-  background: #2563eb; /* bright blue */
+  background: #2563eb;
   color: #fff;
   border-color: #2563eb;
   opacity: 1;
@@ -179,4 +215,25 @@
 .auth-welcome-name:hover,
 .auth-logout-link:hover {
   text-decoration: underline;
+}
+
+@media (max-width: 1200px) {
+  .auth-main {
+    grid-template-columns: 1fr;
+    row-gap: 1.5rem;
+  }
+
+  .auth-copy-column {
+    max-width: none;
+  }
+
+  .auth-card {
+    justify-self: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-headline-line1 {
+    white-space: normal;
+  }
 }

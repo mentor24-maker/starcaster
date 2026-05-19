@@ -6,6 +6,7 @@ const { getProviderValues } = require('../lib/apiSettings');
 const { listCampaigns, rowToCampaign } = require('../lib/store');
 const { getAssetById, rowToAsset } = require('../lib/assetsStore');
 const socialStore = require('../lib/engageSocialStore');
+const { requestProjectScope } = require('../lib/requestProjectScope');
 const xClient = require('../lib/xClient');
 const telegramClient = require('../lib/telegramClient');
 const blueskyClient = require('../lib/blueskyClient');
@@ -525,10 +526,11 @@ async function resolvePostImageMeta(post, req, requireHttps = false) {
 
 async function publishStoredPost(post, req) {
   if (!post) return { ok: false, status: 404, error: 'Post not found' };
+  const scope = requestProjectScope(req);
   const channel = String(post.channel || 'x').trim().toLowerCase();
 
   if (!PUBLISH_NOW_CHANNELS.includes(channel)) {
-    const skipped = socialStore.updatePost(post.id, {
+    const skipped = await socialStore.updatePost(post.id, {
       status: 'failed',
       error: `Publishing for ${channel.toUpperCase()} is not configured yet`,
       diagnostics: {
@@ -541,11 +543,11 @@ async function publishStoredPost(post, req) {
           message: `Publishing for ${channel.toUpperCase()} is not configured yet`,
         }],
       },
-    });
+    }, scope);
     return { ok: false, status: 400, error: `Publishing for ${channel.toUpperCase()} is not configured yet`, post: skipped };
   }
 
-  socialStore.updatePost(post.id, { status: 'publishing', error: '' });
+  await socialStore.updatePost(post.id, { status: 'publishing', error: '' }, scope);
   const imageOpts = {
     imageUrl: String(post.imageUrl || '').trim(),
     imageAlt: String(post.imageAlt || '').trim(),
@@ -576,7 +578,7 @@ async function publishStoredPost(post, req) {
     result = await xClient.createPost(post.text);
   }
   if (!result.ok) {
-    const failed = socialStore.updatePost(post.id, {
+    const failed = await socialStore.updatePost(post.id, {
       status: 'failed',
       error: String(result.error || 'Unknown publish error'),
       diagnostics: {
@@ -587,11 +589,11 @@ async function publishStoredPost(post, req) {
         attempts: Array.isArray(result.attempts) ? result.attempts : [],
         payload: result.data || null,
       },
-    });
+    }, scope);
     return { ...result, post: failed };
   }
 
-  const published = socialStore.updatePost(post.id, {
+  const published = await socialStore.updatePost(post.id, {
     status: 'published',
     publishedAt: new Date().toISOString(),
     remoteId: String(result.data?.id || result.data?.messageId || ''),
@@ -604,7 +606,7 @@ async function publishStoredPost(post, req) {
       imageUrl: safeText(imageOpts.imageUrl || post?.imageUrl || ''),
       attempts: Array.isArray(result.data?.attempts) ? result.data.attempts : [],
     },
-  });
+  }, scope);
 
   logActivity({
     action: channel === 'telegram'
@@ -864,16 +866,18 @@ async function handle(req, res, pathname, method) {
     }
     const auth = await xClient.checkAuth();
     if (!auth.ok) {
+      const errMsg = String(auth.error || 'X auth test failed');
       return sendOk(res, 200, {
         configured: true,
         authOk: false,
         status: Number(auth.status || 0) || 0,
-        error: String(auth.error || 'X auth test failed'),
+        error: errMsg,
         attempts: Array.isArray(auth.attempts) ? auth.attempts : [],
         accountName: creds.accountName || '',
       }, {
         configured: true,
         authOk: false,
+        error: errMsg,
       }), true;
     }
     return sendOk(res, 200, {
@@ -1206,12 +1210,14 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/engage/social/posts' && requestMethod === 'GET') {
-    const posts = socialStore.listPosts();
+    const scope = requestProjectScope(req);
+    const posts = await socialStore.listPosts(scope);
     return sendOk(res, 200, posts, { posts }, { total: posts.length }), true;
   }
 
   if (pathname === '/api/engage/social/diagnostics' && requestMethod === 'GET') {
-    const posts = socialStore.listPosts();
+    const scope = requestProjectScope(req);
+    const posts = await socialStore.listPosts(scope);
     const failures = posts
       .filter((post) => String(post.status || '').toLowerCase() === 'failed')
       .slice(0, 10)
@@ -1325,7 +1331,8 @@ async function handle(req, res, pathname, method) {
       }
     }
 
-    const created = socialStore.createPost({
+    const scope = requestProjectScope(req);
+    const created = await socialStore.createPost({
       text,
       channel,
       campaignId,
@@ -1333,7 +1340,7 @@ async function handle(req, res, pathname, method) {
       imageAlt,
       scheduledFor: publishNow ? '' : scheduledFor,
       status: publishNow && PUBLISH_NOW_CHANNELS.includes(channel) ? 'queued' : 'scheduled',
-    });
+    }, scope);
 
     logActivity({
       action: publishNow ? 'engage.social.publish_now_requested' : 'engage.social.scheduled',
@@ -1357,7 +1364,8 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/engage/social/posts/publish-due' && requestMethod === 'POST') {
-    const duePosts = socialStore.listDuePosts();
+    const scope = requestProjectScope(req);
+    const duePosts = await socialStore.listDuePosts(scope);
     const results = [];
     for (const post of duePosts) {
       const result = await publishStoredPost(post, req);
@@ -1367,14 +1375,15 @@ async function handle(req, res, pathname, method) {
         error: result.ok ? '' : String(result.error || 'Publish failed'),
       });
     }
-    const posts = socialStore.listPosts();
+    const posts = await socialStore.listPosts(scope);
     return sendOk(res, 200, { processed: results, posts }, { processed: results, posts }), true;
   }
 
   const publishMatch = String(pathname || '').match(/^\/api\/engage\/social\/posts\/([^/]+)\/publish\/?$/);
   if (publishMatch && requestMethod === 'POST') {
     const postId = decodeURIComponent(publishMatch[1] || '');
-    const post = socialStore.getPost(postId);
+    const scope = requestProjectScope(req);
+    const post = await socialStore.getPost(postId, scope);
     if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
     const result = await publishStoredPost(post, req);
     if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: 'SOCIAL_PUBLISH_FAILED' }), true;
@@ -1384,7 +1393,8 @@ async function handle(req, res, pathname, method) {
   const postMatch = String(pathname || '').match(/^\/api\/engage\/social\/posts\/([^/]+)\/?$/);
   if (postMatch && requestMethod === 'DELETE') {
     const postId = decodeURIComponent(postMatch[1] || '');
-    const deleted = socialStore.deletePost(postId);
+    const scope = requestProjectScope(req);
+    const deleted = await socialStore.deletePost(postId, scope);
     if (!deleted) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
     logActivity({
       action: 'engage.social.deleted',

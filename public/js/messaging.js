@@ -6089,7 +6089,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 10;
+      td.colSpan = 11;
       td.textContent = 'No messaging topics yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -6136,9 +6136,14 @@ App.messaging = (function () {
         (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
         (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
         simpleContentConfigs.reduce((acc, config) => {
+          if (config.key === 'hashtags') return acc;
           const items = simpleContentState[config.key]?.items || [];
           return acc + items.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
         }, 0);
+
+      const hashtagsCount = (simpleContentState.hashtags?.items || []).filter((h) =>
+        String(h.topic || h.category || '').toLowerCase() === topicLower
+      ).length;
 
       const categoryTd = document.createElement('td');
       categoryTd.textContent = topicName || '-';
@@ -6159,7 +6164,8 @@ App.messaging = (function () {
               const input = document.getElementById(filterInputId);
               if (input) {
                 input.value = topicName;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+                const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
+                input.dispatchEvent(new Event(evtName, { bubbles: true }));
               }
             }
             App.setActivePage(pageId);
@@ -6174,6 +6180,7 @@ App.messaging = (function () {
       tr.appendChild(drawStat(contactsCount, 'contactsPage', null)); // filter set actively above
       tr.appendChild(drawStat(channelsCount, 'channelsPage', null));
       tr.appendChild(drawStat(messagesCount, 'messagingContentPage', 'messagingContentTextFilter'));
+      tr.appendChild(drawStat(hashtagsCount, 'messagingHashtagsPage', 'messagingHashtagsLibraryCategoryFilter'));
       tr.appendChild(drawStat(assetsCount, 'assetsPage', null));
       tr.appendChild(drawStat(campaignsCount, 'campaignsPage', null));
       tr.appendChild(drawStat(segmentsCount, 'segmentsPage', null));
@@ -6205,7 +6212,11 @@ App.messaging = (function () {
 
   async function refreshMessagingTopics() {
     try {
-      const res = await api('/api/messaging/topics?limit=5000');
+      const hashtagsConfig = simpleContentConfigs.find((config) => config.key === 'hashtags');
+      const [res] = await Promise.all([
+        api('/api/messaging/topics?limit=5000'),
+        hashtagsConfig ? refreshSimpleContent(hashtagsConfig) : Promise.resolve(),
+      ]);
       const categories = Array.isArray(res?.topics)
         ? res.topics
         : Array.isArray(res?.categories)

@@ -1,5 +1,8 @@
 # Standard Operating Procedure: Code Deployment
 
+> Project canon: [`AI_AGENT_HANDOFF.md`](AI_AGENT_HANDOFF.md) · Env template: [`.env.example`](../.env.example)
+
+
 This document establishes the definitive four-step workflow for deploying code securely and reliably. It provides clear guidelines on version control, staging, and the critical distinction between preview and production updates. 
 
 ---

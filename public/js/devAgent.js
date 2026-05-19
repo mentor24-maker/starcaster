@@ -2437,7 +2437,9 @@ App.devAgent.submitChat = async function(formEl = null) {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-  App.devAgent.init();
+  if (typeof App.whenAuthenticated === 'function') {
+    App.whenAuthenticated(() => App.devAgent.init());
+  }
 });
 
 App.devAgent.searchHits = [];
@@ -2987,7 +2989,12 @@ Please analyze this friction boundary and formulate an architectural plan to eng
 };
 
 window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => App.devAgentFriction.init(), 1000);
+  const bootFriction = () => setTimeout(() => App.devAgentFriction.init(), 1000);
+  if (typeof App.whenAuthenticated === 'function') {
+    App.whenAuthenticated(bootFriction);
+  } else {
+    bootFriction();
+  }
   
   // Bind collapsible sidebar headers
   const toggles = document.querySelectorAll('#devAgentPage .accordion-toggle');

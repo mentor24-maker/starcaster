@@ -39,3 +39,6 @@ const finalHtml = layout.replace('      <!-- INJECT_PAGES -->', pagesContent);
 
 fs.writeFileSync(outputPath, finalHtml, 'utf8');
 console.log(`Successfully built public/index.html from ${files.length} top-level partials with recursive includes.`);
+
+const { buildLegalPages } = require('./build_legal');
+buildLegalPages();

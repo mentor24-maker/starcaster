@@ -817,8 +817,17 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/messaging/hashtags' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const hashtags = Array.isArray(body?.hashtags) ? body.hashtags : [];
-    const campaignId = Number(body?.campaign_id || 0) || 0;
+    const singleHashtag = String(body?.hashtag || '').trim();
+
+    // Single-tag create (e.g. Acquire → Web → Save Selected) — no campaign required.
+    if (!hashtags.length && singleHashtag) {
+      const result = await createMessagingHashtag(body || {}, scope);
+      if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+      return sendOk(res, 201, result.data, { hashtag: result.data }), true;
+    }
+
     if (!hashtags.length) return sendErr(res, 400, 'At least one hashtag is required', { code: 'VALIDATION_ERROR' }), true;
+    const campaignId = Number(body?.campaign_id || 0) || 0;
     if (!campaignId) return sendErr(res, 400, 'campaign_id is required', { code: 'VALIDATION_ERROR' }), true;
     const result = await createMessagingHashtags(body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;

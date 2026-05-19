@@ -1,5 +1,9 @@
 # Goal: Ask Roger "Roger Drive" File Management System
 
+> **Historical / archive.** Superseded for onboarding and architecture by [`docs/AI_AGENT_HANDOFF.md`](AI_AGENT_HANDOFF.md) (2026-05-18) and [`.cursorrules`](../.cursorrules). Kept for context only.
+
+
+
 The objective is to transcend the current limitations of Base64 JSON-injected image attachments by constructing a dedicated, persistent File Management System natively integrated into the Ask Roger environment. This system will allow agents and human operators to upload, manipulate, and review files of *any type* safely, referencing them universally.
 
 ## Proposed Changes

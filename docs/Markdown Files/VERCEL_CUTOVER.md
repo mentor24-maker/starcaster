@@ -1,5 +1,8 @@
 # Vercel Cutover Checklist
 
+> Project canon: [`AI_AGENT_HANDOFF.md`](AI_AGENT_HANDOFF.md) · Env template: [`.env.example`](../.env.example)
+
+
 This app is ready for Vercel cutover with Blob-backed assets.
 
 ## 1) Set environment variables in Vercel
