@@ -144,5 +144,7 @@ App.personas = (function() {
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
-    App.personas.init();
+  if (typeof App.whenAuthenticated === 'function') {
+    App.whenAuthenticated(() => App.personas.init());
+  }
 });

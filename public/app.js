@@ -49,6 +49,9 @@ App.manifests = [
 App.refresh = async function refresh() {
   const { state, api, notify } = App;
   const activePageId = String(state.activePage || '');
+  if (Array.isArray(App.PUBLIC_LEGAL_PAGE_IDS) && App.PUBLIC_LEGAL_PAGE_IDS.includes(activePageId)) {
+    return;
+  }
   const shouldNotifySharedDataErrors = (() => {
     if (!activePageId) return true;
     const relevantPrefixes = [

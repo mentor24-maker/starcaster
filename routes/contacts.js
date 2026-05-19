@@ -64,7 +64,7 @@ function requestScope(req) {
 const CONTACT_CREATE_SCHEMA = {
   contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other', ''], default: '' },
   contactClass: { type: 'string', required: false, enum: ['persona','personality','personnel'], default: 'persona' },
-  entity_type:  { type: 'string', required: false, default: '' },
+  entityType:   { type: 'string', required: false, enum: ['Human', 'Agent'], default: 'Human' },
   email:       { type: 'string', required: false, format: 'email', maxLength: 254 },
   firstName:   { type: 'string', required: false, maxLength: 100, default: '' },
   lastName:    { type: 'string', required: false, maxLength: 100, default: '' },

@@ -1189,7 +1189,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/jobs — read-only, no extra limit
   if (pathname === '/api/acquire/jobs' && method === 'GET') {
     const limit  = Number(urlObj.searchParams.get('limit') || 200);
-    const result = await listAcquireJobs(limit);
+    const scope = requestProjectScope(req);
+    const result = await listAcquireJobs(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const jobs = result.data || [];
     return sendOk(res, 200, jobs, { jobs }, { total: jobs.length }), true;
@@ -1199,7 +1200,8 @@ async function handle(req, res, pathname, method) {
   const acquireJobMatch = pathname.match(/^\/api\/acquire\/jobs\/([^/]+)$/);
   if (acquireJobMatch && method === 'DELETE') {
     const id     = decodeURIComponent(acquireJobMatch[1]);
-    const result = deleteMirroredAcquireJob(id);
+    const scope = requestProjectScope(req);
+    const result = await deleteMirroredAcquireJob(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.job_deleted', entityType: 'acquire', entityId: id,
@@ -1211,14 +1213,16 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/direct-runs — read-only
   if (pathname === '/api/acquire/direct-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
-    const runs  = listDirectAcquireRuns(limit);
+    const scope = requestProjectScope(req);
+    const runs = await listDirectAcquireRuns(limit, scope);
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
   }
 
   // GET /api/acquire/direct-runs/:id — read-only
   const directRunMatch = pathname.match(/^\/api\/acquire\/direct-runs\/([^/]+)$/);
   if (directRunMatch && method === 'GET') {
-    const run = getDirectAcquireRun(decodeURIComponent(directRunMatch[1]));
+    const scope = requestProjectScope(req);
+    const run = await getDirectAcquireRun(decodeURIComponent(directRunMatch[1]), scope);
     if (!run) return sendErr(res, 404, 'Run not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, run, { run }), true;
   }
@@ -1300,8 +1304,8 @@ async function handle(req, res, pathname, method) {
     if (checkEndpointLimit(req, res, 'harvest.direct')) return true;
 
     const body = await parseJsonBody(req);
-    const run = await runDirectAcquire(body || {});
     const scope = requestProjectScope(req);
+    const run = await runDirectAcquire(body || {}, scope);
     let websitePeersSavedCount = 0;
     let websitePeersError = '';
     const websitePeersResult = await upsertWebsitePeersFromRun(run, scope);
@@ -1400,7 +1404,8 @@ async function handle(req, res, pathname, method) {
         ].filter(Boolean),
       }), true;
     }
-    const saved = createXHarvestRun(inputPayload, harvest.data || {});
+    const scope = requestProjectScope(req);
+    const saved = createXHarvestRun(inputPayload, harvest.data || {}, scope);
     const run = saved.data || null;
     logActivity({
       action: 'acquire.x',
@@ -1420,7 +1425,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/x-runs — read-only
   if (pathname === '/api/acquire/x-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
-    const result = listXHarvestRuns(limit);
+    const scope = requestProjectScope(req);
+    const result = listXHarvestRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -1430,7 +1436,8 @@ async function handle(req, res, pathname, method) {
   const xRunMatch = pathname.match(/^\/api\/acquire\/x-runs\/([^/]+)$/);
   if (xRunMatch && method === 'GET') {
     const id = decodeURIComponent(xRunMatch[1]);
-    const result = getXHarvestRun(id);
+    const scope = requestProjectScope(req);
+    const result = getXHarvestRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -1438,7 +1445,8 @@ async function handle(req, res, pathname, method) {
   // DELETE /api/acquire/x-runs/:id
   if (xRunMatch && method === 'DELETE') {
     const id = decodeURIComponent(xRunMatch[1]);
-    const result = deleteXHarvestRun(id);
+    const scope = requestProjectScope(req);
+    const result = deleteXHarvestRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.x_deleted',
@@ -1499,8 +1507,9 @@ async function handle(req, res, pathname, method) {
         ].filter(Boolean),
       }), true;
     }
+    const scope = requestProjectScope(req);
     const saved = await Promise.race([
-      Promise.resolve(createRedditHarvestRun(inputPayload, harvest.data || {})),
+      Promise.resolve(createRedditHarvestRun(inputPayload, harvest.data || {}, scope)),
       (async () => {
         await waitFor(10000);
         return { ok: false, status: 504, error: 'Reddit harvest save timed out after 10000ms' };
@@ -1539,7 +1548,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/reddit-runs — read-only
   if (pathname === '/api/acquire/reddit-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
-    const result = listRedditHarvestRuns(limit);
+    const scope = requestProjectScope(req);
+    const result = listRedditHarvestRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -1549,7 +1559,8 @@ async function handle(req, res, pathname, method) {
   const redditRunMatch = pathname.match(/^\/api\/acquire\/reddit-runs\/([^/]+)$/);
   if (redditRunMatch && method === 'GET') {
     const id = decodeURIComponent(redditRunMatch[1]);
-    const result = getRedditHarvestRun(id);
+    const scope = requestProjectScope(req);
+    const result = getRedditHarvestRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -1557,7 +1568,8 @@ async function handle(req, res, pathname, method) {
   // DELETE /api/acquire/reddit-runs/:id
   if (redditRunMatch && method === 'DELETE') {
     const id = decodeURIComponent(redditRunMatch[1]);
-    const result = deleteRedditHarvestRun(id);
+    const scope = requestProjectScope(req);
+    const result = deleteRedditHarvestRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.reddit_deleted',

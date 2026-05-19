@@ -48,11 +48,7 @@ const MIME = {
   '.svg':  'image/svg+xml',
 };
 
-function serveStatic(req, res) {
-  const urlPath  = req.url.split('?')[0];
-  const filePath = urlPath === '/' ? '/index.html' : urlPath;
-  const fullPath = path.join(__dirname, 'public', filePath);
-
+function sendStaticFile(res, fullPath) {
   fs.readFile(fullPath, (err, data) => {
     if (err) {
       res.writeHead(404);
@@ -65,6 +61,23 @@ function serveStatic(req, res) {
     });
     res.end(data);
   });
+}
+
+function serveStatic(req, res) {
+  const urlPath = req.url.split('?')[0];
+  const filePath = urlPath === '/' ? '/index.html' : urlPath;
+  const fullPath = path.join(__dirname, 'public', filePath);
+
+  if (!path.extname(filePath)) {
+    const htmlPath = `${fullPath}.html`;
+    fs.stat(htmlPath, (statErr) => {
+      if (!statErr) return sendStaticFile(res, htmlPath);
+      return sendStaticFile(res, fullPath);
+    });
+    return;
+  }
+
+  sendStaticFile(res, fullPath);
 }
 
 // ---------------------------------------------------------------------------

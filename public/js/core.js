@@ -431,6 +431,13 @@ App.notify = function notify(text, isError = false) {
   els.message.style.background = isError ? '#f7c6c6' : '#fcebc8';
 };
 
+App.PUBLIC_LEGAL_PAGE_IDS = ['privacyPolicyPage', 'termsOfServicePage'];
+
+function isPublicLegalPageId(pageId) {
+  const id = String(pageId || '').trim();
+  return App.PUBLIC_LEGAL_PAGE_IDS.includes(id);
+}
+
 function isValidPageId(pageId) {
   const id = String(pageId || '').trim();
   if (!id) return false;
@@ -537,13 +544,17 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
   });
 
   if (shouldPersist) persistActivePage(target, options.skipPushState === true);
-  
-  if (!options.skipTracking) {
-      // Background ping to insert into observe history
-      App.api('/api/observe/page-views', { 
-          method: 'POST', 
-          body: JSON.stringify({ pageId: target }) 
-      }).catch(err => console.debug('[Observe] page-view log failed:', err));
+
+  const isPublicLegalGuest = (
+    Array.isArray(App.PUBLIC_LEGAL_PAGE_IDS)
+    && App.PUBLIC_LEGAL_PAGE_IDS.includes(target)
+    && !(App.auth && App.auth.user)
+  );
+  if (!options.skipTracking && !isPublicLegalGuest) {
+    App.api('/api/observe/page-views', {
+      method: 'POST',
+      body: JSON.stringify({ pageId: target }),
+    }).catch((err) => console.debug('[Observe] page-view log failed:', err));
   }
 };
 
@@ -631,9 +642,23 @@ App.api = async function api(path, options = {}) {
       res.statusText ||
       'Request failed'
     );
-    if (res.status === 401 && App.auth && typeof App.auth.handleUnauthorized === 'function') {
-      if (body?.error?.message) App.notify(body.error.message, true);
-      App.auth.handleUnauthorized();
+    if (res.status === 401 && App.auth) {
+      const errCode = typeof err === 'object' && err !== null ? err.code : '';
+      const isAuthRequired = errCode === 'AUTH_REQUIRED' || text === 'Not authenticated';
+      const hasSession = Boolean(App.auth.user);
+      const bootPending = Boolean(App.auth._sessionCheckPending);
+
+      if (isAuthRequired) {
+        if (hasSession && !bootPending && typeof App.auth.handleUnauthorized === 'function') {
+          App.notify('Your session has expired. Please sign in again.', true);
+          App.auth.handleUnauthorized();
+        }
+      } else if (text && !bootPending) {
+        App.notify(text, true);
+        if (hasSession && typeof App.auth.handleUnauthorized === 'function') {
+          App.auth.handleUnauthorized();
+        }
+      }
     }
     const jsErr = new Error(String(text).trim());
     if (typeof err === 'object' && err !== null && err.details) {

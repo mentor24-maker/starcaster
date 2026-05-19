@@ -5879,23 +5879,23 @@ button[type="submit"] {
 .settings-projects-actions-heading {
   text-align: center;
   white-space: nowrap;
-  width: 180px;
-  min-width: 180px;
+  width: 120px;
+  min-width: 120px;
 }
 
 .settings-projects-actions-cell {
   text-align: center;
   white-space: nowrap;
-  width: 180px;
-  min-width: 180px;
+  width: 120px;
+  min-width: 120px;
 }
 
-.settings-projects-actions-cell .tiny-btn + .tiny-btn {
+.settings-projects-actions-cell .icon-btn + .icon-btn {
   margin-left: 8px;
 }
 
-.settings-project-active-btn,
-.settings-project-active-btn:disabled {
+.settings-projects-actions-cell .icon-btn.settings-project-active-btn,
+.settings-projects-actions-cell .icon-btn.settings-project-active-btn:disabled {
   background: #1fc04b;
   border-color: #149238;
   color: #ffffff;
@@ -7605,6 +7605,27 @@ table {
   display: none;
 }
 
+.btn-connection-ops-quick-test {
+  background: #00c853;
+  color: #fff;
+  border: 1px solid #00a844;
+  white-space: nowrap;
+  width: fit-content;
+  margin-top: 0.35rem;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+}
+
+.btn-connection-ops-quick-test:hover {
+  background: #00e676;
+  color: #fff;
+  opacity: 1;
+}
+
+.btn-connection-ops-quick-test:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .api-setup-top-grid {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
@@ -7756,9 +7777,7 @@ table {
 
 @media (max-width: 1200px) {
   .auth-landing {
-    grid-template-columns: 1fr;
-    gap: 1.2rem;
-    padding: 1.2rem;
+    padding: 1.2rem 1.2rem 4.5rem;
   }
 
   .messaging-content-map {

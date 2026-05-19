@@ -1,0 +1,208 @@
+# Development Rules & Framework Architecture
+
+## Core Philosophy
+- **Alphire** is the company; **StarCaster** is the product. Repository: `~/WebApps/starcaster`.
+- Target users: influencers, content creators, communities, and grassroots builders who grow organic followings through comment-section and social engagement (likes, shares, replies) across articles, posts, tweets, videos, and the wider social web.
+- Prioritize vanilla, highly decoupled architectures. Keep modules small and predictable.
+- **Craftsman mindset:** take time to build well; discover before coding; plan non-trivial work; surgical edits on large files (`develop.js`, `messaging.js`, `devAgent.js`, generated `index.html`).
+- **Normie** (`~/WebApps/normie`) is the primary reference/test project for fleshing out StarCaster flows.
+- Avoid unnecessary dependencies; use native web standards where possible.
+- Maintain clean, atomic git commits. Do not add placeholder/TODO comments unless asked.
+
+## Conversation scope (thread hygiene)
+
+The operator often shifts between tasks in one session. **Watch for tangents** and suggest a **new Cursor chat thread** when the work is a different deliverable — do not wait to be asked.
+
+### When to suggest a new thread
+
+- A **different deliverable** (e.g. auth landing → X OAuth → Supabase migration).
+- The current task is **done** or blocked, and what’s next is unrelated.
+- **Many failed iterations** on one problem; a clean thread + clear spec would help.
+- Phrases like “while we’re here,” “also,” or “one more thing” about another module, page, or system.
+
+### Stay in the same thread
+
+- **Direct follow-ups** on the same deliverable (copy tweak, spacing, bug in code just written).
+- A **small dependency** of the current task (e.g. legal URLs needed for auth already in progress).
+
+### Handoff protocol (when suggesting a switch)
+
+1. **Say so briefly** — what’s wrapped up vs what the tangent is; offer to finish the current slice first if mid-edit.
+2. **Operator** starts the new thread and gives it a **clear title** (matches the new topic).
+3. **Agent (this thread)** writes a handoff markdown file before the switch:
+   - Path: `docs/Cursor Threads/<Thread Title>.md` (use a short, descriptive title; sanitize filename).
+   - Contents: goal, what was completed, what’s open, key files, success criteria, paste-ready prompt for the new thread, links to mockups/specs mentioned in chat.
+   - Model after `docs/Cursor Threads/Cursor Recommendations 1-3.md`.
+4. **Operator** opens the new thread, attaches or references that handoff file, and continues there.
+
+Do **not** start unrelated work in the current thread just because context is already loaded.
+
+## Tech Stack
+- **Frontend:** Vanilla JS SPA (`public/js/*` on `window.App`), HTML partials (`src/pages/` → `build:html`), CSS in `src/css/` (bundled to `public/styles.css`). **No Tailwind.** No component library.
+- **React:** Only the Campaigns list island (`react-entry.js` → `public/bundle.js`). Default new UI to vanilla unless explicitly directed otherwise.
+- **Backend:** Node.js; shared dispatcher `routes/index.js` (local `server.js` + Vercel `api/[...slug].js`).
+- **Database:** Supabase (PostgreSQL). SQL setup files in `docs/`. No migration runner — apply SQL manually and track per environment.
+- **Hosting:** Vercel. Production filesystem is read-only — no `data/*.json` writes in prod.
+- **Rich text (where used):** Tiptap packages in `package.json` — pin versions; do not upgrade casually.
+
+## Style Guide (Compiled UI Standards)
+
+Sourced from `docs/UI_STANDARDS.md`, `docs/STYLE_GUIDE.md`, and prior agent/human sessions. Full CSS blueprints live in `src/css/` — especially `_tables.css`, `_forms.css`, `_buttons.css`.
+
+### Development workflow (UI-related)
+- **Zero hacky edits:** no broad regex replacements across monolith files; use precise, line-targeted changes.
+- **Mandatory discovery:** grep/trace DOM IDs and `App.*` handlers before changing markup or handlers.
+- **Planning:** non-trivial UI → brief implementation plan before code.
+- **Surgical precision:** edit `src/pages/*.html` + run `npm run build:html`; do not casually rewrite all of `public/index.html`.
+
+### Buttons & actions
+- Never style bare `button` / `input` globally for layout; use utility classes:
+  - Primary: `btn btn-primary`
+  - Secondary/ghost: `btn btn-ghost`
+  - Destructive: `btn btn-danger`
+  - Table micro-actions: `btn tiny-btn icon-btn`
+- **Button labels:** Title Case (`Save Settings`, `Add Contact`, not sentence case).
+- **Button text must not wrap:** use `white-space: nowrap`; size with `width: fit-content` + horizontal padding — not full width unless layout requires it.
+- **Icon-only buttons:** square container (e.g. 28×28px), `inline-flex` centered; no text inside; use `aria-label` (Title Case, e.g. `Delete`, `Save`). In `.standard-form-grid`, set explicit width/height and `min-width: 0` (may need `!important` if parent forces 100% width).
+
+### Typography & page chrome
+- Headings `h1`–`h6` and `p` use locked line-heights in bundled CSS; body text on white uses `var(--ink-primary)` / `var(--ink)` for contrast.
+- **Page titles:** `<h2>` in `.page-heading-row` must use **`Module: Subpage`** format — e.g. `Contacts: Personnel`, `Acquire: Web`, `Builder: Forms`. Single colon + space. Not bare titles like `Manage Personas`.
+- **Instructional text purge:** no paragraph summaries under `.page-heading-row` on hub pages; use structure, labels, and tooltips — not page-level bloat.
+
+### CRUD data tables
+- Canonical styles: `src/css/_tables.css`. **Do not create per-module header classes** (no `.contacts-actions-heading`, etc.).
+- **Column headers:** plain `<th>` only — **never** put `<button>` or `<a>` inside `<th>`. Put sort `id` on the `<th>`; JS toggles sort and appends `▲`/`▼` to `textContent`.
+- Header style: black `#000` background, white bold text, left-aligned; hover `#b8e0ff` / `#0b3d7a`; cursor pointer on sortable columns.
+- **Actions column:** last column; `text-align: center` on header; use `.actions-col` on both `<th>` and `<td>`.
+- **Filter row:** `.table-filter-row` above header row; light background (`var(--bg-page)`), not black.
+- **Sorting:** every data table must support column sort on string/date headers with `sortColumn` / `sortDirection` state.
+- **Boolean filters:** use a single checkbox (e.g. `Has YouTube`) — not free-text URL fields for yes/no metadata.
+- Wrap tables in `.table-wrap` for horizontal scroll on small viewports only — **not** inside form modals (see Modals).
+
+### Forms & labels
+- **Standard grid:** `.standard-form-grid` — `grid-template-columns: 140px 1fr`; labels in column 1 (not wrapping inputs), controls in column 2.
+- **No placeholders for instructions:** fields blank by default; permanent `<label>` to the left (or above in `.form-group` stacks).
+- **Vertical stacks in modals:** `.form-group` for label → input sequences.
+- **Dense modals:** `.standard-form-grid-4col` when needed.
+- **Checkboxes in grid:** `.standard-form-checkbox` on the input; group related checkboxes in a flex/grid in column 2 under one label.
+- **Submit row:** empty `<div></div>` first cell, button in second column — or `.standard-form-grid-full` for full-width actions.
+- **Validation glow:** persisted populated fields get green completeness outline; empty required fields red (existing pattern in app).
+
+### Hero & collapsible inputs
+- Primary focal inputs (e.g. Acquire URL bar): `.hero-action-input` — blue focus ring/glow without layout shift (`box-shadow` inset trick).
+
+### Details / accordion
+- Native `<details>` advanced blocks: `.hanging-details` on `<details>` so disclosure triangle hangs in left margin and title aligns flush with content.
+- App collapsibles: `.accordion-header` button with `.accordion-title`, `.accordion-toggle`, `.accordion-arrow`; toggle **`aria-expanded` only** — do not rewrite button `innerHTML` for chevrons.
+
+### Pods (hub / settings navigation)
+- Hub pages: `.section-settings-shell` grid; each tile `.pod` with `.pod-icon-col` (left) + `.pod-content` (right).
+- Icons: Lucide-style SVG ~84×84px, `stroke-width: 1px`, `color: var(--accent)` — no large inline flex style blobs on pods.
+
+### Modals
+- **Law: no scrollbars in form modals**, especially horizontal. Widen modal to fit tables; do not `overflow-x: auto` inside modal forms.
+
+### Feedback & notices
+- **Global status bar:** `App.notify(text, isError)` → `#message` (sticky bottom). Success-ish: `#fcebc8`; error: `#f7c6c6`.
+- **Toasts (preferred for transient feedback):** `App.components.Toast` — `.c-toast`, variants `--success`, `--error`, `--info` (see `public/js/components.js`).
+- **Auth messages:** `.auth-message` / `.auth-message.error` on login/register forms.
+- **Inline save status (Builder):** `.develop-save-notice` / `.is-success` where used.
+
+### CSS conventions
+- Edit source in `src/css/`; run build so `public/styles.css` updates (`npm run build` or `npm run dev`).
+- Use CSS variables from `src/css/_variables.css` (`--ink-primary`, `--border-light`, `--btn-bg`, etc.).
+- Legacy rules live in `src/css/legacy.css` — prefer extending shared partials over duplicating.
+- Avoid `!important` except icon buttons in grids and third-party overrides.
+
+---
+
+# StarCaster Project — Cursor Rules & Coding Conventions
+
+## Project Structure
+```
+starcaster/
+  server.js                 # Local dev HTTP server only
+  api/[...slug].js          # Vercel serverless entry → routes/index.js
+  routes/                   # API modules: { handle, manifest }
+  lib/                      # Stores, supabase, config, projectScope, AI helpers
+  public/
+    index.html              # Generated — edit src/ instead
+    app.js                  # Module registry & boot (PROTECTED)
+    js/*.js                 # Feature modules (window.App.*)
+    bundle.js               # React campaigns island only
+    styles.css              # Built from src/css/main.css
+  src/
+    layout.html             # App shell template
+    pages/*.html            # Page partials (INJECT_PAGES)
+    css/                    # Authoritative stylesheets
+  components/               # React (campaigns only)
+  scripts/                  # build_html, migrations, imports
+  docs/                     # AI_AGENT_HANDOFF.md, UI_STANDARDS.md, *.sql
+  data/                     # Local JSON stores (gitignored secrets); not for prod writes
+  ai-daemon/                # Separate agent service — not main app
+```
+
+## Frontend Module Pattern
+1. Create `public/js/myModule.js` with `manifest: { id, label, pageId, pagePrefixes? }`, `init()`, optional `refresh()` / `onPageActivated()`.
+2. Add `<script src="/js/myModule.js">` in `src/layout.html` before `app.js`.
+3. Register in `public/app.js` → `App.manifests`.
+4. Add or extend markup in `src/pages/*.html`, then `npm run build:html`.
+
+Shared state: `public/js/core.js` — `App.state`, `App.api()`, project switcher, navigation.
+
+## Backend Route Pattern
+1. Create `routes/myModule.js` exporting `{ handle(req, res, pathname, method), manifest: { id, label, prefixes } }`.
+2. Import and append to `ROUTE_MODULES` in `routes/index.js`.
+3. Implement store in `lib/` using `sbQuery()` and `projectScope` helpers when data is tenant-scoped.
+4. Add `docs/my_table_setup.sql`; wire table names in `lib/supabase.js` if needed.
+
+## API Conventions
+- Envelope: `{ ok: true, data }` / `{ ok: false, error: { message, code?, details? } }`.
+- Authenticated requests: session cookie `app_session`; project header `x-project-id`.
+- Rate limits: global in dispatcher; expensive ops add per-route limits.
+- Never expose `SUPABASE_SERVICE_KEY` to the browser.
+
+## Supabase & Multitenancy
+- New project-scoped tables: `project_id`, `owner_user_id`, scoped queries via `lib/projectScope.js`.
+- Email/slug uniqueness is per-project, not global.
+- Legacy `NULL project_id` rows may still appear via compat filter — prefer backfill + strict scope for new code.
+- Check `docs/` SQL before assuming a column exists.
+
+## Naming (code vs UI)
+| UI | Code / DB |
+|----|-----------|
+| Builder | `develop`, `develop_*` |
+| Messaging: Topics | `topics` (not `category`) |
+| Ask Roger | `devAgent`, `/api/develop/roger/*` |
+| StarCaster | package `starcaster`, title in `src/layout.html` |
+
+## File-Backed Stores (avoid for new features)
+Do not add new production features that write `data/*.json`. Known file stores: direct acquire runs, engage social posts, acquire job mirror, auth/projects fallback, api settings, training JSON, some develop fallbacks.
+
+## Vercel & Deployment
+- `vercel.json` must keep API rewrite to `api/[...slug]`.
+- Deploy: `git push` then `vercel --prod` per `docs/DEPLOYMENT.md`.
+- Required env: see `docs/VERCEL_CUTOVER.md` and `lib/config.js`.
+
+## Rich Text (Tiptap)
+- Used in Builder/messaging editors where present; keep package versions aligned in `package.json`.
+- Custom extensions may exist in builder tooling — follow existing patterns in `scripts/build_richtext_bundle.mjs`.
+
+## Common Pitfalls
+- Do not edit `public/index.html` for structural changes without running `build:html` from `src/`.
+- Do not remove or simplify `vercel.json` API routes (caused production 404s).
+- Do not treat `public/app.js` as disposable when experimenting with React.
+- Do not use `ai-daemon/sandbox/isit-app/docs/` as schema source — use `docs/` at repo root.
+- `polls.js` is loaded in layout but may need explicit registration in `App.manifests` when wiring UI.
+- Supabase free tier pauses after inactivity — resume from dashboard if connections fail.
+- Production: env vars override `data/api_settings.json` for secrets.
+
+## Agent Documentation
+- **Start here:** `docs/AI_AGENT_HANDOFF.md` (canonical; supersedes older handoffs and wrong paths).
+- UI deep-dive: `docs/UI_STANDARDS.md`, `docs/STYLE_GUIDE.md`.
+- Incidents: `docs/roger_diagnostic_report.md`.
+- Tri-agent protocol: `docs/tri_agent_protocol_v1.md`.
+
+## Reference Implementation
+Use **Normie** (`~/WebApps/normie`) as the live tenant/project when validating end-to-end StarCaster flows (presence, promotion, engagement). Keep product boundaries clear: Normie-specific token/branding stays in Normie unless explicitly ported.

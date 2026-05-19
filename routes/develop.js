@@ -448,7 +448,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'object_name is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const icon = createIcon({
+    const icon = await createIcon({
       workspaceId: String(body.workspace_id || body.workspaceId || '').trim(),
       objectType,
       objectName,
@@ -457,7 +457,7 @@ async function handle(req, res, pathname, method) {
       visualStyle: String(iconSpec.visual_style || iconSpec.visualStyle || '').trim(),
       palette: String(iconSpec.palette || '').trim(),
       size: String(iconSpec.size || '').trim(),
-    });
+    }, scope);
 
     return sendOk(res, 201, icon, { icon }), true;
   }

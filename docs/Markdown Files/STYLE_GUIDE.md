@@ -1,4 +1,8 @@
 # Application Official Style Guide & Core UI Conventions
+
+> **Supporting doc.** Agent quick-reference UI rules live in [`.cursorrules`](../.cursorrules). Full CSS blueprints remain below. Project canon: [`AI_AGENT_HANDOFF.md`](AI_AGENT_HANDOFF.md).
+
+
 *Last Updated: 2026-04*
 
 ## 0. Development Philosophy & Workflow

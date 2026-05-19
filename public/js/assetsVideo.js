@@ -1249,15 +1249,22 @@
   // Run initialization routines globally on script hook rather than sequestering them behind openCreateVideoTool routing
   // This guarantees that Star Rating Event Listeners and Topics Taxonomy properly hydrate regardless of how the User accessed the view.
   document.addEventListener('DOMContentLoaded', () => {
-    injectYoutubeScript();
-    initStars();
-    loadTopicDropdowns();
-    loadCreationAssetCategories();
-    renderGenerationHistory();
-    
-    const creationTypeFilter = document.getElementById('creationRefAssetType');
-    if (creationTypeFilter) {
-       creationTypeFilter.addEventListener('change', loadCreationAssetCategories);
+    const boot = () => {
+      injectYoutubeScript();
+      initStars();
+      loadTopicDropdowns();
+      loadCreationAssetCategories();
+      renderGenerationHistory();
+
+      const creationTypeFilter = document.getElementById('creationRefAssetType');
+      if (creationTypeFilter) {
+        creationTypeFilter.addEventListener('change', loadCreationAssetCategories);
+      }
+    };
+    if (typeof App.whenAuthenticated === 'function') {
+      App.whenAuthenticated(boot);
+    } else {
+      boot();
     }
   });
 

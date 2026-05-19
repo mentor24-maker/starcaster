@@ -1,0 +1,134 @@
+/* Standalone and in-app legal document pages */
+
+.legal-standalone {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-page, #f5f7fa);
+  color: var(--ink-primary, #111827);
+}
+
+.legal-standalone-header {
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--border-light, #d1d5db);
+  background: #000;
+}
+
+.legal-standalone-header a {
+  display: inline-block;
+  line-height: 0;
+  text-decoration: none;
+}
+
+.legal-standalone-header img {
+  display: block;
+  width: min(100%, 640px);
+  max-width: 640px;
+  height: auto;
+}
+
+.legal-standalone-main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.legal-standalone-footer {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 2.5rem;
+  font-size: 0.9rem;
+  color: var(--ink-secondary, #4b5563);
+}
+
+.legal-standalone-footer a {
+  color: var(--accent, #2563eb);
+}
+
+.legal-document h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.85rem;
+  line-height: 1.2;
+}
+
+.legal-document .legal-effective {
+  margin: 0 0 1.75rem;
+  color: var(--ink-secondary, #4b5563);
+  font-size: 0.95rem;
+}
+
+.legal-document h2 {
+  margin: 1.75rem 0 0.6rem;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.legal-document p,
+.legal-document li {
+  line-height: 1.65;
+  color: var(--ink-primary, #111827);
+}
+
+.legal-document ul {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.35rem;
+}
+
+.legal-document a {
+  color: var(--accent, #2563eb);
+}
+
+.app-page.legal-app-page .legal-document {
+  max-width: 52rem;
+}
+
+.auth-legal-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  flex-shrink: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0.85rem 1.25rem 1.1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #9ca3af;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 70%, rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
+.auth-legal-footer a,
+.auth-legal-footer .auth-legal-sep {
+  pointer-events: auto;
+}
+
+.auth-legal-footer a {
+  color: #d1d5db;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-legal-footer a:hover {
+  color: #ffffff;
+}
+
+.auth-legal-footer .auth-legal-sep {
+  margin: 0 0.65rem;
+  color: #6b7280;
+}
+
+.legal-back-link {
+  margin: 1.5rem 0 0;
+  font-size: 0.95rem;
+}
+
+.legal-back-link a {
+  color: var(--accent, #2563eb);
+}
+
+body.public-legal-view #topNav,
+body.public-legal-view .auth-header-meta,
+body.public-legal-view #brandProfileButton {
+  display: none;
+}
