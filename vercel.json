@@ -6,6 +6,14 @@
       "destination": "/api/[...slug]"
     },
     {
+      "source": "/privacy-policy",
+      "destination": "/public/privacy-policy.html"
+    },
+    {
+      "source": "/terms-of-service",
+      "destination": "/public/terms-of-service.html"
+    },
+    {
       "source": "/",
       "destination": "/public/index.html"
     },

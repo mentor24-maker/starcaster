@@ -245,16 +245,11 @@ App.settings = (function () {
         <td>${String(project?.membership?.role || 'member')}</td>
         <td>${String(project?.description || '')}</td>
         <td>${formatDateLabel(project?.createdAt || project?.created_at || '') || '-'}</td>
-        <td class="settings-projects-actions-cell"></td>
+        <td class="settings-projects-actions-cell actions-col"></td>
       `;
       const actionsCell = row.querySelector('.settings-projects-actions-cell');
       if (actionsCell) {
-        const activateBtn = document.createElement('button');
-        activateBtn.type = 'button';
-        activateBtn.className = isActive ? 'tiny-btn settings-project-active-btn' : 'tiny-btn';
-        activateBtn.textContent = isActive ? 'Active' : 'Set Active';
-        activateBtn.disabled = isActive;
-        activateBtn.addEventListener('click', () => {
+        const selectProject = () => {
           if (!id) return;
           state.currentProjectId = id;
           window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
@@ -264,22 +259,19 @@ App.settings = (function () {
           renderProjectDetails();
           applyProjectToHeader();
           refreshCurrentPageAfterProjectChange();
-          notify('Active project updated');
-        });
-        const detailsBtn = document.createElement('button');
-        detailsBtn.type = 'button';
-        detailsBtn.className = 'tiny-btn';
-        detailsBtn.textContent = 'Details';
-        detailsBtn.addEventListener('click', () => {
-          if (!id) return;
-          state.currentProjectId = id;
-          window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
-          renderProjectSelector();
-          renderProjectLists();
-          renderProjectsTable();
-          renderProjectDetails();
-          applyProjectToHeader();
-          refreshCurrentPageAfterProjectChange();
+        };
+        const activateBtn = App.makeIconButton(
+          'approve',
+          isActive ? 'Active' : 'Set Active',
+          () => {
+            selectProject();
+            notify('Active project updated');
+          },
+          { disabled: isActive }
+        );
+        if (isActive) activateBtn.classList.add('settings-project-active-btn');
+        const detailsBtn = App.makeIconButton('view', 'Details', () => {
+          selectProject();
           const panel = els.settingsProjectDetailsPanel;
           if (panel && typeof panel.scrollIntoView === 'function') {
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -950,7 +942,7 @@ App.settings = (function () {
       <div><strong>Human Gates</strong><br>${readiness.completedGates || 0}/${readiness.totalGates || 0}</div>
       <div><strong>Next Action</strong><br>${String(data.nextAction || '-')}</div>
       <div><strong>Latest Attempt</strong><br>${latestAttempt ? `${formatStatus(latestAttempt.status)} · ${formatDateTime(latestAttempt.createdAt)}` : 'No attempts logged'}</div>
-      <div><strong>Quick Test</strong><br>${supportsTest ? '<button id="connectionOpsRunTestBtn" type="button">Run Test</button>' : '-'}</div>
+      <div><strong>Quick Test</strong><br>${supportsTest ? '<button id="connectionOpsRunTestBtn" type="button" class="btn btn-connection-ops-quick-test">Run Test</button>' : '-'}</div>
     `;
     const testBtn = document.getElementById('connectionOpsRunTestBtn');
     if (supportsTest && testBtn) {
@@ -965,6 +957,18 @@ App.settings = (function () {
     }
   }
 
+  function parseSocialAuthTestResponse(res) {
+    const payload = (res && typeof res.data === 'object' && res.data !== null) ? res.data : (res || {});
+    const authOk = payload.authOk === true || res?.authOk === true;
+    const errText = String(
+      payload.error
+      || res?.error
+      || payload.auth?.error
+      || ''
+    ).trim();
+    return { authOk, error: errText, payload, raw: res };
+  }
+
   async function runConnectionOpsTest() {
     const platform = String(connectionOpsState.platform || '').trim().toLowerCase();
     if (!platform) return;
@@ -976,34 +980,34 @@ App.settings = (function () {
     let blockerCode = '';
 
     if (platform === 'bluesky') {
-      const res = await api('/api/engage/social/bluesky/auth-test');
-      testOk = res?.authOk === true;
-      summary = testOk ? 'Bluesky auth test passed' : `Bluesky auth test failed: ${String(res?.error || 'unknown error')}`;
-      details = JSON.stringify(res || {}, null, 2);
+      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/bluesky/auth-test'));
+      testOk = parsed.authOk;
+      summary = testOk ? 'Bluesky auth test passed' : `Bluesky auth test failed: ${parsed.error || 'unknown error'}`;
+      details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'BLUESKY_401';
     } else if (platform === 'x') {
-      const res = await api('/api/engage/social/x/auth-test');
-      testOk = res?.authOk === true;
-      summary = testOk ? 'X auth test passed' : `X auth test failed: ${String(res?.error || 'unknown error')}`;
-      details = JSON.stringify(res || {}, null, 2);
+      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/x/auth-test'));
+      testOk = parsed.authOk;
+      summary = testOk ? 'X auth test passed' : `X auth test failed: ${parsed.error || 'unknown error'}`;
+      details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'X_AUTH_FAILED';
     } else if (platform === 'facebook') {
-      const res = await api('/api/engage/social/facebook/auth-test');
-      testOk = res?.authOk === true;
-      summary = testOk ? 'Facebook auth test passed' : `Facebook auth test failed: ${String(res?.error || 'unknown error')}`;
-      details = JSON.stringify(res || {}, null, 2);
+      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/facebook/auth-test'));
+      testOk = parsed.authOk;
+      summary = testOk ? 'Facebook auth test passed' : `Facebook auth test failed: ${parsed.error || 'unknown error'}`;
+      details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'FACEBOOK_401';
     } else if (platform === 'instagram') {
-      const res = await api('/api/engage/social/instagram/auth-test');
-      testOk = res?.authOk === true;
-      summary = testOk ? 'Instagram auth test passed' : `Instagram auth test failed: ${String(res?.error || 'unknown error')}`;
-      details = JSON.stringify(res || {}, null, 2);
+      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/instagram/auth-test'));
+      testOk = parsed.authOk;
+      summary = testOk ? 'Instagram auth test passed' : `Instagram auth test failed: ${parsed.error || 'unknown error'}`;
+      details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'INSTAGRAM_401';
     } else if (platform === 'threads') {
-      const res = await api('/api/engage/social/threads/auth-test');
-      testOk = res?.authOk === true;
-      summary = testOk ? 'Threads auth test passed' : `Threads auth test failed: ${String(res?.error || 'unknown error')}`;
-      details = JSON.stringify(res || {}, null, 2);
+      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/threads/auth-test'));
+      testOk = parsed.authOk;
+      summary = testOk ? 'Threads auth test passed' : `Threads auth test failed: ${parsed.error || 'unknown error'}`;
+      details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'THREADS_401';
     } else if (platform === 'telegram') {
       const res = await api('/api/engage/social/telegram/status');
@@ -1032,7 +1036,7 @@ App.settings = (function () {
     });
     await refreshConnectionOps(platform);
     setConnectionOpsStatus(testOk ? `${platform} test passed.` : `${platform} test failed. Check latest attempt.`);
-    notify(testOk ? 'Connection test passed' : 'Connection test failed', !testOk);
+    notify(testOk ? 'Connection test passed' : summary || 'Connection test failed', !testOk);
   }
 
   function renderConnectionOpsSetupLinks(data) {

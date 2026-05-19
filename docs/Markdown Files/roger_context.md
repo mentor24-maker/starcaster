@@ -1,5 +1,9 @@
 # ROGER DIAGNOSTIC CONTEXT BUNDLE
 
+> **Historical / archive.** Superseded for onboarding and architecture by [`docs/AI_AGENT_HANDOFF.md`](AI_AGENT_HANDOFF.md) (2026-05-18) and [`.cursorrules`](../.cursorrules). Kept for context only.
+
+
+
 Below is the current state of the application for debugging the CSS/DOM collision on the Acquire Hub:
 
 ## public/styles.css

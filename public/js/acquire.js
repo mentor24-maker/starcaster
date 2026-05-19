@@ -1655,6 +1655,7 @@ App.acquire = (function () {
     if (whatsapp.length) extraNotes.push(`WhatsApp: ${whatsapp.join(', ')}`);
     return {
       contactType: 'lead',
+      entityType: 'Human',
       company: domain,
       email: emails[0] || '',
       phone: phones[0] || '',

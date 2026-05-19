@@ -103,10 +103,22 @@ App.auth._showApp = function _showApp() {
   const { appShell, authLanding, authLogoutButton, authWelcomeName } = App.auth._els;
   if (authLanding) authLanding.classList.add('hidden');
   if (appShell) appShell.classList.remove('hidden');
+  document.body.classList.remove('public-legal-view');
   if (authLogoutButton) authLogoutButton.classList.remove('hidden');
   if (authWelcomeName) {
     const accountLabel = String(App.auth.user?.name || App.auth.user?.email || '').trim();
     authWelcomeName.textContent = accountLabel || 'Account';
+  }
+};
+
+App.auth._showPublicLegal = function _showPublicLegal(pageId) {
+  const { appShell, authLanding, authLogoutButton } = App.auth._els;
+  if (authLanding) authLanding.classList.add('hidden');
+  if (appShell) appShell.classList.remove('hidden');
+  document.body.classList.add('public-legal-view');
+  if (authLogoutButton) authLogoutButton.classList.add('hidden');
+  if (typeof App.setActivePage === 'function') {
+    App.setActivePage(pageId, { persist: true });
   }
 };
 
@@ -132,7 +144,27 @@ App.auth._syncProjectContext = async function _syncProjectContext() {
   }
 };
 
+App.auth._sessionCheckPending = false;
+App.auth._onAuthenticated = [];
+
+App.whenAuthenticated = function whenAuthenticated(fn) {
+  if (typeof fn !== 'function') return Promise.resolve();
+  if (App.auth.user) return Promise.resolve().then(fn);
+  App.auth._onAuthenticated.push(fn);
+  return Promise.resolve();
+};
+
+App.auth._runAuthenticatedCallbacks = function _runAuthenticatedCallbacks() {
+  const queue = Array.isArray(App.auth._onAuthenticated) ? App.auth._onAuthenticated.splice(0) : [];
+  queue.forEach((fn) => {
+    try {
+      Promise.resolve().then(fn);
+    } catch (_) {}
+  });
+};
+
 App.auth.handleUnauthorized = function handleUnauthorized() {
+  if (!App.auth.user) return;
   App.auth.user = null;
   try {
     window.localStorage.removeItem('alphire.authUser');
@@ -336,27 +368,38 @@ App.auth.init = function init(bootMainApp) {
     });
   }
 
-  // Delay showing the login screen until we definitively know auth failed.
-  // This prevents the login screen from brutally flashing on every page reload.
-  // App.auth._showLanding('login');
-  // App.auth._setMessage('Checking session...');
+  App.auth._sessionCheckPending = true;
+
   App.auth._me()
     .then((user) => {
       App.auth.user = user;
       return App.auth._syncProjectContext().then(() => {
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._runAuthenticatedCallbacks();
         App.auth._setMessage('');
       });
     })
     .catch((e) => {
-      console.error('Core Boot Error:', e);
-      if (e?.message !== 'Not authenticated') App.notify('Boot Error: ' + (e?.message || e), true);
+      if (e?.message !== 'Not authenticated') {
+        console.error('Core Boot Error:', e);
+        App.notify('Boot Error: ' + (e?.message || e), true);
+      }
       App.auth.user = null;
       try {
         window.localStorage.removeItem('alphire.authUser');
       } catch (_) {}
-      App.auth._showLanding('login');
+      const initialPage = typeof App.getInitialPage === 'function' ? App.getInitialPage() : '';
+      const publicLegal = Array.isArray(App.PUBLIC_LEGAL_PAGE_IDS) && App.PUBLIC_LEGAL_PAGE_IDS.includes(initialPage);
+      if (publicLegal) {
+        App.auth._showPublicLegal(initialPage);
+        App.auth._startMainApp();
+      } else {
+        App.auth._showLanding('login');
+      }
       App.auth._setMessage('');
+    })
+    .finally(() => {
+      App.auth._sessionCheckPending = false;
     });
 };

@@ -1,5 +1,9 @@
 # Diagnostic Post-Mortem Report
 
+> **Historical / archive.** Superseded for onboarding and architecture by [`docs/AI_AGENT_HANDOFF.md`](AI_AGENT_HANDOFF.md) (2026-05-18) and [`.cursorrules`](../.cursorrules). Kept for context only.
+
+
+
 **To:** System Architect / Agent Roger Thorson  
 **From:** Antigravity (Advanced Agentic Coding Module)  
 **Regarding:** Contextual Divergence and Pipeline Collision Incident Analysis

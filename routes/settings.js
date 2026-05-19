@@ -34,6 +34,7 @@ const {
   listContactOptions, createContactOption, updateContactOption, deleteContactOption
 } = require("../lib/ContactsStore");
 const { logActivity } = require('../lib/activityLog');
+const { requestProjectScope } = require('../lib/requestProjectScope');
 const {
   getProfile,
   saveProfile,
@@ -111,13 +112,15 @@ async function handle(req, res, pathname, method) {
 
   // GET /api/settings/orchestrator/runs/latest
   if (pathname === '/api/settings/orchestrator/runs/latest' && method === 'GET') {
-    const run = getLatestOrchestratorRun();
+    const scope = requestProjectScope(req);
+    const run = await getLatestOrchestratorRun(scope);
     return sendOk(res, 200, run, { run }), true;
   }
 
   // GET /api/settings/orchestrator/runs
   if (pathname === '/api/settings/orchestrator/runs' && method === 'GET') {
-    const runs = listOrchestratorRuns(25);
+    const scope = requestProjectScope(req);
+    const runs = await listOrchestratorRuns(25, scope);
     return sendOk(res, 200, runs, { runs }), true;
   }
 
@@ -125,11 +128,13 @@ async function handle(req, res, pathname, method) {
   const orchestratorChecklistMatch = pathname.match(/^\/api\/settings\/orchestrator\/runs\/([^/]+)\/checklist$/);
   if (orchestratorChecklistMatch && method === 'PATCH') {
     const body = await parseJsonBody(req);
-    const result = updateOrchestratorChecklistStep(
+    const scope = requestProjectScope(req);
+    const result = await updateOrchestratorChecklistStep(
       orchestratorChecklistMatch[1],
       body?.channel,
       body?.step_id || body?.stepId,
-      body?.done === true
+      body?.done === true,
+      scope
     );
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
@@ -137,6 +142,7 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/settings/orchestrator/run
   if (pathname === '/api/settings/orchestrator/run' && method === 'POST') {
+    const scope = requestProjectScope(req);
     const body = await parseJsonBody(req);
     const channels = Array.isArray(body?.channels) && body.channels.length
       ? body.channels
@@ -166,12 +172,12 @@ async function handle(req, res, pathname, method) {
     };
 
     const relayResult = await relayOpenClaw('create_job', request);
-    const runRecord = addOrchestratorRun({
+    const runRecord = await addOrchestratorRun({
       request,
       relayResult: relayResult.ok ? relayResult.data : null,
       relayError: relayResult.ok ? null : relayResult.error,
       relayStatus: relayResult.status,
-    });
+    }, scope);
 
     logActivity({
       action: 'settings.orchestrator_run',
@@ -207,7 +213,8 @@ async function handle(req, res, pathname, method) {
   const connectionOpsAttemptMatch = pathname.match(/^\/api\/settings\/connection-ops\/([^/]+)\/attempts$/);
   if (connectionOpsAttemptMatch && method === 'POST') {
     const body = await parseJsonBody(req);
-    const result = addConnectionOpsAttempt(connectionOpsAttemptMatch[1], body || {});
+    const scope = requestProjectScope(req);
+    const result = await addConnectionOpsAttempt(connectionOpsAttemptMatch[1], body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'settings.connection_ops_attempt',
@@ -220,7 +227,8 @@ async function handle(req, res, pathname, method) {
   const connectionOpsGateMatch = pathname.match(/^\/api\/settings\/connection-ops\/([^/]+)\/gates\/([^/]+)$/);
   if (connectionOpsGateMatch && method === 'PATCH') {
     const body = await parseJsonBody(req);
-    const result = updateConnectionOpsGate(connectionOpsGateMatch[1], connectionOpsGateMatch[2], body?.done === true);
+    const scope = requestProjectScope(req);
+    const result = await updateConnectionOpsGate(connectionOpsGateMatch[1], connectionOpsGateMatch[2], body?.done === true, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'settings.connection_ops_gate',
@@ -232,7 +240,8 @@ async function handle(req, res, pathname, method) {
 
   const connectionOpsMatch = pathname.match(/^\/api\/settings\/connection-ops\/([^/]+)$/);
   if (connectionOpsMatch && method === 'GET') {
-    const result = getConnectionOps(connectionOpsMatch[1]);
+    const scope = requestProjectScope(req);
+    const result = await getConnectionOps(connectionOpsMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { connectionOps: result.data }), true;
   }
@@ -501,7 +510,7 @@ async function handle(req, res, pathname, method) {
       }), true;
     }
     const responsePayload = { action: openClawMatch[1], result: result.data };
-    upsertMirroredAcquireJob(openClawMatch[1], body, responsePayload);
+    await upsertMirroredAcquireJob(openClawMatch[1], body, responsePayload, requestProjectScope(req));
     logActivity({
       action: `openclaw.${openClawMatch[1]}`, entityType: 'acquire',
       summary: `OpenClaw action: ${openClawMatch[1]}`

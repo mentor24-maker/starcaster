@@ -631,6 +631,7 @@ App.contacts = (function () {
       first_name: 'firstName',
       middle_name: 'middleName',
       last_name: 'lastName',
+      entity_type: 'entityType',
     };
     const payload = { 
       contactType: '',

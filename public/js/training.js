@@ -575,5 +575,10 @@ App.training = {
 };
 
 window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => App.training.init(), 1000);
+  const boot = () => setTimeout(() => App.training.init(), 1000);
+  if (typeof App.whenAuthenticated === 'function') {
+    App.whenAuthenticated(boot);
+  } else {
+    boot();
+  }
 });

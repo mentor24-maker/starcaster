@@ -1,5 +1,9 @@
 # Hive Mind
 
+> **Historical / archive.** Superseded for onboarding and architecture by [`docs/AI_AGENT_HANDOFF.md`](AI_AGENT_HANDOFF.md) (2026-05-18) and [`.cursorrules`](../.cursorrules). Kept for context only.
+
+
+
 ### Mentor `4/22/2026, 8:16:08 PM`
 
 I believe this page is the ideal one to implement our shift to utilizing our page builder tool internally on this system. It only has these text boxes with links to other pages, so we start of easy and work our way up from here.

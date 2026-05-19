@@ -1,3 +1,60 @@
 {
-  "posts": []
+  "posts": [
+    {
+      "id": "spost_1778013655471_elcbth",
+      "channel": "x",
+      "campaignId": "campaign_1777936924260_dmbkh",
+      "imageUrl": "",
+      "imageAlt": "WYR: Freedom/Security",
+      "text": "Plot twist: Your most 'original' thoughts show up in 73% of people surveyed. ...\n\nDo you know who you are? Do you Really? Normie Knows.\n\nAwaken Your Real Self https://isitas.org\n\n#LifeChoices #DecisionDilemmas #LifeBalance",
+      "status": "failed",
+      "scheduledFor": "",
+      "createdAt": "2026-05-05T20:40:55.471Z",
+      "updatedAt": "2026-05-05T20:40:55.610Z",
+      "publishedAt": "",
+      "remoteId": "",
+      "error": "X API error: Unauthorized",
+      "diagnostics": {
+        "checkedAt": "2026-05-05T20:40:55.610Z",
+        "channel": "x",
+        "endpoint": "",
+        "status": 401,
+        "attempts": [],
+        "payload": {
+          "title": "Unauthorized",
+          "type": "about:blank",
+          "status": 401,
+          "detail": "Unauthorized"
+        }
+      }
+    },
+    {
+      "id": "spost_1778013294312_x8o18k",
+      "channel": "x",
+      "campaignId": "campaign_1777936924260_dmbkh",
+      "imageUrl": "",
+      "imageAlt": "WYR: Freedom/Security",
+      "text": "Plot twist: Your most 'original' thoughts show up in 73% of people surveyed. ...\n\nDo you know who you are? Do you Really? Normie Knows.\n\nAwaken Your Real Self https://isitas.org\n\n#LifeChoices #DecisionDilemmas #LifeBalance",
+      "status": "failed",
+      "scheduledFor": "2026-05-05T20:35:00.000Z",
+      "createdAt": "2026-05-05T20:34:54.312Z",
+      "updatedAt": "2026-05-05T20:40:16.426Z",
+      "publishedAt": "",
+      "remoteId": "",
+      "error": "X API error: Unauthorized",
+      "diagnostics": {
+        "checkedAt": "2026-05-05T20:40:16.426Z",
+        "channel": "x",
+        "endpoint": "",
+        "status": 401,
+        "attempts": [],
+        "payload": {
+          "title": "Unauthorized",
+          "type": "about:blank",
+          "status": 401,
+          "detail": "Unauthorized"
+        }
+      }
+    }
+  ]
 }
