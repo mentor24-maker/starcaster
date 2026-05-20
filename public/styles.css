@@ -6870,6 +6870,28 @@ button[type=submit] {
   background: #ffeef3;
   color: #ff9bb2;
 }
+#engageSocialPage .status-pill {
+  color: #fff;
+  border: none;
+  white-space: nowrap;
+  line-height: 1.25;
+  padding: calc(0.2rem + 2px) calc(0.45rem + 2px);
+}
+#engageSocialPage .status-social-published {
+  background: #1a7f37;
+}
+#engageSocialPage .status-social-scheduled {
+  background: #b8860b;
+}
+#engageSocialPage .status-social-failed {
+  background: #c0392b;
+}
+#engageSocialPage .status-social-publishing {
+  background: #2563eb;
+}
+#engageSocialPage .status-social-queued {
+  background: #5c6b7a;
+}
 .meta {
   color: var(--muted);
   font-size: 0.9rem;
