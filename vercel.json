@@ -37,5 +37,11 @@
     "api/[...slug].js": {
       "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/engage/social/posts/publish-due",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }
