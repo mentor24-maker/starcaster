@@ -605,9 +605,33 @@ async function resolvePostImageMeta(post, req, requireHttps = false) {
   };
 }
 
+function requestScopeForPublish(req, post) {
+  const fromReq = requestProjectScope(req);
+  if (fromReq.projectId) return fromReq;
+  const projectId = safeText(post?.projectId);
+  const userId = safeText(post?.ownerUserId);
+  if (projectId) {
+    return { projectId, userId, projectIds: [projectId] };
+  }
+  return fromReq;
+}
+
+function enrichReqForPostPublish(req, post) {
+  const scope = requestScopeForPublish(req, post);
+  if (!scope.projectId || safeText(req?.projectContext?.project?.id)) return req;
+  return {
+    ...req,
+    projectContext: {
+      project: { id: scope.projectId },
+      projects: [{ id: scope.projectId }],
+    },
+  };
+}
+
 async function publishStoredPost(post, req) {
   if (!post) return { ok: false, status: 404, error: 'Post not found' };
-  const scope = requestProjectScope(req);
+  const scope = requestScopeForPublish(req, post);
+  const credOpts = req?.cronPublish ? { envOnly: true } : {};
   const channel = String(post.channel || 'x').trim().toLowerCase();
 
   if (!PUBLISH_NOW_CHANNELS.includes(channel)) {
@@ -663,18 +687,21 @@ async function publishStoredPost(post, req) {
     let mediaIds = [];
     const bytesRes = await loadImageBytesForSocialPublish(resolved.imageUrl, resolved.primaryImageId, scope);
     if (bytesRes.ok && bytesRes.buffer.length <= maxMediaBytes) {
-      const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType);
+      const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType, credOpts);
       if (upload.ok && upload.mediaId) mediaIds = [upload.mediaId];
     }
-    result = await xClient.createPost(post.text, { mediaIds });
+    result = await xClient.createPost(post.text, { mediaIds, ...credOpts });
   }
   if (!result.ok) {
+    const xDiag = channel === 'x' ? getProviderCredentialDiagnostics('x') : null;
     const failed = await socialStore.updatePost(post.id, {
       status: 'failed',
       error: String(result.error || 'Unknown publish error'),
       diagnostics: {
         checkedAt: new Date().toISOString(),
         channel,
+        publishMode: req?.cronPublish ? 'cron' : 'session',
+        credentialSources: xDiag?.sources || null,
         endpoint: String(result.endpoint || ''),
         status: Number(result.status || 0) || 0,
         attempts: Array.isArray(result.attempts) ? result.attempts : [],
@@ -1485,7 +1512,8 @@ async function handle(req, res, pathname, method) {
     const duePosts = await socialStore.listDuePosts(scope);
     const results = [];
     for (const post of duePosts) {
-      const result = await publishStoredPost(post, req);
+      const publishReq = enrichReqForPostPublish(req, post);
+      const result = await publishStoredPost(post, publishReq);
       results.push({
         id: post.id,
         ok: !!result.ok,
@@ -1493,7 +1521,7 @@ async function handle(req, res, pathname, method) {
       });
     }
     if (duePosts.length) {
-      console.log(`[engage.social] publish-due processed ${results.length} post(s), failures=${results.filter((r) => !r.ok).length}`);
+      console.log(`[engage.social] publish-due processed ${results.length} post(s), failures=${results.filter((r) => !r.ok).length}, cron=${Boolean(req?.cronPublish)}`);
     }
     const posts = await socialStore.listPosts(scope);
     return sendOk(res, 200, { processed: results, posts }, { processed: results, posts }), true;

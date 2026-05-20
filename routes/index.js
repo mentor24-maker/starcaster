@@ -146,9 +146,10 @@ async function handleRequest(req, res) {
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);
-  
+
   req.authUser = authUser || null;
   req.projectContext = null;
+  req.cronPublish = isCronAuthorized;
 
   if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !authUser) {
 
