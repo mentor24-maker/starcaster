@@ -23,6 +23,24 @@ App.settings = (function () {
     { key: 'medium', label: 'Medium', provider: 'medium', coreFields: 'integration_token' },
     { key: 'patreon', label: 'Patreon', provider: 'patreon', coreFields: 'client_id, client_secret' },
   ];
+  const CHANNEL_LOGO_LOCAL = {
+    x: '/images/logos/x.svg',
+    facebook: '/images/logos/facebook.svg',
+    bluesky: '/images/logos/bluesky.svg',
+    youtube: '/images/logos/youtube.svg',
+    quora: '/images/logos/quora.svg',
+    substack: '/images/logos/substack.svg',
+    medium: '/images/logos/medium.svg',
+  };
+  const CHANNEL_LOGO_REMOTE = {
+    instagram: 'https://cdn.simpleicons.org/instagram/e4405f',
+    linkedin: 'https://cdn.simpleicons.org/linkedin/0a66c2',
+    threads: 'https://cdn.simpleicons.org/threads/000000',
+    pinterest: 'https://cdn.simpleicons.org/pinterest/bd081c',
+    reddit: 'https://cdn.simpleicons.org/reddit/ff4500',
+    telegram: 'https://cdn.simpleicons.org/telegram/26a5e4',
+    patreon: 'https://cdn.simpleicons.org/patreon/ff424d',
+  };
   const connectionOpsState = {
     platform: '',
     data: null,
@@ -521,6 +539,20 @@ App.settings = (function () {
     }
   }
 
+  async function copyApiFieldValue(input, fieldLabel) {
+    const text = String(input?.value || '').trim();
+    if (!text) {
+      notify(`${fieldLabel} is empty`, true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      notify(`Copied ${fieldLabel}`);
+    } catch (err) {
+      notify(err?.message || 'Copy failed', true);
+    }
+  }
+
   function renderApiFieldInputs() {
     if (!els.apiFieldsContainer) return;
     const provider = els.apiProviderSelect?.value || state.apiSchemas[0]?.provider;
@@ -536,8 +568,8 @@ App.settings = (function () {
         els.apiFieldsContainer.appendChild(hidden);
         return;
       }
-      const row   = document.createElement('div');
-      row.className = 'form-row';
+      const row = document.createElement('div');
+      row.className = 'api-field-row';
       const label = document.createElement('label');
       label.setAttribute('for', `api-field-${field.key}`);
       const helpText = getApiFieldHelpText(provider, field.key, field.label);
@@ -562,25 +594,39 @@ App.settings = (function () {
       }
       if (field.required) input.required = true;
       input.value = String(state.apiFormValues[field.key] || '');
-      row.appendChild(label);
-      row.appendChild(input);
-      // Add Show/Hide toggle for secret fields
+
+      const control = document.createElement('div');
+      control.className = 'api-field-control';
+      control.appendChild(input);
+
       if (field.secret && !isMultiline) {
         const toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
+        toggleBtn.className = 'btn btn-ghost api-field-toggle';
         toggleBtn.textContent = 'Show';
-        toggleBtn.style.cssText = 'margin-left:8px; padding:4px 10px; font-size:0.8rem; cursor:pointer; border:1px solid #555; border-radius:4px; background:#333; color:#ccc;';
+        toggleBtn.setAttribute('aria-label', `Show ${field.label}`);
         toggleBtn.addEventListener('click', () => {
           if (input.type === 'password') {
             input.type = 'text';
             toggleBtn.textContent = 'Hide';
+            toggleBtn.setAttribute('aria-label', `Hide ${field.label}`);
           } else {
             input.type = 'password';
             toggleBtn.textContent = 'Show';
+            toggleBtn.setAttribute('aria-label', `Show ${field.label}`);
           }
         });
-        row.appendChild(toggleBtn);
+        control.appendChild(toggleBtn);
+
+        const copyBtn = App.makeIconButton('copy', `Copy ${field.label}`, () => {
+          copyApiFieldValue(input, field.label);
+        });
+        copyBtn.classList.add('api-field-copy');
+        control.appendChild(copyBtn);
       }
+
+      row.appendChild(label);
+      row.appendChild(control);
       els.apiFieldsContainer.appendChild(row);
     });
     renderApiProviderHelp(provider);
@@ -766,6 +812,11 @@ App.settings = (function () {
     await api(`/api/settings/apis/${encodeURIComponent(provider)}`, { method: 'DELETE' });
   }
 
+  function channelLogoSrc(channelKey) {
+    const key = String(channelKey || '').trim().toLowerCase();
+    return CHANNEL_LOGO_LOCAL[key] || CHANNEL_LOGO_REMOTE[key] || '/images/logos/web.svg';
+  }
+
   function renderApiConfigsTable() {
     const body = document.getElementById('apiChannelsTableBody');
     if (!body) return;
@@ -789,9 +840,18 @@ App.settings = (function () {
       tr.className = cfg?.configured ? 'api-config-row-complete' : 'api-config-row-incomplete';
 
       const channelTd = document.createElement('td');
+      channelTd.className = 'channel-connection-col';
       const link = document.createElement('a');
       link.href = '#';
-      link.textContent = row.label;
+      link.className = 'channel-connection-logo-link';
+      link.title = row.label;
+      link.setAttribute('aria-label', `Open ${row.label}`);
+      const logo = document.createElement('img');
+      logo.className = 'channel-connection-logo';
+      logo.src = channelLogoSrc(row.key);
+      logo.alt = '';
+      logo.setAttribute('aria-hidden', 'true');
+      link.appendChild(logo);
       link.addEventListener('click', async (event) => {
         event.preventDefault();
         await openChannelConnection(row.key);
