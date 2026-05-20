@@ -481,33 +481,58 @@
           </div>
         </div>
 
-        <form id="messagingTweetsEditForm" class="standard-form-grid">
-          <input name="id" type="hidden" />
-          <div class="page-heading-row">
+        <section id="messagingTweetsEditPanel" class="messaging-tweet-edit-layout hidden" aria-label="Edit Tweet">
+          <div class="page-heading-row messaging-tweet-edit-heading">
             <h3>Edit Tweet</h3>
-            <button id="messagingTweetsCancelEditBtn" type="button" class="btn">Cancel Edit</button>
+            <button id="messagingTweetsCancelEditBtn" type="button" class="btn btn-ghost">Cancel Edit</button>
           </div>
-          <select name="topic" data-messaging-topic-select="true">
-            <option value="">Topic</option>
-          </select>
-          <textarea name="content" rows="6" placeholder="Content" required></textarea>
-          <input name="url" placeholder="URL" />
-          <input name="hashtags" placeholder="Hashtags (comma-separated)" />
-          <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
-          <select name="quality_score">
-            <option value="">Score</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-          </select>
-          <select id="messagingTweetEditImageSelect" name="image_asset_id">
-            <option value="">Image (optional)</option>
-          </select>
-          <div></div>
+          <div class="messaging-tweet-edit-columns">
+            <form id="messagingTweetsEditForm" class="standard-form-grid messaging-tweet-edit-form">
+              <input name="id" type="hidden" />
+
+              <label for="messagingTweetEditTopic">Topic</label>
+              <select id="messagingTweetEditTopic" name="topic" data-messaging-topic-select="true">
+                <option value="">Select Topic</option>
+              </select>
+
+              <label for="messagingTweetEditContent">Tweet</label>
+              <textarea id="messagingTweetEditContent" name="content" rows="6" required></textarea>
+
+              <label for="messagingTweetEditUrl">URL</label>
+              <input id="messagingTweetEditUrl" name="url" type="url" />
+
+              <label for="messagingTweetEditHashtags">Hashtags</label>
+              <input id="messagingTweetEditHashtags" name="hashtags" placeholder="Comma-separated" />
+
+              <label for="messagingTweetEditImageSelect">Image</label>
+              <select id="messagingTweetEditImageSelect" name="image_asset_id">
+                <option value="">Image (optional)</option>
+              </select>
+
+              <label for="messagingTweetEditQuality">Score</label>
+              <select id="messagingTweetEditQuality" name="quality_score">
+                <option value="">Score</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+
+              <label for="messagingTweetEditFeedback">Feedback</label>
+              <textarea id="messagingTweetEditFeedback" name="feedback" rows="4"></textarea>
+
+              <div></div>
               <button type="submit" class="btn btn-primary">Update Tweet</button>
-        </form>
+            </form>
+
+            <aside class="messaging-tweet-edit-preview-column messaging-create-content-results" aria-label="X post preview">
+              <h3 class="messaging-tweet-edit-preview-title">X Preview</h3>
+              <p class="messaging-tweet-edit-preview-note">Live preview of how this post may appear on X.</p>
+              <div id="messagingTweetEditPreviewMount" class="messaging-tweet-edit-preview-mount"></div>
+            </aside>
+          </div>
+        </section>
 
         <h3>Saved Tweets</h3>
         <div class="table-wrap">

@@ -46,12 +46,39 @@ App.engageSocial = (function () {
     return normalizeProjectUrl(state.profile?.website);
   }
 
+  function updateScheduleTimezoneHint() {
+    const hint = el('engageSocialScheduleTzHint');
+    if (!hint) return;
+    const tz = safeText(activeProject?.timezone) || 'UTC';
+    hint.textContent = `Date and time are interpreted in the active project timezone (${tz}). Change it under Settings → Projects → Schedule Timezone.`;
+  }
+
   function appendCtaUrl(ctaText) {
     const text = safeText(ctaText);
     if (!text) return '';
     const url = campaignProjectUrl();
     if (!url || text.includes(url)) return text;
     return `${text} ${url}`;
+  }
+
+  async function ensureEngageSocialProjectContext() {
+    try {
+      const current = await api('/api/projects/current', { method: 'GET' });
+      const project = current.project || current.currentProject || current.data?.project || null;
+      if (project?.id) {
+        activeProject = project;
+        state.currentProject = project;
+        state.currentProjectId = safeText(project.id);
+      }
+    } catch (_) {}
+    if (!activeProject && state.currentProject?.id) activeProject = state.currentProject;
+    if (!safeText(state.profile?.website)) {
+      try {
+        const profileRes = await api('/api/settings/profile', { method: 'GET' });
+        const profile = profileRes.profile || profileRes.data || {};
+        if (profile && typeof profile === 'object') state.profile = { ...(state.profile || {}), ...profile };
+      } catch (_) {}
+    }
   }
 
   function buildTweet(campaign) {
@@ -62,16 +89,22 @@ App.engageSocial = (function () {
       hidden.has('campaignTaglineSelect') ? '' : safeText(config.taglineLabel),
     ].filter(Boolean);
     const ctaText = hidden.has('campaignCtaSelect') ? '' : appendCtaUrl(config.ctaLabel);
+    const shareUrl = campaignProjectUrl();
     const originalHashtags = hidden.has('campaignHashtagGroupSelect')
       ? []
       : safeText(config.hashtagsText || config.hashtagGroupLabel).split(/\s+/).filter(Boolean);
     let hashtags = originalHashtags.slice();
     let includeCta = !!ctaText;
-    const compose = () => [
-      ...baseParts,
-      includeCta ? ctaText : '',
-      hashtags.length ? hashtags.join(' ') : '',
-    ].filter(Boolean).join('\n\n');
+    let includeLink = Boolean(shareUrl);
+    const compose = () => {
+      const bodyParts = [...baseParts];
+      if (includeCta && ctaText) bodyParts.push(ctaText);
+      const bodyJoined = bodyParts.join('\n\n');
+      if (includeLink && shareUrl && !bodyJoined.includes(shareUrl)) bodyParts.push(shareUrl);
+      const withHashtags = [...bodyParts];
+      if (hashtags.length) withHashtags.push(hashtags.join(' '));
+      return withHashtags.filter(Boolean).join('\n\n');
+    };
 
     let text = compose();
     while (hashtags.length && characterCount(text) > TWEET_LIMIT) {
@@ -82,10 +115,17 @@ App.engageSocial = (function () {
       includeCta = false;
       text = compose();
     }
+    if (includeLink && characterCount(text) > TWEET_LIMIT) {
+      includeLink = false;
+      text = compose();
+    }
+    const urlMissingFromTweet = Boolean(shareUrl) && !text.includes(shareUrl);
     return {
       text,
       count: characterCount(text),
       config,
+      shareUrl,
+      urlMissingFromTweet,
     };
   }
 
@@ -201,22 +241,34 @@ App.engageSocial = (function () {
     if (diagPre) diagPre.textContent = JSON.stringify(report, null, 2);
   }
 
-  // --- Campaign dropdown (only "complete" campaigns) ---
+  // --- Campaign dropdown (builder campaigns ready to publish) ---
+  // Must match workflow statuses saved from Acquire → Campaigns (see public/js/campaigns.js).
+  const PROMOTABLE_SOCIAL_STATUSES = new Set(['complete', 'ready', 'active', 'scheduled']);
+
+  function normalizeWorkflowStatus(value) {
+    return safeText(value).toLowerCase().replace(/[\s-]+/g, '_');
+  }
+
+  /** Prefer status inside campaign-v1 JSON (authoritative in UI); fall back to DB column. */
+  function campaignWorkflowStatus(campaign) {
+    const config = parseConfig(campaign);
+    const fromConfig = config && typeof config.status === 'string' ? config.status : '';
+    const raw = safeText(fromConfig) || safeText(campaign?.status);
+    return normalizeWorkflowStatus(raw);
+  }
 
   function renderCampaignSelect() {
     const select = el('engageSocialCampaignSelect');
     if (!select) return;
     const current = select.value;
     while (select.options.length > 1) select.remove(1);
-    const completeCampaigns = campaigns.filter((c) => {
-      return safeText(c.status).toLowerCase() === 'complete';
-    });
-    if (!completeCampaigns.length) {
-      select.options[0].textContent = 'No Complete campaigns available';
+    const eligible = campaigns.filter((c) => PROMOTABLE_SOCIAL_STATUSES.has(campaignWorkflowStatus(c)));
+    if (!eligible.length) {
+      select.options[0].textContent = 'No campaigns (set status to Ready, Active, or Complete)';
       return;
     }
-    select.options[0].textContent = 'Select a Complete campaign';
-    completeCampaigns.forEach((campaign) => {
+    select.options[0].textContent = 'Select campaign';
+    eligible.forEach((campaign) => {
       const option = document.createElement('option');
       option.value = String(campaign.id);
       option.textContent = safeText(campaign.name) || `Campaign ${campaign.id}`;
@@ -328,21 +380,31 @@ App.engageSocial = (function () {
   // --- Send / Schedule ---
 
   async function queueCampaignPost(campaign, options) {
+    await ensureEngageSocialProjectContext();
     const preview = buildTweet(campaign);
     const text = safeText(preview.text);
     if (!text) throw new Error('No post content could be assembled from this campaign.');
+    if (preview.urlMissingFromTweet) {
+      throw new Error('Tweet is over the X limit and the project URL could not be kept. Shorten tweet, tagline, CTA, or hashtags — or use a shorter Website URL on the project or profile.');
+    }
     if (characterCount(text) > TWEET_LIMIT) throw new Error(`Tweet is ${characterCount(text) - TWEET_LIMIT} characters over the X limit.`);
     const config = preview.config;
+    const publishNow = !!options?.publishNow;
+    const payload = {
+      text,
+      channel: 'x',
+      campaignId: campaign.id,
+      imageAlt: config.primaryImageLabel || '',
+      publishNow,
+    };
+    if (publishNow) {
+      payload.scheduledFor = '';
+    } else {
+      payload.scheduledForWall = safeText(options?.scheduledForWall);
+    }
     return api('/api/engage/social/posts', {
       method: 'POST',
-      body: JSON.stringify({
-        text,
-        channel: 'x',
-        campaignId: campaign.id,
-        imageAlt: config.primaryImageLabel || '',
-        scheduledFor: options?.scheduledFor || '',
-        publishNow: !!options?.publishNow,
-      }),
+      body: JSON.stringify(payload),
     });
   }
 
@@ -371,12 +433,25 @@ App.engageSocial = (function () {
     if (!campaign) { notify('Select a campaign first', true); return; }
     const scheduleAt = el('engageSocialScheduleAt')?.value;
     if (!scheduleAt) { notify('Pick a date and time first', true); return; }
-    const scheduledDate = new Date(scheduleAt);
-    if (Number.isNaN(scheduledDate.getTime())) { notify('Invalid date/time', true); return; }
     try {
       setStatus('Scheduling...');
-      await queueCampaignPost(campaign, { scheduledFor: scheduledDate.toISOString() });
-      notify(`Scheduled for ${scheduledDate.toLocaleString()}`);
+      const res = await queueCampaignPost(campaign, { scheduledForWall: scheduleAt });
+      const tz = safeText(activeProject?.timezone) || 'UTC';
+      const whenIso = res?.post?.scheduledFor || res?.data?.post?.scheduledFor;
+      let msg = 'Scheduled';
+      if (whenIso) {
+        try {
+          const disp = new Date(whenIso).toLocaleString(undefined, {
+            timeZone: tz,
+            dateStyle: 'short',
+            timeStyle: 'short',
+          });
+          msg = `Scheduled for ${disp} (${tz})`;
+        } catch (_) {
+          msg = 'Scheduled';
+        }
+      }
+      notify(msg);
       setStatus('');
       const input = el('engageSocialScheduleAt');
       if (input) input.value = '';
@@ -412,6 +487,7 @@ App.engageSocial = (function () {
       campaigns = campaignsRes.value.campaigns || campaignsRes.value.data || [];
       renderCampaignSelect();
     }
+    updateScheduleTimezoneHint();
   }
 
   // --- Init ---
@@ -460,8 +536,15 @@ App.engageSocial = (function () {
   }
 
   return {
-    manifest: { id: 'engageSocial', label: 'Engage Social', pageId: 'engageSocialPage' },
+    manifest: {
+      id: 'engageSocial',
+      label: 'Engage Social',
+      pageId: 'engageSocialPage',
+    },
     init,
     refresh,
+    onPageActivated() {
+      updateScheduleTimezoneHint();
+    },
   };
 })();

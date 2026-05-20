@@ -48,6 +48,26 @@ App.settings = (function () {
     byPlatform: {},
   };
   const PROJECT_LOGO_STORAGE_KEY = 'alphire.projectLogoMap';
+  /** IANA zones for project scheduling (Engage: Social). */
+  const PROJECT_SCHEDULE_TIMEZONES = [
+    { value: 'UTC', label: 'UTC' },
+    { value: 'America/Los_Angeles', label: 'Pacific (US) — Los Angeles' },
+    { value: 'America/Denver', label: 'Mountain (US) — Denver' },
+    { value: 'America/Chicago', label: 'Central (US) — Chicago' },
+    { value: 'America/New_York', label: 'Eastern (US) — New York' },
+    { value: 'America/Phoenix', label: 'Arizona — Phoenix' },
+    { value: 'America/Anchorage', label: 'Alaska — Anchorage' },
+    { value: 'Pacific/Honolulu', label: 'Hawaii — Honolulu' },
+    { value: 'Europe/London', label: 'UK — London' },
+    { value: 'Europe/Paris', label: 'Central Europe — Paris' },
+    { value: 'Europe/Berlin', label: 'Central Europe — Berlin' },
+    { value: 'Europe/Athens', label: 'Eastern Europe — Athens' },
+    { value: 'Asia/Tokyo', label: 'Japan — Tokyo' },
+    { value: 'Asia/Shanghai', label: 'China — Shanghai' },
+    { value: 'Asia/Singapore', label: 'Singapore' },
+    { value: 'Australia/Sydney', label: 'Australia — Sydney' },
+    { value: 'Pacific/Auckland', label: 'New Zealand — Auckland' },
+  ];
   let activeChannelLabel = '';
 
   function byId(id) {
@@ -302,6 +322,33 @@ App.settings = (function () {
     });
   }
 
+  function ensureProjectTimezoneSelectOptions() {
+    const sel = els.settingsProjectTimezoneSelect;
+    if (!sel || sel.dataset.populated === '1') return;
+    PROJECT_SCHEDULE_TIMEZONES.forEach(({ value, label }) => {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = label;
+      sel.appendChild(o);
+    });
+    sel.dataset.populated = '1';
+  }
+
+  function syncProjectTimezoneSelectValue(active) {
+    const sel = els.settingsProjectTimezoneSelect;
+    if (!sel) return;
+    ensureProjectTimezoneSelectOptions();
+    const tz = String(active?.timezone || 'UTC').trim() || 'UTC';
+    const has = Array.from(sel.options).some((o) => o.value === tz);
+    if (!has) {
+      const o = document.createElement('option');
+      o.value = tz;
+      o.textContent = tz;
+      sel.appendChild(o);
+    }
+    sel.value = tz;
+  }
+
   function renderProjectDetails() {
     const projects = Array.isArray(state.projects) ? state.projects : [];
     const active = projects.find((project) => String(project?.id || '') === String(state.currentProjectId || '')) || null;
@@ -327,6 +374,7 @@ App.settings = (function () {
     if (els.settingsProjectDetailsCreatedAt) {
       els.settingsProjectDetailsCreatedAt.value = formatDateLabel(active?.createdAt || active?.created_at || '');
     }
+    syncProjectTimezoneSelectValue(active);
     const logoDataUrl = getProjectLogoDataUrl(active);
     if (els.settingsProjectLogoPreview) {
       const hasLogo = Boolean(logoDataUrl);
@@ -1518,6 +1566,24 @@ App.settings = (function () {
           await refreshProjectContext();
           setProjectsCreateVisible(false);
           notify('Project created');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (els.settingsProjectTimezoneSaveBtn) {
+      els.settingsProjectTimezoneSaveBtn.addEventListener('click', async () => {
+        const activeId = String(state.currentProjectId || '').trim();
+        if (!activeId) return notify('Select a project first', true);
+        const tz = String(els.settingsProjectTimezoneSelect?.value || '').trim() || 'UTC';
+        try {
+          await api(`/api/projects/${encodeURIComponent(activeId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ timezone: tz }),
+          });
+          await refreshProjectContext();
+          notify('Project timezone saved');
         } catch (err) {
           notify(err.message, true);
         }
