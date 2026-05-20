@@ -239,6 +239,29 @@ App.engageSocial = (function () {
       report.summary = `❌ Auth test error: ${err.message}`;
     }
 
+    try {
+      const schedRaw = await api('/api/engage/social/scheduler-diagnostics');
+      const sched = schedRaw?.schedulerDiagnostics || schedRaw?.data?.schedulerDiagnostics || schedRaw || {};
+      report.checks.scheduler = sched;
+      const cronAuthOk = Boolean(sched?.xAuth?.cron?.ok);
+      const sessionAuthOk = Boolean(sched?.xAuth?.session?.ok);
+      const mismatch = Boolean(sched?.xCredentials?.tokenMismatch);
+      if (mismatch && sessionAuthOk && !cronAuthOk) {
+        report.schedulerVerdict = '❌ Cron credentials differ from session — deploy cursor/engage-social-cron-publish-fix and ensure X_* env vars on Production.';
+        if (!report.summary || report.summary.startsWith('✅')) {
+          report.summary = report.schedulerVerdict;
+        }
+      } else if (!cronAuthOk && sched?.queue?.dueCount > 0) {
+        report.schedulerVerdict = '❌ Cron auth would fail for due posts — check Vercel X_* env vars (not file settings).';
+      } else if (cronAuthOk && sessionAuthOk) {
+        report.schedulerVerdict = mismatch
+          ? '⚠️ Auth OK but credential sets differ — scheduled cron may use different tokens until fix is deployed.'
+          : '✅ Session and cron credential paths both authenticate.';
+      }
+    } catch (err) {
+      report.checks.scheduler = { error: err.message };
+    }
+
     if (diagPre) diagPre.textContent = JSON.stringify(report, null, 2);
   }
 
@@ -386,6 +409,24 @@ App.engageSocial = (function () {
         err.style.color = '#c0392b';
         err.textContent = post.error;
         statusTd.appendChild(err);
+      }
+      const diag = post.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : null;
+      if (diag && (diag.publishMode || diag.credentialSources || diag.cronCredentialSources)) {
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.style.marginTop = '6px';
+        const parts = [];
+        if (diag.publishMode) parts.push(`mode: ${diag.publishMode}`);
+        if (diag.credentialSources) {
+          const src = Object.entries(diag.credentialSources).map(([k, v]) => `${k}=${v}`).join(', ');
+          if (src) parts.push(`creds: ${src}`);
+        }
+        if (diag.cronCredentialSources) {
+          const src = Object.entries(diag.cronCredentialSources).map(([k, v]) => `${k}=${v}`).join(', ');
+          if (src) parts.push(`cron creds: ${src}`);
+        }
+        meta.textContent = parts.join(' · ');
+        statusTd.appendChild(meta);
       }
       tr.appendChild(statusTd);
 

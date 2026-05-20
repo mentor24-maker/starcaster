@@ -669,6 +669,7 @@ async function publishStoredPost(post, req) {
     }
   }
   let result;
+  let mediaUpload = null;
   if (channel === 'telegram') {
     result = await telegramClient.sendMessage(post.text);
   } else if (channel === 'bluesky') {
@@ -686,14 +687,36 @@ async function publishStoredPost(post, req) {
     const maxMediaBytes = 5 * 1024 * 1024;
     let mediaIds = [];
     const bytesRes = await loadImageBytesForSocialPublish(resolved.imageUrl, resolved.primaryImageId, scope);
+    mediaUpload = { attempted: false, ok: false, status: 0, error: '' };
     if (bytesRes.ok && bytesRes.buffer.length <= maxMediaBytes) {
+      mediaUpload.attempted = true;
       const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType, credOpts);
+      mediaUpload = {
+        attempted: true,
+        ok: Boolean(upload.ok),
+        status: Number(upload.status || 0) || 0,
+        error: safeText(upload.error),
+        mediaId: safeText(upload.mediaId),
+      };
       if (upload.ok && upload.mediaId) mediaIds = [upload.mediaId];
+    } else if (safeText(resolved.imageUrl)) {
+      mediaUpload = {
+        attempted: true,
+        ok: false,
+        status: 0,
+        error: safeText(bytesRes.error) || 'Could not load image bytes for publish',
+        mediaId: '',
+      };
     }
     result = await xClient.createPost(post.text, { mediaIds, ...credOpts });
   }
   if (!result.ok) {
-    const xDiag = channel === 'x' ? getProviderCredentialDiagnostics('x') : null;
+    const xDiag = channel === 'x'
+      ? {
+        session: getProviderCredentialDiagnostics('x'),
+        cron: getProviderCredentialDiagnostics('x', { envOnly: true }),
+      }
+      : null;
     const failed = await socialStore.updatePost(post.id, {
       status: 'failed',
       error: String(result.error || 'Unknown publish error'),
@@ -701,7 +724,9 @@ async function publishStoredPost(post, req) {
         checkedAt: new Date().toISOString(),
         channel,
         publishMode: req?.cronPublish ? 'cron' : 'session',
-        credentialSources: xDiag?.sources || null,
+        credentialSources: xDiag?.session?.sources || null,
+        cronCredentialSources: xDiag?.cron?.sources || null,
+        mediaUpload: channel === 'x' ? mediaUpload : null,
         endpoint: String(result.endpoint || ''),
         status: Number(result.status || 0) || 0,
         attempts: Array.isArray(result.attempts) ? result.attempts : [],
@@ -1341,6 +1366,62 @@ async function handle(req, res, pathname, method) {
     const scope = requestProjectScope(req);
     const posts = await socialStore.listPosts(scope);
     return sendOk(res, 200, posts, { posts }, { total: posts.length }), true;
+  }
+
+  if (pathname === '/api/engage/social/scheduler-diagnostics' && requestMethod === 'GET') {
+    const scope = requestProjectScope(req);
+    const duePosts = await socialStore.listDuePosts(scope);
+    const mergedDiag = getProviderCredentialDiagnostics('x');
+    const cronDiag = getProviderCredentialDiagnostics('x', { envOnly: true });
+    const mergedValues = getProviderValues('x');
+    const cronValues = getProviderValues('x', { envOnly: true });
+    const [mergedAuth, cronAuth] = await Promise.all([
+      xClient.checkAuth({ envOnly: false }),
+      xClient.checkAuth({ envOnly: true }),
+    ]);
+    const tokenFields = ['api_key', 'api_secret', 'access_token', 'access_token_secret'];
+    const tokenMismatch = tokenFields.some(
+      (field) => String(mergedValues[field] || '') !== String(cronValues[field] || '')
+    );
+    const payload = {
+      checkedAt: new Date().toISOString(),
+      publishModeLabels: {
+        session: 'Logged-in Send Now / Publish Due / Retry',
+        cron: 'Vercel Cron publish-due (no user session)',
+      },
+      queue: {
+        dueCount: duePosts.length,
+        duePostIds: duePosts.slice(0, 10).map((post) => post.id),
+      },
+      xCredentials: {
+        mergedSources: mergedDiag?.sources || null,
+        cronSources: cronDiag?.sources || null,
+        tokenMismatch,
+        mismatchHint: tokenMismatch
+          ? 'Cron uses env-only credentials; UI session may use different file-backed values. Stale file tokens cause cron 401 while Send Now works.'
+          : 'Merged and env-only X credential sets match.',
+      },
+      xAuth: {
+        session: {
+          ok: Boolean(mergedAuth.ok),
+          status: Number(mergedAuth.status || 0) || 0,
+          error: safeText(mergedAuth.error),
+          authMode: mergedAuth.data?.authMode || '',
+        },
+        cron: {
+          ok: Boolean(cronAuth.ok),
+          status: Number(cronAuth.status || 0) || 0,
+          error: safeText(cronAuth.error),
+          authMode: cronAuth.data?.authMode || '',
+        },
+      },
+      runtime: mergedDiag?.runtime || cronDiag?.runtime || {},
+      deploy: {
+        cronPublishEnvOnlyFix: true,
+        note: 'Deploy branch cursor/engage-social-cron-publish-fix (or merge to main) for cron env-only publish fix.',
+      },
+    };
+    return sendOk(res, 200, payload, { schedulerDiagnostics: payload }), true;
   }
 
   if (pathname === '/api/engage/social/diagnostics' && requestMethod === 'GET') {
