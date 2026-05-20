@@ -36,3 +36,93 @@ input:focus, textarea:focus, select:focus {
   font-size: 1.1rem;
   font-weight: 600;
 }
+
+/* Settings > APIs — channel credential fields */
+.api-fields-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.api-field-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 1rem;
+  align-items: center;
+}
+
+.api-field-row > label {
+  text-align: right;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.api-field-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.api-field-control > input,
+.api-field-control > textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+}
+
+.api-field-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-width: 4.5rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.api-field-control .api-field-copy.icon-btn {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  min-width: 28px !important;
+  padding: 0;
+}
+
+.api-field-row:has(textarea) {
+  align-items: start;
+}
+
+.api-field-row:has(textarea) > label {
+  padding-top: 0.8rem;
+}
+
+#settingsApisPage .api-settings-form > .btn-primary {
+  width: fit-content;
+}
+
+.channel-connection-col {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.channel-connection-logo-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.5rem;
+  text-decoration: none;
+}
+
+.channel-connection-logo-link:hover {
+  background: var(--bg-hover, rgba(39, 166, 255, 0.12));
+}
+
+.channel-connection-logo {
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: contain;
+}

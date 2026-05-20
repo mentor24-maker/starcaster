@@ -2,7 +2,7 @@
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { logActivity } = require('../lib/activityLog');
-const { getProviderValues } = require('../lib/apiSettings');
+const { getProviderValues, getProviderCredentialDiagnostics } = require('../lib/apiSettings');
 const { listCampaigns, rowToCampaign } = require('../lib/store');
 const { getAssetById, rowToAsset } = require('../lib/assetsStore');
 const socialStore = require('../lib/engageSocialStore');
@@ -828,12 +828,7 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/engage/social/x/status' && requestMethod === 'GET') {
     const creds = xClient.getXCredentials();
-    const mask = (val) => {
-      const s = String(val || '');
-      if (!s) return '(empty)';
-      if (s.length <= 8) return `${s.slice(0, 2)}...(${s.length} chars)`;
-      return `${s.slice(0, 4)}...${s.slice(-4)} (${s.length} chars)`;
-    };
+    const diag = getProviderCredentialDiagnostics('x');
     const payload = {
       configured: xClient.isConfigured(),
       accountName: creds.accountName || '',
@@ -842,11 +837,26 @@ async function handle(req, res, pathname, method) {
       hasAccessToken: Boolean(creds.accessToken),
       hasAccessTokenSecret: Boolean(creds.accessTokenSecret),
       preview: {
-        apiKey: mask(creds.apiKey),
-        apiSecret: mask(creds.apiSecret),
-        accessToken: mask(creds.accessToken),
-        accessTokenSecret: mask(creds.accessTokenSecret),
+        apiKey: diag.preview?.api_key || '',
+        apiSecret: diag.preview?.api_secret || '',
+        accessToken: diag.preview?.access_token || '',
+        accessTokenSecret: diag.preview?.access_token_secret || '',
       },
+      sources: {
+        apiKey: diag.sources?.api_key || 'missing',
+        apiSecret: diag.sources?.api_secret || 'missing',
+        accessToken: diag.sources?.access_token || 'missing',
+        accessTokenSecret: diag.sources?.access_token_secret || 'missing',
+        accountName: diag.sources?.account_name || 'missing',
+      },
+      envKeys: {
+        apiKey: diag.envKeys?.api_key || 'X_API_KEY',
+        apiSecret: diag.envKeys?.api_secret || 'X_API_SECRET',
+        accessToken: diag.envKeys?.access_token || 'X_ACCESS_TOKEN',
+        accessTokenSecret: diag.envKeys?.access_token_secret || 'X_ACCESS_TOKEN_SECRET',
+        accountName: diag.envKeys?.account_name || 'X_ACCOUNT_NAME',
+      },
+      runtime: diag.runtime || {},
     };
     return sendOk(res, 200, payload, payload), true;
   }

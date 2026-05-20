@@ -12,10 +12,13 @@
 </head>
 
 <body>
-  <section id="authLanding" class="auth-landing hidden">
+  <section id="authLanding" class="auth-landing hidden" style="--auth-bg-image: url('/images/background_galaxy_1920x1080.jpg')">
     <div class="auth-content">
       <div class="auth-banner">
-        <img src="/images/logo_starcaster_1920x300.png" alt="StarCaster by Alphire" />
+        <img class="auth-banner-logo" src="/images/logo_starcaster_1200x180.png" alt="StarCaster by Alphire" />
+        <a class="auth-banner-alphire-link" href="https://alphire.agency" target="_blank" rel="noopener noreferrer">
+          <img class="auth-banner-alphire" src="/images/wordmark_alphire_ai_agency.png" alt="Alphire AI Agency" />
+        </a>
       </div>
       <div class="auth-main">
         <div class="auth-copy-column">
@@ -100,7 +103,7 @@
 
   <div id="appShell" class="hidden">
     <header>
-      <img src="/images/logo_starcaster_1920x300.png" alt="StarCaster by Alphire" class="brand-wordmark"
+      <img src="/images/logo_starcaster_1200x180.png" alt="StarCaster by Alphire" class="brand-wordmark"
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';" />
       <h1 id="brandFallback" class="brand-fallback">StarCaster by Alphire</h1>
       <div class="auth-header-meta">
