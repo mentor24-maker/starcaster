@@ -655,12 +655,8 @@ App.api = async function api(path, options = {}) {
           App.notify('Your session has expired. Please sign in again.', true);
           App.auth.handleUnauthorized();
         }
-      } else if (text && !bootPending) {
-        App.notify(text, true);
-        if (hasSession && typeof App.auth.handleUnauthorized === 'function') {
-          App.auth.handleUnauthorized();
-        }
       }
+      // Upstream 401s (e.g. X API Unauthorized on publish) must not clear the app session.
     }
     const jsErr = new Error(String(text).trim());
     if (typeof err === 'object' && err !== null && err.details) {

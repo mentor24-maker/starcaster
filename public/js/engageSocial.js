@@ -140,9 +140,12 @@ App.engageSocial = (function () {
 
   function statusClass(status) {
     const value = safeText(status).toLowerCase();
-    if (value === 'published') return 'status-ok';
-    if (value === 'failed') return 'status-bad';
-    return 'status-warn';
+    if (value === 'published') return 'status-social-published';
+    if (value === 'failed') return 'status-social-failed';
+    if (value === 'scheduled') return 'status-social-scheduled';
+    if (value === 'publishing') return 'status-social-publishing';
+    if (value === 'queued') return 'status-social-queued';
+    return 'status-social-scheduled';
   }
 
   // --- Test Connection diagnostics ---
