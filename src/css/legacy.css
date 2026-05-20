@@ -2274,6 +2274,56 @@ button[type="submit"] {
   background: var(--bg-surface);
 }
 
+.messaging-tweet-edit-layout {
+  margin-bottom: 1.25rem;
+}
+
+.messaging-tweet-edit-heading {
+  margin-bottom: 0.75rem;
+}
+
+.messaging-tweet-edit-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.messaging-tweet-edit-form {
+  max-width: none;
+}
+
+.messaging-tweet-edit-preview-column {
+  position: sticky;
+  top: 12px;
+}
+
+.messaging-tweet-edit-preview-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.messaging-tweet-edit-preview-note {
+  margin: 0 0 0.85rem;
+  color: var(--muted, #536471);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.messaging-tweet-edit-preview-mount .campaign-preview-tweet-shell {
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .messaging-tweet-edit-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .messaging-tweet-edit-preview-column {
+    position: static;
+  }
+}
+
 #messagingCreateContentFeedbackWrap textarea {
   min-height: 120px;
 }

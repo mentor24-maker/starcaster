@@ -5,6 +5,7 @@ const {
   listProjectsForUser,
   createProjectForUser,
   resolveCurrentProject,
+  updateProjectForUser,
 } = require('../lib/projectsStore');
 
 function safeText(value) {
@@ -32,6 +33,18 @@ async function handle(req, res, pathname, method) {
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  const projectPatchMatch = String(pathname || '').match(/^\/api\/projects\/([^/]+)\/?$/);
+  if (projectPatchMatch && requestMethod === 'PATCH') {
+    const projectId = decodeURIComponent(projectPatchMatch[1] || '').trim();
+    if (!projectId || projectId === 'current') {
+      return sendErr(res, 400, 'Valid project id is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const body = await parseJsonBody(req);
+    const result = await updateProjectForUser(projectId, body, userId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: 'PROJECT_UPDATE_FAILED' }), true;
+    return sendOk(res, 200, { project: result.data }, { project: result.data }), true;
   }
 
   if (pathname === '/api/projects' && requestMethod === 'POST') {

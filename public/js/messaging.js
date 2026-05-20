@@ -1041,12 +1041,151 @@ App.messaging = (function () {
     editForm.classList.add('hidden');
   }
 
+  const TWEET_PREVIEW_CHARACTER_LIMIT = 280;
+  let tweetPreviewAccount = { name: 'Your account', handle: '@account' };
+
+  function tweetEditPanelEl() {
+    return document.getElementById('messagingTweetsEditPanel');
+  }
+
+  function tweetCharacterCount(value) {
+    return Array.from(String(value || '')).length;
+  }
+
+  function formatHashtagsForTweetPreview(raw) {
+    return String(raw || '')
+      .split(/[,\s]+/)
+      .map((tag) => String(tag || '').trim())
+      .filter(Boolean)
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
+      .join(' ');
+  }
+
+  function buildTweetEditPreviewText(form) {
+    if (!form) return '';
+    const content = cleanText(form.elements.content?.value);
+    const url = cleanText(form.elements.url?.value);
+    const hashtags = formatHashtagsForTweetPreview(form.elements.hashtags?.value);
+    return [content, url, hashtags].filter(Boolean).join('\n\n');
+  }
+
+  function tweetEditPreviewImageAsset(form) {
+    if (!form) return null;
+    const imageId = Number(form.elements.image_asset_id?.value || 0) || 0;
+    if (!imageId) return null;
+    return tweetImageAssets.find((asset) => (Number(asset.id || 0) || 0) === imageId) || null;
+  }
+
+  async function loadTweetPreviewAccount() {
+    try {
+      const res = await api('/api/engage/social/x/status');
+      const name = cleanText(res?.data?.accountName || res?.accountName);
+      if (!name) return;
+      tweetPreviewAccount = {
+        name,
+        handle: name.startsWith('@') ? name : `@${name}`,
+      };
+    } catch {
+      // Keep defaults when X status is unavailable.
+    }
+  }
+
+  function renderTweetEditPreview(form) {
+    const mount = document.getElementById('messagingTweetEditPreviewMount');
+    if (!mount) return;
+
+    const text = buildTweetEditPreviewText(form);
+    const count = tweetCharacterCount(text);
+    const delta = TWEET_PREVIEW_CHARACTER_LIMIT - count;
+    const imageAsset = tweetEditPreviewImageAsset(form);
+    const imageUrl = thumbnailUrlFromAsset(imageAsset);
+    const accountName = cleanText(tweetPreviewAccount.name) || 'Your account';
+    const accountHandle = cleanText(tweetPreviewAccount.handle) || '@account';
+    const avatarLetter = accountName.replace(/^@/, '').charAt(0).toUpperCase() || 'X';
+
+    mount.innerHTML = '';
+
+    const shell = document.createElement('div');
+    shell.className = 'campaign-preview-tweet-shell';
+
+    const header = document.createElement('div');
+    header.className = 'campaign-preview-tweet-header';
+    const avatar = document.createElement('div');
+    avatar.className = 'campaign-preview-tweet-avatar';
+    avatar.textContent = avatarLetter;
+    const account = document.createElement('div');
+    const nameEl = document.createElement('div');
+    nameEl.className = 'campaign-preview-tweet-name';
+    nameEl.textContent = accountName;
+    const handleEl = document.createElement('div');
+    handleEl.className = 'campaign-preview-tweet-handle';
+    handleEl.textContent = accountHandle;
+    account.appendChild(nameEl);
+    account.appendChild(handleEl);
+    header.appendChild(avatar);
+    header.appendChild(account);
+    shell.appendChild(header);
+
+    const textEl = document.createElement('div');
+    textEl.className = text ? 'campaign-preview-tweet-text' : 'campaign-preview-empty';
+    textEl.textContent = text || 'Enter tweet text to preview your post on X.';
+    shell.appendChild(textEl);
+
+    if (imageUrl) {
+      const mediaWrap = document.createElement('div');
+      mediaWrap.className = 'campaign-preview-tweet-media';
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.alt = cleanText(imageAsset?.assetName) || 'Tweet image';
+      mediaWrap.appendChild(img);
+      shell.appendChild(mediaWrap);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'campaign-preview-tweet-meta';
+    meta.style.marginTop = '12px';
+    meta.textContent = `${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    shell.appendChild(meta);
+
+    const countEl = document.createElement('div');
+    countEl.className = `campaign-preview-tweet-count ${delta < 0 ? 'is-over' : 'is-under'}`;
+    const statusText = delta >= 0
+      ? `${delta} under limit`
+      : `${Math.abs(delta)} over limit`;
+    countEl.textContent = `${count}/${TWEET_PREVIEW_CHARACTER_LIMIT} characters · ${statusText}`;
+    shell.appendChild(countEl);
+
+    const footer = document.createElement('div');
+    footer.className = 'campaign-preview-tweet-footer';
+    ['Reply', 'Repost', 'Like', 'Share'].forEach((label) => {
+      const span = document.createElement('span');
+      span.textContent = label;
+      footer.appendChild(span);
+    });
+    shell.appendChild(footer);
+
+    mount.appendChild(shell);
+  }
+
+  function bindTweetEditPreview(form) {
+    if (!form || form.dataset.previewBound === '1') return;
+    form.dataset.previewBound = '1';
+    const rerender = () => renderTweetEditPreview(form);
+    ['content', 'url', 'hashtags', 'image_asset_id'].forEach((fieldName) => {
+      const field = form.elements[fieldName];
+      if (!field) return;
+      field.addEventListener('input', rerender);
+      field.addEventListener('change', rerender);
+    });
+  }
+
   function openTweetEditForm(tweet) {
     const editForm = document.getElementById('messagingTweetsEditForm');
+    const panel = tweetEditPanelEl();
     const workspace = document.getElementById('messagingTweetsWorkspace');
     const addBtn = document.getElementById('messagingTweetsToggleFormBtn');
     if (!editForm || !tweet) return;
-    editForm.classList.remove('hidden');
+    if (panel) panel.classList.remove('hidden');
     editForm.elements.id.value = String(tweet.id || '');
     if (editForm.elements.topic) editForm.elements.topic.value = String(tweet.topic || tweet.category || '');
     editForm.elements.content.value = String(tweet.content || '');
@@ -1057,14 +1196,17 @@ App.messaging = (function () {
     editForm.elements.image_asset_id.value = tweet.image_asset_id ? String(tweet.image_asset_id) : '';
     if (workspace) workspace.classList.add('hidden');
     if (addBtn) addBtn.textContent = 'Add Tweet';
-    editForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    bindTweetEditPreview(editForm);
+    renderTweetEditPreview(editForm);
+    loadTweetPreviewAccount().then(() => renderTweetEditPreview(editForm));
+    (panel || editForm).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function closeTweetEditForm() {
     const editForm = document.getElementById('messagingTweetsEditForm');
-    if (!editForm) return;
-    editForm.reset();
-    editForm.classList.add('hidden');
+    const panel = tweetEditPanelEl();
+    if (editForm) editForm.reset();
+    if (panel) panel.classList.add('hidden');
   }
 
   function clearTweetSuggestions() {
@@ -1275,7 +1417,7 @@ App.messaging = (function () {
     notify(selectedIndexes.length === 1 ? 'Tweet saved' : `${selectedIndexes.length} tweets saved`);
     form.reset();
     clearTweetSuggestions();
-    renderMessagingTopicSelects();
+    syncHeadlineCategorySelects();
     renderImageOptions(document.getElementById('messagingTweetImageSelect'));
     const workspace = document.getElementById('messagingTweetsWorkspace');
     const toggleBtn = document.getElementById('messagingTweetsToggleFormBtn');
@@ -1951,12 +2093,18 @@ App.messaging = (function () {
     });
   }
 
+  function tweetsListFromApiResponse(res) {
+    if (Array.isArray(res?.tweets)) return res.tweets;
+    if (Array.isArray(res?.data)) return res.data;
+    return [];
+  }
+
   async function refreshTweets() {
     const tbody = document.getElementById('messagingTweetsTable');
     if (!tbody) return;
     try {
       const res = await api('/api/messaging/tweets?limit=200');
-      renderTweetsTable(Array.isArray(res.tweets) ? res.tweets : []);
+      renderTweetsTable(tweetsListFromApiResponse(res));
     } catch (err) {
       notify(`Could not load tweets: ${err.message}`, true);
     }
@@ -5573,12 +5721,20 @@ App.messaging = (function () {
     const ids = getSimpleContentIds(config);
     try {
       const res = await api(`${config.endpoint}?limit=5000`);
-      const items = Array.isArray(res[config.responseKey]) ? res[config.responseKey] : [];
+      const key = config.responseKey;
+      const items = Array.isArray(res[key])
+        ? res[key]
+        : Array.isArray(res.data)
+          ? res.data
+          : [];
       const stateForType = simpleContentState[config.key];
       if (stateForType) stateForType.items = items.slice();
       const tbody = document.getElementById(ids.tableId);
       if (tbody) {
         renderSimpleContentTable(config, items);
+      }
+      if (config.key === 'tweets' && document.getElementById('messagingTweetsTable')) {
+        renderTweetsTable(items);
       }
     } catch (err) {
       notify(`Could not load ${config.pluralLower}: ${err.message}`, true);
@@ -8366,7 +8522,7 @@ App.messaging = (function () {
           const promptIdInput = document.getElementById('messagingTweetPromptId');
           if (promptIdInput) promptIdInput.value = '';
           clearTweetSuggestions();
-          renderMessagingTopicSelects();
+          syncHeadlineCategorySelects();
           renderImageOptions(document.getElementById('messagingTweetImageSelect'));
           renderTweetSavedPromptOptions();
           if (tweetToggleBtn) tweetToggleBtn.textContent = 'Add Tweet';

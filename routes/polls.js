@@ -1,7 +1,8 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
-const { listPolls, createPoll, updatePoll, deletePoll } = require('../lib/pollsStore');
+const { listPolls, createPoll, updatePoll, deletePoll, importPollRows } = require('../lib/pollsStore');
+const { mapImportRow, validateAdvancedHeaders } = require('../lib/pollsCsvImport');
 
 async function handle(req, res, pathname, method) {
   // GET /api/polls
@@ -69,22 +70,46 @@ async function handle(req, res, pathname, method) {
       const body = await parseJsonBody(req);
       const rows = Array.isArray(body.rows) ? body.rows : [];
       if (!rows.length) return sendErr(res, 400, 'No data to import'), true;
-      
-      let imported = 0;
-      for (const row of rows) {
-        const question = String(row.Question || '').trim();
-        if (!question) continue;
-        
-        const options = [];
-        if (row['Option A']) options.push({ label: String(row['Option A']).trim(), sort_order: 1 });
-        if (row['Option B']) options.push({ label: String(row['Option B']).trim(), sort_order: 2 });
-        // Can extend this for Option C, etc. if needed
-        
-        await createPoll({ question, category: String(row.Category || '').trim() }, options);
-        imported++;
+
+      const mapped = rows
+        .map((row) => mapImportRow(row, 'basic'))
+        .filter(Boolean);
+      if (!mapped.length) return sendErr(res, 400, 'No valid poll rows found'), true;
+
+      const result = await importPollRows(mapped, { upsert: false });
+      return sendOk(res, 201, { success: true, ...result }), true;
+    } catch (err) {
+      return sendErr(res, 500, err.message), true;
+    }
+  }
+
+  // POST /api/polls/import/advanced — Normie scoring CSV (all columns)
+  if (pathname === '/api/polls/import/advanced' && method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      if (!rows.length) return sendErr(res, 400, 'No data to import'), true;
+
+      const headers = Object.keys(rows[0] || {});
+      const headerCheck = validateAdvancedHeaders(headers);
+      if (!headerCheck.ok) {
+        return sendErr(
+          res,
+          400,
+          `CSV missing required columns: ${headerCheck.missing.join(', ')}`
+        ), true;
       }
-      
-      return sendOk(res, 201, { success: true, count: imported }), true;
+
+      const mapped = rows
+        .map((row) => mapImportRow(row, 'advanced'))
+        .filter(Boolean);
+      if (!mapped.length) {
+        return sendErr(res, 400, 'No valid scoring poll rows found'), true;
+      }
+
+      const upsert = body.upsert !== false;
+      const result = await importPollRows(mapped, { upsert });
+      return sendOk(res, 201, { success: true, ...result }), true;
     } catch (err) {
       return sendErr(res, 500, err.message), true;
     }

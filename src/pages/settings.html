@@ -178,6 +178,14 @@
                     <label>Created</label>
                     <input id="settingsProjectDetailsCreatedAt" readonly />
                   </div>
+                  <div class="form-row">
+                    <label for="settingsProjectTimezoneSelect">Schedule Timezone</label>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+                      <select id="settingsProjectTimezoneSelect" style="min-width: 220px;"></select>
+                      <button id="settingsProjectTimezoneSaveBtn" type="button" class="btn btn-primary">Save Timezone</button>
+                    </div>
+                  </div>
+                  <p class="meta" style="margin-top: 0;">Used when scheduling Engage: Social posts. Pick the IANA region for this workspace (defaults to UTC until you save).</p>
                 </div>
                 <div class="project-details-media">
                   <div class="form-row">

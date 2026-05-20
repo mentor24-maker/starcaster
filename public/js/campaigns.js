@@ -500,15 +500,20 @@ App.campaigns = (function () {
       safeText(taglineRow?.tagline || selectedOptionTextIfValue(byId('campaignTaglineSelect'))),
     ].filter(Boolean);
     const ctaText = appendCtaUrl(ctaRow?.cta || selectedOptionTextIfValue(byId('campaignCtaSelect')));
+    const shareUrl = campaignProjectUrl();
     const originalHashtags = selectedHashtagRows().map(hashtagText).filter(Boolean);
     let hashtags = originalHashtags.slice();
     let includeCta = !!ctaText;
-
-    const compose = () => [
-      ...baseParts,
-      includeCta ? ctaText : '',
-      hashtags.length ? hashtags.join(' ') : '',
-    ].filter(Boolean).join('\n\n');
+    let includeLink = Boolean(shareUrl);
+    const compose = () => {
+      const bodyParts = [...baseParts];
+      if (includeCta && ctaText) bodyParts.push(ctaText);
+      const bodyJoined = bodyParts.join('\n\n');
+      if (includeLink && shareUrl && !bodyJoined.includes(shareUrl)) bodyParts.push(shareUrl);
+      const withHashtags = [...bodyParts];
+      if (hashtags.length) withHashtags.push(hashtags.join(' '));
+      return withHashtags.filter(Boolean).join('\n\n');
+    };
 
     let text = compose();
     while (hashtags.length && characterCount(text) > TWEET_CHARACTER_LIMIT) {
@@ -517,6 +522,10 @@ App.campaigns = (function () {
     }
     if (includeCta && characterCount(text) > TWEET_CHARACTER_LIMIT) {
       includeCta = false;
+      text = compose();
+    }
+    if (includeLink && characterCount(text) > TWEET_CHARACTER_LIMIT) {
+      includeLink = false;
       text = compose();
     }
 
@@ -528,6 +537,7 @@ App.campaigns = (function () {
       delta: TWEET_CHARACTER_LIMIT - count,
       removedHashtagCount: originalHashtags.length - hashtags.length,
       ctaDropped: !!ctaText && !includeCta,
+      urlMissingFromTweet: Boolean(shareUrl) && !text.includes(shareUrl),
     };
   }
 
@@ -613,6 +623,7 @@ App.campaigns = (function () {
       const trimNotes = [
         preview.removedHashtagCount ? `${preview.removedHashtagCount} hashtag${preview.removedHashtagCount === 1 ? '' : 's'} removed` : '',
         preview.ctaDropped ? 'CTA dropped' : '',
+        preview.urlMissingFromTweet ? 'Project URL not in tweet — shorten copy or use a shorter Website URL' : '',
       ].filter(Boolean).join(' · ');
       countEl.textContent = `${preview.count}/${preview.limit} characters · ${statusText}${trimNotes ? ` · ${trimNotes}` : ''}`;
       shell.appendChild(countEl);
@@ -1453,7 +1464,7 @@ App.campaigns = (function () {
     const idInput = byId('campaignIdInput');
     if (idInput) idInput.value = editingCampaignId;
     form.elements.name.value = cloneMode ? `${safeText(campaign.name)} Copy`.trim() : safeText(campaign.name);
-    form.elements.status.value = campaignStatusValue(campaign, config);
+    form.elements.status.value = cloneMode ? 'draft' : campaignStatusValue(campaign, config);
     applySelectValue(byId('campaignChannelSelect'), config.channelId);
     applyTopicValue(byId('campaignTopicSelect'), config.topicId, config.topicLabel);
     applySelectValue(byId('campaignSegmentSelect'), config.segmentId || campaign.segmentId);

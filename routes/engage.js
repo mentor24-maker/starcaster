@@ -5,8 +5,11 @@ const { logActivity } = require('../lib/activityLog');
 const { getProviderValues, getProviderCredentialDiagnostics } = require('../lib/apiSettings');
 const { listCampaigns, rowToCampaign } = require('../lib/store');
 const { getAssetById, rowToAsset } = require('../lib/assetsStore');
+const { fetchDriveFileMedia } = require('../lib/googleDrive');
 const socialStore = require('../lib/engageSocialStore');
 const { requestProjectScope } = require('../lib/requestProjectScope');
+const { wallLocalToUtcIso } = require('../lib/wallTimeUtc');
+const { getProjectTimezoneForUser } = require('../lib/projectsStore');
 const xClient = require('../lib/xClient');
 const telegramClient = require('../lib/telegramClient');
 const blueskyClient = require('../lib/blueskyClient');
@@ -480,47 +483,125 @@ function isPublicMediaUrl(value, requireHttps = false) {
   }
 }
 
+function emptyCampaignImageMeta() {
+  return { imageUrl: '', imageAlt: '', primaryImageId: '' };
+}
+
+function extractDriveFileIdFromLocation(value) {
+  const text = safeText(value);
+  if (!text) return '';
+  const m = text.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  try {
+    const u = new URL(text);
+    const id = u.searchParams.get('id');
+    if (id) return id.trim();
+    if (String(u.hostname || '').includes('drive.google.com') && u.pathname.includes('/file/d/')) {
+      const parts = u.pathname.split('/').filter(Boolean);
+      const di = parts.indexOf('d');
+      if (di >= 0 && parts[di + 1]) return parts[di + 1];
+    }
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+async function loadImageBytesForSocialPublish(imageUrl, primaryImageId, scope = null) {
+  const maxBytes = 15 * 1024 * 1024;
+  const tryUrl = safeText(imageUrl);
+  if (tryUrl && /^https:/i.test(tryUrl)) {
+    try {
+      const res = await fetch(tryUrl, { signal: AbortSignal.timeout(120000), redirect: 'follow' });
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length && buf.length <= maxBytes) {
+          const ct = String(res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+          const sniff = ct && ct.startsWith('image/') ? ct : 'image/jpeg';
+          return { ok: true, buffer: buf, contentType: sniff };
+        }
+      }
+    } catch {
+      // fall through to asset / drive
+    }
+  }
+  const id = safeText(primaryImageId);
+  if (!id) return { ok: false, error: 'Could not load image bytes' };
+  const assetRes = await getAssetById(id, scope);
+  if (!assetRes.ok) return { ok: false, error: 'Asset not found' };
+  const assetRow = Array.isArray(assetRes.data) ? assetRes.data[0] : assetRes.data;
+  const asset = rowToAsset(assetRow);
+  const location = safeText(asset?.location);
+  const driveId = extractDriveFileIdFromLocation(location);
+  if (driveId) {
+    const media = await fetchDriveFileMedia(driveId);
+    if (media.ok && media.data?.buffer?.length) {
+      const ct = String(media.data.contentType || 'image/jpeg').split(';')[0].trim();
+      return { ok: true, buffer: media.data.buffer, contentType: ct.startsWith('image/') ? ct : 'image/jpeg' };
+    }
+  }
+  if (location && /^https:/i.test(location)) {
+    try {
+      const res = await fetch(location, { signal: AbortSignal.timeout(120000), redirect: 'follow' });
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length && buf.length <= maxBytes) {
+          const ct = String(res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+          return { ok: true, buffer: buf, contentType: ct.startsWith('image/') ? ct : 'image/jpeg' };
+        }
+      }
+    } catch {
+      return { ok: false, error: 'Could not load image bytes' };
+    }
+  }
+  return { ok: false, error: 'Could not load image bytes' };
+}
+
 async function resolveCampaignImageMeta(campaignIdInput, req) {
+  const scope = requestProjectScope(req);
   const campaignId = safeText(campaignIdInput);
-  if (!campaignId) return { imageUrl: '', imageAlt: '' };
+  if (!campaignId) return emptyCampaignImageMeta();
   const res = await listCampaigns();
-  if (!res.ok) return { imageUrl: '', imageAlt: '' };
+  if (!res.ok) return emptyCampaignImageMeta();
   const campaigns = (Array.isArray(res.data) ? res.data : []).map(rowToCampaign);
   const campaign = campaigns.find((item) => safeText(item?.id) === campaignId);
-  if (!campaign) return { imageUrl: '', imageAlt: '' };
+  if (!campaign) return emptyCampaignImageMeta();
   const content = parseJsonObject(campaign.content);
   const primaryImageId = safeText(content?.primaryImageId);
-  if (!primaryImageId) return { imageUrl: '', imageAlt: '' };
+  if (!primaryImageId) return { imageUrl: '', imageAlt: '', primaryImageId: '' };
+  const imageAltDefault = `${safeText(campaign?.name) || 'Campaign'} image`;
   let imageUrl = '';
-  const assetRes = await getAssetById(primaryImageId);
+  const assetRes = await getAssetById(primaryImageId, scope);
   if (assetRes.ok) {
     const assetRow = Array.isArray(assetRes.data) ? assetRes.data[0] : assetRes.data;
     const asset = rowToAsset(assetRow);
-    const location = safeText(asset?.location);
-    if (isPublicMediaUrl(location, true)) imageUrl = location;
+    const loc = safeText(asset?.location);
+    if (isPublicMediaUrl(loc, true)) imageUrl = loc;
   }
   if (!imageUrl) {
     const origin = configuredPublicOrigin(req);
-    if (!origin) return { imageUrl: '', imageAlt: '' };
+    if (!origin) return { imageUrl: '', imageAlt: imageAltDefault, primaryImageId };
     imageUrl = `${origin}/api/assets/file/${encodeURIComponent(primaryImageId)}`;
   }
   return {
     imageUrl,
-    imageAlt: `${safeText(campaign?.name) || 'Campaign'} image`,
+    imageAlt: imageAltDefault,
+    primaryImageId,
   };
 }
 
 async function resolvePostImageMeta(post, req, requireHttps = false) {
   const currentUrl = safeText(post?.imageUrl);
   if (isPublicMediaUrl(currentUrl, requireHttps)) {
-    return { imageUrl: currentUrl, imageAlt: safeText(post?.imageAlt) };
+    return { imageUrl: currentUrl, imageAlt: safeText(post?.imageAlt), primaryImageId: '' };
   }
   const campaignId = safeText(post?.campaignId);
-  if (!campaignId) return { imageUrl: '', imageAlt: safeText(post?.imageAlt) };
+  if (!campaignId) return { imageUrl: '', imageAlt: safeText(post?.imageAlt), primaryImageId: '' };
   const fallback = await resolveCampaignImageMeta(campaignId, req);
   return {
     imageUrl: safeText(fallback.imageUrl),
     imageAlt: safeText(post?.imageAlt || fallback.imageAlt),
+    primaryImageId: safeText(fallback.primaryImageId),
   };
 }
 
@@ -575,7 +656,17 @@ async function publishStoredPost(post, req) {
   } else if (channel === 'instagram') {
     result = await metaClients.createInstagramPost(post.text, imageOpts);
   } else {
-    result = await xClient.createPost(post.text);
+    const resolved = await resolvePostImageMeta(post, req, false);
+    imageOpts.imageUrl = safeText(resolved.imageUrl);
+    imageOpts.imageAlt = safeText(resolved.imageAlt);
+    const maxMediaBytes = 5 * 1024 * 1024;
+    let mediaIds = [];
+    const bytesRes = await loadImageBytesForSocialPublish(resolved.imageUrl, resolved.primaryImageId, scope);
+    if (bytesRes.ok && bytesRes.buffer.length <= maxMediaBytes) {
+      const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType);
+      if (upload.ok && upload.mediaId) mediaIds = [upload.mediaId];
+    }
+    result = await xClient.createPost(post.text, { mediaIds });
   }
   if (!result.ok) {
     const failed = await socialStore.updatePost(post.id, {
@@ -1315,7 +1406,8 @@ async function handle(req, res, pathname, method) {
     let imageUrl = safeText(body.imageUrl);
     let imageAlt = safeText(body.imageAlt);
     const publishNow = Boolean(body.publishNow);
-    const scheduledFor = String(body.scheduledFor || '').trim();
+    let scheduledFor = String(body.scheduledFor || '').trim();
+    const scheduledForWall = String(body.scheduledForWall || '').trim();
     const maxLengths = {
       x: 280,
       facebook: 63206,
@@ -1331,7 +1423,7 @@ async function handle(req, res, pathname, method) {
 
     if (!text) return sendErr(res, 400, 'Post text is required', { code: 'VALIDATION_ERROR' }), true;
     if (text.length > maxLen) return sendErr(res, 400, `${channel.toUpperCase()} posts must be ${maxLen} characters or fewer`, { code: 'VALIDATION_ERROR' }), true;
-    if (channel === 'bluesky' && !imageUrl && campaignId) {
+    if ((channel === 'bluesky' || channel === 'x') && !imageUrl && campaignId) {
       try {
         const fallback = await resolveCampaignImageMeta(campaignId, req);
         imageUrl = safeText(fallback.imageUrl);
@@ -1342,6 +1434,21 @@ async function handle(req, res, pathname, method) {
     }
 
     const scope = requestProjectScope(req);
+    const userId = safeText(req?.authUser?.id);
+    if (!publishNow) {
+      if (scheduledForWall) {
+        const tz = await getProjectTimezoneForUser(safeText(scope.projectId), userId);
+        const iso = wallLocalToUtcIso(scheduledForWall, tz);
+        if (!iso) {
+          return sendErr(res, 400, 'Could not interpret schedule time in the project timezone. Check the clock time (DST gaps have no matching instant) or the project timezone in Settings → Projects.', { code: 'VALIDATION_ERROR' }), true;
+        }
+        scheduledFor = iso;
+      }
+      if (!scheduledFor) {
+        return sendErr(res, 400, 'Schedule time is required unless publishing now.', { code: 'VALIDATION_ERROR' }), true;
+      }
+    }
+
     const created = await socialStore.createPost({
       text,
       channel,
