@@ -431,16 +431,16 @@
             </div>
           </section>
 
-          <form id="apiSettingsForm">
-            <div class="page-heading-row">
+          <form id="apiSettingsForm" class="standard-form-grid api-settings-form">
+            <div class="standard-form-grid-full page-heading-row">
               <h3 id="apiSettingsFormTitle">Credentials</h3>
             </div>
-            <div id="apiSettingsFormContext" class="meta"></div>
+            <div id="apiSettingsFormContext" class="standard-form-grid-full meta"></div>
             
               <label for="apiProviderSelect">Provider</label>
               <select id="apiProviderSelect" name="provider" required></select>
             
-            <div id="apiFieldsContainer" class="stack-form"></div>
+            <div id="apiFieldsContainer" class="standard-form-grid-full api-fields-stack"></div>
             <div></div>
               <button type="submit" class="btn btn-primary">Save Credentials</button>
           </form>
@@ -452,7 +452,7 @@
           <table>
             <thead>
               <tr>
-                <th>Channel</th>
+                <th class="channel-connection-col">Channel</th>
                 <th>Core Fields / Saved</th>
                 <th id="channelGateHeader0">Gate 1</th>
                 <th id="channelGateHeader1">Gate 2</th>

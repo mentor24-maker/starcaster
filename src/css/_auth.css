@@ -7,7 +7,13 @@
   display: flex;
   flex-direction: column;
   padding: 2rem 1.25rem 4.5rem;
-  background: #000000;
+  background-color: #000000;
+  background-image:
+    linear-gradient(to bottom, #000000 0%, transparent 100%),
+    var(--auth-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   box-sizing: border-box;
 }
 
@@ -22,15 +28,39 @@
 }
 
 .auth-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
   width: 100%;
-  text-align: left;
   margin: 0 0 2rem;
 }
 
-.auth-banner img {
+.auth-banner-logo {
   width: min(100%, var(--auth-brand-width));
   max-width: 100%;
   height: auto;
+  flex: 0 1 auto;
+}
+
+.auth-banner-alphire-link {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: block;
+  line-height: 0;
+}
+
+.auth-banner-alphire-link:hover {
+  opacity: 0.9;
+}
+
+.auth-banner-alphire {
+  display: block;
+  height: auto;
+  max-height: 4.5rem;
+  width: auto;
+  max-width: min(22rem, 38vw);
+  object-fit: contain;
 }
 
 .auth-main {
@@ -65,13 +95,14 @@
   flex-direction: column;
   gap: 1.25rem;
   max-width: min(43.75rem, 100cqw);
-  font-size: 1.2rem;
   line-height: 1.55;
-  color: #cccccc;
 }
 
 .auth-intro-body p {
   margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.55;
+  color: #dddddd;
 }
 
 .auth-intro-closer {
@@ -89,8 +120,8 @@
 }
 
 .auth-card {
-  background: #eaf4ff;
-  border: 1px solid var(--border-strong);
+  background: rgba(183, 221, 255, 0.7);
+  border: 2px solid #0245a1;
   border-radius: var(--radius-container);
   padding: 2.5rem 2rem;
   justify-self: center;
