@@ -80,6 +80,14 @@ function requestOrigin(req) {
   return `${proto}://${host}`;
 }
 
+/** Map third-party auth failures to 502 so App.api does not treat them as session expiry. */
+function socialPublishHttpStatus(statusInput) {
+  const status = Number(statusInput || 0) || 0;
+  if (status === 401 || status === 403) return 502;
+  if (status >= 400 && status < 600) return status;
+  return 500;
+}
+
 function configuredPublicOrigin(req) {
   const configured = safeText(process.env.PUBLIC_APP_ORIGIN || process.env.APP_PUBLIC_ORIGIN || process.env.PUBLIC_BASE_URL);
   if (configured) return configured.replace(/\/+$/, '');
@@ -1578,7 +1586,7 @@ async function handle(req, res, pathname, method) {
     if (publishNow && PUBLISH_NOW_CHANNELS.includes(channel)) {
       const publishResult = await publishStoredPost(created, req);
       if (!publishResult.ok) {
-        return sendErr(res, publishResult.status || 500, publishResult.error, {
+        return sendErr(res, socialPublishHttpStatus(publishResult.status), publishResult.error, {
           code: 'SOCIAL_PUBLISH_FAILED',
         }), true;
       }
@@ -1615,7 +1623,9 @@ async function handle(req, res, pathname, method) {
     const post = await socialStore.getPost(postId, scope);
     if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
     const result = await publishStoredPost(post, req);
-    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: 'SOCIAL_PUBLISH_FAILED' }), true;
+    if (!result.ok) {
+      return sendErr(res, socialPublishHttpStatus(result.status), result.error, { code: 'SOCIAL_PUBLISH_FAILED' }), true;
+    }
     return sendOk(res, 200, result.data, result.data), true;
   }
 
