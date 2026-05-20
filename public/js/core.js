@@ -356,6 +356,8 @@ App.els = {
   settingsProjectDetailsDescription: document.getElementById('settingsProjectDetailsDescription'),
   settingsProjectDetailsRole: document.getElementById('settingsProjectDetailsRole'),
   settingsProjectDetailsCreatedAt: document.getElementById('settingsProjectDetailsCreatedAt'),
+  settingsProjectTimezoneSelect: document.getElementById('settingsProjectTimezoneSelect'),
+  settingsProjectTimezoneSaveBtn: document.getElementById('settingsProjectTimezoneSaveBtn'),
   settingsProjectLogoFile: document.getElementById('settingsProjectLogoFile'),
   settingsProjectLogoPreview: document.getElementById('settingsProjectLogoPreview'),
   settingsProjectLogoPlaceholder: document.getElementById('settingsProjectLogoPlaceholder'),
