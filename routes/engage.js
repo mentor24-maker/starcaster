@@ -1480,7 +1480,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, { post: created }, { post: created }), true;
   }
 
-  if (pathname === '/api/engage/social/posts/publish-due' && requestMethod === 'POST') {
+  if (pathname === '/api/engage/social/posts/publish-due' && (requestMethod === 'POST' || requestMethod === 'GET')) {
     const scope = requestProjectScope(req);
     const duePosts = await socialStore.listDuePosts(scope);
     const results = [];
@@ -1491,6 +1491,9 @@ async function handle(req, res, pathname, method) {
         ok: !!result.ok,
         error: result.ok ? '' : String(result.error || 'Publish failed'),
       });
+    }
+    if (duePosts.length) {
+      console.log(`[engage.social] publish-due processed ${results.length} post(s), failures=${results.filter((r) => !r.ok).length}`);
     }
     const posts = await socialStore.listPosts(scope);
     return sendOk(res, 200, { processed: results, posts }, { processed: results, posts }), true;

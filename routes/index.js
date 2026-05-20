@@ -89,9 +89,13 @@ function providerDebug(provider, envVar) {
   };
 }
 
+const CRON_PATHS = new Set([
+  '/api/engage/youtube-comment-agents/run-due',
+  '/api/engage/social/posts/publish-due',
+]);
+
 function isAuthorizedCronRequest(req, pathname) {
-  const cronPath = pathname === '/api/engage/youtube-comment-agents/run-due';
-  if (!cronPath) return false;
+  if (!CRON_PATHS.has(pathname)) return false;
   const vercelCron = String(req?.headers?.['x-vercel-cron'] || '').trim();
   if (vercelCron) return true;
   const authHeader = String(req?.headers?.authorization || '').trim();
