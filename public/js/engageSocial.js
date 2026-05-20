@@ -7,6 +7,7 @@ App.engageSocial = (function () {
 
   let campaigns = [];
   let posts = [];
+  let assetsForThumbs = [];
   let activeProject = null;
 
   function el(id) {
@@ -287,6 +288,70 @@ App.engageSocial = (function () {
 
   // --- Queue / History table ---
 
+  function extractDriveFileIdFromLocation(value) {
+    const text = safeText(value);
+    if (!text) return '';
+    const m = text.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return m[1];
+    try {
+      const u = new URL(text);
+      const id = u.searchParams.get('id');
+      if (id) return id.trim();
+      if (String(u.hostname || '').includes('drive.google.com') && u.pathname.includes('/file/d/')) {
+        const parts = u.pathname.split('/').filter(Boolean);
+        const di = parts.indexOf('d');
+        if (di >= 0 && parts[di + 1]) return parts[di + 1];
+      }
+    } catch {
+      return '';
+    }
+    return '';
+  }
+
+  /** URLs safe to use as <img src> (https public, or same-origin asset proxy). */
+  function isBrowserImgSrc(raw) {
+    const u = safeText(raw);
+    if (!u) return false;
+    if (u.startsWith('/api/assets/')) return true;
+    try {
+      const parsed = new URL(u);
+      const host = (parsed.hostname || '').toLowerCase();
+      if (host === 'localhost' || host === '127.0.0.1') return false;
+      return parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  function normalizeAssetsPayload(body) {
+    if (!body || typeof body !== 'object') return [];
+    const fromData = body.data;
+    if (Array.isArray(fromData)) return fromData;
+    if (Array.isArray(body.assets)) return body.assets;
+    return [];
+  }
+
+  function postThumbnailSrc(post) {
+    const direct = safeText(post.imageUrl);
+    if (isBrowserImgSrc(direct)) return direct;
+    const cid = safeText(post.campaignId);
+    const campaign = cid ? campaigns.find((c) => String(c.id) === cid) : null;
+    if (!campaign) return '';
+    const cfg = parseConfig(campaign);
+    const pid = safeText(cfg.primaryImageId);
+    if (!pid) return '';
+    const pool = []
+      .concat(Array.isArray(assetsForThumbs) ? assetsForThumbs : [])
+      .concat(Array.isArray(state.assets) ? state.assets : []);
+    const asset = pool.find((a) => String(a.id) === pid);
+    if (!asset) return '';
+    const loc = safeText(asset.location);
+    if (isBrowserImgSrc(loc)) return loc;
+    const driveId = extractDriveFileIdFromLocation(loc);
+    if (driveId) return `/api/assets/drive-file/${encodeURIComponent(driveId)}`;
+    return '';
+  }
+
   function renderPosts(rows) {
     const tbody = el('engageSocialPostsTable');
     if (!tbody) return;
@@ -296,7 +361,7 @@ App.engageSocial = (function () {
     if (!posts.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 7;
+      td.colSpan = 8;
       td.textContent = 'No social posts yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -331,6 +396,25 @@ App.engageSocial = (function () {
       const publishedTd = document.createElement('td');
       publishedTd.textContent = formatDate(post.publishedAt);
       tr.appendChild(publishedTd);
+
+      const thumbTd = document.createElement('td');
+      thumbTd.className = 'engage-social-post-thumb-cell';
+      const thumbSrc = postThumbnailSrc(post);
+      if (thumbSrc) {
+        const img = document.createElement('img');
+        img.src = thumbSrc;
+        img.alt = safeText(post.imageAlt) || 'Featured image';
+        img.className = 'engage-social-post-thumb';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        thumbTd.appendChild(img);
+      } else {
+        const dash = document.createElement('span');
+        dash.className = 'meta';
+        dash.textContent = '—';
+        thumbTd.appendChild(dash);
+      }
+      tr.appendChild(thumbTd);
 
       const textTd = document.createElement('td');
       textTd.textContent = safeText(post.text);
@@ -465,13 +549,18 @@ App.engageSocial = (function () {
   // --- Data refresh ---
 
   async function refresh() {
-    const [postsRes, campaignsRes, projectRes, profileRes] = await Promise.allSettled([
+    const [postsRes, campaignsRes, projectRes, profileRes, assetsRes] = await Promise.allSettled([
       api('/api/engage/social/posts'),
       api('/api/campaigns'),
       api('/api/projects/current'),
       api('/api/settings/profile'),
+      api('/api/assets'),
     ]);
-    if (postsRes.status === 'fulfilled') renderPosts(postsRes.value.posts || postsRes.value.data || []);
+    if (assetsRes.status === 'fulfilled') {
+      assetsForThumbs = normalizeAssetsPayload(assetsRes.value);
+    } else {
+      assetsForThumbs = [];
+    }
     if (projectRes.status === 'fulfilled') {
       activeProject = projectRes.value.project || projectRes.value.currentProject || projectRes.value.data?.project || null;
       if (activeProject?.id) {
@@ -486,6 +575,9 @@ App.engageSocial = (function () {
     if (campaignsRes.status === 'fulfilled') {
       campaigns = campaignsRes.value.campaigns || campaignsRes.value.data || [];
       renderCampaignSelect();
+    }
+    if (postsRes.status === 'fulfilled') {
+      renderPosts(postsRes.value.posts || postsRes.value.data || []);
     }
     updateScheduleTimezoneHint();
   }

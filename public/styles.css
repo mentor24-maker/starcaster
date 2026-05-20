@@ -6743,6 +6743,22 @@ button[type=submit] {
   border-radius: 0;
   object-fit: cover;
 }
+.engage-social-post-thumb-cell {
+  width: 1%;
+  white-space: nowrap;
+  vertical-align: middle;
+  padding: 6px 10px;
+}
+.engage-social-post-thumb {
+  display: block;
+  height: 50px;
+  width: auto;
+  max-width: 100px;
+  object-fit: cover;
+  border-radius: var(--radius-container);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
 .c-modal__dialog.engage-social-schedule-modal {
   width: min(860px, calc(100vw - 48px));
 }

@@ -430,7 +430,7 @@
               <li>Engage: Social is an implemented queueing workflow focused on X.</li>
               <li>Operators can compose posts, schedule optional publish times, monitor a character counter, queue content, or publish immediately.</li>
               <li>A queue snapshot tracks scheduled, failed, and published counts plus connected account status.</li>
-              <li>The `Publish Due Posts` action flushes posts that are due now or overdue.</li>
+              <li>Scheduled posts are published automatically in production via Vercel Cron (`/api/engage/social/posts/publish-due`, every 5 minutes). The `Publish Due Posts` button flushes due posts immediately.</li>
             </ul>
           </section>
           <section class="docs-panel">
