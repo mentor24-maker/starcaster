@@ -31,10 +31,10 @@ App.settings = (function () {
     quora: '/images/logos/quora.svg',
     substack: '/images/logos/substack.svg',
     medium: '/images/logos/medium.svg',
+    linkedin: '/images/logos/linkedin.svg',
   };
   const CHANNEL_LOGO_REMOTE = {
     instagram: 'https://cdn.simpleicons.org/instagram/e4405f',
-    linkedin: 'https://cdn.simpleicons.org/linkedin/0a66c2',
     threads: 'https://cdn.simpleicons.org/threads/000000',
     pinterest: 'https://cdn.simpleicons.org/pinterest/bd081c',
     reddit: 'https://cdn.simpleicons.org/reddit/ff4500',
@@ -748,7 +748,7 @@ App.settings = (function () {
       meta:      { logo: 'https://cdn.simpleicons.org/meta/0866ff', setupUrl: 'https://developers.facebook.com/apps/', title: 'Meta' },
       instagram: { logo: 'https://cdn.simpleicons.org/instagram/e4405f', setupUrl: 'https://developers.facebook.com/docs/instagram-platform/get-started', title: 'Instagram' },
       threads:   { logo: 'https://cdn.simpleicons.org/threads/000000', setupUrl: 'https://developers.facebook.com/docs/threads', title: 'Threads' },
-      linkedin:  { logo: 'https://cdn.simpleicons.org/linkedin/0a66c2', setupUrl: 'https://www.linkedin.com/developers/apps', title: 'LinkedIn' },
+      linkedin:  { logo: '/images/logos/linkedin.svg', setupUrl: 'https://www.linkedin.com/developers/apps', title: 'LinkedIn' },
       reddit:    { logo: 'https://cdn.simpleicons.org/reddit/ff4500', setupUrl: 'https://www.reddit.com/prefs/apps', title: 'Reddit' },
       pinterest: { logo: 'https://cdn.simpleicons.org/pinterest/bd081c', setupUrl: 'https://developers.pinterest.com/apps/', title: 'Pinterest' },
       telegram:  { logo: 'https://cdn.simpleicons.org/telegram/26a5e4', setupUrl: 'https://core.telegram.org/bots', title: 'Telegram' },
@@ -899,7 +899,11 @@ App.settings = (function () {
       logo.src = channelLogoSrc(row.key);
       logo.alt = '';
       logo.setAttribute('aria-hidden', 'true');
+      const label = document.createElement('span');
+      label.className = 'channel-connection-label';
+      label.textContent = row.label;
       link.appendChild(logo);
+      link.appendChild(label);
       link.addEventListener('click', async (event) => {
         event.preventDefault();
         await openChannelConnection(row.key);
