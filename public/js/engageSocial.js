@@ -428,6 +428,7 @@ App.engageSocial = (function () {
           const src = Object.entries(diag.cronCredentialSources).map(([k, v]) => `${k}=${v}`).join(', ');
           if (src) parts.push(`cron creds: ${src}`);
         }
+        if (diag.mediaUpload?.error) parts.push(`media: ${diag.mediaUpload.error}`);
         meta.textContent = parts.join(' · ');
         statusTd.appendChild(meta);
       }
