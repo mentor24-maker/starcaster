@@ -13,6 +13,7 @@ const { getProjectTimezoneForUser } = require('../lib/projectsStore');
 const xClient = require('../lib/xClient');
 const telegramClient = require('../lib/telegramClient');
 const blueskyClient = require('../lib/blueskyClient');
+const bufferClient = require('../lib/bufferClient');
 const metaClients = require('../lib/metaClients');
 const redditClient = require('../lib/redditClient');
 const { discoverRedditThreads } = require('../lib/redditThreadDiscovery');
@@ -39,7 +40,7 @@ const {
 } = require('../lib/acquire/YoutubeCommentSuggestions');
 const { postYoutubeComment } = require('../lib/acquire/YoutubeCommentPost');
 const { getAccessToken, config: getGoogleDriveConfig } = require('../lib/googleDrive');
-const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram'];
+const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram', 'buffer'];
 
 function safeText(value) {
   return String(value || '').trim();
@@ -86,6 +87,16 @@ function socialPublishHttpStatus(statusInput) {
   if (status === 401 || status === 403) return 502;
   if (status >= 400 && status < 600) return status;
   return 500;
+}
+
+function formatXPublishError(result, mediaUpload) {
+  const tweetErr = safeText(result?.error);
+  const mediaErr = safeText(mediaUpload?.error);
+  if (mediaErr && mediaUpload?.attempted && !mediaUpload?.ok) {
+    if (tweetErr && tweetErr !== mediaErr) return `${mediaErr} (tweet: ${tweetErr})`;
+    return mediaErr;
+  }
+  return tweetErr || 'Unknown publish error';
 }
 
 function configuredPublicOrigin(req) {
@@ -682,6 +693,13 @@ async function publishStoredPost(post, req) {
     result = await telegramClient.sendMessage(post.text);
   } else if (channel === 'bluesky') {
     result = await blueskyClient.createPost(post.text, imageOpts);
+  } else if (channel === 'buffer') {
+    const resolved = await resolvePostImageMeta(post, req, false);
+    imageOpts.imageUrl = safeText(resolved.imageUrl);
+    imageOpts.imageAlt = safeText(resolved.imageAlt);
+    result = await bufferClient.createQueuedPost(post.text, {
+      imageUrl: imageOpts.imageUrl,
+    });
   } else if (channel === 'facebook') {
     result = await metaClients.createFacebookPost(post.text, imageOpts);
   } else if (channel === 'threads') {
@@ -689,34 +707,43 @@ async function publishStoredPost(post, req) {
   } else if (channel === 'instagram') {
     result = await metaClients.createInstagramPost(post.text, imageOpts);
   } else {
-    const resolved = await resolvePostImageMeta(post, req, false);
-    imageOpts.imageUrl = safeText(resolved.imageUrl);
-    imageOpts.imageAlt = safeText(resolved.imageAlt);
-    const maxMediaBytes = 5 * 1024 * 1024;
-    let mediaIds = [];
-    const bytesRes = await loadImageBytesForSocialPublish(resolved.imageUrl, resolved.primaryImageId, scope);
-    mediaUpload = { attempted: false, ok: false, status: 0, error: '' };
-    if (bytesRes.ok && bytesRes.buffer.length <= maxMediaBytes) {
-      mediaUpload.attempted = true;
-      const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType, credOpts);
-      mediaUpload = {
-        attempted: true,
-        ok: Boolean(upload.ok),
-        status: Number(upload.status || 0) || 0,
-        error: safeText(upload.error),
-        mediaId: safeText(upload.mediaId),
-      };
-      if (upload.ok && upload.mediaId) mediaIds = [upload.mediaId];
-    } else if (safeText(resolved.imageUrl)) {
-      mediaUpload = {
-        attempted: true,
+    const authCheck = await xClient.checkAuth(credOpts);
+    if (!authCheck.ok) {
+      result = {
         ok: false,
-        status: 0,
-        error: safeText(bytesRes.error) || 'Could not load image bytes for publish',
-        mediaId: '',
+        status: authCheck.status || 502,
+        error: safeText(authCheck.error) || 'X authentication failed before publish',
       };
+    } else {
+      const resolved = await resolvePostImageMeta(post, req, false);
+      imageOpts.imageUrl = safeText(resolved.imageUrl);
+      imageOpts.imageAlt = safeText(resolved.imageAlt);
+      const maxMediaBytes = 5 * 1024 * 1024;
+      let mediaIds = [];
+      const bytesRes = await loadImageBytesForSocialPublish(resolved.imageUrl, resolved.primaryImageId, scope);
+      mediaUpload = { attempted: false, ok: false, status: 0, error: '' };
+      if (bytesRes.ok && bytesRes.buffer.length <= maxMediaBytes) {
+        mediaUpload.attempted = true;
+        const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType, credOpts);
+        mediaUpload = {
+          attempted: true,
+          ok: Boolean(upload.ok),
+          status: Number(upload.status || 0) || 0,
+          error: safeText(upload.error),
+          mediaId: safeText(upload.mediaId),
+        };
+        if (upload.ok && upload.mediaId) mediaIds = [upload.mediaId];
+      } else if (safeText(resolved.imageUrl)) {
+        mediaUpload = {
+          attempted: true,
+          ok: false,
+          status: 0,
+          error: safeText(bytesRes.error) || 'Could not load image bytes for publish',
+          mediaId: '',
+        };
+      }
+      result = await xClient.createPost(post.text, { mediaIds, ...credOpts });
     }
-    result = await xClient.createPost(post.text, { mediaIds, ...credOpts });
   }
   if (!result.ok) {
     const xDiag = channel === 'x'
@@ -725,9 +752,12 @@ async function publishStoredPost(post, req) {
         cron: getProviderCredentialDiagnostics('x', { envOnly: true }),
       }
       : null;
+    const publishError = channel === 'x'
+      ? formatXPublishError(result, mediaUpload)
+      : String(result.error || 'Unknown publish error');
     const failed = await socialStore.updatePost(post.id, {
       status: 'failed',
-      error: String(result.error || 'Unknown publish error'),
+      error: publishError,
       diagnostics: {
         checkedAt: new Date().toISOString(),
         channel,
@@ -755,23 +785,29 @@ async function publishStoredPost(post, req) {
       endpoint: String(result.data?.endpoint || ''),
       status: Number(result.status || 0) || 0,
       imageUrl: safeText(imageOpts.imageUrl || post?.imageUrl || ''),
+      externalQueue: channel === 'buffer' ? 'buffer' : '',
+      externalDueAt: channel === 'buffer' ? safeText(result.data?.dueAt) : '',
       attempts: Array.isArray(result.data?.attempts) ? result.data.attempts : [],
     },
   }, scope);
 
   logActivity({
     action: channel === 'telegram'
-      ? 'engage.social.telegram_posted'
-      : (channel === 'bluesky'
-        ? 'engage.social.bluesky_posted'
-        : (channel === 'facebook'
-          ? 'engage.social.facebook_posted'
-          : (channel === 'threads'
-            ? 'engage.social.threads_posted'
-            : (channel === 'instagram' ? 'engage.social.instagram_posted' : 'engage.social.x_posted')))),
+        ? 'engage.social.telegram_posted'
+        : (channel === 'bluesky'
+          ? 'engage.social.bluesky_posted'
+          : (channel === 'facebook'
+            ? 'engage.social.facebook_posted'
+            : (channel === 'threads'
+              ? 'engage.social.threads_posted'
+              : (channel === 'instagram'
+                ? 'engage.social.instagram_posted'
+                : (channel === 'buffer' ? 'engage.social.buffer_queued' : 'engage.social.x_posted'))))),
     entityType: 'engage_social_post',
     entityId: published?.id || null,
-    summary: `Published ${channel.toUpperCase()} post ${published?.id || ''}`,
+    summary: channel === 'buffer'
+      ? `Queued Buffer post ${published?.id || ''}`
+      : `Published ${channel.toUpperCase()} post ${published?.id || ''}`,
     meta: { remoteId: published?.remoteId || '' },
   });
 
@@ -1476,6 +1512,16 @@ async function handle(req, res, pathname, method) {
           serviceUrl: bs.serviceUrl || '',
         };
       })(),
+      bufferConfig: (() => {
+        const bf = bufferClient.getBufferCredentials();
+        return {
+          configured: bufferClient.isConfigured(bf),
+          hasApiKey: Boolean(bf.apiKey),
+          hasOrganizationId: Boolean(bf.organizationId),
+          hasDefaultChannelId: Boolean(bf.defaultChannelId),
+          baseUrl: bf.baseUrl || '',
+        };
+      })(),
       facebookConfig: (() => {
         const fb = metaClients.getFacebookCredentials();
         return {
@@ -1514,6 +1560,52 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, { diagnostics: payload }), true;
   }
 
+  if (pathname === '/api/engage/social/buffer/status' && requestMethod === 'GET') {
+    const creds = bufferClient.getBufferCredentials();
+    const status = {
+      configured: bufferClient.isConfigured(creds),
+      hasApiKey: Boolean(creds.apiKey),
+      hasOrganizationId: Boolean(creds.organizationId),
+      hasDefaultChannelId: Boolean(creds.defaultChannelId),
+      baseUrl: creds.baseUrl || '',
+    };
+    if (!status.configured) {
+      return sendOk(res, 200, { ...status, authOk: false, auth: null }, { status: { ...status, authOk: false, auth: null } }), true;
+    }
+    const auth = await bufferClient.checkAuth(creds);
+    return sendOk(
+      res,
+      200,
+      {
+        ...status,
+        authOk: Boolean(auth.ok),
+        auth: auth.ok
+          ? { organizations: auth.data?.organizations || [] }
+          : { error: safeText(auth.error) || 'Auth failed' },
+      },
+      {
+        status: {
+          ...status,
+          authOk: Boolean(auth.ok),
+          auth: auth.ok
+            ? { organizations: auth.data?.organizations || [] }
+            : { error: safeText(auth.error) || 'Auth failed' },
+        },
+      }
+    ), true;
+  }
+
+  if (pathname === '/api/engage/social/buffer/channels' && requestMethod === 'GET') {
+    const creds = bufferClient.getBufferCredentials();
+    const result = await bufferClient.listChannels({}, creds);
+    if (!result.ok) {
+      return sendErr(res, socialPublishHttpStatus(result.status), result.error, {
+        code: 'BUFFER_CHANNELS_FAILED',
+      }), true;
+    }
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
   if (pathname === '/api/engage/social/posts' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const text = String(body.text || '').trim();
@@ -1534,6 +1626,7 @@ async function handle(req, res, pathname, method) {
       pinterest: 500,
       reddit: 40000,
       telegram: 4096,
+      buffer: 5000,
     };
     const maxLen = Number(maxLengths[channel] || 5000);
 
