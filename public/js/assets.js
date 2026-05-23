@@ -64,6 +64,17 @@ App.assets = (function () {
     return `/api/assets/drive-file/${encodeURIComponent(id)}`;
   }
 
+  function assetImageUrl(asset, options = {}) {
+    const preferThumbnail = options.preferThumbnail !== false;
+    const thumbnailLocation = String(
+      asset?.thumbnailLocation || asset?.thumbnailUrl || asset?.thumbnail_location || ''
+    ).trim();
+    const sourceLocation = String(asset?.location || '').trim();
+    const location = preferThumbnail && thumbnailLocation ? thumbnailLocation : sourceLocation;
+    if (!location) return '';
+    return toDriveDirectUrl(location) || (isValidUrl(location) ? location : '');
+  }
+
   function appendCell(tr, text) {
     const td = document.createElement('td');
     td.textContent = String(text || '-');
@@ -675,7 +686,7 @@ App.assets = (function () {
       const thumbnailTd = document.createElement('td');
       const assetTypeText = String(asset.assetType || '').trim();
       const location = String(asset.location || '').trim();
-      const directImageUrl = toDriveDirectUrl(location) || (isValidUrl(location) ? location : '');
+      const directImageUrl = assetImageUrl(asset);
       if (assetTypeText === 'Image' && directImageUrl) {
         const img = document.createElement('img');
         img.src = directImageUrl;

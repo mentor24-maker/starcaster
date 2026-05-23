@@ -352,6 +352,20 @@ App.messaging = (function () {
     return `${name} [${category}]`;
   }
 
+  function tweetImageAssetById(assetId) {
+    const id = String(assetId || '').trim();
+    if (!id) return null;
+    return (tweetImageAssets || []).find((asset) => String(asset.id || '') === id)
+      || (allImageAssets || []).find((asset) => String(asset.id || '') === id)
+      || (Array.isArray(state.assets) ? state.assets : []).find((asset) => String(asset.id || '') === id)
+      || null;
+  }
+
+  function tweetImageAssetLabel(assetId) {
+    const asset = tweetImageAssetById(assetId);
+    return asset ? thumbnailOptionLabel(asset) : '';
+  }
+
   function syncHeadlineCategorySelects() {
     const categoryNames = currentMessagingTopics
       .map((item) => String(item?.topic || item?.category || '').trim())
@@ -667,7 +681,9 @@ App.messaging = (function () {
   }
 
   function thumbnailUrlFromAsset(asset) {
-    const location = String(asset && asset.location ? asset.location : '').trim();
+    const location = String(
+      asset?.thumbnailLocation || asset?.thumbnailUrl || asset?.thumbnail_location || asset?.location || ''
+    ).trim();
     if (!location) return '';
     const driveDirect = toDriveDirectUrl(location);
     if (driveDirect) return driveDirect;
@@ -692,6 +708,10 @@ App.messaging = (function () {
 
   function renderImageOptions(select) {
     if (!select) return;
+    if (select.tagName !== 'SELECT') {
+      renderTweetImagePickerDisplay(select.id);
+      return;
+    }
     const currentValue = String(select.value || '');
     select.innerHTML = '<option value="">Image (optional)</option>';
     tweetImageAssets.forEach((asset) => {
@@ -705,6 +725,197 @@ App.messaging = (function () {
     if (currentValue) select.value = currentValue;
   }
 
+  function tweetImagePickerConfig(inputId) {
+    const id = String(inputId || '').trim();
+    if (id === 'messagingTweetEditImageSelect') {
+      return {
+        inputId: id,
+        buttonId: 'messagingTweetEditImagePickerBtn',
+        previewId: 'messagingTweetEditImagePreview',
+      };
+    }
+    return {
+      inputId: 'messagingTweetImageSelect',
+      buttonId: 'messagingTweetImagePickerBtn',
+      previewId: 'messagingTweetImagePreview',
+    };
+  }
+
+  function setTweetImagePickerValue(inputId, value) {
+    const config = tweetImagePickerConfig(inputId);
+    const input = document.getElementById(config.inputId);
+    if (!input) return;
+    input.value = String(value || '').trim();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    renderTweetImagePickerDisplay(config.inputId);
+  }
+
+  function renderTweetImagePickerDisplay(inputId) {
+    const config = tweetImagePickerConfig(inputId);
+    const input = document.getElementById(config.inputId);
+    const button = document.getElementById(config.buttonId);
+    const preview = document.getElementById(config.previewId);
+    const asset = tweetImageAssetById(input?.value);
+    if (button) button.textContent = asset ? 'Change Image' : 'Choose Image';
+    if (!preview) return;
+    preview.textContent = '';
+    if (!asset) {
+      preview.textContent = 'No image selected';
+      return;
+    }
+    const imageUrl = thumbnailUrlFromAsset(asset);
+    if (imageUrl) {
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.alt = String(asset.assetName || 'Tweet image');
+      preview.appendChild(img);
+    }
+    const text = document.createElement('div');
+    text.className = 'develop-theme-asset-preview-text';
+    const strong = document.createElement('strong');
+    strong.textContent = thumbnailOptionLabel(asset);
+    const span = document.createElement('span');
+    span.textContent = String(asset.category || 'Image');
+    text.appendChild(strong);
+    text.appendChild(span);
+    preview.appendChild(text);
+  }
+
+  function openTweetImageAssetPicker(inputId) {
+    if (!App.components || typeof App.components.Modal !== 'function') return false;
+    const config = tweetImagePickerConfig(inputId);
+    const currentValue = String(document.getElementById(config.inputId)?.value || '').trim();
+    const modalAssets = (tweetImageAssets.length ? tweetImageAssets : allImageAssets).slice();
+    const currentAsset = tweetImageAssetById(currentValue);
+    if (currentAsset && !modalAssets.some((asset) => String(asset.id || '') === currentValue)) {
+      modalAssets.unshift(currentAsset);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'develop-theme-picker-body';
+    const toolbar = document.createElement('div');
+    toolbar.className = 'develop-theme-picker-toolbar';
+
+    const filterInput = document.createElement('input');
+    filterInput.placeholder = 'Search images by name, category, or tag';
+    const categoryFilter = document.createElement('select');
+    const resultCount = document.createElement('div');
+    resultCount.className = 'develop-theme-picker-result-count';
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear Selection';
+
+    toolbar.appendChild(filterInput);
+    toolbar.appendChild(categoryFilter);
+    toolbar.appendChild(resultCount);
+    toolbar.appendChild(clearBtn);
+
+    const grid = document.createElement('div');
+    grid.className = 'develop-theme-picker-grid';
+    body.appendChild(toolbar);
+    body.appendChild(grid);
+
+    let modal = null;
+    const categoryValues = Array.from(new Set(modalAssets.map((asset) => String(asset.category || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    categoryFilter.innerHTML = '<option value="">All Categories</option>';
+    categoryValues.forEach((category) => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      categoryFilter.appendChild(option);
+    });
+
+    function renderGrid() {
+      const filter = String(filterInput.value || '').trim().toLowerCase();
+      const category = String(categoryFilter.value || '').trim();
+      const rows = modalAssets.filter((asset) => {
+        if (category && String(asset.category || '').trim() !== category) return false;
+        if (!filter) return true;
+        const tags = Array.isArray(asset.tags) ? asset.tags.join(' ') : String(asset.tags || '');
+        const haystack = [
+          thumbnailOptionLabel(asset),
+          asset.assetName,
+          asset.category,
+          asset.location,
+          tags,
+        ].join(' ').toLowerCase();
+        return haystack.includes(filter);
+      });
+      resultCount.textContent = `${rows.length} image${rows.length === 1 ? '' : 's'}`;
+      grid.textContent = '';
+      if (!rows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No matching images found.';
+        grid.appendChild(empty);
+        return;
+      }
+
+      rows.forEach((asset) => {
+        const card = document.createElement('div');
+        card.className = `develop-theme-picker-card${String(asset.id || '') === currentValue ? ' is-selected' : ''}`;
+        const imageBtn = document.createElement('button');
+        imageBtn.type = 'button';
+        imageBtn.className = 'develop-theme-picker-card-image-btn';
+        const imageUrl = thumbnailUrlFromAsset(asset);
+        if (imageUrl) {
+          const img = document.createElement('img');
+          img.src = imageUrl;
+          img.alt = String(asset.assetName || 'Tweet image');
+          imageBtn.appendChild(img);
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'develop-theme-table-thumb-empty';
+          empty.textContent = 'No Image';
+          imageBtn.appendChild(empty);
+        }
+
+        const title = document.createElement('div');
+        title.className = 'develop-theme-picker-card-title';
+        title.textContent = thumbnailOptionLabel(asset);
+
+        const meta = document.createElement('div');
+        meta.className = 'develop-theme-picker-card-meta';
+        meta.textContent = String(asset.category || 'Image');
+
+        const selectBtn = document.createElement('button');
+        selectBtn.type = 'button';
+        selectBtn.className = 'tiny-btn develop-theme-picker-select-btn';
+        selectBtn.textContent = 'Use Image';
+
+        const choose = () => {
+          setTweetImagePickerValue(config.inputId, asset.id);
+          if (modal) modal.close();
+        };
+        imageBtn.addEventListener('click', choose);
+        selectBtn.addEventListener('click', choose);
+
+        card.appendChild(imageBtn);
+        card.appendChild(title);
+        card.appendChild(meta);
+        card.appendChild(selectBtn);
+        grid.appendChild(card);
+      });
+    }
+
+    filterInput.addEventListener('input', renderGrid);
+    categoryFilter.addEventListener('change', renderGrid);
+    clearBtn.addEventListener('click', () => {
+      setTweetImagePickerValue(config.inputId, '');
+      if (modal) modal.close();
+    });
+
+    modal = App.components.Modal({
+      title: 'Choose Tweet Image',
+      body,
+      dialogClass: 'develop-theme-picker-modal',
+    });
+    renderGrid();
+    modal.open();
+    return modal;
+  }
+
   async function loadThumbnailOptions() {
     const addSelect = document.getElementById('messagingArticleThumbnailSelect');
     const editSelect = document.getElementById('messagingArticleEditThumbnailSelect');
@@ -714,10 +925,13 @@ App.messaging = (function () {
     const whitePaperEditSelect = document.getElementById('messagingWhitePaperEditThumbnailSelect');
     const ebookAddSelect = document.getElementById('messagingEbookThumbnailSelect');
     const ebookEditSelect = document.getElementById('messagingEbookEditThumbnailSelect');
-    if (!addSelect && !editSelect && !reportAddSelect && !reportEditSelect && !whitePaperAddSelect && !whitePaperEditSelect && !ebookAddSelect && !ebookEditSelect) return;
+    const tweetImageInput = document.getElementById('messagingTweetImageSelect');
+    const tweetEditImageInput = document.getElementById('messagingTweetEditImageSelect');
+    if (!addSelect && !editSelect && !reportAddSelect && !reportEditSelect && !whitePaperAddSelect && !whitePaperEditSelect && !ebookAddSelect && !ebookEditSelect && !tweetImageInput && !tweetEditImageInput) return;
     try {
       const res = await api('/api/assets');
       const assets = Array.isArray(res.assets) ? res.assets : [];
+      state.assets = assets;
       allImageAssets = assets.filter((a) => String(a.assetType || '').trim() === 'Image');
       articleBannerAssets = allImageAssets.filter((a) => {
         const category = String(a.category || '').trim();
@@ -735,8 +949,8 @@ App.messaging = (function () {
       renderThumbnailOptions(whitePaperEditSelect);
       renderThumbnailOptions(ebookAddSelect);
       renderThumbnailOptions(ebookEditSelect);
-      renderImageOptions(document.getElementById('messagingTweetImageSelect'));
-      renderImageOptions(document.getElementById('messagingTweetEditImageSelect'));
+      renderImageOptions(tweetImageInput);
+      renderImageOptions(tweetEditImageInput);
     } catch (err) {
       notify(`Could not load thumbnail images: ${err.message}`, true);
     }
@@ -921,12 +1135,56 @@ App.messaging = (function () {
     };
   }
 
-  async function cloneArticle(article) {
-    const payload = cloneArticlePayload(article);
-    await api('/api/messaging/articles', {
+  function cloneLongformPayload(item, titleFallback = 'Untitled') {
+    return {
+      topic: String(item?.topic || item?.category || '').trim(),
+      platform: String(item?.platform || '').trim(),
+      author: String(item?.author || '').trim(),
+      title: `${String(item?.title || '').trim() || titleFallback} (Clone)`,
+      subtitle: String(item?.subtitle || '').trim(),
+      url: String(item?.url || '').trim(),
+      content: String(item?.content || '').trim(),
+      feedback: String(item?.feedback || '').trim(),
+      prompt_id: Number(item?.prompt_id || 0) || null,
+      quality_score: Number(item?.quality_score || 0) || null,
+      publish_date: item?.publish_date || null,
+      thumbnail_asset_id: Number(item?.thumbnail_asset_id || 0) || null,
+      pdf_name: String(item?.pdf_name || '').trim(),
+      pdf_mime_type: String(item?.pdf_mime_type || '').trim(),
+      pdf_data_url: String(item?.pdf_data_url || '').trim(),
+    };
+  }
+
+  function cloneSimplePayload(item, field) {
+    return {
+      [field]: String(item?.[field] || '').trim(),
+      topic: String(item?.topic || item?.category || '').trim(),
+      feedback: String(item?.feedback || '').trim(),
+      prompt_id: Number(item?.prompt_id || 0) || null,
+      quality_score: Number(item?.quality_score || 0) || null,
+      campaign_id: Number(item?.campaign_id || 0) || null,
+    };
+  }
+
+  function cloneTweetPayload(tweet) {
+    return {
+      ...cloneSimplePayload(tweet, 'content'),
+      url: String(tweet?.url || '').trim(),
+      hashtags: String(tweet?.hashtags || '').trim(),
+      image_asset_id: Number(tweet?.image_asset_id || 0) || null,
+    };
+  }
+
+  async function cloneMessagingItem(endpoint, payload) {
+    await api(endpoint, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async function cloneArticle(article) {
+    const payload = cloneArticlePayload(article);
+    await cloneMessagingItem('/api/messaging/articles', payload);
   }
 
   function closeEditForm() {
@@ -1194,6 +1452,7 @@ App.messaging = (function () {
     if (editForm.elements.quality_score) editForm.elements.quality_score.value = tweet.quality_score ? String(tweet.quality_score) : '';
     if (editForm.elements.feedback) editForm.elements.feedback.value = String(tweet.feedback || '');
     editForm.elements.image_asset_id.value = tweet.image_asset_id ? String(tweet.image_asset_id) : '';
+    renderTweetImagePickerDisplay('messagingTweetEditImageSelect');
     if (workspace) workspace.classList.add('hidden');
     if (addBtn) addBtn.textContent = 'Add Tweet';
     bindTweetEditPreview(editForm);
@@ -1206,6 +1465,7 @@ App.messaging = (function () {
     const editForm = document.getElementById('messagingTweetsEditForm');
     const panel = tweetEditPanelEl();
     if (editForm) editForm.reset();
+    renderTweetImagePickerDisplay('messagingTweetEditImageSelect');
     if (panel) panel.classList.add('hidden');
   }
 
@@ -1314,10 +1574,7 @@ App.messaging = (function () {
     button.disabled = true;
     button.textContent = 'Generating...';
     try {
-      const imageSelect = document.getElementById('messagingTweetImageSelect');
-      const imageLabel = imageSelect && imageSelect.selectedIndex >= 0
-        ? String(imageSelect.options[imageSelect.selectedIndex]?.textContent || '').trim()
-        : '';
+      const imageLabel = tweetImageAssetLabel(formData.get('image_asset_id'));
       const result = await api('/api/messaging/content-suggestions', {
         method: 'POST',
         body: JSON.stringify({
@@ -1354,10 +1611,7 @@ App.messaging = (function () {
     button.disabled = true;
     button.textContent = 'Saving Prompt...';
     try {
-      const imageSelect = document.getElementById('messagingTweetImageSelect');
-      const imageLabel = imageSelect && imageSelect.selectedIndex >= 0
-        ? String(imageSelect.options[imageSelect.selectedIndex]?.textContent || '').trim()
-        : '';
+      const imageLabel = tweetImageAssetLabel(formData.get('image_asset_id'));
       const result = await api('/api/messaging/prompts', {
         method: 'POST',
         body: JSON.stringify({
@@ -1720,6 +1974,17 @@ App.messaging = (function () {
       });
       actionsTd.appendChild(editBtn);
 
+      const cloneBtn = App.makeIconButton('clone', 'Clone Report', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/reports', cloneLongformPayload(report, 'Untitled Report'));
+          notify('Report cloned');
+          await refreshReports();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      actionsTd.appendChild(cloneBtn);
+
       const deleteBtn = App.makeIconButton('delete', 'Delete Report', async function () {
         if (!confirm(`Delete report "${title}"?`)) return;
         try {
@@ -1837,6 +2102,17 @@ App.messaging = (function () {
       });
       actionsTd.appendChild(editBtn);
 
+      const cloneBtn = App.makeIconButton('clone', 'Clone White Paper', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/white-papers', cloneLongformPayload(whitePaper, 'Untitled White Paper'));
+          notify('White paper cloned');
+          await refreshWhitePapers();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      actionsTd.appendChild(cloneBtn);
+
       const deleteBtn = App.makeIconButton('delete', 'Delete White Paper', async function () {
         if (!confirm(`Delete white paper "${title}"?`)) return;
         try {
@@ -1953,6 +2229,17 @@ App.messaging = (function () {
         openEbookEditForm(ebook);
       });
       actionsTd.appendChild(editBtn);
+
+      const cloneBtn = App.makeIconButton('clone', 'Clone eBook', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/ebooks', cloneLongformPayload(ebook, 'Untitled eBook'));
+          notify('eBook cloned');
+          await refreshEbooks();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      actionsTd.appendChild(cloneBtn);
 
       const deleteBtn = App.makeIconButton('delete', 'Delete eBook', async function () {
         if (!confirm(`Delete eBook "${title}"?`)) return;
@@ -2075,6 +2362,17 @@ App.messaging = (function () {
         openTweetEditForm(tweet);
       });
       actionsTd.appendChild(editBtn);
+
+      const cloneBtn = App.makeIconButton('clone', 'Clone Tweet', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/tweets', cloneTweetPayload(tweet));
+          notify('Tweet cloned');
+          await refreshTweets();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
+      actionsTd.appendChild(cloneBtn);
 
       const deleteBtn = App.makeIconButton('delete', 'Delete Tweet', async function () {
         if (!confirm('Delete this tweet?')) return;
@@ -2379,6 +2677,15 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Headline', function () {
         openHeadlineEditForm(item);
       });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Headline', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/headlines', cloneSimplePayload(item, 'headline'));
+          notify('Headline cloned');
+          await refreshHeadlines();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Headline', async function () {
         if (!confirm(`Delete headline "${item.headline}"?`)) return;
         try {
@@ -2390,6 +2697,7 @@ App.messaging = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -2561,6 +2869,15 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Sub-heading', function () {
         openSubheadingEditForm(item);
       });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Sub-heading', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/subheadings', cloneSimplePayload(item, 'subheading'));
+          notify('Sub-heading cloned');
+          await refreshSubheadings();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Sub-heading', async function () {
         if (!confirm(`Delete sub-heading "${item.subheading}"?`)) return;
         try {
@@ -2572,6 +2889,7 @@ App.messaging = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -2742,6 +3060,15 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Tagline', function () {
         openTaglineEditForm(item);
       });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Tagline', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/taglines', cloneSimplePayload(item, 'tagline'));
+          notify('Tagline cloned');
+          await refreshTaglines();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Tagline', async function () {
         if (!confirm(`Delete tagline "${item.tagline}"?`)) return;
         try {
@@ -2753,6 +3080,7 @@ App.messaging = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -2924,6 +3252,15 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Pitch', function () {
         openPitchEditForm(item);
       });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Pitch', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/pitches', cloneSimplePayload(item, 'pitch'));
+          notify('Pitch cloned');
+          await refreshPitches();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Pitch', async function () {
         if (!confirm(`Delete pitch "${item.pitch}"?`)) return;
         try {
@@ -2935,6 +3272,7 @@ App.messaging = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -5698,6 +6036,15 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', `Edit ${config.singularLabel}`, function () {
         openSimpleContentEditForm(config, item);
       });
+      const cloneBtn = App.makeIconButton('clone', `Clone ${config.singularLabel}`, async function () {
+        try {
+          await cloneMessagingItem(config.endpoint, cloneSimplePayload(item, config.field));
+          notify(`${config.singularLabel} cloned`);
+          await refreshSimpleContent(config);
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', `Delete ${config.singularLabel}`, async function () {
         if (!confirm(`Delete ${config.singularLower} "${item[config.field]}"?`)) return;
         try {
@@ -5709,6 +6056,7 @@ App.messaging = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -6348,6 +6696,17 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Topic', function () {
         openMessagingTopicEditForm(item);
       });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Topic', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/topics', {
+            topic: `${String(item.topic || item.category || '').trim()} Copy`.trim(),
+          });
+          notify('Messaging topic cloned');
+          await refreshMessagingTopics();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Topic', async function () {
         if (!confirm(`Delete messaging topic "${String(item.topic || item.category || '').trim()}"?`)) return;
         try {
@@ -6359,6 +6718,7 @@ App.messaging = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
 
@@ -6500,6 +6860,17 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Tag', function () {
         openMessagingTagEditForm(item);
       });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Tag', async function () {
+        try {
+          await cloneMessagingItem('/api/messaging/tags', {
+            tag: `${String(item.tag || '').trim()} Copy`.trim(),
+          });
+          notify('Messaging tag cloned');
+          await refreshMessagingTags();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }, { marginLeft: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Tag', async function () {
         if (!confirm(`Delete messaging tag "${item.tag}"?`)) return;
         try {
@@ -6511,6 +6882,7 @@ App.messaging = (function () {
         }
       }, { danger: true, marginLeft: '8px' });
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -6902,6 +7274,8 @@ App.messaging = (function () {
     const tweetSavePromptBtn = document.getElementById('messagingTweetsSavePromptBtn');
     const tweetSavedPrompt = document.getElementById('messagingTweetSavedPrompt');
     const tweetTopic = document.getElementById('messagingTweetTopic');
+    const tweetImagePickerBtn = document.getElementById('messagingTweetImagePickerBtn');
+    const tweetEditImagePickerBtn = document.getElementById('messagingTweetEditImagePickerBtn');
     const tweetClearSuggestionsBtn = document.getElementById('messagingTweetsClearSuggestionsBtn');
     const tweetSaveSelectedBtn = document.getElementById('messagingTweetsSaveSelectedBtn');
     const tweetSelectAllSuggestions = document.getElementById('messagingTweetsSelectAllSuggestions');
@@ -8501,6 +8875,18 @@ App.messaging = (function () {
       });
     }
 
+    if (tweetImagePickerBtn) {
+      tweetImagePickerBtn.addEventListener('click', function () {
+        openTweetImageAssetPicker('messagingTweetImageSelect');
+      });
+    }
+
+    if (tweetEditImagePickerBtn) {
+      tweetEditImagePickerBtn.addEventListener('click', function () {
+        openTweetImageAssetPicker('messagingTweetEditImageSelect');
+      });
+    }
+
     if (tweetSavedPrompt) {
       tweetSavedPrompt.addEventListener('change', function () {
         const selectedId = String(tweetSavedPrompt.value || '').trim();
@@ -8521,6 +8907,7 @@ App.messaging = (function () {
           tweetsForm.reset();
           const promptIdInput = document.getElementById('messagingTweetPromptId');
           if (promptIdInput) promptIdInput.value = '';
+          renderTweetImagePickerDisplay('messagingTweetImageSelect');
           clearTweetSuggestions();
           syncHeadlineCategorySelects();
           renderImageOptions(document.getElementById('messagingTweetImageSelect'));
