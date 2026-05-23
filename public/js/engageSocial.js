@@ -215,8 +215,8 @@ App.engageSocial = (function () {
         preview,
         howToRead: {
           verdict: 'Top-level pass/fail for Buffer + TikTok publish',
-          'media.staging': 'Whether StarCaster uploaded the Primary Video to Buffer CDN',
-          'media.videoUrl': 'Resolved public URL before staging (Drive/blob)',
+          'media.staging': 'Whether StarCaster staged the video or skipped staging because a public URL is available',
+          'media.videoUrl': 'Resolved public video URL sent to Buffer when available',
         },
       };
       if (diagPre) diagPre.textContent = JSON.stringify(report, null, 2);

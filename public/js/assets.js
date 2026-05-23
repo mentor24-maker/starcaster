@@ -233,15 +233,21 @@ App.assets = (function () {
   function getCategoryOptionsForType(assetType) {
     const type = String(assetType || '').trim();
     const categories = Array.isArray(state.assetCategories) ? state.assetCategories : [];
-    const names = categories
-      .filter((item) => {
-        if (!type) return true;
-        return String(item?.assetType || '').trim() === type;
-      })
-      .map((item) => String(item?.category || '').trim())
-      .filter(Boolean);
+    const names = new Set();
 
-    return Array.from(new Set(names));
+    categories.forEach((item) => {
+      if (type && String(item?.assetType || '').trim() !== type) return;
+      const name = String(item?.category || '').trim();
+      if (name) names.add(name);
+    });
+
+    (Array.isArray(state.assets) ? state.assets : []).forEach((asset) => {
+      if (type && String(asset?.assetType || '').trim() !== type) return;
+      const name = String(asset?.category || '').trim();
+      if (name) names.add(name);
+    });
+
+    return Array.from(names).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   }
 
   function formatBytes(bytesValue) {
