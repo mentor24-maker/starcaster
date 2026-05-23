@@ -423,6 +423,7 @@ App.assets = (function () {
     editingAssetId = null;
     if (els.assetForm) els.assetForm.reset();
     renderCategoryOptionsByType('', '');
+    renderAssetTopicOptions('');
     if (els.assetIdInput) els.assetIdInput.value = '';
     if (els.assetLocationText) els.assetLocationText.textContent = '-';
     if (els.assetLocationRow) els.assetLocationRow.classList.add('hidden');
@@ -459,6 +460,46 @@ App.assets = (function () {
     });
 
     select.value = selected || '';
+  }
+
+  async function renderAssetTopicOptions(selectedTopic = '') {
+    const select = els.assetForm?.topic;
+    if (!select) return;
+    const selected = String(selectedTopic || '').trim();
+    const topics = new Set();
+
+    try {
+      if (App.ui && typeof App.ui.ensureMessagingTopicsLoaded === 'function') {
+        const loaded = await App.ui.ensureMessagingTopicsLoaded();
+        (Array.isArray(loaded) ? loaded : []).forEach((topic) => {
+          const name = String(topic || '').trim();
+          if (name) topics.add(name);
+        });
+      }
+    } catch (_) {}
+
+    (Array.isArray(state.assets) ? state.assets : []).forEach((asset) => {
+      const name = String(asset?.topic || '').trim();
+      if (name) topics.add(name);
+    });
+
+    if (selected) topics.add(selected);
+
+    const options = Array.from(topics).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select Topic';
+    select.appendChild(placeholder);
+
+    options.forEach((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+
+    select.value = selected && options.includes(selected) ? selected : '';
   }
 
   function renderUploadCategorySelect(select, assetType, selectedCategory) {
@@ -651,7 +692,7 @@ App.assets = (function () {
     }
   }
 
-  function beginEdit(asset) {
+  async function beginEdit(asset) {
     editingAssetId = Number(asset?.id || 0) || null;
     if (!editingAssetId) {
       notify('This asset cannot be edited yet. Run the SQL migration to add the id column.', true);
@@ -665,9 +706,7 @@ App.assets = (function () {
     if (els.assetForm.aspect) els.assetForm.aspect.value = resolvedAssetAspect(asset);
     if (els.assetForm.topic) {
       if (els.assetForm.topic.tagName === 'SELECT') {
-        if (App && App.ui && typeof App.ui.populateTopicsDropdown === 'function') {
-          App.ui.populateTopicsDropdown(els.assetForm.topic, 'Select Topic', String(asset.topic || ''));
-        }
+        await renderAssetTopicOptions(String(asset.topic || ''));
       } else {
         els.assetForm.topic.value = String(asset.topic || '');
       }
