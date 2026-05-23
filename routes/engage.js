@@ -767,7 +767,16 @@ async function buildBufferPublishPreview(req, campaignIdInput) {
     videoResolution: media.videoMediaResolution,
   };
 
-  if (safeText(media.primaryVideoId) && preview.delivery?.usesBuffer) {
+  if (safeText(media.primaryVideoId) && preview.delivery?.usesBuffer && safeText(media.videoUrl)) {
+    preview.media.staging = {
+      ok: true,
+      skipped: true,
+      primaryVideoId: safeText(media.primaryVideoId),
+      publicUrl: safeText(media.videoUrl),
+      source: 'direct_public_url',
+      reason: 'Public video URL will be sent directly to Buffer.',
+    };
+  } else if (safeText(media.primaryVideoId) && preview.delivery?.usesBuffer) {
     const creds = bufferClient.getBufferCredentials();
     const staged = await stageCampaignVideoForBuffer(media.primaryVideoId, scope, req, creds);
     preview.media.staging = staged.ok
@@ -798,7 +807,8 @@ async function buildBufferPublishPreview(req, campaignIdInput) {
     const resolvedPlatform = preview.buffer.resolvedPlatform;
     const needsVideo = resolvedPlatform === 'tiktok';
     const stagedUrl = safeText(preview.media?.staging?.stagedUrl);
-    const hasMedia = Boolean(stagedUrl || safeText(media.videoUrl) || safeText(media.imageUrl));
+    const directVideoUrl = safeText(media.videoUrl);
+    const hasMedia = Boolean(stagedUrl || directVideoUrl || safeText(media.imageUrl));
 
     if (!preview.publicOriginReachable && !safeText(media.videoUrl).includes('drive.google.com')) {
       preview.warnings.push(
@@ -809,7 +819,7 @@ async function buildBufferPublishPreview(req, campaignIdInput) {
       preview.verdict = '❌ TikTok requires a Primary Video on the campaign';
     } else if (needsVideo && preview.media?.staging && preview.media.staging.ok === false) {
       preview.verdict = `❌ Could not stage video for Buffer: ${safeText(preview.media.staging.error)}`;
-    } else if (needsVideo && !safeText(preview.media?.staging?.stagedUrl) && !safeText(media.videoUrl)) {
+    } else if (needsVideo && !stagedUrl && !directVideoUrl) {
       preview.verdict = '❌ TikTok requires a publicly fetchable video URL — check Primary Video Drive sharing';
       if (media.videoMediaResolution?.warnings?.length) {
         preview.warnings.push(...media.videoMediaResolution.warnings);
@@ -822,8 +832,10 @@ async function buildBufferPublishPreview(req, campaignIdInput) {
       preview.verdict = '❌ Buffer API key is not configured';
     } else {
       preview.verdict = needsVideo
-        ? (preview.media?.staging?.ok
-          ? '✅ Ready — video staged on Buffer CDN for TikTok'
+        ? (preview.media?.staging?.skipped || directVideoUrl
+          ? '✅ Ready — direct video URL resolved for Buffer/TikTok'
+          : preview.media?.staging?.ok
+            ? '✅ Ready — video staged on Buffer CDN for TikTok'
           : '✅ Ready — TikTok video URL resolved for Buffer')
         : '✅ Ready — Buffer channel and media resolved';
     }
@@ -1015,7 +1027,19 @@ async function publishStoredPost(post, req) {
       let publishVideoUrl = videoUrl;
       let videoStaging = null;
       const primaryVideoId = safeText(resolved.primaryVideoId);
-      if (primaryVideoId && (bufferPlatform === 'tiktok' || publishVideoUrl)) {
+      if (publishVideoUrl) {
+        videoStaging = {
+          ok: true,
+          status: 200,
+          data: {
+            primaryVideoId,
+            publicUrl: publishVideoUrl,
+            source: 'direct_public_url',
+            skipped: true,
+            reason: 'Public video URL was sent directly to Buffer.',
+          },
+        };
+      } else if (primaryVideoId && bufferPlatform === 'tiktok') {
         const creds = bufferClient.getBufferCredentials();
         const staged = await stageCampaignVideoForBuffer(primaryVideoId, scope, req, creds);
         videoStaging = staged;
