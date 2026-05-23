@@ -731,7 +731,36 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/asset-categories' && requestMethod === 'GET') {
     const result = await listAssetCategories(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    const categories = (Array.isArray(result.data) ? result.data : []).map(rowToAssetCategory);
+    const categoriesByKey = new Map();
+    (Array.isArray(result.data) ? result.data : []).map(rowToAssetCategory).forEach((category) => {
+      if (!category?.category) return;
+      categoriesByKey.set(`${category.assetType}::${category.category}`, category);
+    });
+
+    const assetsResult = await listAssets(scope);
+    if (assetsResult.ok) {
+      (Array.isArray(assetsResult.data) ? assetsResult.data : []).map(rowToAsset).forEach((asset) => {
+        const assetType = String(asset?.assetType || '').trim();
+        const categoryName = String(asset?.category || '').trim();
+        if (!assetType || !categoryName) return;
+        const key = `${assetType}::${categoryName}`;
+        if (!categoriesByKey.has(key)) {
+          categoriesByKey.set(key, {
+            id: 0,
+            assetType,
+            category: categoryName,
+            createdAt: '',
+            source: 'assets',
+          });
+        }
+      });
+    }
+
+    const categories = Array.from(categoriesByKey.values()).sort((a, b) => {
+      const typeSort = String(a.assetType || '').localeCompare(String(b.assetType || ''));
+      if (typeSort) return typeSort;
+      return String(a.category || '').localeCompare(String(b.category || ''));
+    });
     return sendOk(res, 200, categories, { categories }, { total: categories.length }), true;
   }
 
