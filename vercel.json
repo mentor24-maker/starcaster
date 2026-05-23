@@ -40,7 +40,7 @@
   },
   "crons": [
     {
-      "path": "/api/engage/social/posts/publish-due",
+      "path": "/api/promote/social/posts/publish-due",
       "schedule": "*/5 * * * *"
     }
   ]

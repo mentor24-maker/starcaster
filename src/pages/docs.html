@@ -331,7 +331,7 @@
             <h3>Operational Role</h3>
             <ul class="docs-list">
               <li>Channels are prerequisites for campaign assembly and future multi-channel engagement features.</li>
-              <li>The Engage social workflow currently focuses on X, but Channels provides the generalized abstraction for more destinations.</li>
+              <li>The Promote social workflow currently focuses on X, but Channels provides the generalized abstraction for more destinations.</li>
             </ul>
           </section>
         </div>
@@ -429,11 +429,11 @@
           <section class="docs-panel">
             <h3>Social Publishing</h3>
             <ul class="docs-list">
-              <li>Engage: Social turns campaign definitions into queued social posts.</li>
+              <li>Promote: Social turns campaign definitions into queued social posts.</li>
               <li>X and TikTok campaign channels currently route through Buffer, preserving the selected Starcaster channel id, platform, and account handle.</li>
               <li>When no campaign-specific URL is selected, social posts use the active project's default URL.</li>
               <li>A queue snapshot tracks scheduled, failed, and published counts plus connected account status.</li>
-              <li>Scheduled posts are published automatically in production via Vercel Cron (`/api/engage/social/posts/publish-due`, every 5 minutes). The `Publish Due Posts` button flushes due posts immediately.</li>
+              <li>Scheduled posts are published automatically in production via Vercel Cron (`/api/promote/social/posts/publish-due`, every 5 minutes). The `Publish Due Posts` button flushes due posts immediately.</li>
             </ul>
           </section>
           <section class="docs-panel">

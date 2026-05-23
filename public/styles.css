@@ -6681,78 +6681,78 @@ button[type=submit] {
   font-size: 0.9rem;
   font-weight: 700;
 }
-.engage-social-layout {
+.promote-social-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
   gap: 1rem;
   margin-top: 1rem;
   align-items: start;
 }
-.engage-social-panel {
+.promote-social-panel {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-container);
   padding: 1rem;
   background: var(--bg-surface);
 }
-.engage-social-side-panel {
+.promote-social-side-panel {
   background: var(--bg-page);
 }
-.engage-social-channel-bar,
-.engage-social-meta-row,
-.engage-social-action-row {
+.promote-social-channel-bar,
+.promote-social-meta-row,
+.promote-social-action-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }
-.engage-social-meta-row {
+.promote-social-meta-row {
   align-items: flex-end;
 }
-.engage-social-action-row {
+.promote-social-action-row {
   margin-top: 0.65rem;
 }
-.engage-social-action-row button {
+.promote-social-action-row button {
   min-width: 180px;
   width: auto;
 }
-.engage-social-eyebrow {
+.promote-social-eyebrow {
   font-size: 0.76rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 0.2rem;
 }
-.engage-social-channel-name {
+.promote-social-channel-name {
   font-size: 1.45rem;
   font-weight: 700;
 }
-.engage-social-campaigns-table-wrap {
+.promote-social-campaigns-table-wrap {
   margin-top: 0.85rem;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   overflow: auto;
 }
-.engage-social-campaigns-table {
+.promote-social-campaigns-table {
   min-width: 920px;
 }
-.engage-social-campaigns-table th,
-.engage-social-campaigns-table td {
+.promote-social-campaigns-table th,
+.promote-social-campaigns-table td {
   vertical-align: top;
 }
-.engage-social-campaign-preview {
+.promote-social-campaign-preview {
   max-width: 460px;
   white-space: pre-wrap;
   line-height: 1.35;
 }
-.engage-social-schedule-field {
+.promote-social-schedule-field {
   flex: 1 1 auto;
 }
-.engage-social-counter-wrap {
+.promote-social-counter-wrap {
   flex: 0 0 auto;
   min-width: 92px;
   text-align: right;
 }
-.engage-social-counter {
+.promote-social-counter {
   display: inline-block;
   padding: 0.3rem 0.55rem;
   border-radius: 999px;
@@ -6760,51 +6760,51 @@ button[type=submit] {
   font-size: 0.84rem;
   font-weight: 600;
 }
-.engage-social-counter-over {
+.promote-social-counter-over {
   background: #ffeef3;
   color: #ab2a55;
 }
-.engage-social-stats-grid {
+.promote-social-stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   margin-top: 0.8rem;
 }
-.engage-social-stat-card {
+.promote-social-stat-card {
   padding: 0.8rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
 }
-.engage-social-stat-card strong {
+.promote-social-stat-card strong {
   display: block;
   font-size: 1.25rem;
   margin-top: 0.25rem;
 }
-.engage-social-stat-label {
+.promote-social-stat-label {
   font-size: 0.8rem;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.engage-social-note {
+.promote-social-note {
   margin: 1rem 0 0;
   font-size: 0.92rem;
   color: var(--muted);
   line-height: 1.45;
 }
-.engage-social-section-title {
+.promote-social-section-title {
   margin: 0.95rem 0 0.45rem;
   font-size: 1.35rem;
   font-weight: 800;
   color: var(--text);
 }
-.engage-social-section-divider {
+.promote-social-section-divider {
   margin: 0.85rem 0 0.35rem;
   border: 0;
   border-top: 1px solid var(--border-light);
 }
-.engage-social-platform-option {
+.promote-social-platform-option {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -6812,16 +6812,16 @@ button[type=submit] {
   font-weight: 700;
   line-height: 1.2;
 }
-.engage-social-platform-option input[type=checkbox] {
+.promote-social-platform-option input[type=checkbox] {
   width: auto;
   margin: 0;
   transform: translateY(-1px);
 }
-.engage-social-platform-name {
+.promote-social-platform-name {
   font-weight: 800;
   color: var(--text);
 }
-.engage-social-campaign-image {
+.promote-social-campaign-image {
   margin: 0 0 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-container);
@@ -6829,7 +6829,7 @@ button[type=submit] {
   padding: 0;
   overflow: hidden;
 }
-.engage-social-campaign-image img {
+.promote-social-campaign-image img {
   display: block;
   width: 100%;
   height: auto;
@@ -6837,13 +6837,13 @@ button[type=submit] {
   border-radius: 0;
   object-fit: cover;
 }
-.engage-social-post-thumb-cell {
+.promote-social-post-thumb-cell {
   width: 1%;
   white-space: nowrap;
   vertical-align: middle;
   padding: 6px 10px;
 }
-.engage-social-post-thumb {
+.promote-social-post-thumb {
   display: block;
   height: 50px;
   width: auto;
@@ -6853,35 +6853,35 @@ button[type=submit] {
   border: 1px solid var(--border);
   background: var(--bg-surface);
 }
-.c-modal__dialog.engage-social-schedule-modal {
+.c-modal__dialog.promote-social-schedule-modal {
   width: min(860px, calc(100vw - 48px));
 }
-.engage-social-schedule-modal-body {
+.promote-social-schedule-modal-body {
   display: grid;
   gap: 1rem;
 }
-.engage-social-schedule-grid {
+.promote-social-schedule-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.85rem;
 }
-.engage-social-schedule-grid label,
-.engage-social-schedule-textarea-label {
+.promote-social-schedule-grid label,
+.promote-social-schedule-textarea-label {
   display: grid;
   gap: 0.35rem;
   font-weight: 700;
 }
-.engage-social-schedule-grid label span,
-.engage-social-schedule-textarea-label span {
+.promote-social-schedule-grid label span,
+.promote-social-schedule-textarea-label span {
   font-size: 0.86rem;
   color: var(--muted);
 }
-.engage-social-schedule-days {
+.promote-social-schedule-days {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.5rem;
 }
-.engage-social-schedule-days label {
+.promote-social-schedule-days label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6891,15 +6891,15 @@ button[type=submit] {
   border-radius: var(--radius-sm);
   font-weight: 800;
 }
-.engage-social-schedule-days input {
+.promote-social-schedule-days input {
   width: auto;
   margin: 0;
 }
-.engage-social-schedule-textarea-label textarea {
+.promote-social-schedule-textarea-label textarea {
   min-height: 150px;
   resize: vertical;
 }
-.engage-social-schedule-count {
+.promote-social-schedule-count {
   justify-self: end;
   padding: 0.35rem 0.6rem;
   border-radius: 999px;
@@ -6907,7 +6907,7 @@ button[type=submit] {
   font-weight: 800;
   color: var(--muted);
 }
-.engage-social-schedule-count.is-over {
+.promote-social-schedule-count.is-over {
   background: #ffeef3;
   color: #ab2a55;
 }
@@ -6964,26 +6964,26 @@ button[type=submit] {
   background: #ffeef3;
   color: #ff9bb2;
 }
-#engageSocialPage .status-pill {
+#promoteSocialPage .status-pill {
   color: #fff;
   border: none;
   white-space: nowrap;
   line-height: 1.25;
   padding: calc(0.2rem + 2px) calc(0.45rem + 2px);
 }
-#engageSocialPage .status-social-published {
+#promoteSocialPage .status-social-published {
   background: #1a7f37;
 }
-#engageSocialPage .status-social-scheduled {
+#promoteSocialPage .status-social-scheduled {
   background: #b8860b;
 }
-#engageSocialPage .status-social-failed {
+#promoteSocialPage .status-social-failed {
   background: #c0392b;
 }
-#engageSocialPage .status-social-publishing {
+#promoteSocialPage .status-social-publishing {
   background: #2563eb;
 }
-#engageSocialPage .status-social-queued {
+#promoteSocialPage .status-social-queued {
   background: #5c6b7a;
 }
 .meta {
@@ -7083,7 +7083,7 @@ button[type=submit] {
     width: 100%;
     min-width: 0;
   }
-  .engage-social-layout {
+  .promote-social-layout {
     grid-template-columns: 1fr;
   }
   .explore-filters-grid {
@@ -7093,19 +7093,19 @@ button[type=submit] {
   .docs-platform-detail-layout {
     grid-template-columns: 1fr;
   }
-  .engage-social-meta-row,
-  .engage-social-action-row,
-  .engage-social-channel-bar {
+  .promote-social-meta-row,
+  .promote-social-action-row,
+  .promote-social-channel-bar {
     flex-direction: column;
     align-items: stretch;
   }
-  .engage-social-action-row button {
+  .promote-social-action-row button {
     width: 100%;
   }
-  .engage-social-counter-wrap {
+  .promote-social-counter-wrap {
     text-align: left;
   }
-  .engage-social-stats-grid {
+  .promote-social-stats-grid {
     grid-template-columns: 1fr;
   }
   .asset-preview-wrap {

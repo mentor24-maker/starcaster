@@ -58,7 +58,7 @@ The human asked Cursor to **take over as primary developer** for StarCaster afte
 
 - `lib/projectScope.js` — `STRICT_PROJECT_SCOPE` env (strict = no NULL bleed)
 - `lib/projectScopeFile.js` — scoping for JSON file stores
-- `lib/engageSocialStore.js` — Supabase `engage_social_posts` + scoped file fallback
+- `lib/promoteSocialStore.js` — Supabase `engage_social_posts` + scoped file fallback
 - `lib/directAcquireRunsStore.js` + updates to `lib/directAcquire.js`
 - Scoped X/Reddit harvest file stores; routes pass `requestProjectScope(req)`
 - `docs/011_multitenancy_acquire_engage.sql` — table definitions
@@ -137,7 +137,7 @@ npm run dev
 | Thread | Focus |
 |--------|--------|
 | **Multitenancy verify** | Confirm 011/012/013 applied; project switch smoke test Engage + Acquire |
-| **Feature flesh-out** | Pick one domain (e.g. Engage social queue UX) with one StarCaster project selected |
+| **Feature flesh-out** | Pick one domain (e.g. Promote social queue UX) with one StarCaster project selected |
 | **Normie as dogfood** | Plan content/campaigns **inside StarCaster** for a brand; build **site** changes in Normie repo separately |
 
 ---

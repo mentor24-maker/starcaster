@@ -32,7 +32,7 @@ App.manifests = [
   App.youtubeComments,
   App.messaging,
   App.promoteEmail,
-  App.engageSocial,
+  App.promoteSocial,
   App.engageComments,
   App.docsApiSetup,
   App.develop,
@@ -59,6 +59,7 @@ App.refresh = async function refresh() {
       'segments',
       'campaigns',
       'promoteEmailPage',
+      'promoteSocialPage',
       'engageEmailPage'
     ];
     return relevantPrefixes.some((prefix) => activePageId.startsWith(prefix));
