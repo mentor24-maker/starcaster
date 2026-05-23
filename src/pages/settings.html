@@ -121,6 +121,10 @@
             <label for="settingsNewProjectDescription">Description</label>
             <input id="settingsNewProjectDescription" placeholder="Optional description" />
           </div>
+          <div class="form-row">
+            <label for="settingsNewProjectDefaultUrl">Default URL</label>
+            <input id="settingsNewProjectDefaultUrl" required placeholder="https://example.com" />
+          </div>
           <div class="page-heading-actions" style="justify-content:flex-start;">
             <button id="settingsCreateProjectBtn" type="button" class="btn">Save Project</button>
             <button type="button" onclick="App.settings.openProjectsPage(); return false;" class="btn">Back To Projects</button>
@@ -170,6 +174,14 @@
                     <label>Description</label>
                     <textarea id="settingsProjectDetailsDescription" rows="4" readonly></textarea>
                   </div>
+                  <div class="form-row">
+                    <label for="settingsProjectDefaultUrlInput">Default URL</label>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+                      <input id="settingsProjectDefaultUrlInput" required placeholder="https://example.com" style="min-width: 260px;" />
+                      <button id="settingsProjectDefaultUrlSaveBtn" type="button" class="btn btn-primary">Save URL</button>
+                    </div>
+                  </div>
+                  <p class="meta" style="margin-top: 0;">Required for this project. Used as the default link for Campaign and Engage: Social posts when no campaign-specific URL is selected.</p>
                   <div class="form-row">
                     <label>Role</label>
                     <input id="settingsProjectDetailsRole" readonly />
