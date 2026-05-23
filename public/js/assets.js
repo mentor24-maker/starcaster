@@ -6,10 +6,13 @@ App.assets = (function () {
   let vercelBlobClientPromise = null;
   let editingAssetId = null;
   let selectedAssetIds = new Set();
+  const ASSET_ASPECT_OVERRIDE_STORAGE_KEY = 'starcaster.assetAspectOverrides';
+  let manualAspectOverrides = {};
   let bulkDraft = {
     asset_name: '',
     asset_type: '',
     category: '',
+    aspect: '',
     tags: '',
   };
   const assetTableState = {
@@ -90,6 +93,7 @@ App.assets = (function () {
       ['assetsSortNameBtn', 'assetName', 'Asset Name'],
       ['assetsSortTypeBtn', 'assetType', 'Asset Type'],
       ['assetsSortCategoryBtn', 'category', 'Category'],
+      ['assetsSortAspectBtn', 'aspect', 'Aspect'],
       ['assetsSortTagsBtn', 'tags', 'Tags'],
       ['assetsSortSizeBtn', 'size', 'Size'],
     ];
@@ -106,6 +110,7 @@ App.assets = (function () {
 
   function getAssetSortValue(asset, key) {
     if (key === 'size') return Number(asset?.size || 0) || 0;
+    if (key === 'aspect') return resolvedAssetAspect(asset);
     if (key === 'tags') {
       return Array.isArray(asset?.tags) ? asset.tags.join(', ') : '';
     }
@@ -117,8 +122,80 @@ App.assets = (function () {
       asset_name: '',
       asset_type: '',
       category: '',
+      aspect: '',
       tags: '',
     };
+  }
+
+  function normalizeAspect(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return ['wide', 'square', 'tall'].includes(key) ? key : '';
+  }
+
+  function readManualAspectOverrides() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(ASSET_ASPECT_OVERRIDE_STORAGE_KEY) || '{}');
+      manualAspectOverrides = parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      manualAspectOverrides = {};
+    }
+  }
+
+  function saveManualAspectOverrides() {
+    try {
+      window.localStorage.setItem(ASSET_ASPECT_OVERRIDE_STORAGE_KEY, JSON.stringify(manualAspectOverrides || {}));
+    } catch (_) {}
+  }
+
+  function setManualAspectOverride(assetId, aspect) {
+    const id = String(assetId || '').trim();
+    const normalized = normalizeAspect(aspect);
+    if (!id || !normalized) return;
+    manualAspectOverrides[id] = normalized;
+    saveManualAspectOverrides();
+  }
+
+  function displayAspect(value) {
+    const aspect = normalizeAspect(value);
+    if (aspect === 'wide') return 'Wide';
+    if (aspect === 'square') return 'Square';
+    if (aspect === 'tall') return 'Tall';
+    return '-';
+  }
+
+  function inferAspectFromDimensions(width, height) {
+    const w = Math.max(0, Number(width) || 0);
+    const h = Math.max(0, Number(height) || 0);
+    if (w > 0 && h > 0) {
+      const ratio = w / h;
+      if (ratio >= 1.2) return 'wide';
+      if (ratio <= 0.82) return 'tall';
+      return 'square';
+    }
+    return '';
+  }
+
+  function dimensionsFromAssetName(asset) {
+    const text = String(asset?.assetName || asset?.asset_name || '').trim();
+    const match = text.match(/(?:^|[^0-9])([1-9][0-9]{1,4})\s*[xX]\s*([1-9][0-9]{1,4})(?:[^0-9]|$)/);
+    if (!match) return { width: 0, height: 0 };
+    return {
+      width: Number(match[1] || 0) || 0,
+      height: Number(match[2] || 0) || 0,
+    };
+  }
+
+  function resolvedAssetAspect(asset) {
+    const manual = normalizeAspect(manualAspectOverrides[String(asset?.id || '').trim()]);
+    if (manual) return manual;
+    const stored = normalizeAspect(asset?.aspect);
+    if (stored) return stored;
+    const direct = inferAspectFromDimensions(asset?.imageWidth || asset?.image_width, asset?.imageHeight || asset?.image_height);
+    if (direct) return direct;
+    const thumb = inferAspectFromDimensions(asset?.thumbnailWidth || asset?.thumbnail_width, asset?.thumbnailHeight || asset?.thumbnail_height);
+    if (thumb) return thumb;
+    const named = dimensionsFromAssetName(asset);
+    return inferAspectFromDimensions(named.width, named.height);
   }
 
   function isBulkMode() {
@@ -186,6 +263,7 @@ App.assets = (function () {
     const name = String(filters.asset_name || '').trim().toLowerCase();
     const type = String(filters.asset_type || '').trim();
     const category = String(filters.category || '').trim().toLowerCase();
+    const aspect = normalizeAspect(filters.aspect);
     const tags = String(filters.tags || '').trim().toLowerCase();
     const size = String(filters.size || '').trim().toLowerCase();
 
@@ -193,6 +271,7 @@ App.assets = (function () {
       const assetName = String(asset.assetName || '').toLowerCase();
       const assetType = String(asset.assetType || '');
       const assetCategory = String(asset.category || '').toLowerCase();
+      const assetAspect = resolvedAssetAspect(asset);
       const assetTags = Array.isArray(asset.tags) ? asset.tags.join(', ').toLowerCase() : '';
       const assetSizeRaw = String(Math.max(0, Number(asset.size || 0) || 0));
       const assetSizeFmt = formatBytes(asset.size).toLowerCase();
@@ -200,6 +279,7 @@ App.assets = (function () {
       if (name && !assetName.includes(name)) return false;
       if (type && assetType !== type) return false;
       if (category && assetCategory !== category) return false;
+      if (aspect && assetAspect !== aspect) return false;
       if (tags && !assetTags.includes(tags)) return false;
       if (size && !assetSizeRaw.includes(size) && !assetSizeFmt.includes(size)) return false;
       return true;
@@ -407,6 +487,10 @@ App.assets = (function () {
     renderUploadCategorySelect(els.assetMultiUploadCategory, assetType, selectedCategory);
   }
 
+  function renderDriveFolderCategoryOptions(selectedCategory) {
+    renderUploadCategorySelect(els.assetDriveFolderCategory, 'Image', selectedCategory);
+  }
+
   function inferAssetTypeFromCategory(category) {
     const targetCategory = String(category || '').trim();
     if (!targetCategory) return '';
@@ -442,6 +526,7 @@ App.assets = (function () {
       els.assetMultiUploadType.value = defaults.assetType || '';
     }
     renderMultiUploadCategoryOptionsByType(defaults.assetType, defaults.category);
+    renderDriveFolderCategoryOptions(defaults.category);
   }
 
   function renderAssetFilterCategoryOptions(assetType, selectedCategory, config = {}) {
@@ -514,9 +599,11 @@ App.assets = (function () {
       els.assetsFilterName.placeholder = 'Asset Name (leave unchanged)';
       els.assetsFilterTags.placeholder = 'Tags (comma-separated, leave unchanged)';
       if (els.assetsFilterType.options[0]) els.assetsFilterType.options[0].textContent = 'Asset Type (leave unchanged)';
+      if (els.assetsFilterAspect?.options?.[0]) els.assetsFilterAspect.options[0].textContent = 'Aspect (leave unchanged)';
 
       els.assetsFilterName.value = bulkDraft.asset_name;
       els.assetsFilterType.value = bulkDraft.asset_type;
+      if (els.assetsFilterAspect) els.assetsFilterAspect.value = normalizeAspect(bulkDraft.aspect);
       els.assetsFilterTags.value = bulkDraft.tags;
 
       const categoryType = bulkDraft.asset_type || getBulkCommonAssetType();
@@ -532,10 +619,12 @@ App.assets = (function () {
     els.assetsFilterName.placeholder = 'Asset Name';
     els.assetsFilterTags.placeholder = 'Tags';
     if (els.assetsFilterType.options[0]) els.assetsFilterType.options[0].textContent = 'All Types';
+    if (els.assetsFilterAspect?.options?.[0]) els.assetsFilterAspect.options[0].textContent = 'All Aspects';
 
     els.assetsFilterName.value = String(state.assetsFilters?.asset_name || '');
     const activeType = String(state.assetsFilters?.asset_type || '').trim();
     els.assetsFilterType.value = activeType;
+    if (els.assetsFilterAspect) els.assetsFilterAspect.value = normalizeAspect(state.assetsFilters?.aspect);
     els.assetsFilterTags.value = String(state.assetsFilters?.tags || '');
     renderAssetFilterCategoryOptions(
       activeType,
@@ -567,6 +656,7 @@ App.assets = (function () {
     els.assetForm.asset_name.value = String(asset.assetName || '');
     els.assetForm.asset_type.value = String(asset.assetType || '');
     renderCategoryOptionsByType(asset.assetType, String(asset.category || ''));
+    if (els.assetForm.aspect) els.assetForm.aspect.value = resolvedAssetAspect(asset);
     if (els.assetForm.topic) {
       if (els.assetForm.topic.tagName === 'SELECT') {
         if (App && App.ui && typeof App.ui.populateTopicsDropdown === 'function') {
@@ -716,6 +806,7 @@ App.assets = (function () {
 
       appendCell(tr, displayAssetType(asset.assetType));
       appendCell(tr, asset.category);
+      appendCell(tr, displayAspect(resolvedAssetAspect(asset)));
       appendCell(tr, Array.isArray(asset.tags) ? asset.tags.join(', ') : '-');
       appendCell(tr, formatBytes(asset.size));
 
@@ -760,12 +851,83 @@ App.assets = (function () {
     return vercelBlobClientPromise;
   }
 
+  function isImageMimeType(mimeType) {
+    return String(mimeType || '').toLowerCase().startsWith('image/');
+  }
+
+  function isImageUploadFile(file) {
+    if (!file) return false;
+    const mime = String(file.type || '').toLowerCase();
+    if (mime.startsWith('image/')) return true;
+    return /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(String(file.name || ''));
+  }
+
+  function setBulkImportProgress(visible, text, value, max) {
+    const wrap = document.getElementById('assetMultiUploadProgressWrap');
+    const label = document.getElementById('assetMultiUploadProgressText');
+    const bar = document.getElementById('assetMultiUploadProgressBar');
+    if (wrap) wrap.classList.toggle('hidden', !visible);
+    if (label && text) label.textContent = text;
+    if (bar) {
+      bar.max = Math.max(1, Number(max || 1));
+      bar.value = Math.max(0, Number(value || 0));
+    }
+  }
+
+  function setDriveFolderImportProgress(visible, text, value, max) {
+    const wrap = document.getElementById('assetDriveFolderProgressWrap');
+    const label = document.getElementById('assetDriveFolderProgressText');
+    const bar = document.getElementById('assetDriveFolderProgressBar');
+    if (wrap) wrap.classList.toggle('hidden', !visible);
+    if (label && text) label.textContent = text;
+    if (bar) {
+      if (max == null) {
+        bar.removeAttribute('value');
+        bar.removeAttribute('max');
+      } else {
+        bar.max = Math.max(1, Number(max || 1));
+        bar.value = Math.max(0, Number(value || 0));
+      }
+    }
+  }
+
+  async function importImageFile(file, options) {
+    if (!file) throw new Error('Choose a file to upload');
+    if (!isImageUploadFile(file)) {
+      throw new Error('Bulk image import only accepts image files');
+    }
+    if (file.size > LEGACY_UPLOAD_MAX_BYTES) {
+      throw new Error('Upload limit is 7MB per image in this version');
+    }
+
+    const fileBuffer = await file.arrayBuffer();
+    const payload = {
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      fileBase64: bytesToBase64(fileBuffer),
+      assetName: String(options?.assetName || '').trim() || file.name,
+      category: String(options?.category || '').trim(),
+      tags: Array.isArray(options?.tags) ? options.tags : [],
+    };
+
+    const result = await api('/api/assets/import-image', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    return result;
+  }
+
   async function uploadFileToDrive(file, options) {
     if (!file) throw new Error('Choose a file to upload');
     const assetType = String(options?.assetType || '').trim();
     if (!assetType) throw new Error('Asset Type is required');
     if (assetType !== 'Video' && file.size > LEGACY_UPLOAD_MAX_BYTES) {
       throw new Error('Upload limit is 7MB per file for this asset type in this version');
+    }
+
+    if (assetType === 'Image' && isImageUploadFile(file)) {
+      return importImageFile(file, options);
     }
 
     const fileBuffer = await file.arrayBuffer();
@@ -921,12 +1083,13 @@ App.assets = (function () {
     const nextName = String(bulkDraft.asset_name || '').trim();
     const nextType = String(bulkDraft.asset_type || '').trim();
     const nextCategory = String(bulkDraft.category || '').trim();
+    const nextAspect = normalizeAspect(bulkDraft.aspect);
     const nextTagsRaw = String(bulkDraft.tags || '').trim();
     const nextTags = nextTagsRaw
       ? nextTagsRaw.split(',').map((s) => s.trim()).filter(Boolean)
       : null;
 
-    if (!nextName && !nextType && !nextCategory && !nextTagsRaw) {
+    if (!nextName && !nextType && !nextCategory && !nextAspect && !nextTagsRaw) {
       notify('Change one or more fields before using Edit All', true);
       return;
     }
@@ -935,15 +1098,23 @@ App.assets = (function () {
       for (const asset of selectedAssets) {
         const assetId = Number(asset.id || 0) || 0;
         if (!assetId) continue;
-        await api(`/api/assets/${assetId}`, {
+        const payload = {
+          assetName: nextName || String(asset.assetName || '').trim(),
+          assetType: nextType || String(asset.assetType || '').trim(),
+          category: nextCategory || String(asset.category || '').trim(),
+          aspect: nextAspect || resolvedAssetAspect(asset),
+          tags: nextTags || (Array.isArray(asset.tags) ? asset.tags : []),
+        };
+        const updated = await api(`/api/assets/${assetId}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            assetName: nextName || String(asset.assetName || '').trim(),
-            assetType: nextType || String(asset.assetType || '').trim(),
-            category: nextCategory || String(asset.category || '').trim(),
-            tags: nextTags || (Array.isArray(asset.tags) ? asset.tags : []),
-          }),
+          body: JSON.stringify(payload),
         });
+        if (payload.aspect) setManualAspectOverride(assetId, payload.aspect);
+        const updatedAsset = updated?.asset || updated?.data || null;
+        if (updatedAsset?.id) {
+          const idx = (state.assets || []).findIndex((item) => Number(item.id || 0) === Number(updatedAsset.id || 0));
+          if (idx >= 0) state.assets[idx] = { ...state.assets[idx], ...updatedAsset, aspect: payload.aspect || updatedAsset.aspect };
+        }
       }
 
       notify(`${selectedAssets.length} asset${selectedAssets.length === 1 ? '' : 's'} updated`);
@@ -976,6 +1147,7 @@ App.assets = (function () {
   }
 
   function init() {
+    readManualAspectOverrides();
     const bindSortButton = (id, key, defaultDir = 'asc') => {
       const button = document.getElementById(id);
       if (!button) return;
@@ -993,6 +1165,7 @@ App.assets = (function () {
     bindSortButton('assetsSortNameBtn', 'assetName', 'asc');
     bindSortButton('assetsSortTypeBtn', 'assetType', 'asc');
     bindSortButton('assetsSortCategoryBtn', 'category', 'asc');
+    bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
     bindSortButton('assetsSortTagsBtn', 'tags', 'asc');
     bindSortButton('assetsSortSizeBtn', 'size', 'desc');
 
@@ -1043,12 +1216,70 @@ App.assets = (function () {
             });
           }
 
-          notify(assetType === 'Video' ? 'Video uploaded' : 'Asset uploaded to Google Drive');
+          const uploadedViaImport = assetType === 'Image' && isImageUploadFile(file);
+          notify(
+            assetType === 'Video'
+              ? 'Video uploaded'
+              : uploadedViaImport
+                ? 'Image imported with thumbnail and aspect'
+                : 'Asset uploaded to Google Drive'
+          );
           els.assetUploadForm.reset();
           prefillUploadFormsFromActiveFilters();
           await refresh();
         } catch (err) {
           notify(err.message, true);
+        }
+      });
+    }
+
+    if (els.assetDriveFolderImportForm) {
+      els.assetDriveFolderImportForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const folderUrl = String(els.assetDriveFolderUrl?.value || '').trim();
+        if (!folderUrl) return notify('Paste a Google Drive folder URL', true);
+
+        const category = String(els.assetDriveFolderCategory?.value || '').trim();
+        const submitBtn = els.assetDriveFolderImportForm.querySelector('button[type="submit"]');
+
+        try {
+          if (submitBtn) submitBtn.disabled = true;
+          setDriveFolderImportProgress(true, 'Listing folder and importing images from Google Drive…');
+
+          const body = await api('/api/assets/import-drive-folder', {
+            method: 'POST',
+            body: JSON.stringify({ folderUrl, category, tags: [] }),
+          });
+
+          const data = body?.data ?? body;
+          const folderName = String(data?.folderName || '').trim();
+          const discovered = Number(data?.discovered || 0);
+          const imported = Number(data?.imported || 0);
+          const skipped = Number(data?.skipped || 0);
+          const failed = Number(data?.failed || 0);
+          const thumbCount = Number(data?.thumbnailCount || 0);
+
+          const label = folderName ? `"${folderName}"` : 'folder';
+          let summary = `Imported ${imported} of ${discovered} image${discovered === 1 ? '' : 's'} from ${label}`;
+          if (thumbCount > 0) summary += ` (${thumbCount} with thumbnails)`;
+          if (skipped > 0) summary += `. ${skipped} skipped (already in Assets)`;
+          if (failed > 0) summary += `. ${failed} failed — see console`;
+
+          notify(summary, failed > 0);
+          if (failed > 0 && Array.isArray(data?.results)) {
+            const issues = data.results.filter((row) => row && row.ok === false);
+            if (issues.length) console.warn('[assets] Drive folder import issues:', issues);
+          }
+
+          els.assetDriveFolderImportForm.reset();
+          prefillUploadFormsFromActiveFilters();
+          await refresh();
+        } catch (err) {
+          notify(err.message, true);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+          setDriveFolderImportProgress(false);
         }
       });
     }
@@ -1066,30 +1297,82 @@ App.assets = (function () {
         const category = String(els.assetMultiUploadCategory?.value || '').trim();
 
         try {
-          for (const file of files) {
-            if (assetType === 'Video') {
-              await uploadFileToBlobClient(file, {
-                assetType,
-                assetName: file.name,
-                category,
-                tags: [],
-              });
-            } else {
-              await uploadFileToDrive(file, {
-                assetType,
-                assetName: file.name,
-                category,
-                tags: [],
-              });
+          if (assetType === 'Image') {
+            const imageFiles = files.filter((file) => isImageUploadFile(file));
+            const skipped = files.length - imageFiles.length;
+            if (!imageFiles.length) {
+              notify('Choose one or more image files for bulk image import', true);
+              return;
             }
+
+            setBulkImportProgress(true, `Importing 0 of ${imageFiles.length}...`, 0, imageFiles.length);
+            let imported = 0;
+            let thumbCount = 0;
+            const failures = [];
+
+            for (let index = 0; index < imageFiles.length; index += 1) {
+              const file = imageFiles[index];
+              setBulkImportProgress(
+                true,
+                `Importing ${index + 1} of ${imageFiles.length}: ${file.name}`,
+                index,
+                imageFiles.length
+              );
+              try {
+                const result = await importImageFile(file, {
+                  assetName: file.name,
+                  category,
+                  tags: [],
+                });
+                imported += 1;
+                if (result?.thumbnailGenerated) thumbCount += 1;
+                if (result?.thumbnailError) {
+                  failures.push(`${file.name}: thumbnail ${result.thumbnailError}`);
+                }
+              } catch (err) {
+                failures.push(`${file.name}: ${err.message || 'Import failed'}`);
+              }
+            }
+
+            setBulkImportProgress(true, 'Import complete', imageFiles.length, imageFiles.length);
+            const summary = `Imported ${imported} image${imported === 1 ? '' : 's'} (${thumbCount} with thumbnails)`;
+            if (skipped > 0 || failures.length) {
+              notify(
+                `${summary}. ${skipped ? `${skipped} non-image file(s) skipped. ` : ''}${failures.length ? `${failures.length} issue(s) — see console.` : ''}`,
+                failures.length > 0
+              );
+              if (failures.length) console.warn('[assets] bulk image import issues:', failures);
+            } else {
+              notify(summary);
+            }
+          } else {
+            for (const file of files) {
+              if (assetType === 'Video') {
+                await uploadFileToBlobClient(file, {
+                  assetType,
+                  assetName: file.name,
+                  category,
+                  tags: [],
+                });
+              } else {
+                await uploadFileToDrive(file, {
+                  assetType,
+                  assetName: file.name,
+                  category,
+                  tags: [],
+                });
+              }
+            }
+            notify(`${files.length} ${assetType === 'Video' ? 'video' : 'asset'}${files.length === 1 ? '' : 's'} uploaded`);
           }
 
-          notify(`${files.length} ${assetType === 'Video' ? 'video' : 'asset'}${files.length === 1 ? '' : 's'} uploaded`);
           els.assetMultiUploadForm.reset();
           prefillUploadFormsFromActiveFilters();
           await refresh();
         } catch (err) {
           notify(err.message, true);
+        } finally {
+          setBulkImportProgress(false);
         }
       });
     }
@@ -1102,6 +1385,7 @@ App.assets = (function () {
           assetName: String(formData.get('asset_name') || '').trim(),
           assetType: String(formData.get('asset_type') || '').trim(),
           category: String(formData.get('category') || '').trim(),
+          aspect: normalizeAspect(formData.get('aspect')),
           topic: String(formData.get('topic') || '').trim(),
           comments: String(formData.get('comments') || '').trim(),
           tags: String(formData.get('tags') || '')
@@ -1113,7 +1397,13 @@ App.assets = (function () {
         try {
           const currentId = Number(formData.get('asset_id') || editingAssetId || 0) || 0;
           if (currentId > 0) {
-            await api(`/api/assets/${currentId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+            const updated = await api(`/api/assets/${currentId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+            if (payload.aspect) setManualAspectOverride(currentId, payload.aspect);
+            const updatedAsset = updated?.asset || updated?.data || null;
+            if (updatedAsset?.id) {
+              const idx = (state.assets || []).findIndex((item) => Number(item.id || 0) === Number(updatedAsset.id || 0));
+              if (idx >= 0) state.assets[idx] = { ...state.assets[idx], ...updatedAsset, aspect: payload.aspect || updatedAsset.aspect };
+            }
             notify('Asset updated');
           } else {
             await api('/api/assets', { method: 'POST', body: JSON.stringify(payload) });
@@ -1179,6 +1469,7 @@ App.assets = (function () {
 
     bindHeaderField(els.assetsFilterName, 'asset_name');
     bindHeaderField(els.assetsFilterCategory, 'category');
+    bindHeaderField(els.assetsFilterAspect, 'aspect');
     bindHeaderField(els.assetsFilterTags, 'tags');
 
     if (els.assetsFilterType) {
@@ -1211,6 +1502,7 @@ App.assets = (function () {
         state.assetsFilters.asset_name = String(els.assetsFilterName?.value || '');
         state.assetsFilters.asset_type = String(els.assetsFilterType?.value || '');
         state.assetsFilters.category = String(els.assetsFilterCategory?.value || '');
+        state.assetsFilters.aspect = normalizeAspect(els.assetsFilterAspect?.value);
         state.assetsFilters.tags = String(els.assetsFilterTags?.value || '');
         renderAssets();
       });

@@ -127,16 +127,20 @@
                   <input id="messagingCreateContentHashtags" name="hashtags" />
                 
                 
-                  <label for="messagingCreateContentImage"><strong>Image:</strong></label>
-                  <select id="messagingCreateContentImage" name="image_asset_id">
-                    <option value="">Image (optional)</option>
-                  </select>
+                  <label for="messagingCreateContentImagePickerBtn"><strong>Image:</strong></label>
+                  <div class="field-stack">
+                    <input id="messagingCreateContentImage" name="image_asset_id" type="hidden" />
+                    <button id="messagingCreateContentImagePickerBtn" type="button" class="btn">Choose Image</button>
+                    <div id="messagingCreateContentImagePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 
                 
-                  <label for="messagingCreateContentThumbnail"><strong id="messagingCreateContentThumbnailLabel">Image:</strong></label>
-                  <select id="messagingCreateContentThumbnail" name="thumbnail_asset_id">
-                    <option value="">Thumbnail (optional)</option>
-                  </select>
+                  <label for="messagingCreateContentThumbnailPickerBtn"><strong id="messagingCreateContentThumbnailLabel">Image:</strong></label>
+                  <div class="field-stack">
+                    <input id="messagingCreateContentThumbnail" name="thumbnail_asset_id" type="hidden" />
+                    <button id="messagingCreateContentThumbnailPickerBtn" type="button" class="btn">Choose Image</button>
+                    <div id="messagingCreateContentThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 
                 
                   <label for="messagingCreateContentBody"><strong id="messagingCreateContentBodyLabel">Body:</strong></label>
@@ -321,9 +325,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingArticleThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingArticleThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingArticleThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingArticleThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <input name="url" placeholder="URL" />
@@ -352,9 +358,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingArticleEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingArticleEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingArticleEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingArticleEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <input name="url" placeholder="URL" />
@@ -1396,9 +1404,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingReportThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingReportThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingReportThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingReportThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -1430,9 +1440,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingReportEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingReportEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingReportEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingReportEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -1494,9 +1506,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingWhitePaperThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingWhitePaperThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingWhitePaperThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingWhitePaperThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -1528,9 +1542,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingWhitePaperEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingWhitePaperEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingWhitePaperEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingWhitePaperEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -1592,9 +1608,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingEbookThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingEbookThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingEbookThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingEbookThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -1626,9 +1644,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingEbookEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingEbookEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingEbookEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingEbookEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">

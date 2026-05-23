@@ -31,6 +31,69 @@ main {
   gap: 1.5rem;
 }
 
+.channels-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+
+.channels-page-panel {
+  border: 1px solid var(--border-light, #c8ddef);
+  border-radius: var(--radius-container, 10px);
+  background: var(--bg-surface, #fff);
+  padding: 1.25rem 1.5rem;
+}
+
+.channels-page-panel h3 {
+  margin: 0 0 1rem;
+}
+
+.channels-platform-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.channels-platform-filter-cell {
+  width: 100%;
+}
+
+.channels-platform-filter-cell select {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.channels-platform-icon {
+  display: block;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  object-fit: contain;
+}
+
+.channels-platform-icon--muted {
+  opacity: 0.45;
+}
+
+.channels-platform-name {
+  font-weight: 700;
+  color: var(--ink-primary, #0f2f4c);
+}
+
+.channels-platform-heading-cell .channels-platform-name {
+  font-size: inherit;
+}
+
+@media (max-width: 960px) {
+  .channels-page-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .pod-logo {
   width: 48px;
   height: 48px;

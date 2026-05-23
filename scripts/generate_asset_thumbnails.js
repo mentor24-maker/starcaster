@@ -11,6 +11,7 @@ const { listAssets, rowToAsset, updateAsset } = require('../lib/assetsStore');
 const { uploadAssetFile, isConfigured: isAssetStorageConfigured } = require('../lib/assetStorage');
 const { fetchDriveFileMedia } = require('../lib/googleDrive');
 const { sbQuery, tableConfig } = require('../lib/supabase');
+const { inferAspectFromDimensions } = require('../lib/assetAspect');
 
 const SIPS_PATH = '/usr/bin/sips';
 
@@ -221,6 +222,9 @@ async function processAsset(asset, options) {
       thumbnailHeight: dimensions.height,
       thumbnailSize: outputBuffer.length,
       thumbnailGeneratedAt: new Date().toISOString(),
+      aspect: dimensions.width > 0 && dimensions.height > 0
+        ? inferAspectFromDimensions(dimensions.width, dimensions.height)
+        : asset.aspect,
     });
     if (!updated.ok) return { ok: false, error: updated.error || 'Asset update failed' };
 
