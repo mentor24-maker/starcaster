@@ -81,6 +81,7 @@ create table if not exists public.assets (
   size       bigint not null default 0,
   image_width integer null,
   image_height integer null,
+  aspect text not null default 'square' check (aspect in ('wide', 'square', 'tall')),
   thumbnail_location text not null default '',
   thumbnail_width integer null,
   thumbnail_height integer null,
@@ -147,6 +148,14 @@ alter table public.assets
   add column if not exists image_width integer null;
 alter table public.assets
   add column if not exists image_height integer null;
+alter table public.assets
+  add column if not exists aspect text not null default 'square';
+alter table public.assets
+  drop constraint if exists assets_aspect_check;
+alter table public.assets
+  add constraint assets_aspect_check
+  check (aspect in ('wide', 'square', 'tall'));
+create index if not exists assets_aspect_idx on public.assets (aspect);
 alter table public.assets
   add column if not exists thumbnail_location text not null default '';
 alter table public.assets

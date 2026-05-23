@@ -169,8 +169,16 @@ App.auth.handleUnauthorized = function handleUnauthorized() {
   try {
     window.localStorage.removeItem('alphire.authUser');
   } catch (_) {}
+  if (typeof App.setSessionToken === 'function') App.setSessionToken('');
   App.auth._showLanding('login');
   App.auth._setMessage('');
+};
+
+App.auth._persistSessionToken = function _persistSessionToken(res) {
+  const token = String(res?.sessionToken || res?.data?.sessionToken || '').trim();
+  if (token && typeof App.setSessionToken === 'function') {
+    App.setSessionToken(token);
+  }
 };
 
 App.auth._login = async function _login(payload) {
@@ -182,7 +190,8 @@ App.auth._login = async function _login(payload) {
     method: 'POST',
     body: JSON.stringify(body),
   });
-    return res.user || res.data?.user || null;
+  App.auth._persistSessionToken(res);
+  return res.user || res.data?.user || null;
 };
 
 App.auth._register = async function _register(payload) {
@@ -195,7 +204,8 @@ App.auth._register = async function _register(payload) {
     method: 'POST',
     body: JSON.stringify(body),
   });
-    return res.user || res.data?.user || null;
+  App.auth._persistSessionToken(res);
+  return res.user || res.data?.user || null;
 };
 
 App.auth._forgotPassword = async function _forgotPassword(email) {
@@ -218,7 +228,11 @@ App.auth._me = async function _me() {
 };
 
 App.auth._logout = async function _logout() {
-  await App.api('/api/auth/logout', { method: 'POST' });
+  try {
+    await App.api('/api/auth/logout', { method: 'POST' });
+  } finally {
+    if (typeof App.setSessionToken === 'function') App.setSessionToken('');
+  }
 };
 
 App.auth.init = function init(bootMainApp) {

@@ -55,6 +55,13 @@ function getUrlObj(req) {
   return new URL(req.url, `http://${host}`);
 }
 
+/** Strip trailing slashes so `/api/foo/` matches route handlers for `/api/foo`. */
+function normalizeApiPathname(pathname) {
+  const raw = String(pathname || '/').trim();
+  if (raw.length > 1) return raw.replace(/\/+$/, '');
+  return raw || '/';
+}
+
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -139,6 +146,7 @@ module.exports = {
   parseJsonBody,
   setCors,
   getUrlObj,
+  normalizeApiPathname,
   normalizeEmail,
   nextId,
   parseCookies,

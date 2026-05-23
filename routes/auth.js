@@ -33,40 +33,48 @@ function isSecureRequest(req) {
 
 function readSessionToken(req) {
   const cookies = parseCookies(req.headers.cookie || '');
-  const fromCookie = String(cookies[SESSION_COOKIE_NAME] || '').trim();
-  if (fromCookie) return fromCookie;
+  const rawCookie = String(cookies[SESSION_COOKIE_NAME] || '').trim();
+  if (rawCookie) {
+    try {
+      return decodeURIComponent(rawCookie).trim() || rawCookie;
+    } catch {
+      return rawCookie;
+    }
+  }
 
   const auth = String(req.headers.authorization || '').trim();
   if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
   return '';
 }
 
-function setSessionCookie(res, token, req) {
-  const expiresDate = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000).toUTCString();
+function buildSessionCookieHeader(token, req, { clear = false } = {}) {
+  const secure = isSecureRequest(req);
   const parts = [
-    `${SESSION_COOKIE_NAME}=${encodeURIComponent(String(token || ''))}`,
-    `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
-    `Expires=${expiresDate}`,
+    `${SESSION_COOKIE_NAME}=${clear ? '' : encodeURIComponent(String(token || ''))}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=None',
-    'Secure'
   ];
+  if (clear) {
+    parts.push('Max-Age=0');
+  } else {
+    parts.push(`Max-Age=${SESSION_MAX_AGE_SECONDS}`);
+    parts.push(`Expires=${new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000).toUTCString()}`);
+  }
+  // Secure + SameSite=None only on HTTPS; http://localhost must omit Secure or browsers drop the cookie.
+  if (secure) {
+    parts.push('SameSite=None', 'Secure');
+  } else {
+    parts.push('SameSite=Lax');
+  }
+  return parts.join('; ');
+}
 
-  res.setHeader('Set-Cookie', parts.join('; '));
+function setSessionCookie(res, token, req) {
+  res.setHeader('Set-Cookie', buildSessionCookieHeader(token, req));
 }
 
 function clearSessionCookie(res, req) {
-  const parts = [
-    `${SESSION_COOKIE_NAME}=`,
-    'Max-Age=0',
-    'Path=/',
-    'HttpOnly',
-    'SameSite=None',
-    'Secure'
-  ];
-
-  res.setHeader('Set-Cookie', parts.join('; '));
+  res.setHeader('Set-Cookie', buildSessionCookieHeader('', req, { clear: true }));
 }
 
 async function handle(req, res, pathname, method) {
@@ -92,7 +100,12 @@ async function handle(req, res, pathname, method) {
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
     setSessionCookie(res, session.data.token, req);
-    return sendOk(res, 201, { user: created.data }, { user: created.data }), true;
+    return sendOk(
+      res,
+      201,
+      { user: created.data, sessionToken: session.data.token },
+      { user: created.data, sessionToken: session.data.token }
+    ), true;
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {
@@ -107,7 +120,12 @@ async function handle(req, res, pathname, method) {
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
     setSessionCookie(res, session.data.token, req);
-    return sendOk(res, 200, { user: matched.data }, { user: matched.data }), true;
+    return sendOk(
+      res,
+      200,
+      { user: matched.data, sessionToken: session.data.token },
+      { user: matched.data, sessionToken: session.data.token }
+    ), true;
   }
 
   if (pathname === '/api/auth/forgot-password' && method === 'POST') {

@@ -1289,7 +1289,6 @@ App.develop = (function () {
     filterInput.placeholder = 'Search images by name, category, or tag';
 
     const categoryFilter = document.createElement('select');
-    const orientationFilter = document.createElement('select');
     const tagFilter = document.createElement('select');
 
     const resultCount = document.createElement('div');
@@ -1313,42 +1312,18 @@ App.develop = (function () {
 
     toolbar.appendChild(filterInput);
     toolbar.appendChild(categoryFilter);
-    toolbar.appendChild(orientationFilter);
     toolbar.appendChild(tagFilter);
     toolbar.appendChild(resultCount);
     toolbar.appendChild(clearBtn);
     toolbar.appendChild(uploadWrap);
 
     const grid = document.createElement('div');
-    grid.className = 'develop-theme-picker-grid';
+    grid.className = 'develop-theme-picker-groups';
     body.appendChild(toolbar);
     body.appendChild(grid);
 
     let modal = null;
     let previewModal = null;
-
-    function getAssetDimensions(asset) {
-      const width = Number(asset?.width || asset?.imageWidth || asset?.assetWidth || 0);
-      const height = Number(asset?.height || asset?.imageHeight || asset?.assetHeight || 0);
-      return {
-        width: Number.isFinite(width) && width > 0 ? width : 0,
-        height: Number.isFinite(height) && height > 0 ? height : 0,
-      };
-    }
-
-    function getAssetOrientation(asset) {
-      const { width, height } = getAssetDimensions(asset);
-      if (!width || !height) return 'unknown';
-      const ratio = width / height;
-      if (ratio >= 1.2) return 'wide';
-      if (ratio <= 0.82) return 'tall';
-      return 'square';
-    }
-
-    function getAssetDimensionLabel(asset) {
-      const { width, height } = getAssetDimensions(asset);
-      return width && height ? `${width} x ${height}` : '';
-    }
 
     function getScopedAssets() {
       return getImagePickerAssets(selectId, getValue());
@@ -1371,17 +1346,6 @@ App.develop = (function () {
         categoryValues.map((value) => ({ value, label: value })),
         'All Relevant Categories',
         safeText(categoryFilter.value)
-      );
-      setSelectOptions(
-        orientationFilter,
-        [
-          { value: 'wide', label: 'Wide' },
-          { value: 'square', label: 'Square' },
-          { value: 'tall', label: 'Tall' },
-          { value: 'unknown', label: 'Other' },
-        ],
-        'All Shapes',
-        safeText(orientationFilter.value)
       );
       setSelectOptions(
         tagFilter,
@@ -1421,11 +1385,9 @@ App.develop = (function () {
       syncPickerFilters();
       const filter = safeText(filterInput.value).toLowerCase();
       const categoryValue = safeText(categoryFilter.value);
-      const orientationValue = safeText(orientationFilter.value);
       const tagValue = safeText(tagFilter.value).toLowerCase();
       const assets = getScopedAssets().filter((asset) => {
         if (categoryValue && safeText(asset?.category) !== categoryValue) return false;
-        if (orientationValue && getAssetOrientation(asset) !== orientationValue) return false;
         const tagText = getAssetTagText(asset).toLowerCase();
         if (tagValue && !tagText.includes(tagValue)) return false;
         if (!filter) return true;
@@ -1434,126 +1396,36 @@ App.develop = (function () {
           safeText(asset.category),
           safeText(asset.assetName),
           safeText(asset.location),
+          safeText(asset?.aspect),
           tagText,
         ].join(' ').toLowerCase();
         return haystack.includes(filter);
       });
       resultCount.textContent = `${assets.length} image${assets.length === 1 ? '' : 's'}`;
       grid.textContent = '';
-      if (!assets.length) {
-        const empty = document.createElement('div');
-        empty.className = 'meta';
-        empty.textContent = 'No matching images found.';
-        grid.appendChild(empty);
+      if (!App.assetPicker || typeof App.assetPicker.renderGroupedImageGrid !== 'function') {
+        const fallback = document.createElement('div');
+        fallback.className = 'meta';
+        fallback.textContent = 'Image picker is unavailable.';
+        grid.appendChild(fallback);
         return;
       }
-      const grouped = {
-        wide: [],
-        square: [],
-        tall: [],
-        unknown: [],
-      };
-      assets.forEach((asset) => {
-        grouped[getAssetOrientation(asset)].push(asset);
-      });
-
-      [
-        ['wide', 'Wide Images'],
-        ['square', 'Square Images'],
-        ['tall', 'Tall Images'],
-        ['unknown', 'Other Images'],
-      ].forEach(([groupKey, label]) => {
-        const rows = grouped[groupKey];
-        if (!rows.length) return;
-        const section = document.createElement('section');
-        section.className = 'develop-theme-picker-group';
-
-        const heading = document.createElement('div');
-        heading.className = 'develop-theme-picker-group-heading';
-        heading.textContent = '';
-        const strong = document.createElement('strong');
-        strong.textContent = label;
-        const span = document.createElement('span');
-        span.textContent = rows.length;
-        heading.appendChild(strong);
-        heading.appendChild(span);
-        section.appendChild(heading);
-
-        const sectionGrid = document.createElement('div');
-        sectionGrid.className = `develop-theme-picker-grid develop-theme-picker-grid--${groupKey}`;
-
-        rows.forEach((asset) => {
-          const card = document.createElement('div');
-          card.className = `develop-theme-picker-card develop-theme-picker-card--${groupKey}${String(asset.id) === getValue() ? ' is-selected' : ''}`;
-          const imageUrl = toDirectAssetUrl(asset.location);
-          const dimensionLabel = getAssetDimensionLabel(asset);
-          
-          const imageBtn = document.createElement('button');
-          imageBtn.type = 'button';
-          imageBtn.className = 'develop-theme-picker-card-image-btn';
-          
-          if (imageUrl) {
-            const img = document.createElement('img');
-            img.src = imageUrl;
-            img.alt = safeText(assetLabel(asset, config.title));
-            imageBtn.appendChild(img);
-          } else {
-            const empty = document.createElement('div');
-            empty.className = 'develop-theme-table-thumb-empty';
-            empty.textContent = 'No Image';
-            imageBtn.appendChild(empty);
-          }
-
-          const titleDiv = document.createElement('div');
-          titleDiv.className = 'develop-theme-picker-card-title';
-          titleDiv.textContent = safeText(assetLabel(asset, config.title));
-
-          const metaDiv = document.createElement('div');
-          metaDiv.className = 'develop-theme-picker-card-meta';
-          metaDiv.textContent = `${safeText(asset.category) || 'Image'}${dimensionLabel ? ` • ${dimensionLabel}` : ''}`;
-
-          const actionsDiv = document.createElement('div');
-          actionsDiv.className = 'develop-theme-picker-card-actions';
-
-          const previewBtn = document.createElement('button');
-          previewBtn.type = 'button';
-          previewBtn.className = 'tiny-btn develop-theme-picker-preview-btn';
-          previewBtn.textContent = 'Preview';
-
-          const selectBtn = document.createElement('button');
-          selectBtn.type = 'button';
-          selectBtn.className = 'tiny-btn develop-theme-picker-select-btn';
-          selectBtn.textContent = 'Use Image';
-
-          actionsDiv.appendChild(previewBtn);
-          actionsDiv.appendChild(selectBtn);
-
-          card.appendChild(imageBtn);
-          card.appendChild(titleDiv);
-          card.appendChild(metaDiv);
-          card.appendChild(actionsDiv);
-
-          const choose = () => {
-            setValue(String(asset.id));
-            afterChange(asset);
-            if (modal) modal.close();
-          };
-
-          imageBtn.addEventListener('click', choose);
-          previewBtn.addEventListener('click', () => openImagePreview(asset));
-          selectBtn.addEventListener('click', choose);
-
-          sectionGrid.appendChild(card);
-        });
-
-        section.appendChild(sectionGrid);
-        grid.appendChild(section);
+      App.assetPicker.renderGroupedImageGrid(grid, {
+        assets,
+        getSelectedId: getValue,
+        toDirectAssetUrl,
+        assetLabel: (asset) => assetLabel(asset, config.title),
+        onChoose: (asset) => {
+          setValue(String(asset.id));
+          afterChange(asset);
+          if (modal) modal.close();
+        },
+        onPreview: openImagePreview,
       });
     }
 
     filterInput.addEventListener('input', renderGrid);
     categoryFilter.addEventListener('change', renderGrid);
-    orientationFilter.addEventListener('change', renderGrid);
     tagFilter.addEventListener('change', renderGrid);
     clearBtn.addEventListener('click', () => {
       setValue('');

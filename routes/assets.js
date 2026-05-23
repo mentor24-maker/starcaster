@@ -14,6 +14,26 @@ const {
   fetchDriveFileMedia,
 } = require('../lib/googleDrive');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
+const { importImageAssetWithThumbnail } = require('../lib/assetImageImport');
+const { isConfigured: isGoogleDriveConfigured } = require('../lib/googleDrive');
+
+const IMPORT_DRIVE_FOLDER_PATH = '/api/assets/import-drive-folder';
+const MAX_FOLDER_IMPORT_FILES = 100;
+
+function loadDriveFolderImportLib() {
+  try {
+    const lib = require('../lib/assetDriveFolderImport');
+    return { ok: true, lib };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err || 'unknown error');
+    return { ok: false, error: message };
+  }
+}
+
+function isImportDriveFolderPath(pathname) {
+  const path = String(pathname || '').replace(/\/+$/, '') || '/';
+  return path === IMPORT_DRIVE_FOLDER_PATH;
+}
 const { isConfigured: isBlobConfigured, handleClientUpload } = require('../lib/blobStorage');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const { listYoutubeVideos } = require('../lib/acquire/YoutubeVideosStore');
@@ -29,6 +49,7 @@ try {
 const ASSET_TYPES = new Set(['Image', 'Video', 'Audio', 'Lead Magnet', 'File']);
 const ASSETS_PATH_RE = /^\/api\/assets\/?$/;
 const MAX_UPLOAD_BASE64_CHARS = 9_000_000;
+const MAX_BULK_IMAGE_IMPORT_FILES = 40;
 
 const ASSET_TYPE_CANONICAL = new Map([
   ['image', 'Image'],
@@ -58,9 +79,94 @@ function estimatedBytesFromBase64(base64Text) {
   return Math.max(0, Math.floor((clean.length * 3) / 4) - pad);
 }
 
+async function handleImportDriveFolderPost(req, res, scope) {
+  const importLib = loadDriveFolderImportLib();
+  if (!importLib.ok) {
+    return sendErr(
+      res,
+      503,
+      `Drive folder import module is not available: ${importLib.error}`,
+      { code: 'IMPORT_DRIVE_FOLDER_MODULE_MISSING' }
+    ), true;
+  }
+
+  if (!isGoogleDriveConfigured()) {
+    return sendErr(
+      res,
+      400,
+      'Google Drive credentials are not configured in Settings > APIs or environment variables.',
+      { code: 'GOOGLE_DRIVE_NOT_CONFIGURED' }
+    ), true;
+  }
+
+  const body = await parseJsonBody(req);
+  const folderUrl = String(body.folderUrl || body.folder_url || '').trim();
+  if (!folderUrl) {
+    return sendErr(res, 400, 'folderUrl is required', { code: 'VALIDATION_ERROR' }), true;
+  }
+
+  const driveImport = importLib.lib;
+  const maxFiles = Math.max(
+    1,
+    Number(driveImport.MAX_FOLDER_IMPORT_FILES || MAX_FOLDER_IMPORT_FILES) || MAX_FOLDER_IMPORT_FILES
+  );
+  const limit = Math.max(1, Math.min(maxFiles, Number(body.limit || maxFiles) || maxFiles));
+
+  const result = await driveImport.importDriveFolderImages(
+    {
+      folderUrl,
+      category: String(body.category || '').trim(),
+      tags: Array.isArray(body.tags) ? body.tags : [],
+      limit,
+    },
+    scope
+  );
+
+  if (!result.ok) {
+    return sendErr(res, result.status || 500, result.error, { code: 'IMPORT_DRIVE_FOLDER_FAILED' }), true;
+  }
+
+  return sendOk(res, result.status || 200, result.data, result.data), true;
+}
+
+async function handleImportDriveFolderGet(req, res) {
+  const importLib = loadDriveFolderImportLib();
+  const payload = {
+    ok: true,
+    registered: true,
+    available: importLib.ok,
+    path: IMPORT_DRIVE_FOLDER_PATH,
+    methods: ['POST', 'GET'],
+    note: 'GET is a public health check. POST /api/assets/import-drive-folder requires login.',
+  };
+  if (!importLib.ok) {
+    payload.moduleError = importLib.error;
+  }
+  if (req.authUser) {
+    payload.googleDriveConfigured = isGoogleDriveConfigured();
+  }
+  return sendOk(res, 200, payload, payload), true;
+}
+
+async function handleImportDriveFolder(req, res, scope, requestMethod) {
+  if (requestMethod === 'GET') {
+    return handleImportDriveFolderGet(req, res);
+  }
+  if (requestMethod === 'POST') {
+    return handleImportDriveFolderPost(req, res, scope);
+  }
+  return sendErr(res, 405, 'Method not allowed', { code: 'METHOD_NOT_ALLOWED' }), true;
+}
+
 async function handle(req, res, pathname, method) {
   const parsedUrl = getUrlObj(req);
-  const isAssetsPath = ASSETS_PATH_RE.test(String(pathname || ''));
+  const normalizedPath = String(pathname || '').replace(/\/+$/, '') || '/';
+  const isAssetApiPath = normalizedPath === '/api/assets'
+    || normalizedPath.startsWith('/api/assets/')
+    || normalizedPath.startsWith('/api/asset-categories');
+  if (!isAssetApiPath) return false;
+
+  const isAssetsPath = ASSETS_PATH_RE.test(normalizedPath);
   const requestMethod = String(method || '').toUpperCase();
   const scope = {
     projectId: String(req?.projectContext?.project?.id || '').trim(),
@@ -69,6 +175,10 @@ async function handle(req, res, pathname, method) {
       ? req.projectContext.projects.map((project) => String(project?.id || '').trim()).filter(Boolean)
       : [],
   };
+
+  if (isImportDriveFolderPath(normalizedPath) && (requestMethod === 'POST' || requestMethod === 'GET')) {
+    return handleImportDriveFolder(req, res, scope, requestMethod);
+  }
 
   if (isAssetsPath && requestMethod === 'GET') {
     const result = await listAssets(scope);
@@ -87,6 +197,7 @@ async function handle(req, res, pathname, method) {
     const size = Math.max(0, Number(body.size || 0) || 0);
     const imageWidth = Math.max(0, Number(body.imageWidth || body.image_width || 0) || 0);
     const imageHeight = Math.max(0, Number(body.imageHeight || body.image_height || 0) || 0);
+    const aspect = String(body.aspect || '').trim();
 
     if (!assetName) return sendErr(res, 400, 'assetName is required', { code: 'VALIDATION_ERROR' }), true;
     if (!ASSET_TYPES.has(assetType)) {
@@ -98,13 +209,13 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
 
-    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight }, scope);
+    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight, aspect }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
   }
 
-  const assetIdMatch = String(pathname || '').match(/^\/api\/assets\/(\d+)\/?$/);
+  const assetIdMatch = normalizedPath.match(/^\/api\/assets\/(\d+)$/);
   if (assetIdMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const assetId = Number(assetIdMatch[1]);
@@ -428,7 +539,143 @@ async function handle(req, res, pathname, method) {
     ), true;
   }
 
-  if (pathname === '/api/assets/blob-upload' && requestMethod === 'POST') {
+  if (pathname === '/api/assets/import-image' && requestMethod === 'POST') {
+    if (!isAssetStorageConfigured()) {
+      return sendErr(
+        res,
+        400,
+        'No asset storage backend is configured. Configure Vercel Blob token or Google Drive credentials.',
+        { code: 'ASSET_STORAGE_NOT_CONFIGURED' }
+      ), true;
+    }
+
+    const body = await parseJsonBody(req);
+    const fileName = String(body.fileName || '').trim();
+    const mimeType = String(body.mimeType || 'image/jpeg').trim();
+    const fileBase64 = String(body.fileBase64 || '').trim();
+
+    if (!fileName || !fileBase64) {
+      return sendErr(res, 400, 'fileName and fileBase64 are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (fileBase64.length > MAX_UPLOAD_BASE64_CHARS) {
+      return sendErr(res, 413, 'File is too large for this upload path. Use files up to about 7MB.', { code: 'PAYLOAD_TOO_LARGE' }), true;
+    }
+    if (!String(mimeType || '').toLowerCase().startsWith('image/')) {
+      return sendErr(res, 400, 'import-image only accepts image files', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const result = await importImageAssetWithThumbnail(
+      {
+        fileName,
+        mimeType,
+        fileBase64,
+        assetName: String(body.assetName || body.asset_name || fileName).trim(),
+        category: String(body.category || '').trim(),
+        tags: Array.isArray(body.tags) ? body.tags : [],
+      },
+      scope
+    );
+
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error, { code: 'IMPORT_IMAGE_FAILED' }), true;
+    }
+
+    return sendOk(res, result.status || 201, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/assets/bulk-import-images' && requestMethod === 'POST') {
+    if (!isAssetStorageConfigured()) {
+      return sendErr(
+        res,
+        400,
+        'No asset storage backend is configured. Configure Vercel Blob token or Google Drive credentials.',
+        { code: 'ASSET_STORAGE_NOT_CONFIGURED' }
+      ), true;
+    }
+
+    const body = await parseJsonBody(req);
+    const files = Array.isArray(body.files) ? body.files : [];
+    const category = String(body.category || '').trim();
+    const sharedTags = Array.isArray(body.tags) ? body.tags : [];
+
+    if (!files.length) {
+      return sendErr(res, 400, 'files array is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (files.length > MAX_BULK_IMAGE_IMPORT_FILES) {
+      return sendErr(
+        res,
+        400,
+        `Bulk import supports up to ${MAX_BULK_IMAGE_IMPORT_FILES} images per request`,
+        { code: 'VALIDATION_ERROR' }
+      ), true;
+    }
+
+    const results = [];
+    let createdCount = 0;
+    let thumbnailCount = 0;
+
+    for (const entry of files) {
+      const fileName = String(entry?.fileName || entry?.file_name || '').trim();
+      const mimeType = String(entry?.mimeType || entry?.mime_type || 'image/jpeg').trim();
+      const fileBase64 = String(entry?.fileBase64 || entry?.file_base64 || '').trim();
+      const assetName = String(entry?.assetName || entry?.asset_name || fileName).trim();
+      const tags = Array.isArray(entry?.tags) ? entry.tags : sharedTags;
+
+      if (!fileName || !fileBase64) {
+        results.push({ fileName: fileName || '(unnamed)', ok: false, error: 'fileName and fileBase64 are required' });
+        continue;
+      }
+      if (fileBase64.length > MAX_UPLOAD_BASE64_CHARS) {
+        results.push({ fileName, ok: false, error: 'File exceeds upload size limit (~7MB)' });
+        continue;
+      }
+      if (!mimeType.toLowerCase().startsWith('image/')) {
+        results.push({ fileName, ok: false, error: 'Only image files are supported' });
+        continue;
+      }
+
+      const imported = await importImageAssetWithThumbnail(
+        { fileName, mimeType, fileBase64, assetName, category, tags },
+        scope
+      );
+
+      if (!imported.ok) {
+        results.push({ fileName, ok: false, error: imported.error || 'Import failed' });
+        continue;
+      }
+
+      createdCount += 1;
+      if (imported.data?.thumbnailGenerated) thumbnailCount += 1;
+
+      results.push({
+        fileName,
+        ok: true,
+        asset: imported.data.asset,
+        aspect: imported.data.aspect,
+        thumbnailGenerated: Boolean(imported.data.thumbnailGenerated),
+        thumbnailError: imported.data.thumbnailError || '',
+      });
+    }
+
+    return sendOk(
+      res,
+      200,
+      {
+        createdCount,
+        thumbnailCount,
+        failedCount: results.filter((row) => !row.ok).length,
+        results,
+      },
+      {
+        createdCount,
+        thumbnailCount,
+        failedCount: results.filter((row) => !row.ok).length,
+        results,
+      }
+    ), true;
+  }
+
+  if (normalizedPath === '/api/assets/blob-upload' && requestMethod === 'POST') {
     if (!isBlobConfigured()) {
       return sendErr(
         res,
@@ -835,4 +1082,10 @@ const manifest = {
   prefixes: ['/api/assets', '/api/asset-categories'],
 };
 
-module.exports = { handle, manifest };
+module.exports = {
+  handle,
+  manifest,
+  IMPORT_DRIVE_FOLDER_PATH,
+  isImportDriveFolderPath,
+  handleImportDriveFolder,
+};

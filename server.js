@@ -470,5 +470,11 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[server] Listening on http://localhost:${PORT}`);
   logRegistry();
+  try {
+    const assetsRoutes = require('./routes/assets');
+    console.log(`[server] ${assetsRoutes.IMPORT_DRIVE_FOLDER_PATH} registered (GET health, POST import)`);
+  } catch (err) {
+    console.warn('[server] Assets routes failed to load:', err.message);
+  }
   initTimerDaemon();
 });

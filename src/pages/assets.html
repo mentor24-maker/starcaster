@@ -48,10 +48,11 @@
               </form>
             </div>
             <div class="stack-form" style="margin: 0;">
-              <h3>Add Multiple Assets</h3>
+              <h3>Bulk Import Images</h3>
+              <p class="meta" style="margin: 0 0 0.5rem;">Uploads each image, generates a thumbnail, and assigns wide / square / tall aspect automatically. Set Asset Type to Image.</p>
               <form id="assetMultiUploadForm" class="standard-form-grid">
-                <label for="assetMultiUploadFiles">Files</label>
-                <input id="assetMultiUploadFiles" name="files" type="file" multiple required />
+                <label for="assetMultiUploadFiles">Image Files</label>
+                <input id="assetMultiUploadFiles" name="files" type="file" accept="image/*" multiple required />
                 
                 <label for="assetMultiUploadType">Asset Type</label>
                 <select id="assetMultiUploadType" name="asset_type" required>
@@ -69,14 +70,35 @@
                 </select>
                 
                 <div></div>
-                <button type="submit" class="btn btn-primary">Upload Asset(s)</button>
+                <button type="submit" class="btn btn-primary">Import Images</button>
                 
                 <div id="assetMultiUploadProgressWrap" class="standard-form-grid-full asset-upload-progress hidden" aria-live="polite">
-                  <div id="assetMultiUploadProgressText" class="asset-upload-progress-text">Uploading...</div>
+                  <div id="assetMultiUploadProgressText" class="asset-upload-progress-text">Importing...</div>
                   <progress id="assetMultiUploadProgressBar" max="100" value="0"></progress>
                 </div>
               </form>
             </div>
+          </div>
+          <div class="stack-form asset-drive-folder-import" style="margin: 1rem 0 0;">
+            <h3>Import From Google Drive Folder</h3>
+            <p class="meta" style="margin: 0 0 0.5rem;">Paste a shared folder link. StarCaster imports each image in that folder (not subfolders), generates thumbnails, and assigns aspect. Skips files already linked in Assets.</p>
+            <form id="assetDriveFolderImportForm" class="standard-form-grid">
+              <label for="assetDriveFolderUrl">Folder URL</label>
+              <input id="assetDriveFolderUrl" name="folder_url" type="url" placeholder="https://drive.google.com/drive/folders/..." required />
+
+              <label for="assetDriveFolderCategory">Category</label>
+              <select id="assetDriveFolderCategory" name="category">
+                <option value="">Select Category</option>
+              </select>
+
+              <div></div>
+              <button type="submit" class="btn btn-primary">Import From Folder</button>
+
+              <div id="assetDriveFolderProgressWrap" class="standard-form-grid-full asset-upload-progress hidden" aria-live="polite">
+                <div id="assetDriveFolderProgressText" class="asset-upload-progress-text">Importing...</div>
+                <progress id="assetDriveFolderProgressBar" max="100" value="0"></progress>
+              </div>
+            </form>
           </div>
         </section>
         <div class="table-wrap">
@@ -101,6 +123,14 @@
                     <option value="">Select Asset Type First</option>
                   </select>
                 </th>
+                <th>
+                  <select id="assetsFilterAspect">
+                    <option value="">All Aspects</option>
+                    <option value="wide">Wide</option>
+                    <option value="square">Square</option>
+                    <option value="tall">Tall</option>
+                  </select>
+                </th>
                 <th><input id="assetsFilterTags" placeholder="Tags" /></th>
                 <th colspan="2">
                   <div id="assetsFilterActionRow" class="assets-bulk-action-row">
@@ -119,6 +149,7 @@
                 <th id="assetsSortNameBtn">Asset Name</th>
                 <th id="assetsSortTypeBtn">Asset Type</th>
                 <th id="assetsSortCategoryBtn">Category</th>
+                <th id="assetsSortAspectBtn">Aspect</th>
                 <th id="assetsSortTagsBtn">Tags</th>
                 <th id="assetsSortSizeBtn">Size</th>
                 <th>Actions</th>
@@ -155,6 +186,14 @@
               <label for="assetCategoryInput">Category</label>
               <select id="assetCategoryInput" name="category">
                 <option value="">Select Category</option>
+              </select>
+
+              <label for="assetAspectInput">Aspect</label>
+              <select id="assetAspectInput" name="aspect">
+                <option value="">Auto / Unchanged</option>
+                <option value="wide">Wide</option>
+                <option value="square">Square</option>
+                <option value="tall">Tall</option>
               </select>
 
               <label for="assetTopicInput">Topic</label>
