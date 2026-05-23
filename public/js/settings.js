@@ -349,6 +349,14 @@ App.settings = (function () {
     sel.value = tz;
   }
 
+  function normalizeProjectDefaultUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/.*)?$/i.test(raw)) return `https://${raw}`;
+    return raw;
+  }
+
   function renderProjectDetails() {
     const projects = Array.isArray(state.projects) ? state.projects : [];
     const active = projects.find((project) => String(project?.id || '') === String(state.currentProjectId || '')) || null;
@@ -367,6 +375,9 @@ App.settings = (function () {
     }
     if (els.settingsProjectDetailsDescription) {
       els.settingsProjectDetailsDescription.value = String(active?.description || '');
+    }
+    if (els.settingsProjectDefaultUrlInput) {
+      els.settingsProjectDefaultUrlInput.value = String(active?.projectUrl || active?.project_url || active?.website || '');
     }
     if (els.settingsProjectDetailsRole) {
       els.settingsProjectDetailsRole.value = String(active?.membership?.role || 'member');
@@ -1554,11 +1565,21 @@ App.settings = (function () {
       els.settingsCreateProjectBtn.addEventListener('click', async () => {
         const name = String(els.settingsNewProjectName?.value || '').trim();
         const description = String(els.settingsNewProjectDescription?.value || '').trim();
+        const projectUrl = normalizeProjectDefaultUrl(els.settingsNewProjectDefaultUrl?.value);
         if (!name) return notify('Project name is required', true);
+        if (!projectUrl) return notify('Project default URL is required', true);
+        try {
+          const parsed = new URL(projectUrl);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return notify('Project default URL must start with http:// or https://', true);
+          }
+        } catch {
+          return notify('Project default URL must be a valid URL', true);
+        }
         try {
           const res = await api('/api/projects', {
             method: 'POST',
-            body: JSON.stringify({ name, description }),
+            body: JSON.stringify({ name, description, projectUrl }),
           });
           const projectId = String(res.project?.id || res.id || '').trim();
           if (projectId) {
@@ -1567,6 +1588,7 @@ App.settings = (function () {
           }
           if (els.settingsNewProjectName) els.settingsNewProjectName.value = '';
           if (els.settingsNewProjectDescription) els.settingsNewProjectDescription.value = '';
+          if (els.settingsNewProjectDefaultUrl) els.settingsNewProjectDefaultUrl.value = '';
           await refreshProjectContext();
           setProjectsCreateVisible(false);
           notify('Project created');
@@ -1588,6 +1610,33 @@ App.settings = (function () {
           });
           await refreshProjectContext();
           notify('Project timezone saved');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (els.settingsProjectDefaultUrlSaveBtn) {
+      els.settingsProjectDefaultUrlSaveBtn.addEventListener('click', async () => {
+        const activeId = String(state.currentProjectId || '').trim();
+        if (!activeId) return notify('Select a project first', true);
+        const projectUrl = normalizeProjectDefaultUrl(els.settingsProjectDefaultUrlInput?.value);
+        if (!projectUrl) return notify('Default URL is required', true);
+        try {
+          const parsed = new URL(projectUrl);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return notify('Default URL must start with http:// or https://', true);
+          }
+        } catch {
+          return notify('Default URL must be a valid URL', true);
+        }
+        try {
+          await api(`/api/projects/${encodeURIComponent(activeId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ projectUrl }),
+          });
+          await refreshProjectContext();
+          notify('Project default URL saved');
         } catch (err) {
           notify(err.message, true);
         }

@@ -27,6 +27,57 @@ App.engageSocial = (function () {
     }
   }
 
+  function campaignChannel(campaign, config = parseConfig(campaign)) {
+    const desired = safeText(config.channelId);
+    if (!desired) return null;
+    const channels = Array.isArray(state.channels) ? state.channels : [];
+    return channels.find((channel) => String(channel.id) === desired) || null;
+  }
+
+  function channelPlatform(channel) {
+    return safeText(channel?.channel || channel?.name).toLowerCase();
+  }
+
+  function channelAccount(channel) {
+    return safeText(channel?.userName || channel?.handle || channel?.displayName || channel?.email);
+  }
+
+  function bufferPlatformKey(platform) {
+    const key = safeText(platform).toLowerCase();
+    if (key === 'x' || key === 'twitter') return 'x';
+    if (key === 'tiktok' || key === 'tik tok') return 'tiktok';
+    return key;
+  }
+
+  function socialDeliveryForCampaign(campaign, config = parseConfig(campaign)) {
+    const selectedChannel = campaignChannel(campaign, config);
+    if (safeText(config.channelId) && !selectedChannel) {
+      return {
+        publisher: '',
+        missingChannel: true,
+        starcasterChannelId: safeText(config.channelId),
+        targetPlatform: '',
+        targetAccount: '',
+      };
+    }
+    const platform = bufferPlatformKey(channelPlatform(selectedChannel));
+    const account = channelAccount(selectedChannel);
+    if (platform === 'x' || platform === 'tiktok') {
+      return {
+        publisher: 'buffer',
+        starcasterChannelId: safeText(selectedChannel?.id || config.channelId),
+        targetPlatform: platform,
+        targetAccount: account,
+      };
+    }
+    return {
+      publisher: platform || 'x',
+      starcasterChannelId: safeText(selectedChannel?.id || config.channelId),
+      targetPlatform: platform,
+      targetAccount: account,
+    };
+  }
+
   function characterCount(value) {
     return Array.from(String(value || '')).length;
   }
@@ -43,8 +94,7 @@ App.engageSocial = (function () {
     const projectUrl = PROJECT_URL_FIELDS
       .map((field) => normalizeProjectUrl(activeProject?.[field]))
       .find(Boolean);
-    if (projectUrl) return projectUrl;
-    return normalizeProjectUrl(state.profile?.website);
+    return projectUrl || '';
   }
 
   function updateScheduleTimezoneHint() {
@@ -73,13 +123,6 @@ App.engageSocial = (function () {
       }
     } catch (_) {}
     if (!activeProject && state.currentProject?.id) activeProject = state.currentProject;
-    if (!safeText(state.profile?.website)) {
-      try {
-        const profileRes = await api('/api/settings/profile', { method: 'GET' });
-        const profile = profileRes.profile || profileRes.data || {};
-        if (profile && typeof profile === 'object') state.profile = { ...(state.profile || {}), ...profile };
-      } catch (_) {}
-    }
   }
 
   function buildTweet(campaign) {
@@ -519,10 +562,17 @@ App.engageSocial = (function () {
     if (characterCount(text) > TWEET_LIMIT) throw new Error(`Tweet is ${characterCount(text) - TWEET_LIMIT} characters over the X limit.`);
     const config = preview.config;
     const publishNow = !!options?.publishNow;
+    const delivery = socialDeliveryForCampaign(campaign, config);
+    if (delivery.missingChannel) {
+      throw new Error('Campaign channel details are not loaded yet. Refresh Engage Social and try again.');
+    }
     const payload = {
       text,
-      channel: 'x',
+      channel: delivery.publisher,
       campaignId: campaign.id,
+      starcasterChannelId: delivery.starcasterChannelId,
+      targetPlatform: delivery.targetPlatform,
+      targetAccount: delivery.targetAccount,
       imageAlt: config.primaryImageLabel || '',
       publishNow,
     };
@@ -594,13 +644,17 @@ App.engageSocial = (function () {
   // --- Data refresh ---
 
   async function refresh() {
-    const [postsRes, campaignsRes, projectRes, profileRes, assetsRes] = await Promise.allSettled([
+    const [postsRes, campaignsRes, projectRes, profileRes, assetsRes, channelsRes] = await Promise.allSettled([
       api('/api/engage/social/posts'),
       api('/api/campaigns'),
       api('/api/projects/current'),
       api('/api/settings/profile'),
       api('/api/assets'),
+      api('/api/channels'),
     ]);
+    if (channelsRes.status === 'fulfilled') {
+      state.channels = channelsRes.value.channels || channelsRes.value.data || [];
+    }
     if (assetsRes.status === 'fulfilled') {
       assetsForThumbs = normalizeAssetsPayload(assetsRes.value);
     } else {
