@@ -12,7 +12,7 @@ const {
   originIsBufferReachable,
   isProbablyDirectMediaUrl,
 } = require('../lib/assetPublicMediaUrl');
-const socialStore = require('../lib/engageSocialStore');
+const socialStore = require('../lib/promoteSocialStore');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { wallLocalToUtcIso } = require('../lib/wallTimeUtc');
 const { getProjectTimezoneForUser } = require('../lib/projectsStore');
@@ -687,9 +687,62 @@ function bufferTargetPlatform(bufferTarget) {
   );
 }
 
+function requestForProjectScope(req, scope) {
+  const projectId = safeText(scope?.projectId);
+  if (!projectId) return req;
+  return {
+    ...req,
+    projectContext: {
+      ...(req?.projectContext || {}),
+      project: { ...(scope?.project || {}), id: projectId },
+      projects: Array.isArray(req?.projectContext?.projects) ? req.projectContext.projects : [{ id: projectId }],
+    },
+  };
+}
+
+async function findCampaignAcrossAccessibleProjects(req, campaignId, initialScope) {
+  const checked = new Set();
+  const scopes = [];
+  const pushScope = (scope) => {
+    const projectId = safeText(scope?.projectId);
+    const key = projectId || '(unscoped)';
+    if (checked.has(key)) return;
+    checked.add(key);
+    scopes.push(scope);
+  };
+
+  pushScope(initialScope);
+  (Array.isArray(initialScope?.projectIds) ? initialScope.projectIds : []).forEach((projectId) => {
+    pushScope({
+      ...initialScope,
+      projectId,
+      project: { id: projectId },
+    });
+  });
+
+  for (const candidateScope of scopes) {
+    const res = await listCampaigns(candidateScope);
+    if (!res.ok) {
+      return { ok: false, error: safeText(res.error), status: res.status || 500, checkedProjectIds: Array.from(checked) };
+    }
+    const campaigns = (Array.isArray(res.data) ? res.data : []).map(rowToCampaign);
+    const campaign = campaigns.find((item) => safeText(item?.id) === campaignId);
+    if (campaign) {
+      return {
+        ok: true,
+        campaign,
+        scope: candidateScope,
+        checkedProjectIds: Array.from(checked),
+      };
+    }
+  }
+
+  return { ok: true, campaign: null, scope: initialScope, checkedProjectIds: Array.from(checked) };
+}
+
 async function buildBufferPublishPreview(req, campaignIdInput) {
   const campaignId = safeText(campaignIdInput);
-  const scope = requestProjectScope(req);
+  let scope = requestProjectScope(req);
   const publicOrigin = configuredPublicOrigin(req);
   const preview = {
     checkedAt: new Date().toISOString(),
@@ -709,18 +762,22 @@ async function buildBufferPublishPreview(req, campaignIdInput) {
     return preview;
   }
 
-  const res = await listCampaigns(scope);
-  if (!res.ok) {
-    preview.verdict = `❌ Could not load campaigns: ${safeText(res.error)}`;
+  const found = await findCampaignAcrossAccessibleProjects(req, campaignId, scope);
+  if (!found.ok) {
+    preview.verdict = `❌ Could not load campaigns: ${safeText(found.error)}`;
     return preview;
   }
 
-  const campaigns = (Array.isArray(res.data) ? res.data : []).map(rowToCampaign);
-  const campaign = campaigns.find((item) => safeText(item?.id) === campaignId);
+  const campaign = found.campaign;
   if (!campaign) {
     preview.verdict = '❌ Campaign not found';
+    preview.checkedProjectIds = found.checkedProjectIds || [];
     return preview;
   }
+  scope = found.scope || scope;
+  const scopedReq = requestForProjectScope(req, scope);
+  preview.resolvedProjectId = safeText(scope.projectId);
+  preview.checkedProjectIds = found.checkedProjectIds || [];
 
   const content = parseJsonObject(campaign.content);
   preview.campaign = {
@@ -758,7 +815,7 @@ async function buildBufferPublishPreview(req, campaignIdInput) {
     usesBuffer: platform === 'x' || platform === 'tiktok',
   };
 
-  const media = await resolvePostBufferMediaMeta({ campaignId }, req);
+  const media = await resolvePostBufferMediaMeta({ campaignId }, scopedReq);
   preview.media = {
     videoUrl: safeText(media.videoUrl),
     imageUrl: safeText(media.imageUrl),
@@ -1248,6 +1305,7 @@ async function publishStoredPost(post, req) {
 }
 
 async function handle(req, res, pathname, method) {
+  pathname = String(pathname || '').replace(/^\/api\/engage\/social(?=\/|$)/, '/api/promote/social');
   const requestMethod = String(method || '').toUpperCase();
   const projectScope = requestProjectScope(req);
 
@@ -1449,7 +1507,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 202, result, { result }), true;
   }
 
-  if (pathname === '/api/engage/social/x/status' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/x/status' && requestMethod === 'GET') {
     const creds = xClient.getXCredentials();
     const diag = getProviderCredentialDiagnostics('x');
     const payload = {
@@ -1484,7 +1542,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
-  if (pathname === '/api/engage/social/x/auth-test' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/x/auth-test' && requestMethod === 'GET') {
     const creds = xClient.getXCredentials();
     const configured = xClient.isConfigured();
     if (!configured) {
@@ -1526,7 +1584,7 @@ async function handle(req, res, pathname, method) {
     }), true;
   }
 
-  if (pathname === '/api/engage/social/telegram/status' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/telegram/status' && requestMethod === 'GET') {
     const creds = telegramClient.getTelegramCredentials();
     const payload = {
       configured: telegramClient.isConfigured(creds),
@@ -1537,7 +1595,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
-  if (pathname === '/api/engage/social/bluesky/status' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/bluesky/status' && requestMethod === 'GET') {
     const creds = blueskyClient.getBlueskyCredentials();
     const payload = {
       configured: blueskyClient.isConfigured(creds),
@@ -1548,7 +1606,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
-  if (pathname === '/api/engage/social/bluesky/auth-test' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/bluesky/auth-test' && requestMethod === 'GET') {
     const creds = blueskyClient.getBlueskyCredentials();
     const configured = blueskyClient.isConfigured(creds);
     if (!configured) {
@@ -1586,7 +1644,7 @@ async function handle(req, res, pathname, method) {
     }), true;
   }
 
-  if (pathname === '/api/engage/social/facebook/status' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/facebook/status' && requestMethod === 'GET') {
     const creds = metaClients.getFacebookCredentials();
     const payload = {
       configured: metaClients.isFacebookConfigured(creds),
@@ -1597,7 +1655,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
-  if (pathname === '/api/engage/social/facebook/auth-test' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/facebook/auth-test' && requestMethod === 'GET') {
     const creds = metaClients.getFacebookCredentials();
     if (!metaClients.isFacebookConfigured(creds)) {
       return sendOk(res, 200, { configured: false, authOk: false, error: 'Missing Facebook access_token/page_id' }, { configured: false, authOk: false }), true;
@@ -1621,7 +1679,7 @@ async function handle(req, res, pathname, method) {
     }, { configured: true, authOk: true }), true;
   }
 
-  if (pathname === '/api/engage/social/threads/status' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/threads/status' && requestMethod === 'GET') {
     const creds = metaClients.getThreadsCredentials();
     const payload = {
       configured: metaClients.isThreadsConfigured(creds),
@@ -1632,7 +1690,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
-  if (pathname === '/api/engage/social/threads/auth-test' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/threads/auth-test' && requestMethod === 'GET') {
     const creds = metaClients.getThreadsCredentials();
     if (!metaClients.isThreadsConfigured(creds)) {
       return sendOk(res, 200, { configured: false, authOk: false, error: 'Missing Threads access_token/user_id' }, { configured: false, authOk: false }), true;
@@ -1656,7 +1714,7 @@ async function handle(req, res, pathname, method) {
     }, { configured: true, authOk: true }), true;
   }
 
-  if (pathname === '/api/engage/social/instagram/status' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/instagram/status' && requestMethod === 'GET') {
     const creds = metaClients.getInstagramCredentials();
     const payload = {
       configured: metaClients.isInstagramConfigured(creds),
@@ -1667,7 +1725,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
-  if (pathname === '/api/engage/social/instagram/auth-test' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/instagram/auth-test' && requestMethod === 'GET') {
     const creds = metaClients.getInstagramCredentials();
     if (!metaClients.isInstagramConfigured(creds)) {
       return sendOk(res, 200, { configured: false, authOk: false, error: 'Missing Instagram access_token/business_account_id' }, { configured: false, authOk: false }), true;
@@ -1691,7 +1749,7 @@ async function handle(req, res, pathname, method) {
     }, { configured: true, authOk: true }), true;
   }
 
-  if (pathname === '/api/engage/social/capabilities' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/capabilities' && requestMethod === 'GET') {
     return sendOk(
       res,
       200,
@@ -1842,13 +1900,13 @@ async function handle(req, res, pathname, method) {
     }
   }
 
-  if (pathname === '/api/engage/social/posts' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/posts' && requestMethod === 'GET') {
     const scope = requestProjectScope(req);
     const posts = await socialStore.listPosts(scope);
     return sendOk(res, 200, posts, { posts }, { total: posts.length }), true;
   }
 
-  if (pathname === '/api/engage/social/scheduler-diagnostics' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/scheduler-diagnostics' && requestMethod === 'GET') {
     const scope = requestProjectScope(req);
     const duePosts = await socialStore.listDuePosts(scope);
     const mergedDiag = getProviderCredentialDiagnostics('x');
@@ -1898,13 +1956,13 @@ async function handle(req, res, pathname, method) {
       runtime: mergedDiag?.runtime || cronDiag?.runtime || {},
       deploy: {
         cronPublishEnvOnlyFix: true,
-        note: 'Deploy branch cursor/engage-social-cron-publish-fix (or merge to main) for cron env-only publish fix.',
+        note: 'Deploy branch cursor/promote-social-cron-publish-fix (or merge to main) for cron env-only publish fix.',
       },
     };
     return sendOk(res, 200, payload, { schedulerDiagnostics: payload }), true;
   }
 
-  if (pathname === '/api/engage/social/diagnostics' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/diagnostics' && requestMethod === 'GET') {
     const scope = requestProjectScope(req);
     const posts = await socialStore.listPosts(scope);
     const failures = posts
@@ -1996,7 +2054,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, { diagnostics: payload }), true;
   }
 
-  if (pathname === '/api/engage/social/buffer/status' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/buffer/status' && requestMethod === 'GET') {
     const creds = bufferClient.getBufferCredentials();
     const status = {
       configured: bufferClient.isConfigured(creds),
@@ -2036,7 +2094,7 @@ async function handle(req, res, pathname, method) {
     ), true;
   }
 
-  if (pathname === '/api/engage/social/buffer/channels' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/buffer/channels' && requestMethod === 'GET') {
     const creds = bufferClient.getBufferCredentials();
     const result = await bufferClient.listChannels({}, creds);
     if (!result.ok) {
@@ -2047,14 +2105,14 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, result.data), true;
   }
 
-  if (pathname === '/api/engage/social/buffer/publish-preview' && requestMethod === 'GET') {
+  if (pathname === '/api/promote/social/buffer/publish-preview' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     const campaignId = safeText(urlObj.searchParams.get('campaignId') || urlObj.searchParams.get('campaign_id'));
     const preview = await buildBufferPublishPreview(req, campaignId);
     return sendOk(res, 200, preview, { preview }), true;
   }
 
-  if (pathname === '/api/engage/social/posts' && requestMethod === 'POST') {
+  if (pathname === '/api/promote/social/posts' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const text = String(body.text || '').trim();
     const channel = String(body.channel || 'x').trim().toLowerCase() || 'x';
@@ -2152,7 +2210,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, { post: created }, { post: created }), true;
   }
 
-  if (pathname === '/api/engage/social/posts/publish-due' && (requestMethod === 'POST' || requestMethod === 'GET')) {
+  if (pathname === '/api/promote/social/posts/publish-due' && (requestMethod === 'POST' || requestMethod === 'GET')) {
     const scope = requestProjectScope(req);
     const duePosts = await socialStore.listDuePosts(scope);
     const results = [];
@@ -2204,9 +2262,9 @@ async function handle(req, res, pathname, method) {
 }
 
 const manifest = {
-  id: 'engage',
-  label: 'Engage',
-  prefixes: ['/api/engage'],
+  id: 'promote',
+  label: 'Promote',
+  prefixes: ['/api/promote', '/api/engage'],
 };
 
 module.exports = { handle, manifest };

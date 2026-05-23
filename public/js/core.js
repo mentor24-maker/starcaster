@@ -457,11 +457,14 @@ function readPageFromHash() {
   if (!raw) return '';
 
   const bare = raw.startsWith('#') ? raw.slice(1) : raw;
-  if (bare && !bare.includes('=') && isValidPageId(bare)) return bare;
+  if (bare && !bare.includes('=')) {
+    const normalizedBare = normalizeInitialPageId(bare);
+    return isValidPageId(normalizedBare) ? normalizedBare : '';
+  }
 
   const match = bare.match(/(?:^|&)page=([^&]+)/);
   if (!match || !match[1]) return '';
-  const decoded = decodeURIComponent(match[1]);
+  const decoded = normalizeInitialPageId(decodeURIComponent(match[1]));
   return isValidPageId(decoded) ? decoded : '';
 }
 
@@ -469,6 +472,8 @@ function normalizeInitialPageId(pageId) {
   const id = String(pageId || '').trim();
   if (!id) return '';
   if (id === 'developLandingPagesPage') return 'developManageLandingPagesPage';
+  if (id === 'engageSocialPage') return 'promoteSocialPage';
+  if (id === 'engageSocialResponsesPage') return 'promoteSocialResponsesPage';
   return id;
 }
 
@@ -500,7 +505,8 @@ App.getInitialPage = function getInitialPage() {
 };
 
 App.setActivePage = function setActivePage(pageId, options = {}) {
-  const target = isValidPageId(pageId) ? String(pageId) : 'contactsPage';
+  const normalizedPageId = normalizeInitialPageId(pageId);
+  const target = isValidPageId(normalizedPageId) ? String(normalizedPageId) : 'contactsPage';
   const shouldPersist = options.persist !== false;
 
   state.activePage = target;

@@ -1,5 +1,5 @@
 -- 011_multitenancy_acquire_engage.sql
--- Project-scoped persistence for Engage Social and Acquire operational runs.
+-- Project-scoped persistence for Promote Social and Acquire operational runs.
 -- Apply in Supabase SQL editor after core project columns exist (projects_multitenancy_setup.sql).
 
 begin;

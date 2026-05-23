@@ -19,7 +19,7 @@ Shared helper: `lib/localDataFs.js` — skips local JSON writes when `VERCEL` / 
 | Module | File | Status | Notes |
 |--------|------|--------|-------|
 | `ContactsStore.js` | — | Supabase-primary | No file writes |
-| `engageSocialStore.js` | `engage_social_posts.json` | Supabase-primary | File fallback when table missing |
+| `promoteSocialStore.js` | `engage_social_posts.json` | Supabase-primary | File fallback when table missing |
 | `directAcquireRunsStore.js` | `direct_acquire_runs.json` | Supabase-primary | File fallback |
 | `acquire/XAcquireStore.js` | `x_harvest_runs.json` | Supabase-primary | Scoped file; SB table optional (011) |
 | `acquire/RedditAcquireStore.js` | `reddit_harvest_runs.json` | Supabase-primary | Same as X |

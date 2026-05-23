@@ -183,7 +183,7 @@ Registered in `ROUTE_MODULES` (order matters — first match wins):
 
 ### Supabase-first (project-scoped where applicable)
 
-Messaging, assets, contacts, channels, segments, campaigns, most Builder tables, website peers, **engage social posts**, **direct acquire runs** (when `docs/011_multitenancy_acquire_engage.sql` applied), observe logs, auth (when configured), projects (when configured).
+Messaging, assets, contacts, channels, segments, campaigns, most Builder tables, website peers, **promote social posts**, **direct acquire runs** (when `docs/011_multitenancy_acquire_engage.sql` applied), observe logs, auth (when configured), projects (when configured).
 
 ### File-backed (⚠️ production risk on Vercel)
 
@@ -191,7 +191,7 @@ Vercel serverless filesystem is **read-only**. Any `writeFileSync` to `data/` **
 
 Stores below use **Supabase when tables exist**, with scoped JSON file fallback for local dev:
 
-- `lib/engageSocialStore.js` → `engage_social_posts`
+- `lib/promoteSocialStore.js` → `engage_social_posts`
 - `lib/directAcquireRunsStore.js` → `direct_acquire_runs`
 - `lib/acquire/XAcquireStore.js`, `lib/acquire/RedditAcquireStore.js` → file runs filtered by `project_id` (Supabase tables in 011 optional later)
 
@@ -309,7 +309,7 @@ Ordered by “blocks safe, predictable work” first. **Item 1 is done.** Contin
 
 - `STRICT_PROJECT_SCOPE` in `lib/projectScope.js` (set in **StarCaster** `.env` / Vercel only—not Normie)
 - `lib/projectScopeFile.js` for JSON/file stores
-- Engage Social → `lib/engageSocialStore.js` (Supabase `engage_social_posts` + scoped file fallback)
+- Promote Social → `lib/promoteSocialStore.js` (Supabase `engage_social_posts` + scoped file fallback)
 - Direct Acquire runs → `lib/directAcquireRunsStore.js`
 - X/Reddit harvest JSON stores filter by `project_id` in `lib/acquire/XAcquireStore.js`, `lib/acquire/RedditAcquireStore.js`
 - SQL: `docs/011_multitenancy_acquire_engage.sql`, backfill template `docs/012_multitenancy_backfill_primary_project.sql`

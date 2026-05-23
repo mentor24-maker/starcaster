@@ -1462,7 +1462,7 @@ App.messaging = (function () {
 
   async function loadTweetPreviewAccount() {
     try {
-      const res = await api('/api/engage/social/x/status');
+      const res = await api('/api/promote/social/x/status');
       const name = cleanText(res?.data?.accountName || res?.accountName);
       if (!name) return;
       tweetPreviewAccount = {

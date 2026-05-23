@@ -1,6 +1,6 @@
 window.App = window.App || {};
 
-App.engageSocial = (function () {
+App.promoteSocial = (function () {
   const { api, notify, state } = App;
   const TWEET_LIMIT = 280;
   const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
@@ -16,6 +16,19 @@ App.engageSocial = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  async function promoteSocialApi(path, options) {
+    const promotePath = String(path || '');
+    try {
+      return await api(promotePath, options);
+    } catch (err) {
+      const message = safeText(err?.message);
+      const canFallback = promotePath.startsWith('/api/promote/social')
+        && /route not found|not_found|404/i.test(message);
+      if (!canFallback) throw err;
+      return api(promotePath.replace('/api/promote/social', '/api/engage/social'), options);
+    }
   }
 
   function parseConfig(campaign) {
@@ -98,7 +111,7 @@ App.engageSocial = (function () {
   }
 
   function updateScheduleTimezoneHint() {
-    const hint = el('engageSocialScheduleTzHint');
+    const hint = el('promoteSocialScheduleTzHint');
     if (!hint) return;
     const tz = safeText(activeProject?.timezone) || 'UTC';
     hint.textContent = `Date and time are interpreted in the active project timezone (${tz}). Change it under Settings → Projects → Schedule Timezone.`;
@@ -112,7 +125,7 @@ App.engageSocial = (function () {
     return `${text} ${url}`;
   }
 
-  async function ensureEngageSocialProjectContext() {
+  async function ensurePromoteSocialProjectContext() {
     try {
       const current = await api('/api/projects/current', { method: 'GET' });
       const project = current.project || current.currentProject || current.data?.project || null;
@@ -199,13 +212,13 @@ App.engageSocial = (function () {
       notify('Select a campaign first', true);
       return;
     }
-    const diagWrap = el('engageSocialDiagnosticsWrap');
-    const diagPre = el('engageSocialDiagnosticsPreview');
+    const diagWrap = el('promoteSocialDiagnosticsWrap');
+    const diagPre = el('promoteSocialDiagnosticsPreview');
     if (diagWrap) diagWrap.classList.remove('hidden');
     if (diagPre) diagPre.textContent = 'Running Buffer diagnostics...';
     try {
-      const previewRaw = await api(
-        `/api/engage/social/buffer/publish-preview?campaignId=${encodeURIComponent(campaign.id)}`
+      const previewRaw = await promoteSocialApi(
+        `/api/promote/social/buffer/publish-preview?campaignId=${encodeURIComponent(campaign.id)}`
       );
       const preview = previewRaw?.preview || previewRaw?.data?.preview || previewRaw || {};
       const report = {
@@ -228,8 +241,8 @@ App.engageSocial = (function () {
   }
 
   async function testConnection() {
-    const diagWrap = el('engageSocialDiagnosticsWrap');
-    const diagPre = el('engageSocialDiagnosticsPreview');
+    const diagWrap = el('promoteSocialDiagnosticsWrap');
+    const diagPre = el('promoteSocialDiagnosticsPreview');
     if (diagWrap) diagWrap.classList.remove('hidden');
     if (diagPre) diagPre.textContent = 'Running diagnostics...';
 
@@ -237,7 +250,7 @@ App.engageSocial = (function () {
 
     try {
       // Step 1: Check credentials presence
-      const statusRaw = await api('/api/engage/social/x/status');
+      const statusRaw = await promoteSocialApi('/api/promote/social/x/status');
       const statusRes = statusRaw?.data || statusRaw || {};
       report.checks.credentials = {
         configured: Boolean(statusRes?.configured),
@@ -270,7 +283,7 @@ App.engageSocial = (function () {
 
     try {
       // Step 2: Auth test — calls X /2/users/me
-      const authRaw = await api('/api/engage/social/x/auth-test');
+      const authRaw = await promoteSocialApi('/api/promote/social/x/auth-test');
       const authRes = (typeof authRaw?.data === 'object' && authRaw?.data !== null) ? authRaw.data : authRaw || {};
       report.checks.auth = {
         authOk: Boolean(authRes?.authOk || authRaw?.authOk),
@@ -320,7 +333,7 @@ App.engageSocial = (function () {
     }
 
     try {
-      const bufferStatusRaw = await api('/api/engage/social/buffer/status');
+      const bufferStatusRaw = await promoteSocialApi('/api/promote/social/buffer/status');
       const bufferStatus = bufferStatusRaw?.status || bufferStatusRaw?.data?.status || bufferStatusRaw || {};
       report.checks.buffer = {
         configured: Boolean(bufferStatus?.configured),
@@ -334,8 +347,8 @@ App.engageSocial = (function () {
 
       const campaign = getSelectedCampaign();
       if (campaign?.id) {
-        const previewRaw = await api(
-          `/api/engage/social/buffer/publish-preview?campaignId=${encodeURIComponent(campaign.id)}`
+        const previewRaw = await promoteSocialApi(
+          `/api/promote/social/buffer/publish-preview?campaignId=${encodeURIComponent(campaign.id)}`
         );
         const preview = previewRaw?.preview || previewRaw?.data?.preview || previewRaw || {};
         report.checks.bufferPublishPreview = preview;
@@ -351,14 +364,14 @@ App.engageSocial = (function () {
     }
 
     try {
-      const schedRaw = await api('/api/engage/social/scheduler-diagnostics');
+      const schedRaw = await promoteSocialApi('/api/promote/social/scheduler-diagnostics');
       const sched = schedRaw?.schedulerDiagnostics || schedRaw?.data?.schedulerDiagnostics || schedRaw || {};
       report.checks.scheduler = sched;
       const cronAuthOk = Boolean(sched?.xAuth?.cron?.ok);
       const sessionAuthOk = Boolean(sched?.xAuth?.session?.ok);
       const mismatch = Boolean(sched?.xCredentials?.tokenMismatch);
       if (mismatch && sessionAuthOk && !cronAuthOk) {
-        report.schedulerVerdict = '❌ Cron credentials differ from session — deploy cursor/engage-social-cron-publish-fix and ensure X_* env vars on Production.';
+        report.schedulerVerdict = '❌ Cron credentials differ from session — deploy cursor/promote-social-cron-publish-fix and ensure X_* env vars on Production.';
         if (!report.summary || report.summary.startsWith('✅')) {
           report.summary = report.schedulerVerdict;
         }
@@ -393,7 +406,7 @@ App.engageSocial = (function () {
   }
 
   function renderCampaignSelect() {
-    const select = el('engageSocialCampaignSelect');
+    const select = el('promoteSocialCampaignSelect');
     if (!select) return;
     const current = select.value;
     while (select.options.length > 1) select.remove(1);
@@ -415,7 +428,7 @@ App.engageSocial = (function () {
   }
 
   function getSelectedCampaign() {
-    const select = el('engageSocialCampaignSelect');
+    const select = el('promoteSocialCampaignSelect');
     if (!select || !select.value) return null;
     return campaigns.find((c) => String(c.id) === select.value) || null;
   }
@@ -487,7 +500,7 @@ App.engageSocial = (function () {
   }
 
   function renderPosts(rows) {
-    const tbody = el('engageSocialPostsTable');
+    const tbody = el('promoteSocialPostsTable');
     if (!tbody) return;
 
     posts = Array.isArray(rows) ? rows : [];
@@ -557,13 +570,13 @@ App.engageSocial = (function () {
       tr.appendChild(publishedTd);
 
       const thumbTd = document.createElement('td');
-      thumbTd.className = 'engage-social-post-thumb-cell';
+      thumbTd.className = 'promote-social-post-thumb-cell';
       const thumbSrc = postThumbnailSrc(post);
       if (thumbSrc) {
         const img = document.createElement('img');
         img.src = thumbSrc;
         img.alt = safeText(post.imageAlt) || 'Featured image';
-        img.className = 'engage-social-post-thumb';
+        img.className = 'promote-social-post-thumb';
         img.loading = 'lazy';
         img.decoding = 'async';
         thumbTd.appendChild(img);
@@ -593,7 +606,7 @@ App.engageSocial = (function () {
         const iconKey = post.status === 'failed' ? 'publish' : 'publish';
         const publishBtn = App.makeIconButton(iconKey, label, async function () {
           try {
-            await api(`/api/engage/social/posts/${encodeURIComponent(post.id)}/publish`, { method: 'POST' });
+            await promoteSocialApi(`/api/promote/social/posts/${encodeURIComponent(post.id)}/publish`, { method: 'POST' });
             notify(post.status === 'failed' ? 'Retrying post...' : 'Social post published');
             await refresh();
           } catch (err) {
@@ -607,7 +620,7 @@ App.engageSocial = (function () {
       const deleteBtn = App.makeIconButton('delete', 'Delete Post', async function () {
         if (!confirm('Delete this social post?')) return;
         try {
-          await api(`/api/engage/social/posts/${encodeURIComponent(post.id)}`, { method: 'DELETE' });
+          await promoteSocialApi(`/api/promote/social/posts/${encodeURIComponent(post.id)}`, { method: 'DELETE' });
           notify('Social post deleted');
           await refresh();
         } catch (err) {
@@ -623,7 +636,7 @@ App.engageSocial = (function () {
   // --- Send / Schedule ---
 
   async function queueCampaignPost(campaign, options) {
-    await ensureEngageSocialProjectContext();
+    await ensurePromoteSocialProjectContext();
     const preview = buildTweet(campaign);
     const text = safeText(preview.text);
     if (!text) throw new Error('No post content could be assembled from this campaign.');
@@ -635,7 +648,7 @@ App.engageSocial = (function () {
     const publishNow = !!options?.publishNow;
     const delivery = socialDeliveryForCampaign(campaign, config);
     if (delivery.missingChannel) {
-      throw new Error('Campaign channel details are not loaded yet. Refresh Engage Social and try again.');
+      throw new Error('Campaign channel details are not loaded yet. Refresh Promote Social and try again.');
     }
     const payload = {
       text,
@@ -652,14 +665,14 @@ App.engageSocial = (function () {
     } else {
       payload.scheduledForWall = safeText(options?.scheduledForWall);
     }
-    return api('/api/engage/social/posts', {
+    return promoteSocialApi('/api/promote/social/posts', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
   function setStatus(msg) {
-    const statusEl = el('engageSocialStatus');
+    const statusEl = el('promoteSocialStatus');
     if (statusEl) statusEl.textContent = msg || '';
   }
 
@@ -681,7 +694,7 @@ App.engageSocial = (function () {
   async function handleSchedule() {
     const campaign = getSelectedCampaign();
     if (!campaign) { notify('Select a campaign first', true); return; }
-    const scheduleAt = el('engageSocialScheduleAt')?.value;
+    const scheduleAt = el('promoteSocialScheduleAt')?.value;
     if (!scheduleAt) { notify('Pick a date and time first', true); return; }
     try {
       setStatus('Scheduling...');
@@ -703,7 +716,7 @@ App.engageSocial = (function () {
       }
       notify(msg);
       setStatus('');
-      const input = el('engageSocialScheduleAt');
+      const input = el('promoteSocialScheduleAt');
       if (input) input.value = '';
       await refresh();
     } catch (err) {
@@ -715,8 +728,9 @@ App.engageSocial = (function () {
   // --- Data refresh ---
 
   async function refresh() {
+    await ensurePromoteSocialProjectContext();
     const [postsRes, campaignsRes, projectRes, profileRes, assetsRes, channelsRes] = await Promise.allSettled([
-      api('/api/engage/social/posts'),
+      promoteSocialApi('/api/promote/social/posts'),
       api('/api/campaigns'),
       api('/api/projects/current'),
       api('/api/settings/profile'),
@@ -745,9 +759,17 @@ App.engageSocial = (function () {
     if (campaignsRes.status === 'fulfilled') {
       campaigns = campaignsRes.value.campaigns || campaignsRes.value.data || [];
       renderCampaignSelect();
+    } else {
+      campaigns = [];
+      renderCampaignSelect();
+      const select = el('promoteSocialCampaignSelect');
+      if (select?.options?.[0]) select.options[0].textContent = `Could not load campaigns: ${safeText(campaignsRes.reason?.message) || 'unknown error'}`;
     }
     if (postsRes.status === 'fulfilled') {
       renderPosts(postsRes.value.posts || postsRes.value.data || []);
+    } else {
+      renderPosts([]);
+      setStatus(`Could not load queue/history: ${safeText(postsRes.reason?.message) || 'unknown error'}`);
     }
     updateScheduleTimezoneHint();
   }
@@ -755,12 +777,12 @@ App.engageSocial = (function () {
   // --- Init ---
 
   function init() {
-    const testConnectionBtn = el('engageSocialTestConnectionBtn');
-    const bufferDiagnosticsBtn = el('engageSocialBufferDiagnosticsBtn');
-    const publishDueBtn = el('engageSocialPublishDueBtn');
-    const openSettingsBtn = el('engageSocialOpenSettingsBtn');
-    const sendNowBtn = el('engageSocialSendNowBtn');
-    const scheduleBtn = el('engageSocialScheduleBtn');
+    const testConnectionBtn = el('promoteSocialTestConnectionBtn');
+    const bufferDiagnosticsBtn = el('promoteSocialBufferDiagnosticsBtn');
+    const publishDueBtn = el('promoteSocialPublishDueBtn');
+    const openSettingsBtn = el('promoteSocialOpenSettingsBtn');
+    const sendNowBtn = el('promoteSocialSendNowBtn');
+    const scheduleBtn = el('promoteSocialScheduleBtn');
 
     if (testConnectionBtn) testConnectionBtn.addEventListener('click', testConnection);
     if (bufferDiagnosticsBtn) bufferDiagnosticsBtn.addEventListener('click', runBufferDiagnostics);
@@ -770,7 +792,7 @@ App.engageSocial = (function () {
     if (publishDueBtn) {
       publishDueBtn.addEventListener('click', async function () {
         try {
-          const res = await api('/api/engage/social/posts/publish-due', { method: 'POST' });
+          const res = await promoteSocialApi('/api/promote/social/posts/publish-due', { method: 'POST' });
           const processed = Array.isArray(res.processed) ? res.processed : [];
           const failures = processed.filter((item) => !item.ok).length;
           notify(failures ? `Processed ${processed.length} due posts (${failures} failed)` : `Processed ${processed.length} due posts`);
@@ -801,9 +823,9 @@ App.engageSocial = (function () {
 
   return {
     manifest: {
-      id: 'engageSocial',
-      label: 'Engage Social',
-      pageId: 'engageSocialPage',
+      id: 'promoteSocial',
+      label: 'Promote Social',
+      pageId: 'promoteSocialPage',
     },
     init,
     refresh,

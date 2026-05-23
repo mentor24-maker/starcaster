@@ -18,7 +18,7 @@ Recommended:
 
 - `ASSET_STORAGE_PROVIDER=vercel_blob`
 - `BLOB_ASSETS_ROOT=APP/Assets`
-- `CRON_SECRET` — random string; Vercel Cron sends it as `Authorization: Bearer …` on scheduled hits (Engage Social publish-due is defined in `vercel.json`)
+- `CRON_SECRET` — random string; Vercel Cron sends it as `Authorization: Bearer …` on scheduled hits (Promote Social publish-due is defined in `vercel.json`)
 
 ## 2) Install dependencies
 

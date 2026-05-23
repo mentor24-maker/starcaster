@@ -49,7 +49,7 @@ App.youtubeComments = (function () {
   }
 
   function getSourcePageLabel(pageId) {
-    return pageId === 'engageSocialPage' ? 'Promote: Social' : 'Acquire: YouTube';
+    return pageId === 'promoteSocialPage' ? 'Promote: Social' : 'Acquire: YouTube';
   }
 
   function updateBackButton() {

@@ -1,4 +1,4 @@
--- Per-project default URL for Campaign and Engage: Social posts.
+-- Per-project default URL for Campaign and Promote: Social posts.
 -- Apply manually in Supabase SQL editor for each environment.
 
 begin;

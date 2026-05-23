@@ -3714,7 +3714,7 @@ App.acquire = (function () {
       blueskyDiscoveryStatusBtn.addEventListener('click', async () => {
         try {
           setBlueskyDiscoveryStatus('Checking BlueSky connection...');
-          const res = await api('/api/engage/social/bluesky/auth-test');
+          const res = await api('/api/promote/social/bluesky/auth-test');
           const configured = Boolean(res?.configured);
           const ok = Boolean(res?.authOk);
           const message = !configured
@@ -3834,7 +3834,7 @@ App.acquire = (function () {
       blueskyPostingStatusBtn.addEventListener('click', async () => {
         try {
           setBlueskyPostingStatus('Checking BlueSky posting setup...');
-          const res = await api('/api/engage/social/bluesky/auth-test');
+          const res = await api('/api/promote/social/bluesky/auth-test');
           const configured = Boolean(res?.configured);
           const ok = Boolean(res?.authOk);
           const message = !configured

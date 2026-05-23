@@ -48,7 +48,7 @@ App.settings = (function () {
     byPlatform: {},
   };
   const PROJECT_LOGO_STORAGE_KEY = 'alphire.projectLogoMap';
-  /** IANA zones for project scheduling (Engage: Social). */
+  /** IANA zones for project scheduling (Promote: Social). */
   const PROJECT_SCHEDULE_TIMEZONES = [
     { value: 'UTC', label: 'UTC' },
     { value: 'America/Los_Angeles', label: 'Pacific (US) — Los Angeles' },
@@ -1103,37 +1103,37 @@ App.settings = (function () {
     let blockerCode = '';
 
     if (platform === 'bluesky') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/bluesky/auth-test'));
+      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/bluesky/auth-test'));
       testOk = parsed.authOk;
       summary = testOk ? 'Bluesky auth test passed' : `Bluesky auth test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'BLUESKY_401';
     } else if (platform === 'x') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/x/auth-test'));
+      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/x/auth-test'));
       testOk = parsed.authOk;
       summary = testOk ? 'X auth test passed' : `X auth test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'X_AUTH_FAILED';
     } else if (platform === 'facebook') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/facebook/auth-test'));
+      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/facebook/auth-test'));
       testOk = parsed.authOk;
       summary = testOk ? 'Facebook auth test passed' : `Facebook auth test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'FACEBOOK_401';
     } else if (platform === 'instagram') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/instagram/auth-test'));
+      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/instagram/auth-test'));
       testOk = parsed.authOk;
       summary = testOk ? 'Instagram auth test passed' : `Instagram auth test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'INSTAGRAM_401';
     } else if (platform === 'threads') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/engage/social/threads/auth-test'));
+      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/threads/auth-test'));
       testOk = parsed.authOk;
       summary = testOk ? 'Threads auth test passed' : `Threads auth test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'THREADS_401';
     } else if (platform === 'telegram') {
-      const res = await api('/api/engage/social/telegram/status');
+      const res = await api('/api/promote/social/telegram/status');
       testOk = res?.configured === true;
       summary = testOk ? 'Telegram config test passed' : 'Telegram config test failed (missing bot token/chat id)';
       details = JSON.stringify(res || {}, null, 2);
