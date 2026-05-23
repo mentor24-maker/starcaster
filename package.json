@@ -18,6 +18,8 @@
     "backfill:channels-passwords:apply": "node scripts/backfill_channels_password_encryption.js --apply",
     "migrate:assets-drive-to-blob:dry-run": "node scripts/migrate_assets_drive_to_blob.js",
     "migrate:assets-drive-to-blob:apply": "node scripts/migrate_assets_drive_to_blob.js --apply",
+    "assets:thumbnails:dry-run": "node scripts/generate_asset_thumbnails.js",
+    "assets:thumbnails:apply": "node scripts/generate_asset_thumbnails.js --apply",
     "check:vercel-cutover": "node scripts/vercel_cutover_check.js",
     "import:training-context:apply": "node scripts/harvest_knowledge.mjs",
     "sync:dev-logs": "node scripts/sync_dev_logs.mjs"

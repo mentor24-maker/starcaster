@@ -425,10 +425,12 @@
                 <input id="messagingTweetHashtags" name="hashtags" />
               
               
-                <label for="messagingTweetImageSelect"><strong>Image:</strong></label>
-                <select id="messagingTweetImageSelect" name="image_asset_id">
-                  <option value="">Image (optional)</option>
-                </select>
+                <label for="messagingTweetImagePickerBtn"><strong>Image:</strong></label>
+                <div class="field-stack">
+                  <input id="messagingTweetImageSelect" name="image_asset_id" type="hidden" />
+                  <button id="messagingTweetImagePickerBtn" type="button" class="btn">Choose Image</button>
+                  <div id="messagingTweetImagePreview" class="develop-theme-asset-preview">No image selected</div>
+                </div>
               
               
                 <label for="messagingTweetFeedback"><strong>Feedback:</strong></label>
@@ -504,10 +506,12 @@
               <label for="messagingTweetEditHashtags">Hashtags</label>
               <input id="messagingTweetEditHashtags" name="hashtags" placeholder="Comma-separated" />
 
-              <label for="messagingTweetEditImageSelect">Image</label>
-              <select id="messagingTweetEditImageSelect" name="image_asset_id">
-                <option value="">Image (optional)</option>
-              </select>
+              <label for="messagingTweetEditImagePickerBtn">Image</label>
+              <div class="field-stack">
+                <input id="messagingTweetEditImageSelect" name="image_asset_id" type="hidden" />
+                <button id="messagingTweetEditImagePickerBtn" type="button" class="btn">Choose Image</button>
+                <div id="messagingTweetEditImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
 
               <label for="messagingTweetEditQuality">Score</label>
               <select id="messagingTweetEditQuality" name="quality_score">
