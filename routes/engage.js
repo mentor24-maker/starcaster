@@ -647,6 +647,87 @@ function enrichReqForPostPublish(req, post) {
   };
 }
 
+function normalizeBufferService(value) {
+  const key = safeText(value).toLowerCase();
+  if (key === 'x' || key === 'twitter') return 'twitter';
+  if (key === 'tiktok' || key === 'tik tok') return 'tiktok';
+  return key;
+}
+
+function normalizeAccountHandle(value) {
+  return safeText(value).replace(/^@+/, '').toLowerCase();
+}
+
+function nextBufferRetryIso() {
+  return new Date(Date.now() + 15 * 60 * 1000).toISOString();
+}
+
+async function resolveBufferChannelId(post) {
+  const diag = post?.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : {};
+  const target = diag.bufferTarget && typeof diag.bufferTarget === 'object' ? diag.bufferTarget : {};
+  const configured = bufferClient.getBufferCredentials();
+  const explicitChannelId = safeText(target.bufferChannelId || target.channelId);
+  if (explicitChannelId) {
+    return {
+      channelId: explicitChannelId,
+      source: 'post.diagnostics.bufferTarget.channelId',
+      target,
+    };
+  }
+
+  const targetService = normalizeBufferService(target.platform || target.service || target.channel);
+  const targetAccount = normalizeAccountHandle(target.account || target.userName || target.handle || target.displayName);
+  if (targetService || targetAccount) {
+    const listed = await bufferClient.listChannels({}, configured);
+    if (listed.ok) {
+      const channels = Array.isArray(listed.data?.channels) ? listed.data.channels : [];
+      const match = channels.find((channel) => {
+        const serviceMatches = !targetService || normalizeBufferService(channel?.service) === targetService;
+        const accountCandidates = [
+          channel?.name,
+          channel?.displayName,
+        ].map(normalizeAccountHandle).filter(Boolean);
+        const accountMatches = !targetAccount || accountCandidates.includes(targetAccount);
+        return serviceMatches && accountMatches;
+      });
+      if (match?.id) {
+        return {
+          channelId: safeText(match.id),
+          source: 'buffer.channels.match',
+          target,
+          matchedChannel: {
+            id: safeText(match.id),
+            name: safeText(match.name),
+            displayName: safeText(match.displayName),
+            service: safeText(match.service),
+          },
+        };
+      }
+      if (!safeText(configured.defaultChannelId)) {
+        return {
+          channelId: '',
+          source: 'buffer.channels.no_match',
+          target,
+          error: `No Buffer channel matched ${targetService || 'any platform'}:${targetAccount || 'any account'}`,
+        };
+      }
+    } else if (!safeText(configured.defaultChannelId)) {
+      return {
+        channelId: '',
+        source: 'buffer.channels.failed',
+        target,
+        error: listed.error || 'Could not list Buffer channels',
+      };
+    }
+  }
+
+  return {
+    channelId: safeText(configured.defaultChannelId),
+    source: 'buffer.default_channel_id',
+    target,
+  };
+}
+
 async function publishStoredPost(post, req) {
   if (!post) return { ok: false, status: 404, error: 'Post not found' };
   const scope = requestScopeForPublish(req, post);
@@ -697,9 +778,21 @@ async function publishStoredPost(post, req) {
     const resolved = await resolvePostImageMeta(post, req, false);
     imageOpts.imageUrl = safeText(resolved.imageUrl);
     imageOpts.imageAlt = safeText(resolved.imageAlt);
-    result = await bufferClient.createQueuedPost(post.text, {
-      imageUrl: imageOpts.imageUrl,
-    });
+    const bufferTarget = await resolveBufferChannelId(post);
+    if (!bufferTarget.channelId && bufferTarget.error) {
+      result = { ok: false, status: 400, error: bufferTarget.error, data: { bufferTarget } };
+    } else {
+      result = await bufferClient.createQueuedPost(post.text, {
+        imageUrl: imageOpts.imageUrl,
+        channelId: bufferTarget.channelId,
+      });
+      if (result && typeof result === 'object') {
+        result.data = {
+          ...(result.data || {}),
+          bufferTarget,
+        };
+      }
+    }
   } else if (channel === 'facebook') {
     result = await metaClients.createFacebookPost(post.text, imageOpts);
   } else if (channel === 'threads') {
@@ -746,6 +839,47 @@ async function publishStoredPost(post, req) {
     }
   }
   if (!result.ok) {
+    if (channel === 'buffer' && result.code === 'BUFFER_QUEUE_FULL') {
+      const retryAt = nextBufferRetryIso();
+      const held = await socialStore.updatePost(post.id, {
+        status: 'scheduled',
+        scheduledFor: retryAt,
+        error: '',
+        diagnostics: {
+          checkedAt: new Date().toISOString(),
+          channel,
+          publishMode: req?.cronPublish ? 'cron' : 'session',
+          imageUrl: safeText(imageOpts.imageUrl || post?.imageUrl || ''),
+          externalQueue: 'starcaster_waiting_for_buffer_capacity',
+          retryAt,
+          bufferTarget: result.data?.bufferTarget || result.data?.queue || null,
+          endpoint: String(result.endpoint || ''),
+          status: Number(result.status || 0) || 0,
+          attempts: Array.isArray(result.attempts) ? result.attempts : [],
+          payload: result.data || null,
+        },
+      }, scope);
+      logActivity({
+        action: 'engage.social.buffer_waiting',
+        entityType: 'engage_social_post',
+        entityId: held?.id || null,
+        summary: `Buffer queue full; Starcaster will retry ${held?.id || ''}`,
+        meta: { retryAt, channel, buffer: result.data || null },
+      });
+      return {
+        ok: true,
+        status: 202,
+        data: {
+          post: held,
+          remote: {
+            queuedExternally: false,
+            reason: 'BUFFER_QUEUE_FULL',
+            retryAt,
+            queue: result.data?.queue || null,
+          },
+        },
+      };
+    }
     const xDiag = channel === 'x'
       ? {
         session: getProviderCredentialDiagnostics('x'),
@@ -787,6 +921,7 @@ async function publishStoredPost(post, req) {
       imageUrl: safeText(imageOpts.imageUrl || post?.imageUrl || ''),
       externalQueue: channel === 'buffer' ? 'buffer' : '',
       externalDueAt: channel === 'buffer' ? safeText(result.data?.dueAt) : '',
+      bufferTarget: channel === 'buffer' ? (result.data?.bufferTarget || null) : null,
       attempts: Array.isArray(result.data?.attempts) ? result.data.attempts : [],
     },
   }, scope);
@@ -1573,6 +1708,9 @@ async function handle(req, res, pathname, method) {
       return sendOk(res, 200, { ...status, authOk: false, auth: null }, { status: { ...status, authOk: false, auth: null } }), true;
     }
     const auth = await bufferClient.checkAuth(creds);
+    const defaultQueue = creds.defaultChannelId
+      ? await bufferClient.getQueueStatus({ channelId: creds.defaultChannelId }, creds)
+      : null;
     return sendOk(
       res,
       200,
@@ -1582,6 +1720,7 @@ async function handle(req, res, pathname, method) {
         auth: auth.ok
           ? { organizations: auth.data?.organizations || [] }
           : { error: safeText(auth.error) || 'Auth failed' },
+        defaultQueue: defaultQueue?.ok ? defaultQueue.data : null,
       },
       {
         status: {
@@ -1590,6 +1729,7 @@ async function handle(req, res, pathname, method) {
           auth: auth.ok
             ? { organizations: auth.data?.organizations || [] }
             : { error: safeText(auth.error) || 'Auth failed' },
+          defaultQueue: defaultQueue?.ok ? defaultQueue.data : null,
         },
       }
     ), true;
@@ -1611,6 +1751,9 @@ async function handle(req, res, pathname, method) {
     const text = String(body.text || '').trim();
     const channel = String(body.channel || 'x').trim().toLowerCase() || 'x';
     const campaignId = String(body.campaignId || '').trim();
+    const starcasterChannelId = safeText(body.starcasterChannelId || body.channelId);
+    const targetPlatform = safeText(body.targetPlatform || body.platform);
+    const targetAccount = safeText(body.targetAccount || body.account || body.userName || body.handle);
     let imageUrl = safeText(body.imageUrl);
     let imageAlt = safeText(body.imageAlt);
     const publishNow = Boolean(body.publishNow);
@@ -1666,6 +1809,18 @@ async function handle(req, res, pathname, method) {
       imageAlt,
       scheduledFor: publishNow ? '' : scheduledFor,
       status: publishNow && PUBLISH_NOW_CHANNELS.includes(channel) ? 'queued' : 'scheduled',
+      diagnostics: channel === 'buffer'
+        ? {
+          checkedAt: new Date().toISOString(),
+          channel,
+          bufferTarget: {
+            starcasterChannelId,
+            platform: targetPlatform,
+            account: targetAccount,
+            bufferChannelId: safeText(body.bufferChannelId),
+          },
+        }
+        : null,
     }, scope);
 
     logActivity({

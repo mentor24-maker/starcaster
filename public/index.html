@@ -5750,6 +5750,8 @@
             <h3>Mechanics</h3>
             <ul class="docs-list">
               <li>Campaign setup starts with a campaign name and a required channel selection.</li>
+              <li>A Channel is a platform account, such as X: Normie765714 or TikTok: normiepolls.</li>
+              <li>The default outbound URL is required on the active project under Settings: Projects.</li>
               <li>Optional mechanics include segment, page, form object, and PDF references.</li>
               <li>This separation keeps delivery mechanics distinct from content choices.</li>
             </ul>
@@ -5789,16 +5791,34 @@
           <section class="docs-panel">
             <h3>Social Publishing</h3>
             <ul class="docs-list">
-              <li>Engage: Social is an implemented queueing workflow focused on X.</li>
-              <li>Operators can compose posts, schedule optional publish times, monitor a character counter, queue content, or publish immediately.</li>
+              <li>Engage: Social turns campaign definitions into queued social posts.</li>
+              <li>X and TikTok campaign channels currently route through Buffer, preserving the selected Starcaster channel id, platform, and account handle.</li>
+              <li>When no campaign-specific URL is selected, social posts use the active project's default URL.</li>
               <li>A queue snapshot tracks scheduled, failed, and published counts plus connected account status.</li>
               <li>Scheduled posts are published automatically in production via Vercel Cron (`/api/engage/social/posts/publish-due`, every 5 minutes). The `Publish Due Posts` button flushes due posts immediately.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Buffer Bridge</h3>
+            <ul class="docs-list">
+              <li>Buffer is the external scheduler for supported platform accounts.</li>
+              <li>Before creating a Buffer post, Starcaster resolves the Buffer channel by matching platform service and account display name.</li>
+              <li>Buffer posts are created with add-to-queue scheduling, and Starcaster records the remote id, due time, and diagnostics.</li>
+            </ul>
+          </section>
+          <section class="docs-panel">
+            <h3>Queue Governor</h3>
+            <ul class="docs-list">
+              <li>Starcaster checks Buffer's scheduled queue before pushing another post.</li>
+              <li>The default Buffer queue limit is 10 posts per channel, configurable with `BUFFER_QUEUE_LIMIT`.</li>
+              <li>When Buffer is full, Starcaster holds the post locally as scheduled and retries later instead of marking it failed.</li>
             </ul>
           </section>
           <section class="docs-panel">
             <h3>Execution Role</h3>
             <ul class="docs-list">
               <li>Engage consumes campaign definitions, channel credentials, and messaging assets rather than creating those records itself.</li>
+              <li>The social foundation is documented in `docs/Markdown Files/SOCIAL_POSTING_FOUNDATION.md`.</li>
               <li>The non-social submenu pages are currently reserved for future workflow-specific implementations.</li>
             </ul>
           </section>
@@ -8729,6 +8749,10 @@
             <label for="settingsNewProjectDescription">Description</label>
             <input id="settingsNewProjectDescription" placeholder="Optional description" />
           </div>
+          <div class="form-row">
+            <label for="settingsNewProjectDefaultUrl">Default URL</label>
+            <input id="settingsNewProjectDefaultUrl" required placeholder="https://example.com" />
+          </div>
           <div class="page-heading-actions" style="justify-content:flex-start;">
             <button id="settingsCreateProjectBtn" type="button" class="btn">Save Project</button>
             <button type="button" onclick="App.settings.openProjectsPage(); return false;" class="btn">Back To Projects</button>
@@ -8778,6 +8802,14 @@
                     <label>Description</label>
                     <textarea id="settingsProjectDetailsDescription" rows="4" readonly></textarea>
                   </div>
+                  <div class="form-row">
+                    <label for="settingsProjectDefaultUrlInput">Default URL</label>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+                      <input id="settingsProjectDefaultUrlInput" required placeholder="https://example.com" style="min-width: 260px;" />
+                      <button id="settingsProjectDefaultUrlSaveBtn" type="button" class="btn btn-primary">Save URL</button>
+                    </div>
+                  </div>
+                  <p class="meta" style="margin-top: 0;">Required for this project. Used as the default link for Campaign and Engage: Social posts when no campaign-specific URL is selected.</p>
                   <div class="form-row">
                     <label>Role</label>
                     <input id="settingsProjectDetailsRole" readonly />
@@ -9083,6 +9115,7 @@
         </div>
       </section>
     
+
       <!-- INJECTED PAGE: training.html -->
 
       <section id="trainingKnowledgebasePage" class="app-page hidden training-page">

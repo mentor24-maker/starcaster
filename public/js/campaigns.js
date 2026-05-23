@@ -295,14 +295,6 @@ App.campaigns = (function () {
       }
       if (projects.length) state.projects = projects;
     } catch (_) {}
-
-    if (!safeText(state.profile?.website)) {
-      try {
-        const profileRes = await api('/api/settings/profile', { method: 'GET' });
-        const profile = profileRes.profile || profileRes.data || {};
-        if (profile && typeof profile === 'object') state.profile = { ...(state.profile || {}), ...profile };
-      } catch (_) {}
-    }
   }
 
   function campaignProjectUrl() {
@@ -310,8 +302,7 @@ App.campaigns = (function () {
     const projectUrl = PROJECT_URL_FIELDS
       .map((field) => normalizeProjectUrl(project?.[field]))
       .find(Boolean);
-    if (projectUrl) return projectUrl;
-    return normalizeProjectUrl(state.profile?.website);
+    return projectUrl || '';
   }
 
   function appendCtaUrl(ctaText) {
@@ -650,13 +641,13 @@ App.campaigns = (function () {
   }
 
   function channelLabel(channel) {
-    return safeText(
+    const platform = safeText(
       channel?.channel
       || channel?.name
-      || channel?.handle
-      || channel?.userName
-      || channel?.id
     );
+    const account = safeText(channel?.userName || channel?.handle || channel?.displayName || channel?.email);
+    if (platform && account) return `${platform}: ${account}`;
+    return safeText(platform || account || channel?.id);
   }
 
   function optionLabelFromText(value, fallback) {

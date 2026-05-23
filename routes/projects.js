@@ -54,6 +54,7 @@ async function handle(req, res, pathname, method) {
         name: body?.name,
         slug: body?.slug,
         description: body?.description,
+        projectUrl: body?.projectUrl || body?.project_url || body?.website,
       },
       userId
     );
@@ -71,4 +72,3 @@ const manifest = {
 };
 
 module.exports = { handle, manifest };
-

@@ -8,6 +8,8 @@ create table if not exists public.app_projects (
   name text not null,
   slug text not null unique,
   description text null,
+  project_url text not null default '',
+  website text not null default '',
   created_by_user_id text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
