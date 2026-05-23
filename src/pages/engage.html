@@ -11,8 +11,8 @@
         <h2>Engage: Email</h2>
         <p>Email response workspace placeholder.</p>
       </section>
-      <section id="engageSocialResponsesPage" class="app-page hidden">
-        <h2>Engage: Social</h2>
+      <section id="promoteSocialResponsesPage" class="app-page hidden">
+        <h2>Promote: Social</h2>
         <p>Social response workspace placeholder.</p>
       </section>
       <section id="engageMessageResponsesPage" class="app-page hidden">
@@ -120,7 +120,7 @@
           </section>
 
           <aside class="promote-email-panel promote-email-preview-panel">
-            <div class="engage-social-eyebrow">Email Preview</div>
+            <div class="promote-social-eyebrow">Email Preview</div>
             <div class="promote-email-preview-meta">
               <div class="promote-email-preview-meta-row"><strong>Send:</strong> <span id="promoteEmailPreviewSend">-</span></div>
               <div class="promote-email-preview-meta-row"><strong>From:</strong> <span id="promoteEmailPreviewFrom">-</span></div>
@@ -133,43 +133,43 @@
           </aside>
         </div>
       </section>
-      <section id="engageSocialPage" class="app-page hidden">
+      <section id="promoteSocialPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Engage: Social</h2>
+          <h2>Promote: Social</h2>
           <div class="page-heading-actions">
-            <button id="engageSocialTestConnectionBtn" type="button" class="btn">Test Connection</button>
-            <button id="engageSocialBufferDiagnosticsBtn" type="button" class="btn">Buffer Diagnostics</button>
-            <button id="engageSocialPublishDueBtn" type="button" class="btn">Publish Due Posts</button>
-            <button id="engageSocialOpenSettingsBtn" type="button" class="btn">API Settings</button>
+            <button id="promoteSocialTestConnectionBtn" type="button" class="btn">Test Connection</button>
+            <button id="promoteSocialBufferDiagnosticsBtn" type="button" class="btn">Buffer Diagnostics</button>
+            <button id="promoteSocialPublishDueBtn" type="button" class="btn">Publish Due Posts</button>
+            <button id="promoteSocialOpenSettingsBtn" type="button" class="btn">API Settings</button>
           </div>
         </div>
 
         <div class="standard-form-grid" style="max-width: 600px; margin-top: 1.5rem;">
 
-          <label for="engageSocialCampaignSelect"><strong>Campaign:</strong></label>
-          <select id="engageSocialCampaignSelect" required>
+          <label for="promoteSocialCampaignSelect"><strong>Campaign:</strong></label>
+          <select id="promoteSocialCampaignSelect" required>
             <option value="">Select campaign</option>
           </select>
 
-          <label for="engageSocialScheduleAt"><strong>Schedule:</strong></label>
+          <label for="promoteSocialScheduleAt"><strong>Schedule:</strong></label>
           <div>
-            <input id="engageSocialScheduleAt" type="datetime-local" />
-            <p id="engageSocialScheduleTzHint" class="meta" style="margin-top: 0.35rem;"></p>
+            <input id="promoteSocialScheduleAt" type="datetime-local" />
+            <p id="promoteSocialScheduleTzHint" class="meta" style="margin-top: 0.35rem;"></p>
           </div>
 
           <div></div>
           <div class="page-heading-actions" style="justify-content: flex-start; gap: 0.75rem;">
-            <button id="engageSocialSendNowBtn" type="button" class="btn btn-primary">Send Now</button>
-            <button id="engageSocialScheduleBtn" type="button" class="btn">Schedule</button>
+            <button id="promoteSocialSendNowBtn" type="button" class="btn btn-primary">Send Now</button>
+            <button id="promoteSocialScheduleBtn" type="button" class="btn">Schedule</button>
           </div>
 
         </div>
 
-        <p id="engageSocialStatus" class="meta" style="margin-top: 1rem;"></p>
+        <p id="promoteSocialStatus" class="meta" style="margin-top: 1rem;"></p>
 
-        <div id="engageSocialDiagnosticsWrap" class="hidden" style="margin-top: 1.5rem;">
+        <div id="promoteSocialDiagnosticsWrap" class="hidden" style="margin-top: 1.5rem;">
           <h3>Connection Diagnostics</h3>
-          <pre id="engageSocialDiagnosticsPreview" class="code-box">{}</pre>
+          <pre id="promoteSocialDiagnosticsPreview" class="code-box">{}</pre>
         </div>
 
         <h3 style="margin-top: 2rem;">Queue &amp; History</h3>
@@ -187,7 +187,7 @@
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="engageSocialPostsTable"></tbody>
+            <tbody id="promoteSocialPostsTable"></tbody>
           </table>
         </div>
       </section>

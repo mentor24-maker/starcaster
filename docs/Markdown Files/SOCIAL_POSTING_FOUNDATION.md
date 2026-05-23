@@ -8,7 +8,7 @@ Starcaster social posting is now moving from a single-platform send button towar
 
 - A **Channel** is a platform account, such as `X: Normie765714` or `TikTok: normiepolls`.
 - A **Campaign** is the assembled promotion package: copy, CTA, hashtags, media, destination, default URL, and selected channel.
-- **Engage: Social** is the execution layer that turns a campaign into a queued or published social post.
+- **Promote: Social** is the execution layer that turns a campaign into a queued or published social post.
 - **Buffer** is the current external scheduler for supported social platforms, beginning with X and TikTok.
 
 The current breakthrough is that Starcaster no longer treats "X" as a hardcoded publisher. It reads the campaign channel, recognizes when that platform/account should route through Buffer, and passes the account identity into the Buffer bridge.
@@ -24,7 +24,7 @@ The current breakthrough is that Starcaster no longer treats "X" as a hardcoded 
    - Campaigns still owns content assembly and channel-specific field rules.
    - The default outbound URL comes from the active project details, not the deprecated global profile page.
 
-3. Engage: Social loads campaigns and channels.
+3. Promote: Social loads campaigns and channels.
    - Eligible campaigns are currently `ready`, `active`, `complete`, or `scheduled`.
    - When the selected campaign channel is X or TikTok, Engage sends the social post to Starcaster as `channel: "buffer"`.
    - The request includes delivery intent:
@@ -65,20 +65,20 @@ This means Starcaster can maintain a deeper internal backlog while Buffer remain
 
 ## Important Endpoints
 
-- `GET /api/engage/social/buffer/status`
+- `GET /api/promote/social/buffer/status`
   - Checks Buffer credential presence and authentication.
   - Includes default channel queue status when configured.
 
-- `GET /api/engage/social/buffer/channels`
+- `GET /api/promote/social/buffer/channels`
   - Lists Buffer channels for the configured organization.
   - Used to discover Buffer channel ids and verify account mappings.
 
-- `POST /api/engage/social/posts`
+- `POST /api/promote/social/posts`
   - Creates Starcaster social posts.
   - With `publishNow: true`, supported channels publish immediately.
   - With `channel: "buffer"`, the backend uses Buffer and records external queue diagnostics.
 
-- `POST /api/engage/social/posts/publish-due`
+- `POST /api/promote/social/posts/publish-due`
   - Publishes due Starcaster posts.
   - Production cron calls this endpoint.
   - Also handles retrying posts held because Buffer was previously full.
@@ -92,7 +92,7 @@ This means Starcaster can maintain a deeper internal backlog while Buffer remain
   - Campaign channel labels and channel-specific campaign field rules.
   - Campaign preview URL resolution from the active project.
 
-- `public/js/engageSocial.js`
+- `public/js/promoteSocial.js`
   - Campaign-to-social-post assembly.
   - Maps selected campaign channel to Buffer delivery intent.
   - Uses the active project default URL as the fallback share URL.
@@ -106,13 +106,13 @@ This means Starcaster can maintain a deeper internal backlog while Buffer remain
   - Buffer GraphQL client.
   - Auth checks, channel listing, queue status, and create-post mutation.
 
-- `lib/engageSocialStore.js`
+- `lib/promoteSocialStore.js`
   - Starcaster social queue persistence.
   - Stores diagnostics so queued retries retain delivery intent.
 
 ## Current Limitations
 
-- The Engage social composer still builds tweet-style text and enforces the X character limit.
+- The Promote social composer still builds tweet-style text and enforces the X character limit.
 - TikTok routing through Buffer is structurally ready, but content assembly rules for TikTok-specific media/caption requirements still need product work.
 - Queue-full retry delay is a fixed 15 minutes.
 - Buffer queue capacity is read per target channel at publish time, not continuously mirrored in a separate local table.
@@ -121,7 +121,7 @@ This means Starcaster can maintain a deeper internal backlog while Buffer remain
 
 ## Near-Term Roadmap
 
-1. Add a visible queue/capacity panel in Engage: Social.
+1. Add a visible queue/capacity panel in Promote: Social.
    - Show Starcaster backlog.
    - Show Buffer count per connected account.
    - Show waiting-for-capacity status.

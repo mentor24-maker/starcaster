@@ -134,8 +134,11 @@ App.auth._syncProjectContext = async function _syncProjectContext() {
   try {
     const res = await App.api('/api/projects/current', { method: 'GET' });
     const project = res.project || res.currentProject || null;
+    const projects = Array.isArray(res.projects) ? res.projects : [];
     const projectId = String(project?.id || '').trim();
+    if (projects.length) App.state.projects = projects;
     if (projectId) {
+      App.state.currentProject = project;
       App.state.currentProjectId = projectId;
       window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', projectId);
     }

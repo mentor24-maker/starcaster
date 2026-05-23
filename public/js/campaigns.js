@@ -1188,6 +1188,7 @@ App.campaigns = (function () {
   }
 
   async function loadBuilderSources() {
+    await ensureCampaignProjectContext();
     const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes, topicsRes, headlinesRes, subheadingsRes, taglinesRes, pitchesRes, articlesRes, reportsRes, whitePapersRes, ebooksRes, postsRes, descriptionsRes, transcriptsRes, commentsRes, ctasRes, landingPagesRes, formsRes] = await Promise.allSettled([
       api('/api/channels'),
       api('/api/assets'),

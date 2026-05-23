@@ -1,4 +1,4 @@
--- Per-project IANA timezone for scheduling (Engage: Social, etc.).
+-- Per-project IANA timezone for scheduling (Promote: Social, etc.).
 -- Apply manually in Supabase SQL editor for each environment.
 
 begin;
