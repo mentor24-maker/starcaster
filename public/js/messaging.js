@@ -38,6 +38,9 @@ App.messaging = (function () {
   let currentSubheadingCreatorSuggestions = [];
   let currentTaglineCreatorSuggestions = [];
   let currentPitchCreatorSuggestions = [];
+  let imageAssetOptionsLoaded = false;
+  let imageAssetOptionsProjectId = '';
+  let imageAssetOptionsLoading = null;
   let messagingTopicsProgressTimer = null;
   let activeMessagingContentCategory = '';
   const headlineTableState = {
@@ -691,84 +694,156 @@ App.messaging = (function () {
     return '';
   }
 
-  function renderThumbnailOptions(select) {
-    if (!select) return;
-    const currentValue = String(select.value || '');
-    select.innerHTML = '<option value="">Thumbnail (Image + Article Banner)</option>';
-    articleBannerAssets.forEach((asset) => {
-      const id = Number(asset.id || 0) || 0;
-      if (!id) return;
-      const option = document.createElement('option');
-      option.value = String(id);
-      option.textContent = thumbnailOptionLabel(asset);
-      select.appendChild(option);
-    });
-    if (currentValue) select.value = currentValue;
-  }
-
-  function renderImageOptions(select) {
-    if (!select) return;
-    if (select.tagName !== 'SELECT') {
-      renderTweetImagePickerDisplay(select.id);
-      return;
-    }
-    const currentValue = String(select.value || '');
-    select.innerHTML = '<option value="">Image (optional)</option>';
-    tweetImageAssets.forEach((asset) => {
-      const id = Number(asset.id || 0) || 0;
-      if (!id) return;
-      const option = document.createElement('option');
-      option.value = String(id);
-      option.textContent = thumbnailOptionLabel(asset);
-      select.appendChild(option);
-    });
-    if (currentValue) select.value = currentValue;
-  }
-
-  function tweetImagePickerConfig(inputId) {
-    const id = String(inputId || '').trim();
-    if (id === 'messagingTweetEditImageSelect') {
-      return {
-        inputId: id,
-        buttonId: 'messagingTweetEditImagePickerBtn',
-        previewId: 'messagingTweetEditImagePreview',
-      };
-    }
-    return {
-      inputId: 'messagingTweetImageSelect',
+  const ASSET_PICKER_CONFIGS = {
+    messagingCreateContentImage: {
+      buttonId: 'messagingCreateContentImagePickerBtn',
+      previewId: 'messagingCreateContentImagePreview',
+      source: 'tweet',
+      title: 'Choose Image',
+      emptyText: 'No image selected',
+      buttonText: 'Choose Image',
+      selectedButtonText: 'Change Image',
+    },
+    messagingCreateContentThumbnail: {
+      buttonId: 'messagingCreateContentThumbnailPickerBtn',
+      previewId: 'messagingCreateContentThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose Thumbnail',
+      emptyText: 'No image selected',
+      buttonText: 'Choose Image',
+      selectedButtonText: 'Change Image',
+    },
+    messagingArticleThumbnailSelect: {
+      buttonId: 'messagingArticleThumbnailPickerBtn',
+      previewId: 'messagingArticleThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose Article Thumbnail',
+    },
+    messagingArticleEditThumbnailSelect: {
+      buttonId: 'messagingArticleEditThumbnailPickerBtn',
+      previewId: 'messagingArticleEditThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose Article Thumbnail',
+    },
+    messagingReportThumbnailSelect: {
+      buttonId: 'messagingReportThumbnailPickerBtn',
+      previewId: 'messagingReportThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose Report Thumbnail',
+    },
+    messagingReportEditThumbnailSelect: {
+      buttonId: 'messagingReportEditThumbnailPickerBtn',
+      previewId: 'messagingReportEditThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose Report Thumbnail',
+    },
+    messagingWhitePaperThumbnailSelect: {
+      buttonId: 'messagingWhitePaperThumbnailPickerBtn',
+      previewId: 'messagingWhitePaperThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose White Paper Thumbnail',
+    },
+    messagingWhitePaperEditThumbnailSelect: {
+      buttonId: 'messagingWhitePaperEditThumbnailPickerBtn',
+      previewId: 'messagingWhitePaperEditThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose White Paper Thumbnail',
+    },
+    messagingEbookThumbnailSelect: {
+      buttonId: 'messagingEbookThumbnailPickerBtn',
+      previewId: 'messagingEbookThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose eBook Thumbnail',
+    },
+    messagingEbookEditThumbnailSelect: {
+      buttonId: 'messagingEbookEditThumbnailPickerBtn',
+      previewId: 'messagingEbookEditThumbnailPreview',
+      source: 'thumbnail',
+      title: 'Choose eBook Thumbnail',
+    },
+    messagingTweetImageSelect: {
       buttonId: 'messagingTweetImagePickerBtn',
       previewId: 'messagingTweetImagePreview',
+      source: 'tweet',
+      title: 'Choose Tweet Image',
+      emptyText: 'No image selected',
+      buttonText: 'Choose Image',
+      selectedButtonText: 'Change Image',
+    },
+    messagingTweetEditImageSelect: {
+      buttonId: 'messagingTweetEditImagePickerBtn',
+      previewId: 'messagingTweetEditImagePreview',
+      source: 'tweet',
+      title: 'Choose Tweet Image',
+      emptyText: 'No image selected',
+      buttonText: 'Choose Image',
+      selectedButtonText: 'Change Image',
+    },
+  };
+
+  function assetPickerConfig(inputId) {
+    const id = String(inputId || '').trim();
+    const base = ASSET_PICKER_CONFIGS[id] || ASSET_PICKER_CONFIGS.messagingTweetImageSelect;
+    return {
+      inputId: id || 'messagingTweetImageSelect',
+      emptyText: 'No image selected',
+      buttonText: 'Choose Thumbnail',
+      selectedButtonText: 'Change Thumbnail',
+      ...base,
     };
   }
 
-  function setTweetImagePickerValue(inputId, value) {
-    const config = tweetImagePickerConfig(inputId);
+  function assetPickerAssets(config) {
+    if (config?.source === 'thumbnail') return articleBannerAssets.length ? articleBannerAssets : allImageAssets;
+    if (config?.source === 'tweet') return tweetImageAssets.length ? tweetImageAssets : allImageAssets;
+    return allImageAssets;
+  }
+
+  function imageAssetById(assetId, config = null) {
+    const id = String(assetId || '').trim();
+    if (!id) return null;
+    const scoped = config ? assetPickerAssets(config) : [];
+    return scoped.find((asset) => String(asset.id || '') === id)
+      || (tweetImageAssets || []).find((asset) => String(asset.id || '') === id)
+      || (articleBannerAssets || []).find((asset) => String(asset.id || '') === id)
+      || (allImageAssets || []).find((asset) => String(asset.id || '') === id)
+      || (Array.isArray(state.assets) ? state.assets : []).find((asset) => String(asset.id || '') === id)
+      || null;
+  }
+
+  function imageAssetLabel(assetId, config = null) {
+    const asset = imageAssetById(assetId, config);
+    return asset ? thumbnailOptionLabel(asset) : '';
+  }
+
+  function setAssetPickerValue(inputId, value) {
+    const config = assetPickerConfig(inputId);
     const input = document.getElementById(config.inputId);
     if (!input) return;
     input.value = String(value || '').trim();
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
-    renderTweetImagePickerDisplay(config.inputId);
+    renderAssetPickerDisplay(config.inputId);
   }
 
-  function renderTweetImagePickerDisplay(inputId) {
-    const config = tweetImagePickerConfig(inputId);
+  function renderAssetPickerDisplay(inputId) {
+    const config = assetPickerConfig(inputId);
     const input = document.getElementById(config.inputId);
     const button = document.getElementById(config.buttonId);
     const preview = document.getElementById(config.previewId);
-    const asset = tweetImageAssetById(input?.value);
-    if (button) button.textContent = asset ? 'Change Image' : 'Choose Image';
+    const asset = imageAssetById(input?.value, config);
+    if (button) button.textContent = asset ? config.selectedButtonText : config.buttonText;
     if (!preview) return;
     preview.textContent = '';
     if (!asset) {
-      preview.textContent = 'No image selected';
+      preview.textContent = config.emptyText;
       return;
     }
     const imageUrl = thumbnailUrlFromAsset(asset);
     if (imageUrl) {
       const img = document.createElement('img');
       img.src = imageUrl;
-      img.alt = String(asset.assetName || 'Tweet image');
+      img.alt = String(asset.assetName || 'Selected image');
       preview.appendChild(img);
     }
     const text = document.createElement('div');
@@ -782,12 +857,16 @@ App.messaging = (function () {
     preview.appendChild(text);
   }
 
-  function openTweetImageAssetPicker(inputId) {
+  async function openImageAssetPicker(inputId) {
+    const currentProjectId = cleanText(state.currentProjectId);
+    if (!imageAssetOptionsLoaded || imageAssetOptionsProjectId !== currentProjectId) {
+      await loadThumbnailOptions({ force: true });
+    }
     if (!App.components || typeof App.components.Modal !== 'function') return false;
-    const config = tweetImagePickerConfig(inputId);
+    const config = assetPickerConfig(inputId);
     const currentValue = String(document.getElementById(config.inputId)?.value || '').trim();
-    const modalAssets = (tweetImageAssets.length ? tweetImageAssets : allImageAssets).slice();
-    const currentAsset = tweetImageAssetById(currentValue);
+    const modalAssets = assetPickerAssets(config).slice();
+    const currentAsset = imageAssetById(currentValue, config);
     if (currentAsset && !modalAssets.some((asset) => String(asset.id || '') === currentValue)) {
       modalAssets.unshift(currentAsset);
     }
@@ -812,7 +891,7 @@ App.messaging = (function () {
     toolbar.appendChild(clearBtn);
 
     const grid = document.createElement('div');
-    grid.className = 'develop-theme-picker-grid';
+    grid.className = 'develop-theme-picker-groups';
     body.appendChild(toolbar);
     body.appendChild(grid);
 
@@ -838,76 +917,41 @@ App.messaging = (function () {
           asset.assetName,
           asset.category,
           asset.location,
+          asset.aspect,
           tags,
         ].join(' ').toLowerCase();
         return haystack.includes(filter);
       });
       resultCount.textContent = `${rows.length} image${rows.length === 1 ? '' : 's'}`;
       grid.textContent = '';
-      if (!rows.length) {
+      if (!App.assetPicker || typeof App.assetPicker.renderGroupedImageGrid !== 'function') {
         const empty = document.createElement('div');
         empty.className = 'meta';
-        empty.textContent = 'No matching images found.';
+        empty.textContent = 'Image picker is unavailable.';
         grid.appendChild(empty);
         return;
       }
-
-      rows.forEach((asset) => {
-        const card = document.createElement('div');
-        card.className = `develop-theme-picker-card${String(asset.id || '') === currentValue ? ' is-selected' : ''}`;
-        const imageBtn = document.createElement('button');
-        imageBtn.type = 'button';
-        imageBtn.className = 'develop-theme-picker-card-image-btn';
-        const imageUrl = thumbnailUrlFromAsset(asset);
-        if (imageUrl) {
-          const img = document.createElement('img');
-          img.src = imageUrl;
-          img.alt = String(asset.assetName || 'Tweet image');
-          imageBtn.appendChild(img);
-        } else {
-          const empty = document.createElement('div');
-          empty.className = 'develop-theme-table-thumb-empty';
-          empty.textContent = 'No Image';
-          imageBtn.appendChild(empty);
-        }
-
-        const title = document.createElement('div');
-        title.className = 'develop-theme-picker-card-title';
-        title.textContent = thumbnailOptionLabel(asset);
-
-        const meta = document.createElement('div');
-        meta.className = 'develop-theme-picker-card-meta';
-        meta.textContent = String(asset.category || 'Image');
-
-        const selectBtn = document.createElement('button');
-        selectBtn.type = 'button';
-        selectBtn.className = 'tiny-btn develop-theme-picker-select-btn';
-        selectBtn.textContent = 'Use Image';
-
-        const choose = () => {
-          setTweetImagePickerValue(config.inputId, asset.id);
+      App.assetPicker.renderGroupedImageGrid(grid, {
+        assets: rows,
+        getSelectedId: () => currentValue,
+        toDirectAssetUrl: thumbnailUrlFromAsset,
+        assetLabel: thumbnailOptionLabel,
+        onChoose: (asset) => {
+          setAssetPickerValue(config.inputId, asset.id);
           if (modal) modal.close();
-        };
-        imageBtn.addEventListener('click', choose);
-        selectBtn.addEventListener('click', choose);
-
-        card.appendChild(imageBtn);
-        card.appendChild(title);
-        card.appendChild(meta);
-        card.appendChild(selectBtn);
-        grid.appendChild(card);
+        },
       });
     }
 
     filterInput.addEventListener('input', renderGrid);
     categoryFilter.addEventListener('change', renderGrid);
     clearBtn.addEventListener('click', () => {
-      setTweetImagePickerValue(config.inputId, '');
+      setAssetPickerValue(config.inputId, '');
       if (modal) modal.close();
     });
 
     modal = App.components.Modal({
-      title: 'Choose Tweet Image',
+      title: config.title,
       body,
       dialogClass: 'develop-theme-picker-modal',
     });
@@ -916,19 +960,90 @@ App.messaging = (function () {
     return modal;
   }
 
-  async function loadThumbnailOptions() {
-    const addSelect = document.getElementById('messagingArticleThumbnailSelect');
-    const editSelect = document.getElementById('messagingArticleEditThumbnailSelect');
-    const reportAddSelect = document.getElementById('messagingReportThumbnailSelect');
-    const reportEditSelect = document.getElementById('messagingReportEditThumbnailSelect');
-    const whitePaperAddSelect = document.getElementById('messagingWhitePaperThumbnailSelect');
-    const whitePaperEditSelect = document.getElementById('messagingWhitePaperEditThumbnailSelect');
-    const ebookAddSelect = document.getElementById('messagingEbookThumbnailSelect');
-    const ebookEditSelect = document.getElementById('messagingEbookEditThumbnailSelect');
-    const tweetImageInput = document.getElementById('messagingTweetImageSelect');
-    const tweetEditImageInput = document.getElementById('messagingTweetEditImageSelect');
-    if (!addSelect && !editSelect && !reportAddSelect && !reportEditSelect && !whitePaperAddSelect && !whitePaperEditSelect && !ebookAddSelect && !ebookEditSelect && !tweetImageInput && !tweetEditImageInput) return;
+  function renderThumbnailOptions(select) {
+    if (!select) return;
+    if (select.tagName !== 'SELECT') {
+      renderAssetPickerDisplay(select.id);
+      return;
+    }
+    const currentValue = String(select.value || '');
+    select.innerHTML = '<option value="">Thumbnail (Image + Article Banner)</option>';
+    articleBannerAssets.forEach((asset) => {
+      const id = Number(asset.id || 0) || 0;
+      if (!id) return;
+      const option = document.createElement('option');
+      option.value = String(id);
+      option.textContent = thumbnailOptionLabel(asset);
+      select.appendChild(option);
+    });
+    if (currentValue) select.value = currentValue;
+  }
+
+  function renderImageOptions(select) {
+    if (!select) return;
+    if (select.tagName !== 'SELECT') {
+      renderAssetPickerDisplay(select.id);
+      return;
+    }
+    const currentValue = String(select.value || '');
+    select.innerHTML = '<option value="">Image (optional)</option>';
+    tweetImageAssets.forEach((asset) => {
+      const id = Number(asset.id || 0) || 0;
+      if (!id) return;
+      const option = document.createElement('option');
+      option.value = String(id);
+      option.textContent = thumbnailOptionLabel(asset);
+      select.appendChild(option);
+    });
+    if (currentValue) select.value = currentValue;
+  }
+
+  function tweetImagePickerConfig(inputId) {
+    return assetPickerConfig(inputId);
+  }
+
+  function setTweetImagePickerValue(inputId, value) {
+    setAssetPickerValue(inputId, value);
+  }
+
+  function renderTweetImagePickerDisplay(inputId) {
+    renderAssetPickerDisplay(inputId);
+  }
+
+  function openTweetImageAssetPicker(inputId) {
+    return openImageAssetPicker(inputId);
+  }
+
+  async function ensureMessagingProjectContext() {
+    if (cleanText(state.currentProjectId)) return;
     try {
+      const current = await api('/api/projects/current', { method: 'GET' });
+      const project = current.project || current.currentProject || current.data?.project || null;
+      if (project?.id) {
+        state.currentProject = project;
+        state.currentProjectId = cleanText(project.id);
+        window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', state.currentProjectId);
+      }
+    } catch (_) {}
+  }
+
+  async function loadThumbnailOptions(options = {}) {
+    const force = Boolean(options && options.force);
+    if (imageAssetOptionsLoading && !force) return imageAssetOptionsLoading;
+    const pickerInputs = Object.keys(ASSET_PICKER_CONFIGS)
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    const run = (async function () {
+      await ensureMessagingProjectContext();
+      const projectId = cleanText(state.currentProjectId);
+      if (imageAssetOptionsLoaded && imageAssetOptionsProjectId === projectId && !force) {
+        pickerInputs.forEach((input) => {
+          const config = assetPickerConfig(input.id);
+          if (config.source === 'thumbnail') renderThumbnailOptions(input);
+          else renderImageOptions(input);
+        });
+        return;
+      }
       const res = await api('/api/assets');
       const assets = Array.isArray(res.assets) ? res.assets : [];
       state.assets = assets;
@@ -941,18 +1056,21 @@ App.messaging = (function () {
         const category = String(a.category || '').trim();
         return category === 'X Post';
       });
-      renderThumbnailOptions(addSelect);
-      renderThumbnailOptions(editSelect);
-      renderThumbnailOptions(reportAddSelect);
-      renderThumbnailOptions(reportEditSelect);
-      renderThumbnailOptions(whitePaperAddSelect);
-      renderThumbnailOptions(whitePaperEditSelect);
-      renderThumbnailOptions(ebookAddSelect);
-      renderThumbnailOptions(ebookEditSelect);
-      renderImageOptions(tweetImageInput);
-      renderImageOptions(tweetEditImageInput);
+      pickerInputs.forEach((input) => {
+        const config = assetPickerConfig(input.id);
+        if (config.source === 'thumbnail') renderThumbnailOptions(input);
+        else renderImageOptions(input);
+      });
+      imageAssetOptionsLoaded = true;
+      imageAssetOptionsProjectId = projectId;
+    })();
+    imageAssetOptionsLoading = run;
+    try {
+      await run;
     } catch (err) {
       notify(`Could not load thumbnail images: ${err.message}`, true);
+    } finally {
+      if (imageAssetOptionsLoading === run) imageAssetOptionsLoading = null;
     }
   }
 
@@ -1025,6 +1143,7 @@ App.messaging = (function () {
     if (form.elements.feedback) form.elements.feedback.value = String(article.feedback || '');
     if (form.elements.quality_score) form.elements.quality_score.value = article.quality_score ? String(article.quality_score) : '';
     form.elements.thumbnail_asset_id.value = article.thumbnail_asset_id ? String(article.thumbnail_asset_id) : '';
+    renderAssetPickerDisplay(form.elements.thumbnail_asset_id.id);
   }
 
   function openEditForm(article) {
@@ -1192,6 +1311,7 @@ App.messaging = (function () {
     if (!editForm) return;
     editForm.reset();
     editForm.classList.add('hidden');
+    renderAssetPickerDisplay('messagingArticleEditThumbnailSelect');
   }
 
   function fillFormFromReport(form, report) {
@@ -1206,6 +1326,7 @@ App.messaging = (function () {
     if (form.elements.feedback) form.elements.feedback.value = String(report.feedback || '');
     if (form.elements.quality_score) form.elements.quality_score.value = report.quality_score ? String(report.quality_score) : '';
     form.elements.thumbnail_asset_id.value = report.thumbnail_asset_id ? String(report.thumbnail_asset_id) : '';
+    renderAssetPickerDisplay(form.elements.thumbnail_asset_id.id);
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
 
@@ -1227,6 +1348,7 @@ App.messaging = (function () {
     if (!editForm) return;
     editForm.reset();
     editForm.classList.add('hidden');
+    renderAssetPickerDisplay('messagingReportEditThumbnailSelect');
   }
 
   function fillFormFromWhitePaper(form, whitePaper) {
@@ -1241,6 +1363,7 @@ App.messaging = (function () {
     if (form.elements.feedback) form.elements.feedback.value = String(whitePaper.feedback || '');
     if (form.elements.quality_score) form.elements.quality_score.value = whitePaper.quality_score ? String(whitePaper.quality_score) : '';
     form.elements.thumbnail_asset_id.value = whitePaper.thumbnail_asset_id ? String(whitePaper.thumbnail_asset_id) : '';
+    renderAssetPickerDisplay(form.elements.thumbnail_asset_id.id);
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
 
@@ -1262,6 +1385,7 @@ App.messaging = (function () {
     if (!editForm) return;
     editForm.reset();
     editForm.classList.add('hidden');
+    renderAssetPickerDisplay('messagingWhitePaperEditThumbnailSelect');
   }
 
   function fillFormFromEbook(form, ebook) {
@@ -1276,6 +1400,7 @@ App.messaging = (function () {
     if (form.elements.feedback) form.elements.feedback.value = String(ebook.feedback || '');
     if (form.elements.quality_score) form.elements.quality_score.value = ebook.quality_score ? String(ebook.quality_score) : '';
     form.elements.thumbnail_asset_id.value = ebook.thumbnail_asset_id ? String(ebook.thumbnail_asset_id) : '';
+    renderAssetPickerDisplay(form.elements.thumbnail_asset_id.id);
     if (form.elements.pdf_file) form.elements.pdf_file.value = '';
   }
 
@@ -1297,6 +1422,7 @@ App.messaging = (function () {
     if (!editForm) return;
     editForm.reset();
     editForm.classList.add('hidden');
+    renderAssetPickerDisplay('messagingEbookEditThumbnailSelect');
   }
 
   const TWEET_PREVIEW_CHARACTER_LIMIT = 280;
@@ -4769,6 +4895,10 @@ App.messaging = (function () {
     setCreateContentFieldVisible('messagingCreateContentThumbnailRow', hasField('thumbnail'));
     setCreateContentFieldVisible('messagingCreateContentBodyRow', hasField('body'));
     setCreateContentFieldVisible('messagingCreateContentPdfRow', hasField('pdf'));
+    if (!hasField('image')) setAssetPickerValue('messagingCreateContentImage', '');
+    else renderAssetPickerDisplay('messagingCreateContentImage');
+    if (!hasField('thumbnail')) setAssetPickerValue('messagingCreateContentThumbnail', '');
+    else renderAssetPickerDisplay('messagingCreateContentThumbnail');
 
     if (primaryLabel) primaryLabel.textContent = `${schema?.primaryLabel || 'Content'}:`;
     if (primaryInput) {
@@ -4981,7 +5111,6 @@ App.messaging = (function () {
     button.textContent = 'Revising...';
     try {
       await saveCreateContentFeedbackToTraining(feedback);
-      const thumbSelect = document.getElementById('messagingCreateContentThumbnail');
       const result = await api('/api/messaging/content-suggestions', {
         method: 'POST',
         body: JSON.stringify({
@@ -4992,7 +5121,7 @@ App.messaging = (function () {
           subtitle: cleanText(document.getElementById('messagingCreateContentGeneratedSubtitle')?.value || formData.get('subtitle')),
           url: cleanText(formData.get('url')),
           body: getGeneratedBodyEditorText() || cleanText(formData.get('content')),
-          image_label: cleanText(thumbSelect?.selectedOptions?.[0]?.textContent),
+          image_label: imageAssetLabel(formData.get('thumbnail_asset_id'), assetPickerConfig('messagingCreateContentThumbnail')),
           feedback,
         }),
       });
@@ -5025,8 +5154,6 @@ App.messaging = (function () {
       button.textContent = 'Saving Prompt...';
     }
     try {
-      const imageSelect = document.getElementById('messagingCreateContentImage');
-      const thumbSelect = document.getElementById('messagingCreateContentThumbnail');
       const pdfInput = document.getElementById('messagingCreateContentPdf');
       const result = await api('/api/messaging/prompts', {
         method: 'POST',
@@ -5040,7 +5167,10 @@ App.messaging = (function () {
           url: cleanText(formData.get('url')),
           hashtags: cleanText(formData.get('hashtags')),
           body: cleanText(formData.get('content') || formData.get('primary')),
-          image_label: cleanText(imageSelect?.selectedOptions?.[0]?.textContent || thumbSelect?.selectedOptions?.[0]?.textContent),
+          image_label: cleanText(
+            imageAssetLabel(formData.get('image_asset_id'), assetPickerConfig('messagingCreateContentImage'))
+            || imageAssetLabel(formData.get('thumbnail_asset_id'), assetPickerConfig('messagingCreateContentThumbnail'))
+          ),
           pdf_name: cleanText(pdfInput?.files?.[0]?.name),
           feedback: cleanText(formData.get('feedback')),
         }),
@@ -5078,8 +5208,6 @@ App.messaging = (function () {
       button.textContent = 'Generating...';
     }
     try {
-      const imageSelect = document.getElementById('messagingCreateContentImage');
-      const thumbSelect = document.getElementById('messagingCreateContentThumbnail');
       const pdfInput = document.getElementById('messagingCreateContentPdf');
       const result = await api('/api/messaging/content-suggestions', {
         method: 'POST',
@@ -5093,7 +5221,10 @@ App.messaging = (function () {
           url: cleanText(formData.get('url')),
           hashtags: cleanText(formData.get('hashtags')),
           body: cleanText(formData.get('content') || formData.get('primary')),
-          image_label: cleanText(imageSelect?.selectedOptions?.[0]?.textContent || thumbSelect?.selectedOptions?.[0]?.textContent),
+          image_label: cleanText(
+            imageAssetLabel(formData.get('image_asset_id'), assetPickerConfig('messagingCreateContentImage'))
+            || imageAssetLabel(formData.get('thumbnail_asset_id'), assetPickerConfig('messagingCreateContentThumbnail'))
+          ),
           pdf_name: cleanText(pdfInput?.files?.[0]?.name),
         }),
       });
@@ -8601,6 +8732,14 @@ App.messaging = (function () {
     const createContentReviseBtn = document.getElementById('messagingCreateContentReviseBtn');
     const createContentSelectAllSuggestions = document.getElementById('messagingCreateContentSelectAllSuggestions');
     const createContentRichtextToolbar = document.querySelector('.messaging-richtext-toolbar');
+    Object.entries(ASSET_PICKER_CONFIGS).forEach(([inputId, config]) => {
+      const button = document.getElementById(config.buttonId);
+      if (!button || button.dataset.assetPickerBound === 'true') return;
+      button.dataset.assetPickerBound = 'true';
+      button.addEventListener('click', function () {
+        openImageAssetPicker(inputId);
+      });
+    });
     if (createContentFormat) {
       createContentFormat.addEventListener('change', renderCreateContentDynamicFields);
     }
@@ -8690,6 +8829,7 @@ App.messaging = (function () {
           await saveArticleFromForm(form);
           notify('Article saved');
           form.reset();
+          renderAssetPickerDisplay('messagingArticleThumbnailSelect');
           if (toggleBtn) toggleBtn.textContent = 'Add Article';
           form.classList.add('hidden');
           await refreshArticles();
@@ -8735,6 +8875,7 @@ App.messaging = (function () {
           await saveReportFromForm(reportsForm);
           notify('Report saved');
           reportsForm.reset();
+          renderAssetPickerDisplay('messagingReportThumbnailSelect');
           if (reportsToggleBtn) reportsToggleBtn.textContent = 'Add Report';
           reportsForm.classList.add('hidden');
           await refreshReports();
@@ -8780,6 +8921,7 @@ App.messaging = (function () {
           await saveWhitePaperFromForm(whitePapersForm);
           notify('White paper saved');
           whitePapersForm.reset();
+          renderAssetPickerDisplay('messagingWhitePaperThumbnailSelect');
           if (whitePapersToggleBtn) whitePapersToggleBtn.textContent = 'Add White Paper';
           whitePapersForm.classList.add('hidden');
           await refreshWhitePapers();
@@ -8825,6 +8967,7 @@ App.messaging = (function () {
           await saveEbookFromForm(ebooksForm);
           notify('eBook saved');
           ebooksForm.reset();
+          renderAssetPickerDisplay('messagingEbookThumbnailSelect');
           if (ebooksToggleBtn) ebooksToggleBtn.textContent = 'Add eBook';
           ebooksForm.classList.add('hidden');
           await refreshEbooks();
@@ -8875,13 +9018,13 @@ App.messaging = (function () {
       });
     }
 
-    if (tweetImagePickerBtn) {
+    if (tweetImagePickerBtn && tweetImagePickerBtn.dataset.assetPickerBound !== 'true') {
       tweetImagePickerBtn.addEventListener('click', function () {
         openTweetImageAssetPicker('messagingTweetImageSelect');
       });
     }
 
-    if (tweetEditImagePickerBtn) {
+    if (tweetEditImagePickerBtn && tweetEditImagePickerBtn.dataset.assetPickerBound !== 'true') {
       tweetEditImagePickerBtn.addEventListener('click', function () {
         openTweetImageAssetPicker('messagingTweetEditImageSelect');
       });

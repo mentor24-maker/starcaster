@@ -193,6 +193,40 @@ App.engageSocial = (function () {
 
   // --- Test Connection diagnostics ---
 
+  async function runBufferDiagnostics() {
+    const campaign = getSelectedCampaign();
+    if (!campaign?.id) {
+      notify('Select a campaign first', true);
+      return;
+    }
+    const diagWrap = el('engageSocialDiagnosticsWrap');
+    const diagPre = el('engageSocialDiagnosticsPreview');
+    if (diagWrap) diagWrap.classList.remove('hidden');
+    if (diagPre) diagPre.textContent = 'Running Buffer diagnostics...';
+    try {
+      const previewRaw = await api(
+        `/api/engage/social/buffer/publish-preview?campaignId=${encodeURIComponent(campaign.id)}`
+      );
+      const preview = previewRaw?.preview || previewRaw?.data?.preview || previewRaw || {};
+      const report = {
+        checkedAt: new Date().toISOString(),
+        campaignId: campaign.id,
+        campaignName: safeText(campaign.name),
+        preview,
+        howToRead: {
+          verdict: 'Top-level pass/fail for Buffer + TikTok publish',
+          'media.staging': 'Whether StarCaster uploaded the Primary Video to Buffer CDN',
+          'media.videoUrl': 'Resolved public URL before staging (Drive/blob)',
+        },
+      };
+      if (diagPre) diagPre.textContent = JSON.stringify(report, null, 2);
+      notify(safeText(preview.verdict) || 'Buffer diagnostics complete', !String(preview.verdict || '').startsWith('✅'));
+    } catch (err) {
+      if (diagPre) diagPre.textContent = JSON.stringify({ error: err.message }, null, 2);
+      notify(err.message, true);
+    }
+  }
+
   async function testConnection() {
     const diagWrap = el('engageSocialDiagnosticsWrap');
     const diagPre = el('engageSocialDiagnosticsPreview');
@@ -283,6 +317,37 @@ App.engageSocial = (function () {
     } catch (err) {
       report.checks.auth = { verdict: '❌ Auth test request failed', error: err.message };
       report.summary = `❌ Auth test error: ${err.message}`;
+    }
+
+    try {
+      const bufferStatusRaw = await api('/api/engage/social/buffer/status');
+      const bufferStatus = bufferStatusRaw?.status || bufferStatusRaw?.data?.status || bufferStatusRaw || {};
+      report.checks.buffer = {
+        configured: Boolean(bufferStatus?.configured),
+        authOk: Boolean(bufferStatus?.authOk),
+        hasDefaultChannelId: Boolean(bufferStatus?.hasDefaultChannelId),
+        defaultQueue: bufferStatus?.defaultQueue || null,
+      };
+      report.checks.buffer.verdict = !bufferStatus?.configured
+        ? '❌ Buffer API key missing — Settings → APIs → Buffer'
+        : (bufferStatus?.authOk ? '✅ Buffer credentials authenticate' : `❌ Buffer auth failed: ${safeText(bufferStatus?.auth?.error)}`);
+
+      const campaign = getSelectedCampaign();
+      if (campaign?.id) {
+        const previewRaw = await api(
+          `/api/engage/social/buffer/publish-preview?campaignId=${encodeURIComponent(campaign.id)}`
+        );
+        const preview = previewRaw?.preview || previewRaw?.data?.preview || previewRaw || {};
+        report.checks.bufferPublishPreview = preview;
+        if (safeText(preview.verdict)) {
+          report.bufferCampaignVerdict = preview.verdict;
+          if (!report.summary || report.summary.startsWith('✅')) {
+            report.summary = `${preview.verdict} (selected campaign)`;
+          }
+        }
+      }
+    } catch (err) {
+      report.checks.buffer = { error: err.message };
     }
 
     try {
@@ -472,6 +537,12 @@ App.engageSocial = (function () {
           if (src) parts.push(`cron creds: ${src}`);
         }
         if (diag.mediaUpload?.error) parts.push(`media: ${diag.mediaUpload.error}`);
+        if (safeText(diag.videoUrl)) parts.push(`video: ${diag.videoUrl}`);
+        if (safeText(diag.primaryVideoId)) parts.push(`asset: ${diag.primaryVideoId}`);
+        if (diag.videoStaging && typeof diag.videoStaging === 'object') {
+          const staged = safeText(diag.videoStaging.stagedUrl || diag.videoStaging.error);
+          if (staged) parts.push(`staging: ${staged}`);
+        }
         meta.textContent = parts.join(' · ');
         statusTd.appendChild(meta);
       }
@@ -685,12 +756,14 @@ App.engageSocial = (function () {
 
   function init() {
     const testConnectionBtn = el('engageSocialTestConnectionBtn');
+    const bufferDiagnosticsBtn = el('engageSocialBufferDiagnosticsBtn');
     const publishDueBtn = el('engageSocialPublishDueBtn');
     const openSettingsBtn = el('engageSocialOpenSettingsBtn');
     const sendNowBtn = el('engageSocialSendNowBtn');
     const scheduleBtn = el('engageSocialScheduleBtn');
 
     if (testConnectionBtn) testConnectionBtn.addEventListener('click', testConnection);
+    if (bufferDiagnosticsBtn) bufferDiagnosticsBtn.addEventListener('click', runBufferDiagnostics);
     if (sendNowBtn) sendNowBtn.addEventListener('click', handleSendNow);
     if (scheduleBtn) scheduleBtn.addEventListener('click', handleSchedule);
 

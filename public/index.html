@@ -2003,10 +2003,11 @@
               </form>
             </div>
             <div class="stack-form" style="margin: 0;">
-              <h3>Add Multiple Assets</h3>
+              <h3>Bulk Import Images</h3>
+              <p class="meta" style="margin: 0 0 0.5rem;">Uploads each image, generates a thumbnail, and assigns wide / square / tall aspect automatically. Set Asset Type to Image.</p>
               <form id="assetMultiUploadForm" class="standard-form-grid">
-                <label for="assetMultiUploadFiles">Files</label>
-                <input id="assetMultiUploadFiles" name="files" type="file" multiple required />
+                <label for="assetMultiUploadFiles">Image Files</label>
+                <input id="assetMultiUploadFiles" name="files" type="file" accept="image/*" multiple required />
                 
                 <label for="assetMultiUploadType">Asset Type</label>
                 <select id="assetMultiUploadType" name="asset_type" required>
@@ -2024,14 +2025,35 @@
                 </select>
                 
                 <div></div>
-                <button type="submit" class="btn btn-primary">Upload Asset(s)</button>
+                <button type="submit" class="btn btn-primary">Import Images</button>
                 
                 <div id="assetMultiUploadProgressWrap" class="standard-form-grid-full asset-upload-progress hidden" aria-live="polite">
-                  <div id="assetMultiUploadProgressText" class="asset-upload-progress-text">Uploading...</div>
+                  <div id="assetMultiUploadProgressText" class="asset-upload-progress-text">Importing...</div>
                   <progress id="assetMultiUploadProgressBar" max="100" value="0"></progress>
                 </div>
               </form>
             </div>
+          </div>
+          <div class="stack-form asset-drive-folder-import" style="margin: 1rem 0 0;">
+            <h3>Import From Google Drive Folder</h3>
+            <p class="meta" style="margin: 0 0 0.5rem;">Paste a shared folder link. StarCaster imports each image in that folder (not subfolders), generates thumbnails, and assigns aspect. Skips files already linked in Assets.</p>
+            <form id="assetDriveFolderImportForm" class="standard-form-grid">
+              <label for="assetDriveFolderUrl">Folder URL</label>
+              <input id="assetDriveFolderUrl" name="folder_url" type="url" placeholder="https://drive.google.com/drive/folders/..." required />
+
+              <label for="assetDriveFolderCategory">Category</label>
+              <select id="assetDriveFolderCategory" name="category">
+                <option value="">Select Category</option>
+              </select>
+
+              <div></div>
+              <button type="submit" class="btn btn-primary">Import From Folder</button>
+
+              <div id="assetDriveFolderProgressWrap" class="standard-form-grid-full asset-upload-progress hidden" aria-live="polite">
+                <div id="assetDriveFolderProgressText" class="asset-upload-progress-text">Importing...</div>
+                <progress id="assetDriveFolderProgressBar" max="100" value="0"></progress>
+              </div>
+            </form>
           </div>
         </section>
         <div class="table-wrap">
@@ -2056,6 +2078,14 @@
                     <option value="">Select Asset Type First</option>
                   </select>
                 </th>
+                <th>
+                  <select id="assetsFilterAspect">
+                    <option value="">All Aspects</option>
+                    <option value="wide">Wide</option>
+                    <option value="square">Square</option>
+                    <option value="tall">Tall</option>
+                  </select>
+                </th>
                 <th><input id="assetsFilterTags" placeholder="Tags" /></th>
                 <th colspan="2">
                   <div id="assetsFilterActionRow" class="assets-bulk-action-row">
@@ -2074,6 +2104,7 @@
                 <th id="assetsSortNameBtn">Asset Name</th>
                 <th id="assetsSortTypeBtn">Asset Type</th>
                 <th id="assetsSortCategoryBtn">Category</th>
+                <th id="assetsSortAspectBtn">Aspect</th>
                 <th id="assetsSortTagsBtn">Tags</th>
                 <th id="assetsSortSizeBtn">Size</th>
                 <th>Actions</th>
@@ -2110,6 +2141,14 @@
               <label for="assetCategoryInput">Category</label>
               <select id="assetCategoryInput" name="category">
                 <option value="">Select Category</option>
+              </select>
+
+              <label for="assetAspectInput">Aspect</label>
+              <select id="assetAspectInput" name="aspect">
+                <option value="">Auto / Unchanged</option>
+                <option value="wide">Wide</option>
+                <option value="square">Square</option>
+                <option value="tall">Tall</option>
               </select>
 
               <label for="assetTopicInput">Topic</label>
@@ -2582,6 +2621,7 @@
         <h2>Assets: Audio</h2>
         <p>Audio module placeholder.</p>
       </section>
+
       <!-- INJECTED PAGE: campaigns.html -->
 
       <section id="campaignsPage" class="app-page hidden">
@@ -2998,13 +3038,6 @@
             </div>
           </section>
         </div>
-      </section>
-      <section id="addChannelPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Add Channel</h2>
-          <button id="backToChannelsBtn" type="button" onclick="App.channels.openChannelsPage(); return false;" class="btn">Back To Channels</button>
-        </div>
-        <p>The create form lives on the main Channels page.</p>
       </section>
       <section id="editChannelPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -6156,6 +6189,7 @@
           <h2>Engage: Social</h2>
           <div class="page-heading-actions">
             <button id="engageSocialTestConnectionBtn" type="button" class="btn">Test Connection</button>
+            <button id="engageSocialBufferDiagnosticsBtn" type="button" class="btn">Buffer Diagnostics</button>
             <button id="engageSocialPublishDueBtn" type="button" class="btn">Publish Due Posts</button>
             <button id="engageSocialOpenSettingsBtn" type="button" class="btn">API Settings</button>
           </div>
@@ -6610,16 +6644,20 @@
                   <input id="messagingCreateContentHashtags" name="hashtags" />
                 
                 
-                  <label for="messagingCreateContentImage"><strong>Image:</strong></label>
-                  <select id="messagingCreateContentImage" name="image_asset_id">
-                    <option value="">Image (optional)</option>
-                  </select>
+                  <label for="messagingCreateContentImagePickerBtn"><strong>Image:</strong></label>
+                  <div class="field-stack">
+                    <input id="messagingCreateContentImage" name="image_asset_id" type="hidden" />
+                    <button id="messagingCreateContentImagePickerBtn" type="button" class="btn">Choose Image</button>
+                    <div id="messagingCreateContentImagePreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 
                 
-                  <label for="messagingCreateContentThumbnail"><strong id="messagingCreateContentThumbnailLabel">Image:</strong></label>
-                  <select id="messagingCreateContentThumbnail" name="thumbnail_asset_id">
-                    <option value="">Thumbnail (optional)</option>
-                  </select>
+                  <label for="messagingCreateContentThumbnailPickerBtn"><strong id="messagingCreateContentThumbnailLabel">Image:</strong></label>
+                  <div class="field-stack">
+                    <input id="messagingCreateContentThumbnail" name="thumbnail_asset_id" type="hidden" />
+                    <button id="messagingCreateContentThumbnailPickerBtn" type="button" class="btn">Choose Image</button>
+                    <div id="messagingCreateContentThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+                  </div>
                 
                 
                   <label for="messagingCreateContentBody"><strong id="messagingCreateContentBodyLabel">Body:</strong></label>
@@ -6804,9 +6842,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingArticleThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingArticleThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingArticleThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingArticleThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <input name="url" placeholder="URL" />
@@ -6835,9 +6875,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingArticleEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingArticleEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingArticleEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingArticleEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <input name="url" placeholder="URL" />
@@ -7879,9 +7921,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingReportThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingReportThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingReportThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingReportThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -7913,9 +7957,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingReportEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingReportEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingReportEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingReportEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -7977,9 +8023,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingWhitePaperThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingWhitePaperThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingWhitePaperThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingWhitePaperThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -8011,9 +8059,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingWhitePaperEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingWhitePaperEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingWhitePaperEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingWhitePaperEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -8075,9 +8125,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingEbookThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingEbookThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingEbookThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingEbookThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -8109,9 +8161,11 @@
           </div>
           <div class="grid-form">
             <input name="title" placeholder="Title" required />
-            <select id="messagingEbookEditThumbnailSelect" name="thumbnail_asset_id">
-              <option value="">Thumbnail (Image + Article Banner)</option>
-            </select>
+            <div class="field-stack">
+              <input id="messagingEbookEditThumbnailSelect" name="thumbnail_asset_id" type="hidden" />
+              <button id="messagingEbookEditThumbnailPickerBtn" type="button" class="btn">Choose Thumbnail</button>
+              <div id="messagingEbookEditThumbnailPreview" class="develop-theme-asset-preview">No image selected</div>
+            </div>
           </div>
           <input name="subtitle" placeholder="Subtitle" />
           <div class="grid-form">
@@ -9513,6 +9567,8 @@
   <script src="/js/core.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/components.js"></script>
+  <script src="/js/assetAspect.js"></script>
+  <script src="/js/assetPicker.js"></script>
   <script src="/js/contacts.js"></script>
   <script src="/js/contactPersonas.js"></script>
   <script src="/js/segments.js"></script>
@@ -9534,7 +9590,7 @@
   <script src="/js/activityLog.js"></script>
   <script src="/js/observe.js"></script>
   <script src="/js/devAgent.js"></script>
-  <script src="/js/assets.js?v=1.1"></script>
+  <script src="/js/assets.js?v=1.2"></script>
   <script src="/js/assetsVideo.js?v=1.6"></script>
   <script src="/js/assetCategories.js"></script>
   <script src="/js/channels.js"></script>

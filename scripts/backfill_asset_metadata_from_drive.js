@@ -13,6 +13,7 @@
  */
 
 const { sbQuery, tableConfig, isConfigured: isSupabaseConfigured } = require('../lib/supabase');
+const { inferAspectFromDimensions } = require('../lib/assetAspect');
 const {
   isConfigured: isGoogleDriveConfigured,
   extractDriveFileIdFromUrl,
@@ -40,7 +41,7 @@ async function fetchAssets(limit) {
   const pageSize = 1000;
   let offset = 0;
   const rows = [];
-  let selectFields = 'id,asset_name,asset_type,location,size,image_width,image_height';
+  let selectFields = 'id,asset_name,asset_type,location,size,image_width,image_height,aspect';
 
   while (true) {
     const query = `select=${selectFields}&order=id.asc&limit=${pageSize}&offset=${offset}`;
@@ -77,6 +78,11 @@ function buildPatch(row, drive) {
   }
   if (Object.prototype.hasOwnProperty.call(row, 'image_height') && nextH !== currentH) {
     patch.image_height = nextH || null;
+  }
+  const widthForAspect = patch.image_width != null ? patch.image_width : currentW;
+  const heightForAspect = patch.image_height != null ? patch.image_height : currentH;
+  if (widthForAspect > 0 && heightForAspect > 0) {
+    patch.aspect = inferAspectFromDimensions(widthForAspect, heightForAspect);
   }
   return patch;
 }

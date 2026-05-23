@@ -225,7 +225,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const format = String(body?.format || '').trim();
     if (!format) return sendErr(res, 400, 'format is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await generateMessagingContentSuggestions(body || {});
+    const result = await generateMessagingContentSuggestions(body || {}, scope);
     if (!result.ok) {
       return sendErr(
         res,
@@ -247,7 +247,7 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/messaging/prompts' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
-    const prepared = await prepareMessagingContentPrompt(body || {});
+    const prepared = await prepareMessagingContentPrompt(body || {}, scope);
     if (!prepared.ok) {
       return sendErr(res, prepared.status || 500, prepared.error || 'Could not prepare messaging prompt', { code: 'MESSAGING_PROMPT_PREPARE_FAILED' }), true;
     }

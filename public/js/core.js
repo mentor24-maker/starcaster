@@ -185,7 +185,6 @@ App.els = {
   campaignsPage: document.getElementById('campaignsPage'),
   assetsPage: document.getElementById('assetsPage'),
   channelsPage: document.getElementById('channelsPage'),
-  addChannelPage: document.getElementById('addChannelPage'),
   editChannelPage: document.getElementById('editChannelPage'),
   addAssetPage: document.getElementById('addAssetPage'),
   assetCategoriesPage: document.getElementById('assetCategoriesPage'),
@@ -204,9 +203,13 @@ App.els = {
   assetMultiUploadFiles: document.getElementById('assetMultiUploadFiles'),
   assetMultiUploadType: document.getElementById('assetMultiUploadType'),
   assetMultiUploadCategory: document.getElementById('assetMultiUploadCategory'),
+  assetDriveFolderImportForm: document.getElementById('assetDriveFolderImportForm'),
+  assetDriveFolderUrl: document.getElementById('assetDriveFolderUrl'),
+  assetDriveFolderCategory: document.getElementById('assetDriveFolderCategory'),
   assetFormTitle: document.getElementById('assetFormTitle'),
   assetTypeInput: document.getElementById('assetTypeInput'),
   assetCategoryInput: document.getElementById('assetCategoryInput'),
+  assetAspectInput: document.getElementById('assetAspectInput'),
   assetIdInput: document.getElementById('assetIdInput'),
   assetLocationRow: document.getElementById('assetLocationRow'),
   assetLocationText: document.getElementById('assetLocationText'),
@@ -227,6 +230,7 @@ App.els = {
   assetsFilterName: document.getElementById('assetsFilterName'),
   assetsFilterType: document.getElementById('assetsFilterType'),
   assetsFilterCategory: document.getElementById('assetsFilterCategory'),
+  assetsFilterAspect: document.getElementById('assetsFilterAspect'),
   assetsFilterTags: document.getElementById('assetsFilterTags'),
   assetsApplyFilterBtn: document.getElementById('assetsApplyFilterBtn'),
   assetsFilterActionRow: document.getElementById('assetsFilterActionRow'),
@@ -242,8 +246,6 @@ App.els = {
   assetCategoryEditForm: document.getElementById('assetCategoryEditForm'),
   assetCategoryEditId: document.getElementById('assetCategoryEditId'),
   channelsTable: document.getElementById('channelsTable'),
-  openAddChannelPageBtn: document.getElementById('openAddChannelPageBtn'),
-  backToChannelsBtn: document.getElementById('backToChannelsBtn'),
   channelForm: document.getElementById('channelForm'),
   backFromEditChannelBtn: document.getElementById('backFromEditChannelBtn'),
   channelEditForm: document.getElementById('channelEditForm'),
@@ -606,11 +608,33 @@ App.openTrainingSection = function openTrainingSection(sectionId) {
  * Non-envelope responses (any JSON without an `ok` field) pass through
  * unchanged so any endpoints not yet migrated continue to work.
  */
+const SESSION_TOKEN_STORAGE_KEY = 'app_session';
+
+App.getSessionToken = function getSessionToken() {
+  try {
+    return String(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || '').trim();
+  } catch {
+    return '';
+  }
+};
+
+App.setSessionToken = function setSessionToken(token) {
+  const value = String(token || '').trim();
+  try {
+    if (value) window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, value);
+    else window.localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+  } catch (_) {}
+};
+
 App.api = async function api(path, options = {}) {
   const projectId = String(state.currentProjectId || '').trim();
   const baseHeaders = { 'Content-Type': 'application/json' };
   if (projectId) baseHeaders['X-Project-ID'] = projectId;
-  
+
+  const sessionToken = App.getSessionToken();
+  if (sessionToken && !baseHeaders.Authorization && !(options.headers || {}).Authorization) {
+    baseHeaders.Authorization = `Bearer ${sessionToken}`;
+  }
 
   const res = await fetch(path, {
     headers: { ...baseHeaders, ...(options.headers || {}) },

@@ -1184,6 +1184,7 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
 
 async function handle(req, res, pathname, method) {
   const urlObj = getUrlObj(req);
+  const projectScope = requestProjectScope(req);
   pathname = String(pathname || '').replace(/^\/api\/harvest(?=\/|$)/, '/api/acquire');
 
   // GET /api/acquire/jobs — read-only, no extra limit
@@ -2070,7 +2071,7 @@ async function handle(req, res, pathname, method) {
       description: body?.description,
       transcript: body?.transcript,
     });
-    const genRes = await generateYoutubeCommentSuggestions(input);
+    const genRes = await generateYoutubeCommentSuggestions(input, projectScope);
     if (!genRes.ok) return sendErr(res, genRes.status || 500, genRes.error), true;
 
     const comments = Array.isArray(genRes.data) ? genRes.data : [];

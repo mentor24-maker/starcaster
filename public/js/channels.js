@@ -3,6 +3,54 @@ window.App = window.App || {};
 App.channels = (function () {
   const { state, els, api, notify } = App;
   let activeFilteredChannelType = null;
+  let activePlatformFilter = '';
+
+  const PLATFORM_LOGO_LOCAL = {
+    x: '/images/logos/x.svg',
+    facebook: '/images/logos/facebook.svg',
+    instagram: '/images/logos/instagram.svg',
+    youtube: '/images/logos/youtube.svg',
+    tiktok: '/images/logos/tiktok.svg',
+    linkedin: '/images/logos/linkedin.svg',
+    bluesky: '/images/logos/bluesky.svg',
+    reddit: '/images/logos/reddit.svg',
+    medium: '/images/logos/medium.svg',
+    substack: '/images/logos/substack.svg',
+  };
+
+  const PLATFORM_LOGO_REMOTE = {
+    pinterest: 'https://cdn.simpleicons.org/pinterest/bd081c',
+    threads: 'https://cdn.simpleicons.org/threads/000000',
+    snapchat: 'https://cdn.simpleicons.org/snapchat/fffc00',
+    telegram: 'https://cdn.simpleicons.org/telegram/26a5e4',
+    discord: 'https://cdn.simpleicons.org/discord/5865f2',
+    twitch: 'https://cdn.simpleicons.org/twitch/9146ff',
+    mastodon: 'https://cdn.simpleicons.org/mastodon/6364ff',
+    patreon: 'https://cdn.simpleicons.org/patreon/ff424d',
+    whatsapp: 'https://cdn.simpleicons.org/whatsapp/25d366',
+  };
+
+  const SOCIAL_PLATFORMS = [
+    'Bluesky',
+    'Discord',
+    'Facebook',
+    'Instagram',
+    'LinkedIn',
+    'Mastodon',
+    'Medium',
+    'Patreon',
+    'Pinterest',
+    'Reddit',
+    'Snapchat',
+    'Substack',
+    'Telegram',
+    'Threads',
+    'TikTok',
+    'Twitch',
+    'WhatsApp',
+    'X',
+    'YouTube',
+  ];
 
   function byId(id) {
     return document.getElementById(id);
@@ -12,28 +60,173 @@ App.channels = (function () {
     return String(value || '').trim();
   }
 
-  function setCreatePanelVisible(visible) {
-    const panel = byId('channelCreatePanel');
-    if (!panel) return;
-    panel.classList.toggle('hidden', !visible);
+  function normalizePlatformKey(value) {
+    return safeText(value).toLowerCase();
+  }
+
+  function platformToLogoKey(platformName) {
+    const key = normalizePlatformKey(platformName);
+    if (!key) return 'web';
+    if (key === 'x' || key.includes('twitter')) return 'x';
+    if (key.includes('facebook')) return 'facebook';
+    if (key.includes('instagram')) return 'instagram';
+    if (key.includes('youtube')) return 'youtube';
+    if (key.includes('tiktok')) return 'tiktok';
+    if (key.includes('linkedin')) return 'linkedin';
+    if (key.includes('pinterest')) return 'pinterest';
+    if (key.includes('threads')) return 'threads';
+    if (key.includes('bluesky')) return 'bluesky';
+    if (key.includes('snapchat')) return 'snapchat';
+    if (key.includes('reddit')) return 'reddit';
+    if (key.includes('telegram')) return 'telegram';
+    if (key.includes('discord')) return 'discord';
+    if (key.includes('twitch')) return 'twitch';
+    if (key.includes('mastodon')) return 'mastodon';
+    if (key.includes('medium')) return 'medium';
+    if (key.includes('substack')) return 'substack';
+    if (key.includes('patreon')) return 'patreon';
+    if (key.includes('whatsapp')) return 'whatsapp';
+    return key.replace(/[^a-z0-9]/g, '');
+  }
+
+  function platformLogoSrc(platformName) {
+    const key = platformToLogoKey(platformName);
+    return PLATFORM_LOGO_LOCAL[key] || PLATFORM_LOGO_REMOTE[key] || '/images/logos/web.svg';
+  }
+
+  function formatPlatformDisplayName(platformName) {
+    const raw = safeText(platformName);
+    if (!raw) return '-';
+    const match = SOCIAL_PLATFORMS.find(
+      (platform) =>
+        normalizePlatformKey(platform) === normalizePlatformKey(raw) || platformMatchesFilter(platform, raw)
+    );
+    return match || raw;
+  }
+
+  function buildPlatformCell(platformName) {
+    const wrap = document.createElement('div');
+    wrap.className = 'channels-platform-cell';
+
+    const icon = document.createElement('img');
+    icon.className = 'channels-platform-icon';
+    icon.src = platformLogoSrc(platformName);
+    icon.alt = '';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const name = document.createElement('strong');
+    name.className = 'channels-platform-name';
+    name.textContent = formatPlatformDisplayName(platformName);
+
+    wrap.appendChild(icon);
+    wrap.appendChild(name);
+    return wrap;
+  }
+
+  function syncPlatformFilterIcon() {
+    const icon = byId('channelsFilterPlatformIcon');
+    const select = byId('channelsFilterPlatform');
+    if (!icon || !select) return;
+    const value = safeText(select.value);
+    icon.src = platformLogoSrc(value || 'web');
+    icon.classList.toggle('channels-platform-icon--muted', !value);
+  }
+
+  function platformMatchesFilter(channelName, filterValue) {
+    const filter = normalizePlatformKey(filterValue);
+    if (!filter) return true;
+    const channel = normalizePlatformKey(channelName);
+    if (channel === filter) return true;
+    if (filter === 'x' && (channel === 'x' || channel.includes('twitter'))) return true;
+    if (filter.includes('twitter') && (channel === 'x' || channel.includes('twitter'))) return true;
+    if (filter.includes('facebook') && channel.includes('facebook')) return true;
+    if (filter.includes('instagram') && channel.includes('instagram')) return true;
+    if (filter.includes('youtube') && channel.includes('youtube')) return true;
+    if (filter.includes('tiktok') && channel.includes('tiktok')) return true;
+    if (filter.includes('linkedin') && channel.includes('linkedin')) return true;
+    return channel.includes(filter) || filter.includes(channel);
+  }
+
+  function fillPlatformSelect(selectEl, { includePlaceholder = true, selectedValue = '' } = {}) {
+    if (!selectEl) return;
+    const previous = safeText(selectedValue || selectEl.value);
+    selectEl.innerHTML = '';
+    if (includePlaceholder) {
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select platform';
+      selectEl.appendChild(placeholder);
+    }
+    SOCIAL_PLATFORMS.forEach((platform) => {
+      const option = document.createElement('option');
+      option.value = platform;
+      option.textContent = platform;
+      selectEl.appendChild(option);
+    });
+    if (previous) {
+      const match = SOCIAL_PLATFORMS.find((p) => normalizePlatformKey(p) === normalizePlatformKey(previous));
+      selectEl.value = match || previous;
+    }
+  }
+
+  function fillPlatformFilterSelect(selectEl) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'All Platforms';
+    selectEl.appendChild(all);
+    SOCIAL_PLATFORMS.forEach((platform) => {
+      const option = document.createElement('option');
+      option.value = platform;
+      option.textContent = platform;
+      selectEl.appendChild(option);
+    });
+    selectEl.value = activePlatformFilter;
+    syncPlatformFilterIcon();
+  }
+
+  function syncVirtualPersonalityFields(formKind, channelTypeOverride) {
+    const isCreate = formKind === 'create';
+    const vpLabel = byId(isCreate ? 'channelTypeAssignLabel' : 'channelEditTypeAssignLabel');
+    const vpSelect = byId(isCreate ? 'channelTypeAssign' : 'channelEditTypeAssign');
+    if (!vpLabel || !vpSelect) return;
+
+    const channelType = channelTypeOverride || activeFilteredChannelType;
+    if (String(channelType || '').toLowerCase() === 'virtual') {
+      vpLabel.classList.remove('hidden');
+      vpSelect.classList.remove('hidden');
+      const vps = (state.contacts || []).filter((c) => (c.contactClass || c.contact_class) === 'personality');
+      vpSelect.innerHTML = '<option value="">-- Select Virtual Personality --</option>';
+      vps.forEach((v) => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = `${v.firstName || ''} ${v.lastName || ''}`.trim() || v.email;
+        vpSelect.appendChild(opt);
+      });
+      return;
+    }
+
+    vpLabel.classList.add('hidden');
+    vpSelect.classList.add('hidden');
+    vpSelect.innerHTML = '';
   }
 
   function openChannelsPage() {
     activeFilteredChannelType = null;
-    setCreatePanelVisible(false);
-    
+    activePlatformFilter = '';
+
     const heading = byId('channelsPageHeading');
     if (heading) heading.textContent = 'Channels';
     const subtitle = byId('channelsPageSubtitle');
-    if (subtitle) subtitle.textContent = 'Select a class below to manage primary organizational accounts vs targeted agent accounts.';
-    const btn = byId('openAddChannelPageBtn');
-    if (btn) btn.classList.add('hidden');
-    
-    const overview = byId('channelsOverviewSection');
-    const tableRegion = byId('channelsTableSection');
-    if (overview) overview.classList.remove('hidden');
-    if (tableRegion) tableRegion.classList.add('hidden');
-    
+    if (subtitle) {
+      subtitle.textContent =
+        'Connect social accounts used for outreach. Create channels on the left; browse and filter existing channels on the right.';
+    }
+
+    syncVirtualPersonalityFields('create');
+    fillPlatformFilterSelect(byId('channelsFilterPlatform'));
+
     App.setActivePage('channelsPage');
     refresh().catch((err) => notify(err.message || 'Unable to load channels', true));
     return false;
@@ -41,61 +234,23 @@ App.channels = (function () {
 
   function openFilteredChannelsPage(type) {
     activeFilteredChannelType = type;
-    setCreatePanelVisible(false);
-    
+    activePlatformFilter = '';
+
     const headerDisplay = type === 'virtual' ? 'Virtual Channels' : 'Organic Channels';
     const heading = byId('channelsPageHeading');
     if (heading) heading.textContent = `Channels: ${headerDisplay}`;
-    
+
     const subtitle = byId('channelsPageSubtitle');
     if (subtitle) {
       if (type === 'virtual') subtitle.textContent = 'Social accounts proxying as synthesized Virtual Personalities.';
-      if (type === 'organic') subtitle.textContent = 'The primary, authentic social accounts owned and operated directly by your brand.';
+      if (type === 'organic') subtitle.textContent = 'Primary, authentic social accounts owned and operated directly by your brand.';
     }
-    
-    const btn = byId('openAddChannelPageBtn');
-    if (btn) btn.classList.remove('hidden');
 
-    const overview = byId('channelsOverviewSection');
-    const tableRegion = byId('channelsTableSection');
-    if (overview) overview.classList.add('hidden');
-    if (tableRegion) tableRegion.classList.remove('hidden');
+    syncVirtualPersonalityFields('create');
+    fillPlatformFilterSelect(byId('channelsFilterPlatform'));
 
     App.setActivePage('channelsPage');
     renderChannels();
-    return false;
-  }
-
-  function openChannelsCreate() {
-    if (els.channelForm) els.channelForm.reset();
-    
-    const vpLabel = byId('channelTypeAssignLabel');
-    const vpSelect = byId('channelTypeAssign');
-    if (vpLabel && vpSelect) {
-       if (activeFilteredChannelType === 'virtual') {
-         vpLabel.classList.remove('hidden');
-         vpSelect.classList.remove('hidden');
-         const vps = (state.contacts || []).filter(c => (c.contactClass || c.contact_class) === 'personality');
-         vpSelect.innerHTML = '<option value="">-- Select Virtual Personality --</option>';
-         vps.forEach(v => {
-           const opt = document.createElement('option');
-           opt.value = v.id;
-           opt.textContent = `${v.firstName || ''} ${v.lastName || ''}`.trim() || v.email;
-           vpSelect.appendChild(opt);
-         });
-       } else {
-         vpLabel.classList.add('hidden');
-         vpSelect.classList.add('hidden');
-         vpSelect.innerHTML = '';
-       }
-    }
-    
-    setCreatePanelVisible(true);
-    App.setActivePage('channelsPage');
-    const panel = byId('channelCreatePanel');
-    if (panel && typeof panel.scrollIntoView === 'function') {
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
     return false;
   }
 
@@ -143,6 +298,11 @@ App.channels = (function () {
     if (channel.includes('pinterest')) return `https://www.pinterest.com/${encodeURIComponent(handle)}/`;
     if (channel.includes('telegram')) return `https://t.me/${encodeURIComponent(handle)}`;
     if (channel.includes('reddit')) return `https://www.reddit.com/user/${encodeURIComponent(handle)}/`;
+    if (channel.includes('snapchat')) return `https://www.snapchat.com/add/${encodeURIComponent(handle)}`;
+    if (channel.includes('discord')) return '';
+    if (channel.includes('twitch')) return `https://www.twitch.tv/${encodeURIComponent(handle)}`;
+    if (channel.includes('mastodon')) return '';
+    if (channel.includes('whatsapp')) return '';
 
     return '';
   }
@@ -154,31 +314,15 @@ App.channels = (function () {
     }
 
     els.channelEditForm.reset();
-    
-    const vpLabel = byId('channelEditTypeAssignLabel');
+    fillPlatformSelect(byId('channelEditPlatformInput'), { selectedValue: item.channel || '' });
+    syncVirtualPersonalityFields('edit', item.channelType);
+
     const vpSelect = byId('channelEditTypeAssign');
-    if (vpLabel && vpSelect) {
-       if (item.channelType === 'virtual') {
-         vpLabel.classList.remove('hidden');
-         vpSelect.classList.remove('hidden');
-         const vps = (state.contacts || []).filter(c => (c.contactClass || c.contact_class) === 'personality');
-         vpSelect.innerHTML = '<option value="">-- Select Virtual Personality --</option>';
-         vps.forEach(v => {
-           const opt = document.createElement('option');
-           opt.value = v.id;
-           opt.textContent = `${v.firstName || ''} ${v.lastName || ''}`.trim() || v.email;
-           vpSelect.appendChild(opt);
-         });
-         vpSelect.value = item.contactId || '';
-       } else {
-         vpLabel.classList.add('hidden');
-         vpSelect.classList.add('hidden');
-         vpSelect.innerHTML = '';
-       }
+    if (vpSelect && String(item.channelType || '').toLowerCase() === 'virtual') {
+      vpSelect.value = item.contactId || '';
     }
 
     if (els.channelEditId) els.channelEditId.value = String(id);
-    els.channelEditForm.channel.value = String(item.channel || '');
     els.channelEditForm.user_name.value = String(item.userName || '');
     els.channelEditForm.email.value = String(item.email || '');
     els.channelEditForm.password.value = '';
@@ -199,11 +343,38 @@ App.channels = (function () {
     }
   }
 
+  async function cloneChannel(item) {
+    const id = Number(item?.id || 0) || 0;
+    if (!id) return notify('Channel id is missing', true);
+
+    const baseUser = safeText(item.userName) || 'channel';
+    const clonedUser = /\s*\(copy\)$/i.test(baseUser) ? baseUser : `${baseUser} (copy)`;
+
+    const payload = {
+      channel: safeText(item.channel),
+      userName: clonedUser,
+      email: safeText(item.email),
+      channelType: item.channelType || activeFilteredChannelType || 'organic',
+      contactId: item.contactId || null,
+      password: '',
+    };
+
+    if (!payload.channel) return notify('Platform is required to clone', true);
+    if (!payload.userName) return notify('User name is required to clone', true);
+
+    try {
+      await api('/api/channels', { method: 'POST', body: JSON.stringify(payload) });
+      notify('Channel cloned');
+      await refresh();
+    } catch (err) {
+      notify(err.message, true);
+    }
+  }
+
   function renderChannels() {
     if (!els.channelsTable) return;
     els.channelsTable.innerHTML = '';
 
-    // Project context check
     const projectId = App.state?.currentProjectId || '';
     if (!projectId && activeFilteredChannelType) {
       const tr = document.createElement('tr');
@@ -215,17 +386,37 @@ App.channels = (function () {
       els.channelsTable.appendChild(tr);
       return;
     }
-    
+
     let activeSet = state.channels || [];
     if (activeFilteredChannelType) {
-      activeSet = activeSet.filter(c => String(c.channelType || 'organic').toLowerCase() === String(activeFilteredChannelType).toLowerCase());
+      activeSet = activeSet.filter(
+        (c) => String(c.channelType || 'organic').toLowerCase() === String(activeFilteredChannelType).toLowerCase()
+      );
     }
-    
+    if (activePlatformFilter) {
+      activeSet = activeSet.filter((c) => platformMatchesFilter(c.channel, activePlatformFilter));
+    }
+
+    if (!activeSet.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.style.cssText = 'text-align:center; padding:1.5rem; color:#888;';
+      td.textContent = activePlatformFilter ? 'No channels match this platform.' : 'No channels yet.';
+      tr.appendChild(td);
+      els.channelsTable.appendChild(tr);
+      return;
+    }
+
     activeSet.forEach((item) => {
       const tr = document.createElement('tr');
 
       const channelTd = document.createElement('td');
-      channelTd.textContent = item.channel || '-';
+      if (safeText(item.channel)) {
+        channelTd.appendChild(buildPlatformCell(item.channel));
+      } else {
+        channelTd.textContent = '-';
+      }
 
       const userTd = document.createElement('td');
       const userName = safeText(item.userName);
@@ -249,12 +440,18 @@ App.channels = (function () {
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'channels-actions-cell';
-      const id = Number(item.id || 0) || 0;
-      if (id > 0) {
+      const rowId = Number(item.id || 0) || 0;
+      if (rowId > 0) {
         const editBtn = App.makeIconButton('edit', 'Edit Channel', () => openEditPage(item));
-        const deleteBtn = App.makeIconButton('delete', 'Delete Channel', () => deleteChannel(item), { danger: true, marginLeft: '8px' });
-
+        const cloneBtn = App.makeIconButton('clone', 'Clone Channel', () => {
+          void cloneChannel(item);
+        }, { marginLeft: '8px' });
+        const deleteBtn = App.makeIconButton('delete', 'Delete Channel', () => deleteChannel(item), {
+          danger: true,
+          marginLeft: '8px',
+        });
         actionsTd.appendChild(editBtn);
+        actionsTd.appendChild(cloneBtn);
         actionsTd.appendChild(deleteBtn);
       } else {
         actionsTd.textContent = '-';
@@ -279,26 +476,28 @@ App.channels = (function () {
   function init() {
     state.channels = state.channels || [];
 
-    if (els.openAddChannelPageBtn) {
-      els.openAddChannelPageBtn.addEventListener('click', () => {
-        openChannelsCreate();
-      });
-    }
+    fillPlatformSelect(byId('channelPlatformInput'));
+    fillPlatformSelect(byId('channelEditPlatformInput'));
+    fillPlatformFilterSelect(byId('channelsFilterPlatform'));
 
-    if (els.backToChannelsBtn) {
-      els.backToChannelsBtn.addEventListener('click', () => {
-        openChannelsPage();
+    const platformFilter = byId('channelsFilterPlatform');
+    if (platformFilter) {
+      platformFilter.addEventListener('change', () => {
+        activePlatformFilter = safeText(platformFilter.value);
+        syncPlatformFilterIcon();
+        renderChannels();
       });
     }
 
     if (els.backFromEditChannelBtn) {
       els.backFromEditChannelBtn.addEventListener('click', () => {
-        openChannelsPage();
+        if (activeFilteredChannelType) {
+          openFilteredChannelsPage(activeFilteredChannelType);
+        } else {
+          openChannelsPage();
+        }
       });
     }
-
-    // Forms already submit through inline onsubmit handlers in index.html.
-    // Avoid binding duplicate listeners here or create/update will fire twice.
   }
 
   async function submitChannelCreate(event) {
@@ -319,8 +518,8 @@ App.channels = (function () {
       await api('/api/channels', { method: 'POST', body: JSON.stringify(payload) });
       notify('Channel created');
       form.reset();
+      fillPlatformSelect(byId('channelPlatformInput'));
       await refresh();
-      setCreatePanelVisible(true);
       App.setActivePage('channelsPage');
     } catch (err) {
       notify(err.message, true);
@@ -354,7 +553,11 @@ App.channels = (function () {
       notify('Channel updated');
       form.reset();
       await refresh();
-      openChannelsPage();
+      if (activeFilteredChannelType) {
+        openFilteredChannelsPage(activeFilteredChannelType);
+      } else {
+        openChannelsPage();
+      }
     } catch (err) {
       notify(err.message, true);
     }
@@ -366,7 +569,6 @@ App.channels = (function () {
     init,
     openChannelsPage,
     openFilteredChannelsPage,
-    openChannelsCreate,
     refresh,
     submitChannelCreate,
     submitChannelEdit,

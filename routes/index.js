@@ -21,7 +21,7 @@
  *   for expensive operations (acquire, openclaw, import).
  */
 
-const { sendJson, sendErr, setCors, getUrlObj } = require('./http');
+const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname } = require('./http');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
 const { getUserFromSessionToken } = require('../lib/authStore');
@@ -131,6 +131,35 @@ async function handleRequest(req, res) {
     return res.end();
   }
 
+  const urlObjEarly = getUrlObj(req);
+  const pathnameEarly = normalizeApiPathname(urlObjEarly.pathname);
+  const methodEarly = String(req.method || '').toUpperCase();
+
+  if (pathnameEarly === '/api/ping' && methodEarly === 'GET') {
+    return sendJson(res, 200, {
+      ok: true,
+      app: 'starcaster',
+      message: 'API is up. Log in via the app, then use Import From Folder.',
+    });
+  }
+
+  if (pathnameEarly === '/api/assets/import-drive-folder' && methodEarly === 'GET') {
+    let importModuleOk = false;
+    try {
+      require('../lib/assetDriveFolderImport');
+      importModuleOk = true;
+    } catch {
+      importModuleOk = false;
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      registered: true,
+      available: importModuleOk,
+      path: '/api/assets/import-drive-folder',
+      note: 'POST requires login. After login, use Assets → Import From Google Drive Folder.',
+    });
+  }
+
   // ── Global rate limit ceiling ────────────────────────────────────────────
   // Applied to every API request before any routing logic runs.
   // Expensive endpoints additionally check their own per-endpoint limit
@@ -138,11 +167,13 @@ async function handleRequest(req, res) {
   if (checkLimit(req, res, 'global')) return;
 
   const urlObj   = getUrlObj(req);
-  const pathname = urlObj.pathname;
+  const pathname = normalizeApiPathname(urlObj.pathname);
   const method   = req.method;
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
   const isWebhookRoute = pathname === '/api/develop/devAgent/worker' || pathname.startsWith('/api/tasks');
+  const isImportDriveFolderHealth =
+    pathname === assets.IMPORT_DRIVE_FOLDER_PATH && method === 'GET';
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authUser = await getUserFromSessionToken(sessionToken);
@@ -150,6 +181,11 @@ async function handleRequest(req, res) {
   req.authUser = authUser || null;
   req.projectContext = null;
   req.cronPublish = isCronAuthorized;
+
+  if (isImportDriveFolderHealth) {
+    const handled = await assets.handleImportDriveFolder(req, res, {}, 'GET');
+    if (handled) return;
+  }
 
   if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !authUser) {
 
@@ -224,8 +260,32 @@ async function handleRequest(req, res) {
         'POST /api/acquire/youtube-comment-suggestions',
         'POST /api/acquire/youtube-comment',
       ],
+      assetFeatures: {
+        importDriveFolder: typeof assets.handleImportDriveFolder === 'function',
+        importDriveFolderPath: assets.IMPORT_DRIVE_FOLDER_PATH || null,
+        importDriveFolderModule: (() => {
+          try {
+            require('../lib/assetDriveFolderImport');
+            return true;
+          } catch {
+            return false;
+          }
+        })(),
+      },
     };
     return sendJson(res, 200, { ok: true, data: payload, ...payload });
+  }
+
+  if (assets.isImportDriveFolderPath(pathname) && (method === 'POST' || method === 'GET')) {
+    const scope = {
+      projectId: String(req?.projectContext?.project?.id || '').trim(),
+      userId: String(req?.authUser?.id || '').trim(),
+      projectIds: Array.isArray(req?.projectContext?.projects)
+        ? req.projectContext.projects.map((project) => String(project?.id || '').trim()).filter(Boolean)
+        : [],
+    };
+    const handled = await assets.handleImportDriveFolder(req, res, scope, String(method || '').toUpperCase());
+    if (handled) return;
   }
 
   try {

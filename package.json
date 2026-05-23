@@ -14,12 +14,15 @@
     "import:contacts-csv:apply": "node scripts/import_contacts_csv_to_supabase.js --apply",
     "backfill:assets-drive-meta:dry-run": "node scripts/backfill_asset_metadata_from_drive.js",
     "backfill:assets-drive-meta:apply": "node scripts/backfill_asset_metadata_from_drive.js --apply",
+    "backfill:assets-aspect:dry-run": "node scripts/backfill_asset_aspects.js",
+    "backfill:assets-aspect:apply": "node scripts/backfill_asset_aspects.js --apply",
     "backfill:channels-passwords:dry-run": "node scripts/backfill_channels_password_encryption.js",
     "backfill:channels-passwords:apply": "node scripts/backfill_channels_password_encryption.js --apply",
     "migrate:assets-drive-to-blob:dry-run": "node scripts/migrate_assets_drive_to_blob.js",
     "migrate:assets-drive-to-blob:apply": "node scripts/migrate_assets_drive_to_blob.js --apply",
     "assets:thumbnails:dry-run": "node scripts/generate_asset_thumbnails.js",
     "assets:thumbnails:apply": "node scripts/generate_asset_thumbnails.js --apply",
+    "verify:import-drive-folder": "node scripts/verify_import_drive_folder_route.js",
     "check:vercel-cutover": "node scripts/vercel_cutover_check.js",
     "import:training-context:apply": "node scripts/harvest_knowledge.mjs",
     "sync:dev-logs": "node scripts/sync_dev_logs.mjs"
@@ -45,6 +48,7 @@
     "mailparser": "^3.9.8",
     "playwright": "^1.59.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "sharp": "^0.34.5"
   }
 }

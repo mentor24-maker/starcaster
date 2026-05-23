@@ -1,11 +1,17 @@
 'use strict';
 
-const { sendOk, sendErr, parseJsonBody } = require('./http');
+const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { logActivity } = require('../lib/activityLog');
 const { getProviderValues, getProviderCredentialDiagnostics } = require('../lib/apiSettings');
 const { listCampaigns, rowToCampaign } = require('../lib/store');
 const { getAssetById, rowToAsset } = require('../lib/assetsStore');
 const { fetchDriveFileMedia } = require('../lib/googleDrive');
+const {
+  resolveAssetPublicMediaUrl,
+  configuredPublicOrigin,
+  originIsBufferReachable,
+  isProbablyDirectMediaUrl,
+} = require('../lib/assetPublicMediaUrl');
 const socialStore = require('../lib/engageSocialStore');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { wallLocalToUtcIso } = require('../lib/wallTimeUtc');
@@ -14,6 +20,7 @@ const xClient = require('../lib/xClient');
 const telegramClient = require('../lib/telegramClient');
 const blueskyClient = require('../lib/blueskyClient');
 const bufferClient = require('../lib/bufferClient');
+const { stageCampaignVideoForBuffer } = require('../lib/bufferVideoStaging');
 const metaClients = require('../lib/metaClients');
 const redditClient = require('../lib/redditClient');
 const { discoverRedditThreads } = require('../lib/redditThreadDiscovery');
@@ -74,13 +81,6 @@ function parseJsonObject(raw) {
   }
 }
 
-function requestOrigin(req) {
-  const proto = safeText(req?.headers?.['x-forwarded-proto']) || 'http';
-  const host = safeText(req?.headers?.host);
-  if (!host) return '';
-  return `${proto}://${host}`;
-}
-
 /** Map third-party auth failures to 502 so App.api does not treat them as session expiry. */
 function socialPublishHttpStatus(statusInput) {
   const status = Number(statusInput || 0) || 0;
@@ -99,12 +99,11 @@ function formatXPublishError(result, mediaUpload) {
   return tweetErr || 'Unknown publish error';
 }
 
-function configuredPublicOrigin(req) {
-  const configured = safeText(process.env.PUBLIC_APP_ORIGIN || process.env.APP_PUBLIC_ORIGIN || process.env.PUBLIC_BASE_URL);
-  if (configured) return configured.replace(/\/+$/, '');
-  const vercel = safeText(process.env.VERCEL_URL);
-  if (vercel) return `https://${vercel.replace(/\/+$/, '')}`;
-  return requestOrigin(req);
+function requestOrigin(req) {
+  const host = safeText(req?.headers?.['x-forwarded-host'] || req?.headers?.host);
+  const proto = safeText(req?.headers?.['x-forwarded-proto']) || 'http';
+  if (!host) return '';
+  return `${proto}://${host}`.replace(/\/+$/, '');
 }
 
 function clampInteger(value, min, max, fallback) {
@@ -210,7 +209,7 @@ async function fetchYoutubePostingIdentity(accessToken) {
   };
 }
 
-async function buildYoutubeCommentAgentPreflight(payload) {
+async function buildYoutubeCommentAgentPreflight(payload, scope = null) {
   const videoUrl = safeText(payload?.videoUrl);
   const issues = [];
   const result = {
@@ -261,7 +260,7 @@ async function buildYoutubeCommentAgentPreflight(payload) {
   });
   result.suggestionInput = suggestionInput;
 
-  const suggestionRes = await generateYoutubeCommentSuggestions(suggestionInput);
+  const suggestionRes = await generateYoutubeCommentSuggestions(suggestionInput, scope);
   result.suggestions = Array.isArray(suggestionRes?.data) ? suggestionRes.data : [];
   result.checks.commentGeneration = {
     ok: Boolean(suggestionRes?.ok),
@@ -506,6 +505,10 @@ function emptyCampaignImageMeta() {
   return { imageUrl: '', imageAlt: '', primaryImageId: '' };
 }
 
+function emptyCampaignVideoMeta() {
+  return { videoUrl: '', primaryVideoId: '' };
+}
+
 function extractDriveFileIdFromLocation(value) {
   const text = safeText(value);
   if (!text) return '';
@@ -580,7 +583,7 @@ async function resolveCampaignImageMeta(campaignIdInput, req) {
   const scope = requestProjectScope(req);
   const campaignId = safeText(campaignIdInput);
   if (!campaignId) return emptyCampaignImageMeta();
-  const res = await listCampaigns();
+  const res = await listCampaigns(scope);
   if (!res.ok) return emptyCampaignImageMeta();
   const campaigns = (Array.isArray(res.data) ? res.data : []).map(rowToCampaign);
   const campaign = campaigns.find((item) => safeText(item?.id) === campaignId);
@@ -594,18 +597,55 @@ async function resolveCampaignImageMeta(campaignIdInput, req) {
   if (assetRes.ok) {
     const assetRow = Array.isArray(assetRes.data) ? assetRes.data[0] : assetRes.data;
     const asset = rowToAsset(assetRow);
-    const loc = safeText(asset?.location);
-    if (isPublicMediaUrl(loc, true)) imageUrl = loc;
+    const resolved = await resolveAssetPublicMediaUrl(asset, { assetId: primaryImageId, req });
+    if (resolved.ok) imageUrl = safeText(resolved.url);
   }
   if (!imageUrl) {
     const origin = configuredPublicOrigin(req);
-    if (!origin) return { imageUrl: '', imageAlt: imageAltDefault, primaryImageId };
+    if (!originIsBufferReachable(origin)) {
+      return { imageUrl: '', imageAlt: imageAltDefault, primaryImageId };
+    }
     imageUrl = `${origin}/api/assets/file/${encodeURIComponent(primaryImageId)}`;
   }
   return {
     imageUrl,
     imageAlt: imageAltDefault,
     primaryImageId,
+  };
+}
+
+async function resolveCampaignVideoMeta(campaignIdInput, req) {
+  const scope = requestProjectScope(req);
+  const campaignId = safeText(campaignIdInput);
+  if (!campaignId) return emptyCampaignVideoMeta();
+  const res = await listCampaigns(scope);
+  if (!res.ok) return emptyCampaignVideoMeta();
+  const campaigns = (Array.isArray(res.data) ? res.data : []).map(rowToCampaign);
+  const campaign = campaigns.find((item) => safeText(item?.id) === campaignId);
+  if (!campaign) return emptyCampaignVideoMeta();
+  const content = parseJsonObject(campaign.content);
+  const primaryVideoId = safeText(content?.primaryVideoId);
+  if (!primaryVideoId) return emptyCampaignVideoMeta();
+
+  let videoUrl = '';
+  let mediaResolution = null;
+  const assetRes = await getAssetById(primaryVideoId, scope);
+  if (assetRes.ok) {
+    const assetRow = Array.isArray(assetRes.data) ? assetRes.data[0] : assetRes.data;
+    const asset = rowToAsset(assetRow);
+    const resolved = await resolveAssetPublicMediaUrl(asset, { assetId: primaryVideoId, req });
+    mediaResolution = resolved.diagnostics || null;
+    if (resolved.ok) videoUrl = safeText(resolved.url);
+    else if (isProbablyDirectMediaUrl(asset?.location)) {
+      videoUrl = safeText(asset.location);
+      mediaResolution = { used: 'asset.location.legacy', warnings: [] };
+    }
+  }
+
+  return {
+    videoUrl,
+    primaryVideoId,
+    mediaResolution,
   };
 }
 
@@ -622,6 +662,176 @@ async function resolvePostImageMeta(post, req, requireHttps = false) {
     imageAlt: safeText(post?.imageAlt || fallback.imageAlt),
     primaryImageId: safeText(fallback.primaryImageId),
   };
+}
+
+async function resolvePostBufferMediaMeta(post, req) {
+  const image = await resolvePostImageMeta(post, req, true);
+  const video = await resolveCampaignVideoMeta(post?.campaignId, req);
+  return {
+    imageUrl: safeText(image.imageUrl),
+    imageAlt: safeText(image.imageAlt),
+    primaryImageId: safeText(image.primaryImageId),
+    videoUrl: safeText(video.videoUrl),
+    primaryVideoId: safeText(video.primaryVideoId),
+    videoMediaResolution: video.mediaResolution || null,
+  };
+}
+
+function bufferTargetPlatform(bufferTarget) {
+  const target = bufferTarget && typeof bufferTarget === 'object' ? bufferTarget : {};
+  return normalizeBufferService(
+    target?.matchedChannel?.service
+    || target?.target?.platform
+    || target?.target?.service
+    || target?.platform
+  );
+}
+
+async function buildBufferPublishPreview(req, campaignIdInput) {
+  const campaignId = safeText(campaignIdInput);
+  const scope = requestProjectScope(req);
+  const publicOrigin = configuredPublicOrigin(req);
+  const preview = {
+    checkedAt: new Date().toISOString(),
+    campaignId,
+    publicOrigin,
+    publicOriginReachable: originIsBufferReachable(publicOrigin),
+    campaign: null,
+    delivery: null,
+    media: null,
+    buffer: null,
+    verdict: '',
+    warnings: [],
+  };
+
+  if (!campaignId) {
+    preview.verdict = '❌ campaignId is required';
+    return preview;
+  }
+
+  const res = await listCampaigns(scope);
+  if (!res.ok) {
+    preview.verdict = `❌ Could not load campaigns: ${safeText(res.error)}`;
+    return preview;
+  }
+
+  const campaigns = (Array.isArray(res.data) ? res.data : []).map(rowToCampaign);
+  const campaign = campaigns.find((item) => safeText(item?.id) === campaignId);
+  if (!campaign) {
+    preview.verdict = '❌ Campaign not found';
+    return preview;
+  }
+
+  const content = parseJsonObject(campaign.content);
+  preview.campaign = {
+    id: safeText(campaign.id),
+    name: safeText(campaign.name),
+    status: safeText(campaign.status),
+    primaryVideoId: safeText(content?.primaryVideoId),
+    primaryVideoLabel: safeText(content?.primaryVideoLabel),
+    primaryImageId: safeText(content?.primaryImageId),
+    channelId: safeText(content?.channelId),
+  };
+
+  let selectedChannel = null;
+  try {
+    const { listChannels } = require('../lib/channelsStore');
+    const chRes = await listChannels(scope);
+    if (chRes.ok) {
+      const rows = Array.isArray(chRes.data) ? chRes.data : [];
+      selectedChannel = rows.find((ch) => String(ch?.id) === safeText(content?.channelId)) || null;
+    }
+  } catch {
+    // channels optional for preview
+  }
+
+  const starcasterChannelId = safeText(content?.channelId);
+  const platform = normalizeBufferService(safeText(selectedChannel?.channel).toLowerCase());
+  const account = safeText(selectedChannel?.user_name || selectedChannel?.userName)
+    .replace(/^@+/, '')
+    .toLowerCase();
+
+  preview.delivery = {
+    starcasterChannelId,
+    targetPlatform: platform,
+    targetAccount: account,
+    usesBuffer: platform === 'x' || platform === 'tiktok',
+  };
+
+  const media = await resolvePostBufferMediaMeta({ campaignId }, req);
+  preview.media = {
+    videoUrl: safeText(media.videoUrl),
+    imageUrl: safeText(media.imageUrl),
+    primaryVideoId: safeText(media.primaryVideoId),
+    primaryImageId: safeText(media.primaryImageId),
+    videoResolution: media.videoMediaResolution,
+  };
+
+  if (safeText(media.primaryVideoId) && preview.delivery?.usesBuffer) {
+    const creds = bufferClient.getBufferCredentials();
+    const staged = await stageCampaignVideoForBuffer(media.primaryVideoId, scope, req, creds);
+    preview.media.staging = staged.ok
+      ? { ok: true, stagedUrl: safeText(staged.url), ...(staged.data || {}) }
+      : { ok: false, error: safeText(staged.error), ...(staged.data || {}) };
+  }
+
+  const creds = bufferClient.getBufferCredentials();
+  preview.buffer = {
+    configured: bufferClient.isConfigured(creds),
+    hasDefaultChannelId: Boolean(creds.defaultChannelId),
+  };
+
+  if (preview.delivery.usesBuffer) {
+    const fakePost = {
+      diagnostics: {
+        bufferTarget: {
+          platform,
+          account,
+          starcasterChannelId,
+        },
+      },
+    };
+    const bufferTarget = await resolveBufferChannelId(fakePost);
+    preview.buffer.target = bufferTarget;
+    preview.buffer.resolvedPlatform = bufferTargetPlatform(bufferTarget);
+
+    const resolvedPlatform = preview.buffer.resolvedPlatform;
+    const needsVideo = resolvedPlatform === 'tiktok';
+    const stagedUrl = safeText(preview.media?.staging?.stagedUrl);
+    const hasMedia = Boolean(stagedUrl || safeText(media.videoUrl) || safeText(media.imageUrl));
+
+    if (!preview.publicOriginReachable && !safeText(media.videoUrl).includes('drive.google.com')) {
+      preview.warnings.push(
+        'Set PUBLIC_APP_ORIGIN (or deploy on Vercel) so media URLs are not localhost-only.'
+      );
+    }
+    if (needsVideo && !safeText(content?.primaryVideoId)) {
+      preview.verdict = '❌ TikTok requires a Primary Video on the campaign';
+    } else if (needsVideo && preview.media?.staging && preview.media.staging.ok === false) {
+      preview.verdict = `❌ Could not stage video for Buffer: ${safeText(preview.media.staging.error)}`;
+    } else if (needsVideo && !safeText(preview.media?.staging?.stagedUrl) && !safeText(media.videoUrl)) {
+      preview.verdict = '❌ TikTok requires a publicly fetchable video URL — check Primary Video Drive sharing';
+      if (media.videoMediaResolution?.warnings?.length) {
+        preview.warnings.push(...media.videoMediaResolution.warnings);
+      }
+    } else if (needsVideo && !hasMedia && !preview.media?.staging?.ok) {
+      preview.verdict = '❌ TikTok post has no image or video URL for Buffer';
+    } else if (!bufferTarget.channelId) {
+      preview.verdict = `❌ ${safeText(bufferTarget.error) || 'Could not resolve Buffer channel'}`;
+    } else if (!preview.buffer.configured) {
+      preview.verdict = '❌ Buffer API key is not configured';
+    } else {
+      preview.verdict = needsVideo
+        ? (preview.media?.staging?.ok
+          ? '✅ Ready — video staged on Buffer CDN for TikTok'
+          : '✅ Ready — TikTok video URL resolved for Buffer')
+        : '✅ Ready — Buffer channel and media resolved';
+    }
+  } else {
+    preview.verdict = `ℹ️ Campaign channel (${platform || 'unknown'}) does not route through Buffer`;
+  }
+
+  return preview;
 }
 
 function requestScopeForPublish(req, post) {
@@ -775,21 +985,75 @@ async function publishStoredPost(post, req) {
   } else if (channel === 'bluesky') {
     result = await blueskyClient.createPost(post.text, imageOpts);
   } else if (channel === 'buffer') {
-    const resolved = await resolvePostImageMeta(post, req, false);
+    const resolved = await resolvePostBufferMediaMeta(post, req);
     imageOpts.imageUrl = safeText(resolved.imageUrl);
     imageOpts.imageAlt = safeText(resolved.imageAlt);
+    const videoUrl = safeText(resolved.videoUrl);
     const bufferTarget = await resolveBufferChannelId(post);
+    const bufferPlatform = bufferTargetPlatform(bufferTarget);
     if (!bufferTarget.channelId && bufferTarget.error) {
       result = { ok: false, status: 400, error: bufferTarget.error, data: { bufferTarget } };
+    } else if (bufferPlatform === 'tiktok' && !videoUrl && !safeText(imageOpts.imageUrl)) {
+      const mediaHints = Array.isArray(resolved.videoMediaResolution?.warnings)
+        ? resolved.videoMediaResolution.warnings
+        : [];
+      result = {
+        ok: false,
+        status: 400,
+        error: 'TikTok Buffer posts require a selected image or a publicly accessible video URL. Select a Primary Video on the campaign (Google Drive file must be shared as “Anyone with the link”), then retry.',
+        data: {
+          bufferTarget,
+          bufferPlatform,
+          videoUrl,
+          primaryVideoId: safeText(resolved.primaryVideoId),
+          imageUrl: safeText(imageOpts.imageUrl),
+          videoMediaResolution: resolved.videoMediaResolution || null,
+          mediaHints,
+        },
+      };
     } else {
-      result = await bufferClient.createQueuedPost(post.text, {
-        imageUrl: imageOpts.imageUrl,
-        channelId: bufferTarget.channelId,
-      });
+      let publishVideoUrl = videoUrl;
+      let videoStaging = null;
+      const primaryVideoId = safeText(resolved.primaryVideoId);
+      if (primaryVideoId && (bufferPlatform === 'tiktok' || publishVideoUrl)) {
+        const creds = bufferClient.getBufferCredentials();
+        const staged = await stageCampaignVideoForBuffer(primaryVideoId, scope, req, creds);
+        videoStaging = staged;
+        if (staged.ok) {
+          publishVideoUrl = safeText(staged.url);
+        } else if (bufferPlatform === 'tiktok') {
+          result = {
+            ok: false,
+            status: staged.status || 400,
+            error: safeText(staged.error) || 'Could not stage campaign video for Buffer.',
+            data: {
+              bufferTarget,
+              bufferPlatform,
+              primaryVideoId,
+              videoUrl: publishVideoUrl,
+              videoMediaResolution: resolved.videoMediaResolution || null,
+              videoStaging: staged.data || null,
+            },
+          };
+        }
+      }
+
+      if (!result) {
+        result = await bufferClient.createQueuedPost(post.text, {
+          imageUrl: imageOpts.imageUrl,
+          videoUrl: publishVideoUrl,
+          channelId: bufferTarget.channelId,
+        });
+      }
       if (result && typeof result === 'object') {
         result.data = {
           ...(result.data || {}),
+          videoUrl: publishVideoUrl,
+          primaryVideoId,
+          videoMediaResolution: resolved.videoMediaResolution || null,
+          videoStaging: videoStaging?.ok ? videoStaging.data : (videoStaging?.data || videoStaging?.error || null),
           bufferTarget,
+          bufferPlatform,
         };
       }
     }
@@ -850,6 +1114,8 @@ async function publishStoredPost(post, req) {
           channel,
           publishMode: req?.cronPublish ? 'cron' : 'session',
           imageUrl: safeText(imageOpts.imageUrl || post?.imageUrl || ''),
+          videoUrl: safeText(result.data?.videoUrl),
+          primaryVideoId: safeText(result.data?.primaryVideoId),
           externalQueue: 'starcaster_waiting_for_buffer_capacity',
           retryAt,
           bufferTarget: result.data?.bufferTarget || result.data?.queue || null,
@@ -901,6 +1167,12 @@ async function publishStoredPost(post, req) {
         mediaUpload: channel === 'x' ? mediaUpload : null,
         endpoint: String(result.endpoint || ''),
         status: Number(result.status || 0) || 0,
+        imageUrl: channel === 'buffer' ? safeText(imageOpts.imageUrl || post?.imageUrl || '') : '',
+        videoUrl: channel === 'buffer' ? safeText(result.data?.videoUrl) : '',
+        primaryVideoId: channel === 'buffer' ? safeText(result.data?.primaryVideoId) : '',
+        videoMediaResolution: channel === 'buffer' ? (result.data?.videoMediaResolution || null) : null,
+        videoStaging: channel === 'buffer' ? (result.data?.videoStaging || null) : null,
+        bufferPlatform: channel === 'buffer' ? safeText(result.data?.bufferPlatform) : '',
         attempts: Array.isArray(result.attempts) ? result.attempts : [],
         payload: result.data || null,
       },
@@ -919,6 +1191,8 @@ async function publishStoredPost(post, req) {
       endpoint: String(result.data?.endpoint || ''),
       status: Number(result.status || 0) || 0,
       imageUrl: safeText(imageOpts.imageUrl || post?.imageUrl || ''),
+      videoUrl: channel === 'buffer' ? safeText(result.data?.videoUrl) : '',
+      primaryVideoId: channel === 'buffer' ? safeText(result.data?.primaryVideoId) : '',
       externalQueue: channel === 'buffer' ? 'buffer' : '',
       externalDueAt: channel === 'buffer' ? safeText(result.data?.dueAt) : '',
       bufferTarget: channel === 'buffer' ? (result.data?.bufferTarget || null) : null,
@@ -951,6 +1225,7 @@ async function publishStoredPost(post, req) {
 
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
+  const projectScope = requestProjectScope(req);
 
   if (pathname === '/api/engage/reddit/status' && requestMethod === 'GET') {
     const creds = redditClient.getRedditCredentials();
@@ -1017,6 +1292,7 @@ async function handle(req, res, pathname, method) {
       target,
       source_mode: body?.source_mode || body?.sourceMode,
       comment_limit: body?.comment_limit || body?.commentLimit,
+      scope: projectScope,
     });
     if (!result.ok) {
       return sendErr(res, result.status || 500, result.error || 'Could not generate Reddit reply candidates', { code: 'REDDIT_REPLY_CANDIDATES_FAILED' }), true;
@@ -1059,6 +1335,7 @@ async function handle(req, res, pathname, method) {
       context_limit: body?.context_limit || body?.contextLimit,
       user_id: req.authUser?.id || req.authUser?.email || '',
       userEmail: req.authUser?.email || '',
+      scope: projectScope,
     });
     if (!result.ok) {
       return sendErr(res, result.status || 500, result.error || 'Could not generate BlueSky reply candidates', { code: 'BLUESKY_REPLY_CANDIDATES_FAILED' }), true;
@@ -1473,7 +1750,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/engage/youtube-comment-agents/preflight' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const payload = normalizeYoutubeCommentAgentPayload(body);
-    const preflight = await buildYoutubeCommentAgentPreflight(payload);
+    const preflight = await buildYoutubeCommentAgentPreflight(payload, projectScope);
     return sendOk(res, 200, preflight, preflight), true;
   }
 
@@ -1744,6 +2021,13 @@ async function handle(req, res, pathname, method) {
       }), true;
     }
     return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/engage/social/buffer/publish-preview' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const campaignId = safeText(urlObj.searchParams.get('campaignId') || urlObj.searchParams.get('campaign_id'));
+    const preview = await buildBufferPublishPreview(req, campaignId);
+    return sendOk(res, 200, preview, { preview }), true;
   }
 
   if (pathname === '/api/engage/social/posts' && requestMethod === 'POST') {
