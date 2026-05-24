@@ -203,6 +203,7 @@ App.els = {
   assetMultiUploadFiles: document.getElementById('assetMultiUploadFiles'),
   assetMultiUploadType: document.getElementById('assetMultiUploadType'),
   assetMultiUploadCategory: document.getElementById('assetMultiUploadCategory'),
+  assetMultiUploadAspect: document.getElementById('assetMultiUploadAspect'),
   assetDriveFolderImportForm: document.getElementById('assetDriveFolderImportForm'),
   assetDriveFolderUrl: document.getElementById('assetDriveFolderUrl'),
   assetDriveFolderCategory: document.getElementById('assetDriveFolderCategory'),
@@ -705,6 +706,25 @@ App.api = async function api(path, options = {}) {
 // Shared utility functions
 // ---------------------------------------------------------------------------
 
+App.byId = function byId(id) {
+  return document.getElementById(String(id || '').trim());
+};
+
+App.on = function on(id, eventName, handler) {
+  const el = App.byId(id);
+  if (el && typeof handler === 'function') {
+    el.addEventListener(eventName, handler);
+  }
+};
+
+App.safeText = function safeText(value) {
+  return String(value == null ? '' : value).trim();
+};
+
+App.empty = function empty(el) {
+  if (el) el.innerHTML = '';
+};
+
 App.parseJsonInput = function parseJsonInput(raw, fallback) {
   try { return JSON.parse(raw || ''); } catch { return fallback; }
 };
@@ -872,6 +892,31 @@ App.makeIconButton = function makeIconButton(iconKey, label, onClick, options = 
 
   if (typeof onClick === 'function') btn.addEventListener('click', onClick);
   return btn;
+};
+
+/** Wrap table action icon buttons in a single non-wrapping row inside an actions cell. */
+App.appendTableActions = function appendTableActions(cell, buttons) {
+  const host = cell && typeof cell.appendChild === 'function' ? cell : null;
+  if (!host) return null;
+  const list = (Array.isArray(buttons) ? buttons : []).filter(Boolean);
+  let row = host.querySelector(':scope > .table-actions-row');
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'table-actions-row';
+    row.setAttribute('role', 'group');
+    host.appendChild(row);
+  }
+  list.forEach((btn) => row.appendChild(btn));
+  return row;
+};
+
+/** Standard actions <td>: adds .actions-col and a monolithic .table-actions-row. */
+App.finishTableActionsCell = function finishTableActionsCell(cell, ...buttons) {
+  const td = cell && typeof cell.appendChild === 'function' ? cell : null;
+  if (!td) return null;
+  td.classList.add('actions-col');
+  App.appendTableActions(td, buttons.filter(Boolean));
+  return td;
 };
 
 App.iconButtonMarkup = function iconButtonMarkup(iconKey, label, className = '') {

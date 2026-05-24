@@ -572,6 +572,7 @@ async function handle(req, res, pathname, method) {
         assetName: String(body.assetName || body.asset_name || fileName).trim(),
         category: String(body.category || '').trim(),
         tags: Array.isArray(body.tags) ? body.tags : [],
+        aspect: String(body.aspect || '').trim(),
       },
       scope
     );
@@ -596,6 +597,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const files = Array.isArray(body.files) ? body.files : [];
     const category = String(body.category || '').trim();
+    const aspect = String(body.aspect || '').trim();
     const sharedTags = Array.isArray(body.tags) ? body.tags : [];
 
     if (!files.length) {
@@ -635,7 +637,7 @@ async function handle(req, res, pathname, method) {
       }
 
       const imported = await importImageAssetWithThumbnail(
-        { fileName, mimeType, fileBase64, assetName, category, tags },
+        { fileName, mimeType, fileBase64, assetName, category, tags, aspect },
         scope
       );
 
@@ -779,7 +781,7 @@ async function handle(req, res, pathname, method) {
     }
     if (!category) return sendErr(res, 400, 'category is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const result = await createAssetCategory({ assetType, category }, scope);
+    const result = await createAssetCategory({ assetType, category, ...body }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToAssetCategory(created), { category: rowToAssetCategory(created) }), true;

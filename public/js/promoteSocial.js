@@ -2,8 +2,20 @@ window.App = window.App || {};
 
 App.promoteSocial = (function () {
   const { api, notify, state } = App;
-  const TWEET_LIMIT = 280;
+  const SOCIAL_TEXT_LIMIT = 280;
   const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
+  const CAPTION_PLACEHOLDER_PATTERNS = [
+    /^tweet(?:\s*\(.+\))?$/i,
+    /^post(?:\s*\(.+\))?$/i,
+    /^caption(?:\s*\(.+\))?$/i,
+    /^tagline(?:\s*\(.+\))?$/i,
+    /^cta(?:\s*\(.+\))?$/i,
+    /^hashtags?(?:\s*\(.+\))?$/i,
+    /^wyr\s+question(?:\s*\(.+\))?$/i,
+    /^would\s+you\s+rather\s+question(?:\s*\(.+\))?$/i,
+    /^primary\s+(?:image|video)(?:\s*\(.+\))?$/i,
+    /^(?:image|video)(?:\s*\(.+\))?$/i,
+  ];
 
   let campaigns = [];
   let posts = [];
@@ -16,6 +28,12 @@ App.promoteSocial = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
+  }
+
+  function captionText(value) {
+    const text = safeText(value);
+    if (!text) return '';
+    return CAPTION_PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(text)) ? '' : text;
   }
 
   async function promoteSocialApi(path, options) {
@@ -138,18 +156,19 @@ App.promoteSocial = (function () {
     if (!activeProject && state.currentProject?.id) activeProject = state.currentProject;
   }
 
-  function buildTweet(campaign) {
+  function buildSocialText(campaign) {
     const config = parseConfig(campaign);
     const hidden = new Set(Array.isArray(config.hiddenContentFieldIds) ? config.hiddenContentFieldIds : []);
     const baseParts = [
-      hidden.has('campaignTweetSelect') ? '' : safeText(config.tweetLabel || campaign?.subject),
-      hidden.has('campaignTaglineSelect') ? '' : safeText(config.taglineLabel),
+      hidden.has('campaignTweetSelect') ? '' : captionText(config.tweetLabel),
+      hidden.has('campaignTaglineSelect') ? '' : captionText(config.taglineLabel),
     ].filter(Boolean);
-    const ctaText = hidden.has('campaignCtaSelect') ? '' : appendCtaUrl(config.ctaLabel);
+    const ctaText = hidden.has('campaignCtaSelect') ? '' : appendCtaUrl(captionText(config.ctaLabel));
     const shareUrl = campaignProjectUrl();
+    const hashtagSource = captionText(config.hashtagsText || config.hashtagGroupLabel);
     const originalHashtags = hidden.has('campaignHashtagGroupSelect')
       ? []
-      : safeText(config.hashtagsText || config.hashtagGroupLabel).split(/\s+/).filter(Boolean);
+      : hashtagSource.split(/\s+/).filter(Boolean);
     let hashtags = originalHashtags.slice();
     let includeCta = !!ctaText;
     let includeLink = Boolean(shareUrl);
@@ -164,25 +183,25 @@ App.promoteSocial = (function () {
     };
 
     let text = compose();
-    while (hashtags.length && characterCount(text) > TWEET_LIMIT) {
+    while (hashtags.length && characterCount(text) > SOCIAL_TEXT_LIMIT) {
       hashtags = hashtags.slice(0, -1);
       text = compose();
     }
-    if (includeCta && characterCount(text) > TWEET_LIMIT) {
+    if (includeCta && characterCount(text) > SOCIAL_TEXT_LIMIT) {
       includeCta = false;
       text = compose();
     }
-    if (includeLink && characterCount(text) > TWEET_LIMIT) {
+    if (includeLink && characterCount(text) > SOCIAL_TEXT_LIMIT) {
       includeLink = false;
       text = compose();
     }
-    const urlMissingFromTweet = Boolean(shareUrl) && !text.includes(shareUrl);
+    const urlMissingFromText = Boolean(shareUrl) && !text.includes(shareUrl);
     return {
       text,
       count: characterCount(text),
       config,
       shareUrl,
-      urlMissingFromTweet,
+      urlMissingFromText,
     };
   }
 
@@ -202,6 +221,87 @@ App.promoteSocial = (function () {
     if (value === 'publishing') return 'status-social-publishing';
     if (value === 'queued') return 'status-social-queued';
     return 'status-social-scheduled';
+  }
+
+  function formatDiagnosticsText(diag) {
+    if (!diag || typeof diag !== 'object') return '';
+    const parts = [];
+    if (diag.publishMode) parts.push(`mode: ${diag.publishMode}`);
+    if (diag.credentialSources) {
+      const src = Object.entries(diag.credentialSources).map(([k, v]) => `${k}=${v}`).join(', ');
+      if (src) parts.push(`creds: ${src}`);
+    }
+    if (diag.cronCredentialSources) {
+      const src = Object.entries(diag.cronCredentialSources).map(([k, v]) => `${k}=${v}`).join(', ');
+      if (src) parts.push(`cron creds: ${src}`);
+    }
+    if (diag.mediaUpload?.error) parts.push(`media: ${diag.mediaUpload.error}`);
+    if (safeText(diag.videoUrl)) parts.push(`video: ${diag.videoUrl}`);
+    if (safeText(diag.primaryVideoId)) parts.push(`asset: ${diag.primaryVideoId}`);
+    if (diag.videoStaging && typeof diag.videoStaging === 'object') {
+      const staged = safeText(diag.videoStaging.stagedUrl || diag.videoStaging.error);
+      if (staged) parts.push(`staging: ${staged}`);
+    }
+    return parts.join('\n');
+  }
+
+  function buildPostFailureReport(post) {
+    const lines = [];
+    const err = safeText(post?.error);
+    if (err) lines.push(err);
+    const diagText = formatDiagnosticsText(post?.diagnostics);
+    if (diagText) {
+      if (lines.length) lines.push('');
+      lines.push('Diagnostics:');
+      lines.push(diagText);
+    }
+    if (!lines.length) return 'No error details were recorded for this post.';
+    return lines.join('\n');
+  }
+
+  function openPostFailureModal(post) {
+    const modal = el('promoteSocialPostFailureModal');
+    const meta = el('promoteSocialPostFailureMeta');
+    const body = el('promoteSocialPostFailureBody');
+    if (!modal || !body) return;
+    const platform = safeText(post?.channel).toUpperCase() || 'X';
+    const scheduled = formatDate(post?.scheduledFor || post?.createdAt);
+    if (meta) {
+      meta.textContent = `${platform} · Scheduled ${scheduled}`;
+    }
+    body.textContent = buildPostFailureReport(post);
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+
+  function closePostFailureModal() {
+    const modal = el('promoteSocialPostFailureModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+
+  function renderPostStatusCell(post) {
+    const statusTd = document.createElement('td');
+    statusTd.className = 'promote-social-post-status-cell';
+    const status = safeText(post?.status).toLowerCase() || 'scheduled';
+
+    if (status === 'failed') {
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'status-pill status-social-failed promote-social-status-failed-link';
+      link.textContent = 'Failed';
+      link.setAttribute('aria-label', 'View failure details');
+      link.addEventListener('click', () => openPostFailureModal(post));
+      statusTd.appendChild(link);
+      return statusTd;
+    }
+
+    const pill = document.createElement('span');
+    pill.className = `status-pill ${statusClass(post.status)}`;
+    pill.textContent = safeText(post.status) || 'scheduled';
+    statusTd.appendChild(pill);
+    return statusTd;
   }
 
   // --- Test Connection diagnostics ---
@@ -521,45 +621,7 @@ App.promoteSocial = (function () {
       platformTd.textContent = safeText(post.channel).toUpperCase() || 'X';
       tr.appendChild(platformTd);
 
-      const statusTd = document.createElement('td');
-      const pill = document.createElement('span');
-      pill.className = `status-pill ${statusClass(post.status)}`;
-      pill.textContent = safeText(post.status) || 'scheduled';
-      statusTd.appendChild(pill);
-      if (post.error) {
-        const err = document.createElement('div');
-        err.className = 'meta';
-        err.style.marginTop = '6px';
-        err.style.color = '#c0392b';
-        err.textContent = post.error;
-        statusTd.appendChild(err);
-      }
-      const diag = post.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : null;
-      if (diag && (diag.publishMode || diag.credentialSources || diag.cronCredentialSources)) {
-        const meta = document.createElement('div');
-        meta.className = 'meta';
-        meta.style.marginTop = '6px';
-        const parts = [];
-        if (diag.publishMode) parts.push(`mode: ${diag.publishMode}`);
-        if (diag.credentialSources) {
-          const src = Object.entries(diag.credentialSources).map(([k, v]) => `${k}=${v}`).join(', ');
-          if (src) parts.push(`creds: ${src}`);
-        }
-        if (diag.cronCredentialSources) {
-          const src = Object.entries(diag.cronCredentialSources).map(([k, v]) => `${k}=${v}`).join(', ');
-          if (src) parts.push(`cron creds: ${src}`);
-        }
-        if (diag.mediaUpload?.error) parts.push(`media: ${diag.mediaUpload.error}`);
-        if (safeText(diag.videoUrl)) parts.push(`video: ${diag.videoUrl}`);
-        if (safeText(diag.primaryVideoId)) parts.push(`asset: ${diag.primaryVideoId}`);
-        if (diag.videoStaging && typeof diag.videoStaging === 'object') {
-          const staged = safeText(diag.videoStaging.stagedUrl || diag.videoStaging.error);
-          if (staged) parts.push(`staging: ${staged}`);
-        }
-        meta.textContent = parts.join(' · ');
-        statusTd.appendChild(meta);
-      }
-      tr.appendChild(statusTd);
+      tr.appendChild(renderPostStatusCell(post));
 
       const scheduledTd = document.createElement('td');
       scheduledTd.textContent = formatDate(post.scheduledFor || post.createdAt);
@@ -597,14 +659,13 @@ App.promoteSocial = (function () {
       tr.appendChild(remoteTd);
 
       const actionsTd = document.createElement('td');
-      actionsTd.style.whiteSpace = 'nowrap';
+      actionsTd.classList.add('promote-social-posts-actions-cell');
       const canPublish = post.status !== 'published' && post.status !== 'publishing';
+      const actionButtons = [];
 
       if (canPublish) {
-        // For failed posts, label it "Retry"; otherwise "Publish Now"
         const label = post.status === 'failed' ? 'Retry' : 'Publish Now';
-        const iconKey = post.status === 'failed' ? 'publish' : 'publish';
-        const publishBtn = App.makeIconButton(iconKey, label, async function () {
+        actionButtons.push(App.makeIconButton('publish', label, async function () {
           try {
             await promoteSocialApi(`/api/promote/social/posts/${encodeURIComponent(post.id)}/publish`, { method: 'POST' });
             notify(post.status === 'failed' ? 'Retrying post...' : 'Social post published');
@@ -613,11 +674,20 @@ App.promoteSocial = (function () {
             notify(err.message, true);
             await refresh();
           }
-        }, { primary: true });
-        actionsTd.appendChild(publishBtn);
+        }, { primary: true }));
       }
 
-      const deleteBtn = App.makeIconButton('delete', 'Delete Post', async function () {
+      actionButtons.push(App.makeIconButton('clone', 'Clone', async function () {
+        try {
+          await promoteSocialApi(`/api/promote/social/posts/${encodeURIComponent(post.id)}/clone`, { method: 'POST' });
+          notify('Social post cloned');
+          await refresh();
+        } catch (err) {
+          notify(err.message, true);
+        }
+      }));
+
+      actionButtons.push(App.makeIconButton('delete', 'Delete', async function () {
         if (!confirm('Delete this social post?')) return;
         try {
           await promoteSocialApi(`/api/promote/social/posts/${encodeURIComponent(post.id)}`, { method: 'DELETE' });
@@ -626,8 +696,9 @@ App.promoteSocial = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(deleteBtn);
+      }, { danger: true }));
+
+      App.finishTableActionsCell(actionsTd, ...actionButtons);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -637,13 +708,13 @@ App.promoteSocial = (function () {
 
   async function queueCampaignPost(campaign, options) {
     await ensurePromoteSocialProjectContext();
-    const preview = buildTweet(campaign);
+    const preview = buildSocialText(campaign);
     const text = safeText(preview.text);
     if (!text) throw new Error('No post content could be assembled from this campaign.');
-    if (preview.urlMissingFromTweet) {
-      throw new Error('Tweet is over the X limit and the project URL could not be kept. Shorten tweet, tagline, CTA, or hashtags — or use a shorter Website URL on the project or profile.');
+    if (preview.urlMissingFromText) {
+      throw new Error('Post text is over the current limit and the project URL could not be kept. Shorten copy, tagline, CTA, or hashtags, or use a shorter Website URL on the project or profile.');
     }
-    if (characterCount(text) > TWEET_LIMIT) throw new Error(`Tweet is ${characterCount(text) - TWEET_LIMIT} characters over the X limit.`);
+    if (characterCount(text) > SOCIAL_TEXT_LIMIT) throw new Error(`Post text is ${characterCount(text) - SOCIAL_TEXT_LIMIT} characters over the current limit.`);
     const config = preview.config;
     const publishNow = !!options?.publishNow;
     const delivery = socialDeliveryForCampaign(campaign, config);
@@ -815,6 +886,15 @@ App.promoteSocial = (function () {
         if (typeof App.settings?.openApiSettingsForm === 'function') {
           App.settings.openApiSettingsForm('x', {}, 'Add API: X');
         }
+      });
+    }
+
+    const failureModal = el('promoteSocialPostFailureModal');
+    const failureCloseBtn = el('promoteSocialPostFailureCloseBtn');
+    if (failureCloseBtn) failureCloseBtn.addEventListener('click', closePostFailureModal);
+    if (failureModal) {
+      failureModal.addEventListener('click', (e) => {
+        if (e.target === failureModal) closePostFailureModal();
       });
     }
 

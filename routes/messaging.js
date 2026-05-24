@@ -7,6 +7,7 @@ const {
   updateMessagingHeadline,
   deleteMessagingHeadline
 } = require('../lib/messagingHeadlinesStore');
+const { importMessagingFormatRows } = require('../lib/messagingImportService');
 const {
   listMessagingSubheadings,
   createMessagingSubheading,
@@ -132,6 +133,8 @@ const {
 const { generateMessagingContentSuggestions, generateMessagingTopicSuggestions, prepareMessagingContentPrompt } = require('../lib/messagingContentSuggestions');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 
+const FORMAT_IMPORT_PATH_RE = /^\/api\/messaging\/([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*)\/import\/?$/;
+
 function isValidHttpUrl(value) {
   const text = String(value || '').trim();
   if (!text) return true;
@@ -141,6 +144,37 @@ function isValidHttpUrl(value) {
   } catch {
     return false;
   }
+}
+
+function isMessagingFormatImportPath(pathname) {
+  return FORMAT_IMPORT_PATH_RE.test(String(pathname || '').trim());
+}
+
+async function handleFormatImport(req, res, pathname, requestMethod) {
+  const formatImportMatch = String(pathname || '').match(FORMAT_IMPORT_PATH_RE);
+  if (!formatImportMatch || requestMethod !== 'POST') return false;
+
+  const scope = requestProjectScope(req);
+  if (!String(scope?.projectId || '').trim()) {
+    sendErr(res, 400, 'Select a project before importing', { code: 'PROJECT_REQUIRED' });
+    return true;
+  }
+
+  const slug = decodeURIComponent(formatImportMatch[1] || '').trim().toLowerCase();
+  const body = await parseJsonBody(req);
+  const rows = Array.isArray(body.rows) ? body.rows : [];
+  if (!rows.length) {
+    sendErr(res, 400, 'No data to import', { code: 'VALIDATION_ERROR' });
+    return true;
+  }
+
+  const result = await importMessagingFormatRows(slug, rows, scope);
+  if (!result.ok) {
+    sendErr(res, result.status || 400, result.error, { code: 'VALIDATION_ERROR' });
+    return true;
+  }
+  sendOk(res, 201, result, { count: result.imported, imported: result.imported, errors: result.errors });
+  return true;
 }
 
 async function handleSimpleTextResource(req, res, pathname, requestMethod, options) {
@@ -220,6 +254,8 @@ async function handleSimpleTextResource(req, res, pathname, requestMethod, optio
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
+
+  if (await handleFormatImport(req, res, pathname, requestMethod)) return true;
 
   if (pathname === '/api/messaging/content-suggestions' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
@@ -983,4 +1019,9 @@ const manifest = {
   prefixes: ['/api/messaging'],
 };
 
-module.exports = { handle, manifest };
+module.exports = {
+  handle,
+  handleFormatImport,
+  isMessagingFormatImportPath,
+  manifest,
+};
