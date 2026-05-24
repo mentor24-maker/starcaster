@@ -2,7 +2,7 @@ window.App = window.App || {};
 
 App.campaigns = (function () {
   const { state, els, api, notify } = App;
-  const CHANNEL_RULES_STORAGE_KEY = 'campaignChannelRules.v1';
+  const CHANNEL_RULES_STORAGE_KEY = 'campaignChannelRules.v2';
   const TWEET_CHARACTER_LIMIT = 280;
   const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
   const CAMPAIGN_STATUSES = [
@@ -46,8 +46,39 @@ App.campaigns = (function () {
     { id: 'campaignHashtagGroupSelect', label: 'Hashtags' },
     { id: 'campaignLeadMagnetSelect', label: 'PDF' },
   ];
+  const CAMPAIGN_CONTENT_COMBOBOX_SELECT_IDS = CONTENT_RULE_FIELDS
+    .map((field) => field.id)
+    .filter((id) => id !== 'campaignHashtagGroupSelect');
+  const SOCIAL_CONTENT_TEMPLATE_FIELDS = [
+    'campaignTweetSelect',
+    'campaignCtaSelect',
+    'campaignHashtagGroupSelect',
+    'campaignPrimaryImageSelect',
+    'campaignPrimaryVideoSelect',
+  ];
+  const CAMPAIGN_CONTENT_TEMPLATES = {
+    default: {
+      hint: 'Social campaigns use short copy, a CTA, hashtags, and primary image and video by default.',
+      visibleMechanics: ['campaignSegmentSelect'],
+      requiredMechanics: [],
+      visibleContent: SOCIAL_CONTENT_TEMPLATE_FIELDS,
+    },
+    x: {
+      hint: 'X campaigns use short copy, a CTA, hashtags, and primary image and video by default.',
+      visibleMechanics: ['campaignSegmentSelect'],
+      requiredMechanics: [],
+      visibleContent: SOCIAL_CONTENT_TEMPLATE_FIELDS,
+    },
+    tiktok: {
+      hint: 'TikTok campaigns require a primary video and use short caption copy, a CTA, and hashtags.',
+      visibleMechanics: ['campaignSegmentSelect'],
+      requiredMechanics: [],
+      visibleContent: SOCIAL_CONTENT_TEMPLATE_FIELDS,
+    },
+  };
 
   let builderTweets = [];
+  const campaignContentComboboxRegistry = new Map();
   let builderHashtags = [];
   let builderEmails = [];
   let builderEmailTemplates = [];
@@ -147,7 +178,9 @@ App.campaigns = (function () {
     );
     document.querySelectorAll('#campaignContentConditional .campaign-content-row').forEach((row) => {
       const fieldId = safeText(row?.dataset?.fieldId);
-      row.classList.toggle('user-hidden', hiddenCampaignContentFieldIds.has(fieldId));
+      const isHidden = hiddenCampaignContentFieldIds.has(fieldId);
+      row.classList.toggle('user-hidden', isHidden);
+      row.style.display = (row.dataset.channelVisible !== '0' && !isHidden) ? '' : 'none';
     });
     updateAddContentBtnVisibility();
   }
@@ -199,7 +232,9 @@ App.campaigns = (function () {
   }
 
   function assetPreviewUrl(asset) {
-    const location = safeText(asset?.location);
+    const location = safeText(
+      asset?.thumbnailLocation || asset?.thumbnailUrl || asset?.thumbnail_location || asset?.location
+    );
     if (!location) return '';
     const driveId = extractDriveId(location);
     if (driveId) return `/api/assets/drive-file/${encodeURIComponent(driveId)}`;
@@ -208,6 +243,11 @@ App.campaigns = (function () {
       if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return location;
     } catch {}
     return '';
+  }
+
+  function selectedCampaignTweetRow() {
+    if (!contentFieldIsActive('campaignTweetSelect')) return null;
+    return findById(builderTweets, byId('campaignTweetSelect')?.value);
   }
 
   function parseCampaignConfig(campaign) {
@@ -243,6 +283,299 @@ App.campaigns = (function () {
     }
   }
 
+  function isCampaignContentCombobox(selectId) {
+    return CAMPAIGN_CONTENT_COMBOBOX_SELECT_IDS.includes(selectId);
+  }
+
+  function campaignComboboxSearchId(selectId) {
+    return String(selectId).replace(/Select$/, 'Search');
+  }
+
+  function campaignComboboxListboxId(selectId) {
+    return String(selectId).replace(/Select$/, 'Listbox');
+  }
+
+  function getCampaignComboboxState(selectId) {
+    if (!campaignContentComboboxRegistry.has(selectId)) {
+      campaignContentComboboxRegistry.set(selectId, {
+        options: [],
+        emptyHint: '',
+        activeIndex: -1,
+        blurTimer: 0,
+        wired: false,
+      });
+    }
+    return campaignContentComboboxRegistry.get(selectId);
+  }
+
+  function normalizeComboboxOptions(options) {
+    return (Array.isArray(options) ? options : []).map((item) => {
+      const label = safeText(item.label);
+      const searchText = safeText(item.searchText) || label;
+      return {
+        value: item.value,
+        label: label || String(item.value),
+        searchText,
+      };
+    });
+  }
+
+  function comboboxOptionsFromTextRows(rows, textField, fallbackPrefix, labelMax = 100) {
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+      const searchText = safeText(row?.[textField]);
+      const label = optionLabelFromText(searchText, `${fallbackPrefix} ${row?.id || ''}`);
+      const shortLabel = label.length > labelMax ? `${label.slice(0, labelMax - 3)}...` : label;
+      return {
+        value: row.id,
+        label: shortLabel,
+        searchText: searchText || shortLabel,
+      };
+    });
+  }
+
+  function comboboxOptionsFromMappedRows(rows, mapFn) {
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+      const mapped = mapFn(row) || {};
+      const label = safeText(mapped.label);
+      const searchText = safeText(mapped.searchText) || label;
+      return {
+        value: row.id,
+        label: label || String(row.id),
+        searchText,
+      };
+    });
+  }
+
+  function syncCampaignComboboxSearchFromSelect(selectId) {
+    const select = byId(selectId);
+    const search = byId(campaignComboboxSearchId(selectId));
+    if (!select || !search) return;
+    const value = safeText(select.value);
+    if (!value) {
+      search.value = '';
+      return;
+    }
+    const state = getCampaignComboboxState(selectId);
+    const match = state.options.find((item) => String(item.value) === value);
+    search.value = match?.searchText || selectedOptionText(select);
+  }
+
+  function setCampaignComboboxExpanded(selectId, isOpen) {
+    const search = byId(campaignComboboxSearchId(selectId));
+    const listbox = byId(campaignComboboxListboxId(selectId));
+    if (search) search.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    if (listbox) listbox.classList.toggle('hidden', !isOpen);
+  }
+
+  function closeCampaignComboboxList(selectId) {
+    const state = getCampaignComboboxState(selectId);
+    state.activeIndex = -1;
+    setCampaignComboboxExpanded(selectId, false);
+  }
+
+  function openCampaignComboboxList(selectId) {
+    setCampaignComboboxExpanded(selectId, true);
+  }
+
+  function visibleCampaignComboboxMatches(selectId) {
+    const search = byId(campaignComboboxSearchId(selectId));
+    const state = getCampaignComboboxState(selectId);
+    const query = safeText(search?.value).toLowerCase();
+    if (!state.options.length) return [];
+    return state.options.filter((item) => {
+      if (!query) return true;
+      const haystack = `${item.searchText} ${item.label}`.toLowerCase();
+      return haystack.includes(query);
+    }).slice(0, 80);
+  }
+
+  function renderCampaignComboboxList(selectId) {
+    const listbox = byId(campaignComboboxListboxId(selectId));
+    const state = getCampaignComboboxState(selectId);
+    if (!listbox) return;
+    listbox.innerHTML = '';
+    const matches = visibleCampaignComboboxMatches(selectId);
+
+    if (!state.options.length) {
+      const empty = document.createElement('div');
+      empty.className = 'campaign-combobox-empty';
+      empty.textContent = state.emptyHint || 'No options available';
+      listbox.appendChild(empty);
+      state.activeIndex = -1;
+      return;
+    }
+
+    if (!matches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'campaign-combobox-empty';
+      empty.textContent = 'No matching options';
+      listbox.appendChild(empty);
+      state.activeIndex = -1;
+      return;
+    }
+
+    if (state.activeIndex >= matches.length) {
+      state.activeIndex = matches.length - 1;
+    }
+
+    matches.forEach((item, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'campaign-combobox-option';
+      if (index === state.activeIndex) btn.classList.add('is-active');
+      btn.dataset.comboboxValue = String(item.value);
+      btn.setAttribute('role', 'option');
+      btn.textContent = item.label;
+      listbox.appendChild(btn);
+    });
+  }
+
+  function setCampaignComboboxSelection(selectId, value, options = {}) {
+    const select = byId(selectId);
+    const search = byId(campaignComboboxSearchId(selectId));
+    if (!select) return;
+    const desired = safeText(value);
+    if (!desired) {
+      select.value = '';
+      if (search && options.clearSearch !== false) search.value = '';
+    } else if (Array.from(select.options).some((option) => String(option.value) === desired)) {
+      select.value = desired;
+      syncCampaignComboboxSearchFromSelect(selectId);
+    }
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    if (options.renderPreview !== false) renderCampaignLivePreview();
+    updateCampaignFieldGlows();
+  }
+
+  function reconcileCampaignComboboxSearchOnBlur(selectId) {
+    const select = byId(selectId);
+    const search = byId(campaignComboboxSearchId(selectId));
+    const state = getCampaignComboboxState(selectId);
+    if (!select || !search) return;
+    const query = safeText(search.value);
+    if (!query) {
+      if (safeText(select.value)) setCampaignComboboxSelection(selectId, '', { renderPreview: false });
+      return;
+    }
+    if (safeText(select.value)) {
+      const selected = state.options.find((item) => String(item.value) === safeText(select.value));
+      if (selected && (query === selected.searchText || query === selected.label)) return;
+    }
+    const exact = state.options.find((item) => (
+      item.searchText.toLowerCase() === query.toLowerCase()
+      || item.label.toLowerCase() === query.toLowerCase()
+    ));
+    if (exact) {
+      setCampaignComboboxSelection(selectId, exact.value, { renderPreview: false });
+      return;
+    }
+    const matches = visibleCampaignComboboxMatches(selectId);
+    if (matches.length === 1) {
+      setCampaignComboboxSelection(selectId, matches[0].value, { renderPreview: false });
+      return;
+    }
+    if (safeText(select.value)) setCampaignComboboxSelection(selectId, '', { renderPreview: false });
+  }
+
+  function setCampaignContentComboboxOptions(selectId, options, emptyHint, currentValue) {
+    const select = byId(selectId);
+    const state = getCampaignComboboxState(selectId);
+    state.options = normalizeComboboxOptions(options);
+    state.emptyHint = safeText(emptyHint);
+    setSelectOptions(select, state.options, '', currentValue);
+    syncCampaignComboboxSearchFromSelect(selectId);
+    renderCampaignComboboxList(selectId);
+  }
+
+  function wireCampaignContentCombobox(selectId) {
+    const state = getCampaignComboboxState(selectId);
+    if (state.wired) return;
+    const search = byId(campaignComboboxSearchId(selectId));
+    const listbox = byId(campaignComboboxListboxId(selectId));
+    const select = byId(selectId);
+    if (!search || !listbox || !select) return;
+    state.wired = true;
+
+    search.addEventListener('input', () => {
+      const selected = state.options.find((item) => String(item.value) === safeText(select.value));
+      const selectedText = selected?.searchText || selected?.label || '';
+      if (safeText(search.value) !== safeText(selectedText)) {
+        select.value = '';
+      }
+      state.activeIndex = -1;
+      renderCampaignComboboxList(selectId);
+      openCampaignComboboxList(selectId);
+      renderCampaignLivePreview();
+      updateCampaignFieldGlows();
+    });
+
+    search.addEventListener('focus', () => {
+      renderCampaignComboboxList(selectId);
+      openCampaignComboboxList(selectId);
+    });
+
+    search.addEventListener('keydown', (event) => {
+      const matches = visibleCampaignComboboxMatches(selectId);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeCampaignComboboxList(selectId);
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!matches.length) return;
+        state.activeIndex = Math.min(matches.length - 1, state.activeIndex + 1);
+        renderCampaignComboboxList(selectId);
+        openCampaignComboboxList(selectId);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (!matches.length) return;
+        state.activeIndex = Math.max(0, state.activeIndex - 1);
+        renderCampaignComboboxList(selectId);
+        openCampaignComboboxList(selectId);
+        return;
+      }
+      if (event.key === 'Enter') {
+        if (!matches.length || state.activeIndex < 0) return;
+        event.preventDefault();
+        const choice = matches[state.activeIndex];
+        if (!choice) return;
+        setCampaignComboboxSelection(selectId, choice.value);
+        closeCampaignComboboxList(selectId);
+      }
+    });
+
+    search.addEventListener('blur', () => {
+      window.clearTimeout(state.blurTimer);
+      state.blurTimer = window.setTimeout(() => {
+        closeCampaignComboboxList(selectId);
+        reconcileCampaignComboboxSearchOnBlur(selectId);
+        renderCampaignLivePreview();
+      }, 160);
+    });
+
+    listbox.addEventListener('mousedown', (event) => {
+      const option = event.target.closest('[data-combobox-value]');
+      if (!option) return;
+      event.preventDefault();
+      setCampaignComboboxSelection(selectId, option.dataset.comboboxValue || '');
+      closeCampaignComboboxList(selectId);
+    });
+
+    select.addEventListener('change', () => {
+      syncCampaignComboboxSearchFromSelect(selectId);
+      updateCampaignFieldGlows();
+    });
+  }
+
+  function initCampaignContentComboboxes() {
+    CAMPAIGN_CONTENT_COMBOBOX_SELECT_IDS.forEach((selectId) => {
+      wireCampaignContentCombobox(selectId);
+    });
+  }
+
   function hashtagText(row) {
     return safeText(row?.hashtag || row?.tag || row?.text || row?.label || row?.name || row?.content);
   }
@@ -254,7 +587,10 @@ App.campaigns = (function () {
   function findById(rows, id) {
     const desired = safeText(id);
     if (!desired) return null;
-    return (Array.isArray(rows) ? rows : []).find((row) => safeText(row?.id) === desired) || null;
+    return (Array.isArray(rows) ? rows : []).find((row) => {
+      const rowId = safeText(row?.id);
+      return rowId === desired || String(row?.id) === desired;
+    }) || null;
   }
 
   function contentFieldIsActive(id) {
@@ -451,6 +787,7 @@ App.campaigns = (function () {
           onClick: () => {
             setSelectedCampaignHashtagIds([]);
             updateCampaignFieldGlows();
+            renderCampaignLivePreview();
             modal.close();
           },
         },
@@ -461,6 +798,7 @@ App.campaigns = (function () {
           onClick: () => {
             setSelectedCampaignHashtagIds(Array.from(draftIds));
             updateCampaignFieldGlows();
+            renderCampaignLivePreview();
             modal.close();
           },
         },
@@ -477,9 +815,7 @@ App.campaigns = (function () {
   }
 
   function buildCampaignTweetPreview() {
-    const tweetRow = contentFieldIsActive('campaignTweetSelect')
-      ? findById(builderTweets, byId('campaignTweetSelect')?.value)
-      : null;
+    const tweetRow = selectedCampaignTweetRow();
     const taglineRow = contentFieldIsActive('campaignTaglineSelect')
       ? findById(builderTaglines, byId('campaignTaglineSelect')?.value)
       : null;
@@ -537,11 +873,122 @@ App.campaigns = (function () {
       const image = findById(state.assets, byId('campaignPrimaryImageSelect')?.value);
       if (image) return { type: 'image', asset: image, url: assetPreviewUrl(image) };
     }
+    const tweetRow = selectedCampaignTweetRow();
+    const tweetImageId = Number(tweetRow?.image_asset_id || 0) || 0;
+    if (tweetImageId) {
+      const tweetImage = findById(state.assets, tweetImageId);
+      const tweetImageUrl = assetPreviewUrl(tweetImage);
+      if (tweetImage && tweetImageUrl) {
+        return { type: 'image', asset: tweetImage, url: tweetImageUrl };
+      }
+    }
     if (contentFieldIsActive('campaignPrimaryVideoSelect')) {
       const video = findById(state.assets, byId('campaignPrimaryVideoSelect')?.value);
       if (video) return { type: 'video', asset: video, url: assetPreviewUrl(video) };
     }
     return null;
+  }
+
+  function selectedCampaignChannel() {
+    const channelId = safeText(byId('campaignChannelSelect')?.value);
+    const channels = Array.isArray(state.channels) ? state.channels : [];
+    return channels.find((channel) => String(channel.id) === channelId) || null;
+  }
+
+  function campaignPreviewAccountLabel(channel) {
+    return safeText(channel?.displayName || channel?.userName || channel?.handle || channel?.email || 'Starcaster');
+  }
+
+  function campaignPreviewHandle(channel) {
+    const account = safeText(channel?.userName || channel?.handle || channel?.displayName || channel?.email);
+    if (!account) return '@starcaster';
+    return account.startsWith('@') ? account : `@${account}`;
+  }
+
+  function createCampaignPreviewShell() {
+    const preview = buildCampaignTweetPreview();
+    const text = preview.text;
+    const media = buildCampaignPreviewAsset();
+    const channel = selectedCampaignChannel();
+    const accountLabel = campaignPreviewAccountLabel(channel);
+    const shell = document.createElement('div');
+    shell.className = 'campaign-preview-tweet-shell';
+
+    const header = document.createElement('div');
+    header.className = 'campaign-preview-tweet-header';
+    const avatar = document.createElement('div');
+    avatar.className = 'campaign-preview-tweet-avatar';
+    avatar.textContent = safeText(accountLabel).charAt(0).toUpperCase() || 'S';
+    const account = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'campaign-preview-tweet-name';
+    name.textContent = accountLabel;
+    const handle = document.createElement('div');
+    handle.className = 'campaign-preview-tweet-handle';
+    handle.textContent = campaignPreviewHandle(channel);
+    account.appendChild(name);
+    account.appendChild(handle);
+    header.appendChild(avatar);
+    header.appendChild(account);
+    shell.appendChild(header);
+
+    const textEl = document.createElement('div');
+    textEl.className = text ? 'campaign-preview-tweet-text' : 'campaign-preview-empty';
+    textEl.textContent = text || 'Choose tweet content, a CTA, hashtags, or media to preview this post.';
+    shell.appendChild(textEl);
+
+    if (media) {
+      const mediaWrap = document.createElement('div');
+      mediaWrap.className = 'campaign-preview-tweet-media';
+      if (media.type === 'image' && media.url) {
+        const img = document.createElement('img');
+        img.src = media.url;
+        img.alt = safeText(media.asset?.assetName) || 'Campaign image';
+        mediaWrap.appendChild(img);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'campaign-preview-tweet-media-placeholder';
+        placeholder.textContent = `${safeText(media.asset?.assetName) || 'Selected media'} will be attached.`;
+        mediaWrap.appendChild(placeholder);
+      }
+      shell.appendChild(mediaWrap);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'campaign-preview-tweet-meta';
+    meta.style.marginTop = '12px';
+    meta.textContent = `${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    shell.appendChild(meta);
+
+    const countEl = document.createElement('div');
+    countEl.className = `campaign-preview-tweet-count ${preview.delta < 0 ? 'is-over' : 'is-under'}`;
+    const statusText = preview.delta >= 0
+      ? `${preview.delta} under limit`
+      : `${Math.abs(preview.delta)} over limit`;
+    const trimNotes = [
+      preview.removedHashtagCount ? `${preview.removedHashtagCount} hashtag${preview.removedHashtagCount === 1 ? '' : 's'} removed` : '',
+      preview.ctaDropped ? 'CTA dropped' : '',
+      preview.urlMissingFromTweet ? 'Project URL not in post - shorten copy or use a shorter Website URL' : '',
+    ].filter(Boolean).join(' · ');
+    countEl.textContent = `${preview.count}/${preview.limit} characters · ${statusText}${trimNotes ? ` · ${trimNotes}` : ''}`;
+    shell.appendChild(countEl);
+
+    const footer = document.createElement('div');
+    footer.className = 'campaign-preview-tweet-footer';
+    ['Reply', 'Repost', 'Like', 'Share'].forEach((item) => {
+      const span = document.createElement('span');
+      span.textContent = item;
+      footer.appendChild(span);
+    });
+    shell.appendChild(footer);
+    return shell;
+  }
+
+  function renderCampaignLivePreview() {
+    const mount = byId('campaignLivePreview');
+    if (!mount) return;
+    mount.innerHTML = '';
+    mount.appendChild(createCampaignPreviewShell());
   }
 
   async function openCampaignPreview() {
@@ -554,80 +1001,7 @@ App.campaigns = (function () {
     const body = document.createElement('div');
 
     if (kind === 'tweet') {
-      const preview = buildCampaignTweetPreview();
-      const text = preview.text;
-      const media = buildCampaignPreviewAsset();
-      const shell = document.createElement('div');
-      shell.className = 'campaign-preview-tweet-shell';
-
-      const header = document.createElement('div');
-      header.className = 'campaign-preview-tweet-header';
-      const avatar = document.createElement('div');
-      avatar.className = 'campaign-preview-tweet-avatar';
-      avatar.textContent = 'S';
-      const account = document.createElement('div');
-      const name = document.createElement('div');
-      name.className = 'campaign-preview-tweet-name';
-      name.textContent = 'Starcaster';
-      const handle = document.createElement('div');
-      handle.className = 'campaign-preview-tweet-handle';
-      handle.textContent = '@starcaster';
-      account.appendChild(name);
-      account.appendChild(handle);
-      header.appendChild(avatar);
-      header.appendChild(account);
-      shell.appendChild(header);
-
-      const textEl = document.createElement('div');
-      textEl.className = text ? 'campaign-preview-tweet-text' : 'campaign-preview-empty';
-      textEl.textContent = text || 'Choose tweet content, a tagline, CTA, or hashtags to preview this post.';
-      shell.appendChild(textEl);
-
-      if (media) {
-        const mediaWrap = document.createElement('div');
-        mediaWrap.className = 'campaign-preview-tweet-media';
-        if (media.type === 'image' && media.url) {
-          const img = document.createElement('img');
-          img.src = media.url;
-          img.alt = safeText(media.asset?.assetName) || 'Campaign image';
-          mediaWrap.appendChild(img);
-        } else {
-          const placeholder = document.createElement('div');
-          placeholder.className = 'campaign-preview-tweet-media-placeholder';
-          placeholder.textContent = `${safeText(media.asset?.assetName) || 'Selected media'} will be attached.`;
-          mediaWrap.appendChild(placeholder);
-        }
-        shell.appendChild(mediaWrap);
-      }
-
-      const meta = document.createElement('div');
-      meta.className = 'campaign-preview-tweet-meta';
-      meta.style.marginTop = '12px';
-      meta.textContent = `${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
-      shell.appendChild(meta);
-
-      const countEl = document.createElement('div');
-      countEl.className = `campaign-preview-tweet-count ${preview.delta < 0 ? 'is-over' : 'is-under'}`;
-      const statusText = preview.delta >= 0
-        ? `${preview.delta} under limit`
-        : `${Math.abs(preview.delta)} over limit`;
-      const trimNotes = [
-        preview.removedHashtagCount ? `${preview.removedHashtagCount} hashtag${preview.removedHashtagCount === 1 ? '' : 's'} removed` : '',
-        preview.ctaDropped ? 'CTA dropped' : '',
-        preview.urlMissingFromTweet ? 'Project URL not in tweet — shorten copy or use a shorter Website URL' : '',
-      ].filter(Boolean).join(' · ');
-      countEl.textContent = `${preview.count}/${preview.limit} characters · ${statusText}${trimNotes ? ` · ${trimNotes}` : ''}`;
-      shell.appendChild(countEl);
-
-      const footer = document.createElement('div');
-      footer.className = 'campaign-preview-tweet-footer';
-      ['Reply', 'Repost', 'Like', 'Share'].forEach((item) => {
-        const span = document.createElement('span');
-        span.textContent = item;
-        footer.appendChild(span);
-      });
-      shell.appendChild(footer);
-      body.appendChild(shell);
+      body.appendChild(createCampaignPreviewShell());
     }
 
     const modal = App.components.Modal({
@@ -650,6 +1024,14 @@ App.campaigns = (function () {
     return safeText(platform || account || channel?.id);
   }
 
+  function channelPlatformKey(channel) {
+    const raw = safeText(channel?.channel || channel?.platform || channel?.name).toLowerCase();
+    if (!raw) return '';
+    if (raw === 'twitter' || raw === 'x' || raw.includes('twitter')) return 'x';
+    if (raw === 'tik tok' || raw === 'tiktok' || raw.includes('tik tok') || raw.includes('tiktok')) return 'tiktok';
+    return raw.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  }
+
   function optionLabelFromText(value, fallback) {
     const text = safeText(value);
     if (!text) return fallback || '-';
@@ -660,7 +1042,7 @@ App.campaigns = (function () {
     const desired = safeText(topicId);
     if (!desired) return '';
     const topic = builderTopics.find((item) => String(item.id) === desired);
-    return safeText(topic?.category);
+    return safeText(topic?.topic || topic?.category);
   }
 
   function filterRowsByTopic(rows, topicLabel, categoryField) {
@@ -678,15 +1060,18 @@ App.campaigns = (function () {
     const desiredId = safeText(topicId);
     if (desiredId && Array.from(select.options).some((option) => String(option.value) === desiredId)) {
       select.value = desiredId;
+      if (isCampaignContentCombobox(select.id)) syncCampaignComboboxSearchFromSelect(select.id);
       return;
     }
     const desiredLabel = safeText(topicLabel).toLowerCase();
     if (!desiredLabel) {
       select.value = '';
+      if (isCampaignContentCombobox(select.id)) syncCampaignComboboxSearchFromSelect(select.id);
       return;
     }
     const matching = Array.from(select.options).find((option) => safeText(option.textContent).toLowerCase() === desiredLabel);
     select.value = matching ? String(matching.value) : '';
+    if (isCampaignContentCombobox(select.id)) syncCampaignComboboxSearchFromSelect(select.id);
   }
 
   function setFieldVisible(id, visible) {
@@ -713,8 +1098,8 @@ App.campaigns = (function () {
   }
 
   function channelProfile(channel) {
-    const name = safeText(channel?.channel || channel?.name).toLowerCase();
-    if (!name) {
+    const platform = channelPlatformKey(channel);
+    if (!platform) {
       return {
         hint: 'Select a channel to load content fields.',
         visibleMechanics: [],
@@ -722,53 +1107,23 @@ App.campaigns = (function () {
         visibleContent: [],
       };
     }
-    if (name.includes('email')) {
-      return {
-        hint: '',
-        visibleMechanics: ['campaignEmailTemplateSelect', 'campaignLandingPageSelect', 'campaignSegmentSelect'],
-        requiredMechanics: [],
-        visibleContent: ['campaignHeadlineSelect', 'campaignEmailSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignLeadMagnetSelect'],
-      };
-    }
-    if (name === 'x' || name.includes('twitter')) {
-      return {
-        hint: 'X campaigns focus on short social copy, hashtags, and optional media.',
-        visibleMechanics: ['campaignSegmentSelect'],
-        requiredMechanics: [],
-        visibleContent: ['campaignTweetSelect', 'campaignTaglineSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect', 'campaignHashtagGroupSelect'],
-      };
-    }
-    if (name.includes('youtube')) {
-      return {
-        hint: 'YouTube campaigns can assemble titles, descriptions, transcripts, CTAs, and media.',
-        visibleMechanics: ['campaignLandingPageSelect', 'campaignSegmentSelect'],
-        requiredMechanics: [],
-        visibleContent: ['campaignHeadlineSelect', 'campaignDescriptionSelect', 'campaignTranscriptSelect', 'campaignCommentSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect'],
-      };
-    }
-    if (name.includes('substack') || name.includes('medium') || name.includes('patreon') || name.includes('blog')) {
-      return {
-        hint: 'Publishing channels can use long-form content plus supporting summary copy and calls to action.',
-        visibleMechanics: ['campaignLandingPageSelect', 'campaignSegmentSelect'],
-        requiredMechanics: [],
-        visibleContent: ['campaignHeadlineSelect', 'campaignArticleSelect', 'campaignReportSelect', 'campaignWhitePaperSelect', 'campaignEbookSelect', 'campaignDescriptionSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignLeadMagnetSelect'],
-      };
-    }
+    const template = CAMPAIGN_CONTENT_TEMPLATES[platform] || CAMPAIGN_CONTENT_TEMPLATES.default;
     return {
-      hint: 'Social campaigns can combine posts, supporting copy, hashtags, and media.',
-      visibleMechanics: ['campaignSegmentSelect'],
-      requiredMechanics: [],
-      visibleContent: ['campaignHeadlineSelect', 'campaignPostSelect', 'campaignDescriptionSelect', 'campaignTaglineSelect', 'campaignCtaSelect', 'campaignPrimaryImageSelect', 'campaignPrimaryVideoSelect', 'campaignHashtagGroupSelect'],
+      hint: template.hint,
+      visibleMechanics: template.visibleMechanics,
+      requiredMechanics: template.requiredMechanics,
+      visibleContent: template.visibleContent,
     };
   }
 
-  function applyCampaignChannelProfile(channelId) {
+  function applyCampaignChannelProfile(channelId, options = {}) {
+    if (options.resetUserHidden) resetCampaignContentRows();
     const mechanicsWrap = byId('campaignMechanicsConditional');
     const contentWrap = byId('campaignContentConditional');
     const hint = byId('campaignContentChannelHint');
     const channels = Array.isArray(state.channels) ? state.channels : [];
     const channel = channels.find((item) => String(item.id) === String(channelId || '')) || null;
-    const profile = channelProfile(channel);
+    const profile = mergeChannelProfile(channel);
     const mechanicIds = ['campaignEmailTemplateSelect', 'campaignThemeSelect', 'campaignLandingPageSelect', 'campaignSegmentSelect'];
     const contentIds = [
       'campaignTopicSelect',
@@ -980,10 +1335,13 @@ App.campaigns = (function () {
       currentValues.channelId
     );
 
-    setSelectOptions(
-      byId('campaignTopicSelect'),
-      builderTopics.map((topic) => ({ value: topic.id, label: safeText(topic.topic || topic.category) || `Topic ${topic.id}` })),
-      builderTopics.length ? 'Topics' : 'Topics (create in Messaging > Topics)',
+    setCampaignContentComboboxOptions(
+      'campaignTopicSelect',
+      comboboxOptionsFromMappedRows(builderTopics, (topic) => {
+        const label = safeText(topic.topic || topic.category) || `Topic ${topic.id}`;
+        return { label, searchText: label };
+      }),
+      builderTopics.length ? '' : 'Create topics in Messaging > Topics',
       currentValues.topicId
     );
 
@@ -1007,118 +1365,120 @@ App.campaigns = (function () {
       currentValues.emailTemplateId
     );
 
-    setSelectOptions(
-      byId('campaignEmailSelect'),
-      filteredEmails.map((email) => {
-        const body = safeText(email.email);
-        const label = body.length > 100 ? `${body.slice(0, 97)}...` : body;
-        return { value: email.id, label: label || `Email ${email.id}` };
-      }),
-      filteredEmails.length ? 'Email Body' : activeTopic ? 'Email Body (no matches for topic)' : 'Email Body (create in Messaging > Emails)',
+    setCampaignContentComboboxOptions(
+      'campaignEmailSelect',
+      comboboxOptionsFromTextRows(filteredEmails, 'email', 'Email'),
+      filteredEmails.length ? '' : activeTopic ? 'No emails for this topic' : 'Create emails in Messaging > Emails',
       currentValues.emailId
     );
 
-    setSelectOptions(
-      byId('campaignHeadlineSelect'),
-      filteredHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Headline ${item.id}`) })),
-      filteredHeadlines.length ? 'Headline' : activeTopic ? 'Headline (no matches for topic)' : 'Headline (create in Messaging > Headlines)',
+    setCampaignContentComboboxOptions(
+      'campaignHeadlineSelect',
+      comboboxOptionsFromTextRows(filteredHeadlines, 'headline', 'Headline'),
+      filteredHeadlines.length ? '' : activeTopic ? 'No headlines for this topic' : 'Create headlines in Messaging > Headlines',
       currentValues.headlineId
     );
 
-    setSelectOptions(
-      byId('campaignSubjectLineSelect'),
-      filteredHeadlines.map((item) => ({ value: item.id, label: optionLabelFromText(item.headline, `Subject ${item.id}`) })),
-      filteredHeadlines.length ? 'Subject Line' : activeTopic ? 'Subject Line (no matches for topic)' : 'Subject Line (use Headlines for now)',
+    setCampaignContentComboboxOptions(
+      'campaignSubjectLineSelect',
+      comboboxOptionsFromTextRows(filteredHeadlines, 'headline', 'Subject'),
+      filteredHeadlines.length ? '' : activeTopic ? 'No subject lines for this topic' : 'Use headlines in Messaging > Headlines',
       currentValues.subjectLineId
     );
 
-    setSelectOptions(
-      byId('campaignBlurbSelect'),
-      filteredDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Blurb ${item.id}`) })),
-      filteredDescriptions.length ? 'Blurb' : activeTopic ? 'Blurb (no matches for topic)' : 'Blurb (use Descriptions)',
+    setCampaignContentComboboxOptions(
+      'campaignBlurbSelect',
+      comboboxOptionsFromTextRows(filteredDescriptions, 'description', 'Blurb'),
+      filteredDescriptions.length ? '' : activeTopic ? 'No blurbs for this topic' : 'Use descriptions in Messaging > Descriptions',
       currentValues.blurbId
     );
 
-    setSelectOptions(
-      byId('campaignPitchSelect'),
-      filteredPitches.map((item) => ({ value: item.id, label: optionLabelFromText(item.pitch, `Pitch ${item.id}`) })),
-      filteredPitches.length ? 'Pitch' : activeTopic ? 'Pitch (no matches for topic)' : 'Pitch (create in Messaging > Pitches)',
+    setCampaignContentComboboxOptions(
+      'campaignPitchSelect',
+      comboboxOptionsFromTextRows(filteredPitches, 'pitch', 'Pitch'),
+      filteredPitches.length ? '' : activeTopic ? 'No pitches for this topic' : 'Create pitches in Messaging > Pitches',
       currentValues.pitchId
     );
 
-    setSelectOptions(
-      byId('campaignSubheadingSelect'),
-      filteredSubheadings.map((item) => ({ value: item.id, label: optionLabelFromText(item.subheading, `Sub-heading ${item.id}`) })),
-      filteredSubheadings.length ? 'Sub-heading' : activeTopic ? 'Sub-heading (no matches for topic)' : 'Sub-heading (create in Messaging > Sub-headings)',
+    setCampaignContentComboboxOptions(
+      'campaignSubheadingSelect',
+      comboboxOptionsFromTextRows(filteredSubheadings, 'subheading', 'Sub-heading'),
+      filteredSubheadings.length ? '' : activeTopic ? 'No sub-headings for this topic' : 'Create sub-headings in Messaging > Sub-headings',
       currentValues.subheadingId
     );
 
-    setSelectOptions(
-      byId('campaignTaglineSelect'),
-      filteredTaglines.map((item) => ({ value: item.id, label: optionLabelFromText(item.tagline, `Tagline ${item.id}`) })),
-      filteredTaglines.length ? 'Tagline' : activeTopic ? 'Tagline (no matches for topic)' : 'Tagline (create in Messaging > Taglines)',
+    setCampaignContentComboboxOptions(
+      'campaignTaglineSelect',
+      comboboxOptionsFromTextRows(filteredTaglines, 'tagline', 'Tagline'),
+      filteredTaglines.length ? '' : activeTopic ? 'No taglines for this topic' : 'Create taglines in Messaging > Taglines',
       currentValues.taglineId
     );
 
     renderCampaignHashtagPicker();
 
-    setSelectOptions(
-      byId('campaignCtaSelect'),
-      filteredCtas.map((item) => ({ value: item.id, label: optionLabelFromText(item.cta, `CTA ${item.id}`) })),
-      filteredCtas.length ? 'CTA' : activeTopic ? 'CTA (no matches for topic)' : 'CTA (create in Messaging > CTAs)',
+    setCampaignContentComboboxOptions(
+      'campaignCtaSelect',
+      comboboxOptionsFromTextRows(filteredCtas, 'cta', 'CTA'),
+      filteredCtas.length ? '' : activeTopic ? 'No CTAs for this topic' : 'Create CTAs in Messaging > CTAs',
       currentValues.ctaId
     );
 
-    setSelectOptions(
-      byId('campaignTweetSelect'),
-      filteredTweets.map((tweet) => {
-        const content = safeText(tweet.content);
-        const label = content.length > 80 ? `${content.slice(0, 77)}...` : content;
-        return { value: tweet.id, label: label || `Tweet ${tweet.id}` };
-      }),
-      filteredTweets.length ? 'Tweet' : activeTopic ? 'Tweet (no matches for topic)' : 'Tweet (create in Messaging > Tweets)',
+    setCampaignContentComboboxOptions(
+      'campaignTweetSelect',
+      comboboxOptionsFromTextRows(filteredTweets, 'content', 'Tweet', 80),
+      filteredTweets.length
+        ? ''
+        : activeTopic
+          ? 'No tweets for this topic — change topic or create in Messaging > Tweets'
+          : 'Create tweets in Messaging > Tweets',
       currentValues.tweetId
     );
 
-    setSelectOptions(
-      byId('campaignPostSelect'),
-      filteredPosts.map((item) => ({ value: item.id, label: optionLabelFromText(item.post, `Post ${item.id}`) })),
-      filteredPosts.length ? 'Post' : activeTopic ? 'Post (no matches for topic)' : 'Post (create in Messaging > Posts)',
+    setCampaignContentComboboxOptions(
+      'campaignPostSelect',
+      comboboxOptionsFromTextRows(filteredPosts, 'post', 'Post'),
+      filteredPosts.length ? '' : activeTopic ? 'No posts for this topic' : 'Create posts in Messaging > Posts',
       currentValues.postId
     );
 
-    setSelectOptions(
-      byId('campaignDescriptionSelect'),
-      filteredDescriptions.map((item) => ({ value: item.id, label: optionLabelFromText(item.description, `Description ${item.id}`) })),
-      filteredDescriptions.length ? 'Description' : activeTopic ? 'Description (no matches for topic)' : 'Description (create in Messaging > Descriptions)',
+    setCampaignContentComboboxOptions(
+      'campaignDescriptionSelect',
+      comboboxOptionsFromTextRows(filteredDescriptions, 'description', 'Description'),
+      filteredDescriptions.length ? '' : activeTopic ? 'No descriptions for this topic' : 'Create descriptions in Messaging > Descriptions',
       currentValues.descriptionId
     );
 
-    setSelectOptions(
-      byId('campaignTranscriptSelect'),
-      filteredTranscripts.map((item) => ({ value: item.id, label: optionLabelFromText(item.transcript, `Transcript ${item.id}`) })),
-      filteredTranscripts.length ? 'Transcript' : activeTopic ? 'Transcript (no matches for topic)' : 'Transcript (create in Messaging > Transcripts)',
+    setCampaignContentComboboxOptions(
+      'campaignTranscriptSelect',
+      comboboxOptionsFromTextRows(filteredTranscripts, 'transcript', 'Transcript'),
+      filteredTranscripts.length ? '' : activeTopic ? 'No transcripts for this topic' : 'Create transcripts in Messaging > Transcripts',
       currentValues.transcriptId
     );
 
-    setSelectOptions(
-      byId('campaignCommentSelect'),
-      filteredComments.map((item) => ({ value: item.id, label: optionLabelFromText(item.comment, `Comment ${item.id}`) })),
-      filteredComments.length ? 'Comment' : activeTopic ? 'Comment (no matches for topic)' : 'Comment (create in Messaging > Comments)',
+    setCampaignContentComboboxOptions(
+      'campaignCommentSelect',
+      comboboxOptionsFromTextRows(filteredComments, 'comment', 'Comment'),
+      filteredComments.length ? '' : activeTopic ? 'No comments for this topic' : 'Create comments in Messaging > Comments',
       currentValues.commentId
     );
 
-    setSelectOptions(
-      byId('campaignPrimaryImageSelect'),
-      filteredImages.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Image ${asset.id}` })),
-      filteredImages.length ? 'Primary Image' : activeTopic ? 'Primary Image (no matches for topic)' : 'Primary Image (no image assets yet)',
+    setCampaignContentComboboxOptions(
+      'campaignPrimaryImageSelect',
+      comboboxOptionsFromMappedRows(filteredImages, (asset) => {
+        const label = safeText(asset.assetName) || `Image ${asset.id}`;
+        return { label, searchText: label };
+      }),
+      filteredImages.length ? '' : activeTopic ? 'No images for this topic' : 'Upload image assets first',
       currentValues.primaryImageId
     );
 
-    setSelectOptions(
-      byId('campaignPrimaryVideoSelect'),
-      filteredVideos.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Video ${asset.id}` })),
-      filteredVideos.length ? 'Primary Video (optional)' : activeTopic ? 'Primary Video (no matches for topic)' : 'Primary Video (optional)',
+    setCampaignContentComboboxOptions(
+      'campaignPrimaryVideoSelect',
+      comboboxOptionsFromMappedRows(filteredVideos, (asset) => {
+        const label = safeText(asset.assetName) || `Video ${asset.id}`;
+        return { label, searchText: label };
+      }),
+      filteredVideos.length ? '' : activeTopic ? 'No videos for this topic' : 'Upload video assets first',
       currentValues.primaryVideoId
     );
 
@@ -1146,38 +1506,41 @@ App.campaigns = (function () {
       currentValues.formObjectId
     );
 
-    setSelectOptions(
-      byId('campaignArticleSelect'),
-      filteredArticles.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Article ${item.id}`) })),
-      filteredArticles.length ? 'Article' : activeTopic ? 'Article (no matches for topic)' : 'Article (create in Messaging > Articles)',
+    setCampaignContentComboboxOptions(
+      'campaignArticleSelect',
+      comboboxOptionsFromTextRows(filteredArticles, 'title', 'Article'),
+      filteredArticles.length ? '' : activeTopic ? 'No articles for this topic' : 'Create articles in Messaging > Articles',
       currentValues.articleId
     );
 
-    setSelectOptions(
-      byId('campaignReportSelect'),
-      filteredReports.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `Report ${item.id}`) })),
-      filteredReports.length ? 'Report' : activeTopic ? 'Report (no matches for topic)' : 'Report (create in Messaging > Reports)',
+    setCampaignContentComboboxOptions(
+      'campaignReportSelect',
+      comboboxOptionsFromTextRows(filteredReports, 'title', 'Report'),
+      filteredReports.length ? '' : activeTopic ? 'No reports for this topic' : 'Create reports in Messaging > Reports',
       currentValues.reportId
     );
 
-    setSelectOptions(
-      byId('campaignWhitePaperSelect'),
-      filteredWhitePapers.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `White Paper ${item.id}`) })),
-      filteredWhitePapers.length ? 'White Paper' : activeTopic ? 'White Paper (no matches for topic)' : 'White Paper (create in Messaging > White Papers)',
+    setCampaignContentComboboxOptions(
+      'campaignWhitePaperSelect',
+      comboboxOptionsFromTextRows(filteredWhitePapers, 'title', 'White Paper'),
+      filteredWhitePapers.length ? '' : activeTopic ? 'No white papers for this topic' : 'Create white papers in Messaging > White Papers',
       currentValues.whitePaperId
     );
 
-    setSelectOptions(
-      byId('campaignEbookSelect'),
-      filteredEbooks.map((item) => ({ value: item.id, label: optionLabelFromText(item.title, `eBook ${item.id}`) })),
-      filteredEbooks.length ? 'eBook' : activeTopic ? 'eBook (no matches for topic)' : 'eBook (create in Messaging > eBooks)',
+    setCampaignContentComboboxOptions(
+      'campaignEbookSelect',
+      comboboxOptionsFromTextRows(filteredEbooks, 'title', 'eBook'),
+      filteredEbooks.length ? '' : activeTopic ? 'No eBooks for this topic' : 'Create eBooks in Messaging > eBooks',
       currentValues.ebookId
     );
 
-    setSelectOptions(
-      byId('campaignLeadMagnetSelect'),
-      filteredLeadMagnets.map((asset) => ({ value: asset.id, label: safeText(asset.assetName) || `Asset ${asset.id}` })),
-      filteredLeadMagnets.length ? 'PDF (optional)' : activeTopic ? 'PDF (no matches for topic)' : 'PDF (placeholder)',
+    setCampaignContentComboboxOptions(
+      'campaignLeadMagnetSelect',
+      comboboxOptionsFromMappedRows(filteredLeadMagnets, (asset) => {
+        const label = safeText(asset.assetName) || `Asset ${asset.id}`;
+        return { label, searchText: label };
+      }),
+      filteredLeadMagnets.length ? '' : activeTopic ? 'No PDFs for this topic' : 'Upload PDF assets first',
       currentValues.leadMagnetId
     );
 
@@ -1185,6 +1548,7 @@ App.campaigns = (function () {
     const submitBtn = campaignForm?.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.disabled = channels.length === 0;
     applyCampaignChannelProfile(currentValues.channelId || safeText(byId('campaignChannelSelect')?.value));
+    renderCampaignLivePreview();
   }
 
   async function loadBuilderSources() {
@@ -1193,7 +1557,7 @@ App.campaigns = (function () {
       api('/api/channels'),
       api('/api/assets'),
       api('/api/segments'),
-      api('/api/messaging/tweets?limit=200'),
+      api('/api/messaging/tweets?limit=5000'),
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/emails?limit=5000'),
       api('/api/develop/email-templates'),
@@ -1225,9 +1589,15 @@ App.campaigns = (function () {
       state.segments = segmentsRes.value.segments;
     }
 
-    builderTweets = tweetsRes.status === 'fulfilled' && Array.isArray(tweetsRes.value.tweets)
-      ? tweetsRes.value.tweets
-      : [];
+    if (tweetsRes.status === 'fulfilled' && Array.isArray(tweetsRes.value.tweets)) {
+      builderTweets = tweetsRes.value.tweets;
+    } else {
+      builderTweets = [];
+      const tweetsErr = safeText(tweetsRes.reason?.message);
+      if (tweetsErr) {
+        notify(`Could not load tweets: ${tweetsErr}`, true);
+      }
+    }
     builderHashtags = hashtagsRes.status === 'fulfilled' && Array.isArray(hashtagsRes.value.hashtags)
       ? hashtagsRes.value.hashtags
       : [];
@@ -1418,10 +1788,12 @@ App.campaigns = (function () {
     const desired = safeText(value);
     if (!desired) {
       select.value = '';
+      if (isCampaignContentCombobox(select.id)) syncCampaignComboboxSearchFromSelect(select.id);
       return;
     }
     if (Array.from(select.options).some((option) => String(option.value) === desired)) {
       select.value = desired;
+      if (isCampaignContentCombobox(select.id)) syncCampaignComboboxSearchFromSelect(select.id);
     }
   }
 
@@ -1434,7 +1806,7 @@ App.campaigns = (function () {
   function updateCampaignFieldGlows() {
     const content = byId('campaignContentConditional');
     if (!content) return;
-    const fields = content.querySelectorAll('select, input');
+    const fields = content.querySelectorAll('.campaign-combobox input[type="text"], select:not(.campaign-combobox-native)');
     fields.forEach(el => {
       if (el.tagName === 'BUTTON' || el.type === 'hidden') return;
       if (el.value && el.value.trim() !== '') {
@@ -1488,6 +1860,7 @@ App.campaigns = (function () {
     setCampaignFormMode(!cloneMode);
     ensureCampaignFormVisible();
     updateCampaignFieldGlows();
+    renderCampaignLivePreview();
   }
 
   async function openCampaignEditor(campaign) {
@@ -1532,6 +1905,7 @@ App.campaigns = (function () {
       setSelectedCampaignHashtagIds([]);
     }
     updateAddContentBtnVisibility();
+    renderCampaignLivePreview();
   }
 
   function showContentRow(row) {
@@ -1542,6 +1916,7 @@ App.campaigns = (function () {
     const channelVisible = row.dataset.channelVisible !== '0';
     row.style.display = channelVisible ? '' : 'none';
     updateAddContentBtnVisibility();
+    renderCampaignLivePreview();
   }
 
   function initCampaignContentRowControls() {
@@ -1623,10 +1998,14 @@ App.campaigns = (function () {
 
     const contentArea = byId('campaignContentConditional');
     if (contentArea) {
-      contentArea.addEventListener('change', updateCampaignFieldGlows);
+      contentArea.addEventListener('change', () => {
+        updateCampaignFieldGlows();
+        renderCampaignLivePreview();
+      });
     }
 
     // --- Content row delete icons + Add Content button ---
+    initCampaignContentComboboxes();
     initCampaignContentRowControls();
 
     // --- Filter bar ---
@@ -1657,19 +2036,29 @@ App.campaigns = (function () {
       rulesResetBtn.addEventListener('click', resetChannelRules);
     }
 
+    document.addEventListener('messaging:formatImported', (event) => {
+      const slug = String(event?.detail?.slug || '').trim().toLowerCase();
+      if (slug && slug !== 'tweets') return;
+      loadBuilderSources().catch((err) => notify(err.message, true));
+    });
+
     if (form) {
       const channelSelect = byId('campaignChannelSelect');
       const topicSelect = byId('campaignTopicSelect');
       if (channelSelect) {
         channelSelect.addEventListener('change', function () {
-          applyCampaignChannelProfile(channelSelect.value);
+          applyCampaignChannelProfile(channelSelect.value, { resetUserHidden: true });
+          updateCampaignFieldGlows();
+          renderCampaignLivePreview();
         });
       }
       if (topicSelect) {
         topicSelect.addEventListener('change', function () {
           renderBuilderSelects();
+          renderCampaignLivePreview();
         });
       }
+      form.addEventListener('input', renderCampaignLivePreview);
       const hashtagPickerBtn = byId('campaignHashtagPickerBtn');
       if (hashtagPickerBtn) {
         hashtagPickerBtn.addEventListener('click', openCampaignHashtagPicker);
@@ -1708,7 +2097,7 @@ App.campaigns = (function () {
         const payload = {
           name: safeText(form.elements.name?.value),
           status: selectedStatus,
-          subject: selectedOptionText(subjectLineSelect) || selectedOptionText(headlineSelect) || safeText(form.elements.name?.value),
+          subject: selectedOptionTextIfValue(subjectLineSelect) || selectedOptionTextIfValue(headlineSelect) || selectedOptionTextIfValue(tweetSelect) || safeText(form.elements.name?.value),
           content: JSON.stringify({
             builder: 'campaign-v1',
             status: selectedStatus,

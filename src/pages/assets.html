@@ -49,7 +49,7 @@
             </div>
             <div class="stack-form" style="margin: 0;">
               <h3>Bulk Import Images</h3>
-              <p class="meta" style="margin: 0 0 0.5rem;">Uploads each image, generates a thumbnail, and assigns wide / square / tall aspect automatically. Set Asset Type to Image.</p>
+              <p class="meta" style="margin: 0 0 0.5rem;">Uploads each image and generates a thumbnail. Set Asset Type to Image. Leave Aspect on Auto to detect wide / square / tall from each file.</p>
               <form id="assetMultiUploadForm" class="standard-form-grid">
                 <label for="assetMultiUploadFiles">Image Files</label>
                 <input id="assetMultiUploadFiles" name="files" type="file" accept="image/*" multiple required />
@@ -67,6 +67,14 @@
                 <label for="assetMultiUploadCategory">Category</label>
                 <select id="assetMultiUploadCategory" name="category">
                   <option value="">Select Category</option>
+                </select>
+
+                <label for="assetMultiUploadAspect">Aspect</label>
+                <select id="assetMultiUploadAspect" name="aspect">
+                  <option value="">Auto (from image)</option>
+                  <option value="wide">Wide</option>
+                  <option value="square">Square</option>
+                  <option value="tall">Tall</option>
                 </select>
                 
                 <div></div>
@@ -272,6 +280,11 @@
             
               <label for="assetCategoryName">Category Name</label>
               <input id="assetCategoryName" name="category" required />
+
+              <label for="assetCategoryParent">Parent Category</label>
+              <select id="assetCategoryParent" name="parent_category">
+                <option value="">None (Top Level)</option>
+              </select>
             
             <div></div>
               <button type="submit" class="btn btn-primary">Save Category</button>
@@ -293,11 +306,13 @@
                 </th>
                 <th></th>
                 <th></th>
+                <th></th>
               </tr>
               <tr>
                 <th id="assetCategoriesSortType">Asset Type</th>
                 <th id="assetCategoriesSortCategory">Category Name</th>
-                <th class="asset-categories-actions-heading">Actions</th>
+                <th id="assetCategoriesSortParent">Parent Category</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="assetCategoriesTable"></tbody>
@@ -346,6 +361,11 @@
           
             <label for="assetCategoryEditName">Category Name</label>
             <input id="assetCategoryEditName" name="category" required />
+
+            <label for="assetCategoryEditParent">Parent Category</label>
+            <select id="assetCategoryEditParent" name="parent_category">
+              <option value="">None (Top Level)</option>
+            </select>
           
           <div></div>
               <button type="submit" class="btn btn-primary">Update Category</button>

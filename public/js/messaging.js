@@ -118,6 +118,10 @@ App.messaging = (function () {
     },
   };
   const messagingTopicTableState = {
+    filters: {
+      topic: '',
+      format: '',
+    },
     dir: 'asc',
   };
   const messagingTagTableState = {
@@ -603,7 +607,7 @@ App.messaging = (function () {
                 <th>Score</th>
                 <th id="${ids.sortCreatedBtnId}">Created</th>
                 <th id="${ids.sortUpdatedBtnId}">Updated</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="${ids.tableId}"></tbody>
@@ -1952,7 +1956,6 @@ App.messaging = (function () {
       tr.appendChild(thumbTd);
 
       const actionsTd = document.createElement('td');
-      actionsTd.className = 'messaging-content-actions-cell';
       const viewBtn = App.makeIconButton('view', 'View Article', function () {
         openMessagingDetailModal('View Article', [
           ['Publish Date', publish],
@@ -1965,12 +1968,9 @@ App.messaging = (function () {
           ['Feedback', String(article.feedback || '').trim() || '-'],
         ]);
       });
-      actionsTd.appendChild(viewBtn);
-
       const editBtn = App.makeIconButton('edit', 'Edit Article', function () {
         openEditForm(article);
-      }, { marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
+      });
 
       const cloneBtn = App.makeIconButton('clone', 'Clone Article', async function () {
         try {
@@ -1980,8 +1980,7 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { marginLeft: '8px' });
-      actionsTd.appendChild(cloneBtn);
+      });
 
       const deleteBtn = App.makeIconButton('delete', 'Delete Article', async function () {
         if (!confirm(`Delete article "${title}"?`)) return;
@@ -1992,8 +1991,8 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(deleteBtn);
+      }, { danger: true });
+      App.finishTableActionsCell(actionsTd, viewBtn, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
 
       tbody.appendChild(tr);
@@ -2098,8 +2097,6 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Report', function () {
         openReportEditForm(report);
       });
-      actionsTd.appendChild(editBtn);
-
       const cloneBtn = App.makeIconButton('clone', 'Clone Report', async function () {
         try {
           await cloneMessagingItem('/api/messaging/reports', cloneLongformPayload(report, 'Untitled Report'));
@@ -2108,8 +2105,7 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { marginLeft: '8px' });
-      actionsTd.appendChild(cloneBtn);
+      });
 
       const deleteBtn = App.makeIconButton('delete', 'Delete Report', async function () {
         if (!confirm(`Delete report "${title}"?`)) return;
@@ -2120,8 +2116,8 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(deleteBtn);
+      }, { danger: true });
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
 
       tbody.appendChild(tr);
@@ -2226,8 +2222,6 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit White Paper', function () {
         openWhitePaperEditForm(whitePaper);
       });
-      actionsTd.appendChild(editBtn);
-
       const cloneBtn = App.makeIconButton('clone', 'Clone White Paper', async function () {
         try {
           await cloneMessagingItem('/api/messaging/white-papers', cloneLongformPayload(whitePaper, 'Untitled White Paper'));
@@ -2236,8 +2230,7 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { marginLeft: '8px' });
-      actionsTd.appendChild(cloneBtn);
+      });
 
       const deleteBtn = App.makeIconButton('delete', 'Delete White Paper', async function () {
         if (!confirm(`Delete white paper "${title}"?`)) return;
@@ -2248,8 +2241,8 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(deleteBtn);
+      }, { danger: true });
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
 
       tbody.appendChild(tr);
@@ -2354,8 +2347,6 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit eBook', function () {
         openEbookEditForm(ebook);
       });
-      actionsTd.appendChild(editBtn);
-
       const cloneBtn = App.makeIconButton('clone', 'Clone eBook', async function () {
         try {
           await cloneMessagingItem('/api/messaging/ebooks', cloneLongformPayload(ebook, 'Untitled eBook'));
@@ -2364,8 +2355,7 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { marginLeft: '8px' });
-      actionsTd.appendChild(cloneBtn);
+      });
 
       const deleteBtn = App.makeIconButton('delete', 'Delete eBook', async function () {
         if (!confirm(`Delete eBook "${title}"?`)) return;
@@ -2376,8 +2366,8 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(deleteBtn);
+      }, { danger: true });
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
 
       tbody.appendChild(tr);
@@ -2487,8 +2477,6 @@ App.messaging = (function () {
       const editBtn = App.makeIconButton('edit', 'Edit Tweet', function () {
         openTweetEditForm(tweet);
       });
-      actionsTd.appendChild(editBtn);
-
       const cloneBtn = App.makeIconButton('clone', 'Clone Tweet', async function () {
         try {
           await cloneMessagingItem('/api/messaging/tweets', cloneTweetPayload(tweet));
@@ -2497,8 +2485,7 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { marginLeft: '8px' });
-      actionsTd.appendChild(cloneBtn);
+      });
 
       const deleteBtn = App.makeIconButton('delete', 'Delete Tweet', async function () {
         if (!confirm('Delete this tweet?')) return;
@@ -2509,8 +2496,8 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(deleteBtn);
+      }, { danger: true });
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
 
       tbody.appendChild(tr);
@@ -2822,9 +2809,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -3014,9 +2999,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -3205,9 +3188,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -3397,9 +3378,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -3495,6 +3474,7 @@ App.messaging = (function () {
     setTopicsCreateVisible(false);
     clearMessagingTopicSuggestions();
     App.setActivePage('messagingTopicsPage');
+    syncAllMessagingFormatFilters();
     refreshMessagingTopics().catch(function (err) {
       notify(`Could not load messaging topics: ${err.message}`, true);
     });
@@ -3790,12 +3770,7 @@ App.messaging = (function () {
   }
 
   function availableCreateContentFormats() {
-    const source = currentMessagingFormats.length
-      ? currentMessagingFormats.filter((entry) => Boolean(entry && entry.enabled))
-      : defaultMessagingFormatEntries;
-    return source
-      .map((entry) => String(entry.format || entry.type || '').trim())
-      .filter((value, index, arr) => value && arr.indexOf(value) === index)
+    return getMessagingFormatNames()
       .filter((value) => Boolean(createContentSchema(value)))
       .sort((a, b) => a.localeCompare(b));
   }
@@ -3809,7 +3784,7 @@ App.messaging = (function () {
     formats.forEach((format) => {
       const option = document.createElement('option');
       option.value = format;
-      option.textContent = format;
+      option.textContent = messagingFormatOptionLabel(format);
       select.appendChild(option);
     });
     if (currentValue && formats.includes(currentValue)) select.value = currentValue;
@@ -5361,32 +5336,85 @@ App.messaging = (function () {
     return false;
   }
 
-  function renderMessagingContentFormatFilter() {
-    const select = document.getElementById('messagingContentFormatFilter');
-    if (!select) return;
-    const currentValue = String(select.value || '').trim();
-    const source = currentMessagingFormats.length
-      ? currentMessagingFormats.filter((entry) => Boolean(entry && entry.enabled))
-      : defaultMessagingFormatEntries;
-    const formats = source
+  function messagingFormatOptionLabel(format) {
+    return format;
+  }
+
+  function getMessagingFormatCatalog() {
+    const merged = new Map();
+    defaultMessagingFormatEntries.forEach((entry) => {
+      const format = String(entry.format || entry.type || '').trim();
+      if (format) merged.set(format, { ...entry, format, enabled: entry.enabled !== false });
+    });
+    (Array.isArray(currentMessagingFormats) ? currentMessagingFormats : []).forEach((entry) => {
+      const format = String(entry.format || entry.type || '').trim();
+      if (!format) return;
+      merged.set(format, { ...entry, format, enabled: entry.enabled !== false });
+    });
+    return Array.from(merged.values()).filter((entry) => entry.enabled !== false);
+  }
+
+  function getMessagingFormatNames() {
+    return getMessagingFormatCatalog()
       .map((entry) => String(entry.format || entry.type || '').trim())
       .filter(Boolean)
       .filter((value, index, arr) => arr.indexOf(value) === index)
       .sort((a, b) => a.localeCompare(b));
+  }
+
+  function populateMessagingFormatFilterSelect(select, placeholderText) {
+    if (!select) return;
+    const currentValue = String(select.value || '').trim();
+    const formats = getMessagingFormatNames();
     select.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = 'All Formats';
+    placeholder.textContent = placeholderText || 'All Formats';
     select.appendChild(placeholder);
     formats.forEach((format) => {
       const option = document.createElement('option');
       option.value = format;
-      option.textContent = format;
+      option.textContent = messagingFormatOptionLabel(format);
       select.appendChild(option);
     });
     if (currentValue && formats.includes(currentValue)) {
       select.value = currentValue;
     }
+  }
+
+  function syncAllMessagingFormatFilters() {
+    populateMessagingFormatFilterSelect(document.getElementById('messagingContentFormatFilter'), 'All Formats');
+    populateMessagingFormatFilterSelect(document.getElementById('messagingHeadlinesFormatFilter'), 'All Formats');
+    populateMessagingFormatFilterSelect(document.getElementById('messagingTopicsFormatFilter'), 'All Formats');
+    simpleContentConfigs.forEach((config) => {
+      populateMessagingFormatFilterSelect(document.getElementById(getSimpleContentIds(config).formatFilterId), 'All Formats');
+    });
+  }
+
+  function renderMessagingContentFormatFilter() {
+    populateMessagingFormatFilterSelect(document.getElementById('messagingContentFormatFilter'), 'All Formats');
+  }
+
+  function countMessagingItemsForTopic(topicName, format) {
+    const topicLower = String(topicName || '').trim().toLowerCase();
+    if (!topicLower) return 0;
+    const matchTopic = (item) => {
+      const topic = String(item?.topic || '').trim().toLowerCase();
+      const category = String(item?.category || '').trim().toLowerCase();
+      return topic === topicLower || category === topicLower;
+    };
+    const formatName = String(format || '').trim();
+
+    if (formatName) {
+      const registryEntry = messagingContentRegistry.find((entry) => entry.format === formatName);
+      if (!registryEntry) return 0;
+      return (Array.isArray(registryEntry.source()) ? registryEntry.source() : []).filter(matchTopic).length;
+    }
+
+    return messagingContentRegistry.reduce((total, entry) => {
+      const items = Array.isArray(entry.source()) ? entry.source() : [];
+      return total + items.filter(matchTopic).length;
+    }, 0) + (Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts : []).filter(matchTopic).length;
   }
 
   function renderMessagingContentTopicFilter() {
@@ -5612,14 +5640,7 @@ App.messaging = (function () {
       const topicRecords = (currentMessagingTopics || []).map(item => {
         const topicName = String(item.topic || item.category || '').trim();
         const topicLower = topicName.toLowerCase();
-        const messagesCount =
-          (currentWhitePapers || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-          (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-          (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-          simpleContentConfigs.reduce((acc, config) => {
-            const configItems = simpleContentState[config.key]?.items || [];
-            return acc + configItems.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
-          }, 0);
+        const messagesCount = countMessagingItemsForTopic(topicName, '');
         return { name: topicName, count: messagesCount };
       }).filter(t => t.count > 0).slice(0, 15);
 
@@ -5713,13 +5734,12 @@ App.messaging = (function () {
         tr.appendChild(td);
       });
       const actionsTd = document.createElement('td');
-      actionsTd.className = 'messaging-content-actions-cell';
       const viewBtn = App.makeIconButton('view', `View ${entry.format}`, function () {
         openMessagingContentEntryView(entry);
       });
       const editBtn = App.makeIconButton('edit', `Edit ${entry.format}`, function () {
         openMessagingContentEntryEditor(entry);
-      }, { marginLeft: '8px' });
+      });
       const cloneBtn = App.makeIconButton('clone', `Clone ${entry.format}`, async function () {
         try {
           await cloneMessagingContentEntry(entry);
@@ -5739,7 +5759,7 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { marginLeft: '8px' });
+      });
       const deleteBtn = App.makeIconButton('delete', `Delete ${entry.format}`, async function () {
         if (!confirm(`Delete this ${String(entry.format || 'content').toLowerCase()} item?`)) return;
         try {
@@ -5760,11 +5780,8 @@ App.messaging = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(viewBtn);
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      }, { danger: true });
+      App.finishTableActionsCell(actionsTd, viewBtn, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -5774,7 +5791,7 @@ App.messaging = (function () {
     const tbody = document.getElementById('messagingFormatsLibraryTable');
     if (!tbody) return;
     tbody.innerHTML = '';
-    const rows = (currentMessagingFormats.length ? currentMessagingFormats : defaultMessagingFormatEntries).slice().sort((a, b) => {
+    const rows = getMessagingFormatCatalog().slice().sort((a, b) => {
       const left = String(a.format || a.type || '').toLowerCase();
       const right = String(b.format || b.type || '').toLowerCase();
       return left.localeCompare(right);
@@ -5797,18 +5814,17 @@ App.messaging = (function () {
         tr.appendChild(td);
       });
       const actionsTd = document.createElement('td');
-      actionsTd.className = 'messaging-content-actions-cell';
       const targetPage = String(entry.pageId || '').trim();
       if (targetPage) {
         const openBtn = App.makeIconButton('edit', `Open ${entry.format || entry.type}`, function () {
           openContentTarget(targetPage);
         });
-        actionsTd.appendChild(openBtn);
+        App.finishTableActionsCell(actionsTd, openBtn);
       } else {
         const manageBtn = App.makeIconButton('edit', `Edit ${entry.format || entry.type}`, function () {
           openMessagingFormatEdit(entry);
         });
-        actionsTd.appendChild(manageBtn);
+        App.finishTableActionsCell(actionsTd, manageBtn);
       }
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -5850,7 +5866,6 @@ App.messaging = (function () {
       enabledTd.textContent = entry.enabled ? 'Yes' : 'No';
       tr.appendChild(enabledTd);
       const actionsTd = document.createElement('td');
-      actionsTd.className = 'messaging-content-actions-cell';
       const editBtn = App.makeIconButton('edit', `Edit ${entry.format}`, function () {
         openMessagingFormatEdit(entry);
       });
@@ -5877,9 +5892,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -5922,7 +5935,7 @@ App.messaging = (function () {
     currentMessagingFormats = formats.slice();
     renderMessagingFormatsTable();
     renderMessagingContentTypesTable();
-    renderMessagingContentFormatFilter();
+    syncAllMessagingFormatFilters();
     renderCreateContentFormatOptions();
     return currentMessagingFormats;
   }
@@ -6186,9 +6199,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -6684,15 +6695,45 @@ App.messaging = (function () {
   }
 
   function getSortedMessagingTopics() {
-    const rows = Array.isArray(currentMessagingTopics) ? currentMessagingTopics.slice() : [];
+    const topicQuery = String(messagingTopicTableState.filters.topic || '').trim().toLowerCase();
+    const formatFilter = String(messagingTopicTableState.filters.format || '').trim();
+    const rows = (Array.isArray(currentMessagingTopics) ? currentMessagingTopics : []).filter((item) => {
+      const topicName = String(item?.topic || item?.category || '').trim();
+      if (topicQuery && !topicName.toLowerCase().includes(topicQuery)) return false;
+      if (formatFilter && countMessagingItemsForTopic(topicName, formatFilter) === 0) return false;
+      return true;
+    });
     rows.sort(function (a, b) {
-      const left = String(a?.category || '').toLowerCase();
-      const right = String(b?.category || '').toLowerCase();
+      const left = String(a?.topic || a?.category || '').toLowerCase();
+      const right = String(b?.topic || b?.category || '').toLowerCase();
       if (left === right) return 0;
       const result = left < right ? -1 : 1;
       return messagingTopicTableState.dir === 'asc' ? result : -result;
     });
     return rows;
+  }
+
+  function messagingTopicStatTarget(topicName) {
+    const formatFilter = String(messagingTopicTableState.filters.format || '').trim();
+    if (!formatFilter) {
+      return { pageId: 'messagingContentPage', topicFilterId: 'messagingContentTopicFilter', formatFilterId: 'messagingContentFormatFilter' };
+    }
+    const catalogEntry = getMessagingFormatCatalog().find((entry) => entry.format === formatFilter);
+    const pageId = String(catalogEntry?.pageId || 'messagingContentPage').trim();
+    const topicFilterByPage = {
+      messagingContentPage: 'messagingContentTopicFilter',
+      messagingHeadlinesPage: 'messagingHeadlinesTopicFilter',
+      messagingSubheadingsPage: 'messagingSubheadingsCategoryFilter',
+      messagingTaglinesPage: 'messagingTaglinesCategoryFilter',
+      messagingPitchesPage: 'messagingPitchesTopicFilter',
+    };
+    const simpleConfig = simpleContentConfigs.find((config) => config.pageId === pageId);
+    return {
+      pageId,
+      topicFilterId: topicFilterByPage[pageId] || (simpleConfig ? getSimpleContentIds(simpleConfig).categoryFilterId : 'messagingContentTopicFilter'),
+      formatFilterId: pageId === 'messagingContentPage' ? 'messagingContentFormatFilter' : null,
+      formatValue: formatFilter,
+    };
   }
 
   function openMessagingTopicEditForm(item) {
@@ -6721,11 +6762,14 @@ App.messaging = (function () {
     }
 
     const rows = getSortedMessagingTopics();
+    const activeFormatFilter = String(messagingTopicTableState.filters.format || '').trim();
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 11;
-      td.textContent = 'No messaging topics yet.';
+      td.textContent = currentMessagingTopics.length
+        ? 'No topics match current filters.'
+        : 'No messaging topics yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
@@ -6766,15 +6810,8 @@ App.messaging = (function () {
         String(r.topic || r.category || '').toLowerCase() === topicLower
       ).length;
 
-      const messagesCount =
-        (currentWhitePapers || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-        (currentEbooks || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-        (currentMessagingPrompts || []).filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length +
-        simpleContentConfigs.reduce((acc, config) => {
-          if (config.key === 'hashtags') return acc;
-          const items = simpleContentState[config.key]?.items || [];
-          return acc + items.filter(m => String(m.topic || m.category || '').toLowerCase() === topicLower).length;
-        }, 0);
+      const messagesCount = countMessagingItemsForTopic(topicName, activeFormatFilter);
+      const messageStatTarget = messagingTopicStatTarget(topicName);
 
       const hashtagsCount = (simpleContentState.hashtags?.items || []).filter((h) =>
         String(h.topic || h.category || '').toLowerCase() === topicLower
@@ -6784,7 +6821,7 @@ App.messaging = (function () {
       categoryTd.textContent = topicName || '-';
       tr.appendChild(categoryTd);
 
-      const drawStat = (count, pageId, filterInputId) => {
+      const drawStat = (count, pageId, filterInputId, statTarget) => {
         const td = document.createElement('td');
         td.className = count > 0 ? 'stat-col' : 'stat-col stat-col--zero';
         if (count > 0) {
@@ -6802,6 +6839,13 @@ App.messaging = (function () {
                 const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
                 input.dispatchEvent(new Event(evtName, { bubbles: true }));
               }
+              if (statTarget?.formatFilterId && statTarget?.formatValue) {
+                const formatSelect = document.getElementById(statTarget.formatFilterId);
+                if (formatSelect) {
+                  formatSelect.value = statTarget.formatValue;
+                  formatSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }
             }
             App.setActivePage(pageId);
           };
@@ -6814,7 +6858,7 @@ App.messaging = (function () {
 
       tr.appendChild(drawStat(contactsCount, 'contactsPage', null)); // filter set actively above
       tr.appendChild(drawStat(channelsCount, 'channelsPage', null));
-      tr.appendChild(drawStat(messagesCount, 'messagingContentPage', 'messagingContentTextFilter'));
+      tr.appendChild(drawStat(messagesCount, messageStatTarget.pageId, messageStatTarget.topicFilterId, messageStatTarget));
       tr.appendChild(drawStat(hashtagsCount, 'messagingHashtagsPage', 'messagingHashtagsLibraryCategoryFilter'));
       tr.appendChild(drawStat(assetsCount, 'assetsPage', null));
       tr.appendChild(drawStat(campaignsCount, 'campaignsPage', null));
@@ -6823,7 +6867,6 @@ App.messaging = (function () {
       tr.appendChild(drawStat(reportsCount, 'messagingReportsPage', null));
 
       const actionsTd = document.createElement('td');
-      actionsTd.className = 'messaging-topics-actions-cell';
       const editBtn = App.makeIconButton('edit', 'Edit Topic', function () {
         openMessagingTopicEditForm(item);
       });
@@ -6848,9 +6891,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
 
       tbody.appendChild(tr);
@@ -6987,7 +7028,6 @@ App.messaging = (function () {
       tr.appendChild(tagTd);
 
       const actionsTd = document.createElement('td');
-      actionsTd.className = 'messaging-topics-actions-cell';
       const editBtn = App.makeIconButton('edit', 'Edit Tag', function () {
         openMessagingTagEditForm(item);
       });
@@ -7012,9 +7052,7 @@ App.messaging = (function () {
           notify(err.message, true);
         }
       }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(cloneBtn);
-      actionsTd.appendChild(deleteBtn);
+      App.finishTableActionsCell(actionsTd, editBtn, cloneBtn, deleteBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
@@ -7300,8 +7338,35 @@ App.messaging = (function () {
     });
   }
 
+  function wireMessagingFormatImports() {
+    if (!App.messagingFormatImport) return;
+    App.messagingFormatImport.init();
+    const pages = [
+      { pageId: 'messagingHeadlinesPage', slug: 'headlines', label: 'Headlines', refresh: refreshHeadlines },
+      { pageId: 'messagingSubheadingsPage', slug: 'subheadings', label: 'Sub-headings', refresh: refreshSubheadings },
+      { pageId: 'messagingTaglinesPage', slug: 'taglines', label: 'Taglines', refresh: refreshTaglines },
+      { pageId: 'messagingPitchesPage', slug: 'pitches', label: 'Pitches', refresh: refreshPitches },
+      { pageId: 'messagingArticlesPage', slug: 'articles', label: 'Articles', refresh: refreshArticles },
+      { pageId: 'messagingReportsPage', slug: 'reports', label: 'Reports', refresh: refreshReports },
+      { pageId: 'messagingWhitePapersPage', slug: 'white-papers', label: 'White Papers', refresh: refreshWhitePapers },
+      { pageId: 'messagingEbooksPage', slug: 'ebooks', label: 'eBooks', refresh: refreshEbooks },
+    ];
+    simpleContentConfigs.forEach((config) => {
+      pages.push({
+        pageId: config.pageId,
+        slug: config.key,
+        label: config.pluralLabel,
+        refresh: function () { return refreshSimpleContent(config); },
+      });
+    });
+    pages.forEach((entry) => {
+      App.messagingFormatImport.ensureImportButton(entry.pageId, entry.slug, entry.label, entry.refresh);
+    });
+  }
+
   function init() {
     ensureSimpleContentPages();
+    wireMessagingFormatImports();
     const messagingContentTextFilter = document.getElementById('messagingContentTextFilter');
     const messagingContentFormatFilter = document.getElementById('messagingContentFormatFilter');
     const messagingContentTopicFilter = document.getElementById('messagingContentTopicFilter');
@@ -8618,6 +8683,30 @@ App.messaging = (function () {
       });
     }
 
+    function applyMessagingTopicsTableFilters() {
+      messagingTopicTableState.filters.topic = String(document.getElementById('messagingTopicsTopicFilter')?.value || '').trim();
+      messagingTopicTableState.filters.format = String(document.getElementById('messagingTopicsFormatFilter')?.value || '').trim();
+      renderMessagingTopicsTable(currentMessagingTopics);
+    }
+
+    const messagingTopicsFormatFilter = document.getElementById('messagingTopicsFormatFilter');
+    const messagingTopicsTopicFilter = document.getElementById('messagingTopicsTopicFilter');
+    const messagingTopicsFiltersGoBtn = document.getElementById('messagingTopicsFiltersGoBtn');
+    if (messagingTopicsFormatFilter) {
+      messagingTopicsFormatFilter.addEventListener('change', applyMessagingTopicsTableFilters);
+    }
+    if (messagingTopicsTopicFilter) {
+      messagingTopicsTopicFilter.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          applyMessagingTopicsTableFilters();
+        }
+      });
+    }
+    if (messagingTopicsFiltersGoBtn) {
+      messagingTopicsFiltersGoBtn.addEventListener('click', applyMessagingTopicsTableFilters);
+    }
+
     const messagingTopicsGenerateBtn = document.getElementById('messagingTopicsGenerateBtn');
     const messagingTopicsSelectAllSuggestions = document.getElementById('messagingTopicsSelectAllSuggestions');
     const messagingTopicsSaveSelectedBtn = document.getElementById('messagingTopicsSaveSelectedBtn');
@@ -8741,7 +8830,9 @@ App.messaging = (function () {
       });
     });
     if (createContentFormat) {
-      createContentFormat.addEventListener('change', renderCreateContentDynamicFields);
+      createContentFormat.addEventListener('change', function () {
+        renderCreateContentDynamicFields();
+      });
     }
     if (createContentTopic) {
       createContentTopic.addEventListener('change', function () {
@@ -9169,6 +9260,11 @@ App.messaging = (function () {
     }
 
     bindSimpleContentPages();
+    syncAllMessagingFormatFilters();
+    document.addEventListener('messaging:formatImported', function () {
+      renderMessagingContentLibraryTable();
+      renderMessagingTopicsTable(currentMessagingTopics);
+    });
   }
 
   return {

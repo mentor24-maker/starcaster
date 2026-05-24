@@ -558,6 +558,7 @@ App.assets = (function () {
     return {
       assetType: activeType || inferAssetTypeFromCategory(activeCategory),
       category: activeCategory,
+      aspect: normalizeAspect(state.assetsFilters?.aspect),
     };
   }
 
@@ -573,6 +574,9 @@ App.assets = (function () {
       els.assetMultiUploadType.value = defaults.assetType || '';
     }
     renderMultiUploadCategoryOptionsByType(defaults.assetType, defaults.category);
+    if (els.assetMultiUploadAspect) {
+      els.assetMultiUploadAspect.value = defaults.aspect || '';
+    }
     renderDriveFolderCategoryOptions(defaults.category);
   }
 
@@ -946,6 +950,7 @@ App.assets = (function () {
     }
 
     const fileBuffer = await file.arrayBuffer();
+    const aspect = normalizeAspect(options?.aspect);
     const payload = {
       fileName: file.name,
       mimeType: file.type || 'application/octet-stream',
@@ -954,6 +959,7 @@ App.assets = (function () {
       category: String(options?.category || '').trim(),
       tags: Array.isArray(options?.tags) ? options.tags : [],
     };
+    if (aspect) payload.aspect = aspect;
 
     const result = await api('/api/assets/import-image', {
       method: 'POST',
@@ -1340,6 +1346,7 @@ App.assets = (function () {
         if (!assetType) return notify('Asset Type is required', true);
 
         const category = String(els.assetMultiUploadCategory?.value || '').trim();
+        const aspect = normalizeAspect(els.assetMultiUploadAspect?.value);
 
         try {
           if (assetType === 'Image') {
@@ -1367,6 +1374,7 @@ App.assets = (function () {
                 const result = await importImageFile(file, {
                   assetName: file.name,
                   category,
+                  aspect,
                   tags: [],
                 });
                 imported += 1;

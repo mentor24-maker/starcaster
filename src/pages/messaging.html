@@ -45,7 +45,7 @@
                 <th>Content</th>
                 <th>Format</th>
                 <th>Topic</th>
-                <th class="messaging-content-actions-heading">Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingContentLibraryTable"></tbody>
@@ -250,7 +250,7 @@
                 <th>Format</th>
                 <th>Family</th>
                 <th>Destination</th>
-                <th class="messaging-content-actions-heading">Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingFormatsLibraryTable"></tbody>
@@ -296,7 +296,7 @@
                 <th id="messagingContentTypesSortFamilyBtn">Family</th>
                 <th id="messagingContentTypesSortUpdatedBtn">Updated</th>
                 <th>Enabled</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingContentTypesTable"></tbody>
@@ -390,7 +390,7 @@
                 <th id="messagingArticlesSortPlatformBtn">Platform</th>
                 <th id="messagingArticlesSortAuthorBtn">Author</th>
                 <th id="messagingArticlesSortThumbnailBtn">Thumbnail</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingArticlesTable"></tbody>
@@ -557,7 +557,7 @@
                 <th id="messagingTweetsSortHashtagsBtn">Hashtags</th>
                 <th id="messagingTweetsSortImageBtn">Image</th>
                 <th>Score</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingTweetsTable"></tbody>
@@ -703,7 +703,7 @@
                 <th>Score</th>
                 <th id="messagingPitchesSortCreatedBtn">Created</th>
                 <th id="messagingPitchesSortUpdatedBtn">Updated</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingPitchesTable"></tbody>
@@ -873,7 +873,6 @@
                 <th>
                   <select id="messagingHeadlinesFormatFilter">
                     <option value="">All Formats</option>
-                    <option value="Headlines">Headlines</option>
                   </select>
                 </th>
                 <th></th>
@@ -890,7 +889,7 @@
                 <th>Score</th>
                 <th id="messagingHeadlinesSortCreatedBtn">Created</th>
                 <th id="messagingHeadlinesSortUpdatedBtn">Updated</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingHeadlinesTable"></tbody>
@@ -922,7 +921,12 @@
             <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
-        <div class="messaging-topics-ai-toolbar">
+        <div class="messaging-topics-ai-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+          <select id="messagingTopicsFormatFilter" aria-label="Filter by format">
+            <option value="">All Formats</option>
+          </select>
+          <input id="messagingTopicsTopicFilter" type="text" placeholder="Filter topic" autocomplete="off" />
+          <button id="messagingTopicsFiltersGoBtn" type="button" class="btn">Go</button>
           <button id="messagingTopicsGenerateBtn" type="button" class="btn">Generate AI Suggestions</button>
         </div>
         <div id="messagingTopicsProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
@@ -971,7 +975,7 @@
                 <th class="stat-col-header">Segments</th>
                 <th class="stat-col-header">Pages</th>
                 <th class="stat-col-header">Reports</th>
-                <th class="messaging-topics-actions-heading">Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingTopicsTable"></tbody>
@@ -1041,7 +1045,7 @@
             <thead>
               <tr>
                 <th id="messagingTagsSortBtn">Tag</th>
-                <th class="messaging-topics-actions-heading">Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingTagsTable"></tbody>
@@ -1209,7 +1213,7 @@
                 <th>Score</th>
                 <th id="messagingSubheadingsSortCreatedBtn">Created</th>
                 <th id="messagingSubheadingsSortUpdatedBtn">Updated</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingSubheadingsTable"></tbody>
@@ -1358,7 +1362,7 @@
                 <th>Score</th>
                 <th id="messagingTaglinesSortCreatedBtn">Created</th>
                 <th id="messagingTaglinesSortUpdatedBtn">Updated</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingTaglinesTable"></tbody>
@@ -1477,7 +1481,7 @@
                 <th id="messagingReportsSortAuthorBtn">Author</th>
                 <th id="messagingReportsSortThumbnailBtn">Thumbnail</th>
                 <th id="messagingReportsSortPdfBtn">PDF</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingReportsTable"></tbody>
@@ -1579,7 +1583,7 @@
                 <th id="messagingWhitePapersSortAuthorBtn">Author</th>
                 <th id="messagingWhitePapersSortThumbnailBtn">Thumbnail</th>
                 <th id="messagingWhitePapersSortPdfBtn">PDF</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingWhitePapersTable"></tbody>
@@ -1681,7 +1685,7 @@
                 <th id="messagingEbooksSortAuthorBtn">Author</th>
                 <th id="messagingEbooksSortThumbnailBtn">Thumbnail</th>
                 <th id="messagingEbooksSortPdfBtn">PDF</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingEbooksTable"></tbody>
@@ -1709,3 +1713,18 @@
         </div>
         <p>CTA writing workspace placeholder.</p>
       </section>
+
+<dialog id="messagingFormatImportModal" class="c-modal">
+  <form id="messagingFormatImportForm" method="dialog" class="standard-form-grid" style="max-width: 520px;">
+    <h3 id="messagingFormatImportTitle" style="grid-column: 1 / -1; margin: 0;">Import CSV</h3>
+    <p id="messagingFormatImportHint" style="grid-column: 1 / -1; margin: 0; color: var(--ink-primary);"></p>
+    <label for="messagingFormatImportCsvFile"><strong>CSV File:</strong></label>
+    <input id="messagingFormatImportCsvFile" type="file" accept=".csv,text/csv" required />
+    <p id="messagingFormatImportPreview" class="hidden" style="grid-column: 1 / -1; margin: 0;"></p>
+    <div></div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <button type="submit" id="messagingFormatImportSubmitBtn" class="btn btn-primary">Import</button>
+      <button type="button" id="messagingFormatImportCloseBtn" class="btn btn-ghost">Cancel</button>
+    </div>
+  </form>
+</dialog>
