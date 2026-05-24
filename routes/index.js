@@ -289,6 +289,11 @@ async function handleRequest(req, res) {
     if (handled) return;
   }
 
+  if (messaging.isMessagingFormatImportPath(pathname) && method === 'POST') {
+    const handled = await messaging.handleFormatImport(req, res, pathname, String(method || '').toUpperCase());
+    if (handled) return;
+  }
+
   try {
     for (const mod of ROUTE_MODULES) {
       const handled = await mod.handle(req, res, pathname, method);

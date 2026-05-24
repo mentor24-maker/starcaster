@@ -174,21 +174,32 @@
 
         <h3 style="margin-top: 2rem;">Queue &amp; History</h3>
         <div class="table-wrap">
-          <table>
+          <table class="promote-social-posts-table">
             <thead>
               <tr>
                 <th>Platform</th>
-                <th>Status</th>
+                <th class="promote-social-post-status-col">Status</th>
                 <th>Scheduled</th>
                 <th>Published</th>
                 <th>Image</th>
                 <th>Post</th>
                 <th>Remote ID</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="promoteSocialPostsTable"></tbody>
           </table>
+        </div>
+
+        <div id="promoteSocialPostFailureModal" class="c-modal__backdrop hidden" style="z-index: 10050;">
+          <div class="c-modal__dialog promote-social-post-failure-dialog" role="dialog" aria-labelledby="promoteSocialPostFailureTitle" aria-modal="true">
+            <div class="promote-social-post-failure-dialog-header">
+              <h3 id="promoteSocialPostFailureTitle" style="margin: 0;">Post Failure Details</h3>
+              <button type="button" id="promoteSocialPostFailureCloseBtn" class="btn btn-ghost" aria-label="Close">Close</button>
+            </div>
+            <p id="promoteSocialPostFailureMeta" class="meta" style="margin: 0.5rem 0 1rem;"></p>
+            <pre id="promoteSocialPostFailureBody" class="code-box promote-social-post-failure-body"></pre>
+          </div>
         </div>
       </section>
       <section id="engageMessagingPage" class="app-page hidden">

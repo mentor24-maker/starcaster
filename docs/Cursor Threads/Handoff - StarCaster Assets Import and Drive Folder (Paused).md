@@ -5,6 +5,7 @@
 **Thread date:** 2026-05-22 / 2026-05-23  
 **Human:** Mentor  
 **Status at thread end:** **Google Drive folder import tabled (not priority).** Human switching back to **Normie** in a new thread.  
+**Updated resume doc (May 24, 2026):** [`Handoff - Google Drive Folder Import Resume.md`](Handoff%20-%20Google%20Drive%20Folder%20Import%20Resume.md) — OAuth Testing setup, `unauthorized_client` blocker, token script, paste-ready prompt.  
 **Cursor transcript:** `ca2cd320-9d79-4d1f-ac81-b79f4b9933c6` (parent workspace may show Normie path — work below is **StarCaster**)
 
 **Canonical technical doc:** [`docs/AI_AGENT_HANDOFF.md`](../AI_AGENT_HANDOFF.md)

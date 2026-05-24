@@ -102,7 +102,7 @@
         </div>
         <form id="campaignForm">
           <input id="campaignIdInput" name="campaignId" type="hidden" />
-          <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start;">
+          <div class="grid-form" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; column-gap: 100px;">
             <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Mechanics</h3>
               
@@ -155,150 +155,239 @@
                   </select>
                 
               </div>
-            </div>
-            <div class="stack-form" style="margin: 0;">
               <h3 style="margin: 1rem 0 0.75rem 0;">Content</h3>
               <p id="campaignContentChannelHint" class="meta">Select a channel to load content fields.</p>
               <div id="campaignContentConditional" style="margin: 0; display: none;">
 
                   <div class="campaign-content-row" data-field-id="campaignTopicSelect">
-                    <label for="campaignTopicSelect"><strong>Topics:</strong></label>
-                    <select name="topicId" id="campaignTopicSelect">
-                      <option value="">Topics</option>
-                    </select>
+                    <label for="campaignTopicSearch"><strong>Topics:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="topicId" id="campaignTopicSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignTopicSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignTopicListbox" aria-expanded="false" />
+                      <div id="campaignTopicListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignHeadlineSelect">
-                    <label for="campaignHeadlineSelect"><strong>Headline:</strong></label>
-                    <select name="headlineId" id="campaignHeadlineSelect">
-                      <option value="">Headline (placeholder until Messaging &gt; Headlines exists)</option>
-                    </select>
+                    <label for="campaignHeadlineSearch"><strong>Headline:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="headlineId" id="campaignHeadlineSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignHeadlineSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignHeadlineListbox" aria-expanded="false" />
+                      <div id="campaignHeadlineListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignEmailSelect">
-                    <label for="campaignEmailSelect"><strong>Email Body:</strong></label>
-                    <select name="emailId" id="campaignEmailSelect">
-                      <option value="">Email Body</option>
-                    </select>
+                    <label for="campaignEmailSearch"><strong>Email Body:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="emailId" id="campaignEmailSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignEmailSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignEmailListbox" aria-expanded="false" />
+                      <div id="campaignEmailListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignSubjectLineSelect">
-                    <label for="campaignSubjectLineSelect"><strong>Subject Line:</strong></label>
-                    <select name="subjectLineId" id="campaignSubjectLineSelect">
-                      <option value="">Subject Line</option>
-                    </select>
+                    <label for="campaignSubjectLineSearch"><strong>Subject Line:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="subjectLineId" id="campaignSubjectLineSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignSubjectLineSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignSubjectLineListbox" aria-expanded="false" />
+                      <div id="campaignSubjectLineListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignBlurbSelect">
-                    <label for="campaignBlurbSelect"><strong>Blurb:</strong></label>
-                    <select name="blurbId" id="campaignBlurbSelect">
-                      <option value="">Blurb (reserved)</option>
-                    </select>
+                    <label for="campaignBlurbSearch"><strong>Blurb:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="blurbId" id="campaignBlurbSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignBlurbSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignBlurbListbox" aria-expanded="false" />
+                      <div id="campaignBlurbListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignPitchSelect">
-                    <label for="campaignPitchSelect"><strong>Pitch:</strong></label>
-                    <select name="pitchId" id="campaignPitchSelect">
-                      <option value="">Pitch (placeholder until Messaging &gt; Pitches exists)</option>
-                    </select>
+                    <label for="campaignPitchSearch"><strong>Pitch:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="pitchId" id="campaignPitchSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignPitchSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignPitchListbox" aria-expanded="false" />
+                      <div id="campaignPitchListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignSubheadingSelect">
-                    <label for="campaignSubheadingSelect"><strong>Sub-heading:</strong></label>
-                    <select name="subheadingId" id="campaignSubheadingSelect">
-                      <option value="">Sub-heading</option>
-                    </select>
+                    <label for="campaignSubheadingSearch"><strong>Sub-heading:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="subheadingId" id="campaignSubheadingSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignSubheadingSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignSubheadingListbox" aria-expanded="false" />
+                      <div id="campaignSubheadingListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignTaglineSelect">
-                    <label for="campaignTaglineSelect"><strong>Tagline:</strong></label>
-                    <select name="taglineId" id="campaignTaglineSelect">
-                      <option value="">Tagline</option>
-                    </select>
+                    <label for="campaignTaglineSearch"><strong>Tagline:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="taglineId" id="campaignTaglineSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignTaglineSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignTaglineListbox" aria-expanded="false" />
+                      <div id="campaignTaglineListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignArticleSelect">
-                    <label for="campaignArticleSelect"><strong>Article:</strong></label>
-                    <select name="articleId" id="campaignArticleSelect">
-                      <option value="">Article</option>
-                    </select>
+                    <label for="campaignArticleSearch"><strong>Article:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="articleId" id="campaignArticleSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignArticleSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignArticleListbox" aria-expanded="false" />
+                      <div id="campaignArticleListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignReportSelect">
-                    <label for="campaignReportSelect"><strong>Report:</strong></label>
-                    <select name="reportId" id="campaignReportSelect">
-                      <option value="">Report</option>
-                    </select>
+                    <label for="campaignReportSearch"><strong>Report:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="reportId" id="campaignReportSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignReportSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignReportListbox" aria-expanded="false" />
+                      <div id="campaignReportListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignWhitePaperSelect">
-                    <label for="campaignWhitePaperSelect"><strong>White Paper:</strong></label>
-                    <select name="whitePaperId" id="campaignWhitePaperSelect">
-                      <option value="">White Paper</option>
-                    </select>
+                    <label for="campaignWhitePaperSearch"><strong>White Paper:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="whitePaperId" id="campaignWhitePaperSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignWhitePaperSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignWhitePaperListbox" aria-expanded="false" />
+                      <div id="campaignWhitePaperListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignEbookSelect">
-                    <label for="campaignEbookSelect"><strong>eBook:</strong></label>
-                    <select name="ebookId" id="campaignEbookSelect">
-                      <option value="">eBook</option>
-                    </select>
+                    <label for="campaignEbookSearch"><strong>eBook:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="ebookId" id="campaignEbookSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignEbookSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignEbookListbox" aria-expanded="false" />
+                      <div id="campaignEbookListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignPostSelect">
-                    <label for="campaignPostSelect"><strong>Post:</strong></label>
-                    <select name="postId" id="campaignPostSelect">
-                      <option value="">Post</option>
-                    </select>
+                    <label for="campaignPostSearch"><strong>Post:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="postId" id="campaignPostSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignPostSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignPostListbox" aria-expanded="false" />
+                      <div id="campaignPostListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignDescriptionSelect">
-                    <label for="campaignDescriptionSelect"><strong>Description:</strong></label>
-                    <select name="descriptionId" id="campaignDescriptionSelect">
-                      <option value="">Description</option>
-                    </select>
+                    <label for="campaignDescriptionSearch"><strong>Description:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="descriptionId" id="campaignDescriptionSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignDescriptionSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignDescriptionListbox" aria-expanded="false" />
+                      <div id="campaignDescriptionListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignTranscriptSelect">
-                    <label for="campaignTranscriptSelect"><strong>Transcript:</strong></label>
-                    <select name="transcriptId" id="campaignTranscriptSelect">
-                      <option value="">Transcript</option>
-                    </select>
+                    <label for="campaignTranscriptSearch"><strong>Transcript:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="transcriptId" id="campaignTranscriptSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignTranscriptSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignTranscriptListbox" aria-expanded="false" />
+                      <div id="campaignTranscriptListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignCommentSelect">
-                    <label for="campaignCommentSelect"><strong>Comment:</strong></label>
-                    <select name="commentId" id="campaignCommentSelect">
-                      <option value="">Comment</option>
-                    </select>
+                    <label for="campaignCommentSearch"><strong>Comment:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="commentId" id="campaignCommentSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignCommentSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignCommentListbox" aria-expanded="false" />
+                      <div id="campaignCommentListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignTweetSelect">
-                    <label for="campaignTweetSelect"><strong>Tweet:</strong></label>
-                    <select name="tweetId" id="campaignTweetSelect">
-                      <option value="">Tweet (optional)</option>
-                    </select>
+                    <label for="campaignTweetSearch"><strong>Tweet:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="tweetId" id="campaignTweetSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignTweetSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignTweetListbox" aria-expanded="false" />
+                      <div id="campaignTweetListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignCtaSelect">
-                    <label for="campaignCtaSelect"><strong>CTA:</strong></label>
-                    <select name="ctaId" id="campaignCtaSelect">
-                      <option value="">CTA (placeholder until Messaging &gt; CTAs exists)</option>
-                    </select>
+                    <label for="campaignCtaSearch"><strong>CTA:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="ctaId" id="campaignCtaSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignCtaSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignCtaListbox" aria-expanded="false" />
+                      <div id="campaignCtaListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignPrimaryImageSelect">
-                    <label for="campaignPrimaryImageSelect"><strong>Primary Image:</strong></label>
-                    <select name="primaryImageId" id="campaignPrimaryImageSelect">
-                      <option value="">Primary Image</option>
-                    </select>
+                    <label for="campaignPrimaryImageSearch"><strong>Primary Image:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="primaryImageId" id="campaignPrimaryImageSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignPrimaryImageSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignPrimaryImageListbox" aria-expanded="false" />
+                      <div id="campaignPrimaryImageListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignPrimaryVideoSelect">
-                    <label for="campaignPrimaryVideoSelect"><strong>Primary Video:</strong></label>
-                    <select name="primaryVideoId" id="campaignPrimaryVideoSelect">
-                      <option value="">Primary Video (optional)</option>
-                    </select>
+                    <label for="campaignPrimaryVideoSearch"><strong>Primary Video:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="primaryVideoId" id="campaignPrimaryVideoSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignPrimaryVideoSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignPrimaryVideoListbox" aria-expanded="false" />
+                      <div id="campaignPrimaryVideoListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
+                  </div>
+
+                  <div class="campaign-content-row" data-field-id="campaignLeadMagnetSelect">
+                    <label for="campaignLeadMagnetSearch"><strong>Lead Magnet:</strong></label>
+                    <div class="campaign-combobox">
+                      <select name="leadMagnetId" id="campaignLeadMagnetSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                      </select>
+                      <input type="text" id="campaignLeadMagnetSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignLeadMagnetListbox" aria-expanded="false" />
+                      <div id="campaignLeadMagnetListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                    </div>
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignHashtagGroupSelect">
@@ -319,6 +408,10 @@
 
                 <button id="campaignAddContentBtn" type="button" class="btn" style="margin-top: 0.75rem;">Add Content</button>
               </div>
+            </div>
+            <div class="stack-form campaign-live-preview-panel" style="margin: 0;">
+              <h3 style="margin: 1rem 0 0.75rem 0;">Preview</h3>
+              <div id="campaignLivePreview" class="campaign-live-preview"></div>
             </div>
           </div>
 

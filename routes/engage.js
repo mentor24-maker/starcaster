@@ -2230,7 +2230,42 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { processed: results, posts }, { processed: results, posts }), true;
   }
 
-  const publishMatch = String(pathname || '').match(/^\/api\/engage\/social\/posts\/([^/]+)\/publish\/?$/);
+  const cloneMatch = String(pathname || '').match(/^\/api\/(?:promote|engage)\/social\/posts\/([^/]+)\/clone\/?$/);
+  if (cloneMatch && requestMethod === 'POST') {
+    const postId = decodeURIComponent(cloneMatch[1] || '');
+    const scope = requestProjectScope(req);
+    const source = await socialStore.getPost(postId, scope);
+    if (!source) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+
+    let scheduledFor = safeText(source.scheduledFor);
+    const scheduledMs = scheduledFor ? new Date(scheduledFor).getTime() : NaN;
+    if (!scheduledFor || !Number.isFinite(scheduledMs) || scheduledMs <= Date.now()) {
+      scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    }
+
+    const cloned = await socialStore.createPost({
+      text: source.text,
+      channel: source.channel,
+      campaignId: source.campaignId,
+      imageUrl: source.imageUrl,
+      imageAlt: source.imageAlt,
+      status: 'scheduled',
+      scheduledFor,
+      diagnostics: source.diagnostics,
+    }, scope);
+
+    logActivity({
+      action: 'engage.social.cloned',
+      entityType: 'engage_social_post',
+      entityId: cloned.id,
+      summary: `Cloned ${String(cloned.channel || '').toUpperCase() || 'social'} post`,
+      meta: { sourcePostId: source.id, scheduledFor: cloned.scheduledFor || '' },
+    });
+
+    return sendOk(res, 201, { post: cloned }, { post: cloned }), true;
+  }
+
+  const publishMatch = String(pathname || '').match(/^\/api\/(?:promote|engage)\/social\/posts\/([^/]+)\/publish\/?$/);
   if (publishMatch && requestMethod === 'POST') {
     const postId = decodeURIComponent(publishMatch[1] || '');
     const scope = requestProjectScope(req);
@@ -2243,7 +2278,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, result.data), true;
   }
 
-  const postMatch = String(pathname || '').match(/^\/api\/engage\/social\/posts\/([^/]+)\/?$/);
+  const postMatch = String(pathname || '').match(/^\/api\/(?:promote|engage)\/social\/posts\/([^/]+)\/?$/);
   if (postMatch && requestMethod === 'DELETE') {
     const postId = decodeURIComponent(postMatch[1] || '');
     const scope = requestProjectScope(req);

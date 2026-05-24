@@ -18,6 +18,10 @@ alter table if exists public.messaging_headlines
   add column if not exists project_id text,
   add column if not exists owner_user_id text;
 
+alter table if exists public.messaging_wyr_questions
+  add column if not exists project_id text,
+  add column if not exists owner_user_id text;
+
 alter table if exists public.messaging_subheadings
   add column if not exists project_id text,
   add column if not exists owner_user_id text;

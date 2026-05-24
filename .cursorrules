@@ -75,6 +75,7 @@ Sourced from `docs/UI_STANDARDS.md`, `docs/STYLE_GUIDE.md`, and prior agent/huma
 - **Column headers:** plain `<th>` only — **never** put `<button>` or `<a>` inside `<th>`. Put sort `id` on the `<th>`; JS toggles sort and appends `▲`/`▼` to `textContent`.
 - Header style: black `#000` background, white bold text, left-aligned; hover `#b8e0ff` / `#0b3d7a`; cursor pointer on sortable columns.
 - **Actions column:** last column; `text-align: center` on header; use `.actions-col` on both `<th>` and `<td>`.
+- **Action icons row:** treat edit/clone/delete (and similar) icons as one **monolithic row that never wraps**. Wrap buttons in `<div class="table-actions-row">` via `App.finishTableActionsCell(td, ...buttons)` (see `App.appendTableActions` in `public/js/core.js`). Canonical CSS: `src/css/_tables.css` (`.table-actions-row { display: inline-flex; flex-wrap: nowrap; }`). Do not stack action icons vertically or allow them to break across lines—use horizontal scroll on `.table-wrap` if the viewport is narrow.
 - **Filter row:** `.table-filter-row` above header row; light background (`var(--bg-page)`), not black.
 - **Sorting:** every data table must support column sort on string/date headers with `sortColumn` / `sortDirection` state.
 - **Boolean filters:** use a single checkbox (e.g. `Has YouTube`) — not free-text URL fields for yes/no metadata.
@@ -83,6 +84,7 @@ Sourced from `docs/UI_STANDARDS.md`, `docs/STYLE_GUIDE.md`, and prior agent/huma
 ### Forms & labels
 - **Standard grid:** `.standard-form-grid` — `grid-template-columns: 140px 1fr`; labels in column 1 (not wrapping inputs), controls in column 2.
 - **No placeholders for instructions:** fields blank by default; permanent `<label>` to the left (or above in `.form-group` stacks).
+- **Content pickers (searchable combobox):** For dropdowns bound to long messaging/asset lists (campaign Content section, similar forms), use a **searchable combobox** — not a native `<select>` users must scroll. Pattern: hidden native `<select class="campaign-combobox-native">` (form value + `name`), visible `<input type="text">` for typing/filter, and `.campaign-combobox-list` listbox. IDs: `campaignFooSelect` → `campaignFooSearch` / `campaignFooListbox`. Populate via `setCampaignContentComboboxOptions()` in `public/js/campaigns.js`; wire once with `initCampaignContentComboboxes()`. Each option needs `value`, `label` (truncated display), and `searchText` (full text to match). Exclude bespoke multi-pickers (e.g. hashtag modal). Mechanics/short lists (channel, segment) may stay native `<select>`.
 - **Vertical stacks in modals:** `.form-group` for label → input sequences.
 - **Dense modals:** `.standard-form-grid-4col` when needed.
 - **Checkboxes in grid:** `.standard-form-checkbox` on the input; group related checkboxes in a flex/grid in column 2 under one label.

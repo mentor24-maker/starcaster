@@ -1,10 +1,20 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
-const { listPolls, createPoll, updatePoll, deletePoll, importPollRows } = require('../lib/pollsStore');
+const { listPolls, listWyrQuestionPolls, createPoll, updatePoll, deletePoll, importPollRows } = require('../lib/pollsStore');
 const { mapImportRow, validateAdvancedHeaders } = require('../lib/pollsCsvImport');
 
 async function handle(req, res, pathname, method) {
+  // GET /api/polls/wyr-questions
+  if (pathname === '/api/polls/wyr-questions' && method === 'GET') {
+    try {
+      const polls = await listWyrQuestionPolls();
+      return sendOk(res, 200, polls, { polls }), true;
+    } catch (err) {
+      return sendErr(res, 500, err.message), true;
+    }
+  }
+
   // GET /api/polls
   if (pathname === '/api/polls' && method === 'GET') {
     try {
