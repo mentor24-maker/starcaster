@@ -142,10 +142,9 @@
       </section>
       <section id="contactsPeerSitesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Contacts: Peer Sites</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="contactsPage">Contacts</a>: Peer Sites</h2>
           <div class="page-heading-actions">
             <button id="contactsPeerSitesRefreshBtn" type="button" class="btn">Refresh</button>
-            <button id="contactsPeerSitesBackBtn" type="button" class="btn">Back To Contacts</button>
           </div>
         </div>
         <div id="contactsPeerSitesMeta" class="meta" style="margin-bottom: 0.75rem;">No peer sites saved yet.</div>
@@ -231,10 +230,9 @@
       </section>
       <section id="contactsPeerSiteDetailsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Contacts: Peer Site Details</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="contactsPeerSitesPage">Contacts: Peer Sites</a>: Details</h2>
           <div class="page-heading-actions">
             <button id="contactsPeerSiteDetailsEditBtn" type="button" class="btn">Edit Peer Site</button>
-            <button id="contactsPeerSiteDetailsBackBtn" type="button" class="btn">Back To Peer Sites</button>
           </div>
         </div>
         <div id="contactsPeerSiteDetailsMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site selected.</div>
@@ -389,18 +387,15 @@
       </section>
       <section id="createContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Create Contact Persona</h2>
-          <button id="backToContactPersonasBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="contactPersonas.openPersonasPage">Contacts: Personas</a>: Create</h2>
         </div>
         <p>The create form now opens inline on the main Personas page.</p>
       </section>
       <section id="editContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Edit Contact Persona</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="contactPersonas.openPersonasPage">Contacts: Personas</a>: Edit</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn">Create Persona</button>
-            <button id="backFromEditContactPersonaBtn" type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
-            <button type="button" onclick="App.setActivePage('contactsPage')" class="btn">Back To Contacts</button>
           </div>
         </div>
         <form id="contactPersonaEditForm" class="standard-form-grid" onsubmit="App.contactPersonas.submitEditForm(event); return false;">
@@ -426,8 +421,7 @@
       </section>
       <section id="addContactPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Add Contact</h2>
-          <button id="backToContactsBtn" type="button" class="btn">Back To Contacts</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="contactsPage">Contacts</a>: Add Contact</h2>
         </div>
         <form id="contactForm" class="standard-form-grid">
           <label>First Name</label>
@@ -478,21 +472,19 @@
       </section>
       <section id="viewContactPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>View Contact</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="contactsPage">Contacts</a>: View</h2>
           <div class="page-heading-actions">
             <button id="editViewedContactBtn" type="button" class="btn">Edit Contact</button>
             <button id="cloneViewedContactBtn" type="button" class="btn">Clone Contact</button>
-            <button id="backFromViewContactBtn" type="button" class="btn">Back To Contacts</button>
           </div>
         </div>
         <div id="viewContactDetails" class="contact-detail-grid"></div>
       </section>
       <section id="editContactPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Edit Contact</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="contactsPage">Contacts</a>: Edit</h2>
           <div class="page-heading-actions">
             <button id="cloneEditedContactBtn" type="button" class="btn">Clone Contact</button>
-            <button id="backFromEditContactBtn" type="button" class="btn">Back To Contacts</button>
           </div>
         </div>
         <form id="contactEditForm" class="standard-form-grid">
@@ -558,8 +550,7 @@
       </section>
       <section id="cloneContactPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Clone Contact</h2>
-          <button id="backFromCloneContactBtn" type="button" class="btn">Back To Contacts</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="contactsPage">Contacts</a>: Clone Contact</h2>
         </div>
         <form id="contactCloneForm" class="standard-form-grid">
           <label>First Name</label>

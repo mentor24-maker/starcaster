@@ -597,7 +597,7 @@ App.messaging = (function () {
                 <th></th>
                 <th></th>
                 <th></th>
-                <th><button id="${ids.bulkEditBtnId}" type="button" class="btn tiny-btn" disabled>Edit Selected</button></th>
+                <th class="actions-col"><button id="${ids.bulkEditBtnId}" type="button" class="btn tiny-btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
@@ -1431,6 +1431,11 @@ App.messaging = (function () {
 
   const TWEET_PREVIEW_CHARACTER_LIMIT = 280;
   let tweetPreviewAccount = { name: 'Your account', handle: '@account' };
+  const TWEET_EDIT_ASSOC_TYPE_ORDER = ['Image', 'Video', 'Audio', 'Lead Magnet', 'File'];
+  let tweetEditAssocFilter = '';
+  let tweetEditAssocChecked = new Set();
+  let tweetEditAssocAssets = [];
+  let tweetEditAssocBound = false;
 
   function tweetEditPanelEl() {
     return document.getElementById('messagingTweetsEditPanel');
@@ -1461,7 +1466,456 @@ App.messaging = (function () {
     if (!form) return null;
     const imageId = Number(form.elements.image_asset_id?.value || 0) || 0;
     if (!imageId) return null;
-    return tweetImageAssets.find((asset) => (Number(asset.id || 0) || 0) === imageId) || null;
+    const pools = [
+      ...(Array.isArray(state.assets) ? state.assets : []),
+      ...(Array.isArray(allImageAssets) ? allImageAssets : []),
+      ...(Array.isArray(tweetImageAssets) ? tweetImageAssets : []),
+    ];
+    const seen = new Set();
+    for (const asset of pools) {
+      const id = Number(asset?.id || 0) || 0;
+      if (!id || seen.has(id)) continue;
+      if (id === imageId) return asset;
+      seen.add(id);
+    }
+    return null;
+  }
+
+  function displayTweetAssocAssetType(value) {
+    const type = String(value || '').trim();
+    if (type === 'Lead Magnet') return 'PDF';
+    return type || 'Other';
+  }
+
+  function truncateTweetAssocLabel(text, max = 100) {
+    const value = String(text || '').trim();
+    if (value.length <= max) return value || 'Tweet';
+    return `${value.slice(0, max - 1)}…`;
+  }
+
+  function normalizeTweetEditAssocQuery() {
+    return String(tweetEditAssocFilter || '').trim().toLowerCase();
+  }
+
+  function filteredTweetEditAssocAssets() {
+    const query = normalizeTweetEditAssocQuery();
+    const list = Array.isArray(tweetEditAssocAssets) ? tweetEditAssocAssets : [];
+    if (!query) return list;
+    return list.filter((asset) => String(asset.assetName || '').toLowerCase().includes(query));
+  }
+
+  function groupTweetEditAssocByType(assets) {
+    const grouped = new Map();
+    assets.forEach((asset) => {
+      const type = String(asset.assetType || '').trim() || 'Other';
+      if (!grouped.has(type)) grouped.set(type, []);
+      grouped.get(type).push(asset);
+    });
+    const order = [...TWEET_EDIT_ASSOC_TYPE_ORDER];
+    grouped.forEach((_, type) => {
+      if (!order.includes(type)) order.push(type);
+    });
+    return order
+      .map((type) => ({
+        type,
+        items: (grouped.get(type) || []).slice().sort((a, b) => {
+          return String(a.assetName || '').localeCompare(String(b.assetName || ''), undefined, { sensitivity: 'base' });
+        }),
+      }))
+      .filter((entry) => entry.items.length);
+  }
+
+  function renderTweetEditAssociations() {
+    const listEl = document.getElementById('messagingTweetEditAssocList');
+    if (!listEl) return;
+
+    const filtered = filteredTweetEditAssocAssets();
+    const groups = groupTweetEditAssocByType(filtered);
+    listEl.innerHTML = '';
+    listEl.classList.remove('is-empty-hint');
+
+    if (!groups.length) {
+      listEl.classList.add('is-empty-hint');
+      listEl.textContent = normalizeTweetEditAssocQuery()
+        ? 'No assets match your search.'
+        : 'No assets in this project.';
+      return;
+    }
+
+    groups.forEach(({ type, items }) => {
+      const section = document.createElement('section');
+      section.className = 'messaging-tweet-edit-assoc-group';
+
+      const heading = document.createElement('h4');
+      heading.textContent = displayTweetAssocAssetType(type);
+      section.appendChild(heading);
+
+      const ul = document.createElement('ul');
+      ul.className = 'messaging-tweet-edit-assoc-items';
+
+      items.forEach((asset) => {
+        const assetId = Number(asset.id || 0) || 0;
+        if (!assetId) return;
+
+        const li = document.createElement('li');
+        const label = document.createElement('label');
+        label.className = 'messaging-tweet-edit-assoc-row';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = tweetEditAssocChecked.has(assetId);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) tweetEditAssocChecked.add(assetId);
+          else tweetEditAssocChecked.delete(assetId);
+        });
+
+        const name = document.createElement('span');
+        name.textContent = String(asset.assetName || '').trim() || `Asset ${assetId}`;
+
+        label.appendChild(checkbox);
+        label.appendChild(name);
+        li.appendChild(label);
+        ul.appendChild(li);
+      });
+
+      section.appendChild(ul);
+      listEl.appendChild(section);
+    });
+  }
+
+  async function loadTweetEditAssociationAssets() {
+    const listEl = document.getElementById('messagingTweetEditAssocList');
+    if (listEl) {
+      listEl.classList.add('is-empty-hint');
+      listEl.textContent = 'Loading assets…';
+    }
+    try {
+      const res = await api('/api/assets');
+      tweetEditAssocAssets = Array.isArray(res.assets) ? res.assets : [];
+      state.assets = tweetEditAssocAssets;
+    } catch (err) {
+      tweetEditAssocAssets = Array.isArray(state.assets) ? state.assets : [];
+      notify(`Could not load assets for associations: ${err.message}`, true);
+    }
+    renderTweetEditAssociations();
+  }
+
+  async function associateCheckedTweetAssets() {
+    const editForm = document.getElementById('messagingTweetsEditForm');
+    const tweetId = String(editForm?.elements?.id?.value || '').trim();
+    if (!tweetId) {
+      notify('Tweet id is missing. Reload the tweet and try again.', true);
+      return;
+    }
+
+    const assetIds = Array.from(tweetEditAssocChecked);
+    if (!assetIds.length) {
+      notify('Select at least one asset to associate.', true);
+      return;
+    }
+
+    const tweetLabel = truncateTweetAssocLabel(cleanText(editForm?.elements?.content?.value));
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const assetId of assetIds) {
+      try {
+        await api(`/api/assets/${encodeURIComponent(assetId)}/associations`, {
+          method: 'POST',
+          body: JSON.stringify({
+            targetType: 'messaging_tweets',
+            targetId: tweetId,
+            targetLabel: `Tweet: ${tweetLabel}`,
+          }),
+        });
+        created += 1;
+      } catch (err) {
+        const message = String(err?.message || '').toLowerCase();
+        if (message.includes('already exists') || message.includes('duplicate')) {
+          skipped += 1;
+        } else {
+          failed += 1;
+        }
+      }
+    }
+
+    tweetEditAssocChecked.clear();
+    renderTweetEditAssociations();
+
+    const parts = [];
+    if (created) parts.push(`${created} associated`);
+    if (skipped) parts.push(`${skipped} already linked`);
+    if (failed) parts.push(`${failed} failed`);
+    const summary = parts.length ? `${parts.join(', ')}.` : 'No associations were created.';
+    notify(summary, failed > 0);
+
+    if (App.components?.Toast && created > 0) {
+      App.components.Toast.show(summary, failed > 0 ? 'error' : 'success');
+    }
+  }
+
+  function resetTweetEditAssociationsUi() {
+    tweetEditAssocFilter = '';
+    tweetEditAssocChecked.clear();
+    const search = document.getElementById('messagingTweetEditAssocSearch');
+    if (search) search.value = '';
+    renderTweetEditAssociations();
+  }
+
+  function bindTweetEditAssociations() {
+    if (tweetEditAssocBound) return;
+    tweetEditAssocBound = true;
+
+    const search = document.getElementById('messagingTweetEditAssocSearch');
+    if (search) {
+      search.addEventListener('input', () => {
+        tweetEditAssocFilter = search.value;
+        renderTweetEditAssociations();
+      });
+    }
+
+    const applyBtn = document.getElementById('messagingTweetEditAssocApplyBtn');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => {
+        associateCheckedTweetAssets();
+      });
+    }
+  }
+
+  const MESSAGING_EDIT_ASSOC_TYPE_ORDER = ['Image', 'Video', 'Audio', 'Lead Magnet', 'File'];
+
+  function displayMessagingEditAssocAssetType(value) {
+    const type = String(value || '').trim();
+    if (type === 'Lead Magnet') return 'PDF';
+    return type || 'Other';
+  }
+
+  function createMessagingEditAssocBridge(config) {
+    const assocState = {
+      filter: '',
+      checked: new Set(),
+      assets: [],
+      bound: false,
+    };
+
+    function normalizeAssocQuery() {
+      return String(assocState.filter || '').trim().toLowerCase();
+    }
+
+    function filteredAssocAssets() {
+      const query = normalizeAssocQuery();
+      const list = Array.isArray(assocState.assets) ? assocState.assets : [];
+      if (!query) return list;
+      return list.filter((asset) => String(asset.assetName || '').toLowerCase().includes(query));
+    }
+
+    function groupAssocByType(assets) {
+      const grouped = new Map();
+      assets.forEach((asset) => {
+        const type = String(asset.assetType || '').trim() || 'Other';
+        if (!grouped.has(type)) grouped.set(type, []);
+        grouped.get(type).push(asset);
+      });
+      const order = [...MESSAGING_EDIT_ASSOC_TYPE_ORDER];
+      grouped.forEach((_, type) => {
+        if (!order.includes(type)) order.push(type);
+      });
+      return order
+        .map((type) => ({
+          type,
+          items: (grouped.get(type) || []).slice().sort((a, b) => {
+            return String(a.assetName || '').localeCompare(String(b.assetName || ''), undefined, { sensitivity: 'base' });
+          }),
+        }))
+        .filter((entry) => entry.items.length);
+    }
+
+    function render() {
+      const listEl = document.getElementById(config.listElId);
+      if (!listEl) return;
+
+      const groups = groupAssocByType(filteredAssocAssets());
+      listEl.innerHTML = '';
+      listEl.classList.remove('is-empty-hint');
+
+      if (!groups.length) {
+        listEl.classList.add('is-empty-hint');
+        listEl.textContent = normalizeAssocQuery()
+          ? 'No assets match your search.'
+          : 'No assets in this project.';
+        return;
+      }
+
+      groups.forEach(({ type, items }) => {
+        const section = document.createElement('section');
+        section.className = 'messaging-tweet-edit-assoc-group';
+
+        const heading = document.createElement('h4');
+        heading.textContent = displayMessagingEditAssocAssetType(type);
+        section.appendChild(heading);
+
+        const ul = document.createElement('ul');
+        ul.className = 'messaging-tweet-edit-assoc-items';
+
+        items.forEach((asset) => {
+          const assetId = Number(asset.id || 0) || 0;
+          if (!assetId) return;
+
+          const li = document.createElement('li');
+          const label = document.createElement('label');
+          label.className = 'messaging-tweet-edit-assoc-row';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = assocState.checked.has(assetId);
+          checkbox.addEventListener('change', () => {
+            if (checkbox.checked) assocState.checked.add(assetId);
+            else assocState.checked.delete(assetId);
+          });
+
+          const name = document.createElement('span');
+          name.textContent = String(asset.assetName || '').trim() || `Asset ${assetId}`;
+
+          label.appendChild(checkbox);
+          label.appendChild(name);
+          li.appendChild(label);
+          ul.appendChild(li);
+        });
+
+        section.appendChild(ul);
+        listEl.appendChild(section);
+      });
+    }
+
+    async function loadAssets() {
+      const listEl = document.getElementById(config.listElId);
+      if (listEl) {
+        listEl.classList.add('is-empty-hint');
+        listEl.textContent = 'Loading assets…';
+      }
+      try {
+        const res = await api('/api/assets');
+        assocState.assets = Array.isArray(res.assets) ? res.assets : [];
+        state.assets = assocState.assets;
+      } catch (err) {
+        assocState.assets = Array.isArray(state.assets) ? state.assets : [];
+        notify(`Could not load assets for associations: ${err.message}`, true);
+      }
+      render();
+    }
+
+    async function associateChecked() {
+      const editForm = document.getElementById(config.formId);
+      const targetId = String(editForm?.elements?.id?.value || '').trim();
+      if (!targetId) {
+        notify(config.missingIdMessage, true);
+        return;
+      }
+
+      const assetIds = Array.from(assocState.checked);
+      if (!assetIds.length) {
+        notify('Select at least one asset to associate.', true);
+        return;
+      }
+
+      const targetLabel = config.formatTargetLabel(editForm);
+      let created = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const assetId of assetIds) {
+        try {
+          await api(`/api/assets/${encodeURIComponent(assetId)}/associations`, {
+            method: 'POST',
+            body: JSON.stringify({
+              targetType: config.targetType,
+              targetId,
+              targetLabel,
+            }),
+          });
+          created += 1;
+        } catch (err) {
+          const message = String(err?.message || '').toLowerCase();
+          if (message.includes('already exists') || message.includes('duplicate')) {
+            skipped += 1;
+          } else {
+            failed += 1;
+          }
+        }
+      }
+
+      assocState.checked.clear();
+      render();
+
+      const parts = [];
+      if (created) parts.push(`${created} associated`);
+      if (skipped) parts.push(`${skipped} already linked`);
+      if (failed) parts.push(`${failed} failed`);
+      const summary = parts.length ? `${parts.join(', ')}.` : 'No associations were created.';
+      notify(summary, failed > 0);
+
+      if (App.components?.Toast && created > 0) {
+        App.components.Toast.show(summary, failed > 0 ? 'error' : 'success');
+      }
+    }
+
+    function resetUi() {
+      assocState.filter = '';
+      assocState.checked.clear();
+      const search = document.getElementById(config.searchId);
+      if (search) search.value = '';
+      render();
+    }
+
+    function bind() {
+      if (assocState.bound) return;
+      assocState.bound = true;
+
+      const search = document.getElementById(config.searchId);
+      if (search) {
+        search.addEventListener('input', () => {
+          assocState.filter = search.value;
+          render();
+        });
+      }
+
+      const applyBtn = document.getElementById(config.applyBtnId);
+      if (applyBtn) {
+        applyBtn.addEventListener('click', () => {
+          associateChecked();
+        });
+      }
+    }
+
+    return { render, loadAssets, associateChecked, resetUi, bind };
+  }
+
+  function truncateMessagingAssocLabel(text, max = 100, fallback = 'Item') {
+    const value = String(text || '').trim();
+    if (value.length <= max) return value || fallback;
+    return `${value.slice(0, max - 1)}…`;
+  }
+
+  const headlineEditAssoc = createMessagingEditAssocBridge({
+    listElId: 'messagingHeadlineEditAssocList',
+    searchId: 'messagingHeadlineEditAssocSearch',
+    applyBtnId: 'messagingHeadlineEditAssocApplyBtn',
+    formId: 'messagingHeadlineEditForm',
+    targetType: 'messaging_headlines',
+    missingIdMessage: 'Headline id is missing. Reload the headline and try again.',
+    formatTargetLabel: (form) => {
+      const text = cleanText(form?.elements?.headline?.value);
+      return `Headline: ${truncateMessagingAssocLabel(text, 100, 'Headline')}`;
+    },
+  });
+
+  function headlineEditPanelEl() {
+    return document.getElementById('messagingHeadlinesEditPanel');
+  }
+
+  function bindHeadlineEditAssociations() {
+    headlineEditAssoc.bind();
   }
 
   async function loadTweetPreviewAccount() {
@@ -1574,6 +2028,7 @@ App.messaging = (function () {
     const addBtn = document.getElementById('messagingTweetsToggleFormBtn');
     if (!editForm || !tweet) return;
     if (panel) panel.classList.remove('hidden');
+    App.pageHeadingNav?.setParentHeadingVisible?.(document.getElementById('messagingTweetsPageHeading'), false);
     editForm.elements.id.value = String(tweet.id || '');
     if (editForm.elements.topic) editForm.elements.topic.value = String(tweet.topic || tweet.category || '');
     editForm.elements.content.value = String(tweet.content || '');
@@ -1586,8 +2041,11 @@ App.messaging = (function () {
     if (workspace) workspace.classList.add('hidden');
     if (addBtn) addBtn.textContent = 'Add Tweet';
     bindTweetEditPreview(editForm);
+    bindTweetEditAssociations();
+    App.pageHeadingNav?.bindBackLinks?.(panel || editForm);
     renderTweetEditPreview(editForm);
     loadTweetPreviewAccount().then(() => renderTweetEditPreview(editForm));
+    loadTweetEditAssociationAssets();
     (panel || editForm).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -1596,7 +2054,9 @@ App.messaging = (function () {
     const panel = tweetEditPanelEl();
     if (editForm) editForm.reset();
     renderTweetImagePickerDisplay('messagingTweetEditImageSelect');
+    resetTweetEditAssociationsUi();
     if (panel) panel.classList.add('hidden');
+    App.pageHeadingNav?.setParentHeadingVisible?.(document.getElementById('messagingTweetsPageHeading'), true);
   }
 
   function clearTweetSuggestions() {
@@ -2652,22 +3112,30 @@ App.messaging = (function () {
 
   function openHeadlineEditForm(item) {
     const form = document.getElementById('messagingHeadlineEditForm');
+    const panel = headlineEditPanelEl();
     const createWrap = document.getElementById('messagingHeadlinesCreateWrap');
     const toggleBtn = document.getElementById('messagingHeadlinesToggleFormBtn');
     if (!form || !item) return;
     syncHeadlineCategorySelects();
     fillHeadlineFormFromItem(form, item);
-    form.classList.remove('hidden');
+    if (panel) panel.classList.remove('hidden');
+    App.pageHeadingNav?.setParentHeadingVisible?.(document.getElementById('messagingHeadlinesPageHeading'), false);
     if (createWrap) createWrap.classList.add('hidden');
     if (toggleBtn) toggleBtn.textContent = 'Create Headlines';
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    bindHeadlineEditAssociations();
+    App.pageHeadingNav?.bindBackLinks?.(panel || form);
+    headlineEditAssoc.resetUi();
+    headlineEditAssoc.loadAssets();
+    (panel || form).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function closeHeadlineEditForm() {
     const form = document.getElementById('messagingHeadlineEditForm');
-    if (!form) return;
-    form.reset();
-    form.classList.add('hidden');
+    const panel = headlineEditPanelEl();
+    if (form) form.reset();
+    headlineEditAssoc.resetUi();
+    if (panel) panel.classList.add('hidden');
+    App.pageHeadingNav?.setParentHeadingVisible?.(document.getElementById('messagingHeadlinesPageHeading'), true);
   }
 
   function getFilteredSortedHeadlines() {
@@ -7367,6 +7835,7 @@ App.messaging = (function () {
   function init() {
     ensureSimpleContentPages();
     wireMessagingFormatImports();
+    if (App.assetFieldImport?.init) App.assetFieldImport.init();
     const messagingContentTextFilter = document.getElementById('messagingContentTextFilter');
     const messagingContentFormatFilter = document.getElementById('messagingContentFormatFilter');
     const messagingContentTopicFilter = document.getElementById('messagingContentTopicFilter');
@@ -9121,6 +9590,9 @@ App.messaging = (function () {
       });
     }
 
+    bindTweetEditAssociations();
+    bindHeadlineEditAssociations();
+
     if (tweetSavedPrompt) {
       tweetSavedPrompt.addEventListener('change', function () {
         const selectedId = String(tweetSavedPrompt.value || '').trim();
@@ -9286,6 +9758,8 @@ App.messaging = (function () {
     openTagsPage,
     openTagsCreate,
     openContentLanding,
+    closeTweetEditForm,
+    closeHeadlineEditForm,
     openCreateContent,
     openManageContentLanding,
     openManageContentCategory,
@@ -9303,6 +9777,9 @@ App.messaging = (function () {
           renderMessagingOverview();
         });
       });
+    },
+    refreshHeadlines: function () {
+      return refreshHeadlines();
     },
     onPageActivated: function () {
       return loadThumbnailOptions().then(function () {

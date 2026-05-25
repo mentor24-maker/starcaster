@@ -88,9 +88,17 @@ App.assets = (function () {
     return String(value == null ? '' : value).trim().toLowerCase();
   }
 
+  function syncAssetCaptionFieldVisibility(assetType) {
+    const isImage = String(assetType || '').trim() === 'Image';
+    document.querySelectorAll('.asset-caption-field').forEach((el) => {
+      el.classList.toggle('hidden', !isImage);
+    });
+  }
+
   function updateAssetSortButtons() {
     const configs = [
       ['assetsSortNameBtn', 'assetName', 'Asset Name'],
+      ['assetsSortCaptionBtn', 'caption', 'Caption'],
       ['assetsSortTypeBtn', 'assetType', 'Asset Type'],
       ['assetsSortCategoryBtn', 'category', 'Category'],
       ['assetsSortAspectBtn', 'aspect', 'Aspect'],
@@ -267,6 +275,7 @@ App.assets = (function () {
   function getFilteredAssets() {
     const filters = state.assetsFilters || {};
     const name = String(filters.asset_name || '').trim().toLowerCase();
+    const caption = String(filters.caption || '').trim().toLowerCase();
     const type = String(filters.asset_type || '').trim();
     const category = String(filters.category || '').trim().toLowerCase();
     const aspect = normalizeAspect(filters.aspect);
@@ -275,6 +284,7 @@ App.assets = (function () {
 
     const filtered = (state.assets || []).filter((asset) => {
       const assetName = String(asset.assetName || '').toLowerCase();
+      const assetCaption = String(asset.caption || '').toLowerCase();
       const assetType = String(asset.assetType || '');
       const assetCategory = String(asset.category || '').toLowerCase();
       const assetAspect = resolvedAssetAspect(asset);
@@ -283,6 +293,7 @@ App.assets = (function () {
       const assetSizeFmt = formatBytes(asset.size).toLowerCase();
 
       if (name && !assetName.includes(name)) return false;
+      if (caption && !assetCaption.includes(caption)) return false;
       if (type && assetType !== type) return false;
       if (category && assetCategory !== category) return false;
       if (aspect && assetAspect !== aspect) return false;
@@ -422,6 +433,7 @@ App.assets = (function () {
   function resetAssetForm() {
     editingAssetId = null;
     if (els.assetForm) els.assetForm.reset();
+    syncAssetCaptionFieldVisibility('');
     renderCategoryOptionsByType('', '');
     renderAssetTopicOptions('');
     if (els.assetIdInput) els.assetIdInput.value = '';
@@ -673,6 +685,9 @@ App.assets = (function () {
     if (els.assetsFilterAspect?.options?.[0]) els.assetsFilterAspect.options[0].textContent = 'All Aspects';
 
     els.assetsFilterName.value = String(state.assetsFilters?.asset_name || '');
+    if (els.assetsFilterCaption) {
+      els.assetsFilterCaption.value = String(state.assetsFilters?.caption || '');
+    }
     const activeType = String(state.assetsFilters?.asset_type || '').trim();
     els.assetsFilterType.value = activeType;
     if (els.assetsFilterAspect) els.assetsFilterAspect.value = normalizeAspect(state.assetsFilters?.aspect);
@@ -715,8 +730,10 @@ App.assets = (function () {
         els.assetForm.topic.value = String(asset.topic || '');
       }
     }
+    if (els.assetCaptionInput) els.assetCaptionInput.value = String(asset.caption || '');
     if (els.assetForm.comments) els.assetForm.comments.value = String(asset.comments || '');
     els.assetForm.tags.value = Array.isArray(asset.tags) ? asset.tags.join(', ') : '';
+    syncAssetCaptionFieldVisibility(asset.assetType);
     if (els.assetIdInput) {
       els.assetIdInput.value = String(editingAssetId);
     }
@@ -852,6 +869,12 @@ App.assets = (function () {
         nameTd.textContent = nameText;
       }
       tr.appendChild(nameTd);
+
+      const captionTd = document.createElement('td');
+      captionTd.textContent = assetTypeText === 'Image'
+        ? (String(asset.caption || '').trim() || '-')
+        : '-';
+      tr.appendChild(captionTd);
 
       appendCell(tr, displayAssetType(asset.assetType));
       appendCell(tr, asset.category);
@@ -1045,7 +1068,14 @@ App.assets = (function () {
     if (assetsRes.status === 'fulfilled') {
       state.assets = assetsRes.value.assets || [];
     } else {
-      throw assetsRes.reason || new Error('Failed to load assets');
+      const reason = assetsRes.reason || new Error('Failed to load assets');
+      const msg = String(reason?.message || reason || '');
+      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        throw new Error(
+          'Cannot reach the API. Start the dev server (npm run dev) and open the app on the same port shown in the terminal (often http://localhost:3001).'
+        );
+      }
+      throw reason;
     }
 
     if (categoriesRes.status === 'fulfilled') {
@@ -1074,6 +1104,7 @@ App.assets = (function () {
 
     const btns = document.querySelectorAll('.assets-header-action-btn');
     btns.forEach(b => b.classList.add('hidden'));
+    App.assetFieldImport?.syncImagesImportButton?.('');
 
     try {
       await refresh();
@@ -1117,7 +1148,8 @@ App.assets = (function () {
     
     const btns = document.querySelectorAll('.assets-header-action-btn');
     btns.forEach(b => b.classList.remove('hidden'));
-    
+    App.assetFieldImport?.syncImagesImportButton?.(nextType);
+
     App.setActivePage('assetsPage');
     try {
       await refresh();
@@ -1200,6 +1232,7 @@ App.assets = (function () {
   }
 
   function init() {
+    if (App.assetFieldImport?.init) App.assetFieldImport.init();
     if (App.assetAssociations?.init) App.assetAssociations.init();
     readManualAspectOverrides();
     const bindSortButton = (id, key, defaultDir = 'asc') => {
@@ -1217,6 +1250,7 @@ App.assets = (function () {
     };
 
     bindSortButton('assetsSortNameBtn', 'assetName', 'asc');
+    bindSortButton('assetsSortCaptionBtn', 'caption', 'asc');
     bindSortButton('assetsSortTypeBtn', 'assetType', 'asc');
     bindSortButton('assetsSortCategoryBtn', 'category', 'asc');
     bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
@@ -1433,6 +1467,10 @@ App.assets = (function () {
       });
     }
 
+    if (els.assetForm?.asset_type) {
+      syncAssetCaptionFieldVisibility(String(els.assetForm.asset_type.value || '').trim());
+    }
+
     if (els.assetForm) {
       els.assetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1443,6 +1481,7 @@ App.assets = (function () {
           category: String(formData.get('category') || '').trim(),
           aspect: normalizeAspect(formData.get('aspect')),
           topic: String(formData.get('topic') || '').trim(),
+          caption: String(formData.get('caption') || '').trim(),
           comments: String(formData.get('comments') || '').trim(),
           tags: String(formData.get('tags') || '')
             .split(',')
@@ -1479,6 +1518,7 @@ App.assets = (function () {
         const assetType = String(els.assetForm.asset_type.value || '').trim();
         const existingCategory = String(els.assetForm.category?.value || '').trim();
         renderCategoryOptionsByType(assetType, existingCategory);
+        syncAssetCaptionFieldVisibility(assetType);
         if (editingAssetId) return;
         const assetName = String(els.assetForm.asset_name?.value || '').trim();
         const tags = String(els.assetForm.tags?.value || '')
@@ -1524,6 +1564,7 @@ App.assets = (function () {
     };
 
     bindHeaderField(els.assetsFilterName, 'asset_name');
+    bindHeaderField(els.assetsFilterCaption, 'caption');
     bindHeaderField(els.assetsFilterCategory, 'category');
     bindHeaderField(els.assetsFilterAspect, 'aspect');
     bindHeaderField(els.assetsFilterTags, 'tags');
@@ -1556,6 +1597,7 @@ App.assets = (function () {
       els.assetsApplyFilterBtn.addEventListener('click', () => {
         if (isBulkMode()) return;
         state.assetsFilters.asset_name = String(els.assetsFilterName?.value || '');
+        state.assetsFilters.caption = String(els.assetsFilterCaption?.value || '');
         state.assetsFilters.asset_type = String(els.assetsFilterType?.value || '');
         state.assetsFilters.category = String(els.assetsFilterCategory?.value || '');
         state.assetsFilters.aspect = normalizeAspect(els.assetsFilterAspect?.value);

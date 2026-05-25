@@ -85,9 +85,8 @@
       </section>
       <section id="editChannelPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Edit Channel</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="channels.openChannelsPage">Channels</a>: Edit</h2>
           <div class="page-heading-actions">
-            <button id="backFromEditChannelBtn" type="button" onclick="App.channels.openChannelsPage(); return false;" class="btn">Back To Channels</button>
           </div>
         </div>
         <form id="channelEditForm" class="standard-form-grid" onsubmit="App.channels.submitChannelEdit(event); return false;">
