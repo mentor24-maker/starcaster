@@ -288,6 +288,34 @@
     <p id="message"></p>
   </div>
 
+  <div id="assetFieldImportModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assetFieldImportModalTitle">
+    <div class="modal-content asset-field-import-modal">
+      <div class="asset-field-import-modal-header">
+        <h3 id="assetFieldImportModalTitle">Import from Assets</h3>
+        <button id="assetFieldImportCloseBtn" type="button" class="btn btn-ghost">Close</button>
+      </div>
+      <div class="asset-field-import-modal-body">
+        <div class="asset-field-import-row">
+          <div class="asset-field-import-side">
+            <label for="assetFieldImportFromType">Copy from</label>
+            <select id="assetFieldImportFromType" aria-label="Copy from"></select>
+          </div>
+          <div class="asset-field-import-center">
+            <label for="assetFieldImportIncludes">Includes</label>
+            <input id="assetFieldImportIncludes" type="text" autocomplete="off" spellcheck="false" />
+            <button id="assetFieldImportRunBtn" type="button" class="btn btn-primary asset-field-import-run-btn" aria-label="Run import" title="Run import">→</button>
+          </div>
+          <div class="asset-field-import-side">
+            <label for="assetFieldImportToType">Copy to</label>
+            <select id="assetFieldImportToType" aria-label="Copy to"></select>
+          </div>
+        </div>
+        <p id="assetFieldImportHint" class="asset-field-import-hint meta"></p>
+        <p id="assetFieldImportResult" class="asset-field-import-result meta hidden" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+
   <!-- YouTube Miner Target Selector Modal -->
   <div id="youtubeMinerTargetSelectorModal" class="c-modal__backdrop hidden" style="z-index: 10050; display: none;">
     <div class="c-modal__dialog"
@@ -375,6 +403,8 @@
   <script src="/js/observe.js"></script>
   <script src="/js/devAgent.js"></script>
   <script src="/js/assetAssociations.js?v=1.0"></script>
+  <script src="/js/assetFieldImport.js?v=2.3"></script>
+  <script src="/js/pageHeadingNav.js?v=1.0"></script>
   <script src="/js/assets.js?v=1.2"></script>
   <script src="/js/assetsVideo.js?v=1.6"></script>
   <script src="/js/assetCategories.js"></script>

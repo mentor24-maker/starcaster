@@ -23,6 +23,9 @@
     "assets:thumbnails:dry-run": "node scripts/generate_asset_thumbnails.js",
     "assets:thumbnails:apply": "node scripts/generate_asset_thumbnails.js --apply",
     "verify:import-drive-folder": "node scripts/verify_import_drive_folder_route.js",
+    "verify:import-from-fields": "node scripts/verify_import_from_fields_route.js",
+    "sync:wyr-tweets-ocr:dry-run": "node scripts/sync_wyr_tweets_from_image_ocr.js",
+    "sync:wyr-tweets-ocr:apply": "node scripts/sync_wyr_tweets_from_image_ocr.js --apply",
     "check:vercel-cutover": "node scripts/vercel_cutover_check.js",
     "import:training-context:apply": "node scripts/harvest_knowledge.mjs",
     "sync:dev-logs": "node scripts/sync_dev_logs.mjs"

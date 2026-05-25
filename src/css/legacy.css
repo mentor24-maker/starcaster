@@ -2429,21 +2429,13 @@ button[type="submit"] {
   margin-bottom: 0.75rem;
 }
 
-.messaging-tweet-edit-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-  gap: 1rem;
-  align-items: start;
-}
+/* Tweet edit grid: see _messaging-tweet-edit.css */
 
 .messaging-tweet-edit-form {
   max-width: none;
 }
 
-.messaging-tweet-edit-preview-column {
-  position: sticky;
-  top: 12px;
-}
+/* Tweet edit columns: see _messaging-tweet-edit.css */
 
 .messaging-tweet-edit-preview-title {
   margin: 0 0 0.35rem;
@@ -2461,15 +2453,6 @@ button[type="submit"] {
   margin: 0;
 }
 
-@media (max-width: 960px) {
-  .messaging-tweet-edit-columns {
-    grid-template-columns: 1fr;
-  }
-
-  .messaging-tweet-edit-preview-column {
-    position: static;
-  }
-}
 
 #messagingCreateContentFeedbackWrap textarea {
   min-height: 120px;

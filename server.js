@@ -30,6 +30,7 @@ const http = require('http');
 const path = require('path');
 const fs   = require('fs');
 const { handleRequest, logRegistry } = require('./routes/index');
+const { sendErr } = require('./routes/http');
 const { initTimerDaemon } = require('./lib/taskTimerDaemon');
 
 const PORT = Number(config.get('port')) || 3000;
@@ -462,9 +463,25 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.url.startsWith('/api/')) {
-    return handleRequest(req, res);
+    try {
+      await handleRequest(req, res);
+    } catch (err) {
+      console.error('[server] API request failed:', err);
+      if (!res.headersSent) {
+        sendErr(res, 500, err?.message || 'Internal server error', { code: 'INTERNAL_ERROR' });
+      }
+    }
+    return;
   }
   serveStatic(req, res);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[server] Uncaught exception:', err);
 });
 
 server.listen(PORT, () => {
@@ -473,6 +490,7 @@ server.listen(PORT, () => {
   try {
     const assetsRoutes = require('./routes/assets');
     console.log(`[server] ${assetsRoutes.IMPORT_DRIVE_FOLDER_PATH} registered (GET health, POST import)`);
+    console.log(`[server] ${assetsRoutes.IMPORT_FROM_FIELDS_PATH} registered (GET meta, POST import)`);
   } catch (err) {
     console.warn('[server] Assets routes failed to load:', err.message);
   }
