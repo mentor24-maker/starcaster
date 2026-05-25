@@ -121,6 +121,7 @@ App.state = {
   },
   assetsFilters: {
     asset_name: '',
+    caption: '',
     asset_type: '',
     category: '',
     tags: '',
@@ -229,6 +230,9 @@ App.els = {
   assetPreviewLink: document.getElementById('assetPreviewLink'),
   assetFormSubmitBtn: document.getElementById('assetFormSubmitBtn'),
   assetsFilterName: document.getElementById('assetsFilterName'),
+  assetsFilterCaption: document.getElementById('assetsFilterCaption'),
+  assetsSortCaptionBtn: document.getElementById('assetsSortCaptionBtn'),
+  assetCaptionInput: document.getElementById('assetCaptionInput'),
   assetsFilterType: document.getElementById('assetsFilterType'),
   assetsFilterCategory: document.getElementById('assetsFilterCategory'),
   assetsFilterAspect: document.getElementById('assetsFilterAspect'),

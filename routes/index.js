@@ -161,6 +161,24 @@ async function handleRequest(req, res) {
     });
   }
 
+  if (pathnameEarly === '/api/assets/import-from-fields/status' && methodEarly === 'GET') {
+    let importModuleOk = false;
+    try {
+      require('../lib/assetFieldImport');
+      importModuleOk = true;
+    } catch (err) {
+      importModuleOk = false;
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      registered: true,
+      available: importModuleOk,
+      path: '/api/assets/import-from-fields',
+      handler: typeof assets.handleImportFromFields === 'function',
+      note: 'POST requires login. After login, use Assets → Images or Messaging → Headlines → Import from Assets.',
+    });
+  }
+
   // ── Global rate limit ceiling ────────────────────────────────────────────
   // Applied to every API request before any routing logic runs.
   // Expensive endpoints additionally check their own per-endpoint limit
@@ -264,6 +282,8 @@ async function handleRequest(req, res) {
       assetFeatures: {
         importDriveFolder: typeof assets.handleImportDriveFolder === 'function',
         importDriveFolderPath: assets.IMPORT_DRIVE_FOLDER_PATH || null,
+        importFromFields: typeof assets.handleImportFromFields === 'function',
+        importFromFieldsPath: assets.IMPORT_FROM_FIELDS_PATH || null,
         importDriveFolderModule: (() => {
           try {
             require('../lib/assetDriveFolderImport');
@@ -277,24 +297,36 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, { ok: true, data: payload, ...payload });
   }
 
-  if (assets.isImportDriveFolderPath(pathname) && (method === 'POST' || method === 'GET')) {
-    const scope = {
-      projectId: String(req?.projectContext?.project?.id || '').trim(),
-      userId: String(req?.authUser?.id || '').trim(),
-      projectIds: Array.isArray(req?.projectContext?.projects)
-        ? req.projectContext.projects.map((project) => String(project?.id || '').trim()).filter(Boolean)
-        : [],
-    };
-    const handled = await assets.handleImportDriveFolder(req, res, scope, String(method || '').toUpperCase());
-    if (handled) return;
-  }
-
-  if (messaging.isMessagingFormatImportPath(pathname) && method === 'POST') {
-    const handled = await messaging.handleFormatImport(req, res, pathname, String(method || '').toUpperCase());
-    if (handled) return;
-  }
-
   try {
+    if (assets.isImportDriveFolderPath(pathname) && (method === 'POST' || method === 'GET')) {
+      const scope = {
+        projectId: String(req?.projectContext?.project?.id || '').trim(),
+        userId: String(req?.authUser?.id || '').trim(),
+        projectIds: Array.isArray(req?.projectContext?.projects)
+          ? req.projectContext.projects.map((project) => String(project?.id || '').trim()).filter(Boolean)
+          : [],
+      };
+      const handled = await assets.handleImportDriveFolder(req, res, scope, String(method || '').toUpperCase());
+      if (handled) return;
+    }
+
+    if (assets.isImportFromFieldsPath(pathname) && (method === 'POST' || method === 'GET')) {
+      const scope = {
+        projectId: String(req?.projectContext?.project?.id || '').trim(),
+        userId: String(req?.authUser?.id || '').trim(),
+        projectIds: Array.isArray(req?.projectContext?.projects)
+          ? req.projectContext.projects.map((project) => String(project?.id || '').trim()).filter(Boolean)
+          : [],
+      };
+      const handled = await assets.handleImportFromFields(req, res, scope, String(method || '').toUpperCase());
+      if (handled) return;
+    }
+
+    if (messaging.isMessagingFormatImportPath(pathname) && method === 'POST') {
+      const handled = await messaging.handleFormatImport(req, res, pathname, String(method || '').toUpperCase());
+      if (handled) return;
+    }
+
     for (const mod of ROUTE_MODULES) {
       const handled = await mod.handle(req, res, pathname, method);
       if (handled) return;

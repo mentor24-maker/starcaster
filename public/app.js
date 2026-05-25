@@ -176,6 +176,22 @@ App.bootMainApp = function bootMainApp() {
   if (App._bootedMainApp) return;
   App._bootedMainApp = true;
 
+  if (App.pageHeadingNav?.init) {
+    try {
+      App.pageHeadingNav.init();
+    } catch (err) {
+      console.error('Page heading navigation init failed:', err);
+    }
+  }
+
+  if (App.assetFieldImport?.init) {
+    try {
+      App.assetFieldImport.init();
+    } catch (err) {
+      console.error('Asset field import init failed:', err);
+    }
+  }
+
   for (const mod of App.manifests) {
     if (!mod || typeof mod !== 'object') continue;
     if (typeof mod.init === 'function') {
@@ -186,6 +202,8 @@ App.bootMainApp = function bootMainApp() {
       }
     }
   }
+
+  if (App.pageHeadingNav?.bindBackLinks) App.pageHeadingNav.bindBackLinks();
 
   const initialPage = App.getInitialPage();
   App.setActivePage(initialPage, { persist: false });

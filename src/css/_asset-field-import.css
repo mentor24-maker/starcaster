@@ -1,0 +1,74 @@
+.asset-field-import-modal {
+  max-width: 720px;
+  width: 94%;
+  padding: 1.25rem 1.5rem;
+}
+
+.asset-field-import-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.asset-field-import-modal-header h3 {
+  margin: 0;
+}
+
+.asset-field-import-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: end;
+}
+
+.asset-field-import-side label,
+.asset-field-import-center label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--ink-primary, #111);
+}
+
+.asset-field-import-side select,
+.asset-field-import-center input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.asset-field-import-center {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 7.5rem;
+}
+
+.asset-field-import-center input {
+  margin-bottom: 0.5rem;
+}
+
+.asset-field-import-run-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0;
+  align-self: center;
+  font-size: 1.25rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.asset-field-import-hint {
+  margin: 0.75rem 0 0;
+}
+
+.asset-field-import-result {
+  margin: 0.5rem 0 0;
+}
+
+.asset-field-import-run-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

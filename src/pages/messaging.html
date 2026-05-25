@@ -15,11 +15,10 @@
       </section>
       <section id="messagingContentPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Content</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="messagingPage">Messaging</a>: Content</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.messaging.openCreateContent(); return false;" class="btn">Create Content</button>
             <button type="button" onclick="App.messaging.openManageContentLanding(); return false;" class="btn">Formats</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -305,10 +304,9 @@
       </section>
       <section id="messagingArticlesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Articles</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Articles</h2>
           <div class="page-heading-actions">
             <button id="messagingArticlesToggleFormBtn" type="button" class="btn">Add Article</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingArticlesForm">
@@ -398,11 +396,10 @@
         </div>
       </section>
       <section id="messagingTweetsPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Messaging: Tweets</h2>
+        <div id="messagingTweetsPageHeading" class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tweets</h2>
           <div class="page-heading-actions">
             <button id="messagingTweetsToggleFormBtn" type="button" class="btn">Add Tweet</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div id="messagingTweetsWorkspace" class="messaging-create-content-layout hidden" style="margin-bottom: 18px;">
@@ -493,7 +490,15 @@
 
         <section id="messagingTweetsEditPanel" class="messaging-tweet-edit-layout hidden" aria-label="Edit Tweet">
           <div class="page-heading-row messaging-tweet-edit-heading">
-            <h3>Edit Tweet</h3>
+            <h2>
+              <a
+                href="#messaging-tweets-list"
+                class="page-heading-back-link"
+                data-back-click="messaging.closeTweetEdit"
+                data-back-show="#messagingTweetsPageHeading"
+                data-back-anchor="messaging-tweets-list"
+              >Messaging: Tweets</a>
+            </h2>
             <button id="messagingTweetsCancelEditBtn" type="button" class="btn btn-ghost">Cancel Edit</button>
           </div>
           <div class="messaging-tweet-edit-columns">
@@ -543,10 +548,28 @@
               <p class="messaging-tweet-edit-preview-note">Live preview of how this post may appear on X.</p>
               <div id="messagingTweetEditPreviewMount" class="messaging-tweet-edit-preview-mount"></div>
             </aside>
+
+            <aside class="messaging-tweet-edit-associations-column" aria-label="Asset associations">
+              <h3 class="messaging-tweet-edit-associations-title">Associations</h3>
+              <div class="messaging-tweet-edit-assoc-search">
+                <label for="messagingTweetEditAssocSearch">Search</label>
+                <input
+                  id="messagingTweetEditAssocSearch"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="Filter by asset name"
+                />
+              </div>
+              <div id="messagingTweetEditAssocList" class="messaging-tweet-edit-assoc-list" aria-live="polite"></div>
+              <div class="messaging-tweet-edit-assoc-actions">
+                <button id="messagingTweetEditAssocApplyBtn" type="button" class="btn btn-primary">Associate Checked</button>
+              </div>
+            </aside>
           </div>
         </section>
 
-        <h3>Saved Tweets</h3>
+        <h3 id="messaging-tweets-list">Saved Tweets</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -566,25 +589,22 @@
       </section>
       <section id="messagingPostsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Posts</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Posts</h2>
         </div>
         <p>Post writing workspace placeholder.</p>
       </section>
       <section id="messagingEmailsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Emails</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Emails</h2>
         </div>
         <p>Email writing workspace placeholder.</p>
       </section>
       <section id="messagingPitchesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Pitches</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Pitches</h2>
           <div class="page-heading-actions">
             <button id="openMessagingTopicsFromPitchesBtn" type="button" class="btn">Topics</button>
             <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
@@ -712,8 +732,7 @@
       </section>
       <section id="messagingPitchesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Bulk Edit Pitches</h2>
-          <button id="messagingPitchesBackFromBulkEditBtn" type="button" class="btn">Back To Pitches</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="messagingPitchesPage">Messaging: Pitches</a></h2>
         </div>
         <p id="messagingPitchesBulkEditSummary">No pitches selected.</p>
         <form id="messagingPitchesBulkEditForm">
@@ -729,18 +748,16 @@
       </section>
       <section id="messagingCommentsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Comments</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Comments</h2>
         </div>
         <p>Comment writing workspace placeholder.</p>
       </section>
       <section id="messagingKeywordsPage" class="app-page hidden"></section>
       <section id="messagingHashtagsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Hashtags</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Hashtags</h2>
           <div class="page-heading-actions">
             <button id="messagingHashtagsToggleFormBtn" type="button" class="btn">Add Hashtags</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingHashtagsForm" class="standard-form-grid">
@@ -760,12 +777,23 @@
         </div>
       </section>
       <section id="messagingHeadlinesPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Messaging: Headlines</h2>
+        <div id="messagingHeadlinesPageHeading" class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Headlines</h2>
           <div class="page-heading-actions">
             <button id="openMessagingTopicsPageBtn" type="button" class="btn">Topics</button>
+            <button
+              id="openHeadlinesAssetImportBtn"
+              type="button"
+              class="btn"
+              onclick="App.assetFieldImport.openModal({ fromType: 'image', toType: 'headline' }); return false;"
+            >Import from Assets</button>
+            <button
+              id="openHeadlinesTweetImportBtn"
+              type="button"
+              class="btn"
+              onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'headline' }); return false;"
+            >Import from Tweets</button>
             <button id="messagingHeadlinesToggleFormBtn" type="button" class="btn">Create Headlines</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
 
@@ -837,28 +865,66 @@
           </div>
         </section>
 
-        <form id="messagingHeadlineEditForm" class="standard-form-grid">
-          <input name="id" type="hidden" />
-          <div class="page-heading-row">
-            <h3>Edit Headline</h3>
-            <button id="messagingHeadlineCancelEditBtn" type="button" class="btn">Cancel Edit</button>
+        <section id="messagingHeadlinesEditPanel" class="messaging-headline-edit-layout messaging-tweet-edit-layout hidden" aria-label="Edit Headline">
+          <div class="page-heading-row messaging-headline-edit-heading messaging-tweet-edit-heading">
+            <h2>
+              <a
+                href="#messaging-headlines-list"
+                class="page-heading-back-link"
+                data-back-click="messaging.closeHeadlineEdit"
+                data-back-show="#messagingHeadlinesPageHeading"
+                data-back-anchor="messaging-headlines-list"
+              >Messaging: Headlines</a>
+            </h2>
+            <button id="messagingHeadlineCancelEditBtn" type="button" class="btn btn-ghost">Cancel Edit</button>
           </div>
-          <select id="messagingHeadlineEditTopicSelect" name="topic">
-            <option value="">No Topic</option>
-          </select>
-          <textarea name="headline" rows="4" placeholder="Headline text" required></textarea>
-          <select name="quality_score">
-            <option value="">Score</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-          </select>
-          <div></div>
-              <button type="submit" class="btn btn-primary">Update Headline</button>
-        </form>
+          <div class="messaging-headline-edit-columns messaging-tweet-edit-columns">
+            <form id="messagingHeadlineEditForm" class="standard-form-grid messaging-headline-edit-form messaging-tweet-edit-form">
+              <input name="id" type="hidden" />
 
+              <label for="messagingHeadlineEditTopicSelect">Topic</label>
+              <select id="messagingHeadlineEditTopicSelect" name="topic" data-messaging-topic-select="true">
+                <option value="">Select Topic</option>
+              </select>
+
+              <label for="messagingHeadlineEditHeadline">Headline</label>
+              <textarea id="messagingHeadlineEditHeadline" name="headline" rows="6" required></textarea>
+
+              <label for="messagingHeadlineEditQuality">Score</label>
+              <select id="messagingHeadlineEditQuality" name="quality_score">
+                <option value="">Score</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+
+              <div></div>
+              <button type="submit" class="btn btn-primary">Update Headline</button>
+            </form>
+
+            <aside class="messaging-tweet-edit-associations-column" aria-label="Asset associations">
+              <h3 class="messaging-tweet-edit-associations-title">Associations</h3>
+              <div class="messaging-tweet-edit-assoc-search">
+                <label for="messagingHeadlineEditAssocSearch">Search</label>
+                <input
+                  id="messagingHeadlineEditAssocSearch"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="Filter by asset name"
+                />
+              </div>
+              <div id="messagingHeadlineEditAssocList" class="messaging-tweet-edit-assoc-list" aria-live="polite"></div>
+              <div class="messaging-tweet-edit-assoc-actions">
+                <button id="messagingHeadlineEditAssocApplyBtn" type="button" class="btn btn-primary">Associate Checked</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <h3 id="messaging-headlines-list">Saved Headlines</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -878,8 +944,7 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th></th>
-                <th id="messagingHeadlinesBulkEditBtn">Edit Selected</th>
+                <th class="actions-col"><button id="messagingHeadlinesBulkEditBtn" type="button" class="btn tiny-btn" disabled>Edit Selected</button></th>
               </tr>
               <tr>
                 <th></th>
@@ -898,8 +963,7 @@
       </section>
       <section id="messagingHeadlinesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Bulk Edit Headlines</h2>
-          <button id="messagingHeadlinesBackFromBulkEditBtn" type="button" class="btn">Back To Headlines</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="messagingHeadlinesPage">Messaging: Headlines</a></h2>
         </div>
         <p id="messagingHeadlinesBulkEditSummary">No headlines selected.</p>
         <form id="messagingHeadlinesBulkEditForm" class="standard-form-grid">
@@ -915,10 +979,9 @@
       </section>
       <section id="messagingTopicsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging Topics</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Topics</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <div class="messaging-topics-ai-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
@@ -994,8 +1057,7 @@
       </section>
       <section id="createMessagingTopicPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Create Messaging Topic</h2>
-          <button id="backToMessagingTopicsBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openTopicsPage">Messaging Topics</a></h2>
         </div>
         <p>The create form now opens inline on the main Topics page.</p>
       </section>
@@ -1020,10 +1082,9 @@
       </section>
       <section id="messagingTagsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging Tags</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tags</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <section id="messagingTagCreatePanel" class="hidden" style="margin-top: 1rem;">
@@ -1064,8 +1125,7 @@
       </section>
       <section id="createMessagingTagPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Create Messaging Tag</h2>
-          <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openTagsPage">Messaging Tags</a></h2>
         </div>
         <p>The create form now opens inline on the main Tags page.</p>
       </section>
@@ -1090,11 +1150,10 @@
       </section>
       <section id="messagingSubheadingsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Sub-headings</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Sub-headings</h2>
           <div class="page-heading-actions">
             <button id="openMessagingTopicsFromSubheadingsBtn" type="button" class="btn">Topics</button>
             <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
@@ -1222,8 +1281,7 @@
       </section>
       <section id="messagingSubheadingsBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Bulk Edit Sub-headings</h2>
-          <button id="messagingSubheadingsBackFromBulkEditBtn" type="button" class="btn">Back To Sub-headings</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="messagingSubheadingsPage">Messaging: Sub-headings</a></h2>
         </div>
         <p id="messagingSubheadingsBulkEditSummary">No sub-headings selected.</p>
         <form id="messagingSubheadingsBulkEditForm" class="standard-form-grid">
@@ -1239,11 +1297,10 @@
       </section>
       <section id="messagingTaglinesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Taglines</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Taglines</h2>
           <div class="page-heading-actions">
             <button id="openMessagingTopicsFromTaglinesBtn" type="button" class="btn">Topics</button>
             <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <p>Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
@@ -1371,8 +1428,7 @@
       </section>
       <section id="messagingTaglinesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Bulk Edit Taglines</h2>
-          <button id="messagingTaglinesBackFromBulkEditBtn" type="button" class="btn">Back To Taglines</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="messagingTaglinesPage">Messaging: Taglines</a></h2>
         </div>
         <p id="messagingTaglinesBulkEditSummary">No taglines selected.</p>
         <form id="messagingTaglinesBulkEditForm" class="standard-form-grid">
@@ -1388,10 +1444,9 @@
       </section>
       <section id="messagingReportsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Reports</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Reports</h2>
           <div class="page-heading-actions">
             <button id="messagingReportsToggleFormBtn" type="button" class="btn">Add Report</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingReportsForm">
@@ -1490,10 +1545,9 @@
       </section>
       <section id="messagingWhitePapersPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: White Papers</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: White Papers</h2>
           <div class="page-heading-actions">
             <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn">Add White Paper</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingWhitePapersForm">
@@ -1592,10 +1646,9 @@
       </section>
       <section id="messagingEbooksPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: eBooks</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: eBooks</h2>
           <div class="page-heading-actions">
             <button id="messagingEbooksToggleFormBtn" type="button" class="btn">Add eBook</button>
-            <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
         <form id="messagingEbooksForm">
@@ -1694,22 +1747,19 @@
       </section>
       <section id="messagingDescriptionsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Descriptions</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Descriptions</h2>
         </div>
         <p>Description writing workspace placeholder.</p>
       </section>
       <section id="messagingTranscriptsPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: Transcripts</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Transcripts</h2>
         </div>
         <p>Transcript writing workspace placeholder.</p>
       </section>
       <section id="messagingCtasPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Messaging: CTAs</h2>
-          <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: CTAs</h2>
         </div>
         <p>CTA writing workspace placeholder.</p>
       </section>

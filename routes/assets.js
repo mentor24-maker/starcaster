@@ -24,6 +24,7 @@ const { importImageAssetWithThumbnail } = require('../lib/assetImageImport');
 const { isConfigured: isGoogleDriveConfigured } = require('../lib/googleDrive');
 
 const IMPORT_DRIVE_FOLDER_PATH = '/api/assets/import-drive-folder';
+const IMPORT_FROM_FIELDS_PATH = '/api/assets/import-from-fields';
 const MAX_FOLDER_IMPORT_FILES = 100;
 
 function loadDriveFolderImportLib() {
@@ -40,7 +41,19 @@ function isImportDriveFolderPath(pathname) {
   const path = String(pathname || '').replace(/\/+$/, '') || '/';
   return path === IMPORT_DRIVE_FOLDER_PATH;
 }
+
+function isImportFromFieldsPath(pathname) {
+  const path = String(pathname || '').replace(/\/+$/, '') || '/';
+  return path === IMPORT_FROM_FIELDS_PATH;
+}
 const { isConfigured: isBlobConfigured, handleClientUpload } = require('../lib/blobStorage');
+const {
+  runAssetFieldImport,
+  FIELD_TYPE_OPTIONS,
+  isSupportedPair,
+  hintForPair,
+} = require('../lib/assetFieldImport');
+
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const { listYoutubeVideos } = require('../lib/acquire/YoutubeVideosStore');
 
@@ -164,6 +177,58 @@ async function handleImportDriveFolder(req, res, scope, requestMethod) {
   return sendErr(res, 405, 'Method not allowed', { code: 'METHOD_NOT_ALLOWED' }), true;
 }
 
+async function handleImportFromFieldsGet(res) {
+  const { listSupportedPairs, hintForPair } = require('../lib/assetFieldImport');
+  const supportedPairs = listSupportedPairs().map((pair) => ({
+    ...pair,
+    description: hintForPair(pair.fromType, pair.toType),
+  }));
+  return sendOk(res, 200, {
+    fieldTypes: FIELD_TYPE_OPTIONS,
+    supportedPairs,
+  }, {
+    fieldTypes: FIELD_TYPE_OPTIONS,
+    supportedPairs,
+  }), true;
+}
+
+async function handleImportFromFieldsPost(req, res, scope) {
+  let body;
+  try {
+    body = await parseJsonBody(req);
+  } catch (err) {
+    return sendErr(res, 400, err?.message || 'Invalid JSON body', { code: 'VALIDATION_ERROR' }), true;
+  }
+  const fromType = String(body.fromType || body.from_type || '').trim().toLowerCase();
+  const toType = String(body.toType || body.to_type || '').trim().toLowerCase();
+  if (!isSupportedPair(fromType, toType)) {
+    return sendErr(
+      res,
+      400,
+      hintForPair(fromType, toType),
+      { code: 'UNSUPPORTED_PAIR' }
+    ), true;
+  }
+  const result = await runAssetFieldImport(body, scope);
+  if (!result.ok) {
+    return sendErr(res, result.status || 500, result.error || 'Import failed', {
+      code: 'IMPORT_FAILED',
+      details: result.data,
+    }), true;
+  }
+  return sendOk(res, 200, result.data, result.data), true;
+}
+
+async function handleImportFromFields(req, res, scope, requestMethod) {
+  if (requestMethod === 'GET') {
+    return handleImportFromFieldsGet(res);
+  }
+  if (requestMethod === 'POST') {
+    return handleImportFromFieldsPost(req, res, scope);
+  }
+  return sendErr(res, 405, 'Method not allowed', { code: 'METHOD_NOT_ALLOWED' }), true;
+}
+
 async function handle(req, res, pathname, method) {
   const parsedUrl = getUrlObj(req);
   const normalizedPath = String(pathname || '').replace(/\/+$/, '') || '/';
@@ -184,6 +249,10 @@ async function handle(req, res, pathname, method) {
 
   if (isImportDriveFolderPath(normalizedPath) && (requestMethod === 'POST' || requestMethod === 'GET')) {
     return handleImportDriveFolder(req, res, scope, requestMethod);
+  }
+
+  if (isImportFromFieldsPath(normalizedPath) && (requestMethod === 'POST' || requestMethod === 'GET')) {
+    return handleImportFromFields(req, res, scope, requestMethod);
   }
 
   if (isAssetsPath && requestMethod === 'GET') {
@@ -1166,4 +1235,7 @@ module.exports = {
   IMPORT_DRIVE_FOLDER_PATH,
   isImportDriveFolderPath,
   handleImportDriveFolder,
+  IMPORT_FROM_FIELDS_PATH,
+  isImportFromFieldsPath,
+  handleImportFromFields,
 };
