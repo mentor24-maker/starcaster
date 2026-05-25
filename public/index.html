@@ -2115,11 +2115,47 @@
                 <th id="assetsSortAspectBtn">Aspect</th>
                 <th id="assetsSortTagsBtn">Tags</th>
                 <th id="assetsSortSizeBtn">Size</th>
-                <th>Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="assetsTable"></tbody>
           </table>
+        </div>
+
+        <div id="assetAssociationsModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assetAssociationsModalTitle">
+          <div class="modal-content asset-associations-modal">
+            <div class="asset-associations-modal-header">
+              <h3 id="assetAssociationsModalTitle">Associations</h3>
+              <div class="asset-associations-modal-header-actions">
+                <button id="assetAssociationsBackBtn" type="button" class="btn btn-ghost" disabled>Back</button>
+                <button id="assetAssociationsCloseBtn" type="button" class="btn btn-ghost">Close</button>
+              </div>
+            </div>
+            <div class="asset-associations-modal-body">
+              <aside class="asset-associations-left">
+                <div id="assetAssociationsAssetPanel" class="asset-associations-asset-panel"></div>
+                <h4 class="asset-associations-linked-heading">Linked To</h4>
+                <ul id="assetAssociationsLinkedList" class="asset-associations-linked-list"></ul>
+              </aside>
+              <div class="asset-associations-right">
+                <div class="asset-associations-search-row standard-form-grid">
+                  <label for="assetAssociationsSearch">Search</label>
+                  <div class="campaign-combobox asset-associations-search">
+                    <input
+                      id="assetAssociationsSearch"
+                      type="text"
+                      autocomplete="off"
+                      aria-controls="assetAssociationsBrowserList"
+                      placeholder="Search options"
+                    />
+                  </div>
+                </div>
+                <nav id="assetAssociationsBreadcrumb" class="asset-associations-breadcrumb" aria-label="Association browser"></nav>
+                <p id="assetAssociationsBrowserStatus" class="asset-associations-browser-status meta"></p>
+                <div id="assetAssociationsBrowserList" class="asset-associations-browser-list" role="listbox" aria-label="Objects to associate"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
       <section id="addAssetPage" class="app-page hidden">
@@ -9734,6 +9770,7 @@
   <script src="/js/activityLog.js"></script>
   <script src="/js/observe.js"></script>
   <script src="/js/devAgent.js"></script>
+  <script src="/js/assetAssociations.js?v=1.0"></script>
   <script src="/js/assets.js?v=1.2"></script>
   <script src="/js/assetsVideo.js?v=1.6"></script>
   <script src="/js/assetCategories.js"></script>

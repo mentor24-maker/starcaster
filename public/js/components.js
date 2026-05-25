@@ -339,17 +339,19 @@ App.components.DataGrid = function DataGrid(opts) {
  */
 App.components.Modal = function Modal(opts) {
   const { title = '', body = '', actions = [], onClose = null,
-          closeOnBackdrop = true, dialogClass = '', bodyClass = '' } = opts;
+          closeOnBackdrop = true, dialogClass = '', bodyClass = '', headerTools = null } = opts;
 
   // ── Build DOM ──────────────────────────────────────────────────────────
   const backdrop = h('div', { class: 'c-modal__backdrop' });
   const dialog   = h('div', { class: 'c-modal__dialog' + (dialogClass ? ' ' + dialogClass : ''), role: 'dialog',
                                'aria-modal': 'true', 'aria-label': title });
 
-  const header = h('div', { class: 'c-modal__header' },
-    h('h2', { class: 'c-modal__title' }, title),
-    h('button', { class: 'c-modal__close', 'aria-label': 'Close', onclick: close }, '×')
-  );
+  const header = h('div', { class: 'c-modal__header' });
+  header.appendChild(h('h2', { class: 'c-modal__title' }, title));
+  if (headerTools instanceof Node) {
+    header.appendChild(headerTools);
+  }
+  header.appendChild(h('button', { class: 'c-modal__close', 'aria-label': 'Close', onclick: close }, '×'));
 
   const bodyEl = h('div', { class: 'c-modal__body' + (bodyClass ? ' ' + bodyClass : '') });
   setBodyContent(body);
