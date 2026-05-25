@@ -584,6 +584,29 @@ App.campaigns = (function () {
     return safeText(row?.id);
   }
 
+  function normalizeCampaignHashtagInput(value) {
+    const text = safeText(value).replace(/^[#,]+/, '').trim();
+    if (!text) return '';
+    return text.startsWith('#') ? text : `#${text}`;
+  }
+
+  function findHashtagRowByText(value) {
+    const normalized = normalizeCampaignHashtagInput(value).toLowerCase();
+    if (!normalized) return null;
+    return (Array.isArray(builderHashtags) ? builderHashtags : []).find((row) => (
+      hashtagText(row).toLowerCase() === normalized
+    )) || null;
+  }
+
+  function filterHashtagRowsByQuery(rows, query) {
+    const needle = safeText(query).toLowerCase();
+    if (!needle) return rows;
+    return rows.filter((row) => {
+      const text = hashtagText(row).toLowerCase();
+      return text.includes(needle) || text.replace(/^#/, '').includes(needle.replace(/^#/, ''));
+    });
+  }
+
   function findById(rows, id) {
     const desired = safeText(id);
     if (!desired) return null;
@@ -717,12 +740,10 @@ App.campaigns = (function () {
       summary.title = selectedTexts.join(' ');
     }
     if (button) {
-      button.disabled = available.length === 0;
-      button.textContent = available.length
-        ? selectedTexts.length
-          ? `Edit Hashtags (${selectedTexts.length})`
-          : 'Choose Hashtags'
-        : 'No Hashtags Available';
+      button.disabled = false;
+      button.textContent = selectedTexts.length
+        ? `Edit Hashtags (${selectedTexts.length})`
+        : 'Choose Hashtags';
     }
   }
 
@@ -732,52 +753,172 @@ App.campaigns = (function () {
       notify('Hashtag picker is unavailable', true);
       return;
     }
-    const rows = rankedHashtagRows(40);
-    if (!rows.length) {
-      notify('No hashtags available yet', true);
-      return;
-    }
 
     const draftIds = new Set(selectedCampaignHashtagIds);
+    const modalHashtagRows = () => rankedHashtagRows(5000);
+    let searchQuery = '';
+
+    const headerTools = document.createElement('div');
+    headerTools.className = 'campaign-hashtag-modal-header-tools';
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'campaign-hashtag-modal-search-wrap';
+
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'campaignHashtagModalSearch';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.setAttribute('aria-label', 'Search hashtags');
+
+    const searchHint = document.createElement('div');
+    searchHint.className = 'campaign-hashtag-modal-search-hint hidden';
+    searchHint.setAttribute('aria-live', 'polite');
+
+    const saveHashtagBtn = document.createElement('button');
+    saveHashtagBtn.type = 'button';
+    saveHashtagBtn.className = 'btn btn-primary';
+    saveHashtagBtn.textContent = 'Save Hashtag';
+    saveHashtagBtn.disabled = true;
+
+    searchWrap.appendChild(searchInput);
+    searchWrap.appendChild(searchHint);
+    headerTools.appendChild(searchWrap);
+    headerTools.appendChild(saveHashtagBtn);
+
     const body = document.createElement('div');
     const list = document.createElement('div');
     list.className = 'campaign-hashtag-modal-list';
-    rows.forEach((row) => {
-      const id = hashtagId(row);
-      const textValue = hashtagText(row);
-      const option = document.createElement('div');
-      option.className = 'campaign-hashtag-modal-option';
-      option.title = textValue;
-
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.value = id;
-      checkbox.checked = draftIds.has(id);
-      checkbox.setAttribute('aria-label', textValue);
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) draftIds.add(id);
-        else draftIds.delete(id);
-      });
-      checkbox.addEventListener('click', (event) => {
-        event.stopPropagation();
-      });
-
-      const text = document.createElement('span');
-      text.className = 'campaign-hashtag-modal-text';
-      text.textContent = textValue;
-
-      option.addEventListener('click', () => {
-        checkbox.checked = !checkbox.checked;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-      });
-      option.appendChild(checkbox);
-      option.appendChild(text);
-      list.appendChild(option);
-    });
     body.appendChild(list);
+
+    function updateSaveHashtagState() {
+      const normalized = normalizeCampaignHashtagInput(searchQuery);
+      const existing = findHashtagRowByText(normalized);
+      const canCreate = Boolean(normalized) && !existing;
+      saveHashtagBtn.disabled = !canCreate;
+      if (!normalized) {
+        searchHint.classList.add('hidden');
+        searchHint.textContent = '';
+        return;
+      }
+      if (existing) {
+        searchHint.classList.remove('hidden');
+        searchHint.textContent = `${hashtagText(existing)} already exists — select it below or type a new hashtag.`;
+        return;
+      }
+      searchHint.classList.remove('hidden');
+      searchHint.textContent = `Save ${normalized} as a new hashtag and add it to this campaign.`;
+    }
+
+    function renderHashtagModalList() {
+      list.innerHTML = '';
+      const filtered = filterHashtagRowsByQuery(modalHashtagRows(), searchQuery);
+      if (!filtered.length) {
+        const empty = document.createElement('div');
+        empty.className = 'campaign-combobox-empty';
+        empty.style.gridColumn = '1 / -1';
+        empty.textContent = searchQuery
+          ? 'No matching hashtags'
+          : 'No hashtags yet — type a hashtag above and click Save Hashtag.';
+        list.appendChild(empty);
+        return;
+      }
+
+      filtered.forEach((row) => {
+        const id = hashtagId(row);
+        const textValue = hashtagText(row);
+        const option = document.createElement('div');
+        option.className = 'campaign-hashtag-modal-option';
+        option.title = textValue;
+        option.dataset.hashtagId = id;
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = id;
+        checkbox.checked = draftIds.has(id);
+        checkbox.setAttribute('aria-label', textValue);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) draftIds.add(id);
+          else draftIds.delete(id);
+        });
+        checkbox.addEventListener('click', (event) => {
+          event.stopPropagation();
+        });
+
+        const text = document.createElement('span');
+        text.className = 'campaign-hashtag-modal-text';
+        text.textContent = textValue;
+
+        option.addEventListener('click', () => {
+          checkbox.checked = !checkbox.checked;
+          checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        option.appendChild(checkbox);
+        option.appendChild(text);
+        list.appendChild(option);
+      });
+    }
+
+    searchInput.addEventListener('input', () => {
+      searchQuery = safeText(searchInput.value);
+      updateSaveHashtagState();
+      renderHashtagModalList();
+    });
+
+    searchInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !saveHashtagBtn.disabled) {
+        event.preventDefault();
+        saveHashtagBtn.click();
+      }
+    });
+
+    saveHashtagBtn.addEventListener('click', async () => {
+      const normalized = normalizeCampaignHashtagInput(searchQuery);
+      if (!normalized) return;
+      const existing = findHashtagRowByText(normalized);
+      if (existing) {
+        draftIds.add(hashtagId(existing));
+        renderHashtagModalList();
+        updateSaveHashtagState();
+        return;
+      }
+
+      saveHashtagBtn.disabled = true;
+      try {
+        const result = await api('/api/messaging/hashtags', {
+          method: 'POST',
+          body: JSON.stringify({ hashtag: normalized }),
+        });
+        const created = result?.hashtag || result?.data || result;
+        const createdId = hashtagId(created);
+        if (!createdId) {
+          throw new Error('Hashtag was saved but no id was returned');
+        }
+        if (!Array.isArray(builderHashtags)) builderHashtags = [];
+        const duplicateIndex = builderHashtags.findIndex((row) => hashtagId(row) === createdId);
+        if (duplicateIndex >= 0) {
+          builderHashtags[duplicateIndex] = created;
+        } else {
+          builderHashtags.unshift(created);
+        }
+        draftIds.add(createdId);
+        searchInput.value = '';
+        searchQuery = '';
+        updateSaveHashtagState();
+        renderHashtagModalList();
+        renderCampaignLivePreview();
+        notify(`Saved ${normalized}`);
+      } catch (err) {
+        notify(err.message || 'Could not save hashtag', true);
+        updateSaveHashtagState();
+      }
+    });
+
+    updateSaveHashtagState();
+    renderHashtagModalList();
 
     const modal = modalFactory({
       title: 'Select Hashtags',
+      headerTools,
       body,
       dialogClass: 'campaign-hashtag-modal',
       bodyClass: 'campaign-hashtag-modal-body',
@@ -805,6 +946,7 @@ App.campaigns = (function () {
       ],
     });
     modal.open();
+    searchInput.focus();
   }
 
   function campaignPreviewChannelKind() {

@@ -3,6 +3,12 @@
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { listAssets, createAsset, updateAsset, deleteAsset, rowToAsset } = require('../lib/assetsStore');
 const {
+  listAssociationsForAsset,
+  createAssociation,
+  deleteAssociation,
+  rowToAssociation,
+} = require('../lib/assetAssociationsStore');
+const {
   listAssetCategories,
   createAssetCategory,
   getAssetCategoryById,
@@ -213,6 +219,47 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
+  }
+
+  const associationDeleteMatch = normalizedPath.match(/^\/api\/assets\/associations\/(\d+)$/);
+  if (associationDeleteMatch && requestMethod === 'DELETE') {
+    const associationId = Number(associationDeleteMatch[1]);
+    const result = await deleteAssociation(associationId, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!deleted) return sendErr(res, 404, 'Association not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToAssociation(deleted), { association: rowToAssociation(deleted) }), true;
+  }
+
+  const assetAssociationsMatch = normalizedPath.match(/^\/api\/assets\/(\d+)\/associations$/);
+  if (assetAssociationsMatch && requestMethod === 'GET') {
+    const assetId = Number(assetAssociationsMatch[1]);
+    const result = await listAssociationsForAsset(assetId, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const associations = (Array.isArray(result.data) ? result.data : [])
+      .map(rowToAssociation)
+      .filter(Boolean);
+    return sendOk(res, 200, associations, { associations }, { total: associations.length }), true;
+  }
+
+  if (assetAssociationsMatch && requestMethod === 'POST') {
+    const assetId = Number(assetAssociationsMatch[1]);
+    const body = await parseJsonBody(req);
+    const result = await createAssociation({
+      assetId,
+      targetType: body.targetType || body.target_type,
+      targetId: body.targetId || body.target_id,
+      targetLabel: body.targetLabel || body.target_label,
+    }, scope);
+    if (!result.ok) {
+      const errText = String(result.error || '').toLowerCase();
+      if (errText.includes('duplicate') || errText.includes('unique')) {
+        return sendErr(res, 409, 'This association already exists', { code: 'DUPLICATE' }), true;
+      }
+      return sendErr(res, result.status || 500, result.error), true;
+    }
+    const created = Array.isArray(result.data) ? result.data[0] : result.data;
+    return sendOk(res, 201, rowToAssociation(created), { association: rowToAssociation(created) }), true;
   }
 
   const assetIdMatch = normalizedPath.match(/^\/api\/assets\/(\d+)$/);

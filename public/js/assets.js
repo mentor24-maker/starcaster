@@ -861,12 +861,14 @@ App.assets = (function () {
 
       const actionsTd = document.createElement('td');
       if (assetId > 0) {
+        const linkBtn = App.makeIconButton('link', 'Associations', () => {
+          if (App.assetAssociations?.openModal) App.assetAssociations.openModal(asset);
+        });
         const editBtn = App.makeIconButton('edit', 'Edit Asset', () => beginEdit(asset));
-        const deleteBtn = App.makeIconButton('delete', 'Delete Asset', () => deleteById(assetId), { danger: true, marginLeft: '8px' });
-
-        actionsTd.appendChild(editBtn);
-        actionsTd.appendChild(deleteBtn);
+        const deleteBtn = App.makeIconButton('delete', 'Delete Asset', () => deleteById(assetId), { danger: true });
+        App.finishTableActionsCell(actionsTd, linkBtn, editBtn, deleteBtn);
       } else {
+        actionsTd.classList.add('actions-col');
         actionsTd.textContent = '-';
       }
       tr.appendChild(actionsTd);
@@ -1198,6 +1200,7 @@ App.assets = (function () {
   }
 
   function init() {
+    if (App.assetAssociations?.init) App.assetAssociations.init();
     readManualAspectOverrides();
     const bindSortButton = (id, key, defaultDir = 'asc') => {
       const button = document.getElementById(id);
@@ -1596,5 +1599,6 @@ App.assets = (function () {
     onPageActivated: refresh,
     openAssetsLanding,
     openAssetsManager,
+    assetImageUrl,
   };
 })();
