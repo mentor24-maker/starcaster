@@ -1,7 +1,40 @@
 'use strict';
 
 window.App = window.App || {};
-App.devAgent = {};
+App.devAgent = App.devAgent || {};
+
+// Capture core navigation before init() wraps setActivePage (team add flow must not trip dev loaders).
+if (typeof App.setActivePage === 'function' && !App._baseSetActivePage) {
+  App._baseSetActivePage = App.setActivePage;
+}
+
+/**
+ * Add Dev Team member — opens Contacts add form; never calls openEditPage(null).
+ * Defined at load time so inline onclick works even if later devAgent.init() fails.
+ */
+App.devAgent.openAddTeamMember = function openAddTeamMember() {
+  const ctx = {
+    returnPageId: 'devTeamPage',
+    contactType: 'team-admin',
+    contactClass: 'personnel',
+  };
+  App.devAgent.teamAddContext = ctx;
+  if (typeof App.contacts?.armTeamMemberCreate === 'function') {
+    App.contacts.armTeamMemberCreate(ctx);
+  } else if (typeof App.contacts?.openAddPage === 'function') {
+    App.contacts.openAddPage(ctx.returnPageId, ctx);
+    return;
+  }
+  const form = document.getElementById('contactForm');
+  if (form) form.reset();
+  const go = App._baseSetActivePage || App.setActivePage;
+  if (typeof go !== 'function') {
+    App.notify('Navigation is not ready. Hard-refresh the page (Cmd+Shift+R).', true);
+    return;
+  }
+  go.call(App, 'addContactPage');
+};
+window.__starcasterOpenAddTeamMember = App.devAgent.openAddTeamMember;
 
 const devState = {
   activeSessionId: null,
@@ -245,7 +278,9 @@ App.devAgent.init = async function() {
     });
   }
 
-  const originalSetActivePage = App.setActivePage;
+  const originalSetActivePage = App._baseSetActivePage || App.setActivePage;
+  App._baseSetActivePage = originalSetActivePage;
+  App.devAgent._setActivePageBase = originalSetActivePage;
   App.setActivePage = async function(pageId) {
     if (devState.activeDevPage && devState.activeDevPage !== pageId && devState.activeDevPage.startsWith('dev')) {
       App.devAgent.cleanup(devState.activeDevPage);
@@ -292,6 +327,7 @@ App.devAgent.init = async function() {
         await App.devAgent.loadSessions();
         setTimeout(() => App.devAgent.restoreChatPanel(), 50);
       } else if (pageId === 'devTeamPage') {
+        await App.devAgent.ensureProjectContext();
         await App.devAgent.loadTeam();
         setTimeout(() => App.devAgent.showTeamBrowser(), 50);
       } else if (pageId === 'devRolesPage') {
@@ -3054,10 +3090,35 @@ window.addEventListener('DOMContentLoaded', () => {
   if (devAddTeamMemberBtn) {
     devAddTeamMemberBtn.addEventListener('click', () => App.devAgent.openTeamEditor());
   }
+  const devNewTeamBtn = document.getElementById('devNewTeamBtn');
+  if (devNewTeamBtn && !devNewTeamBtn.dataset.teamBound) {
+    devNewTeamBtn.dataset.teamBound = 'true';
+    devNewTeamBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      App.devAgent.openAddTeamMember();
+    });
+  }
+  const devAssignTeamBtn = document.getElementById('devAssignTeamBtn');
+  if (devAssignTeamBtn) {
+    devAssignTeamBtn.addEventListener('click', () => App.devAgent.openTeamEditor());
+  }
   const devCloseTeamEditorBtn = document.getElementById('devCloseTeamEditorBtn');
   if (devCloseTeamEditorBtn) {
     devCloseTeamEditorBtn.addEventListener('click', App.devAgent.closeTeamEditor);
   }
+  const devPickTeamContactBtn = document.getElementById('devPickTeamContactBtn');
+  if (devPickTeamContactBtn) {
+    devPickTeamContactBtn.addEventListener('click', () => App.devAgent.openContactSelectorModal());
+  }
+  const devCloseContactSelectorBtn = document.getElementById('devCloseContactSelectorBtn');
+  if (devCloseContactSelectorBtn) {
+    devCloseContactSelectorBtn.addEventListener('click', App.devAgent.closeContactSelectorModal);
+  }
+  ['devContactSelectorSearch', 'devContactSelectorCompany', 'devContactSelectorEntityType'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', App.devAgent.filterModalContacts);
+    if (el && el.tagName === 'SELECT') el.addEventListener('change', App.devAgent.filterModalContacts);
+  });
   const devTeamEditorForm = document.getElementById('devTeamEditorForm');
   if (devTeamEditorForm) {
     devTeamEditorForm.addEventListener('submit', App.devAgent.saveTeamEditor);
@@ -3068,8 +3129,10 @@ window.addEventListener('DOMContentLoaded', () => {
   if (devManageRolesBtn) devManageRolesBtn.addEventListener('click', App.devAgent.showRolesBrowser);
   const devBackToTeamBtn = document.getElementById('devBackToTeamBtn');
   if (devBackToTeamBtn) devBackToTeamBtn.addEventListener('click', App.devAgent.showTeamBrowser);
+  const devNewRoleBtn = document.getElementById('devNewRoleBtn');
   const devAddRoleBtn = document.getElementById('devAddRoleBtn');
-  if (devAddRoleBtn) devAddRoleBtn.addEventListener('click', () => App.devAgent.openRoleEditor());
+  const addRoleBtn = devNewRoleBtn || devAddRoleBtn;
+  if (addRoleBtn) addRoleBtn.addEventListener('click', () => App.devAgent.openRoleEditor());
   const devCloseRoleEditorBtn = document.getElementById('devCloseRoleEditorBtn');
   if (devCloseRoleEditorBtn) devCloseRoleEditorBtn.addEventListener('click', App.devAgent.closeRoleEditor);
   const devRoleEditorForm = document.getElementById('devRoleEditorForm');
@@ -3802,6 +3865,275 @@ App.devAgent.closeTaskEditor = function() {
 // Dev Team Module Functions
 // ==========================================
 
+App.devAgent.currentTeamProjectId = function() {
+  const fromState = String(App.state?.currentProjectId || '').trim();
+  if (fromState) return fromState;
+  try {
+    const key = App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId';
+    return String(window.localStorage.getItem(key) || '').trim();
+  } catch (_) {
+    return '';
+  }
+};
+
+App.devAgent.ensureProjectContext = async function() {
+  const existing = App.devAgent.currentTeamProjectId();
+  if (existing) {
+    if (!String(App.state?.currentProjectId || '').trim()) {
+      App.state.currentProjectId = existing;
+    }
+    return existing;
+  }
+  try {
+    const current = await App.api('/api/projects/current', { method: 'GET' });
+    const project = current?.project || current?.data?.project || null;
+    const id = String(project?.id || '').trim();
+    if (id) {
+      App.state.currentProjectId = id;
+      App.state.currentProject = project;
+      const key = App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId';
+      window.localStorage.setItem(key, id);
+      return id;
+    }
+  } catch (_) {
+    // fall through
+  }
+  return '';
+};
+
+App.devAgent.updateTeamPageHeading = async function() {
+  const titleEl = document.getElementById('devTeamPageTitle');
+  if (!titleEl) return;
+  const base = 'Dev Agent: Team';
+  try {
+    const projectId = await App.devAgent.ensureProjectContext();
+    if (!projectId) {
+      titleEl.textContent = base;
+      return;
+    }
+    let name = '';
+    if (App.state?.currentProject?.id === projectId && App.state.currentProject?.name) {
+      name = String(App.state.currentProject.name).trim();
+    }
+    if (!name) {
+      const current = await App.api('/api/projects/current', { method: 'GET' });
+      const project = current?.project || current?.data?.project || null;
+      if (project?.id === projectId && project?.name) {
+        name = String(project.name).trim();
+        App.state.currentProject = project;
+        App.state.currentProjectId = project.id;
+      }
+    }
+    if (!name && Array.isArray(App.state?.projects)) {
+      const match = App.state.projects.find((p) => p.id === projectId);
+      if (match?.name) name = String(match.name).trim();
+    }
+    titleEl.textContent = name ? `${base} (${name})` : base;
+  } catch (_) {
+    titleEl.textContent = base;
+  }
+};
+
+App.devAgent.populateDevRolesSelect = async function(selectEl, preselectedRole) {
+  if (!selectEl) return;
+  selectEl.textContent = '';
+  const loadOpt = document.createElement('option');
+  loadOpt.value = '';
+  loadOpt.textContent = 'Loading roles...';
+  selectEl.appendChild(loadOpt);
+
+  const projectId = await App.devAgent.ensureProjectContext();
+  if (!projectId) {
+    selectEl.textContent = '';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Select a project first';
+    selectEl.appendChild(opt);
+    return;
+  }
+
+  try {
+    const res = await App.api('/api/develop/devAgent/roles');
+    const roles = res.roles || res.data || [];
+    selectEl.textContent = '';
+    const selOpt = document.createElement('option');
+    selOpt.value = '';
+    selOpt.textContent = 'Select Role...';
+    selectEl.appendChild(selOpt);
+    if (!roles.length) {
+      const emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = 'No roles — create under Dev Agent → Roles';
+      emptyOpt.disabled = true;
+      selectEl.appendChild(emptyOpt);
+      return;
+    }
+    roles.forEach((r) => {
+      const roleName = String(r.role_name || r.roleName || '').trim();
+      if (!roleName) return;
+      const opt = document.createElement('option');
+      opt.value = roleName;
+      opt.textContent = roleName;
+      if (preselectedRole && roleName === preselectedRole) opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+  } catch (err) {
+    selectEl.textContent = '';
+    const errOpt = document.createElement('option');
+    errOpt.value = '';
+    errOpt.textContent = 'Failed to load roles';
+    selectEl.appendChild(errOpt);
+  }
+};
+
+App.devAgent.teamAccountStatusLabel = function(member) {
+  const status = String(member?.accountStatus || member?.account_status || 'not_invited').trim();
+  if (status === 'active') return 'Active';
+  if (status === 'invite_pending') return 'Invite Pending';
+  return 'Not Invited';
+};
+
+App.devAgent.sendTeamInvitation = async function(teamId, options = {}) {
+  const id = String(teamId || '').trim();
+  if (!id) return;
+  const resend = Boolean(options.resend);
+  const path = resend
+    ? `/api/develop/devAgent/team/${encodeURIComponent(id)}/invite/resend`
+    : `/api/develop/devAgent/team/${encodeURIComponent(id)}/invite`;
+  try {
+    await App.api(path, { method: 'POST' });
+    if (App.components?.Toast?.show) {
+      App.components.Toast.show(resend ? 'Invitation resent.' : 'Invitation sent.', 'success');
+    } else {
+      App.notify(resend ? 'Invitation resent.' : 'Invitation sent.', false);
+    }
+    await App.devAgent.showTeamBrowser();
+  } catch (err) {
+    const msg = err?.message || err?.error?.message || 'Failed to send invitation';
+    if (App.components?.Toast?.show) App.components.Toast.show(msg, 'error');
+    else App.notify(msg, true);
+  }
+};
+
+App.devAgent.revokeTeamInvitation = async function(teamId) {
+  const id = String(teamId || '').trim();
+  if (!id) return;
+  if (!window.confirm('Revoke the pending invitation for this team member?')) return;
+  try {
+    await App.api(`/api/develop/devAgent/team/${encodeURIComponent(id)}/invite`, { method: 'DELETE' });
+    if (App.components?.Toast?.show) App.components.Toast.show('Invitation revoked.', 'success');
+    else App.notify('Invitation revoked.', false);
+    await App.devAgent.showTeamBrowser();
+  } catch (err) {
+    const msg = err?.message || err?.error?.message || 'Failed to revoke invitation';
+    if (App.components?.Toast?.show) App.components.Toast.show(msg, 'error');
+    else App.notify(msg, true);
+  }
+};
+
+App.devAgent.loadTeamMembersFromApi = async function() {
+  const projectId = await App.devAgent.ensureProjectContext();
+  if (!projectId) {
+    return {
+      members: [],
+      error: new Error('Select an active project in Settings → Projects, then try again.'),
+    };
+  }
+  try {
+    const res = await App.api('/api/develop/devAgent/team');
+    const members = res.members || res.data || [];
+    return { members, error: null };
+  } catch (err) {
+    return { members: [], error: err };
+  }
+};
+
+App.devAgent.contactDisplayName = function(contact) {
+  if (!contact) return '';
+  if (typeof App.contacts?.contactValue === 'function') {
+    const first = App.contacts.contactValue(contact, 'first_name');
+    const last = App.contacts.contactValue(contact, 'last_name');
+    const full = `${first} ${last}`.trim();
+    if (full) return full;
+    const email = App.contacts.contactValue(contact, 'email');
+    if (email) return email;
+  }
+  const full = `${contact.first_name || contact.firstName || ''} ${contact.last_name || contact.lastName || ''}`.trim();
+  return full || contact.email || contact.id || '';
+};
+
+App.devAgent.contactEntityType = function(contact) {
+  if (!contact) return 'Human';
+  if (typeof App.contacts?.contactValue === 'function') {
+    return App.contacts.contactValue(contact, 'entity_type') || 'Human';
+  }
+  return contact.entity_type || contact.entityType || 'Human';
+};
+
+App.devAgent.contactTypeLabel = function(contact) {
+  if (!contact) return '';
+  if (typeof App.contacts?.contactValue === 'function') {
+    return App.contacts.contactValue(contact, 'contact_type') || App.contacts.contactValue(contact, 'contactType') || '';
+  }
+  return contact.contact_type || contact.contactType || '';
+};
+
+App.devAgent.buildTeamContactMap = function(teamMembers, contacts) {
+  const map = {};
+  const contactsById = {};
+  (contacts || []).forEach((c) => {
+    const id = String(c?.id || '').trim();
+    if (!id) return;
+    map[id] = App.devAgent.contactDisplayName(c);
+    contactsById[id] = c;
+  });
+  (teamMembers || []).forEach((m) => {
+    const id = String(m?.contact_id || '').trim();
+    if (id && !map[id]) map[id] = '';
+  });
+  return { map, contactsById };
+};
+
+App.devAgent.hydrateTeamContactMap = async function(map, contactsById, teamMembers) {
+  const missingIds = [...new Set(
+    (teamMembers || [])
+      .map((m) => String(m?.contact_id || '').trim())
+      .filter((id) => id && !map[id])
+  )].slice(0, 25);
+  if (!missingIds.length) return;
+  await Promise.all(missingIds.map(async (id) => {
+    try {
+      const res = await App.api(`/api/contacts/${encodeURIComponent(id)}`);
+      const contact = res?.contact || res?.data;
+      if (contact?.id) {
+        map[contact.id] = App.devAgent.contactDisplayName(contact);
+        contactsById[contact.id] = contact;
+      }
+    } catch (_) {
+      // Contact may be outside current project scope
+    }
+  }));
+};
+
+App.devAgent.afterTeamContactCreated = async function(contact) {
+  App.setActivePage('devTeamPage');
+  const id = String(contact?.id || '').trim();
+  const name = App.devAgent.contactDisplayName(contact);
+  if (!id) {
+    App.devAgent.showTeamBrowser();
+    return;
+  }
+  await App.devAgent.openTeamEditorWithContact(id, name);
+};
+
+App.devAgent.openTeamEditorWithContact = async function(contactId, displayName) {
+  await App.devAgent.openTeamEditor();
+  const idInput = document.getElementById('devEditTeamContactId');
+  const displayInput = document.getElementById('devEditTeamContactDisplay');
+  if (idInput) idInput.value = String(contactId || '').trim();
+  if (displayInput) displayInput.value = String(displayName || '').trim();
+};
+
 App.devAgent.loadTeam = async function() {
   const teamList = document.getElementById('devTeamList');
   if (!teamList) return;
@@ -3813,32 +4145,20 @@ App.devAgent.loadTeam = async function() {
     loadLi.textContent = 'Loading...';
     teamList.appendChild(loadLi);
     
-    const res = await window.supabaseClient
-      .from('dev_team')
-      .select('*')
-      .order('created_at', { ascending: true });
+    const { members: teamMembers, error } = await App.devAgent.loadTeamMembersFromApi();
       
     teamList.textContent = '';
     
-    if (res.error) {
+    if (error) {
       teamList.textContent = '';
       const errLi = document.createElement('li');
       errLi.className = 'error-msg';
-      errLi.textContent = 'Failed to load team';
+      errLi.textContent = error.message || 'Failed to load team';
       teamList.appendChild(errLi);
       return;
     }
-    
-    const teamMembers = res.data || [];
-    
-    const contactsRes = await App.api('/api/contacts');
-    const contacts = contactsRes.data || [];
-    const contactMap = {};
-    contacts.forEach(c => {
-      contactMap[c.id] = `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || c.id;
-    });
 
-    devState.teamData = { members: teamMembers, contactMap: contactMap };
+    devState.teamData = { members: teamMembers };
     
     if (teamMembers.length === 0) {
       teamList.textContent = '';
@@ -3858,12 +4178,14 @@ App.devAgent.loadTeam = async function() {
       
       const titleSpan = document.createElement('span');
       titleSpan.className = 'session-title';
-      titleSpan.textContent = contactMap[member.contact_id] || 'Unknown Member';
+      titleSpan.textContent = member.member_name || App.devAgent.contactDisplayName(member.contact) || 'Unknown Member';
       
       // Navigate to Contact profile on click
       li.addEventListener('click', (e) => {
         e.preventDefault();
-        window.location.hash = `#page=editContactPage&id=${encodeURIComponent(member.contact_id)}`;
+        if (typeof App.contacts?.openEditPage === 'function') {
+          void App.contacts.openEditPage(member.contact || member.contact_id, 'devTeamPage');
+        }
       });
       
       li.appendChild(titleSpan);
@@ -3879,6 +4201,7 @@ App.devAgent.loadTeam = async function() {
 };
 
 App.devAgent.showTeamBrowser = async function() {
+  void App.devAgent.updateTeamPageHeading();
   const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
   const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
 
@@ -3898,52 +4221,42 @@ App.devAgent.showTeamBrowser = async function() {
   
   const tbody = document.getElementById('devTeamBrowserTable');
   if (!tbody) return;
-  if (!window.supabaseClient) {
-    tbody.innerHTML = '<tr><td colspan="5" style="padding: 2rem; text-align: center; color: #dc2626; font-style: italic;">Supabase Client Not Initialized. Please refresh or check Dev Agent configuration.</td></tr>';
-    return;
-  }
   
+  const renderTeamLoadError = (message) => {
+    tbody.textContent = '';
+    const errTr = document.createElement('tr');
+    const errTd = document.createElement('td');
+    errTd.colSpan = 6;
+    errTd.style.padding = '2rem';
+    errTd.style.textAlign = 'center';
+    errTd.style.color = '#dc2626';
+    errTd.textContent = message;
+    errTr.appendChild(errTd);
+    tbody.appendChild(errTr);
+  };
+
   try {
     tbody.textContent = '';
     const loadTr = document.createElement('tr');
     const loadTd = document.createElement('td');
-    loadTd.colSpan = 5;
+    loadTd.colSpan = 6;
     loadTd.style.padding = '1rem';
     loadTd.style.opacity = '0.7';
     loadTd.textContent = 'Loading team...';
     loadTr.appendChild(loadTd);
     tbody.appendChild(loadTr);
-    
-    const { data: teamMembers, error } = await window.supabaseClient.from('dev_team').select('*').order('created_at', { ascending: false });
+
+    const { members: teamMembers, error } = await App.devAgent.loadTeamMembersFromApi();
     if (error) {
-      tbody.textContent = '';
-      const errTr = document.createElement('tr');
-      const errTd = document.createElement('td');
-      errTd.colSpan = 5;
-      errTd.textContent = 'Failed to fetch.';
-      errTr.appendChild(errTd);
-      tbody.appendChild(errTr);
+      renderTeamLoadError(error.message || 'Failed to load team');
       return;
     }
-    
-    let contacts = [];
-    try {
-      const contactsRes = await App.api('/api/contacts');
-      contacts = contactsRes.data || [];
-    } catch (apiErr) {
-      console.warn('Could not fetch contacts for team map:', apiErr);
-    }
-    
-    const contactMap = {};
-    contacts.forEach(c => {
-      contactMap[c.id] = `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || c.id;
-    });
 
     tbody.textContent = '';
     if (!teamMembers || teamMembers.length === 0) {
       const noTr = document.createElement('tr');
       const noTd = document.createElement('td');
-      noTd.colSpan = 5;
+      noTd.colSpan = 6;
       noTd.style.textAlign = 'center';
       noTd.style.padding = '2rem';
       noTd.style.color = '#666';
@@ -3955,9 +4268,10 @@ App.devAgent.showTeamBrowser = async function() {
     }
     
     teamMembers.forEach(t => {
-      const contact = contacts.find(c => c.id === t.contact_id) || {};
-      const fullName = contactMap[t.contact_id] || 'Unknown Member';
-      const cType = contact.entity_type || 'Human';
+      const contact = t.contact || {};
+      const fullName = t.member_name || App.devAgent.contactDisplayName(contact) || 'Unknown Member';
+      const cType = App.devAgent.contactEntityType(contact);
+      const typeBadge = App.devAgent.contactTypeLabel(contact) || cType;
 
       const tr = document.createElement('tr');
       
@@ -3972,31 +4286,78 @@ App.devAgent.showTeamBrowser = async function() {
       typeTd.textContent = '';
       const badgeSpan = document.createElement('span');
       badgeSpan.className = `badge ${cType === 'Agent' ? 'badge-blue' : 'badge-gray'}`;
-      badgeSpan.textContent = cType;
+      badgeSpan.textContent = typeBadge;
       typeTd.appendChild(badgeSpan);
       
       const roleTd = document.createElement('td');
       roleTd.textContent = t.role || 'Unassigned';
-      
+
+      const accountTd = document.createElement('td');
+      accountTd.textContent = App.devAgent.teamAccountStatusLabel(t);
+
       const dateTd = document.createElement('td');
       dateTd.textContent = new Date(t.created_at).toLocaleDateString();
       
       const actionsTd = document.createElement('td');
       actionsTd.className = 'contacts-actions-cell';
+
+      const accountStatus = String(t.accountStatus || t.account_status || 'not_invited').trim();
+      const contactEmail = String(contact.email || contact.Email || '').trim();
+      const inviteButtons = [];
+
+      if (accountStatus === 'invite_pending') {
+        const resendBtn = document.createElement('button');
+        resendBtn.type = 'button';
+        resendBtn.className = 'btn btn-ghost tiny-btn';
+        resendBtn.textContent = 'Resend';
+        resendBtn.style.whiteSpace = 'nowrap';
+        resendBtn.addEventListener('click', () => App.devAgent.sendTeamInvitation(t.id, { resend: true }));
+        inviteButtons.push(resendBtn);
+
+        const revokeBtn = document.createElement('button');
+        revokeBtn.type = 'button';
+        revokeBtn.className = 'btn btn-ghost tiny-btn';
+        revokeBtn.textContent = 'Revoke';
+        revokeBtn.style.whiteSpace = 'nowrap';
+        revokeBtn.addEventListener('click', () => App.devAgent.revokeTeamInvitation(t.id));
+        inviteButtons.push(revokeBtn);
+      } else if (accountStatus !== 'active') {
+        const inviteBtn = document.createElement('button');
+        inviteBtn.type = 'button';
+        inviteBtn.className = 'btn btn-primary tiny-btn';
+        inviteBtn.textContent = 'Invite';
+        inviteBtn.style.whiteSpace = 'nowrap';
+        inviteBtn.disabled = !contactEmail;
+        inviteBtn.title = contactEmail ? 'Send email invitation' : 'Add an email to the contact first';
+        inviteBtn.addEventListener('click', () => {
+          if (!contactEmail) {
+            App.notify('Add an email address on the contact record before sending an invitation.', true);
+            return;
+          }
+          App.devAgent.sendTeamInvitation(t.id);
+        });
+        inviteButtons.push(inviteBtn);
+      }
       
       if (typeof App.makeIconButton === 'function' && App.contacts) {
-        const viewBtn = App.makeIconButton('view', 'View Contact', () => App.contacts.openViewPage(t.contact_id));
-        const editBtn = App.makeIconButton('edit', 'Edit Contact', () => App.contacts.openEditPage(t.contact_id, 'devAgentPage'), { marginLeft: '8px' });
-        const cloneBtn = App.makeIconButton('copy', 'Clone Contact', () => App.contacts.openClonePage(t.contact_id), { marginLeft: '8px' });
+        const viewBtn = App.makeIconButton('view', 'View Contact', () => App.contacts.openViewPage(contact.id ? contact : t.contact_id));
+        const editBtn = App.makeIconButton('edit', 'Edit Contact', () => App.contacts.openEditPage(contact.id ? contact : t.contact_id, 'devTeamPage'), { marginLeft: '8px' });
+        const cloneBtn = App.makeIconButton('copy', 'Clone Contact', () => App.contacts.openClonePage(contact.id ? contact : t.contact_id), { marginLeft: '8px' });
         const deleteBtn = App.makeIconButton('delete', 'Remove from Team', () => App.devAgent.deleteTeamMember(t.id), { danger: true, marginLeft: '8px' });
-        
-        actionsTd.appendChild(viewBtn);
-        actionsTd.appendChild(editBtn);
-        actionsTd.appendChild(cloneBtn);
-        actionsTd.appendChild(deleteBtn);
+
+        if (typeof App.finishTableActionsCell === 'function') {
+          App.finishTableActionsCell(actionsTd, ...inviteButtons, viewBtn, editBtn, cloneBtn, deleteBtn);
+        } else {
+          inviteButtons.forEach((btn) => actionsTd.appendChild(btn));
+          actionsTd.appendChild(viewBtn);
+          actionsTd.appendChild(editBtn);
+          actionsTd.appendChild(cloneBtn);
+          actionsTd.appendChild(deleteBtn);
+        }
       } else {
         actionsTd.textContent = '';
-        
+        inviteButtons.forEach((btn) => actionsTd.appendChild(btn));
+
         const viewBtn2 = document.createElement('button');
         viewBtn2.type = 'button';
         viewBtn2.className = 'secondary-btn tiny-btn';
@@ -4023,6 +4384,7 @@ App.devAgent.showTeamBrowser = async function() {
       tr.appendChild(nameTd);
       tr.appendChild(typeTd);
       tr.appendChild(roleTd);
+      tr.appendChild(accountTd);
       tr.appendChild(dateTd);
       tr.appendChild(actionsTd);
       
@@ -4030,7 +4392,7 @@ App.devAgent.showTeamBrowser = async function() {
     });
   } catch (err) {
     console.error('showTeamBrowser failed:', err);
-    tbody.innerHTML = `<tr><td colspan="5" style="padding: 2rem; text-align: center; color: #dc2626; font-style: italic;">Render Error: ${err.message}</td></tr>`;
+    renderTeamLoadError(`Render error: ${err.message || err}`);
   }
 };
 
@@ -4055,36 +4417,8 @@ App.devAgent.openTeamEditor = async function() {
     document.getElementById('devEditTeamContactId').value = '';
     document.getElementById('devEditTeamContactDisplay').value = '';
     
-    // Populate Roles dropdown
     const roleSelect = document.getElementById('devEditTeamRole');
-    if (roleSelect && window.supabaseClient) {
-      roleSelect.textContent = '';
-      const loadOpt = document.createElement('option');
-      loadOpt.value = '';
-      loadOpt.textContent = 'Loading roles...';
-      roleSelect.appendChild(loadOpt);
-      try {
-        const { data: roles, error } = await window.supabaseClient.from('dev_roles').select('*').order('role_name', { ascending: true });
-        if (error) throw error;
-        roleSelect.textContent = '';
-        const selOpt = document.createElement('option');
-        selOpt.value = '';
-        selOpt.textContent = 'Select Role...';
-        roleSelect.appendChild(selOpt);
-        roles.forEach(r => {
-          const opt = document.createElement('option');
-          opt.value = r.role_name;
-          opt.textContent = r.role_name;
-          roleSelect.appendChild(opt);
-        });
-      } catch (err) {
-        roleSelect.textContent = '';
-        const errOpt = document.createElement('option');
-        errOpt.value = '';
-        errOpt.textContent = 'Failed to load roles';
-        roleSelect.appendChild(errOpt);
-      }
-    }
+    await App.devAgent.populateDevRolesSelect(roleSelect);
   }
 };
 
@@ -4096,27 +4430,24 @@ App.devAgent.saveTeamEditor = async function(e) {
     App.notify('Please select a contact and a role.', true);
     return;
   }
-  
-  const payload = {
-    project_id: App.state.currentProjectId || 'alphire-promo',
-    contact_id: contactId,
-    role: role
-  };
+
+  const projectId = await App.devAgent.ensureProjectContext();
+  if (!projectId) {
+    App.notify('Select an active project in Settings → Projects, then try again.', true);
+    return;
+  }
   
   try {
-    const { error } = await window.supabaseClient.from('dev_team').insert([payload]);
-    if (error) {
-      // Handle unique constraint violation gracefully
-      if (error.code === '23505') {
-        throw new Error('This contact is already a team member.');
-      }
-      throw error;
-    }
+    await App.api('/api/develop/devAgent/team', {
+      method: 'POST',
+      body: JSON.stringify({ contactId, role }),
+    });
     App.notify('Team member added successfully.', false);
-    App.devAgent.loadTeam(); // refresh sidebar list
-    App.devAgent.showTeamBrowser(); // switch panel back to list
+    App.devAgent.loadTeam();
+    App.devAgent.showTeamBrowser();
   } catch (err) {
-    App.notify('Failed to add member: ' + err.message, true);
+    const msg = err?.message || err?.error?.message || 'Failed to add member';
+    App.notify(msg, true);
   }
 };
 
@@ -4128,13 +4459,12 @@ App.devAgent.closeTeamEditor = function() {
 App.devAgent.deleteTeamMember = async function(teamId) {
   if (!confirm('Are you sure you want to remove this team member?')) return;
   try {
-    const { error } = await window.supabaseClient.from('dev_team').delete().eq('id', teamId);
-    if (error) throw error;
+    await App.api(`/api/develop/devAgent/team/${encodeURIComponent(teamId)}`, { method: 'DELETE' });
     App.notify('Team member removed.');
     App.devAgent.loadTeam();
     App.devAgent.showTeamBrowser();
   } catch (err) {
-    App.notify('Failed to remove member: ' + err.message, true);
+    App.notify(err.message || 'Failed to remove member', true);
   }
 };
 
@@ -4162,11 +4492,6 @@ App.devAgent.showRolesBrowser = async function() {
   
   const tbody = document.getElementById('devRolesBrowserTable');
   if (!tbody) return;
-  if (!window.supabaseClient) {
-    tbody.innerHTML = '<tr><td colspan="4" style="padding: 2rem; text-align: center; color: #dc2626; font-style: italic;">Supabase Client Not Initialized. Please refresh or check Dev Agent configuration.</td></tr>';
-    return;
-  }
-  
   try {
     tbody.textContent = '';
     const rLoadTr = document.createElement('tr');
@@ -4178,8 +4503,26 @@ App.devAgent.showRolesBrowser = async function() {
     rLoadTr.appendChild(rLoadTd);
     tbody.appendChild(rLoadTr);
 
-    const { data: roles, error } = await window.supabaseClient.from('dev_roles').select('*').order('created_at', { ascending: false });
-    if (error) {
+    const projectId = await App.devAgent.ensureProjectContext();
+    if (!projectId) {
+      tbody.textContent = '';
+      const needTr = document.createElement('tr');
+      const needTd = document.createElement('td');
+      needTd.colSpan = 4;
+      needTd.style.padding = '2rem';
+      needTd.style.textAlign = 'center';
+      needTd.style.color = '#dc2626';
+      needTd.textContent = 'Select an active project in Settings → Projects, then try again.';
+      needTr.appendChild(needTd);
+      tbody.appendChild(needTr);
+      return;
+    }
+
+    let roles;
+    try {
+      const res = await App.api('/api/develop/devAgent/roles');
+      roles = res.roles || res.data || [];
+    } catch (_) {
       tbody.textContent = '';
       const rErrTr = document.createElement('tr');
       const rErrTd = document.createElement('td');
@@ -4289,13 +4632,22 @@ App.devAgent.saveRoleEditor = async function(e) {
   
   if (!roleName) return;
   
+  const projectId = await App.devAgent.ensureProjectContext();
+  if (!projectId) {
+    App.notify('Select an active project in Settings → Projects, then try again.', true);
+    return;
+  }
+
   const payload = {
-    project_id: App.state.currentProjectId || 'alphire-promo',
+    project_id: projectId,
     role_name: roleName,
     description: roleDesc
   };
   
   try {
+    if (!window.supabaseClient) {
+      throw new Error('Supabase client is not initialized.');
+    }
     let error;
     if (roleId) {
       const res = await window.supabaseClient.from('dev_roles').update(payload).eq('id', roleId);
@@ -4364,7 +4716,7 @@ App.devAgent.openContactSelectorModal = async function() {
     
     try {
       const res = await App.api('/api/contacts');
-      App.devAgent.modalContacts = res.data || [];
+      App.devAgent.modalContacts = res.contacts || res.data || [];
       App.devAgent.filterModalContacts();
     } catch (e) {
       if (tbody) {

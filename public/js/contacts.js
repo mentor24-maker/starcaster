@@ -12,6 +12,7 @@ App.contacts = (function () {
   let lastSuggestedLogicExpression = '';
   let activeFilteredContactClass = null;
   let returnPageOnSave = null;
+  let pendingAddContactMeta = null;
 
   function escapeHtml(str) {
     if (str == null) return '';
@@ -1473,8 +1474,42 @@ App.contacts = (function () {
     App.setActivePage('viewContactPage');
   }
 
-  function openEditPage(contactOrId, returnPageId = null) {
-    const contact = typeof contactOrId === 'object' ? contactOrId : findContactById(contactOrId);
+  function armTeamMemberCreate(meta = {}) {
+    const ctx = meta && typeof meta === 'object' ? { ...meta } : {};
+    pendingAddContactMeta = ctx;
+    returnPageOnSave = String(ctx.returnPageId || 'devTeamPage').trim() || 'devTeamPage';
+    activeContactId = '';
+  }
+
+  function openAddPage(returnPageId = null, meta = {}) {
+    const ctx = meta && typeof meta === 'object' ? { ...meta } : {};
+    if (returnPageId) ctx.returnPageId = returnPageId;
+    armTeamMemberCreate(ctx);
+    if (els.contactForm) els.contactForm.reset();
+    const go = App._baseSetActivePage || App.setActivePage;
+    go.call(App, 'addContactPage');
+  }
+
+  async function openEditPage(contactOrId, returnPageId = null) {
+    const wantedId = typeof contactOrId === 'object'
+      ? String(contactOrId?.id || '').trim()
+      : String(contactOrId || '').trim();
+    if (!wantedId) {
+      const meta = returnPageId === 'devTeamPage'
+        ? { contactType: 'team-admin', contactClass: 'personnel' }
+        : {};
+      openAddPage(returnPageId || null, meta);
+      return;
+    }
+    let contact = typeof contactOrId === 'object' ? contactOrId : findContactById(contactOrId);
+    if (!contact && wantedId) {
+      try {
+        const res = await api(`/api/contacts/${encodeURIComponent(wantedId)}`);
+        contact = res?.contact || res?.data || null;
+      } catch (_) {
+        contact = null;
+      }
+    }
     if (!contact || !els.contactEditForm) {
       notify('Contact not found', true);
       return;
@@ -3247,14 +3282,45 @@ App.contacts = (function () {
     // Contact form
     els.contactForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!pendingAddContactMeta && App.devAgent?.teamAddContext) {
+        pendingAddContactMeta = { ...App.devAgent.teamAddContext };
+      }
+      if (!returnPageOnSave && pendingAddContactMeta?.returnPageId) {
+        returnPageOnSave = pendingAddContactMeta.returnPageId;
+      }
       const payload = toContactPayload(els.contactForm);
+      if (pendingAddContactMeta?.contactType) {
+        payload.contactType = String(pendingAddContactMeta.contactType).trim();
+      }
+      if (pendingAddContactMeta?.contactClass) {
+        payload.contactClass = String(pendingAddContactMeta.contactClass).trim();
+      }
+      const savedReturnPage = returnPageOnSave;
+      const addMeta = pendingAddContactMeta;
       try {
-        await api('/api/contacts', { method: 'POST', body: JSON.stringify(payload) });
+        const res = await api('/api/contacts', { method: 'POST', body: JSON.stringify(payload) });
+        const created = res?.contact || res?.data || null;
         els.contactForm.reset();
         notify('Contact created');
+        pendingAddContactMeta = null;
+        if (App.devAgent) App.devAgent.teamAddContext = null;
         await App.refresh();
-        openContactsPage();
-      } catch (err) { notify(err.message, true); }
+        if (savedReturnPage === 'devTeamPage' && created?.id && typeof App.devAgent?.afterTeamContactCreated === 'function') {
+          returnPageOnSave = null;
+          await App.devAgent.afterTeamContactCreated(created);
+        } else if (savedReturnPage) {
+          App.setActivePage(savedReturnPage);
+          returnPageOnSave = null;
+          if (savedReturnPage === 'devTeamPage' && typeof App.devAgent?.showTeamBrowser === 'function') {
+            App.devAgent.showTeamBrowser();
+          }
+        } else {
+          openContactsPage();
+        }
+      } catch (err) {
+        pendingAddContactMeta = addMeta;
+        notify(err.message, true);
+      }
     });
 
     if (els.openAddContactPageBtn) {
@@ -3553,7 +3619,7 @@ App.contacts = (function () {
     manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage', pagePrefixes: ['contacts', 'contactsSettingsPage'] },
     init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment,
     activeExploreFilterRules, exploreFilterDefinition,
-    openContactsPage, openFilteredContactsPage, openPeerSitesPage, openViewPage, openEditPage, openClonePage,
+    openContactsPage, openFilteredContactsPage, openPeerSitesPage, openViewPage, openAddPage, armTeamMemberCreate, openEditPage, openClonePage,
     onPageActivated(targetPageId) {
       if (targetPageId !== 'contactsPage') {
         document.querySelectorAll('.submenu-link[data-subpage]').forEach(el => el.classList.remove('active'));

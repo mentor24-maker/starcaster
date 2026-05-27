@@ -279,6 +279,11 @@ async function handleRequest(req, res) {
         'POST /api/acquire/youtube-comment-suggestions',
         'POST /api/acquire/youtube-comment',
       ],
+      expectedDevAgentTeamRoutes: [
+        'GET /api/develop/devAgent/team',
+        'POST /api/develop/devAgent/team',
+        'DELETE /api/develop/devAgent/team/:id',
+      ],
       assetFeatures: {
         importDriveFolder: typeof assets.handleImportDriveFolder === 'function',
         importDriveFolderPath: assets.IMPORT_DRIVE_FOLDER_PATH || null,

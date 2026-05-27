@@ -494,5 +494,11 @@ server.listen(PORT, () => {
   } catch (err) {
     console.warn('[server] Assets routes failed to load:', err.message);
   }
+  try {
+    require('./lib/devTeamStore');
+    console.log('[server] devAgent team + roles + team invite routes registered (project-scoped)');
+  } catch (err) {
+    console.warn('[server] Dev team routes failed to load:', err.message);
+  }
   initTimerDaemon();
 });
