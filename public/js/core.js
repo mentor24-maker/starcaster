@@ -706,6 +706,20 @@ App.api = async function api(path, options = {}) {
   return body;
 };
 
+/**
+ * Read a list from a standard API envelope ({ contacts }, { data }, or nested data).
+ */
+App.normalizeApiArray = function normalizeApiArray(res, key) {
+  if (!res || typeof res !== 'object') return [];
+  const listKey = String(key || '').trim();
+  if (listKey && Array.isArray(res[listKey])) return res[listKey];
+  if (Array.isArray(res.data)) return res.data;
+  if (listKey && res.data && typeof res.data === 'object' && Array.isArray(res.data[listKey])) {
+    return res.data[listKey];
+  }
+  return [];
+};
+
 // ---------------------------------------------------------------------------
 // Shared utility functions
 // ---------------------------------------------------------------------------
