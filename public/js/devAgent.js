@@ -300,7 +300,13 @@ App.devAgent.init = async function() {
     }
     
     // Skip panel resets if the page hasn't changed (e.g. clicking New Task while on Tasks page)
-    if (prevPage === pageId) return;
+    if (prevPage === pageId) {
+      if (pageId === 'devTeamPage') {
+        await App.devAgent.ensureProjectContext();
+        await App.devAgent.showTeamBrowser();
+      }
+      return;
+    }
     
     try {
       if (pageId === 'devProjectsPage') {
@@ -329,7 +335,7 @@ App.devAgent.init = async function() {
       } else if (pageId === 'devTeamPage') {
         await App.devAgent.ensureProjectContext();
         await App.devAgent.loadTeam();
-        setTimeout(() => App.devAgent.showTeamBrowser(), 50);
+        await App.devAgent.showTeamBrowser();
       } else if (pageId === 'devRolesPage') {
         await App.devAgent.loadTeam();
         setTimeout(() => App.devAgent.showRolesBrowser(), 50);
@@ -4031,6 +4037,13 @@ App.devAgent.revokeTeamInvitation = async function(teamId) {
   }
 };
 
+App.devAgent.normalizeTeamMembersResponse = function(res) {
+  if (Array.isArray(res?.members)) return res.members;
+  if (Array.isArray(res?.data)) return res.data;
+  if (res?.data && Array.isArray(res.data.members)) return res.data.members;
+  return [];
+};
+
 App.devAgent.loadTeamMembersFromApi = async function() {
   const projectId = await App.devAgent.ensureProjectContext();
   if (!projectId) {
@@ -4041,8 +4054,7 @@ App.devAgent.loadTeamMembersFromApi = async function() {
   }
   try {
     const res = await App.api('/api/develop/devAgent/team');
-    const members = res.members || res.data || [];
-    return { members, error: null };
+    return { members: App.devAgent.normalizeTeamMembersResponse(res), error: null };
   } catch (err) {
     return { members: [], error: err };
   }
@@ -4200,7 +4212,13 @@ App.devAgent.loadTeam = async function() {
   }
 };
 
+App.devAgent._teamBrowserLoadSeq = 0;
+
 App.devAgent.showTeamBrowser = async function() {
+  const loadSeq = ++App.devAgent._teamBrowserLoadSeq;
+  const isStale = () => loadSeq !== App.devAgent._teamBrowserLoadSeq;
+
+  await App.devAgent.ensureProjectContext();
   void App.devAgent.updateTeamPageHeading();
   const pb = document.getElementById('devProjectBrowserPanel'); if(pb) pb.classList.add('hidden');
   const pe = document.getElementById('devProjectEditorPanel'); if(pe) pe.classList.add('hidden');
@@ -4220,9 +4238,13 @@ App.devAgent.showTeamBrowser = async function() {
   if (browserPanel) browserPanel.classList.remove('hidden');
   
   const tbody = document.getElementById('devTeamBrowserTable');
-  if (!tbody) return;
-  
+  if (!tbody) {
+    console.warn('[devAgent] devTeamBrowserTable not found');
+    return;
+  }
+
   const renderTeamLoadError = (message) => {
+    if (isStale()) return;
     tbody.textContent = '';
     const errTr = document.createElement('tr');
     const errTd = document.createElement('td');
@@ -4247,13 +4269,15 @@ App.devAgent.showTeamBrowser = async function() {
     tbody.appendChild(loadTr);
 
     const { members: teamMembers, error } = await App.devAgent.loadTeamMembersFromApi();
+    if (isStale()) return;
     if (error) {
       renderTeamLoadError(error.message || 'Failed to load team');
       return;
     }
 
+    const members = Array.isArray(teamMembers) ? teamMembers : [];
     tbody.textContent = '';
-    if (!teamMembers || teamMembers.length === 0) {
+    if (!members.length) {
       const noTr = document.createElement('tr');
       const noTd = document.createElement('td');
       noTd.colSpan = 6;
@@ -4266,8 +4290,9 @@ App.devAgent.showTeamBrowser = async function() {
       tbody.appendChild(noTr);
       return;
     }
-    
-    teamMembers.forEach(t => {
+
+    members.forEach((t) => {
+      if (isStale()) return;
       const contact = t.contact || {};
       const fullName = t.member_name || App.devAgent.contactDisplayName(contact) || 'Unknown Member';
       const cType = App.devAgent.contactEntityType(contact);
@@ -5682,7 +5707,9 @@ if (typeof window.App !== 'undefined') {
         const rightCol = document.getElementById('devForumRightColumn');
         if (chatPanel && rightCol) rightCol.appendChild(chatPanel);
       } else if (pageId === 'devTeamPage') {
-        if (typeof App.devAgent.showTeamBrowser === 'function') App.devAgent.showTeamBrowser();
+        if (typeof App.devAgent.showTeamBrowser === 'function') {
+          void App.devAgent.ensureProjectContext().then(() => App.devAgent.showTeamBrowser());
+        }
       } else if (pageId === 'devRolesPage') {
         if (typeof App.devAgent.showRolesBrowser === 'function') App.devAgent.showRolesBrowser();
       } else if (pageId === 'devProjectsPage') {

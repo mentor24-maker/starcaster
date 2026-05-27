@@ -72,7 +72,7 @@ App.refresh = async function refresh() {
   ]);
 
   if (contactsRes.status === 'fulfilled') {
-    state.contacts = contactsRes.value.contacts || [];
+    state.contacts = App.normalizeApiArray(contactsRes.value, 'contacts');
   } else {
     state.contacts = [];
     if (shouldNotifySharedDataErrors) {
@@ -81,7 +81,7 @@ App.refresh = async function refresh() {
   }
 
   if (segmentsRes.status === 'fulfilled') {
-    state.segments = segmentsRes.value.segments || [];
+    state.segments = App.normalizeApiArray(segmentsRes.value, 'segments');
   } else {
     state.segments = [];
     if (shouldNotifySharedDataErrors) {
@@ -90,7 +90,7 @@ App.refresh = async function refresh() {
   }
 
   if (campaignsRes.status === 'fulfilled') {
-    state.campaigns = campaignsRes.value.campaigns || [];
+    state.campaigns = App.normalizeApiArray(campaignsRes.value, 'campaigns');
   } else {
     state.campaigns = [];
     if (shouldNotifySharedDataErrors) {

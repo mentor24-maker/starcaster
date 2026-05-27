@@ -2402,6 +2402,26 @@ App.contacts = (function () {
         });
       }
 
+      if (!filteredContacts.length) {
+        const emptyTr = document.createElement('tr');
+        const emptyTd = document.createElement('td');
+        emptyTd.colSpan = visibleColumns.length + 2;
+        emptyTd.style.textAlign = 'center';
+        emptyTd.style.padding = '2rem';
+        emptyTd.style.color = '#666';
+        emptyTd.style.fontStyle = 'italic';
+        const total = state.contacts.length;
+        if (!total) {
+          emptyTd.textContent = 'No contacts loaded for this project. Confirm the active project under Settings → Projects, then refresh the page.';
+        } else if (activeFilteredContactClass) {
+          emptyTd.textContent = `No contacts in the “${activeFilteredContactClass}” class (${total} contact${total === 1 ? '' : 's'} in other classes). Open Contacts from the menu or pick another class.`;
+        } else {
+          emptyTd.textContent = `No contacts match the current filters (${total} loaded). Clear search fields and column filters above the table.`;
+        }
+        emptyTr.appendChild(emptyTd);
+        els.contactsTable.appendChild(emptyTr);
+      }
+
       filteredContacts.forEach((contact) => {
           const tr = document.createElement('tr');
           const checkTd = document.createElement('td');
@@ -3623,6 +3643,15 @@ App.contacts = (function () {
     onPageActivated(targetPageId) {
       if (targetPageId !== 'contactsPage') {
         document.querySelectorAll('.submenu-link[data-subpage]').forEach(el => el.classList.remove('active'));
+      }
+      if (
+        targetPageId === 'contactsPage'
+        || targetPageId === 'contactsExplorePage'
+        || targetPageId === 'contactsPeerSitesPage'
+      ) {
+        if (typeof App.refresh === 'function') {
+          App.refresh().catch((err) => notify(err.message, true));
+        }
       }
       if (targetPageId === 'contactsSettingsPage') {
         renderContactsSettingsPage();
