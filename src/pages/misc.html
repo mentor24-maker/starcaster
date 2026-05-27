@@ -123,27 +123,82 @@
       </section>
       <section id="devTeamPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Team Members</h2>
-          <button id="devNewTeamBtn" class="primary-btn" onclick="App.contacts.openEditPage(null, 'devTeamPage')">+ Add Member (via Contacts)</button>
+          <h2 id="devTeamPageTitle">Dev Agent: Team</h2>
+          <div class="page-heading-actions">
+            <button id="devNewTeamBtn" type="button" class="btn btn-primary" onclick="(window.__starcasterOpenAddTeamMember||App.devAgent.openAddTeamMember).call(App.devAgent)">Add Member (via Contacts)</button>
+            <button id="devAssignTeamBtn" type="button" class="btn btn-ghost">Assign Existing Contact</button>
+          </div>
         </div>
         <div id="devTeamBrowserPanel" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
           <div class="table-wrap">
             <table class="data-table" style="width: 100%;">
               <thead>
-                <tr><th style="text-align:left;">Member Name</th><th>Type</th><th>Role</th><th>Joined</th><th>Actions</th></tr>
+                <tr><th style="text-align:left;">Member Name</th><th>Type</th><th>Role</th><th>Account</th><th>Joined</th><th class="actions-col">Actions</th></tr>
               </thead>
               <tbody id="devTeamBrowserTable"></tbody>
             </table>
           </div>
         </div>
         <div id="devTeamEditorPanel" class="hidden" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
-           <!-- Editor functionality uses Contacts UI -->
+          <h2 id="devTeamEditorHeader" style="margin-top: 0;">Add Team Member</h2>
+          <form id="devTeamEditorForm" class="standard-form-grid" style="max-width: 800px;">
+            <input type="hidden" id="devEditTeamId" />
+            <label for="devEditTeamContactDisplay">Contact</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <input type="text" id="devEditTeamContactDisplay" readonly style="flex: 1;" />
+              <input type="hidden" id="devEditTeamContactId" />
+              <button type="button" id="devPickTeamContactBtn" class="btn btn-ghost">Select Contact</button>
+            </div>
+            <label for="devEditTeamRole">Dev Role</label>
+            <select id="devEditTeamRole" required>
+              <option value="">Select Role...</option>
+            </select>
+            <div></div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button type="submit" class="btn btn-primary">Save Team Member</button>
+              <button type="button" id="devCloseTeamEditorBtn" class="btn btn-ghost">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="devContactSelectorModal" class="hidden modal-overlay" style="position: fixed; inset: 0; z-index: 1200; background: rgba(0,0,0,0.45); display: none;">
+          <div class="modal-card" style="max-width: 960px; margin: 2rem auto; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius-md); max-height: calc(100vh - 4rem); overflow: auto;">
+            <div class="page-heading-row" style="margin-bottom: 1rem;">
+              <h2 style="margin: 0;">Select Contact</h2>
+              <button type="button" id="devCloseContactSelectorBtn" class="btn btn-ghost" aria-label="Close">Close</button>
+            </div>
+            <div class="standard-form-grid" style="margin-bottom: 1rem; max-width: 100%;">
+              <label for="devContactSelectorSearch">Search</label>
+              <input type="text" id="devContactSelectorSearch" placeholder="" />
+              <label for="devContactSelectorCompany">Company</label>
+              <input type="text" id="devContactSelectorCompany" placeholder="" />
+              <label for="devContactSelectorEntityType">Entity Type</label>
+              <select id="devContactSelectorEntityType">
+                <option value="All">All</option>
+                <option value="Human">Human</option>
+                <option value="Agent">Agent</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table" style="width: 100%;">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;">Name</th>
+                    <th style="text-align:left;">Email</th>
+                    <th>Company</th>
+                    <th>Type</th>
+                    <th class="actions-col">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="devContactSelectorTableBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
       <section id="devRolesPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Roles & Permissions</h2>
-          <button id="devNewRoleBtn" class="primary-btn">+ New Role</button>
+          <button id="devNewRoleBtn" type="button" class="btn btn-primary">New Role</button>
         </div>
         <div id="devRolesBrowserPanel" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
           <div class="table-wrap">
@@ -169,7 +224,7 @@
             </div>
             <div class="form-actions full-width" style="margin-top: 1rem;">
               <button type="submit" class="btn btn-primary">Save Role</button>
-              <button type="button" id="devCloseRoleEditorBtn" class="secondary-btn">Close</button>
+              <button type="button" id="devCloseRoleEditorBtn" class="btn btn-ghost">Close</button>
             </div>
           </form>
         </div>

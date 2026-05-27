@@ -38,6 +38,7 @@ Record **packs** or individual files after you run them. Oldest first.
 | 2026-05-18 | `012_multitenancy_backfill_primary_project.sql` | ✓ | | | Item 2 — backfill (your project/user IDs) |
 | 2026-05-18 | `supabase_connection_ops_setup.sql` | ✓ | | | Item 3 — Connection Ops smoke tests passed |
 | 2026-05-18 | `013_file_stores_supabase.sql` | ✓ | ✓ | ✓ | acquire_job_mirror, orchestrator_runs, develop_icons; SQL run in Supabase **ISITAS** (prod); preview uses same DB as prod on Vercel |
+| 2026-05-27 | `SQL/team_invitations_setup.sql` | | | | Phase 1 team invites: `team_invitations`, `contacts.auth_user_id` |
 | | | | | | |
 
 *Add rows above as you apply scripts. Do not delete history—strike through superseded entries if needed.*
@@ -106,6 +107,7 @@ All paths relative to `docs/`.
 ### Contacts & personas
 
 - `contacts` — implied in `app_tables_setup.sql` or dedicated setup; alters: `contacts_add_middle_name.sql`, `contacts_add_entity_type.sql`, `contacts_add_contact_class.sql`, `contacts_backfill_personality_class.sql`, `contacts_project_unique_email_migration.sql`, `contacts_options_management_setup.sql`
+- `SQL/team_invitations_setup.sql` — `contacts.auth_user_id`, `team_invitations` (depends on auth + dev_team)
 - `contact_personas_setup.sql`, `contact_personas_fields.sql`, `contact_personas_type_migration.sql`
 
 ### Messaging
