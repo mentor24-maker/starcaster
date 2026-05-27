@@ -81,6 +81,13 @@ App.settings = (function () {
 
   function refreshCurrentPageAfterProjectChange() {
     const activePage = String(App.state?.activePage || '').trim();
+    if (typeof App.refresh === 'function') {
+      App.refresh().catch((err) => {
+        if (typeof notify === 'function') {
+          notify(err?.message || 'Could not refresh data for the new project', true);
+        }
+      });
+    }
     if (!activePage || typeof App.setActivePage !== 'function') return;
     window.setTimeout(() => {
       App.setActivePage(activePage, { persist: false });
@@ -1556,6 +1563,7 @@ App.settings = (function () {
         renderProjectLists();
         renderProjectDetails();
         applyProjectToHeader();
+        refreshCurrentPageAfterProjectChange();
         notify('Active project updated');
       });
       refreshProjectContext();
