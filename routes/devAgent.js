@@ -5,6 +5,43 @@ const { listRogerChats, createRogerChat, updateRogerChat, listRogerSessions, cre
 const { consultRoger } = require('../lib/rogerClient');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 const { uploadAssetToBlob } = require('../lib/blobStorage');
+const {
+  listDevTeamMembers,
+  getDevTeamMember,
+  addDevTeamMember,
+  removeDevTeamMember,
+} = require('../lib/devTeamStore');
+const { listDevRoles } = require('../lib/devRolesStore');
+const {
+  canManageTeamInvites,
+  sendTeamMemberInvitation,
+} = require('../lib/teamInviteDelivery');
+const {
+  revokeTeamInvitation,
+  getActiveInvitationForDevTeam,
+} = require('../lib/teamInvitationsStore');
+
+function projectIdFromRequest(req) {
+  return String(
+    req?.projectContext?.project?.id
+    || req.headers['x-project-id']
+    || req.headers['X-Project-ID']
+    || ''
+  ).trim() || null;
+}
+
+async function resolveProjectIdForRequest(req) {
+  const fromContext = projectIdFromRequest(req);
+  if (fromContext) return fromContext;
+  const userId = String(req?.authUser?.id || '').trim();
+  if (!userId) return null;
+  const result = await resolveCurrentProject({
+    userId,
+    requestedProjectId: String(req.headers['x-project-id'] || req.headers['X-Project-ID'] || '').trim(),
+    autoCreateDefault: true,
+  });
+  return result.ok ? String(result.data?.project?.id || '').trim() || null : null;
+}
 
 const manifest = {
   id: 'develop-roger',
@@ -102,8 +139,7 @@ function parseTriAgentBackend(rawString) {
 }
 
 async function handle(req, res, pathname, requestMethod) {
-  const scope = await resolveCurrentProject(req);
-  const projectId = scope?.projectId || null;
+  const projectId = await resolveProjectIdForRequest(req);
 
   if (pathname === '/api/develop/devAgent/sessions' && requestMethod === 'GET') {
     const result = await listRogerSessions(projectId);
@@ -591,6 +627,113 @@ async function handle(req, res, pathname, requestMethod) {
     }), true;
   }
 
+
+  if (pathname === '/api/develop/devAgent/roles' && requestMethod === 'GET') {
+    if (!projectId) return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const result = await listDevRoles(projectId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const roles = result.data || [];
+    return sendOk(res, 200, roles, { roles }), true;
+  }
+
+  if (pathname === '/api/develop/devAgent/team' && requestMethod === 'GET') {
+    if (!projectId) return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const result = await listDevTeamMembers(projectId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const members = result.data || [];
+    return sendOk(res, 200, members, { members }, { total: members.length }), true;
+  }
+
+  if (pathname === '/api/develop/devAgent/team' && requestMethod === 'POST') {
+    if (!projectId) return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const body = await parseJsonBody(req);
+    const result = await addDevTeamMember({
+      projectId,
+      contactId: body?.contactId || body?.contact_id,
+      role: body?.role,
+    });
+    if (!result.ok) {
+      const code = result.status === 409 ? 'CONFLICT' : result.status === 404 ? 'NOT_FOUND' : 'DB_ERROR';
+      return sendErr(res, result.status || 500, result.error, { code }), true;
+    }
+    return sendOk(res, 201, result.data, { member: result.data }), true;
+  }
+
+  const teamInviteResendMatch = pathname.match(/^\/api\/develop\/devAgent\/team\/([^/]+)\/invite\/resend$/);
+  if (teamInviteResendMatch && requestMethod === 'POST') {
+    if (!projectId) return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    if (!canManageTeamInvites(req)) {
+      return sendErr(res, 403, 'Only project owners can send team invitations', { code: 'FORBIDDEN' }), true;
+    }
+    const teamId = decodeURIComponent(teamInviteResendMatch[1]);
+    const projectName = String(req?.projectContext?.project?.name || '').trim();
+    const inviterName = String(req?.authUser?.name || req?.authUser?.email || '').trim();
+    const result = await sendTeamMemberInvitation({
+      projectId,
+      teamMemberId: teamId,
+      invitedByUserId: String(req?.authUser?.id || '').trim(),
+      inviterName,
+      projectName,
+      req,
+    });
+    if (!result.ok) {
+      const code = result.status === 404 ? 'NOT_FOUND' : result.status === 409 ? 'CONFLICT' : 'INVITE_FAILED';
+      return sendErr(res, result.status || 500, result.error, { code, invitation: result.data?.invitation }), true;
+    }
+    return sendOk(res, 200, result.data, { ...result.data, resent: true }), true;
+  }
+
+  const teamInviteMatch = pathname.match(/^\/api\/develop\/devAgent\/team\/([^/]+)\/invite$/);
+  if (teamInviteMatch && requestMethod === 'POST') {
+    if (!projectId) return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    if (!canManageTeamInvites(req)) {
+      return sendErr(res, 403, 'Only project owners can send team invitations', { code: 'FORBIDDEN' }), true;
+    }
+    const teamId = decodeURIComponent(teamInviteMatch[1]);
+    const projectName = String(req?.projectContext?.project?.name || '').trim();
+    const inviterName = String(req?.authUser?.name || req?.authUser?.email || '').trim();
+    const result = await sendTeamMemberInvitation({
+      projectId,
+      teamMemberId: teamId,
+      invitedByUserId: String(req?.authUser?.id || '').trim(),
+      inviterName,
+      projectName,
+      req,
+    });
+    if (!result.ok) {
+      const code = result.status === 404 ? 'NOT_FOUND' : result.status === 409 ? 'CONFLICT' : 'INVITE_FAILED';
+      return sendErr(res, result.status || 500, result.error, { code, invitation: result.data?.invitation }), true;
+    }
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  const teamInviteRevokeMatch = pathname.match(/^\/api\/develop\/devAgent\/team\/([^/]+)\/invite$/);
+  if (teamInviteRevokeMatch && requestMethod === 'DELETE') {
+    if (!projectId) return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    if (!canManageTeamInvites(req)) {
+      return sendErr(res, 403, 'Only project owners can revoke team invitations', { code: 'FORBIDDEN' }), true;
+    }
+    const teamId = decodeURIComponent(teamInviteRevokeMatch[1]);
+    const memberRes = await getDevTeamMember(teamId, projectId);
+    if (!memberRes.ok) return sendErr(res, memberRes.status || 500, memberRes.error), true;
+    const invRes = await getActiveInvitationForDevTeam(projectId, teamId);
+    if (!invRes.ok) return sendErr(res, invRes.status || 500, invRes.error), true;
+    if (!invRes.data) {
+      return sendErr(res, 404, 'No pending invitation for this team member', { code: 'NOT_FOUND' }), true;
+    }
+    const revoked = await revokeTeamInvitation({ id: invRes.data.id, projectId });
+    if (!revoked.ok) return sendErr(res, revoked.status || 500, revoked.error), true;
+    return sendOk(res, 200, { revoked: true, invitation: revoked.data }), true;
+  }
+
+  const teamMemberMatch = pathname.match(/^\/api\/develop\/devAgent\/team\/([^/]+)$/);
+  if (teamMemberMatch && requestMethod === 'DELETE') {
+    if (!projectId) return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const teamId = decodeURIComponent(teamMemberMatch[1]);
+    const result = await removeDevTeamMember(teamId, projectId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, { deleted: true }), true;
+  }
 
   if (pathname === '/api/develop/devAgent/git-status' && requestMethod === 'GET') {
     return new Promise((resolve) => {

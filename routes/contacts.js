@@ -62,7 +62,7 @@ function requestScope(req) {
 // ---------------------------------------------------------------------------
 
 const CONTACT_CREATE_SCHEMA = {
-  contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other', ''], default: '' },
+  contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other','team-admin','team-editor', ''], default: '' },
   contactClass: { type: 'string', required: false, enum: ['persona','personality','personnel'], default: 'persona' },
   entityType:   { type: 'string', required: false, enum: ['Human', 'Agent'], default: 'Human' },
   email:       { type: 'string', required: false, format: 'email', maxLength: 254 },
@@ -97,7 +97,7 @@ Object.keys(CONTACT_UPDATE_SCHEMA).forEach(k => {
 
 const CONTACT_IMPORT_SCHEMA = {
   contacts:     { type: 'array',  required: true },
-  contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other', ''] },
+  contactType:  { type: 'string', required: false, enum: ['lead','prospect','subscriber','member','partner','other','team-admin','team-editor', ''] },
   contactClass: { type: 'string', required: false, enum: ['persona','personality','personnel'] },
 };
 
