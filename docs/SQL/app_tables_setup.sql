@@ -115,6 +115,7 @@ create table if not exists public.channels (
   key_version  text      null,
   channel_type text      not null default 'organic' check (channel_type in ('organic', 'virtual')),
   contact_id   text      null references public.contacts(id) on delete set null,
+  openclaw_profile text  not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -133,7 +134,7 @@ create table if not exists public.website_peers (
   metadata jsonb not null default '{}'::jsonb,
   project_id text null,
   owner_user_id text null,
-  last_harvested_at timestamptz not null default now(),
+  last_acquired_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

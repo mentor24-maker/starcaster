@@ -91,10 +91,10 @@ App.state = {
   directAcquireRuns: [],
   directAcquireCurrentRun: null,
   directAcquireWebsitePeers: [],
-  xHarvestRuns: [],
-  xHarvestCurrentRun: null,
-  redditHarvestRuns: [],
-  redditHarvestCurrentRun: null,
+  xAcquireRuns: [],
+  xAcquireCurrentRun: null,
+  redditAcquireRuns: [],
+  redditAcquireCurrentRun: null,
   youtubeAcquireResult: null,
   acquireYoutubeDetails: [],
   acquireYoutubeTopics: [],
@@ -338,8 +338,6 @@ App.els = {
   dbContactsTable: document.getElementById('dbContactsTable'),
   dbPromoLeadsTable: document.getElementById('dbPromoLeadsTable'),
   dbPromoLeadFieldsTable: document.getElementById('dbPromoLeadFieldsTable'),
-  dbHarvestYoutubeDetailsTable: document.getElementById('dbHarvestYoutubeDetailsTable'),
-  dbHarvestYoutubeCommentsTable: document.getElementById('dbHarvestYoutubeCommentsTable'),
   youtubeCommentsPage: document.getElementById('youtubeCommentsPage'),
   databaseTableSelect: document.getElementById('databaseTableSelect'),
   databaseFieldNameOption: document.getElementById('databaseFieldNameOption'),
@@ -363,11 +361,7 @@ App.els = {
   settingsProjectDetailsSlug: document.getElementById('settingsProjectDetailsSlug'),
   settingsProjectDetailsDescription: document.getElementById('settingsProjectDetailsDescription'),
   settingsProjectDefaultUrlInput: document.getElementById('settingsProjectDefaultUrlInput'),
-  settingsProjectDefaultUrlSaveBtn: document.getElementById('settingsProjectDefaultUrlSaveBtn'),
-  settingsProjectDetailsRole: document.getElementById('settingsProjectDetailsRole'),
-  settingsProjectDetailsCreatedAt: document.getElementById('settingsProjectDetailsCreatedAt'),
   settingsProjectTimezoneSelect: document.getElementById('settingsProjectTimezoneSelect'),
-  settingsProjectTimezoneSaveBtn: document.getElementById('settingsProjectTimezoneSaveBtn'),
   settingsProjectLogoFile: document.getElementById('settingsProjectLogoFile'),
   settingsProjectLogoPreview: document.getElementById('settingsProjectLogoPreview'),
   settingsProjectLogoPlaceholder: document.getElementById('settingsProjectLogoPlaceholder'),
@@ -413,17 +407,17 @@ App.els = {
   directAcquireRunsTable: document.getElementById('directAcquireRunsTable'),
   directAcquirePagesTable: document.getElementById('directAcquirePagesTable'),
   directAcquireErrorsPreview: document.getElementById('directAcquireErrorsPreview'),
-  xHarvestForm: document.getElementById('xHarvestForm'),
-  xHarvestRefreshBtn: document.getElementById('xHarvestRefreshBtn'),
-  xHarvestRunsTable: document.getElementById('xHarvestRunsTable'),
-  xHarvestItemsTable: document.getElementById('xHarvestItemsTable'),
-  xHarvestRawPreview: document.getElementById('xHarvestRawPreview'),
-  redditHarvestForm: document.getElementById('redditHarvestForm'),
-  redditHarvestRefreshBtn: document.getElementById('redditHarvestRefreshBtn'),
-  redditHarvestRunsTable: document.getElementById('redditHarvestRunsTable'),
-  redditHarvestPostDetailsBody: document.getElementById('redditHarvestPostDetailsBody'),
-  redditHarvestItemsTable: document.getElementById('redditHarvestItemsTable'),
-  redditHarvestRawPreview: document.getElementById('redditHarvestRawPreview'),
+  xAcquireForm: document.getElementById('xAcquireForm'),
+  xAcquireRefreshBtn: document.getElementById('xAcquireRefreshBtn'),
+  xAcquireRunsTable: document.getElementById('xAcquireRunsTable'),
+  xAcquireItemsTable: document.getElementById('xAcquireItemsTable'),
+  xAcquireRawPreview: document.getElementById('xAcquireRawPreview'),
+  redditAcquireForm: document.getElementById('redditAcquireForm'),
+  redditAcquireRefreshBtn: document.getElementById('redditAcquireRefreshBtn'),
+  redditAcquireRunsTable: document.getElementById('redditAcquireRunsTable'),
+  redditAcquirePostDetailsBody: document.getElementById('redditAcquirePostDetailsBody'),
+  redditAcquireItemsTable: document.getElementById('redditAcquireItemsTable'),
+  redditAcquireRawPreview: document.getElementById('redditAcquireRawPreview'),
   youtubeAcquireForm: document.getElementById('youtubeAcquireForm'),
   youtubeRunsRefreshBtn: document.getElementById('youtubeRunsRefreshBtn'),
   youtubeRunsTable: document.getElementById('youtubeRunsTable'),
@@ -638,7 +632,11 @@ App.setSessionToken = function setSessionToken(token) {
 };
 
 App.api = async function api(path, options = {}) {
-  const projectId = String(state.currentProjectId || '').trim();
+  const projectId = (
+    typeof App.projectContext?.getSessionProjectId === 'function'
+      ? App.projectContext.getSessionProjectId()
+      : String(state.currentProjectId || '').trim()
+  );
   const baseHeaders = { 'Content-Type': 'application/json' };
   if (projectId) baseHeaders['X-Project-ID'] = projectId;
 

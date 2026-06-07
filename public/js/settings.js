@@ -10,6 +10,7 @@ App.settings = (function () {
   const CHANNEL_CONNECTION_ROWS = [
     { key: 'x', label: 'X', provider: 'x', coreFields: 'api_key, api_secret, access_token, access_token_secret' },
     { key: 'facebook', label: 'Facebook', provider: 'meta', coreFields: 'app_id, app_secret' },
+    { key: 'facebook_personal', label: 'Facebook Personal', provider: 'openclaw', coreFields: 'base_url' },
     { key: 'instagram', label: 'Instagram', provider: 'instagram', coreFields: 'app_id, app_secret, access_token' },
     { key: 'linkedin', label: 'LinkedIn', provider: 'linkedin', coreFields: 'client_id, client_secret' },
     { key: 'threads', label: 'Threads', provider: 'threads', coreFields: 'app_id, app_secret' },
@@ -70,6 +71,8 @@ App.settings = (function () {
   ];
   let activeChannelLabel = '';
 
+  const projectCtx = () => App.projectContext || null;
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -95,12 +98,10 @@ App.settings = (function () {
   }
 
   function openProjectsPage() {
+    projectCtx()?.clearViewContext?.();
     setProjectsCreateVisible(false);
     App.setActivePage('settingsProjectsPage');
     refreshProjectContext().catch((err) => notify(err.message || 'Could not load projects', true));
-    window.setTimeout(() => {
-      refreshProjectContext().catch(() => {});
-    }, 250);
   }
 
   function openProjectsCreate() {
@@ -112,6 +113,168 @@ App.settings = (function () {
     if (panel && typeof panel.scrollIntoView === 'function') {
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  async function selectProjectForSession(projectId, options = {}) {
+    const ctx = projectCtx();
+    if (!ctx?.switchSessionProject) return false;
+    const ok = await ctx.switchSessionProject(projectId, {
+      keepView: options.keepView === true,
+      refresh: options.refresh !== false,
+    });
+    if (!ok) return false;
+    renderProjectSelector();
+    renderProjectLists();
+    renderProjectsTable();
+    renderProjectDetails();
+    return true;
+  }
+
+  function getSettingsDetailProjectId() {
+    if (projectCtx()?.getDetailProjectId) return projectCtx().getDetailProjectId();
+    return String(state.currentProjectId || '').trim();
+  }
+
+  function removeProjectLogoFromStorage(projectId) {
+    const id = String(projectId || '').trim();
+    if (!id) return;
+    if (projectCtx()?.setProjectLogoDataUrl) {
+      projectCtx().setProjectLogoDataUrl(id, '');
+      return;
+    }
+    try {
+      const raw = String(window.localStorage.getItem(PROJECT_LOGO_STORAGE_KEY) || '').trim();
+      if (!raw) return;
+      const map = JSON.parse(raw);
+      if (!map || typeof map !== 'object') return;
+      delete map[id];
+      window.localStorage.setItem(PROJECT_LOGO_STORAGE_KEY, JSON.stringify(map));
+    } catch (_) {}
+  }
+
+  async function performDeleteProject(projectId, options = {}) {
+    const id = String(projectId || '').trim();
+    if (!id) return notify('Project not found', true);
+    try {
+      const purgeAssociated = Boolean(options.purgeAssociated);
+      const res = await api('/api/projects/delete', {
+        method: 'POST',
+        body: JSON.stringify({ projectId: id, purgeAssociated }),
+      });
+      removeProjectLogoFromStorage(id);
+      const wasActive = String(state.currentProjectId || '') === id;
+      await refreshProjectContext();
+      state.projects = (Array.isArray(state.projects) ? state.projects : []).filter(
+        (row) => String(row?.id || '') !== id
+      );
+      if (wasActive) {
+        const next = state.projects[0];
+        if (next?.id) {
+          await selectProjectForSession(next.id, { keepView: false });
+        } else if (projectCtx()?.clearSessionProject) {
+          await projectCtx().clearSessionProject();
+        }
+      }
+      renderProjectSelector();
+      renderProjectLists();
+      renderProjectsTable();
+      renderProjectDetails();
+      let msg = `"${options.name || 'Project'}" deleted.`;
+      if (options.purgeAssociated && res?.purge) {
+        const parts = [];
+        if (res.purge.assetsDeleted) parts.push(`${res.purge.assetsDeleted} asset(s)`);
+        if (res.purge.peopleDeleted) parts.push(`${res.purge.peopleDeleted} global person record(s)`);
+        if (parts.length) msg += ` Removed ${parts.join(' and ')}.`;
+        if (res.purge.assetsSkippedShared) {
+          msg += ` ${res.purge.assetsSkippedShared} asset(s) were kept because they are used outside this project.`;
+        }
+      }
+      notify(msg, false);
+    } catch (err) {
+      notify(err?.message || 'Could not delete project', true);
+    }
+  }
+
+  function openDeleteProjectConfirm(project) {
+    const id = String(project?.id || '').trim();
+    const name = String(project?.name || project?.slug || id || 'Project').trim();
+    const role = String(project?.membership?.role || '').toLowerCase();
+    if (!id) return notify('Project not found', true);
+    if (project?.virtual || id.startsWith('proj_default_')) {
+      return notify('This project cannot be deleted', true);
+    }
+    if (role !== 'owner') return notify('Only project owners can delete a project', true);
+
+    if (!App.components || typeof App.components.Modal !== 'function') {
+      const purgeAssociated = window.confirm(
+        `Delete "${name}" and all associated data?\n\nOK = delete project data too\nCancel = delete project only`
+      );
+      performDeleteProject(id, { purgeAssociated, name });
+      return;
+    }
+
+    const body = document.createElement('div');
+    const intro = document.createElement('p');
+    intro.textContent = `Delete "${name}"? This cannot be undone.`;
+    body.appendChild(intro);
+
+    const checkRow = document.createElement('div');
+    checkRow.className = 'form-group';
+    const checkLabel = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'standard-form-checkbox';
+    checkbox.id = 'settingsDeleteProjectPurgeAssociated';
+    checkLabel.appendChild(checkbox);
+    checkLabel.appendChild(document.createTextNode(
+      ' Also delete associated assets, messages, and other project-owned data (items linked elsewhere are kept)'
+    ));
+    checkRow.appendChild(checkLabel);
+    body.appendChild(checkRow);
+
+    let modal = null;
+    const closeModal = () => {
+      if (modal) modal.destroy();
+      modal = null;
+    };
+
+    modal = App.components.Modal({
+      title: 'Delete Project',
+      body,
+      closeOnBackdrop: false,
+      actions: [
+        { label: 'Cancel', onClick: closeModal },
+        {
+          label: 'Delete Project',
+          primary: true,
+          onClick: () => {
+            const purgeAssociated = Boolean(checkbox.checked);
+            closeModal();
+            performDeleteProject(id, { purgeAssociated, name }).catch((err) => {
+              notify(err?.message || 'Could not delete project', true);
+            });
+          },
+        },
+      ],
+    });
+    modal.open();
+  }
+
+  async function openProjectEditor(projectId) {
+    const id = String(projectId || '').trim();
+    if (!id) return notify('Project not found', true);
+    projectCtx()?.clearViewContext?.({ silent: true });
+    const ok = await selectProjectForSession(id, { refresh: true });
+    if (!ok) return notify('Could not open project', true);
+    setProjectsCreateVisible(false);
+    renderProjectDetails();
+    App.setActivePage('settingsProjectDetailPage');
+    window.setTimeout(() => {
+      const panel = els.settingsProjectDetailsPanel;
+      if (panel && typeof panel.scrollIntoView === 'function') {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 0);
   }
 
   async function refreshPromoLeadsIfAvailable() {
@@ -139,33 +302,8 @@ App.settings = (function () {
   }
 
   function applyProjectToHeader() {
-    const projects = Array.isArray(state.projects) ? state.projects : [];
-    const activeProject = projects.find((project) => String(project?.id || '') === String(state.currentProjectId || '')) || null;
-    const projectLogo = getProjectLogoDataUrl(activeProject);
-    const hasActiveProject = Boolean(activeProject);
-    const hasLogo = hasActiveProject && Boolean(projectLogo);
-
-    if (els.brandProfileButton) {
-      els.brandProfileButton.classList.toggle('has-logo', hasLogo);
-      els.brandProfileButton.title = hasActiveProject ? 'Project details' : 'Projects';
-    }
-    if (els.brandProfileLabel) {
-      if (!hasActiveProject) {
-        els.brandProfileLabel.textContent = 'Projects';
-      } else {
-        const activeName = String(activeProject?.name || activeProject?.slug || '').trim();
-        els.brandProfileLabel.textContent = activeName || 'Project';
-      }
-      els.brandProfileLabel.classList.toggle('hidden', hasLogo);
-    }
-    if (els.brandProfileLogo) {
-      els.brandProfileLogo.classList.toggle('hidden', !hasLogo);
-      if (hasLogo) {
-        els.brandProfileLogo.src = projectLogo;
-      } else {
-        els.brandProfileLogo.removeAttribute('src');
-      }
-    }
+    projectCtx()?.applyBanner?.();
+    projectCtx()?.applyDetailContextNotice?.();
   }
 
   function readProjectLogoMap() {
@@ -186,17 +324,22 @@ App.settings = (function () {
   }
 
   function getProjectLogoDataUrl(project) {
+    if (projectCtx()?.getProjectLogoDataUrl) {
+      return projectCtx().getProjectLogoDataUrl(project, { allowProfileFallback: false });
+    }
     const id = String(project?.id || '').trim();
     if (!id) return '';
     const map = readProjectLogoMap();
     const mapped = String(map[id] || '').trim();
     if (mapped) return mapped;
-    const fromProject = String(project?.logoDataUrl || project?.logo_data_url || '').trim();
-    if (fromProject) return fromProject;
-    return String(state.profile?.logoDataUrl || '').trim();
+    return String(project?.logoDataUrl || project?.logo_data_url || '').trim();
   }
 
   function setProjectLogoDataUrl(projectIdInput, dataUrlInput) {
+    if (projectCtx()?.setProjectLogoDataUrl) {
+      projectCtx().setProjectLogoDataUrl(projectIdInput, dataUrlInput);
+      return;
+    }
     const projectId = String(projectIdInput || '').trim();
     const dataUrl = String(dataUrlInput || '').trim();
     if (!projectId) return;
@@ -255,15 +398,11 @@ App.settings = (function () {
           <div class="settings-project-list-item-meta">${String(project?.membership?.role || 'member')} • ${String(project?.slug || id)}</div>
         `;
         row.addEventListener('click', () => {
-          if (!id) return;
-          state.currentProjectId = id;
-          window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
-          renderProjectSelector();
-          renderProjectLists();
-          renderProjectDetails();
-          applyProjectToHeader();
-          refreshCurrentPageAfterProjectChange();
-          notify('Active project updated');
+          selectProjectForSession(id, { keepView: false }).then((ok) => {
+            if (!ok) return;
+            refreshCurrentPageAfterProjectChange();
+            notify('Active project updated');
+          });
         });
         container.appendChild(row);
       });
@@ -282,49 +421,88 @@ App.settings = (function () {
     body.innerHTML = '';
     projects.forEach((project) => {
       const id = String(project?.id || '').trim();
+      const name = String(project?.name || project?.slug || id || 'Untitled');
+      const logoDataUrl = getProjectLogoDataUrl(project);
       const row = document.createElement('tr');
       const isActive = id && id === String(state.currentProjectId || '');
-      row.innerHTML = `
-        <td>${String(project?.name || project?.slug || id || 'Untitled')}</td>
-        <td>${String(project?.slug || '-')}</td>
-        <td>${String(project?.membership?.role || 'member')}</td>
-        <td>${String(project?.description || '')}</td>
-        <td>${formatDateLabel(project?.createdAt || project?.created_at || '') || '-'}</td>
-        <td class="settings-projects-actions-cell actions-col"></td>
-      `;
-      const actionsCell = row.querySelector('.settings-projects-actions-cell');
+
+      const projectCell = document.createElement('td');
+      const projectLink = document.createElement('button');
+      projectLink.type = 'button';
+      projectLink.className = 'settings-project-table-link';
+      projectLink.addEventListener('click', () => {
+        openProjectEditor(id).catch((err) => notify(err.message || 'Could not open project', true));
+      });
+
+      if (logoDataUrl) {
+        const logo = document.createElement('img');
+        logo.src = logoDataUrl;
+        logo.alt = '';
+        logo.className = 'settings-project-table-logo';
+        projectLink.appendChild(logo);
+      } else {
+        const fallback = document.createElement('span');
+        fallback.className = 'settings-project-table-logo-fallback';
+        fallback.textContent = name.charAt(0).toUpperCase() || '?';
+        projectLink.appendChild(fallback);
+      }
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'settings-project-table-name';
+      nameEl.textContent = name;
+      projectLink.appendChild(nameEl);
+      projectCell.appendChild(projectLink);
+      row.appendChild(projectCell);
+
+      const slugCell = document.createElement('td');
+      slugCell.textContent = String(project?.slug || '-');
+      row.appendChild(slugCell);
+
+      const roleCell = document.createElement('td');
+      roleCell.textContent = String(project?.membership?.role || 'member');
+      row.appendChild(roleCell);
+
+      const descriptionCell = document.createElement('td');
+      descriptionCell.textContent = String(project?.description || '');
+      row.appendChild(descriptionCell);
+
+      const createdCell = document.createElement('td');
+      createdCell.textContent = formatDateLabel(project?.createdAt || project?.created_at || '') || '-';
+      row.appendChild(createdCell);
+
+      const actionsCell = document.createElement('td');
+      actionsCell.className = 'settings-projects-actions-cell actions-col';
       if (actionsCell) {
-        const selectProject = () => {
-          if (!id) return;
-          state.currentProjectId = id;
-          window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
-          renderProjectSelector();
-          renderProjectLists();
-          renderProjectsTable();
-          renderProjectDetails();
-          applyProjectToHeader();
-          refreshCurrentPageAfterProjectChange();
-        };
+        const editBtn = App.makeIconButton('edit', 'Edit', () => {
+          openProjectEditor(id).catch((err) => notify(err.message || 'Could not open project', true));
+        });
         const activateBtn = App.makeIconButton(
           'approve',
           isActive ? 'Active' : 'Set Active',
           () => {
-            selectProject();
-            notify('Active project updated');
+            selectProjectForSession(id, { keepView: false }).then((ok) => {
+              if (!ok) return;
+              refreshCurrentPageAfterProjectChange();
+              notify('Active project updated');
+            });
           },
           { disabled: isActive }
         );
         if (isActive) activateBtn.classList.add('settings-project-active-btn');
-        const detailsBtn = App.makeIconButton('view', 'Details', () => {
-          selectProject();
-          const panel = els.settingsProjectDetailsPanel;
-          if (panel && typeof panel.scrollIntoView === 'function') {
-            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        });
-        actionsCell.appendChild(activateBtn);
-        actionsCell.appendChild(detailsBtn);
+        const isOwner = String(project?.membership?.role || '').toLowerCase() === 'owner';
+        const canDelete = isOwner && !project?.virtual && !id.startsWith('proj_default_');
+        const deleteBtn = App.makeIconButton('delete', 'Delete', () => {
+          openDeleteProjectConfirm(project);
+        }, { danger: true, disabled: !canDelete });
+        if (typeof App.finishTableActionsCell === 'function') {
+          App.finishTableActionsCell(actionsCell, editBtn, activateBtn, deleteBtn);
+        } else {
+          actionsCell.appendChild(editBtn);
+          actionsCell.appendChild(activateBtn);
+          actionsCell.appendChild(deleteBtn);
+        }
       }
+      row.appendChild(actionsCell);
       body.appendChild(row);
     });
   }
@@ -366,13 +544,18 @@ App.settings = (function () {
 
   function renderProjectDetails() {
     const projects = Array.isArray(state.projects) ? state.projects : [];
-    const active = projects.find((project) => String(project?.id || '') === String(state.currentProjectId || '')) || null;
+    const detailProjectId = getSettingsDetailProjectId();
+    const active = projects.find((project) => String(project?.id || '') === detailProjectId) || null;
 
     if (!els.settingsProjectDetailsPanel || !els.settingsProjectDetailsEmpty) return;
     const showPanel = Boolean(active);
+    const onDetailPage = String(App.state?.activePage || '') === 'settingsProjectDetailPage';
     els.settingsProjectDetailsPanel.classList.toggle('hidden', !showPanel);
-    els.settingsProjectDetailsEmpty.classList.toggle('hidden', showPanel);
-    if (!showPanel) return;
+    els.settingsProjectDetailsEmpty.classList.toggle('hidden', showPanel || !onDetailPage);
+    if (!showPanel) {
+      if (onDetailPage) openProjectsPage();
+      return;
+    }
 
     if (els.settingsProjectDetailsName) {
       els.settingsProjectDetailsName.value = String(active?.name || '');
@@ -385,12 +568,6 @@ App.settings = (function () {
     }
     if (els.settingsProjectDefaultUrlInput) {
       els.settingsProjectDefaultUrlInput.value = String(active?.projectUrl || active?.project_url || active?.website || '');
-    }
-    if (els.settingsProjectDetailsRole) {
-      els.settingsProjectDetailsRole.value = String(active?.membership?.role || 'member');
-    }
-    if (els.settingsProjectDetailsCreatedAt) {
-      els.settingsProjectDetailsCreatedAt.value = formatDateLabel(active?.createdAt || active?.created_at || '');
     }
     syncProjectTimezoneSelectValue(active);
     const logoDataUrl = getProjectLogoDataUrl(active);
@@ -406,6 +583,7 @@ App.settings = (function () {
     if (els.settingsProjectLogoPlaceholder) {
       els.settingsProjectLogoPlaceholder.classList.toggle('hidden', Boolean(logoDataUrl));
     }
+    projectCtx()?.applyDetailContextNotice?.();
   }
 
   function getAccountIdentity(profile) {
@@ -495,19 +673,15 @@ App.settings = (function () {
   }
 
   async function refreshProjectContext() {
+    const ctx = projectCtx();
+    if (!ctx?.refreshFromServer) return;
     try {
-      const current = await api('/api/projects/current', { method: 'GET' });
-      const projectsRes = await api('/api/projects', { method: 'GET' });
-      state.projects = Array.isArray(projectsRes.projects) ? projectsRes.projects : (projectsRes.data || []);
-      const currentProject = current.project || null;
-      if (currentProject?.id) {
-        state.currentProjectId = String(currentProject.id);
-        window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', state.currentProjectId);
-      } else {
-        state.currentProjectId = '';
-        window.localStorage.removeItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId');
-      }
+      const result = await ctx.refreshFromServer({ preserveView: true });
+      if (result?.stale) return;
       renderProjectSelector();
+      renderProjectLists();
+      renderProjectsTable();
+      renderProjectDetails();
       applyProjectToHeader();
     } catch (err) {
       notify(`Could not load projects: ${err.message}`, true);
@@ -1053,6 +1227,7 @@ App.settings = (function () {
       || platform === 'reddit'
       || platform === 'x'
       || platform === 'facebook'
+      || platform === 'facebook_personal'
       || platform === 'instagram'
       || platform === 'threads';
     const testLabel = platform === 'bluesky'
@@ -1063,9 +1238,11 @@ App.settings = (function () {
           ? 'Run X Auth Test'
           : (platform === 'facebook'
             ? 'Run Facebook Auth Test'
-            : (platform === 'instagram'
+            : (platform === 'facebook_personal'
+              ? 'Run OpenClaw Gateway Check'
+              : (platform === 'instagram'
               ? 'Run Instagram Auth Test'
-              : (platform === 'threads' ? 'Run Threads Auth Test' : 'Run Channel Test')))));
+              : (platform === 'threads' ? 'Run Threads Auth Test' : 'Run Channel Test'))))));
     wrap.innerHTML = `
       <div><strong>Readiness</strong><br><span class="${badgeClass}">${String(level).toUpperCase()} (${score})</span></div>
       <div><strong>Required Fields</strong><br>${readiness.reqPct || 0}%</div>
@@ -1127,6 +1304,12 @@ App.settings = (function () {
       summary = testOk ? 'Facebook auth test passed' : `Facebook auth test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'FACEBOOK_401';
+    } else if (platform === 'facebook_personal') {
+      const res = await api('/api/promote/social/facebook-personal/status');
+      testOk = res?.configured === true;
+      summary = testOk ? 'OpenClaw gateway configured for Facebook Personal' : 'OpenClaw gateway is not configured';
+      details = JSON.stringify(res || {}, null, 2);
+      blockerCode = testOk ? '' : 'OPENCLAW_NOT_CONFIGURED';
     } else if (platform === 'instagram') {
       const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/instagram/auth-test'));
       testOk = parsed.authOk;
@@ -1551,18 +1734,26 @@ App.settings = (function () {
     if (els.settingsProjectSelector) {
       els.settingsProjectSelector.addEventListener('change', async () => {
         const projectId = String(els.settingsProjectSelector.value || '').trim();
+        const ctx = projectCtx();
         if (!projectId) {
-          state.currentProjectId = '';
-          window.localStorage.removeItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId');
+          if (ctx?.clearSessionProject) await ctx.clearSessionProject({ refresh: false });
+          else {
+            state.currentProjectId = '';
+            window.localStorage.removeItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId');
+          }
+          renderProjectLists();
+          renderProjectDetails();
           applyProjectToHeader();
           notify('Project context cleared');
           return;
         }
-        state.currentProjectId = projectId;
-        window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', projectId);
+        const ok = ctx?.switchSessionProject
+          ? await ctx.switchSessionProject(projectId, { keepView: false, refresh: false })
+          : selectProjectForSession(projectId);
+        if (!ok) return;
+        renderProjectSelector();
         renderProjectLists();
         renderProjectDetails();
-        applyProjectToHeader();
         refreshCurrentPageAfterProjectChange();
         notify('Active project updated');
       });
@@ -1590,7 +1781,9 @@ App.settings = (function () {
             body: JSON.stringify({ name, description, projectUrl }),
           });
           const projectId = String(res.project?.id || res.id || '').trim();
-          if (projectId) {
+          if (projectId && projectCtx()?.switchSessionProject) {
+            await projectCtx().switchSessionProject(projectId, { keepView: false, refresh: false });
+          } else if (projectId) {
             state.currentProjectId = projectId;
             window.localStorage.setItem(App.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', projectId);
           }
@@ -1606,29 +1799,18 @@ App.settings = (function () {
       });
     }
 
-    if (els.settingsProjectTimezoneSaveBtn) {
-      els.settingsProjectTimezoneSaveBtn.addEventListener('click', async () => {
-        const activeId = String(state.currentProjectId || '').trim();
+    const settingsProjectDetailsSaveBtn = byId('settingsProjectDetailsSaveBtn');
+    if (settingsProjectDetailsSaveBtn) {
+      settingsProjectDetailsSaveBtn.addEventListener('click', async () => {
+        const activeId = getSettingsDetailProjectId();
         if (!activeId) return notify('Select a project first', true);
-        const tz = String(els.settingsProjectTimezoneSelect?.value || '').trim() || 'UTC';
-        try {
-          await api(`/api/projects/${encodeURIComponent(activeId)}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ timezone: tz }),
-          });
-          await refreshProjectContext();
-          notify('Project timezone saved');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
-
-    if (els.settingsProjectDefaultUrlSaveBtn) {
-      els.settingsProjectDefaultUrlSaveBtn.addEventListener('click', async () => {
-        const activeId = String(state.currentProjectId || '').trim();
-        if (!activeId) return notify('Select a project first', true);
+        const name = String(els.settingsProjectDetailsName?.value || '').trim();
+        const slug = String(els.settingsProjectDetailsSlug?.value || '').trim();
+        const description = String(els.settingsProjectDetailsDescription?.value || '').trim();
         const projectUrl = normalizeProjectDefaultUrl(els.settingsProjectDefaultUrlInput?.value);
+        const timezone = String(els.settingsProjectTimezoneSelect?.value || '').trim() || 'UTC';
+        if (!name) return notify('Project name is required', true);
+        if (!slug) return notify('Project slug is required', true);
         if (!projectUrl) return notify('Default URL is required', true);
         try {
           const parsed = new URL(projectUrl);
@@ -1641,10 +1823,12 @@ App.settings = (function () {
         try {
           await api(`/api/projects/${encodeURIComponent(activeId)}`, {
             method: 'PATCH',
-            body: JSON.stringify({ projectUrl }),
+            body: JSON.stringify({ name, slug, description, projectUrl, timezone }),
           });
           await refreshProjectContext();
-          notify('Project default URL saved');
+          renderProjectDetails();
+          applyProjectToHeader();
+          notify('Project saved');
         } catch (err) {
           notify(err.message, true);
         }
@@ -1655,7 +1839,7 @@ App.settings = (function () {
       els.settingsProjectLogoFile.addEventListener('change', async () => {
         const file = els.settingsProjectLogoFile.files?.[0];
         if (!file) return;
-        const activeId = String(state.currentProjectId || '').trim();
+        const activeId = getSettingsDetailProjectId();
         if (!activeId) return notify('Select a project first', true);
         try {
           const dataUrl = await readFileAsDataUrl(file);
@@ -1869,6 +2053,8 @@ App.settings = (function () {
     },
     openProjectsPage,
     openProjectsCreate,
+    openProjectEditor,
+    openDeleteProjectConfirm,
     openApiSettingsForm,
     renderApiFieldInputs,
     refreshApiSettings,

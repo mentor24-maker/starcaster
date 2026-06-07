@@ -68,6 +68,66 @@
   color: #3d5870;
 }
 
+.settings-project-table-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  max-width: 100%;
+}
+
+.settings-project-table-link:hover .settings-project-table-name {
+  color: #0b82d4;
+  text-decoration: underline;
+}
+
+.settings-project-table-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  border: 1px solid #b8d7f0;
+  background: #f7fbff;
+}
+
+.settings-project-table-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  border: 1px solid #b8d7f0;
+  background: #e7f4ff;
+  color: #0f2f4c;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.settings-project-table-name {
+  font-weight: 700;
+  color: #0f2f4c;
+  min-width: 0;
+}
+
+.settings-project-context-notice {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #b8d7f0;
+  border-radius: 8px;
+  background: #f7fbff;
+  color: #0f2f4c;
+  font-size: 0.92rem;
+}
+
 .project-details-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -98,6 +158,21 @@
   width: auto;
   height: auto;
   object-fit: contain;
+}
+
+.labeled-form .project-details-field-hint {
+  margin: -0.25rem 0 0.5rem calc(var(--label-col-width, 180px) + var(--label-col-gap, 0.6rem));
+}
+
+#settingsProjectDetailsPanel .project-details-form .project-details-save-row {
+  margin-top: 0.35rem;
+}
+
+#settingsProjectDetailsPanel .project-details-form .project-details-save-row .btn {
+  width: fit-content;
+  max-width: 100%;
+  white-space: nowrap;
+  justify-self: start;
 }
 
 
@@ -6162,6 +6237,84 @@ button[type="submit"] {
   font-weight: 700;
 }
 
+#acquireWebPage .acquire-web-form {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto 1.5rem;
+}
+
+#acquireWebPage .acquire-web-setup-shell {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#acquireWebPage .acquire-web-url-row {
+  width: min(100%, 900px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#acquireWebPage .acquire-web-url-row label {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+#acquireWebPage .acquire-web-url-controls {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: stretch;
+}
+
+#acquireWebPage .acquire-web-url-controls select {
+  width: 100%;
+  min-height: 0;
+  font-size: 1.3rem;
+  padding: 1.05rem 0.85rem;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background-color: var(--field-bg);
+}
+
+#acquireWebPage .acquire-web-reference-model-select {
+  width: min(100%, 720px);
+  min-height: 42px;
+}
+
+#acquireWebPage .acquire-web-advanced-details {
+  width: min(100%, 1040px);
+}
+
+#acquireWebPage .acquire-web-advanced-details > .acquire-web-advanced-grid {
+  margin-top: 1.25rem;
+}
+
+#acquireWebPage .acquire-web-advanced-fields .form-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 1fr;
+  gap: 0.65rem 1rem;
+  align-items: center;
+}
+
+#acquireWebPage .acquire-web-advanced-fields .form-row label {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+#acquireWebPage .acquire-web-advanced-fields-tertiary label {
+  display: block;
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
 .acquire-web-hero-form {
   max-width: 1800px;
   margin: 0 auto 1.5rem;
@@ -6230,13 +6383,13 @@ button[type="submit"] {
 }
 
 .acquire-web-hero-options-row {
-  width: min(100%, 1260px);
+  width: min(100%, 1040px);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.9rem;
   flex-wrap: wrap;
-  margin: 50px 0;
+  margin: 0.5rem 0 0;
 }
 
 /* Convention: Hanging Details Summary */
@@ -6276,6 +6429,9 @@ button[type="submit"] {
   grid-template-columns: minmax(180px, 240px) minmax(240px, 320px) minmax(260px, 1fr);
   gap: 2.5rem;
   align-items: start;
+  justify-content: center;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .acquire-web-advanced-acquire h4 {
@@ -6295,14 +6451,14 @@ button[type="submit"] {
   min-height: 132px;
 }
 
-.acquire-web-harvest-btn {
-  width: min(100%, 1260px);
+.acquire-web-acquire-btn {
+  width: min(100%, 720px);
   margin: 0 auto;
   display: block;
 }
 
-#directAcquireProgressWrap {
-  width: min(100%, 1260px);
+#acquireWebPage #directAcquireProgressWrap {
+  width: min(100%, 720px);
   margin: 0 auto;
 }
 
@@ -6315,6 +6471,10 @@ button[type="submit"] {
 
 .direct-acquire-inline-control {
   position: relative;
+}
+
+#directAcquireKeywordTable tr.direct-acquire-keyword-excluded td {
+  background: #fff6f6;
 }
 
 .direct-acquire-dropdown {
@@ -6424,6 +6584,33 @@ button[type="submit"] {
   align-items: start;
 }
 
+.acquire-web-results-grid-2col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.acquire-web-project-detail-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.acquire-web-project-detail-col {
+  min-width: 0;
+}
+
+.acquire-web-project-detail-col .acquire-web-result-section {
+  height: 100%;
+}
+
+.acquire-web-result-section {
+  margin: 0;
+}
+
+.acquire-web-results-grid .acquire-web-result-section {
+  min-width: 0;
+}
+
 .direct-acquire-contact-label {
   font-weight: 700;
 }
@@ -6496,7 +6683,9 @@ button[type="submit"] {
 }
 
 @media (max-width: 1024px) {
-  .acquire-web-results-grid {
+  .acquire-web-results-grid,
+  .acquire-web-results-grid-2col,
+  .acquire-web-project-detail-row {
     grid-template-columns: 1fr;
   }
 
@@ -7117,6 +7306,11 @@ button[type="submit"] {
 
 #promoteSocialPage .status-social-queued {
   background: #5c6b7a;
+}
+
+#promoteSocialPage .status-social-awaiting {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .meta {
@@ -8324,15 +8518,22 @@ table {
   letter-spacing: 0.2px;
 }
 
-.youtube-miner-panel .accordion-header { padding-left: 28px; }
-
 .youtube-miner-panel {
-  padding-left: 28px;
+  padding-left: 24px;
   margin: 14px 0 20px;
-  padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.youtube-miner-panel .accordion-header {
+  padding-left: 0;
+  position: relative;
+  overflow: visible;
+}
+
+.youtube-miner-panel .accordion-title {
+  padding-left: 1.65rem;
 }
 
 .mode-toggle {
@@ -8649,21 +8850,23 @@ table {
 
 .youtube-miner-section-badge {
   position: absolute;
-  left: -24px;
+  left: 0;
   top: 0;
-  transform: none;
-  width: 48px;
-  height: 48px;
+  bottom: 0;
+  height: auto;
+  width: auto;
+  aspect-ratio: 1;
   border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
   font-weight: 800;
-  font-size: 22px;
+  font-size: 0.95rem;
   line-height: 1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
   z-index: 2;
+  transform: translateX(-50%);
 }
 
 .youtube-miner-section-badge[data-step-index="1"] { background: #dc2626; }
@@ -8674,19 +8877,20 @@ table {
 .youtube-miner-section-badge[data-step-index="6"] { background: #9333ea; }
 .youtube-miner-section-badge[data-step-index="7"] { background: #db2777; }
 
-.youtube-miner-collapsible-arrow::before {
-  content: "\25BE";
-  font-size: 16px;
-  line-height: 1;
-  color: #ffffff;
-}
-
-.youtube-miner-collapsible:not(.is-open) .youtube-miner-collapsible-arrow::before {
-  content: "\25B8";
-}
-
 .youtube-miner-collapsible-body {
   padding: 10px 12px 12px;
+}
+
+.youtube-miner-compact-advanced-details > summary {
+  font-size: 0.85rem;
+}
+
+.youtube-miner-compact-advanced-details > summary::before {
+  left: -0.9rem;
+  margin-top: -3px;
+  border-left-width: 4px;
+  border-top-width: 3px;
+  border-bottom-width: 3px;
 }
 
 .youtube-miner-collapsible:not(.is-open) .youtube-miner-collapsible-body {
@@ -8817,9 +9021,96 @@ table {
   width: 100%;
 }
 
-#youtubeMinerTargets {
-  min-height: 110px;
-  max-height: 130px;
+#acquireYoutubePage .acquire-youtube-hero-form {
+  width: 100%;
+  max-width: 520px;
+  margin: 0;
+}
+
+#acquireYoutubePage .acquire-youtube-hero-shell {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#acquireYoutubePage .acquire-youtube-hero-row {
+  width: min(100%, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#acquireYoutubePage .acquire-youtube-hero-row label {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+#acquireWebPage .acquire-youtube-hero-input,
+#acquireYoutubePage .acquire-youtube-hero-input {
+  width: 100%;
+  font-size: 1.3rem;
+  padding: 1.05rem 1.2rem;
+  border-radius: 24px;
+}
+
+#acquireWebPage .acquire-youtube-hero-row {
+  width: min(100%, 900px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#acquireWebPage .acquire-youtube-hero-row > label {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+#acquireYoutubePage .acquire-youtube-advanced-grid {
+  width: min(100%, 720px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#acquireYoutubePage .acquire-youtube-advanced-extract-grid {
+  width: min(100%, 720px);
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+#acquireYoutubePage .acquire-youtube-advanced-extract-grid .form-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 1fr;
+  gap: 0.65rem 1rem;
+  align-items: center;
+}
+
+#acquireYoutubePage .acquire-youtube-advanced-extract-grid .form-row > label {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+#acquireYoutubePage .acquire-youtube-hero-row-pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin: 0 auto 1.5rem;
+  width: 100%;
+}
+
+#acquireYoutubePage .acquire-youtube-hero-row-pair .acquire-youtube-hero-form {
+  flex: 1 1 min(420px, 100%);
 }
 
 #youtubeMinerCategoryConfigTable input[type="text"],
@@ -10028,7 +10319,7 @@ button.accordion-toggle[aria-expanded="false"] .accordion-arrow {
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
-.dev-chat-avatar.harvest-alert {
+.dev-chat-avatar.acquire-alert {
   background-color: #f3e8ff !important; /* light purple */
   border: 4px solid #a855f7 !important; /* strong purple */
   animation: pulse-halo-purple 2s infinite !important;

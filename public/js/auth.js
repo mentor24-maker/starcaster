@@ -132,9 +132,15 @@ App.auth._startMainApp = function _startMainApp() {
 
 App.auth._syncProjectContext = async function _syncProjectContext() {
   try {
+    if (App.projectContext?.refreshFromServer) {
+      await App.projectContext.refreshFromServer();
+      return;
+    }
     const res = await App.api('/api/projects/current', { method: 'GET' });
     const project = res.project || res.currentProject || null;
-    const projects = Array.isArray(res.projects) ? res.projects : [];
+    const projects = Array.isArray(res.projects)
+      ? res.projects
+      : (Array.isArray(res.data?.projects) ? res.data.projects : []);
     const projectId = String(project?.id || '').trim();
     if (projects.length) App.state.projects = projects;
     if (projectId) {

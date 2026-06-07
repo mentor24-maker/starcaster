@@ -30,7 +30,7 @@ create index if not exists idx_engage_social_posts_project_id
 create index if not exists idx_engage_social_posts_status_scheduled
   on public.engage_social_posts(status, scheduled_for);
 
--- Acquire: direct website harvest runs (summary + full payload)
+-- Acquire: direct website acquire runs (summary + full payload)
 create table if not exists public.direct_acquire_runs (
   run_id text primary key,
   source_url text not null default '',
@@ -50,8 +50,8 @@ create index if not exists idx_direct_acquire_runs_project_id
 create index if not exists idx_direct_acquire_runs_created_at
   on public.direct_acquire_runs(created_at desc);
 
--- Acquire: X harvest runs
-create table if not exists public.x_harvest_runs (
+-- Acquire: X acquire runs
+create table if not exists public.x_acquire_runs (
   run_id text primary key,
   query text not null default '',
   language text not null default '',
@@ -69,11 +69,11 @@ create table if not exists public.x_harvest_runs (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists idx_x_harvest_runs_project_id
-  on public.x_harvest_runs(project_id);
+create index if not exists idx_x_acquire_runs_project_id
+  on public.x_acquire_runs(project_id);
 
--- Acquire: Reddit harvest runs
-create table if not exists public.reddit_harvest_runs (
+-- Acquire: Reddit acquire runs
+create table if not exists public.reddit_acquire_runs (
   run_id text primary key,
   mode text not null default '',
   target text not null default '',
@@ -88,7 +88,7 @@ create table if not exists public.reddit_harvest_runs (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists idx_reddit_harvest_runs_project_id
-  on public.reddit_harvest_runs(project_id);
+create index if not exists idx_reddit_acquire_runs_project_id
+  on public.reddit_acquire_runs(project_id);
 
 commit;

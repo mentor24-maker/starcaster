@@ -16,7 +16,14 @@ const {
   listContacts, getContact, createContact,
   updateContact, deleteContact, importContacts,
   listContactTypes, rowToContact,
+  searchContactsInProject,
+  searchContactsAcrossProjects,
+  ALL_PROJECTS_SCOPE_ID,
+  assignContactFromProject,
+  assignContactToProjects,
+  listContactMembershipProjectIds,
 } = require('../lib/ContactsStore');
+const { listProjectsForUser } = require('../lib/projectsStore');
 const {
   listSegments, createSegment, updateSegment, deleteSegment,
   listCampaigns, createCampaign, updateCampaign, deleteCampaign,
@@ -55,6 +62,13 @@ function requestScope(req) {
     userId: String(req?.authUser?.id || '').trim(),
     projectIds,
   };
+}
+
+function userCanAccessProject(scope, projectId) {
+  const pid = String(projectId || '').trim();
+  if (!pid) return false;
+  if (pid === scope.projectId) return true;
+  return Array.isArray(scope.projectIds) && scope.projectIds.includes(pid);
 }
 
 // ---------------------------------------------------------------------------
@@ -459,7 +473,7 @@ async function handleContacts(req, res, pathname, method) {
 
     // Step 2: Assemble Context Payload securely
     const contextLines = [];
-    const { sbQuery } = require('../lib/supabase');
+    const { sbQuery, tableConfig } = require('../lib/supabase');
     
     for (let i = 0; i < targets.length; i++) {
         const c = targets[i];
@@ -470,7 +484,7 @@ async function handleContacts(req, res, pathname, method) {
         if (ytHandle) {
              const res = await sbQuery({ 
                method: 'GET', 
-               table: 'harvest_youtube_details', 
+               table: tableConfig().acquireYoutubeDetails, 
                query: `channel_name=ilike.*${encodeURIComponent(ytHandle)}*&select=title,result_json&limit=5` 
              });
              
@@ -479,7 +493,7 @@ async function handleContacts(req, res, pathname, method) {
                      .filter(row => row.result_json?.video?.transcript)
                      .map(row => `\t* Transcript [${row.title}]: ${String(row.result_json.video.transcript).slice(0, 8000)}...`);
                  if (videos.length) {
-                     transcriptBlock = `\n\tHarvested YouTube Transcripts:\n${videos.join('\n')}`;
+                     transcriptBlock = `\n\tAcquired YouTube Transcripts:\n${videos.join('\n')}`;
                  }
              }
         }
@@ -596,6 +610,74 @@ ${contextDump}`;
     return sendOk(res, 200, rowToContactPersona(deleted), { persona: rowToContactPersona(deleted) }), true;
   }
 
+  // GET /api/contacts/search-in-project — search contacts in another project the user can access
+  if (pathname === '/api/contacts/search-in-project' && method === 'GET') {
+    const scope = requestScope(req);
+    const projectId = String(urlObj.searchParams.get('projectId') || '').trim();
+    const q = String(urlObj.searchParams.get('q') || '').trim();
+    if (!projectId) return sendErr(res, 400, 'projectId is required', { code: 'VALIDATION_ERROR' }), true;
+
+    let result;
+    if (projectId === ALL_PROJECTS_SCOPE_ID) {
+      result = await searchContactsAcrossProjects(q, { limit: 50, userScope: scope });
+    } else {
+      if (!userCanAccessProject(scope, projectId)) {
+        return sendErr(res, 403, 'Project not found or access denied', { code: 'FORBIDDEN' }), true;
+      }
+      result = await searchContactsInProject(projectId, q, { limit: 50, userScope: scope });
+    }
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const contacts = (Array.isArray(result.data) ? result.data : []).map(rowToContact);
+    return sendOk(res, 200, contacts, { contacts }, { total: contacts.length }), true;
+  }
+
+  // POST /api/contacts/assign-from-project — link person into active project (membership row)
+  if (pathname === '/api/contacts/assign-from-project' && method === 'POST') {
+    const scope = requestScope(req);
+    if (!scope.projectId) {
+      return sendErr(res, 400, 'Active project is required', { code: 'NO_PROJECT' }), true;
+    }
+    const body = await parseJsonBody(req);
+    const sourceContactId = String(body?.sourceContactId || body?.contactId || '').trim();
+    const sourceProjectId = String(body?.sourceProjectId || body?.projectId || '').trim();
+    if (!sourceContactId || !sourceProjectId) {
+      return sendErr(res, 400, 'sourceContactId and sourceProjectId are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (sourceProjectId !== '__legacy__' && !userCanAccessProject(scope, sourceProjectId)) {
+      return sendErr(res, 403, 'Project not found or access denied', { code: 'FORBIDDEN' }), true;
+    }
+    if (sourceProjectId !== '__legacy__' && sourceProjectId === scope.projectId) {
+      return sendErr(res, 400, 'Choose a project other than the active project', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (sourceProjectId === ALL_PROJECTS_SCOPE_ID) {
+      return sendErr(res, 400, 'Select a contact from a specific source project', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const result = await assignContactFromProject({
+      sourceContactId,
+      sourceProjectId,
+      newId: nextId('contact'),
+      targetScope: scope,
+      contactType: String(body?.contactType || '').trim() || undefined,
+      contactClass: String(body?.contactClass || '').trim() || undefined,
+    });
+    if (!result.ok) {
+      const isDupe = result.status === 409 || String(result.error).toLowerCase().includes('unique');
+      return sendErr(res, isDupe ? 409 : result.status || 500, result.error,
+        { code: isDupe ? 'DUPLICATE_EMAIL' : 'DB_ERROR' }), true;
+    }
+    const created = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!created) return sendErr(res, 500, 'Contact could not be assigned'), true;
+    logActivity({
+      action: 'contact.assigned_from_project',
+      entityType: 'contact',
+      entityId: created.id,
+      summary: `Contact assigned from project ${sourceProjectId}: ${created.email || created.id}`,
+      meta: { sourceProjectId, sourceContactId },
+    });
+    const contact = rowToContact(created);
+    return sendOk(res, 201, contact, { contact }), true;
+  }
+
   // GET /api/contacts — list, optionally filtered by type or class
   if (pathname === '/api/contacts' && method === 'GET') {
     const contactType = urlObj.searchParams.get('type') || undefined;
@@ -645,6 +727,77 @@ ${contextDump}`;
     });
     const contact = rowToContact(created);
     return sendOk(res, 201, contact, { contact }), true;
+  }
+
+  const contactMembershipsMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/project-memberships$/);
+  if (contactMembershipsMatch && method === 'GET') {
+    const scope = requestScope(req);
+    const contactId = decodeURIComponent(contactMembershipsMatch[1]);
+    const result = await listContactMembershipProjectIds(contactId, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const projectIds = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, projectIds, { projectIds }, { total: projectIds.length }), true;
+  }
+
+  // POST /api/contacts/assign-to-projects — add membership(s) to selected projects
+  if (pathname === '/api/contacts/assign-to-projects' && method === 'POST') {
+    const scope = requestScope(req);
+    const body = await parseJsonBody(req);
+    const contactIds = Array.isArray(body?.contactIds)
+      ? body.contactIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [String(body?.contactId || '').trim()].filter(Boolean);
+    const projectIds = Array.isArray(body?.projectIds)
+      ? body.projectIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
+    if (!contactIds.length) {
+      return sendErr(res, 400, 'contactIds is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (!projectIds.length) {
+      return sendErr(res, 400, 'projectIds is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    for (const pid of projectIds) {
+      if (!userCanAccessProject(scope, pid)) {
+        return sendErr(res, 403, 'Project not found or access denied', { code: 'FORBIDDEN' }), true;
+      }
+    }
+
+    const allAdded = [];
+    const allSkipped = [];
+    const errors = [];
+
+    for (const contactId of contactIds) {
+      const result = await assignContactToProjects({
+        contactId,
+        projectIds,
+        userScope: scope,
+        contactType: String(body?.contactType || '').trim() || undefined,
+        contactClass: String(body?.contactClass || '').trim() || undefined,
+      });
+      if (!result.ok) {
+        errors.push({ contactId, error: result.error, status: result.status });
+        continue;
+      }
+      const payload = result.data || {};
+      if (Array.isArray(payload.added)) allAdded.push(...payload.added.map((row) => ({ ...row, sourceContactId: contactId })));
+      if (Array.isArray(payload.skipped)) allSkipped.push(...payload.skipped.map((row) => ({ ...row, sourceContactId: contactId })));
+    }
+
+    if (!allAdded.length && errors.length) {
+      return sendErr(res, errors[0].status || 500, errors[0].error, { code: 'ASSIGN_FAILED', details: errors }), true;
+    }
+
+    logActivity({
+      action: 'contact.assigned_to_projects',
+      entityType: 'contact',
+      entityId: contactIds[0],
+      summary: `Contact assigned to ${allAdded.length} project membership(s)`,
+      meta: { contactIds, projectIds, added: allAdded.length, skipped: allSkipped.length },
+    });
+    return sendOk(res, 201, { added: allAdded, skipped: allSkipped, errors }, {
+      added: allAdded,
+      skipped: allSkipped,
+      errors,
+    }), true;
   }
 
   // GET /api/contacts/:id

@@ -28,6 +28,11 @@ const { generateRedditReplyCandidates } = require('../lib/redditReplyCandidates'
 const { discoverBlueskyThreads } = require('../lib/blueskyThreadDiscovery');
 const { generateBlueskyReplyCandidates } = require('../lib/blueskyReplyCandidates');
 const { relayOpenClaw } = require('../lib/openclawGateway');
+const facebookPersonalPublisher = require('../lib/facebookPersonalPublisher');
+const {
+  getChannelOpenClawProfile,
+  isFacebookPersonalChannelName,
+} = require('../lib/channelsStore');
 const {
   listAgents: listYoutubeCommentAgents,
   createAgent: createYoutubeCommentAgent,
@@ -40,14 +45,14 @@ const {
   isDue: isYoutubeAgentDue,
   totalPostsLimit: youtubeAgentTotalPostsLimit,
 } = require('../lib/youtubeCommentAgentScheduler');
-const { runYoutubeHarvest } = require('../lib/acquire/YoutubeDetailsRun');
+const { runYoutubeAcquire } = require('../lib/acquire/YoutubeDetailsRun');
 const {
   buildYoutubeCommentSuggestionInput,
   generateYoutubeCommentSuggestions
 } = require('../lib/acquire/YoutubeCommentSuggestions');
 const { postYoutubeComment } = require('../lib/acquire/YoutubeCommentPost');
 const { getAccessToken, config: getGoogleDriveConfig } = require('../lib/googleDrive');
-const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'threads', 'instagram', 'buffer'];
+const PUBLISH_NOW_CHANNELS = ['x', 'telegram', 'bluesky', 'facebook', 'facebook_personal', 'threads', 'instagram', 'buffer'];
 
 function safeText(value) {
   return String(value || '').trim();
@@ -222,12 +227,12 @@ async function buildYoutubeCommentAgentPreflight(payload, scope = null) {
         ok: Boolean(videoUrl),
         videoUrl,
       },
-      harvest: { ok: false },
+      acquire: { ok: false },
       commentGeneration: { ok: false },
       googleOAuth: { ok: false },
       youtubePosting: { ok: false },
     },
-    harvest: null,
+    acquire: null,
     suggestionInput: null,
     suggestions: [],
   };
@@ -238,25 +243,25 @@ async function buildYoutubeCommentAgentPreflight(payload, scope = null) {
     return result;
   }
 
-  const harvest = await runYoutubeHarvest({ video_url: videoUrl });
-  result.harvest = harvest;
-  result.checks.harvest = {
-    ok: Boolean(harvest?.video?.id || harvest?.video?.title || harvest?.video?.description),
-    videoId: safeText(harvest?.video?.id),
-    title: safeText(harvest?.video?.title),
-    channelName: safeText(harvest?.channel_owner?.name),
-    transcriptStatus: safeText(harvest?.video?.transcript_status),
+  const acquireResult = await runYoutubeAcquire({ video_url: videoUrl });
+  result.acquire = acquireResult;
+  result.checks.acquire = {
+    ok: Boolean(acquireResult?.video?.id || acquireResult?.video?.title || acquireResult?.video?.description),
+    videoId: safeText(acquireResult?.video?.id),
+    title: safeText(acquireResult?.video?.title),
+    channelName: safeText(acquireResult?.channel_owner?.name),
+    transcriptStatus: safeText(acquireResult?.video?.transcript_status),
   };
-  if (!result.checks.harvest.ok) {
-    issues.push('Could not harvest enough video context to generate a comment.');
+  if (!result.checks.acquire.ok) {
+    issues.push('Could not acquire enough video context to generate a comment.');
   }
 
   const suggestionInput = buildYoutubeCommentSuggestionInput({
     video_url: videoUrl,
-    title: safeText(harvest?.video?.title),
-    channel_name: safeText(harvest?.channel_owner?.name),
-    description: safeText(harvest?.video?.description),
-    transcript: safeText(harvest?.video?.transcript),
+    title: safeText(acquireResult?.video?.title),
+    channel_name: safeText(acquireResult?.channel_owner?.name),
+    description: safeText(acquireResult?.video?.description),
+    transcript: safeText(acquireResult?.video?.transcript),
   });
   result.suggestionInput = suggestionInput;
 
@@ -926,6 +931,121 @@ function enrichReqForPostPublish(req, post) {
   };
 }
 
+async function resolveFacebookPersonalPublishContext(post, scope) {
+  const diag = post?.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : {};
+  const starcasterChannelId = safeText(diag.starcasterChannelId);
+  let openclawProfile = safeText(diag.openclawProfile);
+  let channelRow = null;
+
+  if (starcasterChannelId) {
+    const channelRes = await getChannelOpenClawProfile(starcasterChannelId, scope);
+    if (!channelRes.ok) {
+      return { ok: false, status: channelRes.status || 404, error: channelRes.error || 'Channel not found' };
+    }
+    channelRow = channelRes.data;
+    if (!openclawProfile) openclawProfile = safeText(channelRow.openclawProfile);
+    if (!isFacebookPersonalChannelName(channelRow.channel)) {
+      return { ok: false, status: 400, error: 'Selected channel is not a Facebook Personal channel.' };
+    }
+  }
+
+  if (!openclawProfile) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'OpenClaw Profile is required. Edit the Facebook Personal channel and set the profile name.',
+    };
+  }
+
+  if (!facebookPersonalPublisher.isOpenClawConfigured()) {
+    return { ok: false, status: 400, error: 'OpenClaw gateway is not configured in Settings > APIs.' };
+  }
+
+  return {
+    ok: true,
+    data: {
+      openclawProfile,
+      starcasterChannelId,
+      projectId: safeText(scope?.projectId || post?.projectId),
+      postId: safeText(post?.id),
+      channel: channelRow,
+    },
+  };
+}
+
+async function approveFacebookPersonalPost(post, req) {
+  const scope = requestScopeForPublish(req, post);
+  if (String(post.channel || '').toLowerCase() !== 'facebook_personal') {
+    return { ok: false, status: 400, error: 'Post is not a Facebook Personal channel post' };
+  }
+  if (post.status !== 'awaiting_approval') {
+    return { ok: false, status: 409, error: `Post must be awaiting approval (current status: ${post.status || 'unknown'})` };
+  }
+  const jobId = safeText(post.diagnostics?.openclawJobId);
+  if (!jobId) {
+    return { ok: false, status: 400, error: 'Missing OpenClaw job id on post diagnostics' };
+  }
+
+  await socialStore.updatePost(post.id, { status: 'publishing', error: '' }, scope);
+  const executed = await facebookPersonalPublisher.approveAndExecuteJob(jobId);
+  if (!executed.ok) {
+    const failed = await socialStore.updatePost(post.id, {
+      status: 'failed',
+      error: safeText(executed.error) || 'Facebook Personal approve/execute failed',
+      diagnostics: {
+        ...(post.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : {}),
+        checkedAt: new Date().toISOString(),
+        channel: 'facebook_personal',
+        publishMode: 'openclaw_browser',
+        openclawJobId: jobId,
+        failedStep: safeText(executed.step),
+        approvePayload: executed.approve || null,
+        executePayload: executed.data || null,
+      },
+    }, scope);
+    return { ok: false, status: executed.status || 502, error: executed.error, post: failed };
+  }
+
+  const jobData = executed.jobStatus && typeof executed.jobStatus === 'object'
+    ? executed.jobStatus
+    : (executed.execute && typeof executed.execute === 'object' ? executed.execute : {});
+  const remoteId = safeText(
+    jobData.post_url
+    || jobData.postUrl
+    || jobData.url
+    || jobData.id
+    || jobData.result?.post_url
+    || jobData.result?.url
+  );
+
+  const published = await socialStore.updatePost(post.id, {
+    status: 'published',
+    publishedAt: new Date().toISOString(),
+    remoteId,
+    error: '',
+    diagnostics: {
+      ...(post.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : {}),
+      checkedAt: new Date().toISOString(),
+      channel: 'facebook_personal',
+      publishMode: 'openclaw_browser',
+      openclawJobId: jobId,
+      execute: executed.execute || null,
+      jobStatus: executed.jobStatus || null,
+      jobStatusError: safeText(executed.jobStatusError),
+    },
+  }, scope);
+
+  logActivity({
+    action: 'engage.social.facebook_personal_posted',
+    entityType: 'engage_social_post',
+    entityId: published?.id || null,
+    summary: `Published Facebook Personal post ${published?.id || ''}`,
+    meta: { remoteId: published?.remoteId || '', openclawJobId: jobId },
+  });
+
+  return { ok: true, status: 200, data: { post: published, remote: executed } };
+}
+
 function normalizeBufferService(value) {
   const key = safeText(value).toLowerCase();
   if (key === 'x' || key === 'twitter') return 'twitter';
@@ -1138,6 +1258,49 @@ async function publishStoredPost(post, req) {
         };
       }
     }
+  } else if (channel === 'facebook_personal') {
+    const ctx = await resolveFacebookPersonalPublishContext(post, scope);
+    if (!ctx.ok) {
+      result = ctx;
+    } else if (post.status === 'awaiting_approval' && safeText(post.diagnostics?.openclawJobId)) {
+      result = { ok: false, status: 409, error: 'Post is already awaiting approval. Use Approve & Post when ready.' };
+    } else {
+      const queued = await facebookPersonalPublisher.queuePreviewJob({
+        text: post.text,
+        openclawProfile: ctx.data.openclawProfile,
+        starcasterChannelId: ctx.data.starcasterChannelId,
+        projectId: ctx.data.projectId,
+        postId: post.id,
+      });
+      if (!queued.ok) {
+        result = queued;
+      } else {
+        const waiting = await socialStore.updatePost(post.id, {
+          status: 'awaiting_approval',
+          error: safeText(queued.previewError),
+          diagnostics: {
+            ...(post.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : {}),
+            checkedAt: new Date().toISOString(),
+            channel,
+            publishMode: 'openclaw_browser',
+            openclawJobId: queued.jobId,
+            openclawProfile: ctx.data.openclawProfile,
+            starcasterChannelId: ctx.data.starcasterChannelId,
+            preview: queued.preview || queued.create || null,
+            previewStatus: Number(queued.previewStatus || 0) || 0,
+            previewError: safeText(queued.previewError),
+          },
+        }, scope);
+        logActivity({
+          action: 'engage.social.facebook_personal_preview_queued',
+          entityType: 'engage_social_post',
+          entityId: waiting?.id || null,
+          summary: `Facebook Personal post ${waiting?.id || ''} queued for preview`,
+          meta: { openclawJobId: queued.jobId, openclawProfile: ctx.data.openclawProfile },
+        });
+        return { ok: true, status: 202, data: { post: waiting, remote: { mode: 'awaiting_approval', jobId: queued.jobId, preview: queued.preview } } };
+      }
+    }
   } else if (channel === 'facebook') {
     result = await metaClients.createFacebookPost(post.text, imageOpts);
   } else if (channel === 'threads') {
@@ -1288,11 +1451,13 @@ async function publishStoredPost(post, req) {
           ? 'engage.social.bluesky_posted'
           : (channel === 'facebook'
             ? 'engage.social.facebook_posted'
-            : (channel === 'threads'
+            : (channel === 'facebook_personal'
+              ? 'engage.social.facebook_personal_posted'
+              : (channel === 'threads'
               ? 'engage.social.threads_posted'
               : (channel === 'instagram'
                 ? 'engage.social.instagram_posted'
-                : (channel === 'buffer' ? 'engage.social.buffer_queued' : 'engage.social.x_posted'))))),
+                : (channel === 'buffer' ? 'engage.social.buffer_queued' : 'engage.social.x_posted')))))),
     entityType: 'engage_social_post',
     entityId: published?.id || null,
     summary: channel === 'buffer'
@@ -1644,6 +1809,14 @@ async function handle(req, res, pathname, method) {
     }), true;
   }
 
+  if (pathname === '/api/promote/social/facebook-personal/status' && requestMethod === 'GET') {
+    const payload = {
+      configured: facebookPersonalPublisher.isOpenClawConfigured(),
+      publishMode: 'openclaw_browser',
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
   if (pathname === '/api/promote/social/facebook/status' && requestMethod === 'GET') {
     const creds = metaClients.getFacebookCredentials();
     const payload = {
@@ -1873,7 +2046,7 @@ async function handle(req, res, pathname, method) {
         agent,
         scheduling: payload,
         preflight: execRes.preflight,
-        harvest: execRes.preflight.harvest,
+        acquire: execRes.preflight.acquire,
         suggestionInput: execRes.preflight.suggestionInput,
         suggestions: execRes.suggestions,
         selectedComment: execRes.selectedComment,
@@ -2120,6 +2293,7 @@ async function handle(req, res, pathname, method) {
     const starcasterChannelId = safeText(body.starcasterChannelId || body.channelId);
     const targetPlatform = safeText(body.targetPlatform || body.platform);
     const targetAccount = safeText(body.targetAccount || body.account || body.userName || body.handle);
+    const openclawProfile = safeText(body.openclawProfile || body.openclaw_profile);
     let imageUrl = safeText(body.imageUrl);
     let imageAlt = safeText(body.imageAlt);
     const publishNow = Boolean(body.publishNow);
@@ -2128,6 +2302,7 @@ async function handle(req, res, pathname, method) {
     const maxLengths = {
       x: 280,
       facebook: 63206,
+      facebook_personal: 63206,
       instagram: 2200,
       linkedin: 3000,
       threads: 500,
@@ -2141,6 +2316,9 @@ async function handle(req, res, pathname, method) {
 
     if (!text) return sendErr(res, 400, 'Post text is required', { code: 'VALIDATION_ERROR' }), true;
     if (text.length > maxLen) return sendErr(res, 400, `${channel.toUpperCase()} posts must be ${maxLen} characters or fewer`, { code: 'VALIDATION_ERROR' }), true;
+    if (channel === 'facebook_personal' && !resolvedOpenClawProfile && !starcasterChannelId) {
+      return sendErr(res, 400, 'Facebook Personal posts require a channel with OpenClaw Profile configured', { code: 'VALIDATION_ERROR' }), true;
+    }
     if ((channel === 'bluesky' || channel === 'x') && !imageUrl && campaignId) {
       try {
         const fallback = await resolveCampaignImageMeta(campaignId, req);
@@ -2153,6 +2331,11 @@ async function handle(req, res, pathname, method) {
 
     const scope = requestProjectScope(req);
     const userId = safeText(req?.authUser?.id);
+    let resolvedOpenClawProfile = openclawProfile;
+    if (channel === 'facebook_personal' && !resolvedOpenClawProfile && starcasterChannelId) {
+      const channelRes = await getChannelOpenClawProfile(starcasterChannelId, scope);
+      if (channelRes.ok) resolvedOpenClawProfile = safeText(channelRes.data.openclawProfile);
+    }
     if (!publishNow) {
       if (scheduledForWall) {
         const tz = await getProjectTimezoneForUser(safeText(scope.projectId), userId);
@@ -2186,7 +2369,17 @@ async function handle(req, res, pathname, method) {
             bufferChannelId: safeText(body.bufferChannelId),
           },
         }
-        : null,
+        : (channel === 'facebook_personal'
+          ? {
+            checkedAt: new Date().toISOString(),
+            channel,
+            publishMode: 'openclaw_browser',
+            starcasterChannelId,
+            openclawProfile: resolvedOpenClawProfile,
+            targetPlatform,
+            targetAccount,
+          }
+          : null),
     }, scope);
 
     logActivity({
@@ -2263,6 +2456,46 @@ async function handle(req, res, pathname, method) {
     });
 
     return sendOk(res, 201, { post: cloned }, { post: cloned }), true;
+  }
+
+  const fbPersonalPreviewMatch = String(pathname || '').match(/^\/api\/(?:promote|engage)\/social\/posts\/([^/]+)\/facebook-personal\/preview\/?$/);
+  if (fbPersonalPreviewMatch && requestMethod === 'GET') {
+    const postId = decodeURIComponent(fbPersonalPreviewMatch[1] || '');
+    const scope = requestProjectScope(req);
+    const post = await socialStore.getPost(postId, scope);
+    if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+    if (String(post.channel || '').toLowerCase() !== 'facebook_personal') {
+      return sendErr(res, 400, 'Post is not a Facebook Personal channel post', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const jobId = safeText(post.diagnostics?.openclawJobId);
+    let jobStatus = null;
+    if (jobId) {
+      const statusRes = await facebookPersonalPublisher.fetchJobStatus(jobId);
+      jobStatus = statusRes.ok ? statusRes.data : { error: statusRes.error, data: statusRes.data || null };
+    }
+    const payload = {
+      postId: post.id,
+      status: post.status,
+      openclawJobId: jobId,
+      preview: post.diagnostics?.preview || null,
+      previewError: safeText(post.diagnostics?.previewError),
+      jobStatus,
+      text: post.text,
+    };
+    return sendOk(res, 200, payload, { preview: payload }), true;
+  }
+
+  const fbPersonalApproveMatch = String(pathname || '').match(/^\/api\/(?:promote|engage)\/social\/posts\/([^/]+)\/facebook-personal\/approve\/?$/);
+  if (fbPersonalApproveMatch && requestMethod === 'POST') {
+    const postId = decodeURIComponent(fbPersonalApproveMatch[1] || '');
+    const scope = requestProjectScope(req);
+    const post = await socialStore.getPost(postId, scope);
+    if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+    const result = await approveFacebookPersonalPost(post, req);
+    if (!result.ok) {
+      return sendErr(res, socialPublishHttpStatus(result.status), result.error, { code: 'SOCIAL_PUBLISH_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   const publishMatch = String(pathname || '').match(/^\/api\/(?:promote|engage)\/social\/posts\/([^/]+)\/publish\/?$/);

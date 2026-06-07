@@ -693,9 +693,9 @@ App.youtube = (function () {
       card.addEventListener('click', function() {
         var textEl = document.getElementById('youtubeMinerTargets');
         if (!textEl || !vid.video_url) return;
-        var current = String(textEl.value || '').split(/\r?\n/g).map(function(line) { return normalizeYoutubeTarget(line); }).filter(Boolean);
+        var current = String(textEl.value || '').split(/\r?\n|,/g).map(function(line) { return normalizeYoutubeTarget(line); }).filter(Boolean);
         var merged = mergeTargetsUnique(current, [vid.video_url]);
-        textEl.value = merged.join('\n');
+        textEl.value = merged.join(', ');
         notify('Added ' + title.textContent + ' to targets!');
         
         var modal = document.getElementById('youtubeMinerTargetSelectorModal');
@@ -986,7 +986,14 @@ App.youtube = (function () {
       var raw = window.localStorage.getItem(YT_MINER_LAST_INPUT_KEY);
       if (!raw) return null;
       var parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : null;
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (parsed.targets_text) {
+        delete parsed.targets_text;
+        try {
+          window.localStorage.setItem(YT_MINER_LAST_INPUT_KEY, JSON.stringify(parsed));
+        } catch (_) { /* ignore */ }
+      }
+      return parsed;
     } catch (_) {
       return null;
     }
@@ -3736,14 +3743,14 @@ App.youtube = (function () {
       });
     }
 
-    var harvestedVideos = Number(stats.harvested_videos || 0) || 0;
+    var acquiredVideos = Number(stats.acquired_videos || 0) || 0;
     var totalRaw = Number(stats.total_comments_raw || 0) || 0;
     var totalFiltered = Number(stats.total_comments_filtered || 0) || 0;
     var reviewedCount = comments.reduce(function(count, row) {
       return count + (feedbackHasReview(readFeedback(row)) ? 1 : 0);
     }, 0);
     var safeHtmlStr = '<table class="youtube-miner-stats-table"><tbody>' +
-      '<tr><td>Videos harvested</td><td>' + harvestedVideos + '</td></tr>' +
+      '<tr><td>Videos acquired</td><td>' + acquiredVideos + '</td></tr>' +
       '<tr><td>Raw comments</td><td>' + totalRaw + '</td></tr>' +
       '<tr><td>Filtered comments</td><td>' + totalFiltered + '</td></tr>' +
       '<tr><td>Visible rows</td><td>' + comments.length + '</td></tr>' +
@@ -3982,9 +3989,11 @@ App.youtube = (function () {
         if (!targetId) return;
         var body = document.getElementById(targetId);
         if (!body) return;
-        var isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-        toggle.setAttribute('aria-expanded', String(!isExpanded));
-        body.classList.toggle('hidden', isExpanded);
+        var container = toggle.closest('.youtube-miner-collapsible');
+        if (!container) return;
+        var isOpen = container.classList.contains('is-open');
+        container.classList.toggle('is-open', !isOpen);
+        toggle.setAttribute('aria-expanded', String(!isOpen));
       });
     });
   }
@@ -3994,10 +4003,12 @@ App.youtube = (function () {
     if (!id) return;
     var body = document.getElementById(id);
     if (!body) return;
-    var toggle = document.querySelector('.accordion-header[data-target-id="' + id + '"]');
-    if (!toggle) return;
-    toggle.setAttribute('aria-expanded', String(open));
-    body.classList.toggle('hidden', !open);
+    var container = body.closest('.youtube-miner-collapsible');
+    if (!container) return;
+    var toggle = container.querySelector('.accordion-header[data-target-id]');
+    var shouldOpen = open !== false;
+    container.classList.toggle('is-open', shouldOpen);
+    if (toggle) toggle.setAttribute('aria-expanded', String(shouldOpen));
   }
 
   function applyYoutubeMinerInputToForm(formEl, input) {
@@ -4012,7 +4023,6 @@ App.youtube = (function () {
       if (value == null) return;
       field.value = String(value);
     }
-    setValue('targets', input.targets_text);
     setValue('include_phrases_text', input.include_phrases_text);
     setValue('exclude_phrases_text', input.exclude_phrases_text);
     setValue('videos_per_channel', input.videos_per_channel);
@@ -5043,7 +5053,7 @@ App.youtube = (function () {
     else                          notify('Contact updated from YouTube run');
   }
 
-  async function harvestCommentsFromRun(run) {
+  async function acquireCommentsFromRun(run) {
     var videoUrl = String(run && run.video_url ? run.video_url : '').trim();
     if (!videoUrl) throw new Error('This run has no video URL to acquire comments from.');
     var res = await api('/api/acquire/youtube-comments', {
@@ -5143,7 +5153,7 @@ App.youtube = (function () {
       method: 'POST',
       body: JSON.stringify({
         video_urls: videoUrls,
-        include_harvest_preview: videoUrls.length === 1,
+        include_acquire_preview: videoUrls.length === 1,
       }),
     }).then(function(res) {
       var diagnostics = Array.isArray(res && res.diagnostics) ? res.diagnostics : [];
@@ -5285,9 +5295,9 @@ App.youtube = (function () {
         if (!urls.length) return;
         var textEl = document.getElementById('youtubeMinerTargets');
         if (!textEl) return;
-        var current = String(textEl.value || '').split(/\r?\n/g).map(function(line) { return normalizeYoutubeTarget(line); }).filter(Boolean);
+        var current = String(textEl.value || '').split(/\r?\n|,/g).map(function(line) { return normalizeYoutubeTarget(line); }).filter(Boolean);
         var merged = mergeTargetsUnique(current, urls);
-        textEl.value = merged.join('\n');
+        textEl.value = merged.join(', ');
         notify('Added ' + urls.length + ' targets to miner!');
       });
     }
@@ -5500,9 +5510,9 @@ App.youtube = (function () {
 
         var targetField = document.getElementById('youtubeMinerTargets');
         if (targetField) {
-          var current = String(targetField.value || '').split(/\r?\n/g).map(function(t) { return normalizeYoutubeTarget(t); }).filter(Boolean);
+          var current = String(targetField.value || '').split(/\r?\n|,/g).map(function(t) { return normalizeYoutubeTarget(t); }).filter(Boolean);
           var merged = mergeTargetsUnique(current, targets);
-          targetField.value = merged.join('\n');
+          targetField.value = merged.join(', ');
         }
 
         // Persist to underlying DB repository table automatically
@@ -5510,16 +5520,7 @@ App.youtube = (function () {
           console.error('Failed to persist targets to target table', err);
         });
 
-        // Open the Target collapsible
-        var targetBody = document.getElementById('youtubeMinerRepositoryBody');
-        if (targetBody) {
-          var targetWrap = targetBody.closest('.youtube-miner-collapsible');
-          var targetToggle = targetWrap ? targetWrap.querySelector('.accordion-header') : null;
-          if (targetToggle && targetToggle.getAttribute('aria-expanded') !== 'true') {
-            if (targetWrap) targetWrap.classList.add('is-open');
-            if (targetToggle) targetToggle.setAttribute('aria-expanded', 'true');
-          }
-        }
+        setYoutubeMinerCollapsibleOpen('youtubeMinerRepositoryBody', true);
         
         notify('Saved and sent ' + targets.length + ' research target' + (targets.length === 1 ? '' : 's') + ' to Target section');
       });
@@ -5786,14 +5787,10 @@ App.youtube = (function () {
     }
     setYoutubeMinerMode('training');
     setupYoutubeMinerCollapsibles();
-    // Keep the YouTube miner sections collapsed by default.
-    setYoutubeMinerCollapsibleOpen('youtubeMinerResponseContextBody', false);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerTopicsBody', false);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerGuidelinesBody', false);
+    // Hero forms are primary; result sections start collapsed.
     setYoutubeMinerCollapsibleOpen('youtubeResearchBody', false);
     setYoutubeMinerCollapsibleOpen('youtubeMinerRepositoryBody', false);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerTrainingBody', false);
-    setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', true);
+    setYoutubeMinerCollapsibleOpen('youtubeMinerContentBody', false);
     refreshYoutubeResearchTopicHashtagHints().catch(function(err) {
       notify(err.message || 'Could not load messaging topics/hashtags for research', true);
     });
@@ -5807,6 +5804,8 @@ App.youtube = (function () {
     refreshYoutubeResearchRuns(30).catch(function() {});
     if (youtubeCommentMinerForm) {
       applyYoutubeMinerInputToForm(youtubeCommentMinerForm, loadYoutubeMinerLastInput());
+      var minerTargetsField = document.getElementById('youtubeMinerTargets');
+      if (minerTargetsField) minerTargetsField.value = '';
     }
     var restoredMinerResult = loadYoutubeMinerLastResult();
     if (restoredMinerResult) {
