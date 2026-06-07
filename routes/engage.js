@@ -29,6 +29,7 @@ const { discoverBlueskyThreads } = require('../lib/blueskyThreadDiscovery');
 const { generateBlueskyReplyCandidates } = require('../lib/blueskyReplyCandidates');
 const { relayOpenClaw } = require('../lib/openclawGateway');
 const facebookPersonalPublisher = require('../lib/facebookPersonalPublisher');
+const { resolveTaggedPeopleForCampaign } = require('../lib/messagingPostTagMeta');
 const {
   getChannelOpenClawProfile,
   isFacebookPersonalChannelName,
@@ -1271,6 +1272,7 @@ async function publishStoredPost(post, req) {
         starcasterChannelId: ctx.data.starcasterChannelId,
         projectId: ctx.data.projectId,
         postId: post.id,
+        taggedPeople: Array.isArray(post.diagnostics?.taggedPeople) ? post.diagnostics.taggedPeople : [],
       });
       if (!queued.ok) {
         result = queued;
@@ -2332,6 +2334,7 @@ async function handle(req, res, pathname, method) {
     const scope = requestProjectScope(req);
     const userId = safeText(req?.authUser?.id);
     let resolvedOpenClawProfile = openclawProfile;
+    const taggedPeople = campaignId ? await resolveTaggedPeopleForCampaign(campaignId, scope) : [];
     if (channel === 'facebook_personal' && !resolvedOpenClawProfile && starcasterChannelId) {
       const channelRes = await getChannelOpenClawProfile(starcasterChannelId, scope);
       if (channelRes.ok) resolvedOpenClawProfile = safeText(channelRes.data.openclawProfile);
@@ -2378,6 +2381,7 @@ async function handle(req, res, pathname, method) {
             openclawProfile: resolvedOpenClawProfile,
             targetPlatform,
             targetAccount,
+            taggedPeople,
           }
           : null),
     }, scope);

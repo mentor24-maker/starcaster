@@ -22,7 +22,7 @@ App.assetFieldImport = (function assetFieldImportModule() {
     { id: 'hashtag', label: 'Hashtag', group: 'Messaging' },
   ];
 
-  const FALLBACK_SUPPORTED_PAIRS = new Set(['image:tweet', 'image:headline', 'tweet:headline']);
+  const FALLBACK_SUPPORTED_PAIRS = new Set(['image:tweet', 'image:headline', 'tweet:headline', 'tweet:post']);
   let supportedPairs = new Set(FALLBACK_SUPPORTED_PAIRS);
   let hintsByPair = new Map();
 
@@ -30,11 +30,13 @@ App.assetFieldImport = (function assetFieldImportModule() {
     'image:tweet': 'Matching images become Would You Rather… tweets: OCR options (v2), file-name fallback, plus a follow-up teaser.',
     'image:headline': 'Matching images become headlines: Caption when set, otherwise title-case the file name (lowercase stop words).',
     'tweet:headline': 'Matching tweets become headlines: WYR main question only; otherwise first statement (skip if over 20 words).',
+    'tweet:post': 'Matching tweets become posts: copies text, URL, hashtags, image, and topic unchanged.',
   };
 
   const TARGET_LABELS = {
     tweet: 'tweet',
     headline: 'headline',
+    post: 'post',
   };
 
   let modal;
@@ -190,6 +192,12 @@ App.assetFieldImport = (function assetFieldImportModule() {
     if (toType === 'headline' && App.messaging?.refreshHeadlines) {
       try {
         await App.messaging.refreshHeadlines();
+      } catch (_) { /* optional */ }
+      return;
+    }
+    if (toType === 'post' && App.messagingPostsEditor?.refreshPosts) {
+      try {
+        await App.messagingPostsEditor.refreshPosts();
       } catch (_) { /* optional */ }
       return;
     }

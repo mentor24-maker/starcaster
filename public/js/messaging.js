@@ -324,7 +324,7 @@ App.messaging = (function () {
     { format: 'eBooks', pageId: 'messagingEbooksPage', field: 'title', source: () => currentEbooks },
     { format: 'Emails', pageId: 'messagingEmailsPage', field: 'email', source: () => simpleContentState.emails.items },
     { format: 'Tweets', pageId: 'messagingTweetsPage', field: 'content', source: () => simpleContentState.tweets.items },
-    { format: 'Posts', pageId: 'messagingPostsPage', field: 'post', source: () => simpleContentState.posts.items },
+    { format: 'Posts', pageId: 'messagingPostsPage', field: 'post', source: () => (App.messagingPostsEditor?.getPosts?.() || simpleContentState.posts.items) },
     { format: 'Descriptions', pageId: 'messagingDescriptionsPage', field: 'description', source: () => simpleContentState.descriptions.items },
     { format: 'Transcripts', pageId: 'messagingTranscriptsPage', field: 'transcript', source: () => simpleContentState.transcripts.items },
     { format: 'Comments', pageId: 'messagingCommentsPage', field: 'comment', source: () => simpleContentState.comments.items },
@@ -339,7 +339,7 @@ App.messaging = (function () {
     Pitches: { kind: 'simple', endpoint: '/api/messaging/pitches', primaryKey: 'pitch', primaryLabel: 'Pitch', primaryRows: 5, fields: ['primary'] },
     Emails: { kind: 'simple', endpoint: '/api/messaging/emails', primaryKey: 'email', primaryLabel: 'Email Body', primaryRows: 12, fields: ['subject', 'primary'] },
     Tweets: { kind: 'tweet', endpoint: '/api/messaging/tweets', primaryKey: 'content', primaryLabel: 'Tweet', primaryRows: 6, fields: ['primary', 'url', 'hashtags', 'image'] },
-    Posts: { kind: 'simple', endpoint: '/api/messaging/posts', primaryKey: 'post', primaryLabel: 'Post', primaryRows: 6, fields: ['primary', 'url', 'image'] },
+    Posts: { kind: 'post', endpoint: '/api/messaging/posts', primaryKey: 'post', primaryLabel: 'Post', primaryRows: 8, fields: ['primary', 'url', 'hashtags', 'image'] },
     Descriptions: { kind: 'simple', endpoint: '/api/messaging/descriptions', primaryKey: 'description', primaryLabel: 'Description', primaryRows: 6, fields: ['primary'] },
     Transcripts: { kind: 'simple', endpoint: '/api/messaging/transcripts', primaryKey: 'transcript', primaryLabel: 'Transcript', primaryRows: 10, fields: ['primary', 'url'] },
     Comments: { kind: 'simple', endpoint: '/api/messaging/comments', primaryKey: 'comment', primaryLabel: 'Comment', primaryRows: 6, fields: ['primary', 'url'] },
@@ -638,7 +638,7 @@ App.messaging = (function () {
 
   function ensureSimpleContentPages() {
     simpleContentConfigs.forEach((config) => {
-      if (config.pageId === 'messagingTweetsPage' || config.pageId === 'messagingTaglinesPage') return;
+      if (config.pageId === 'messagingTweetsPage' || config.pageId === 'messagingTaglinesPage' || config.pageId === 'messagingPostsPage') return;
       const page = document.getElementById(config.pageId);
       if (page) {
         page.innerHTML = buildSimpleContentPageMarkup(config);
@@ -779,6 +779,24 @@ App.messaging = (function () {
       previewId: 'messagingTweetEditImagePreview',
       source: 'tweet',
       title: 'Choose Tweet Image',
+      emptyText: 'No image selected',
+      buttonText: 'Choose Image',
+      selectedButtonText: 'Change Image',
+    },
+    messagingPostImageSelect: {
+      buttonId: 'messagingPostImagePickerBtn',
+      previewId: 'messagingPostImagePreview',
+      source: 'tweet',
+      title: 'Choose Post Image',
+      emptyText: 'No image selected',
+      buttonText: 'Choose Image',
+      selectedButtonText: 'Change Image',
+    },
+    messagingPostEditImageSelect: {
+      buttonId: 'messagingPostEditImagePickerBtn',
+      previewId: 'messagingPostEditImagePreview',
+      source: 'tweet',
+      title: 'Choose Post Image',
       emptyText: 'No image selected',
       buttonText: 'Choose Image',
       selectedButtonText: 'Change Image',
@@ -5380,10 +5398,10 @@ App.messaging = (function () {
       if (schema.fields.includes('image')) payload.image_asset_id = cleanText(formData.get('image_asset_id'));
       return payload;
     }
-    if (schema.kind === 'tweet') {
+    if (schema.kind === 'tweet' || schema.kind === 'post') {
       const content = cleanText(overrides.primary != null ? overrides.primary : formData.get('primary'));
-      if (!content) throw new Error('Tweet is required');
-      payload.content = content;
+      if (!content) throw new Error(`${schema.primaryLabel} is required`);
+      payload[schema.primaryKey] = content;
       payload.author = cleanText(formData.get('author'));
       payload.url = cleanText(formData.get('url'));
       payload.hashtags = cleanText(overrides.hashtags != null ? overrides.hashtags : formData.get('hashtags'));
@@ -5947,6 +5965,16 @@ App.messaging = (function () {
         feedback: String(item?.feedback || '').trim(),
       };
     }
+    if (schema.kind === 'post') {
+      return {
+        post: `${String(item?.post || '').trim() || 'Untitled'} (Clone)`,
+        url: String(item?.url || '').trim(),
+        hashtags: String(item?.hashtags || '').trim(),
+        image_asset_id: Number(item?.image_asset_id || 0) || null,
+        topic: String(item?.topic || item?.category || '').trim(),
+        feedback: String(item?.feedback || '').trim(),
+      };
+    }
     if (schema.kind === 'longform' || schema.kind === 'pdfLongform') {
       return {
         platform: String(item?.platform || '').trim(),
@@ -5990,6 +6018,13 @@ App.messaging = (function () {
         ['Hashtags', String(item?.hashtags || '').trim() || '-'],
         ['Feedback', String(item?.feedback || '').trim() || '-'],
       );
+    } else if (format === 'Posts') {
+      pairs.push(
+        ['Content', String(item?.post || '').trim() || '-'],
+        ['URL', String(item?.url || '').trim() || '-'],
+        ['Hashtags', String(item?.hashtags || '').trim() || '-'],
+        ['Feedback', String(item?.feedback || '').trim() || '-'],
+      );
     } else {
       pairs.push(
         ['Content', String(entry?.content || '').trim() || '-'],
@@ -6002,7 +6037,7 @@ App.messaging = (function () {
   function openMessagingContentEntryEditor(entry) {
     const format = String(entry?.format || '').trim();
     const item = entry?.item || {};
-    const simpleConfig = simpleContentConfigs.find((config) => config.pluralLabel === format);
+    const simpleConfig = simpleContentConfigs.find((config) => config.pluralLabel === format && config.pageId !== 'messagingPostsPage');
     if (simpleConfig) {
       App.setActivePage(simpleConfig.pageId);
       openSimpleContentEditForm(simpleConfig, item);
@@ -6031,6 +6066,11 @@ App.messaging = (function () {
     if (format === 'Tweets') {
       App.setActivePage('messagingTweetsPage');
       openTweetEditForm(item);
+      return;
+    }
+    if (format === 'Posts') {
+      App.setActivePage('messagingPostsPage');
+      App.messagingPostsEditor?.openPostEditForm?.(item);
       return;
     }
     openContentTarget(entry.pageId);
@@ -7818,8 +7858,10 @@ App.messaging = (function () {
       { pageId: 'messagingReportsPage', slug: 'reports', label: 'Reports', refresh: refreshReports },
       { pageId: 'messagingWhitePapersPage', slug: 'white-papers', label: 'White Papers', refresh: refreshWhitePapers },
       { pageId: 'messagingEbooksPage', slug: 'ebooks', label: 'eBooks', refresh: refreshEbooks },
+      { pageId: 'messagingPostsPage', slug: 'posts', label: 'Posts', refresh: function () { return App.messagingPostsEditor?.refreshPosts?.() || Promise.resolve(); } },
     ];
     simpleContentConfigs.forEach((config) => {
+      if (config.pageId === 'messagingPostsPage') return;
       pages.push({
         pageId: config.pageId,
         slug: config.key,
@@ -7835,6 +7877,7 @@ App.messaging = (function () {
   function init() {
     ensureSimpleContentPages();
     wireMessagingFormatImports();
+    if (App.messagingPostsEditor?.init) App.messagingPostsEditor.init();
     if (App.assetFieldImport?.init) App.assetFieldImport.init();
     const messagingContentTextFilter = document.getElementById('messagingContentTextFilter');
     const messagingContentFormatFilter = document.getElementById('messagingContentFormatFilter');
@@ -9759,6 +9802,22 @@ App.messaging = (function () {
     openTagsCreate,
     openContentLanding,
     closeTweetEditForm,
+    closePostEdit: function () {
+      App.messagingPostsEditor?.closePostEditForm?.();
+    },
+    openImageAssetPicker: openTweetImageAssetPicker,
+    renderImageAssetPickerDisplay: renderTweetImagePickerDisplay,
+    imageAssetById,
+    imageAssetLabel: tweetImageAssetLabel,
+    thumbnailUrlFromAsset,
+    syncTopicSelects: syncHeadlineCategorySelects,
+    getMessagingPrompts: function () {
+      return Array.isArray(currentMessagingPrompts) ? currentMessagingPrompts.slice() : [];
+    },
+    refreshMessagingPrompts,
+    setPostsLibraryItems: function (items) {
+      simpleContentState.posts.items = Array.isArray(items) ? items.slice() : [];
+    },
     closeHeadlineEditForm,
     openCreateContent,
     openManageContentLanding,
@@ -9772,7 +9831,7 @@ App.messaging = (function () {
     submitTagEdit,
     refresh: function () {
       return loadThumbnailOptions().then(function () {
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), App.messagingPostsEditor?.refreshPosts?.() || Promise.resolve(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
           renderMessagingOverview();
         });
@@ -9783,7 +9842,7 @@ App.messaging = (function () {
     },
     onPageActivated: function () {
       return loadThumbnailOptions().then(function () {
-        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
+        return Promise.all([refreshHeadlines(), refreshSubheadings(), refreshTaglines(), refreshPitches(), refreshArticles(), refreshReports(), refreshWhitePapers(), refreshEbooks(), refreshAllSimpleContentPages(), App.messagingPostsEditor?.refreshPosts?.() || Promise.resolve(), refreshMessagingTopics(), refreshMessagingFormats(), refreshMessagingTags()]).then(function () {
           renderMessagingContentLibraryTable();
           renderMessagingOverview();
         });

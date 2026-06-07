@@ -588,10 +588,189 @@
         </div>
       </section>
       <section id="messagingPostsPage" class="app-page hidden">
-        <div class="page-heading-row">
+        <div id="messagingPostsPageHeading" class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Posts</h2>
+          <div class="page-heading-actions">
+            <button
+              id="openPostsFormatImportBtn"
+              type="button"
+              class="btn"
+              onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'post' }); return false;"
+            >Import Other Formats</button>
+            <button id="messagingPostsToggleFormBtn" type="button" class="btn">Add Post</button>
+          </div>
         </div>
-        <p>Post writing workspace placeholder.</p>
+        <div id="messagingPostsWorkspace" class="messaging-create-content-layout hidden" style="margin-bottom: 18px;">
+          <div class="messaging-create-content-column">
+            <form id="messagingPostsForm" class="standard-form-grid" style="max-width: none;">
+              <label for="messagingPostTopic"><strong>Topic:</strong></label>
+              <select id="messagingPostTopic" name="topic" data-messaging-topic-select="true">
+                <option value="">Select Topic</option>
+              </select>
+              <input id="messagingPostPromptId" name="prompt_id" type="hidden" />
+              <label for="messagingPostContent"><strong>Post:</strong></label>
+              <div class="field-stack">
+                <select id="messagingPostSavedPrompt" name="saved_prompt_id">
+                  <option value="">Select Saved Prompt (optional)</option>
+                </select>
+                <textarea id="messagingPostContent" name="post" rows="8" maxlength="10000" required></textarea>
+              </div>
+              <label for="messagingPostUrl"><strong>URL:</strong></label>
+              <input id="messagingPostUrl" name="url" />
+              <label for="messagingPostHashtags"><strong>Hashtags:</strong></label>
+              <input id="messagingPostHashtags" name="hashtags" />
+              <label for="messagingPostImagePickerBtn"><strong>Image:</strong></label>
+              <div class="field-stack">
+                <input id="messagingPostImageSelect" name="image_asset_id" type="hidden" />
+                <button id="messagingPostImagePickerBtn" type="button" class="btn">Choose Image</button>
+                <div id="messagingPostImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <label for="messagingPostTaggedContact"><strong>Tag Person:</strong></label>
+              <select id="messagingPostTaggedContact" name="tagged_contact_id">
+                <option value="">No one tagged</option>
+              </select>
+              <label for="messagingPostFeedback"><strong>Feedback:</strong></label>
+              <textarea id="messagingPostFeedback" name="feedback" rows="4"></textarea>
+              <div></div>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingPostsGenerateBtn" type="button" class="btn">Generate with AI</button>
+                <button id="messagingPostsSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                <div></div>
+                <button id="messagingPostsSubmitBtn" type="submit" class="btn btn-primary">Save Post</button>
+              </div>
+            </form>
+          </div>
+          <div class="messaging-create-content-column messaging-create-content-results">
+            <div class="page-heading-row" style="align-items: center;">
+              <h3 style="margin: 0;">Generated Options</h3>
+              <div class="page-heading-actions">
+                <select id="messagingPostsBulkQuality" style="min-width: 140px;">
+                  <option value="">Set Quality</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+                <button id="messagingPostsClearSuggestionsBtn" type="button" class="btn">Clear Options</button>
+              </div>
+            </div>
+            <div id="messagingPostsSuggestionsEmpty">
+              Use <strong>Generate with AI</strong> to create post suggestions from the fields on the left.
+            </div>
+            <div id="messagingPostsShortSuggestions" class="hidden">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 44px;"><input id="messagingPostsSelectAllSuggestions" type="checkbox" /></th>
+                      <th>Post</th>
+                      <th>Quality</th>
+                    </tr>
+                  </thead>
+                  <tbody id="messagingPostsSuggestionsTable"></tbody>
+                </table>
+              </div>
+              <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
+                <button id="messagingPostsSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section id="messagingPostsEditPanel" class="messaging-tweet-edit-layout hidden" aria-label="Edit Post">
+          <div class="page-heading-row messaging-tweet-edit-heading">
+            <h2>
+              <a
+                href="#messaging-posts-list"
+                class="page-heading-back-link"
+                data-back-click="messaging.closePostEdit"
+                data-back-show="#messagingPostsPageHeading"
+                data-back-anchor="messaging-posts-list"
+              >Messaging: Posts</a>
+            </h2>
+            <button id="messagingPostsCancelEditBtn" type="button" class="btn btn-ghost">Cancel Edit</button>
+          </div>
+          <div class="messaging-tweet-edit-columns">
+            <form id="messagingPostsEditForm" class="standard-form-grid messaging-tweet-edit-form">
+              <input name="id" type="hidden" />
+              <label for="messagingPostEditTopic">Topic</label>
+              <select id="messagingPostEditTopic" name="topic" data-messaging-topic-select="true">
+                <option value="">Select Topic</option>
+              </select>
+              <label for="messagingPostEditContent">Post</label>
+              <textarea id="messagingPostEditContent" name="post" rows="10" maxlength="10000" required></textarea>
+              <label for="messagingPostEditUrl">URL</label>
+              <input id="messagingPostEditUrl" name="url" type="url" />
+              <label for="messagingPostEditHashtags">Hashtags</label>
+              <input id="messagingPostEditHashtags" name="hashtags" placeholder="Comma-separated" />
+              <label for="messagingPostEditImagePickerBtn">Image</label>
+              <div class="field-stack">
+                <input id="messagingPostEditImageSelect" name="image_asset_id" type="hidden" />
+                <button id="messagingPostEditImagePickerBtn" type="button" class="btn">Choose Image</button>
+                <div id="messagingPostEditImagePreview" class="develop-theme-asset-preview">No image selected</div>
+              </div>
+              <label for="messagingPostEditTaggedContact">Tag Person</label>
+              <select id="messagingPostEditTaggedContact" name="tagged_contact_id">
+                <option value="">No one tagged</option>
+              </select>
+              <label for="messagingPostEditQuality">Score</label>
+              <select id="messagingPostEditQuality" name="quality_score">
+                <option value="">Score</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <label for="messagingPostEditFeedback">Feedback</label>
+              <textarea id="messagingPostEditFeedback" name="feedback" rows="4"></textarea>
+              <div></div>
+              <button type="submit" class="btn btn-primary">Update Post</button>
+            </form>
+            <aside class="messaging-tweet-edit-preview-column messaging-create-content-results" aria-label="Social post preview">
+              <h3 class="messaging-tweet-edit-preview-title">Post Preview</h3>
+              <p class="messaging-tweet-edit-preview-note">Live preview for Facebook, Bluesky, Reddit, and similar channels. Platform limits vary at publish time.</p>
+              <div id="messagingPostEditPreviewMount" class="messaging-tweet-edit-preview-mount"></div>
+            </aside>
+            <aside class="messaging-tweet-edit-associations-column" aria-label="Asset associations">
+              <h3 class="messaging-tweet-edit-associations-title">Associations</h3>
+              <div class="messaging-tweet-edit-assoc-search">
+                <label for="messagingPostEditAssocSearch">Search</label>
+                <input
+                  id="messagingPostEditAssocSearch"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="Filter by asset name"
+                />
+              </div>
+              <div id="messagingPostEditAssocList" class="messaging-tweet-edit-assoc-list" aria-live="polite"></div>
+              <div class="messaging-tweet-edit-assoc-actions">
+                <button id="messagingPostEditAssocApplyBtn" type="button" class="btn btn-primary">Associate Checked</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <h3 id="messaging-posts-list">Saved Posts</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th id="messagingPostsSortCreatedBtn">Created</th>
+                <th id="messagingPostsSortContentBtn">Content</th>
+                <th id="messagingPostsSortUrlBtn">URL</th>
+                <th id="messagingPostsSortHashtagsBtn">Hashtags</th>
+                <th id="messagingPostsSortImageBtn">Image</th>
+                <th id="messagingPostsSortTaggedBtn">Tagged</th>
+                <th>Score</th>
+                <th class="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="messagingPostsTable"></tbody>
+          </table>
+        </div>
       </section>
       <section id="messagingEmailsPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -792,7 +971,7 @@
               type="button"
               class="btn"
               onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'headline' }); return false;"
-            >Import from Tweets</button>
+            >Import Other Formats</button>
             <button id="messagingHeadlinesToggleFormBtn" type="button" class="btn">Create Headlines</button>
           </div>
         </div>

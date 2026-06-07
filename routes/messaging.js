@@ -735,17 +735,6 @@ async function handle(req, res, pathname, method) {
   })) return true;
 
   if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
-    path: '/api/messaging/posts',
-    field: 'post',
-    singularKey: 'post',
-    pluralKey: 'posts',
-    listFn: listMessagingPosts,
-    createFn: createMessagingPost,
-    updateFn: updateMessagingPost,
-    deleteFn: deleteMessagingPost,
-  })) return true;
-
-  if (await handleSimpleTextResource(req, res, pathname, requestMethod, {
     path: '/api/messaging/descriptions',
     field: 'description',
     singularKey: 'description',
@@ -839,6 +828,46 @@ async function handle(req, res, pathname, method) {
     const result = await deleteMessagingTweet(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tweet: result.data }), true;
+  }
+
+  if (pathname === '/api/messaging/posts' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const limit = Number(urlObj.searchParams.get('limit') || 200);
+    const result = await listMessagingPosts(limit, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const posts = result.data || [];
+    return sendOk(res, 200, posts, { posts }, { total: posts.length }), true;
+  }
+
+  if (pathname === '/api/messaging/posts' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const post = String(body?.post || '').trim();
+    const url = String(body?.url || '').trim();
+    if (!post) return sendErr(res, 400, 'post is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!isValidHttpUrl(url)) return sendErr(res, 400, 'url must be a valid http(s) URL', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createMessagingPost(body || {}, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, result.data, { post: result.data }), true;
+  }
+
+  const postIdMatch = String(pathname || '').match(/^\/api\/messaging\/posts\/(\d+)\/?$/);
+  if (postIdMatch && (requestMethod === 'PATCH' || requestMethod === 'PUT')) {
+    const id = Number(postIdMatch[1]);
+    const body = await parseJsonBody(req);
+    const post = String(body?.post || '').trim();
+    const url = String(body?.url || '').trim();
+    if (!post) return sendErr(res, 400, 'post is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!isValidHttpUrl(url)) return sendErr(res, 400, 'url must be a valid http(s) URL', { code: 'VALIDATION_ERROR' }), true;
+    const result = await updateMessagingPost(id, body || {}, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { post: result.data }), true;
+  }
+
+  if (postIdMatch && requestMethod === 'DELETE') {
+    const id = Number(postIdMatch[1]);
+    const result = await deleteMessagingPost(id, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { post: result.data }), true;
   }
 
   if (pathname === '/api/messaging/hashtags' && requestMethod === 'GET') {
