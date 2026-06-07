@@ -1198,7 +1198,7 @@ App.contacts = (function () {
       ['Matched Keywords', Array.isArray(peer?.matched_keywords) && peer.matched_keywords.length ? peer.matched_keywords.join(', ') : '-'],
       ['Snippet', String(peer?.snippet || '').trim() || '-'],
       ['Notes', String(peer?.notes || '').trim() || '-'],
-      ['Last Harvested', String(peer?.last_harvested_at || peer?.updated_at || '').trim() || '-'],
+      ['Last Acquired', String(peer?.last_acquired_at || peer?.updated_at || '').trim() || '-'],
       ['Linked Run ID', String(detailMeta.run_id || '').trim() || '-'],
     ];
     fields.forEach(([label, value]) => {
@@ -1225,8 +1225,8 @@ App.contacts = (function () {
     });
     if (metaEl) {
       metaEl.textContent = run
-        ? 'Showing full harvested website details from the linked Acquire: Web run.'
-        : 'Showing the persisted website record. Full harvested details are only available when this website has its own direct website harvest.';
+        ? 'Showing full acquired website details from the linked Acquire: Web run.'
+        : 'Showing the persisted website record. Full acquired details are only available when this website has its own direct website acquire.';
     }
   }
 
@@ -1476,16 +1476,447 @@ App.contacts = (function () {
 
   function armTeamMemberCreate(meta = {}) {
     const ctx = meta && typeof meta === 'object' ? { ...meta } : {};
-    pendingAddContactMeta = ctx;
-    returnPageOnSave = String(ctx.returnPageId || 'devTeamPage').trim() || 'devTeamPage';
+    pendingAddContactMeta = Object.keys(ctx).length ? ctx : null;
+    const returnId = String(ctx.returnPageId || '').trim();
+    returnPageOnSave = returnId || null;
     activeContactId = '';
   }
 
-  function openAddPage(returnPageId = null, meta = {}) {
+  const fromProjectUi = {
+    projectSelect: null,
+    searchInput: null,
+    listbox: null,
+    nativeSelect: null,
+    assignBtn: null,
+    wired: false,
+  };
+  const fromProjectState = {
+    options: [],
+    activeIndex: -1,
+    searchTimer: null,
+    blurTimer: null,
+    projectNames: {},
+  };
+
+  const ALL_PROJECTS_OPTION_VALUE = '__all__';
+
+  function parseProjectsApiResponse(res) {
+    if (!res || typeof res !== 'object') return [];
+    if (Array.isArray(res.projects)) return res.projects;
+    if (Array.isArray(res.data)) return res.data;
+    if (res.data && typeof res.data === 'object' && Array.isArray(res.data.projects)) {
+      return res.data.projects;
+    }
+    return App.normalizeApiArray(res, 'projects') || App.normalizeApiArray(res) || [];
+  }
+
+  function mergeProjectLists(...lists) {
+    const byId = new Map();
+    lists.flat().forEach((project) => {
+      const id = String(project?.id || '').trim();
+      if (!id) return;
+      byId.set(id, project);
+    });
+    return [...byId.values()];
+  }
+
+  async function loadAccessibleProjects() {
+    const cached = Array.isArray(state.projects) ? state.projects : [];
+    let projects = [];
+    let currentId = String(state.currentProjectId || '').trim();
+
+    try {
+      const currentRes = await api('/api/projects/current', { method: 'GET' });
+      const fromCurrent = parseProjectsApiResponse(currentRes);
+      const project = currentRes?.project || currentRes?.data?.project || null;
+      if (project?.id) {
+        currentId = String(project.id).trim();
+        state.currentProjectId = currentId;
+        state.currentProject = project;
+        projects = mergeProjectLists(projects, [project], fromCurrent);
+      } else if (fromCurrent.length) {
+        projects = mergeProjectLists(projects, fromCurrent);
+      }
+    } catch (_) {
+      // Fall through to list endpoint.
+    }
+
+    try {
+      const listRes = await api('/api/projects', { method: 'GET' });
+      projects = mergeProjectLists(projects, parseProjectsApiResponse(listRes));
+    } catch (err) {
+      if (!projects.length && cached.length) {
+        projects = mergeProjectLists(cached);
+      } else if (!projects.length) {
+        throw err;
+      }
+    }
+
+    if (!projects.length && cached.length) {
+      projects = mergeProjectLists(cached);
+    }
+
+    state.projects = projects;
+    return { projects, currentId };
+  }
+
+  function populateFromProjectSelect(select, projects, currentId) {
+    if (!select) return;
+    fromProjectState.projectNames = {};
+    select.replaceChildren();
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select a project…';
+    select.appendChild(placeholder);
+
+    const allOpt = document.createElement('option');
+    allOpt.value = ALL_PROJECTS_OPTION_VALUE;
+    allOpt.textContent = 'All Projects';
+    select.appendChild(allOpt);
+
+    projects.forEach((project) => {
+      const id = String(project?.id || '').trim();
+      if (!id) return;
+      const name = String(project.name || project.slug || id);
+      fromProjectState.projectNames[id] = name;
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id === currentId ? `${name} (current)` : name;
+      select.appendChild(opt);
+    });
+
+    if (!projects.length) {
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.disabled = true;
+      empty.textContent = 'No projects on your account';
+      select.appendChild(empty);
+    }
+  }
+
+  function contactPickerLabel(contact, projectLabel) {
+    const first = safeText(contact.firstName || contact.first_name);
+    const last = safeText(contact.lastName || contact.last_name);
+    const name = [first, last].filter(Boolean).join(' ').trim();
+    const email = safeText(contact.email);
+    const company = safeText(contact.company);
+    const core = [name, email, company].filter(Boolean).join(' · ') || safeText(contact.id) || 'Contact';
+    return projectLabel ? `${projectLabel}: ${core}` : core;
+  }
+
+  function resetAddContactFromProjectPanel() {
+    if (fromProjectUi.projectSelect) fromProjectUi.projectSelect.value = '';
+    if (fromProjectUi.nativeSelect) fromProjectUi.nativeSelect.innerHTML = '';
+    if (fromProjectUi.searchInput) {
+      fromProjectUi.searchInput.value = '';
+      fromProjectUi.searchInput.disabled = true;
+    }
+    fromProjectState.options = [];
+    fromProjectState.activeIndex = -1;
+    renderFromProjectListbox();
+    closeFromProjectListbox();
+    setFromProjectAssignEnabled();
+  }
+
+  function resolveFromProjectSelectEl() {
+    const el = document.getElementById('addContactFromProjectSelect');
+    if (el) fromProjectUi.projectSelect = el;
+    return el;
+  }
+
+  async function loadAddContactFromProjectOptions() {
+    const select = resolveFromProjectSelectEl();
+    if (!select) return;
+    try {
+      const { projects, currentId } = await loadAccessibleProjects();
+      populateFromProjectSelect(select, projects, currentId);
+    } catch (err) {
+      notify(`Could not load projects: ${err.message}`, true);
+      populateFromProjectSelect(select, [], '');
+    }
+  }
+
+  function setFromProjectAssignEnabled() {
+    const projectId = String(fromProjectUi.projectSelect?.value || '').trim();
+    const contactId = String(fromProjectUi.nativeSelect?.value || '').trim();
+    if (fromProjectUi.assignBtn) fromProjectUi.assignBtn.disabled = !(projectId && contactId);
+    if (fromProjectUi.searchInput) fromProjectUi.searchInput.disabled = !projectId;
+  }
+
+  function projectLabelForContact(contact) {
+    const pid = safeText(contact?.project_id || contact?.projectId);
+    if (!pid) return 'Unassigned';
+    return fromProjectState.projectNames[pid] || pid;
+  }
+
+  function isAllProjectsPickerMode() {
+    return String(fromProjectUi.projectSelect?.value || '').trim() === ALL_PROJECTS_OPTION_VALUE;
+  }
+
+  function syncFromProjectNativeSelect() {
+    const select = fromProjectUi.nativeSelect;
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = '';
+    const blank = document.createElement('option');
+    blank.value = '';
+    select.appendChild(blank);
+    fromProjectState.options.forEach((opt) => {
+      const row = document.createElement('option');
+      row.value = opt.value;
+      row.textContent = opt.label;
+      select.appendChild(row);
+    });
+    if (previous && fromProjectState.options.some((opt) => opt.value === previous)) {
+      select.value = previous;
+    }
+    setFromProjectAssignEnabled();
+  }
+
+  function visibleFromProjectMatches() {
+    const term = safeText(fromProjectUi.searchInput?.value || '').toLowerCase();
+    if (!term) return fromProjectState.options.slice(0, 50);
+    return fromProjectState.options
+      .filter((opt) => opt.searchText.includes(term) || opt.label.toLowerCase().includes(term))
+      .slice(0, 50);
+  }
+
+  function renderFromProjectListbox() {
+    const listbox = fromProjectUi.listbox;
+    if (!listbox) return;
+    const matches = visibleFromProjectMatches();
+    listbox.innerHTML = '';
+    if (!matches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'campaign-combobox-empty';
+      const picker = String(fromProjectUi.projectSelect?.value || '').trim();
+      if (!picker) empty.textContent = 'Select a project first';
+      else if (picker === ALL_PROJECTS_OPTION_VALUE) {
+        empty.textContent = 'No matching contacts in your other projects';
+      } else empty.textContent = 'No matching contacts in this project';
+      listbox.appendChild(empty);
+      return;
+    }
+    matches.forEach((opt, index) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'campaign-combobox-option';
+      row.dataset.comboboxValue = opt.value;
+      row.setAttribute('role', 'option');
+      if (index === fromProjectState.activeIndex) row.classList.add('is-active');
+      row.textContent = opt.label;
+      listbox.appendChild(row);
+    });
+  }
+
+  function openFromProjectListbox() {
+    if (fromProjectUi.listbox) fromProjectUi.listbox.hidden = false;
+  }
+
+  function closeFromProjectListbox() {
+    if (fromProjectUi.listbox) fromProjectUi.listbox.hidden = true;
+  }
+
+  function setFromProjectSelection(contactId) {
+    const select = fromProjectUi.nativeSelect;
+    const search = fromProjectUi.searchInput;
+    if (!select || !search) return;
+    select.value = String(contactId || '');
+    const match = fromProjectState.options.find((opt) => opt.value === select.value);
+    search.value = match ? match.label : '';
+    setFromProjectAssignEnabled();
+  }
+
+  function scheduleFromProjectSearch() {
+    window.clearTimeout(fromProjectState.searchTimer);
+    fromProjectState.searchTimer = window.setTimeout(() => {
+      fetchFromProjectContacts(fromProjectUi.searchInput?.value || '').catch((err) => notify(err.message, true));
+    }, 280);
+  }
+
+  async function fetchFromProjectContacts(query) {
+    const projectId = String(fromProjectUi.projectSelect?.value || '').trim();
+    if (!projectId) {
+      fromProjectState.options = [];
+      syncFromProjectNativeSelect();
+      renderFromProjectListbox();
+      return;
+    }
+    const q = encodeURIComponent(String(query || '').trim());
+    const res = await api(`/api/contacts/search-in-project?projectId=${encodeURIComponent(projectId)}&q=${q}`);
+    const contacts = App.normalizeApiArray(res, 'contacts')
+      || App.normalizeApiArray(res, 'data')
+      || App.normalizeApiArray(res)
+      || [];
+    const showProject = isAllProjectsPickerMode();
+    fromProjectState.options = contacts.map((contact) => {
+      const rowProjectId = safeText(contact.project_id || contact.projectId);
+      const sourceProjectId = rowProjectId
+        || (projectId === ALL_PROJECTS_OPTION_VALUE ? '__legacy__' : projectId);
+      const projectLabel = showProject ? projectLabelForContact(contact) : '';
+      return {
+        value: String(contact.id || ''),
+        sourceProjectId,
+        label: contactPickerLabel(contact, projectLabel),
+        searchText: [
+          contact.firstName,
+          contact.lastName,
+          contact.first_name,
+          contact.last_name,
+          contact.email,
+          contact.company,
+          projectLabel,
+        ].filter(Boolean).join(' ').toLowerCase(),
+      };
+    }).filter((opt) => opt.value);
+    fromProjectState.activeIndex = -1;
+    syncFromProjectNativeSelect();
+    renderFromProjectListbox();
+    openFromProjectListbox();
+  }
+
+  function wireAddContactFromProjectPanel() {
+    if (fromProjectUi.wired) return;
+    resolveFromProjectSelectEl();
+    fromProjectUi.searchInput = document.getElementById('addContactFromProjectSearch');
+    fromProjectUi.listbox = document.getElementById('addContactFromProjectListbox');
+    fromProjectUi.nativeSelect = document.getElementById('addContactFromProjectNative');
+    fromProjectUi.assignBtn = document.getElementById('addContactAssignFromProjectBtn');
+    const projectSelect = fromProjectUi.projectSelect;
+    const searchInput = document.getElementById('addContactFromProjectSearch');
+    const listbox = document.getElementById('addContactFromProjectListbox');
+    const nativeSelect = document.getElementById('addContactFromProjectNative');
+    const assignBtn = document.getElementById('addContactAssignFromProjectBtn');
+    fromProjectUi.searchInput = searchInput;
+    fromProjectUi.listbox = listbox;
+    fromProjectUi.nativeSelect = nativeSelect;
+    fromProjectUi.assignBtn = assignBtn;
+    if (!projectSelect || !searchInput || !listbox || !nativeSelect || !assignBtn) return;
+
+    projectSelect.addEventListener('change', () => {
+      nativeSelect.value = '';
+      searchInput.value = '';
+      fromProjectState.activeIndex = -1;
+      setFromProjectAssignEnabled();
+      if (projectSelect.value) {
+        searchInput.disabled = false;
+        searchInput.focus();
+        fetchFromProjectContacts('').catch((err) => notify(err.message, true));
+      } else {
+        searchInput.disabled = true;
+        fromProjectState.options = [];
+        renderFromProjectListbox();
+      }
+    });
+
+    searchInput.addEventListener('input', () => {
+      const selected = fromProjectState.options.find((opt) => opt.value === nativeSelect.value);
+      if (selected && safeText(searchInput.value) !== selected.label) {
+        nativeSelect.value = '';
+      }
+      fromProjectState.activeIndex = -1;
+      setFromProjectAssignEnabled();
+      scheduleFromProjectSearch();
+      openFromProjectListbox();
+    });
+
+    searchInput.addEventListener('focus', () => {
+      openFromProjectListbox();
+      renderFromProjectListbox();
+    });
+
+    searchInput.addEventListener('blur', () => {
+      window.clearTimeout(fromProjectState.blurTimer);
+      fromProjectState.blurTimer = window.setTimeout(() => {
+        closeFromProjectListbox();
+        const match = fromProjectState.options.find((opt) => opt.value === nativeSelect.value);
+        if (match && !safeText(searchInput.value)) searchInput.value = match.label;
+      }, 160);
+    });
+
+    listbox.addEventListener('mousedown', (event) => {
+      const row = event.target.closest('[data-combobox-value]');
+      if (!row) return;
+      event.preventDefault();
+      setFromProjectSelection(row.dataset.comboboxValue || '');
+      closeFromProjectListbox();
+    });
+
+    assignBtn.addEventListener('click', () => {
+      submitAssignFromProject().catch((err) => notify(err.message, true));
+    });
+
+    fromProjectUi.wired = true;
+  }
+
+  async function finishContactCreatedFlow(created, savedReturnPage) {
+    pendingAddContactMeta = null;
+    if (App.devAgent) App.devAgent.teamAddContext = null;
+    await App.refresh();
+    if (savedReturnPage === 'devTeamPage' && created?.id && typeof App.devAgent?.afterTeamContactCreated === 'function') {
+      returnPageOnSave = null;
+      await App.devAgent.afterTeamContactCreated(created);
+    } else if (savedReturnPage) {
+      App.setActivePage(savedReturnPage);
+      returnPageOnSave = null;
+      if (savedReturnPage === 'devTeamPage' && typeof App.devAgent?.showTeamBrowser === 'function') {
+        App.devAgent.showTeamBrowser();
+      }
+    } else {
+      openContactsPage();
+    }
+  }
+
+  async function submitAssignFromProject() {
+    const sourceContactId = String(fromProjectUi.nativeSelect?.value || '').trim();
+    const selected = fromProjectState.options.find((opt) => opt.value === sourceContactId);
+    const pickerProjectId = String(fromProjectUi.projectSelect?.value || '').trim();
+    const sourceProjectId = safeText(selected?.sourceProjectId)
+      || (pickerProjectId === ALL_PROJECTS_OPTION_VALUE ? '' : pickerProjectId);
+    if (!pickerProjectId || !sourceContactId || !sourceProjectId) {
+      notify('Select a project and contact', true);
+      return;
+    }
+    if (!pendingAddContactMeta && App.devAgent?.teamAddContext) {
+      pendingAddContactMeta = { ...App.devAgent.teamAddContext };
+    }
+    if (!returnPageOnSave && pendingAddContactMeta?.returnPageId) {
+      returnPageOnSave = pendingAddContactMeta.returnPageId;
+    }
+    const savedReturnPage = returnPageOnSave;
+    const addMeta = pendingAddContactMeta;
+    const body = { sourceProjectId, sourceContactId };
+    if (addMeta?.contactType) body.contactType = addMeta.contactType;
+    if (addMeta?.contactClass) body.contactClass = addMeta.contactClass;
+    try {
+      const res = await api('/api/contacts/assign-from-project', { method: 'POST', body: JSON.stringify(body) });
+      const created = res?.contact || res?.data || null;
+      resetAddContactFromProjectPanel();
+      notify('Contact added to this project');
+      await finishContactCreatedFlow(created, savedReturnPage);
+    } catch (err) {
+      pendingAddContactMeta = addMeta;
+      notify(err.message, true);
+    }
+  }
+
+  async function initAddContactFromProjectPanel() {
+    if (!fromProjectUi.wired) wireAddContactFromProjectPanel();
+    resetAddContactFromProjectPanel();
+    await loadAddContactFromProjectOptions();
+  }
+
+  async function openAddPage(returnPageId = null, meta = {}) {
     const ctx = meta && typeof meta === 'object' ? { ...meta } : {};
     if (returnPageId) ctx.returnPageId = returnPageId;
     armTeamMemberCreate(ctx);
     if (els.contactForm) els.contactForm.reset();
+    try {
+      await initAddContactFromProjectPanel();
+    } catch (err) {
+      notify(err.message, true);
+    }
     const go = App._baseSetActivePage || App.setActivePage;
     go.call(App, 'addContactPage');
   }
@@ -2438,7 +2869,7 @@ App.contacts = (function () {
             tr.appendChild(td);
           });
           const actionsTd = document.createElement('td');
-          actionsTd.className = 'contacts-actions-cell';
+          actionsTd.className = 'actions-col';
           const viewBtn = App.makeIconButton('view', 'View Contact', () => openViewPage(contact));
           const editBtn = App.makeIconButton('edit', 'Edit Contact', () => openEditPage(contact), { marginLeft: '8px' });
           const cloneBtn = App.makeIconButton('copy', 'Clone Contact', () => openClonePage(contact), { marginLeft: '8px' });
@@ -2623,6 +3054,138 @@ App.contacts = (function () {
     });
   }
 
+  function getSelectedContactIds() {
+    return [...document.querySelectorAll('#contactsTable input.contact-row-check:checked')]
+      .map((el) => String(el.value || '').trim())
+      .filter(Boolean);
+  }
+
+  async function fetchProjectsForMembershipPicker() {
+    try {
+      const { projects } = await loadAccessibleProjects();
+      return projects;
+    } catch (err) {
+      notify(err.message, true);
+      return Array.isArray(state.projects) ? state.projects : [];
+    }
+  }
+
+  async function openAddContactToProjectsModal() {
+    const contactIds = getSelectedContactIds();
+    if (!contactIds.length) {
+      notify('Select at least one contact in the table', true);
+      return;
+    }
+    if (!App.components?.Modal) {
+      notify('Modal component is not available', true);
+      return;
+    }
+
+    const projects = await fetchProjectsForMembershipPicker();
+    if (!projects.length) {
+      notify('No projects available', true);
+      return;
+    }
+
+    const currentId = String(state.currentProjectId || '').trim();
+    let memberProjectIds = new Set();
+    if (contactIds.length === 1) {
+      try {
+        const res = await api(`/api/contacts/${encodeURIComponent(contactIds[0])}/project-memberships`);
+        const ids = Array.isArray(res?.projectIds)
+          ? res.projectIds
+          : (Array.isArray(res?.data) ? res.data : []);
+        memberProjectIds = new Set(ids.map((id) => String(id).trim()).filter(Boolean));
+      } catch (_) {
+        // Non-fatal — user can still pick projects.
+      }
+    }
+
+    const body = document.createElement('div');
+    body.className = 'contact-add-projects-modal-body';
+    const intro = document.createElement('p');
+    intro.className = 'contact-add-projects-modal-intro';
+    intro.textContent = contactIds.length === 1
+      ? 'Select projects for this contact. Projects where they already appear are checked and cannot be removed here.'
+      : `Select projects to add ${contactIds.length} contacts to.`;
+    body.appendChild(intro);
+
+    const list = document.createElement('div');
+    list.className = 'contact-add-projects-list';
+
+    projects.forEach((project) => {
+      const id = String(project?.id || '').trim();
+      if (!id) return;
+      const name = String(project.name || project.slug || id);
+      const label = document.createElement('label');
+      label.className = 'contact-add-projects-option';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = id;
+      cb.className = 'standard-form-checkbox';
+      if (memberProjectIds.has(id)) {
+        cb.checked = true;
+        cb.disabled = true;
+      }
+      const text = document.createElement('span');
+      text.textContent = id === currentId ? `${name} (current)` : name;
+      label.appendChild(cb);
+      label.appendChild(text);
+      list.appendChild(label);
+    });
+    body.appendChild(list);
+
+    const modal = App.components.Modal({
+      title: 'Add to Project',
+      body,
+      dialogClass: 'contact-add-projects-modal',
+      actions: [
+        {
+          label: 'Cancel',
+          onClick: () => modal.close(),
+        },
+        {
+          label: 'Add to Projects',
+          primary: true,
+          onClick: async () => {
+            const projectIds = [...list.querySelectorAll('input[type="checkbox"]:not(:disabled):checked')]
+              .map((el) => String(el.value || '').trim())
+              .filter(Boolean);
+            if (!projectIds.length) {
+              notify('Select at least one project', true);
+              return;
+            }
+            try {
+              const res = await api('/api/contacts/assign-to-projects', {
+                method: 'POST',
+                body: JSON.stringify({ contactIds, projectIds }),
+              });
+              const added = Array.isArray(res?.added)
+                ? res.added
+                : (Array.isArray(res?.data?.added) ? res.data.added : []);
+              const skipped = Array.isArray(res?.skipped)
+                ? res.skipped
+                : (Array.isArray(res?.data?.skipped) ? res.data.skipped : []);
+              modal.close();
+              if (added.length) {
+                notify(`Added to ${added.length} project${added.length === 1 ? '' : 's'}`);
+                await App.refresh();
+                renderContacts();
+              } else if (skipped.length) {
+                notify(String(skipped[0]?.error || 'Already in selected project(s)'), true);
+              } else {
+                notify('No projects were updated', true);
+              }
+            } catch (err) {
+              notify(err.message, true);
+            }
+          },
+        },
+      ],
+    });
+    modal.open();
+  }
+
   function renderContactsTableHead() {
     const thead = document.getElementById('contactsTableHead');
     if (!thead) return;
@@ -2634,7 +3197,7 @@ App.contacts = (function () {
     thead.innerHTML = '';
 
     const filterRow = document.createElement('tr');
-    filterRow.className = 'contacts-filter-row';
+    filterRow.className = 'table-filter-row contacts-filter-row';
     const checkTh = document.createElement('th');
     checkTh.className = 'contacts-go-cell';
     const checkAll = document.createElement('input');
@@ -2793,14 +3356,17 @@ App.contacts = (function () {
       filterRow.appendChild(th);
     });
 
-    const goTh = document.createElement('th');
-    goTh.className = 'contacts-go-cell';
-    const goBtn = document.createElement('button');
-    goBtn.type = 'button';
-    goBtn.textContent = 'Go';
-    goBtn.addEventListener('click', () => renderContacts());
-    goTh.appendChild(goBtn);
-    filterRow.appendChild(goTh);
+    const actionsFilterTh = document.createElement('th');
+    actionsFilterTh.className = 'contacts-go-cell actions-col';
+    const addToProjectBtn = document.createElement('button');
+    addToProjectBtn.type = 'button';
+    addToProjectBtn.className = 'btn tiny-btn';
+    addToProjectBtn.textContent = 'Add to Project';
+    addToProjectBtn.addEventListener('click', () => {
+      openAddContactToProjectsModal().catch((err) => notify(err.message, true));
+    });
+    actionsFilterTh.appendChild(addToProjectBtn);
+    filterRow.appendChild(actionsFilterTh);
     thead.appendChild(filterRow);
 
     const headerRow = document.createElement('tr');
@@ -2827,7 +3393,7 @@ App.contacts = (function () {
       headerRow.appendChild(th);
     });
     const actionsTh = document.createElement('th');
-    actionsTh.className = 'contacts-actions-heading';
+    actionsTh.className = 'actions-col';
     actionsTh.textContent = 'Actions';
     headerRow.appendChild(actionsTh);
     thead.appendChild(headerRow);
@@ -3322,21 +3888,7 @@ App.contacts = (function () {
         const created = res?.contact || res?.data || null;
         els.contactForm.reset();
         notify('Contact created');
-        pendingAddContactMeta = null;
-        if (App.devAgent) App.devAgent.teamAddContext = null;
-        await App.refresh();
-        if (savedReturnPage === 'devTeamPage' && created?.id && typeof App.devAgent?.afterTeamContactCreated === 'function') {
-          returnPageOnSave = null;
-          await App.devAgent.afterTeamContactCreated(created);
-        } else if (savedReturnPage) {
-          App.setActivePage(savedReturnPage);
-          returnPageOnSave = null;
-          if (savedReturnPage === 'devTeamPage' && typeof App.devAgent?.showTeamBrowser === 'function') {
-            App.devAgent.showTeamBrowser();
-          }
-        } else {
-          openContactsPage();
-        }
+        await finishContactCreatedFlow(created, savedReturnPage);
       } catch (err) {
         pendingAddContactMeta = addMeta;
         notify(err.message, true);
@@ -3345,7 +3897,7 @@ App.contacts = (function () {
 
     if (els.openAddContactPageBtn) {
       els.openAddContactPageBtn.addEventListener('click', () => {
-        App.setActivePage('addContactPage');
+        openAddPage();
       });
     }
     if (els.backToContactsBtn) {
@@ -3630,13 +4182,16 @@ App.contacts = (function () {
     bindFilter(els.contactsSearchWebsite,   'website',    'contactsFilters');
     bindFilter(els.contactsSearchYoutube,   'youtube',    'contactsFilters');
     bindFilter(els.contactsSearchInstagram, 'instagram',  'contactsFilters');
-    if (els.contactsFiltersGoBtn) {
-      els.contactsFiltersGoBtn.addEventListener('click', () => renderContacts());
-    }
   }
 
   return {
-    manifest: { id: 'contacts', label: 'Contacts', pageId: 'contactsPage', pagePrefixes: ['contacts', 'contactsSettingsPage'] },
+    manifest: {
+      id: 'contacts',
+      label: 'Contacts',
+      pageId: 'contactsPage',
+      pagePrefixes: ['contacts', 'addContact'],
+      secondaryPages: ['addContactPage', 'editContactPage', 'viewContactPage', 'cloneContactPage'],
+    },
     init, renderContacts, contactValue, appendContactCell, applyExploreFilters, loadExploreSegment,
     activeExploreFilterRules, exploreFilterDefinition,
     openContactsPage, openFilteredContactsPage, openPeerSitesPage, openViewPage, openAddPage, armTeamMemberCreate, openEditPage, openClonePage,
@@ -3655,6 +4210,9 @@ App.contacts = (function () {
       }
       if (targetPageId === 'contactsSettingsPage') {
         renderContactsSettingsPage();
+      }
+      if (targetPageId === 'addContactPage') {
+        initAddContactFromProjectPanel().catch((err) => notify(err.message, true));
       }
       if (targetPageId === 'contactsExplorePage' && els.exploreContactsFilters && els.segmentsLeadFilters) {
         // Transplant the filter builder back from Segment Editor if it was moved

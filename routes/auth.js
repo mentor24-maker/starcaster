@@ -19,6 +19,10 @@ const {
 } = require('../lib/authStore');
 
 const { sendEmail } = require('../lib/mailer');
+const {
+  hasContactOrPersonForEmail,
+  linkAuthUserByEmail,
+} = require('../lib/authPersonLink');
 
 const SESSION_COOKIE_NAME = 'app_session';
 const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
@@ -96,6 +100,8 @@ async function handle(req, res, pathname, method) {
     const created = await createUser({ name, email, password });
     if (!created.ok) return sendErr(res, created.status || 400, created.error || 'Unable to register', { code: 'REGISTER_FAILED' }), true;
 
+    await linkAuthUserByEmail(created.data.id, email);
+
     const session = await createSession(created.data.id);
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
@@ -132,7 +138,18 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const email = normalizeEmail(body.email);
     const user = await findUserByEmail(email);
-    if (!user) return sendErr(res, 404, 'User not found', { code: 'USER_NOT_FOUND' }), true;
+    if (!user) {
+      const hasIdentity = await hasContactOrPersonForEmail(email);
+      if (hasIdentity) {
+        return sendErr(
+          res,
+          404,
+          'No login account exists for this email. Use Register (same email) to create your StarCaster password, then sign in.',
+          { code: 'AUTH_ACCOUNT_REQUIRED' }
+        ), true;
+      }
+      return sendErr(res, 404, 'User not found', { code: 'USER_NOT_FOUND' }), true;
+    }
 
     // Generate highly secure 6-digit OTP mapping
     const otp = Math.floor(100000 + Math.random() * 900000).toString();

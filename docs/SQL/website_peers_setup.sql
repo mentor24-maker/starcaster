@@ -13,7 +13,7 @@ create table if not exists public.website_peers (
   metadata jsonb not null default '{}'::jsonb,
   project_id text null,
   owner_user_id text null,
-  last_harvested_at timestamptz not null default now(),
+  last_acquired_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

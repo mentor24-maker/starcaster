@@ -26,11 +26,25 @@ function setCors(res, req) {
 
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
-    if (req.body !== undefined) {
-      if (typeof req.body === 'object') return resolve(req.body);
-      try { return resolve(JSON.parse(req.body)); } catch { return resolve({}); }
+    if (req._parsedJsonBody !== undefined) {
+      return resolve(req._parsedJsonBody);
     }
-    
+
+    if (req.body !== undefined) {
+      if (typeof req.body === 'object') {
+        req._parsedJsonBody = req.body;
+        return resolve(req.body);
+      }
+      try {
+        const parsed = JSON.parse(req.body);
+        req._parsedJsonBody = parsed;
+        return resolve(parsed);
+      } catch {
+        req._parsedJsonBody = {};
+        return resolve({});
+      }
+    }
+
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
@@ -39,9 +53,14 @@ function parseJsonBody(req) {
       }
     });
     req.on('end', () => {
-      if (!body) return resolve({});
+      if (!body) {
+        req._parsedJsonBody = {};
+        return resolve({});
+      }
       try {
-        resolve(JSON.parse(body));
+        const parsed = JSON.parse(body);
+        req._parsedJsonBody = parsed;
+        resolve(parsed);
       } catch {
         reject(new Error('Invalid JSON body'));
       }

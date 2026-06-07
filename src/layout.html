@@ -107,15 +107,12 @@
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';" />
       <h1 id="brandFallback" class="brand-fallback">StarCaster by Alphire</h1>
       <div class="auth-header-meta">
-        <div class="auth-user-menu">
-          <a id="authWelcomeName" class="auth-welcome-name" href="#page=settingsProfilePage">Account</a>
-          <div class="auth-user-dropdown">
-            <button id="authLogoutButton" class="auth-logout-link hidden" type="button">Logout</button>
-          </div>
-        </div>
+        <a id="authWelcomeName" class="auth-welcome-name" href="#page=settingsProfilePage">Account</a>
+        <span class="auth-header-sep" aria-hidden="true">·</span>
+        <button id="authLogoutButton" class="auth-logout-link hidden" type="button">Logout</button>
       </div>
       <button id="brandProfileButton" class="brand-profile-button" type="button" title="Projects"
-        onclick="if(window.App&&typeof App.setActivePage==='function'){App.setActivePage('settingsProjectsPage');}">
+        onclick="if(window.App&&App.settings&&typeof App.settings.openProjectsPage==='function'){App.settings.openProjectsPage();}else if(window.App&&typeof App.setActivePage==='function'){App.setActivePage('settingsProjectsPage');}">
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
         <span id="brandProfileLabel">Projects</span>
       </button>
@@ -376,11 +373,12 @@
   <!-- Module order matters: core first, then features, then app (orchestrator) last -->
 
   <script src="/js/core.js"></script>
+  <script src="/js/projectContext.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/components.js"></script>
   <script src="/js/assetAspect.js"></script>
   <script src="/js/assetPicker.js"></script>
-  <script src="/js/contacts.js?v=contacts-refresh-1"></script>
+  <script src="/js/contacts.js?v=contact-projects-load-1"></script>
   <script src="/js/contactPersonas.js"></script>
   <script src="/js/segments.js"></script>
   <script src="/js/campaigns.js"></script>

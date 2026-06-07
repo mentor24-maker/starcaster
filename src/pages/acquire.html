@@ -8,262 +8,282 @@
       </section>
       <section id="acquireWebPage" class="app-page hidden">
         <h2>Acquire: Web</h2>
-        <form id="directAcquireForm" class="standard-form-grid">
-            <label for="directAcquireUrlInput">Website</label>
-            <input id="directAcquireUrlInput" name="source_url" aria-label="Website URL" placeholder="https://example.com" />
-          <div class="acquire-web-hero-options-row">
-            <details class="hanging-details" style="margin-top: 1.5rem;">
+        <form id="directAcquireForm" class="acquire-web-form">
+          <div class="acquire-web-setup-shell">
+            <div class="acquire-web-url-row acquire-youtube-hero-row">
+              <label for="directAcquireUrlInput">Website</label>
+              <div class="acquire-web-url-controls">
+                <select id="directAcquireWebsiteRoleSelect" name="website_role" aria-label="Website Type">
+                  <option value="project" selected>Project Website</option>
+                  <option value="peer">Peer Website</option>
+                  <option value="model">Model Website</option>
+                </select>
+                <input id="directAcquireUrlInput" name="source_url" type="text" class="hero-action-input acquire-youtube-hero-input" aria-label="Website URL" />
+              </div>
+              <select id="directAcquireReferenceModelSelect" class="acquire-web-reference-model-select hidden" aria-label="Model Category">
+                <option value="">Model Category</option>
+              </select>
+            </div>
+            <div class="acquire-web-hero-options-row">
+              <details id="directAcquireAdvancedPanel" class="hanging-details acquire-web-advanced-details youtube-miner-compact-advanced-details">
                 <summary>Advanced</summary>
-                <div class="standard-form-grid" style="margin-top: 1.5rem; width: 100%;">
-                  
-                  <label style="align-self: start; margin-top: 0.5rem;">Acquire</label>
-                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.65rem;">
-                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_social" type="checkbox" checked class="standard-form-checkbox" /> Social</label>
-                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_keywords" type="checkbox" checked class="standard-form-checkbox" /> Keywords</label>
-                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_hashtags" type="checkbox" checked class="standard-form-checkbox" /> Hashtags</label>
-                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_images" type="checkbox" checked class="standard-form-checkbox" /> Images</label>
-                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_pages" type="checkbox" checked class="standard-form-checkbox" /> Website Pages</label>
-                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input name="acquire_peer_sites" type="checkbox" class="standard-form-checkbox" /> Peer Sites</label>
+                <div class="acquire-web-advanced-grid" style="margin-top: 1rem;">
+                  <div class="acquire-web-advanced-acquire">
+                    <h4>Acquire</h4>
+                    <label class="checkbox-row"><input name="acquire_social" type="checkbox" checked class="standard-form-checkbox" /> Social</label>
+                    <label class="checkbox-row"><input name="acquire_keywords" type="checkbox" checked class="standard-form-checkbox" /> Keywords</label>
+                    <label class="checkbox-row"><input name="acquire_hashtags" type="checkbox" checked class="standard-form-checkbox" /> Hashtags</label>
+                    <label class="checkbox-row"><input name="acquire_images" type="checkbox" checked class="standard-form-checkbox" /> Images</label>
+                    <label class="checkbox-row"><input name="acquire_pages" type="checkbox" checked class="standard-form-checkbox" /> Website Pages</label>
+                    <label class="checkbox-row"><input name="acquire_peer_sites" type="checkbox" class="standard-form-checkbox" /> Peer Sites</label>
                   </div>
-
-                  <label for="directAcquireMaxPagesSelect">Pages to Harvest</label>
-                  <select id="directAcquireMaxPagesSelect" name="max_pages">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                  </select>
-
-                  <label for="directAcquirePeerSitesLimitSelect">Peer Sites Limit</label>
-                  <select id="directAcquirePeerSitesLimitSelect" name="peer_sites_limit">
-                    <option value="5">5</option>
-                    <option value="10">10</option>
-                    <option value="20" selected>20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                  </select>
-
-                  <label for="directAcquireImagesLimitSelect">Images to Harvest</label>
-                  <select id="directAcquireImagesLimitSelect" name="images_limit">
-                    <option value="5">5</option>
-                    <option value="10">10</option>
-                    <option value="20" selected>20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                  </select>
-
-                  <label for="directAcquireSnippetInput">Snippet Length</label>
-                  <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
-
-                  <label for="directAcquireKeywordExclusionsInput" style="align-self: start; margin-top: 0.5rem;">Exclusions</label>
-                  <textarea id="directAcquireKeywordExclusionsInput" name="keyword_exclusions" rows="4"></textarea>
-
+                  <div class="acquire-web-advanced-fields">
+                    <div class="form-row">
+                      <label for="directAcquireMaxPagesSelect">Pages to Acquire</label>
+                      <select id="directAcquireMaxPagesSelect" name="max_pages">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="directAcquirePeerSitesLimitSelect">Peer Sites Limit</label>
+                      <select id="directAcquirePeerSitesLimitSelect" name="peer_sites_limit">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="directAcquireImagesLimitSelect">Images to Acquire</label>
+                      <select id="directAcquireImagesLimitSelect" name="images_limit">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="directAcquireSnippetInput">Snippet Length</label>
+                      <input id="directAcquireSnippetInput" name="body_snippet_chars" type="number" min="100" max="5000" value="600" />
+                    </div>
+                  </div>
+                  <div class="acquire-web-advanced-fields acquire-web-advanced-fields-tertiary">
+                    <label for="directAcquireKeywordExclusionsInput">Exclusions</label>
+                    <textarea id="directAcquireKeywordExclusionsInput" name="keyword_exclusions" rows="4"></textarea>
+                  </div>
                 </div>
-            </details>
+              </details>
             </div>
-            <button id="directAcquireSubmitBtn" type="submit" class="btn btn-primary">Harvest Website</button>
-            <div id="directAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite" style="width: 100%;">
-              <div id="directAcquireProgressText" class="asset-upload-progress-text">Harvesting website...</div>
-              <progress id="directAcquireProgressBar" max="100" value="8" style="width: 100%;"></progress>
-            </div>
-        </form>
-
-
-        <details id="directAcquireWebsitePeersPanel" class="card acquire-web-expandable-card" style="margin-top: 1rem;">
-          <summary class="acquire-web-expandable-summary">
-            <span>Website Peers</span>
-            <span id="directAcquireWebsitePeersCount" class="meta">0 saved</span>
-          </summary>
-          <div class="acquire-web-expandable-body">
-            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
-              <h3 style="margin:0;">Website Peers</h3>
-              <div class="page-heading-actions">
-                <button id="directAcquireWebsitePeersRefreshBtn" type="button" class="btn">Refresh</button>
-              </div>
-            </div>
-            <div id="directAcquireWebsitePeersMeta" class="meta" style="margin-bottom: 0.75rem;">No website peers saved yet.</div>
-            <form id="directAcquireWebsitePeerForm" class="standard-form-grid" style="margin-bottom: 1rem;">
-              <input type="hidden" id="directAcquireWebsitePeerId" name="id" />
-              
-                <label for="directAcquireWebsitePeerType">Site Type</label>
-                <select id="directAcquireWebsitePeerType" name="website_model"></select>
-              
-              
-                <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
-                <input id="directAcquireWebsitePeerSourceUrl" name="source_url" type="url" />
-              
-              
-                <label for="directAcquireWebsitePeerSiteUrl">Website URL</label>
-                <input id="directAcquireWebsitePeerSiteUrl" name="site_url" type="url" required />
-              
-              
-                <label for="directAcquireWebsitePeerTitle">Site Title</label>
-                <input id="directAcquireWebsitePeerTitle" name="title" type="text" />
-              
-              
-                <label for="directAcquireWebsitePeerModel">Scope</label>
-                <input id="directAcquireWebsitePeerModel" name="site_scope_display" type="text" value="Peer / Source is inferred automatically" readonly />
-              
-              
-                <label for="directAcquireWebsitePeerKeywords">Matched Keywords</label>
-                <textarea id="directAcquireWebsitePeerKeywords" name="matched_keywords" rows="2"></textarea>
-              
-              
-                <label for="directAcquireWebsitePeerSnippet">Snippet</label>
-                <textarea id="directAcquireWebsitePeerSnippet" name="snippet" rows="3"></textarea>
-              
-              
-                <label for="directAcquireWebsitePeerNotes">Notes</label>
-                <textarea id="directAcquireWebsitePeerNotes" name="notes" rows="3"></textarea>
-              
-              <div></div>
-              <div class="page-heading-actions standard-form-grid-full" style="justify-content: center; margin-top: 0.75rem;">
-                <div></div>
-              <button id="directAcquireWebsitePeerSaveBtn" type="submit" class="btn btn-primary">Save Website</button>
-                <button id="directAcquireWebsitePeerCancelBtn" type="button" class="btn">Cancel</button>
-              </div>
-            </form>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Scope</th>
-                    <th>Site Type</th>
-                    <th>Domain</th>
-                    <th>Site</th>
-                    <th>Matched Keywords</th>
-                    <th>Source Website</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="directAcquireWebsitePeersTable"></tbody>
-              </table>
+            <button id="directAcquireSubmitBtn" type="submit" class="btn btn-primary acquire-web-acquire-btn">Acquire Website</button>
+            <button id="directAcquireDiscoverPeersBtn" type="button" class="btn btn-primary acquire-web-acquire-btn hidden">Discover Peers</button>
+            <button id="directAcquireAddReferenceBtn" type="button" class="btn acquire-web-acquire-btn hidden">Add Reference</button>
+            <div id="directAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+              <div id="directAcquireProgressText" class="asset-upload-progress-text">Acquiring website...</div>
+              <progress id="directAcquireProgressBar" max="100" value="8"></progress>
             </div>
           </div>
-        </details>
+        </form>
 
         <div id="directAcquireResultsWrap" class="hidden">
-        <div class="acquire-web-results-grid">
-          <section class="card">
-            <div class="page-heading-row" style="margin-bottom: 0.75rem;">
-              <h3 style="margin:0;">Social</h3>
-              <div class="page-heading-actions">
-                <button id="directAcquireSaveContactBtn" type="button" class="btn" disabled>Save To Contacts</button>
-              </div>
+        <section id="directAcquireProjectWebsitesPanel" class="card" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+            <h3 style="margin:0;">Project Websites</h3>
+            <div class="page-heading-actions">
+              <span id="directAcquireProjectWebsitesCount" class="meta">0 saved</span>
+              <button id="directAcquireWebsitePeersRefreshBtn" type="button" class="btn">Refresh</button>
             </div>
-            <div id="directAcquireContactEmpty" class="meta">No contact data captured yet.</div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Label</th>
-                    <th>Value</th>
-                  </tr>
-                </thead>
-                <tbody id="directAcquireContactTable"></tbody>
-              </table>
-            </div>
-          </section>
+          </div>
+          <div id="directAcquireProjectWebsitesMeta" class="meta" style="margin-bottom: 0.75rem;"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th>Website</th>
+                  <th>Title</th>
+                  <th>Description</th>
+                  <th>Updated</th>
+                  <th class="actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="directAcquireProjectWebsitesTable"></tbody>
+            </table>
+          </div>
+        </section>
 
-          <section class="card">
-            <div class="page-heading-row" style="margin-bottom: 0.5rem;">
-              <h3 style="margin:0;">Keywords</h3>
-              <div class="page-heading-actions" style="justify-content: flex-start;">
-                <div class="direct-acquire-inline-control"><strong>Topics:</strong>
+        <section id="directAcquireProjectWebsitePanel" class="card hidden" style="margin-bottom: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.75rem;">
+            <h3 style="margin:0;">Project Website</h3>
+            <div class="page-heading-actions">
+              <span id="directAcquireProjectWebsiteUrl" class="meta"></span>
+            </div>
+          </div>
+
+          <div class="acquire-web-project-detail-row">
+            <div class="acquire-web-project-detail-col">
+              <h4 style="margin: 0 0 0.75rem;">Website Details</h4>
+              <form id="directAcquireWebsiteDetailsForm" class="standard-form-grid">
+                <input type="hidden" id="directAcquireWebsiteDetailsId" name="id" />
+
+                <label for="directAcquireWebsiteDetailsUrl">Website URL</label>
+                <input id="directAcquireWebsiteDetailsUrl" name="site_url" type="url" readonly />
+
+                <label for="directAcquireWebsiteDetailsTitle">Title</label>
+                <input id="directAcquireWebsiteDetailsTitle" name="title" type="text" />
+
+                <label for="directAcquireWebsiteDetailsDescription">Description</label>
+                <textarea id="directAcquireWebsiteDetailsDescription" name="notes" rows="3"></textarea>
+
+                <label for="directAcquireWebsiteDetailsIsProject">Project Website</label>
+                <label class="checkbox-row" style="justify-content: flex-start; font-weight: normal;">
+                  <input id="directAcquireWebsiteDetailsIsProject" name="is_project_website" type="checkbox" class="standard-form-checkbox" checked />
+                  Mark as project website
+                </label>
+
+                <div></div>
+                <div class="page-heading-actions" style="justify-content: flex-start;">
+                  <button id="directAcquireWebsiteDetailsSaveBtn" type="submit" class="btn btn-primary">Save Website Details</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="acquire-web-project-detail-col">
+              <details class="card acquire-web-expandable-card acquire-web-result-section">
+                <summary class="acquire-web-expandable-summary">
+                  <span>Social</span>
+                  <span class="page-heading-actions" style="padding: 0;">
+                    <button id="directAcquireSaveContactBtn" type="button" class="btn" disabled>Save To Contacts</button>
+                  </span>
+                </summary>
+                <div class="acquire-web-expandable-body">
+                  <div id="directAcquireContactEmpty" class="meta">No contact data captured yet.</div>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Label</th>
+                          <th>Value</th>
+                        </tr>
+                      </thead>
+                      <tbody id="directAcquireContactTable"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="acquire-web-results-grid acquire-web-results-grid-2col" style="margin-top: 1rem;">
+          <details class="card acquire-web-expandable-card acquire-web-result-section">
+            <summary class="acquire-web-expandable-summary">
+              <span>Keywords</span>
+              <span class="page-heading-actions" style="padding: 0; flex-wrap: wrap;">
+                <span class="direct-acquire-inline-control">
                   <details id="directAcquireKeywordTopicsDropdown" class="direct-acquire-dropdown">
                     <summary id="directAcquireKeywordTopicsSummary">Topics</summary>
                     <div id="directAcquireKeywordTopicsMenu" class="direct-acquire-dropdown-menu"></div>
                   </details>
-                </div>
-                <div class="direct-acquire-inline-control"><strong>Exclusions:</strong> <select id="directAcquireKeywordBulkReason" aria-label="Exclusions">
-                    <option value="">Exclusions</option>
+                </span>
+                <span class="direct-acquire-inline-control">
+                  <select id="directAcquireKeywordBulkReason" aria-label="Exclude Reason">
+                    <option value="">Exclude Reason</option>
                     <option value="brand">Brand</option>
                     <option value="generic">Generic</option>
                     <option value="navigational">Navigational</option>
                     <option value="boilerplate">Boilerplate</option>
                     <option value="location">Location</option>
                     <option value="legal">Legal</option>
-                  </select></div>
+                  </select>
+                </span>
+                <button id="directAcquireSaveKeywordsBtn" type="button" class="btn" disabled>Save Selected</button>
+              </span>
+            </summary>
+            <div class="acquire-web-expandable-body">
+              <div id="directAcquireKeywordEmpty" class="meta">No keywords acquired yet.</div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 44px;"><input id="directAcquireKeywordSelectAll" type="checkbox" /></th>
+                      <th>Keyword</th>
+                      <th>Score</th>
+                      <th>Topics</th>
+                      <th>Exclude Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody id="directAcquireKeywordTable"></tbody>
+                </table>
               </div>
             </div>
-            <div id="directAcquireKeywordEmpty" class="meta">No keywords harvested yet.</div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width: 44px;"><input id="directAcquireKeywordSelectAll" type="checkbox" /></th>
-                    <th>Keyword</th>
-                    <th>Score</th>
-                    <th>Topics</th>
-                    <th>Exclude Reason</th>
-                  </tr>
-                </thead>
-                <tbody id="directAcquireKeywordTable"></tbody>
-              </table>
-            </div>
-          </section>
+          </details>
 
-          <section class="card">
-            <div class="page-heading-row" style="margin-bottom: 0.5rem;">
-              <h3 style="margin:0;">Hashtags</h3>
-              <div class="page-heading-actions" style="justify-content: flex-start;">
+          <details class="card acquire-web-expandable-card acquire-web-result-section">
+            <summary class="acquire-web-expandable-summary">
+              <span>Hashtags</span>
+              <span class="page-heading-actions" style="padding: 0;">
                 <label class="checkbox-row" style="margin: 0;">
                   <input id="directAcquireHashtagSelectAll" type="checkbox" />
                   Check All
                 </label>
                 <button id="directAcquireSaveHashtagsBtn" type="button" class="btn" disabled>Save Selected</button>
+              </span>
+            </summary>
+            <div class="acquire-web-expandable-body">
+              <div id="directAcquireHashtagEmpty" class="meta">No validated hashtags yet.</div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:44px;"></th>
+                      <th>Hashtag</th>
+                      <th>Score</th>
+                      <th>Posts</th>
+                      <th>Sample Usage</th>
+                    </tr>
+                  </thead>
+                  <tbody id="directAcquireHashtagTable"></tbody>
+                </table>
               </div>
             </div>
-            <div id="directAcquireHashtagEmpty" class="meta">No validated hashtags yet.</div>
+          </details>
+        </div>
+
+        <details class="card acquire-web-expandable-card acquire-web-result-section" style="margin-top: 1rem;">
+          <summary class="acquire-web-expandable-summary">Peer Sites</summary>
+          <div class="acquire-web-expandable-body">
+            <div id="directAcquirePeerSitesMeta" class="meta">Peer sites not searched.</div>
+            <div id="directAcquirePeerSitesDiagnostics" class="meta" style="margin: 0.35rem 0 0.75rem;"></div>
+            <div id="directAcquirePeerSitesSuggestedWrap" class="hidden" style="margin: 0 0 0.75rem;">
+              <strong>Suggested Other Models:</strong>
+              <span id="directAcquirePeerSitesSuggested"></span>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th style="width:44px;"></th>
-                    <th>Hashtag</th>
-                    <th>Score</th>
-                    <th>Posts</th>
-                    <th>Sample Usage</th>
+                    <th>Model</th>
+                    <th>Domain</th>
+                    <th>Site</th>
+                    <th>Matched Keywords</th>
+                    <th>Snippet</th>
                   </tr>
                 </thead>
-                <tbody id="directAcquireHashtagTable"></tbody>
+                <tbody id="directAcquirePeerSitesTable"></tbody>
               </table>
             </div>
-          </section>
-        </div>
+          </div>
+        </details>
 
-        <section class="card" style="margin-top: 1rem;">
-          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
-            <h3 style="margin:0;">Peer Sites</h3>
-          </div>
-          <div id="directAcquirePeerSitesMeta" class="meta">Peer sites not searched.</div>
-          <div id="directAcquirePeerSitesDiagnostics" class="meta" style="margin: 0.35rem 0 0.75rem;"></div>
-          <div id="directAcquirePeerSitesSuggestedWrap" class="hidden" style="margin: 0 0 0.75rem;">
-            <strong>Suggested Other Models:</strong>
-            <span id="directAcquirePeerSitesSuggested"></span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Model</th>
-                  <th>Domain</th>
-                  <th>Site</th>
-                  <th>Matched Keywords</th>
-                  <th>Snippet</th>
-                </tr>
-              </thead>
-              <tbody id="directAcquirePeerSitesTable"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="card" style="margin-top: 1rem;">
-          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
-            <h3 style="margin:0;">Captured Images</h3>
-            <div class="page-heading-actions" style="justify-content: flex-start; flex-wrap: wrap;">
+        <details class="card acquire-web-expandable-card acquire-web-result-section" style="margin-top: 1rem;">
+          <summary class="acquire-web-expandable-summary">
+            <span>Captured Images</span>
+            <span class="page-heading-actions" style="padding: 0; flex-wrap: wrap;">
               <label class="checkbox-row" style="margin: 0;">
                 <input id="directAcquireImageSelectAll" type="checkbox" />
                 Check All
@@ -273,30 +293,132 @@
               </select>
               <button id="directAcquireApplyImageCategoryBtn" type="button" class="btn">Apply To Checked</button>
               <button id="directAcquireSaveImagesBtn" type="button" class="btn" disabled>Save Selected To Assets</button>
+            </span>
+          </summary>
+          <div class="acquire-web-expandable-body">
+            <div id="directAcquireImagesEmpty" class="meta">No images captured yet.</div>
+            <div id="directAcquireImageGallery" class="direct-acquire-image-gallery"></div>
+            <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
+              <button id="directAcquireImagesSeeMoreBtn" type="button" class="btn hidden">See More</button>
             </div>
           </div>
-          <div id="directAcquireImagesEmpty" class="meta">No images captured yet.</div>
-          <div id="directAcquireImageGallery" class="direct-acquire-image-gallery"></div>
-          <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
-            <button id="directAcquireImagesSeeMoreBtn" type="button" class="btn hidden">See More</button>
+        </details>
+
+        <details class="card acquire-web-expandable-card acquire-web-result-section" style="margin-top: 1rem;">
+          <summary class="acquire-web-expandable-summary">Website Pages</summary>
+          <div class="acquire-web-expandable-body">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>URL</th>
+                    <th>Title</th>
+                    <th>Emails</th>
+                    <th>Phones</th>
+                    <th>Snippet</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquirePagesTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+        </section>
+
+        <section id="directAcquirePeerDiscoveryPanel" class="card hidden" style="margin-top: 1rem;">
+          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
+            <h3 style="margin:0;">Discovered Peers</h3>
+            <div class="page-heading-actions">
+              <span id="directAcquirePeerDiscoveryMeta" class="meta">No peer discovery run yet.</span>
+              <button id="directAcquirePeerDiscoverySaveBtn" type="button" class="btn btn-primary" disabled>Add Selected Peers</button>
+            </div>
+          </div>
+          <div id="directAcquirePeerDiscoveryKeywords" class="meta" style="margin-bottom: 0.75rem;"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 44px;"><input id="directAcquirePeerDiscoverySelectAll" type="checkbox" aria-label="Select All" /></th>
+                  <th>Score</th>
+                  <th>Type</th>
+                  <th>Domain</th>
+                  <th>Site</th>
+                  <th>Matched Keywords</th>
+                  <th>Reasons</th>
+                </tr>
+              </thead>
+              <tbody id="directAcquirePeerDiscoveryTable"></tbody>
+            </table>
           </div>
         </section>
 
-        <h3>Website Pages</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>URL</th>
-                <th>Title</th>
-                <th>Emails</th>
-                <th>Phones</th>
-                <th>Snippet</th>
-              </tr>
-            </thead>
-            <tbody id="directAcquirePagesTable"></tbody>
-          </table>
-        </div>
+        <section id="directAcquireOtherWebsitesPanel" class="card" style="margin-top: 1rem;">
+          <div id="directAcquireOtherWebsitesSection" class="page-heading-row" style="margin-bottom: 0.5rem;">
+            <h3 style="margin:0;">Other Websites</h3>
+            <div class="page-heading-actions">
+              <span id="directAcquireOtherWebsitesCount" class="meta">0 saved</span>
+            </div>
+          </div>
+          <div id="directAcquireWebsitePeersMeta" class="meta" style="margin-bottom: 0.75rem;">Peer and model websites for this project.</div>
+          <form id="directAcquireWebsitePeerForm" class="standard-form-grid" style="margin-bottom: 1rem;">
+            <input type="hidden" id="directAcquireWebsitePeerId" name="id" />
+
+            <label for="directAcquireWebsitePeerReferenceRole">Website Type</label>
+            <select id="directAcquireWebsitePeerReferenceRole" name="reference_role">
+              <option value="peer">Peer</option>
+              <option value="model">Model</option>
+            </select>
+
+            <label for="directAcquireWebsitePeerType">Model Category</label>
+            <select id="directAcquireWebsitePeerType" name="website_model"></select>
+
+            <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
+            <input id="directAcquireWebsitePeerSourceUrl" name="source_url" type="url" />
+
+            <label for="directAcquireWebsitePeerSiteUrl">Website URL</label>
+            <input id="directAcquireWebsitePeerSiteUrl" name="site_url" type="url" required />
+
+            <label for="directAcquireWebsitePeerTitle">Site Title</label>
+            <input id="directAcquireWebsitePeerTitle" name="title" type="text" />
+
+            <label for="directAcquireWebsitePeerModel">Scope</label>
+            <input id="directAcquireWebsitePeerModel" name="site_scope_display" type="text" value="Reference website" readonly />
+
+            <label for="directAcquireWebsitePeerKeywords">Matched Keywords</label>
+            <textarea id="directAcquireWebsitePeerKeywords" name="matched_keywords" rows="2"></textarea>
+
+            <label for="directAcquireWebsitePeerSnippet">Snippet</label>
+            <textarea id="directAcquireWebsitePeerSnippet" name="snippet" rows="3"></textarea>
+
+            <label for="directAcquireWebsitePeerNotes">Notes</label>
+            <textarea id="directAcquireWebsitePeerNotes" name="notes" rows="3"></textarea>
+
+            <div></div>
+            <div class="page-heading-actions standard-form-grid-full" style="justify-content: center; margin-top: 0.75rem;">
+              <div></div>
+              <button id="directAcquireWebsitePeerSaveBtn" type="submit" class="btn btn-primary">Save Website</button>
+              <button id="directAcquireWebsitePeerCancelBtn" type="button" class="btn">Cancel</button>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Website Type</th>
+                  <th>Model Category</th>
+                  <th>Domain</th>
+                  <th>Site</th>
+                  <th>Matched Keywords</th>
+                  <th>Source Website</th>
+                  <th>Updated</th>
+                  <th class="actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="directAcquireWebsitePeersTable"></tbody>
+            </table>
+          </div>
+        </section>
+
         <h3>Direct Ingest Runs</h3>
         <div class="table-wrap">
           <table>
@@ -457,7 +579,7 @@
                   <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input id="acquireSettingsAcquirePeerSites" type="checkbox" class="standard-form-checkbox" /> Peer Sites</label>
                 </div>
                 
-                <label for="acquireSettingsMaxPages">Pages to Harvest</label>
+                <label for="acquireSettingsMaxPages">Pages to Acquire</label>
                 <select id="acquireSettingsMaxPages">
                   <option value="5">5</option>
                   <option value="10">10</option>
@@ -466,7 +588,7 @@
                   <option value="100">100</option>
                 </select>
               
-                <label for="acquireSettingsPeerSitesLimit">Peer Sites to Harvest</label>
+                <label for="acquireSettingsPeerSitesLimit">Peer Sites to Acquire</label>
                 <select id="acquireSettingsPeerSitesLimit">
                   <option value="5">5</option>
                   <option value="10">10</option>
@@ -475,7 +597,7 @@
                   <option value="100">100</option>
                 </select>
               
-                <label for="acquireSettingsImagesLimit">Images to Harvest</label>
+                <label for="acquireSettingsImagesLimit">Images to Acquire</label>
                 <select id="acquireSettingsImagesLimit">
                   <option value="5">5</option>
                   <option value="10">10</option>
@@ -505,61 +627,111 @@
       </section>
       <section id="acquireYoutubePage" class="app-page hidden">
         <div class="page-heading-row">
-        <h2>Acquire: YouTube</h2>
+          <h2>Acquire: YouTube</h2>
         </div>
-        <section class="youtube-miner-panel">
-          <form id="youtubeCommentMinerForm" class="hidden" aria-hidden="true"></form>
 
-          <section class="youtube-miner-collapsible is-open">
-            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeResearchBody" aria-expanded="true">
-              <span>Research</span>
-              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+        <div class="acquire-youtube-hero-row-pair">
+        <form id="youtubeResearchForm" class="acquire-youtube-hero-form">
+          <div class="acquire-youtube-hero-shell">
+            <div class="acquire-youtube-hero-row">
+              <label for="youtubeResearchManualPhrases">Keywords</label>
+              <input id="youtubeResearchManualPhrases" name="manual_phrases_text" type="text" class="hero-action-input acquire-youtube-hero-input" aria-label="Keywords" />
+            </div>
+            <div class="acquire-web-hero-options-row">
+              <details id="youtubeResearchAdvancedPanel" class="hanging-details acquire-web-advanced-details youtube-miner-compact-advanced-details">
+                <summary>Advanced</summary>
+                <div class="standard-form-grid acquire-youtube-advanced-grid" style="margin-top: 1rem;">
+                  <label>Seeds & Settings</label>
+                  <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" class="standard-form-checkbox" /> Use Messaging seeds (articles, tweets, hashtags)</label>
+                    <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked class="standard-form-checkbox" /> Include transcript in targeting handoff</label>
+                  </div>
+
+                  <label for="youtubeResearchMessagingTopic">Topic</label>
+                  <select id="youtubeResearchMessagingTopic" name="messaging_category">
+                    <option value="">All Topics</option>
+                  </select>
+
+                  <label for="youtubeResearchHashtagSelect">Hashtag</label>
+                  <select id="youtubeResearchHashtagSelect" name="messaging_hashtag">
+                    <option value="">All Hashtags</option>
+                  </select>
+
+                  <label for="youtubeResearchMaxPhrases">Max Phrases</label>
+                  <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
+
+                  <label for="youtubeResearchVideosPerPhrase">Videos Per Phrase</label>
+                  <input id="youtubeResearchVideosPerPhrase" name="videos_per_phrase" type="number" min="1" max="10" value="3" />
+
+                  <label for="youtubeResearchDistilledLimit">Distilled Targets</label>
+                  <input id="youtubeResearchDistilledLimit" name="distilled_target_limit" type="number" min="1" max="200" value="30" />
+
+                  <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
+                  <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
+                </div>
+              </details>
+            </div>
+            <button type="submit" id="youtubeResearchSubmitBtn" class="btn btn-primary acquire-web-acquire-btn">Acquire Websites</button>
+          </div>
+        </form>
+
+        <form id="youtubeCommentMinerForm" class="acquire-youtube-hero-form">
+          <div class="acquire-youtube-hero-shell">
+            <div class="acquire-youtube-hero-row">
+              <label for="youtubeMinerTargets">Project Website</label>
+              <input id="youtubeMinerTargets" name="targets" type="text" class="hero-action-input acquire-youtube-hero-input" aria-label="Project Website" />
+            </div>
+            <div class="acquire-web-hero-options-row">
+              <details id="youtubeMinerExtractionAdvancedPanel" class="hanging-details acquire-web-advanced-details youtube-miner-compact-advanced-details">
+                <summary>Advanced</summary>
+                <div class="acquire-youtube-advanced-extract-grid" style="margin-top: 1rem;">
+                  <button type="button" id="youtubeMinerTargetSelectorBtn" class="btn btn-primary">Select Target from Repository</button>
+                  <div class="form-row">
+                    <label for="youtubeMinerIncludePhrases">Include Phrases</label>
+                    <input id="youtubeMinerIncludePhrases" name="include_phrases_text" placeholder="wanting more, outgrowing, next level" />
+                  </div>
+                  <div class="form-row">
+                    <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
+                    <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" placeholder="first, lol, sub4sub" />
+                  </div>
+                  <div class="parameter-grid">
+                    <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
+                    <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" type="number" min="1" max="20" value="5" />
+                    <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
+                    <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
+                    <label for="youtubeMinerMinScore">Minimum Score</label>
+                    <input id="youtubeMinerMinScore" name="min_score" type="number" min="0" max="20" value="3" />
+                    <label for="youtubeMinerSortBy">Sort</label>
+                    <select id="youtubeMinerSortBy" name="sort_by">
+                      <option value="relevance" selected>relevance</option>
+                      <option value="time">time</option>
+                    </select>
+                  </div>
+                  <div class="form-row checkbox-row youtube-miner-filter-checks">
+                    <label><input id="youtubeMinerIncludeReplies" name="include_replies" type="checkbox" /> Include replies</label>
+                    <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" type="checkbox" checked /> Exclude obvious noise</label>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <button type="submit" id="youtubeCommentMinerSubmitBtn" class="btn btn-primary acquire-web-acquire-btn">Acquire Content</button>
+          </div>
+        </form>
+        </div>
+
+        <section class="youtube-miner-panel">
+          <section class="youtube-miner-collapsible">
+            <button type="button" class="btn accordion-header" data-target-id="youtubeResearchBody" aria-expanded="false" aria-controls="youtubeResearchBody">
+              <span class="accordion-title">Research</span>
+              <span class="accordion-toggle" aria-hidden="true">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
+              </span>
             </button>
             <div id="youtubeResearchBody" class="youtube-miner-collapsible-body">
               <p>Research builds a candidate list of YouTube videos securely from your topics, hashtags, and keywords. Review those candidates here to explicitly save the best ones into the Target section below for processing.</p>
-              <form id="youtubeResearchForm" class="standard-form-grid" style="margin-top: 1rem;">
-                <label>Seeds & Settings</label>
-                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                  <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input id="youtubeResearchUseMessaging" name="include_messaging" type="checkbox" class="standard-form-checkbox" /> Use Messaging seeds (articles, tweets, hashtags)</label>
-                  <label class="checkbox-row" style="text-align: left; font-weight: normal;"><input id="youtubeResearchIncludeTranscript" name="include_transcript" type="checkbox" checked class="standard-form-checkbox" /> Include transcript in targeting handoff</label>
-                </div>
-                
-                <label for="youtubeResearchMessagingTopic">Topic</label>
-                <select id="youtubeResearchMessagingTopic" name="messaging_category">
-                  <option value="">All Topics</option>
-                </select>
-                
-                <label for="youtubeResearchHashtagSelect">Hashtag</label>
-                <select id="youtubeResearchHashtagSelect" name="messaging_hashtag">
-                  <option value="">All Hashtags</option>
-                </select>
-                
-                <label for="youtubeResearchManualPhrases">Keywords</label>
-                <textarea id="youtubeResearchManualPhrases" name="manual_phrases_text" rows="5"></textarea>
-                
-                <label for="youtubeResearchMaxPhrases">Max Phrases</label>
-                <input id="youtubeResearchMaxPhrases" name="max_phrases" type="number" min="1" max="120" value="25" />
-                
-                <label for="youtubeResearchVideosPerPhrase">Videos Per Phrase</label>
-                <input id="youtubeResearchVideosPerPhrase" name="videos_per_phrase" type="number" min="1" max="10" value="3" />
-                
-                <label for="youtubeResearchDistilledLimit">Distilled Targets</label>
-                <input id="youtubeResearchDistilledLimit" name="distilled_target_limit" type="number" min="1" max="200" value="30" />
-                
-                <label for="youtubeResearchCommentsPerVideo">Comments Per Video</label>
-                <input id="youtubeResearchCommentsPerVideo" name="max_comments_per_video" type="number" min="1" max="500" value="100" />
-                
-                <div class="standard-form-grid-full">
-                  <div id="youtubeResearchSummary" class="muted" style="margin-top: 1rem; text-align: center;">
-                    <table class="youtube-miner-stats-table" style="margin: 0 auto;"><tbody><tr><td>No research run yet.</td></tr></tbody></table>
-                  </div>
-                </div>
-                
-                <div></div>
-                <div class="page-heading-actions standard-form-grid-full" style="justify-content: center; margin-top: 0.5rem;">
-                  <button type="submit" id="youtubeResearchSubmitBtn" class="btn btn-primary">Run Research</button>
-                </div>
-              </form>
+              <div id="youtubeResearchSummary" class="muted" style="margin-top: 1rem; text-align: center;">
+                <table class="youtube-miner-stats-table" style="margin: 0 auto;"><tbody><tr><td>No research run yet.</td></tr></tbody></table>
+              </div>
               <div class="youtube-research-bulk-bar" style="margin-top: 2.5rem;">
                 <label class="youtube-research-checkall">
                   <input id="youtubeResearchSelectAllVisible" type="checkbox" aria-label="Select all visible research candidates" />
@@ -591,10 +763,12 @@
             </div>
           </section>
 
-          <section class="youtube-miner-collapsible is-open">
-            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerRepositoryBody" aria-expanded="true">
-              <span>Target</span>
-              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+          <section class="youtube-miner-collapsible">
+            <button type="button" class="btn accordion-header" data-target-id="youtubeMinerRepositoryBody" aria-expanded="false" aria-controls="youtubeMinerRepositoryBody">
+              <span class="accordion-title">Target</span>
+              <span class="accordion-toggle" aria-hidden="true">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
+              </span>
             </button>
             <div id="youtubeMinerRepositoryBody" class="youtube-miner-collapsible-body">
               <div class="table-wrap">
@@ -672,56 +846,14 @@
             </div>
           </section>
 
-          <section class="youtube-miner-collapsible is-open">
-            <button type="button" class="youtube-miner-collapsible-toggle" data-target-id="youtubeMinerContentBody" aria-expanded="true">
-              <span>Extract</span>
-              <span class="youtube-miner-collapsible-arrow" aria-hidden="true"></span>
+          <section class="youtube-miner-collapsible">
+            <button type="button" class="btn accordion-header" data-target-id="youtubeMinerContentBody" aria-expanded="false" aria-controls="youtubeMinerContentBody">
+              <span class="accordion-title">Extract</span>
+              <span class="accordion-toggle" aria-hidden="true">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
+              </span>
             </button>
-              <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
-              <h3 style="margin-bottom: 1rem;">Extraction Parameters</h3>
-              <div class="youtube-miner-training-grid">
-                <div class="youtube-miner-col-left">
-                  <div class="form-row">
-                    <label for="youtubeMinerTargets">Video/Channel Targets</label>
-                    <div class="youtube-miner-target-history-row" style="margin-bottom: 0.5rem; display: flex; gap: 8px;">
-                      <button type="button" id="youtubeMinerTargetSelectorBtn" class="btn btn-primary">Select Target from Repository</button>
-                    </div>
-                    <textarea id="youtubeMinerTargets" name="targets" form="youtubeCommentMinerForm" rows="3" placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/@channelname\nUCxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-                  </div>
-                </div>
-                <div class="youtube-miner-col-right">
-                  <div class="form-row">
-                    <label for="youtubeMinerIncludePhrases">Include Phrases</label>
-                    <input id="youtubeMinerIncludePhrases" name="include_phrases_text" form="youtubeCommentMinerForm" placeholder="wanting more, outgrowing, next level" />
-                  </div>
-                  <div class="form-row">
-                    <label for="youtubeMinerExcludePhrases">Exclude Phrases</label>
-                    <input id="youtubeMinerExcludePhrases" name="exclude_phrases_text" form="youtubeCommentMinerForm" placeholder="first, lol, sub4sub" />
-                  </div>
-                  <div class="parameter-grid" style="margin-top: 1rem;">
-                    <label for="youtubeMinerVideosPerChannel">Videos Per Channel</label>
-                    <input id="youtubeMinerVideosPerChannel" name="videos_per_channel" form="youtubeCommentMinerForm" type="number" min="1" max="20" value="5" />
-                    <label for="youtubeMinerMaxCommentsPerVideo">Comments Per Video</label>
-                    <input id="youtubeMinerMaxCommentsPerVideo" name="max_comments_per_video" form="youtubeCommentMinerForm" type="number" min="1" max="500" value="100" />
-                    <label for="youtubeMinerMinScore">Minimum Score</label>
-                    <input id="youtubeMinerMinScore" name="min_score" form="youtubeCommentMinerForm" type="number" min="0" max="20" value="3" />
-                    <label for="youtubeMinerSortBy">Sort</label>
-                    <select id="youtubeMinerSortBy" name="sort_by" form="youtubeCommentMinerForm">
-                      <option value="relevance" selected>relevance</option>
-                      <option value="time">time</option>
-                    </select>
-                  </div>
-                  <div class="form-row checkbox-row youtube-miner-filter-checks">
-                    <label><input id="youtubeMinerIncludeReplies" name="include_replies" form="youtubeCommentMinerForm" type="checkbox" /> Include replies</label>
-                    <label><input id="youtubeMinerExcludeNoise" name="exclude_noise" form="youtubeCommentMinerForm" type="checkbox" checked /> Exclude obvious noise</label>
-                  </div>
-                </div>
-              </div>
-              <div style="display: flex; justify-content: flex-end; margin-top: 1rem; margin-bottom: 2rem;">
-                <button type="submit" id="youtubeCommentMinerSubmitBtn" form="youtubeCommentMinerForm" class="btn btn-primary">Acquire Content</button>
-              </div>
-              <hr style="background: var(--c-border); border: 0; height: 1px; margin-bottom: 2rem;" />
-
+            <div id="youtubeMinerContentBody" class="youtube-miner-collapsible-body">
               <div class="youtube-content-top-row">
                 <div class="youtube-content-filters-panel">
                   <div id="youtubeCommentMinerSummary" class="muted">No miner run yet.</div>
@@ -1187,65 +1319,65 @@
         <div class="page-heading-row">
           <h2>Acquire: X</h2>
           <div class="page-heading-actions">
-            <button id="xHarvestRefreshBtn" type="button" class="btn">Refresh Runs</button>
+            <button id="xAcquireRefreshBtn" type="button" class="btn">Refresh Runs</button>
           </div>
         </div>
-        <p>Harvest recent X posts by query/hashtags, optionally include replies, and store runs for later analysis.</p>
+        <p>Acquire recent X posts by query/hashtags, optionally include replies, and store runs for later analysis.</p>
 
-        <form id="xHarvestForm"  style="max-width: 980px;">
+        <form id="xAcquireForm"  style="max-width: 980px;">
           
-            <label for="xHarvestQuery">Query Keywords</label>
-            <input id="xHarvestQuery" name="query" />
+            <label for="xAcquireQuery">Query Keywords</label>
+            <input id="xAcquireQuery" name="query" />
           
           
-            <label for="xHarvestHashtags">Hashtags</label>
-            <input id="xHarvestHashtags" name="hashtags" />
+            <label for="xAcquireHashtags">Hashtags</label>
+            <input id="xAcquireHashtags" name="hashtags" />
           
           <div class="grid-form">
             
-              <label for="xHarvestLang">Language</label>
-              <input id="xHarvestLang" name="lang" />
+              <label for="xAcquireLang">Language</label>
+              <input id="xAcquireLang" name="lang" />
             
             
-              <label for="xHarvestMaxTweets">Max Posts</label>
-              <input id="xHarvestMaxTweets" name="max_tweets" type="number" min="10" max="100" value="25" />
+              <label for="xAcquireMaxTweets">Max Posts</label>
+              <input id="xAcquireMaxTweets" name="max_tweets" type="number" min="10" max="100" value="25" />
             
           </div>
           <div class="grid-form">
             
-              <label for="xHarvestStartTime">Start Time (UTC)</label>
-              <input id="xHarvestStartTime" name="start_time" type="datetime-local" />
+              <label for="xAcquireStartTime">Start Time (UTC)</label>
+              <input id="xAcquireStartTime" name="start_time" type="datetime-local" />
             
             
-              <label for="xHarvestEndTime">End Time (UTC)</label>
-              <input id="xHarvestEndTime" name="end_time" type="datetime-local" />
-            
-          </div>
-          <div class="grid-form">
-            
-              <label for="xHarvestIncludeReplies">Include Replies</label>
-              <input id="xHarvestIncludeReplies" name="include_replies" type="checkbox" checked />
-            
-            
-              <label for="xHarvestMaxRepliesPerTweet">Max Replies/Post</label>
-              <input id="xHarvestMaxRepliesPerTweet" name="max_replies_per_tweet" type="number" min="1" max="100" value="10" />
+              <label for="xAcquireEndTime">End Time (UTC)</label>
+              <input id="xAcquireEndTime" name="end_time" type="datetime-local" />
             
           </div>
           <div class="grid-form">
-            <label class="checkbox-inline" for="xHarvestExcludeRetweets">
-              <input id="xHarvestExcludeRetweets" name="exclude_retweets" type="checkbox" checked />
+            
+              <label for="xAcquireIncludeReplies">Include Replies</label>
+              <input id="xAcquireIncludeReplies" name="include_replies" type="checkbox" checked />
+            
+            
+              <label for="xAcquireMaxRepliesPerTweet">Max Replies/Post</label>
+              <input id="xAcquireMaxRepliesPerTweet" name="max_replies_per_tweet" type="number" min="1" max="100" value="10" />
+            
+          </div>
+          <div class="grid-form">
+            <label class="checkbox-inline" for="xAcquireExcludeRetweets">
+              <input id="xAcquireExcludeRetweets" name="exclude_retweets" type="checkbox" checked />
               Exclude Reposts
             </label>
-            <label class="checkbox-inline" for="xHarvestExcludeReplies">
-              <input id="xHarvestExcludeReplies" name="exclude_replies" type="checkbox" />
+            <label class="checkbox-inline" for="xAcquireExcludeReplies">
+              <input id="xAcquireExcludeReplies" name="exclude_replies" type="checkbox" />
               Exclude Replies in Primary Search
             </label>
           </div>
           <div></div>
-              <button type="submit" class="btn btn-primary">Run X Harvest</button>
+              <button type="submit" class="btn btn-primary">Run X Acquire</button>
         </form>
 
-        <h3 style="margin-top: 1rem;">X Harvest Runs</h3>
+        <h3 style="margin-top: 1rem;">X Acquire Runs</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1259,7 +1391,7 @@
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="xHarvestRunsTable"></tbody>
+            <tbody id="xAcquireRunsTable"></tbody>
           </table>
         </div>
 
@@ -1273,7 +1405,7 @@
                 <th>Value</th>
               </tr>
             </thead>
-            <tbody id="redditHarvestPostDetailsBody"></tbody>
+            <tbody id="redditAcquirePostDetailsBody"></tbody>
           </table>
         </div>
         <h4 style="margin-top: 0.8rem;">Posts + Comments</h4>
@@ -1288,20 +1420,20 @@
                 <th>Text</th>
               </tr>
             </thead>
-            <tbody id="xHarvestItemsTable"></tbody>
+            <tbody id="xAcquireItemsTable"></tbody>
           </table>
         </div>
-        <pre id="xHarvestRawPreview" class="mono-preview">{}</pre>
+        <pre id="xAcquireRawPreview" class="mono-preview">{}</pre>
       </section>
       <section id="acquireRedditPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Acquire: Reddit</h2>
           <div class="page-heading-actions">
-            <button id="redditHarvestRefreshBtn" type="button" class="btn">Refresh Runs</button>
+            <button id="redditAcquireRefreshBtn" type="button" class="btn">Refresh Runs</button>
           </div>
         </div>
         <div class="deploy-test-banner">DEPLOY TEST MARKER: REDDIT V3 (2026-03-11)</div>
-        <p>Provide a subreddit link/name or specific post link. Reddit harvest is currently routed through OpenClaw browser automation (human-in-the-loop) and stored for later analysis.</p>
+        <p>Provide a subreddit link/name or specific post link. Reddit acquire is currently routed through OpenClaw browser automation (human-in-the-loop) and stored for later analysis.</p>
 
         <div class="settings-card" style="margin-bottom: 1rem;">
           <div class="page-heading-row" style="margin-bottom: 0.75rem;">
@@ -1310,7 +1442,7 @@
               <button id="redditDiscoveryStatusBtn" type="button" class="btn">Check Reddit Connection</button>
             </div>
           </div>
-          <p style="margin-top: 0;">Find and rank candidate Reddit threads directly before moving into harvesting or reply work.</p>
+          <p style="margin-top: 0;">Find and rank candidate Reddit threads directly before moving into acquire or reply work.</p>
           <form id="redditDiscoveryForm" class="standard-form-grid" style="max-width: 980px;">
               <label for="redditDiscoveryTarget">Subreddit or URL</label>
               <input id="redditDiscoveryTarget" name="target" required placeholder="/r/example" />
@@ -1348,7 +1480,7 @@
               
               <div class="page-heading-actions" style="justify-content: flex-start; grid-column: 1 / -1;">
                 <button type="submit" class="btn btn-primary">Discover Threads</button>
-                <button type="button" id="redditDiscoveryUseTargetBtn" class="btn">Copy Target To Harvest</button>
+                <button type="button" id="redditDiscoveryUseTargetBtn" class="btn">Copy Target To Acquire</button>
               </div>
             <div id="redditDiscoveryStatus" class="youtube-comments-schedule-summary">Reddit discovery is idle.</div>
           </form>
@@ -1379,29 +1511,29 @@
 
 
 
-        <form id="redditHarvestForm"  style="max-width: 980px;">
+        <form id="redditAcquireForm"  style="max-width: 980px;">
           
-            <label for="redditHarvestTarget">Subreddit or Post URL</label>
-            <input id="redditHarvestTarget" name="target" required />
+            <label for="redditAcquireTarget">Subreddit or Post URL</label>
+            <input id="redditAcquireTarget" name="target" required />
           
           <div class="grid-form">
             
-              <label for="redditHarvestMode">Mode</label>
-              <select id="redditHarvestMode" name="mode">
+              <label for="redditAcquireMode">Mode</label>
+              <select id="redditAcquireMode" name="mode">
                 <option value="auto">Auto detect</option>
                 <option value="subreddit">Subreddit posts</option>
                 <option value="post">Single post + comments</option>
               </select>
             
             
-              <label for="redditHarvestSourceMode">Source Mode</label>
-              <select id="redditHarvestSourceMode" name="source_mode">
+              <label for="redditAcquireSourceMode">Source Mode</label>
+              <select id="redditAcquireSourceMode" name="source_mode">
                 <option value="openclaw" selected>OpenClaw Browser (human-in-the-loop)</option>
               </select>
             
             
-              <label for="redditHarvestSort">Sort (subreddit mode)</label>
-              <select id="redditHarvestSort" name="sort">
+              <label for="redditAcquireSort">Sort (subreddit mode)</label>
+              <select id="redditAcquireSort" name="sort">
                 <option value="new">new</option>
                 <option value="hot">hot</option>
                 <option value="top">top</option>
@@ -1411,42 +1543,42 @@
           </div>
           <div class="grid-form">
             
-              <label for="redditHarvestMaxPosts">Max Posts</label>
-              <input id="redditHarvestMaxPosts" name="max_posts" type="number" min="1" max="500" value="100" />
+              <label for="redditAcquireMaxPosts">Max Posts</label>
+              <input id="redditAcquireMaxPosts" name="max_posts" type="number" min="1" max="500" value="100" />
             
             
-              <label for="redditHarvestMaxComments">Max Comments (total budget)</label>
-              <input id="redditHarvestMaxComments" name="max_comments" type="number" min="1" max="5000" value="500" />
+              <label for="redditAcquireMaxComments">Max Comments (total budget)</label>
+              <input id="redditAcquireMaxComments" name="max_comments" type="number" min="1" max="5000" value="500" />
             
           </div>
           <div class="grid-form">
             
-              <label for="redditHarvestKeyword">Keyword Filter (optional)</label>
-              <input id="redditHarvestKeyword" name="keyword" />
+              <label for="redditAcquireKeyword">Keyword Filter (optional)</label>
+              <input id="redditAcquireKeyword" name="keyword" />
             
             
-              <label for="redditHarvestStartTime">Start Date (optional)</label>
-              <input id="redditHarvestStartTime" name="start_time" type="date" />
+              <label for="redditAcquireStartTime">Start Date (optional)</label>
+              <input id="redditAcquireStartTime" name="start_time" type="date" />
             
             
-              <label for="redditHarvestEndTime">End Date (optional)</label>
-              <input id="redditHarvestEndTime" name="end_time" type="date" />
+              <label for="redditAcquireEndTime">End Date (optional)</label>
+              <input id="redditAcquireEndTime" name="end_time" type="date" />
             
           </div>
-          <label class="checkbox-inline" for="redditHarvestIncludeReplies">
-            <input id="redditHarvestIncludeReplies" name="include_replies" type="checkbox" checked />
+          <label class="checkbox-inline" for="redditAcquireIncludeReplies">
+            <input id="redditAcquireIncludeReplies" name="include_replies" type="checkbox" checked />
             Include nested replies (post mode)
           </label>
           <div></div>
-              <button type="submit" class="btn btn-primary">Run Reddit Harvest</button>
+              <button type="submit" class="btn btn-primary">Run Reddit Acquire</button>
           <!-- reddit-progress-v2 -->
-          <div id="redditHarvestProgressWrap" class="asset-upload-progress" aria-live="polite">
-            <div id="redditHarvestProgressText" class="asset-upload-progress-text">Idle — ready to run Reddit harvest.</div>
-            <progress id="redditHarvestProgressBar" max="100" value="0"></progress>
+          <div id="redditAcquireProgressWrap" class="asset-upload-progress" aria-live="polite">
+            <div id="redditAcquireProgressText" class="asset-upload-progress-text">Idle — ready to run Reddit acquire.</div>
+            <progress id="redditAcquireProgressBar" max="100" value="0"></progress>
           </div>
         </form>
 
-        <h3 style="margin-top: 1rem;">Reddit Harvest Runs</h3>
+        <h3 style="margin-top: 1rem;">Reddit Acquire Runs</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1460,7 +1592,7 @@
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="redditHarvestRunsTable"></tbody>
+            <tbody id="redditAcquireRunsTable"></tbody>
           </table>
         </div>
 
@@ -1476,10 +1608,10 @@
                 <th>Text/Title</th>
               </tr>
             </thead>
-            <tbody id="redditHarvestItemsTable"></tbody>
+            <tbody id="redditAcquireItemsTable"></tbody>
           </table>
         </div>
-        <pre id="redditHarvestRawPreview" class="mono-preview">{}</pre>
+        <pre id="redditAcquireRawPreview" class="mono-preview">{}</pre>
       </section>
       <section id="acquireBlueskyPage" class="app-page hidden">
         <div class="page-heading-row">

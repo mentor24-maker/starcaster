@@ -1007,21 +1007,21 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { pageTemplate: result.data }), true;
   }
 
-  if (pathname === '/api/develop/training/harvest' && requestMethod === 'POST') {
-    // Run the extraction and harvesting scripts in the background
+  if (pathname === '/api/develop/training/acquire' && requestMethod === 'POST') {
+    // Run the extraction and acquire scripts in the background
     exec('npm run sync:dev-logs && npm run import:training-context:apply', (error, stdout, stderr) => {
       if (error) {
-        console.error(`[Training Harvest] Error: ${error.message}`);
+        console.error(`[Training Acquire] Error: ${error.message}`);
         return;
       }
       if (stderr) {
-        console.error(`[Training Harvest] Stderr: ${stderr}`);
+        console.error(`[Training Acquire] Stderr: ${stderr}`);
       }
-      console.log(`[Training Harvest] Completed:\n${stdout}`);
+      console.log(`[Training Acquire] Completed:\n${stdout}`);
     });
     
     // Return 202 Accepted immediately so the UI doesn't hang
-    return sendOk(res, 202, { message: 'Training harvest initiated in background.' }), true;
+    return sendOk(res, 202, { message: 'Training acquire initiated in background.' }), true;
   }
 
   const pollSubmitMatch = String(pathname || '').match(/^\/api\/develop\/modules\/([^/]+)\/poll-submit\/?$/);

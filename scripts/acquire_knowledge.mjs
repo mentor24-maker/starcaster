@@ -123,7 +123,7 @@ async function clearSupabaseCorpus() {
 }
 
 async function run() {
-  console.log("🧠 Core Tri-Agent Context Harvester Initiated...");
+  console.log("🧠 Core Tri-Agent Context Acquirer Initiated...");
 
   await clearSupabaseCorpus();
 
@@ -165,7 +165,7 @@ async function run() {
             category: 'Alpha_Knowledge_Base',
             content_text: chunk,
             embedding: vector, 
-            metadata: { filepath: file.replace(path.resolve(__dirname, '../'), ''), chunk_index: i, pipeline: 'harvest_knowledge.js' }
+            metadata: { filepath: file.replace(path.resolve(__dirname, '../'), ''), chunk_index: i, pipeline: 'acquire_knowledge.js' }
           });
           totalUploaded++;
           console.log(`   ✔️ Vector alignment secured -> chunk ${i+1}/${chunks.length}`);

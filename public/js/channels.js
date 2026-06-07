@@ -34,6 +34,7 @@ App.channels = (function () {
     'Bluesky',
     'Discord',
     'Facebook',
+    'Facebook Personal',
     'Instagram',
     'LinkedIn',
     'Mastodon',
@@ -62,6 +63,23 @@ App.channels = (function () {
 
   function normalizePlatformKey(value) {
     return safeText(value).toLowerCase();
+  }
+
+  function isFacebookPersonalPlatform(platformName) {
+    const key = normalizePlatformKey(platformName);
+    return key === 'facebook personal' || key === 'facebook_personal';
+  }
+
+  function syncOpenClawProfileFields(formKind) {
+    const isCreate = formKind === 'create';
+    const label = byId(isCreate ? 'channelOpenClawProfileLabel' : 'channelEditOpenClawProfileLabel');
+    const input = byId(isCreate ? 'channelOpenClawProfileInput' : 'channelEditOpenClawProfileInput');
+    const platformSelect = byId(isCreate ? 'channelPlatformInput' : 'channelEditPlatformInput');
+    if (!label || !input || !platformSelect) return;
+    const show = isFacebookPersonalPlatform(platformSelect.value);
+    label.classList.toggle('hidden', !show);
+    input.classList.toggle('hidden', !show);
+    input.required = show;
   }
 
   function platformToLogoKey(platformName) {
@@ -140,6 +158,7 @@ App.channels = (function () {
     if (filter === 'x' && (channel === 'x' || channel.includes('twitter'))) return true;
     if (filter.includes('twitter') && (channel === 'x' || channel.includes('twitter'))) return true;
     if (filter.includes('facebook') && channel.includes('facebook')) return true;
+    if (filter === 'facebook personal' && channel.includes('facebook personal')) return true;
     if (filter.includes('instagram') && channel.includes('instagram')) return true;
     if (filter.includes('youtube') && channel.includes('youtube')) return true;
     if (filter.includes('tiktok') && channel.includes('tiktok')) return true;
@@ -326,6 +345,9 @@ App.channels = (function () {
     els.channelEditForm.user_name.value = String(item.userName || '');
     els.channelEditForm.email.value = String(item.email || '');
     els.channelEditForm.password.value = '';
+    const profileInput = byId('channelEditOpenClawProfileInput');
+    if (profileInput) profileInput.value = String(item.openclawProfile || '');
+    syncOpenClawProfileFields('edit');
     App.setActivePage('editChannelPage');
   }
 
@@ -356,6 +378,7 @@ App.channels = (function () {
       email: safeText(item.email),
       channelType: item.channelType || activeFilteredChannelType || 'organic',
       contactId: item.contactId || null,
+      openclawProfile: safeText(item.openclawProfile),
       password: '',
     };
 
@@ -479,6 +502,16 @@ App.channels = (function () {
     fillPlatformSelect(byId('channelPlatformInput'));
     fillPlatformSelect(byId('channelEditPlatformInput'));
     fillPlatformFilterSelect(byId('channelsFilterPlatform'));
+    syncOpenClawProfileFields('create');
+    syncOpenClawProfileFields('edit');
+
+    ['channelPlatformInput', 'channelEditPlatformInput'].forEach((id) => {
+      const select = byId(id);
+      if (!select) return;
+      select.addEventListener('change', () => {
+        syncOpenClawProfileFields(id === 'channelPlatformInput' ? 'create' : 'edit');
+      });
+    });
 
     const platformFilter = byId('channelsFilterPlatform');
     if (platformFilter) {
@@ -510,15 +543,22 @@ App.channels = (function () {
       userName: String(formData.get('user_name') || '').trim(),
       email: String(formData.get('email') || '').trim(),
       password: String(formData.get('password') || '').trim(),
+      openclawProfile: String(formData.get('openclaw_profile') || '').trim(),
       channelType: activeFilteredChannelType || 'organic',
       contactId: formData.get('contact_id') || null,
     };
+
+    if (isFacebookPersonalPlatform(payload.channel) && !payload.openclawProfile) {
+      notify('OpenClaw Profile is required for Facebook Personal channels', true);
+      return false;
+    }
 
     try {
       await api('/api/channels', { method: 'POST', body: JSON.stringify(payload) });
       notify('Channel created');
       form.reset();
       fillPlatformSelect(byId('channelPlatformInput'));
+      syncOpenClawProfileFields('create');
       await refresh();
       App.setActivePage('channelsPage');
     } catch (err) {
@@ -539,11 +579,17 @@ App.channels = (function () {
       channel: String(formData.get('channel') || '').trim(),
       userName: String(formData.get('user_name') || '').trim(),
       email: String(formData.get('email') || '').trim(),
+      openclawProfile: String(formData.get('openclaw_profile') || '').trim(),
     };
     const cId = formData.get('contact_id');
     if (cId) payload.contactId = cId;
     const password = String(formData.get('password') || '');
     if (password.trim()) payload.password = password.trim();
+
+    if (isFacebookPersonalPlatform(payload.channel) && !payload.openclawProfile) {
+      notify('OpenClaw Profile is required for Facebook Personal channels', true);
+      return false;
+    }
 
     try {
       await api(`/api/channels/${channelId}`, {

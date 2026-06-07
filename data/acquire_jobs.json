@@ -4,7 +4,7 @@
       "id": "job_1771530552973_scmezxta",
       "stage": "COMPLETED",
       "workspace_id": "alphire-main",
-      "type": "harvest.web",
+      "type": "acquire.web",
       "url": "https://isitas.org",
       "created_at": "2026-02-19T19:49:14.091Z",
       "updated_at": "2026-02-19T19:49:38.526Z"
@@ -13,7 +13,7 @@
       "id": "job_1771394101587_s1f3v4uo",
       "stage": "COMPLETED",
       "workspace_id": "alphire-main",
-      "type": "harvest.web",
+      "type": "acquire.web",
       "url": "https://isitism.org",
       "created_at": "2026-02-18T05:55:01.750Z",
       "updated_at": "2026-02-18T06:29:34.535Z"

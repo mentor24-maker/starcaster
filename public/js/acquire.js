@@ -6,7 +6,7 @@
 window.App = window.App || {};
 App.acquire = (function () {
   const { state, els, api, notify, setPreview, prettyJson } = App;
-  let redditHarvestProgressTimer = null;
+  let redditAcquireProgressTimer = null;
   let lastRedditDiscoveryResult = null;
   let lastBlueskyDiscoveryResult = null;
   let blueskyDiscoverySelectedPostUrls = new Set();
@@ -51,11 +51,38 @@ App.acquire = (function () {
   let directAcquireImageCategoryByUrl = new Map();
   let directAcquireImagesExpanded = false;
   let directAcquireSelectedHashtags = new Set();
+  let directAcquireSelectedKeywords = new Set();
+
+  function directAcquireHashtagBodyLength(hashtag) {
+    return String(hashtag || '').trim().replace(/^#+/, '').length;
+  }
+
+  function isDirectAcquireTwoCharacterHashtag(hashtag) {
+    return directAcquireHashtagBodyLength(hashtag) === 2;
+  }
+
+  function filterDirectAcquireHashtagRows(rows) {
+    return (Array.isArray(rows) ? rows : []).filter((item) => {
+      const hashtag = String(item?.hashtag || '').trim();
+      return hashtag && !isDirectAcquireTwoCharacterHashtag(hashtag);
+    });
+  }
   let directAcquireProgressTimer = null;
   let directAcquireTopics = [];
   let directAcquireWebsitePeers = [];
   let directAcquireWebsitePeerEditingId = '';
+  let directAcquireProjectSourceUrl = '';
+  let directAcquirePeerDiscoveryResults = [];
   const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
+  const ACQUIRE_WEBSITE_ROLE_LABELS = {
+    project: 'Project Website',
+    peer: 'Peer Website',
+    model: 'Model Website',
+  };
+  const ACQUIRE_WEBSITE_TYPE_LABELS = {
+    peer: 'Peer',
+    model: 'Model',
+  };
   const SECTION_SETTINGS_LINKS = [
     { label: 'Acquire Settings', pageId: 'acquireSettingsPage' },
     { label: 'Contacts Settings', pageId: 'contactsSettingsPage' },
@@ -264,14 +291,13 @@ App.acquire = (function () {
     const nextReasons = readDirectAcquireKeywordReasons();
     const selectedEntries = [];
     tableBody.querySelectorAll('tr').forEach((row) => {
-      const checkbox = row.querySelector('input[type="checkbox"][data-keyword]');
       const select = row.querySelector('select[data-keyword-reason]');
-      if (!checkbox) return;
-      const label = String(checkbox.dataset.keyword || '').trim();
+      if (!select) return;
+      const label = String(select.dataset.keyword || '').trim();
       const normalized = normalizeDirectAcquireKeyword(label);
       if (!normalized || !label) return;
-      if (checkbox.checked) {
-        const reason = String(select && select.value || 'brand').trim() || 'brand';
+      const reason = String(select.value || '').trim();
+      if (reason) {
         nextReasons[normalized] = reason;
         selectedEntries.push(label);
       } else {
@@ -294,6 +320,532 @@ App.acquire = (function () {
     wrap.classList.toggle('hidden', !visible);
   }
 
+  function setDirectAcquireProjectWebsitePanelVisible(visible) {
+    const panel = document.getElementById('directAcquireProjectWebsitePanel');
+    if (panel) panel.classList.toggle('hidden', !visible);
+  }
+
+  function hasDirectAcquireResultsContent() {
+    const run = state.directAcquireCurrentRun;
+    if (run) return true;
+    return listProjectWebsitePeers(directAcquireWebsitePeers).length > 0
+      || listReferenceWebsitePeers(directAcquireWebsitePeers).length > 0;
+  }
+
+  function syncDirectAcquireResultsVisibility() {
+    setDirectAcquireResultsVisible(hasDirectAcquireResultsContent());
+  }
+
+  function normalizeAcquireSourceUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+      const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+      let path = parsed.pathname.replace(/\/+$/, '');
+      if (path === '/') path = '';
+      return `${parsed.protocol}//${host}${path}`.toLowerCase();
+    } catch {
+      return raw.toLowerCase().replace(/\/+$/, '');
+    }
+  }
+
+  function getWebsitePeerReferenceRole(peer) {
+    const fromPeer = String(peer?.reference_role || '').trim().toLowerCase();
+    if (fromPeer === 'peer' || fromPeer === 'model' || fromPeer === 'project') return fromPeer;
+    const fromMeta = String(peer?.metadata?.reference_role || '').trim().toLowerCase();
+    if (fromMeta === 'peer' || fromMeta === 'model' || fromMeta === 'project') return fromMeta;
+    if (String(peer?.site_type || '').trim() === 'source') return 'project';
+    return 'peer';
+  }
+
+  function listReferenceWebsitePeers(peers) {
+    return (Array.isArray(peers) ? peers : []).filter((peer) => {
+      const role = getWebsitePeerReferenceRole(peer);
+      return role === 'peer' || role === 'model';
+    });
+  }
+
+  function listProjectWebsitePeers(peers) {
+    return (Array.isArray(peers) ? peers : []).filter((peer) => getWebsitePeerReferenceRole(peer) === 'project');
+  }
+
+  function findWebsitePeerForUrl(peers, url) {
+    const normalized = normalizeAcquireSourceUrl(url);
+    if (!normalized) return null;
+    const matches = (Array.isArray(peers) ? peers : []).filter((peer) => (
+      normalizeAcquireSourceUrl(peer?.site_url || '') === normalized
+    ));
+    return matches.find((peer) => getWebsitePeerReferenceRole(peer) === 'project') || matches[0] || null;
+  }
+
+  function getAcquireTitleForUrl(run, url) {
+    const normalized = normalizeAcquireSourceUrl(url);
+    const pages = Array.isArray(run?.pages) ? run.pages : [];
+    const match = pages.find((page) => normalizeAcquireSourceUrl(page?.url) === normalized) || pages[0] || null;
+    return String(match?.title || '').trim();
+  }
+
+  function scrollAcquireWebPanelIntoView(panelId) {
+    const panel = document.getElementById(panelId);
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function getAcquireWebWebsiteRole() {
+    const select = document.getElementById('directAcquireWebsiteRoleSelect');
+    const role = String(select?.value || 'project').trim().toLowerCase();
+    return role === 'peer' || role === 'model' ? role : 'project';
+  }
+
+  async function fetchProjectWebsiteUrl() {
+    const projectFields = ['projectUrl', 'project_url', 'website', 'siteUrl', 'site_url', 'url'];
+    const projects = Array.isArray(state.projects) ? state.projects : [];
+    const active = projects.find((project) => String(project?.id || '') === String(state.currentProjectId || '')) || null;
+    const fromState = projectFields.map((key) => String(active?.[key] || '').trim()).find(Boolean) || '';
+    if (fromState) return fromState;
+    try {
+      const current = await api('/api/projects/current', { method: 'GET' });
+      const project = current?.project || current?.data?.project || null;
+      return projectFields.map((key) => String(project?.[key] || '').trim()).find(Boolean) || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function populateAcquireWebReferenceModelSelect() {
+    const select = document.getElementById('directAcquireReferenceModelSelect');
+    if (!select) return;
+    const current = String(select.value || '').trim();
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Model Category';
+    select.appendChild(placeholder);
+    WEBSITE_PEER_MODELS.forEach((label) => {
+      const option = document.createElement('option');
+      option.value = label;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+    if (current && WEBSITE_PEER_MODELS.includes(current)) select.value = current;
+    else if (WEBSITE_PEER_MODELS.includes('Industry Hubs and Publications')) select.value = 'Industry Hubs and Publications';
+    else if (WEBSITE_PEER_MODELS.length) select.value = WEBSITE_PEER_MODELS[0];
+  }
+
+  function applyAcquireWebWebsiteRoleUi() {
+    const role = getAcquireWebWebsiteRole();
+    const isProject = role === 'project';
+    const isPeer = role === 'peer';
+    const isModel = role === 'model';
+    const submitBtn = document.getElementById('directAcquireSubmitBtn');
+    const discoverBtn = document.getElementById('directAcquireDiscoverPeersBtn');
+    const addRefBtn = document.getElementById('directAcquireAddReferenceBtn');
+    const modelSelect = document.getElementById('directAcquireReferenceModelSelect');
+    const urlInput = document.getElementById('directAcquireUrlInput');
+    if (submitBtn) submitBtn.classList.toggle('hidden', !isProject);
+    if (discoverBtn) discoverBtn.classList.toggle('hidden', !isPeer);
+    if (addRefBtn) addRefBtn.classList.toggle('hidden', !isModel);
+    if (modelSelect) modelSelect.classList.toggle('hidden', !isModel);
+    if (urlInput) {
+      if (isProject || isPeer) {
+        urlInput.value = String(directAcquireProjectSourceUrl || urlInput.value || '').trim();
+        urlInput.placeholder = isPeer ? 'Project website used for peer discovery' : 'https://example.com';
+      } else {
+        urlInput.placeholder = 'https://model-site.example';
+      }
+    }
+  }
+
+  function setDirectAcquirePeerDiscoveryPanelVisible(visible) {
+    const panel = document.getElementById('directAcquirePeerDiscoveryPanel');
+    if (panel) panel.classList.toggle('hidden', !visible);
+  }
+
+  function renderDirectAcquirePeerDiscoveryResults() {
+    const tableBody = document.getElementById('directAcquirePeerDiscoveryTable');
+    const metaEl = document.getElementById('directAcquirePeerDiscoveryMeta');
+    const keywordsEl = document.getElementById('directAcquirePeerDiscoveryKeywords');
+    const saveBtn = document.getElementById('directAcquirePeerDiscoverySaveBtn');
+    const selectAll = document.getElementById('directAcquirePeerDiscoverySelectAll');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
+    setDirectAcquirePeerDiscoveryPanelVisible(results.length > 0);
+    if (!results.length) {
+      if (metaEl) metaEl.textContent = String(state.directAcquirePeerDiscoveryError || '').trim() || 'No peer discovery run yet.';
+      if (keywordsEl) keywordsEl.textContent = String(state.directAcquirePeerDiscoveryKeywords || '').trim();
+      if (saveBtn) saveBtn.disabled = true;
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+      return;
+    }
+    results.forEach((item, index) => {
+      const tr = document.createElement('tr');
+
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = item.selected !== false;
+      checkbox.addEventListener('change', () => {
+        directAcquirePeerDiscoveryResults[index].selected = checkbox.checked;
+        renderDirectAcquirePeerDiscoveryResults();
+      });
+      selectTd.appendChild(checkbox);
+      tr.appendChild(selectTd);
+
+      const scoreTd = document.createElement('td');
+      scoreTd.textContent = Number(item.similarity_score || 0).toFixed(1);
+      tr.appendChild(scoreTd);
+
+      const typeTd = document.createElement('td');
+      typeTd.textContent = String(item.suggested_reference_role || 'peer').toLowerCase() === 'model' ? 'Model' : 'Peer';
+      tr.appendChild(typeTd);
+
+      const domainTd = document.createElement('td');
+      domainTd.className = 'direct-acquire-contact-label';
+      domainTd.textContent = String(item.domain || '').trim() || '-';
+      tr.appendChild(domainTd);
+
+      const siteTd = document.createElement('td');
+      const url = String(item.url || '').trim();
+      if (url) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = String(item.title || '').trim() || url;
+        siteTd.appendChild(link);
+      } else {
+        siteTd.textContent = String(item.title || '').trim() || '-';
+      }
+      tr.appendChild(siteTd);
+
+      const keywordsTd = document.createElement('td');
+      keywordsTd.textContent = Array.isArray(item.matched_keywords) && item.matched_keywords.length
+        ? item.matched_keywords.join(', ')
+        : '-';
+      tr.appendChild(keywordsTd);
+
+      const reasonsTd = document.createElement('td');
+      reasonsTd.textContent = Array.isArray(item.reasons) && item.reasons.length
+        ? item.reasons.join('; ')
+        : '-';
+      tr.appendChild(reasonsTd);
+
+      tableBody.appendChild(tr);
+    });
+    const selectedCount = results.filter((item) => item.selected !== false).length;
+    if (metaEl) {
+      metaEl.textContent = `${results.length} candidate${results.length === 1 ? '' : 's'} ranked by similarity.`;
+    }
+    if (saveBtn) saveBtn.disabled = selectedCount === 0;
+    if (selectAll) {
+      selectAll.checked = selectedCount === results.length;
+      selectAll.indeterminate = selectedCount > 0 && selectedCount < results.length;
+    }
+  }
+
+  function startPeerDiscoveryProgress() {
+    const wrap = document.getElementById('directAcquireProgressWrap');
+    const bar = document.getElementById('directAcquireProgressBar');
+    const text = document.getElementById('directAcquireProgressText');
+    const discoverBtn = document.getElementById('directAcquireDiscoverPeersBtn');
+    if (wrap) wrap.classList.remove('hidden');
+    if (bar) bar.value = 8;
+    if (text) text.textContent = 'Discovering peers...';
+    if (discoverBtn) discoverBtn.disabled = true;
+    if (directAcquireProgressTimer) clearInterval(directAcquireProgressTimer);
+    directAcquireProgressTimer = setInterval(() => {
+      if (!bar) return;
+      const current = Number(bar.value || 0) || 0;
+      bar.value = Math.min(92, current + (current < 35 ? 5 : current < 65 ? 3 : 1.5));
+    }, 650);
+  }
+
+  function finishPeerDiscoveryProgress(ok, message) {
+    const wrap = document.getElementById('directAcquireProgressWrap');
+    const bar = document.getElementById('directAcquireProgressBar');
+    const text = document.getElementById('directAcquireProgressText');
+    const discoverBtn = document.getElementById('directAcquireDiscoverPeersBtn');
+    if (directAcquireProgressTimer) {
+      clearInterval(directAcquireProgressTimer);
+      directAcquireProgressTimer = null;
+    }
+    if (bar) bar.value = ok ? 100 : Math.max(8, Number(bar.value || 0) || 0);
+    if (text) text.textContent = String(message || (ok ? 'Peer discovery complete.' : 'Peer discovery failed.')).trim();
+    if (discoverBtn) discoverBtn.disabled = false;
+    if (wrap) {
+      setTimeout(() => wrap.classList.add('hidden'), ok ? 900 : 1800);
+    }
+  }
+
+  async function discoverAcquireWebPeers() {
+    const projectUrl = String(directAcquireProjectSourceUrl || await fetchProjectWebsiteUrl()).trim();
+    if (!projectUrl) throw new Error('Project website is required before discovering peers.');
+    const exclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
+    const maxPagesSelect = document.getElementById('directAcquireMaxPagesSelect');
+    startPeerDiscoveryProgress();
+    let searchedKeywords = [];
+    try {
+      const result = await api('/api/acquire/peer-discovery', {
+        method: 'POST',
+        body: JSON.stringify({
+          source_url: projectUrl,
+          max_pages: Number(maxPagesSelect?.value || 10) || 10,
+          body_snippet_chars: Number(document.getElementById('directAcquireSnippetInput')?.value || 600) || 600,
+          keyword_exclusions: String(exclusionsInput?.value || '').trim(),
+          keyword_count: 5,
+          results_per_keyword: 30,
+          output_count: 5,
+          light_fetch_count: 20,
+        }),
+      });
+      const payload = result?.data || result || {};
+      const discovery = payload.discovery || payload;
+      const peers = Array.isArray(discovery?.results) ? discovery.results : [];
+      const discoveryError = String(discovery?.error || '').trim();
+      const searchErrors = Array.isArray(discovery?.errors) ? discovery.errors.filter(Boolean) : [];
+      if (discoveryError && !peers.length) {
+        const detail = searchErrors.length && !discoveryError.includes('Custom Search API')
+          ? `${discoveryError} ${searchErrors[0]}`
+          : discoveryError;
+        throw new Error(detail);
+      }
+      searchedKeywords = Array.isArray(discovery?.searched_keywords) ? discovery.searched_keywords : [];
+      state.directAcquirePeerDiscoveryError = '';
+      let sourceDomain = '';
+      try {
+        sourceDomain = new URL(String(discovery?.source_url || projectUrl).trim()).hostname.replace(/^www\./, '').toLowerCase();
+      } catch (_) {
+        sourceDomain = '';
+      }
+      const existingKeys = new Set(
+        (Array.isArray(directAcquireWebsitePeers) ? directAcquireWebsitePeers : []).map((peer) => {
+          const peerSourceDomain = String(peer?.source_domain || '').trim().toLowerCase();
+          const domain = String(peer?.domain || '').trim().toLowerCase();
+          return `${peerSourceDomain}::${domain}`;
+        })
+      );
+      directAcquirePeerDiscoveryResults = peers.map((peer) => {
+        const domain = String(peer?.domain || '').trim().toLowerCase();
+        return {
+          source_url: String(discovery?.source_url || projectUrl).trim(),
+          url: String(peer?.url || '').trim(),
+          domain,
+          title: String(peer?.title || '').trim(),
+          matched_keywords: Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.slice() : [],
+          snippet: String(peer?.snippet || '').trim(),
+          website_model: String(peer?.website_model || peer?.model || '').trim() || 'Direct Competitors',
+          suggested_reference_role: String(peer?.suggested_reference_role || 'peer').trim().toLowerCase() === 'model' ? 'model' : 'peer',
+          similarity_score: Number(peer?.similarity_score || 0) || 0,
+          reasons: Array.isArray(peer?.reasons) ? peer.reasons.slice() : [],
+          selected: !existingKeys.has(`${sourceDomain}::${domain}`),
+        };
+      }).filter((peer) => peer.url && peer.domain);
+      state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
+        ? `Search phrases: ${searchedKeywords.join(', ')}`
+        : '';
+      renderDirectAcquirePeerDiscoveryResults();
+      setDirectAcquireResultsVisible(true);
+      const count = directAcquirePeerDiscoveryResults.length;
+      finishPeerDiscoveryProgress(true, count ? `Discovered ${count} peer candidate${count === 1 ? '' : 's'}.` : 'No peer candidates returned.');
+      notify(count ? `Discovered ${count} peer candidate${count === 1 ? '' : 's'}` : 'No peer candidates returned', !count);
+      if (count) scrollAcquireWebPanelIntoView('directAcquirePeerDiscoveryPanel');
+    } catch (err) {
+      directAcquirePeerDiscoveryResults = [];
+      state.directAcquirePeerDiscoveryError = String(err.message || 'Peer discovery failed.').trim();
+      state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
+        ? `Search phrases: ${searchedKeywords.join(', ')} (keyword discovery succeeded; search step failed.)`
+        : '';
+      setDirectAcquirePeerDiscoveryPanelVisible(true);
+      renderDirectAcquirePeerDiscoveryResults();
+      finishPeerDiscoveryProgress(false, state.directAcquirePeerDiscoveryError);
+      notify(state.directAcquirePeerDiscoveryError, true);
+    }
+  }
+
+  async function saveSelectedAcquireWebPeers() {
+    const selected = directAcquirePeerDiscoveryResults.filter((item) => item.selected !== false);
+    if (!selected.length) {
+      notify('Select at least one discovered peer', true);
+      return;
+    }
+    const existingKeys = new Set(
+      (Array.isArray(directAcquireWebsitePeers) ? directAcquireWebsitePeers : []).map((peer) => {
+        const sourceDomain = String(peer?.source_domain || '').trim().toLowerCase();
+        const domain = String(peer?.domain || '').trim().toLowerCase();
+        return `${sourceDomain}::${domain}`;
+      })
+    );
+    let created = 0;
+    let skipped = 0;
+    for (const peer of selected) {
+      let sourceDomain = '';
+      try {
+        sourceDomain = new URL(String(peer.source_url || '').trim()).hostname.replace(/^www\./, '').toLowerCase();
+      } catch (_) {
+        sourceDomain = '';
+      }
+      const key = `${sourceDomain}::${String(peer.domain || '').trim().toLowerCase()}`;
+      if (existingKeys.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      const referenceRole = peer.suggested_reference_role === 'model' ? 'model' : 'peer';
+      await api('/api/acquire/website-peers', {
+        method: 'POST',
+        body: JSON.stringify({
+          source_url: peer.source_url,
+          site_url: peer.url,
+          title: peer.title,
+          matched_keywords: peer.matched_keywords,
+          snippet: peer.snippet,
+          website_model: peer.website_model,
+          reference_role: referenceRole,
+          metadata: {
+            reference_role: referenceRole,
+            discovery_version: 'peer-discovery-v1',
+            similarity_score: peer.similarity_score,
+          },
+        }),
+      });
+      existingKeys.add(key);
+      created += 1;
+    }
+    await refreshDirectAcquireWebsitePeers();
+    directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.map((item) => ({
+      ...item,
+      selected: false,
+    }));
+    renderDirectAcquirePeerDiscoveryResults();
+    const parts = [];
+    if (created) parts.push(`${created} saved`);
+    if (skipped) parts.push(`${skipped} skipped`);
+    notify(parts.length ? parts.join(', ') : 'No new peers saved', !created);
+  }
+
+  async function addAcquireWebReferenceFromForm() {
+    const role = getAcquireWebWebsiteRole();
+    if (role !== 'peer' && role !== 'model') throw new Error('Select Peer Website or Model Website to add a reference.');
+    const siteUrl = String(document.getElementById('directAcquireUrlInput')?.value || '').trim();
+    if (!siteUrl) throw new Error('Website URL is required.');
+    const projectUrl = String(directAcquireProjectSourceUrl || await fetchProjectWebsiteUrl()).trim();
+    if (!projectUrl) throw new Error('Project website is required before adding references.');
+    const modelSelect = document.getElementById('directAcquireReferenceModelSelect');
+    const websiteModel = role === 'model'
+      ? String(modelSelect?.value || '').trim() || (WEBSITE_PEER_MODELS[0] || '')
+      : String(WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || '')).trim();
+    if (role === 'model' && !websiteModel) throw new Error('Select a model category.');
+    await api('/api/acquire/website-peers', {
+      method: 'POST',
+      body: JSON.stringify({
+        site_type: 'peer',
+        source_url: projectUrl,
+        site_url: siteUrl,
+        reference_role: role,
+        website_model: websiteModel,
+        metadata: { reference_role: role },
+      }),
+    });
+    await refreshDirectAcquireWebsitePeers();
+    const urlInput = document.getElementById('directAcquireUrlInput');
+    if (urlInput) urlInput.value = '';
+    notify(`${ACQUIRE_WEBSITE_ROLE_LABELS[role] || 'Reference'} added`);
+  }
+
+  async function resolveAcquireWebSourceUrl() {
+    if (getAcquireWebWebsiteRole() !== 'project') {
+      return String(directAcquireProjectSourceUrl || await fetchProjectWebsiteUrl()).trim();
+    }
+    const input = document.getElementById('directAcquireUrlInput');
+    const fromInput = String(input?.value || '').trim();
+    if (fromInput) return fromInput;
+    const projectUrl = await fetchProjectWebsiteUrl();
+    if (projectUrl && input) input.value = projectUrl;
+    return projectUrl;
+  }
+
+  async function loadLatestDirectAcquireRunForSourceUrl(sourceUrlInput, options = {}) {
+    const sourceUrl = String(sourceUrlInput || '').trim();
+    const normalized = normalizeAcquireSourceUrl(sourceUrl);
+    if (!normalized) {
+      state.directAcquireCurrentRun = null;
+      if (!options.keepResultsVisible) syncDirectAcquireResultsVisibility();
+      else renderDirectAcquirePagesTable();
+      return false;
+    }
+    const res = await api('/api/acquire/direct-runs?limit=50');
+    const runs = Array.isArray(res.runs) ? res.runs : [];
+    const match = runs.find((run) => normalizeAcquireSourceUrl(run?.source_url) === normalized);
+    if (!match?.run_id) {
+      state.directAcquireCurrentRun = null;
+      if (!options.keepResultsVisible) syncDirectAcquireResultsVisibility();
+      else renderDirectAcquirePagesTable();
+      return false;
+    }
+    await loadDirectAcquireRun(match.run_id);
+    return true;
+  }
+
+  async function openDirectAcquireProjectWebsiteEditor(peer) {
+    const url = String(peer?.site_url || peer?.source_url || '').trim();
+    if (!url) return;
+    setDirectAcquireProjectWebsitePanelVisible(true);
+    directAcquireProjectSourceUrl = url;
+    const urlInput = document.getElementById('directAcquireUrlInput');
+    if (urlInput) urlInput.value = url;
+    const urlMeta = document.getElementById('directAcquireProjectWebsiteUrl');
+    if (urlMeta) urlMeta.textContent = url;
+    fillDirectAcquireWebsiteDetailsForm(peer, url);
+    setDirectAcquireResultsVisible(true);
+    try {
+      await loadLatestDirectAcquireRunForSourceUrl(url, { keepResultsVisible: true });
+    } catch (_) {
+      state.directAcquireCurrentRun = null;
+      renderDirectAcquirePagesTable();
+    }
+    scrollAcquireWebPanelIntoView('directAcquireProjectWebsitePanel');
+  }
+
+  async function hydrateAcquireWebPage(options = {}) {
+    applyAcquireWebsiteDefaultsToForm();
+    populateAcquireWebReferenceModelSelect();
+    const roleSelect = document.getElementById('directAcquireWebsiteRoleSelect');
+    directAcquireProjectSourceUrl = await fetchProjectWebsiteUrl();
+    if (roleSelect) roleSelect.value = 'project';
+    applyAcquireWebWebsiteRoleUi();
+    const advancedPanel = document.getElementById('directAcquireAdvancedPanel');
+    const urlInput = document.getElementById('directAcquireUrlInput');
+    if (urlInput && directAcquireProjectSourceUrl) urlInput.value = directAcquireProjectSourceUrl;
+    try {
+      await refreshDirectAcquireWebsitePeers();
+    } catch (_) {}
+    const sourceUrl = String(directAcquireProjectSourceUrl || '').trim();
+    if (!sourceUrl) {
+      setDirectAcquireProjectWebsitePanelVisible(false);
+      if (!options.keepResults) syncDirectAcquireResultsVisibility();
+      return false;
+    }
+    const loaded = await loadLatestDirectAcquireRunForSourceUrl(sourceUrl);
+    setDirectAcquireProjectWebsitePanelVisible(false);
+    if (loaded) {
+      if (advancedPanel) advancedPanel.open = false;
+      if (options.scrollToResults !== false) {
+        const results = document.getElementById('directAcquireResultsWrap');
+        if (results && typeof results.scrollIntoView === 'function') {
+          window.setTimeout(() => results.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+        }
+      }
+      return true;
+    }
+    if (!options.keepResults) syncDirectAcquireResultsVisibility();
+    return false;
+  }
+
   function startDirectAcquireProgress() {
     const wrap = document.getElementById('directAcquireProgressWrap');
     const bar = document.getElementById('directAcquireProgressBar');
@@ -301,7 +853,7 @@ App.acquire = (function () {
     const submitBtn = document.getElementById('directAcquireSubmitBtn');
     if (wrap) wrap.classList.remove('hidden');
     if (bar) bar.value = 8;
-    if (text) text.textContent = 'Harvesting website...';
+    if (text) text.textContent = 'Acquiring website...';
     if (submitBtn) submitBtn.disabled = true;
     if (directAcquireProgressTimer) clearInterval(directAcquireProgressTimer);
     directAcquireProgressTimer = setInterval(() => {
@@ -321,7 +873,7 @@ App.acquire = (function () {
       directAcquireProgressTimer = null;
     }
     if (bar) bar.value = ok ? 100 : Math.max(8, Number(bar.value || 0) || 0);
-    if (text) text.textContent = String(message || (ok ? 'Harvest complete.' : 'Harvest failed.')).trim();
+    if (text) text.textContent = String(message || (ok ? 'Acquire complete.' : 'Acquire failed.')).trim();
     if (submitBtn) submitBtn.disabled = false;
     if (wrap) {
       setTimeout(() => wrap.classList.add('hidden'), ok ? 900 : 1800);
@@ -982,7 +1534,7 @@ App.acquire = (function () {
   // State helpers
   // -------------------------------------------------------------------------
 
-  function upsertHarvestJobState(job) {
+  function upsertAcquireJobState(job) {
     if (!job || !job.id) return;
     const idx = state.acquireJobs.findIndex((j) => String(j.id) === String(job.id));
     if (idx >= 0) {
@@ -993,7 +1545,7 @@ App.acquire = (function () {
     state.acquireJobs.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
   }
 
-  function deriveHarvestJobFromResponse(built, response) {
+  function deriveAcquireJobFromResponse(built, response) {
     const result = response?.result || {};
     const id = result?.job?.id || result?.job_id || built?.request?.job_id;
     if (!id) return null;
@@ -1014,7 +1566,7 @@ App.acquire = (function () {
   // Render
   // -------------------------------------------------------------------------
 
-  function renderHarvestJobsTable() {
+  function renderAcquireJobsTable() {
     if (!els.acquireJobsTable) return;
     els.acquireJobsTable.innerHTML = '';
 
@@ -1075,17 +1627,17 @@ App.acquire = (function () {
         notify(`Loaded ${job.id}`);
       }, !isBusy));
 
-      actionsTd.appendChild(mkBtn('Run', () => runHarvestRowSequence(job), !isBusy && isActionAllowed(stageValue, 'run')));
-      actionsTd.appendChild(mkBtn('Status',  () => runHarvestRowAction('job_status',  job), !isBusy));
-      actionsTd.appendChild(mkBtn('Preview', () => runHarvestRowAction('preview_job', job), !isBusy && isActionAllowed(stageValue, 'preview_job')));
-      actionsTd.appendChild(mkBtn('Approve', () => runHarvestRowAction('approve_job', job), !isBusy && isActionAllowed(stageValue, 'approve_job')));
-      actionsTd.appendChild(mkBtn('Execute', () => runHarvestRowAction('execute_job', job), !isBusy && isActionAllowed(stageValue, 'execute_job')));
+      actionsTd.appendChild(mkBtn('Run', () => runAcquireRowSequence(job), !isBusy && isActionAllowed(stageValue, 'run')));
+      actionsTd.appendChild(mkBtn('Status',  () => runAcquireRowAction('job_status',  job), !isBusy));
+      actionsTd.appendChild(mkBtn('Preview', () => runAcquireRowAction('preview_job', job), !isBusy && isActionAllowed(stageValue, 'preview_job')));
+      actionsTd.appendChild(mkBtn('Approve', () => runAcquireRowAction('approve_job', job), !isBusy && isActionAllowed(stageValue, 'approve_job')));
+      actionsTd.appendChild(mkBtn('Execute', () => runAcquireRowAction('execute_job', job), !isBusy && isActionAllowed(stageValue, 'execute_job')));
       actionsTd.appendChild(mkBtn('Delete', async () => {
         if (!confirm(`Delete ${job.id} from jobs list?`)) return;
         try {
           await api(`/api/acquire/jobs/${encodeURIComponent(job.id)}`, { method: 'DELETE' });
           state.acquireJobs = state.acquireJobs.filter((j) => String(j.id) !== String(job.id));
-          renderHarvestJobsTable();
+          renderAcquireJobsTable();
           notify(`Deleted ${job.id}`);
         } catch (err) { notify(err.message, true); }
       }, !isBusy));
@@ -1095,7 +1647,7 @@ App.acquire = (function () {
     });
   }
 
-  function renderDirectHarvestRunsTable() {
+  function renderDirectAcquireRunsTable() {
     if (!els.directAcquireRunsTable) return;
     els.directAcquireRunsTable.innerHTML = '';
     if (!state.directAcquireRuns.length) {
@@ -1106,14 +1658,14 @@ App.acquire = (function () {
     state.directAcquireRuns.forEach((run) => {
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
-      tr.addEventListener('click', () => loadDirectHarvestRun(run.run_id).catch((e) => notify(e.message, true)));
+      tr.addEventListener('click', () => loadDirectAcquireRun(run.run_id).catch((e) => notify(e.message, true)));
       [run.run_id||'-', run.source_url||'-', String(run.pages_succeeded??'-'), String(run.pages_failed??'-'), run.finished_at||'-']
         .forEach((text) => { const td = document.createElement('td'); td.textContent = text; tr.appendChild(td); });
       els.directAcquireRunsTable.appendChild(tr);
     });
   }
 
-  function renderDirectHarvestPagesTable() {
+  function renderDirectAcquirePagesTable() {
     if (!els.directAcquirePagesTable) return;
     els.directAcquirePagesTable.innerHTML = '';
     const run = state.directAcquireCurrentRun;
@@ -1138,12 +1690,15 @@ App.acquire = (function () {
       els.directAcquireErrorsPreview.textContent = errors.length ? prettyJson({ errors }) : '{}';
       els.directAcquireErrorsPreview.classList.toggle('hidden', !errors.length);
     }
-    setDirectAcquireResultsVisible(Boolean(run));
+    setDirectAcquireResultsVisible(hasDirectAcquireResultsContent());
+    renderDirectAcquireWebsiteDetails();
+    renderDirectAcquireProjectWebsitesTable();
     renderDirectAcquireContactTable();
     renderDirectAcquireKeywordTable();
     renderDirectAcquireHashtagTable();
     renderDirectAcquirePeerSitesTable();
     renderDirectAcquireImageGallery();
+    renderDirectAcquireWebsitePeersTable();
   }
 
   function renderDirectAcquireContactTable() {
@@ -1192,39 +1747,41 @@ App.acquire = (function () {
     tableBody.innerHTML = '';
     const run = state.directAcquireCurrentRun;
     const labels = Array.isArray(run?.keyword_labels) ? run.keyword_labels : [];
-    const exclusionSet = new Set(
-      splitDirectAcquireKeywordExclusions(document.getElementById('directAcquireKeywordExclusionsInput')?.value)
-        .map((value) => normalizeDirectAcquireKeyword(value))
-        .filter(Boolean)
-    );
     const reasonMap = readDirectAcquireKeywordReasons();
     const topicMap = readDirectAcquireKeywordTopics();
+    const validKeywords = new Set(
+      labels.map(([keyword]) => String(keyword || '').trim()).filter(Boolean)
+    );
+    directAcquireSelectedKeywords = new Set(
+      Array.from(directAcquireSelectedKeywords).filter((keyword) => validKeywords.has(keyword))
+    );
     if (!labels.length) {
       if (emptyEl) emptyEl.classList.remove('hidden');
       if (selectAll) {
         selectAll.checked = false;
         selectAll.indeterminate = false;
       }
+      syncDirectAcquireSaveKeywordsBtn();
       return;
     }
     if (emptyEl) emptyEl.classList.add('hidden');
     labels.forEach(([keyword, score]) => {
       const tr = document.createElement('tr');
       const normalized = normalizeDirectAcquireKeyword(keyword);
-      const selected = exclusionSet.has(normalized);
+      const keywordLabel = String(keyword || '').trim();
+      const isExcluded = Boolean(String(reasonMap[normalized] || '').trim());
       const assignedTopics = Array.isArray(topicMap[normalized]) ? topicMap[normalized].filter(Boolean) : [];
+      if (isExcluded) tr.classList.add('direct-acquire-keyword-excluded');
       const selectTd = document.createElement('td');
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
-      checkbox.checked = selected;
-      checkbox.dataset.keyword = String(keyword || '').trim();
+      checkbox.checked = directAcquireSelectedKeywords.has(keywordLabel);
+      checkbox.dataset.keyword = keywordLabel;
       checkbox.addEventListener('change', () => {
-        if (checkbox.checked) {
-          const reasonSelect = tr.querySelector('select[data-keyword-reason]');
-          if (reasonSelect && !String(reasonSelect.value || '').trim()) reasonSelect.value = 'brand';
-        }
-        syncDirectAcquireKeywordExclusionsFromTable();
-        renderDirectAcquireKeywordTable();
+        if (checkbox.checked) directAcquireSelectedKeywords.add(keywordLabel);
+        else directAcquireSelectedKeywords.delete(keywordLabel);
+        syncDirectAcquireSaveKeywordsBtn();
+        updateDirectAcquireKeywordSelectAllState();
       });
       selectTd.appendChild(checkbox);
       tr.appendChild(selectTd);
@@ -1244,18 +1801,12 @@ App.acquire = (function () {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = label;
-        if (String(value) === String(reasonMap[normalized] || (selected ? 'brand' : ''))) {
+        if (String(value) === String(reasonMap[normalized] || '')) {
           option.selected = true;
         }
         reasonSelect.appendChild(option);
       });
       reasonSelect.addEventListener('change', () => {
-        if (String(reasonSelect.value || '').trim()) {
-          checkbox.checked = true;
-        }
-        if (!String(reasonSelect.value || '').trim()) {
-          checkbox.checked = false;
-        }
         syncDirectAcquireKeywordExclusionsFromTable();
         renderDirectAcquireKeywordTable();
       });
@@ -1266,12 +1817,8 @@ App.acquire = (function () {
       tr.appendChild(reasonTd);
       tableBody.appendChild(tr);
     });
-    if (selectAll) {
-      const checkboxes = Array.from(tableBody.querySelectorAll('input[type="checkbox"][data-keyword]'));
-      const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
-      selectAll.checked = !!checkboxes.length && checkedCount === checkboxes.length;
-      selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
-    }
+    updateDirectAcquireKeywordSelectAllState();
+    syncDirectAcquireSaveKeywordsBtn();
   }
 
   function renderDirectAcquireHashtagTable() {
@@ -1281,9 +1828,7 @@ App.acquire = (function () {
     const saveBtn = document.getElementById('directAcquireSaveHashtagsBtn');
     if (!tableBody) return;
     tableBody.innerHTML = '';
-    const hashtags = Array.isArray(state.directAcquireCurrentRun?.hashtag_summary?.hashtags)
-      ? state.directAcquireCurrentRun.hashtag_summary.hashtags
-      : [];
+    const hashtags = filterDirectAcquireHashtagRows(state.directAcquireCurrentRun?.hashtag_summary?.hashtags);
     const valid = new Set(hashtags.map((item) => String(item?.hashtag || '').trim()).filter(Boolean));
     directAcquireSelectedHashtags = new Set(Array.from(directAcquireSelectedHashtags).filter((tag) => valid.has(tag)));
     if (!hashtags.length) {
@@ -1434,21 +1979,27 @@ App.acquire = (function () {
     });
   }
 
-  function resetDirectAcquireWebsitePeerForm() {
+  function resetDirectAcquireWebsitePeerForm(referenceRole) {
     directAcquireWebsitePeerEditingId = '';
     const form = document.getElementById('directAcquireWebsitePeerForm');
     if (!form) return;
     form.reset();
     const idInput = document.getElementById('directAcquireWebsitePeerId');
     if (idInput) idInput.value = '';
+    const role = referenceRole === 'model' ? 'model' : 'peer';
+    const roleInput = document.getElementById('directAcquireWebsitePeerReferenceRole');
+    if (roleInput) roleInput.value = role;
     const typeInput = document.getElementById('directAcquireWebsitePeerType');
-    if (typeInput) typeInput.value = WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || '');
-    const sourceUrlInput = document.getElementById('directAcquireWebsitePeerSourceUrl');
-    if (sourceUrlInput && state.directAcquireCurrentRun?.source_url) {
-      sourceUrlInput.value = String(state.directAcquireCurrentRun.source_url || '').trim();
+    if (typeInput) {
+      typeInput.value = role === 'model'
+        ? (WEBSITE_PEER_MODELS.includes('Industry Hubs and Publications') ? 'Industry Hubs and Publications' : (WEBSITE_PEER_MODELS[0] || ''))
+        : (WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || ''));
     }
+    const sourceUrlInput = document.getElementById('directAcquireWebsitePeerSourceUrl');
+    const projectUrl = String(directAcquireProjectSourceUrl || state.directAcquireCurrentRun?.source_url || '').trim();
+    if (sourceUrlInput && projectUrl) sourceUrlInput.value = projectUrl;
     const scopeInput = document.getElementById('directAcquireWebsitePeerModel');
-    if (scopeInput) scopeInput.value = 'Peer / Source is inferred automatically';
+    if (scopeInput) scopeInput.value = role === 'model' ? 'Model' : 'Peer';
   }
 
   function populateWebsitePeerModelSelect(selectEl) {
@@ -1482,6 +2033,7 @@ App.acquire = (function () {
   function fillDirectAcquireWebsitePeerForm(peer) {
     directAcquireWebsitePeerEditingId = String(peer?.id || '').trim();
     const idInput = document.getElementById('directAcquireWebsitePeerId');
+    const roleInput = document.getElementById('directAcquireWebsitePeerReferenceRole');
     const typeInput = document.getElementById('directAcquireWebsitePeerType');
     const sourceUrlInput = document.getElementById('directAcquireWebsitePeerSourceUrl');
     const siteUrlInput = document.getElementById('directAcquireWebsitePeerSiteUrl');
@@ -1491,41 +2043,154 @@ App.acquire = (function () {
     const snippetInput = document.getElementById('directAcquireWebsitePeerSnippet');
     const notesInput = document.getElementById('directAcquireWebsitePeerNotes');
     if (idInput) idInput.value = directAcquireWebsitePeerEditingId;
+    const referenceRole = getWebsitePeerReferenceRole(peer);
+    if (roleInput) roleInput.value = referenceRole === 'model' ? 'model' : 'peer';
     if (typeInput) typeInput.value = String(peer?.website_model || '').trim() || (WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || ''));
     if (sourceUrlInput) sourceUrlInput.value = String(peer?.source_url || '').trim();
     if (siteUrlInput) siteUrlInput.value = String(peer?.site_url || '').trim();
     if (titleInput) titleInput.value = String(peer?.title || '').trim();
-    if (modelInput) modelInput.value = String(peer?.site_type || '').trim() === 'source' ? 'Source Website' : 'Peer Website';
+    if (modelInput) {
+      modelInput.value = referenceRole === 'model'
+        ? ACQUIRE_WEBSITE_TYPE_LABELS.model
+        : ACQUIRE_WEBSITE_TYPE_LABELS.peer;
+    }
     if (keywordsInput) keywordsInput.value = Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.join(', ') : '';
     if (snippetInput) snippetInput.value = String(peer?.snippet || '').trim();
     if (notesInput) notesInput.value = String(peer?.notes || '').trim();
   }
 
-  function renderDirectAcquireWebsitePeersTable() {
-    const tableBody = document.getElementById('directAcquireWebsitePeersTable');
-    const metaEl = document.getElementById('directAcquireWebsitePeersMeta');
-    const countEl = document.getElementById('directAcquireWebsitePeersCount');
+  function fillDirectAcquireWebsiteDetailsForm(peer, sourceUrl) {
+    const idInput = document.getElementById('directAcquireWebsiteDetailsId');
+    const urlInput = document.getElementById('directAcquireWebsiteDetailsUrl');
+    const titleInput = document.getElementById('directAcquireWebsiteDetailsTitle');
+    const descriptionInput = document.getElementById('directAcquireWebsiteDetailsDescription');
+    const isProjectInput = document.getElementById('directAcquireWebsiteDetailsIsProject');
+    const run = state.directAcquireCurrentRun;
+    const url = String(sourceUrl || run?.source_url || directAcquireProjectSourceUrl || '').trim();
+    const referenceRole = peer ? getWebsitePeerReferenceRole(peer) : 'project';
+    if (idInput) idInput.value = String(peer?.id || '').trim();
+    if (urlInput) urlInput.value = url;
+    if (titleInput) {
+      titleInput.value = String(peer?.title || '').trim() || getAcquireTitleForUrl(run, url);
+    }
+    if (descriptionInput) descriptionInput.value = String(peer?.notes || '').trim();
+    if (isProjectInput) isProjectInput.checked = referenceRole === 'project';
+  }
+
+  function renderDirectAcquireWebsiteDetails() {
+    const urlMeta = document.getElementById('directAcquireProjectWebsiteUrl');
+    const run = state.directAcquireCurrentRun;
+    const sourceUrl = String(run?.source_url || directAcquireProjectSourceUrl || '').trim();
+    if (urlMeta) urlMeta.textContent = sourceUrl || '';
+    const peer = findWebsitePeerForUrl(directAcquireWebsitePeers, sourceUrl);
+    fillDirectAcquireWebsiteDetailsForm(peer, sourceUrl);
+  }
+
+  function renderDirectAcquireProjectWebsitesTable() {
+    const tableBody = document.getElementById('directAcquireProjectWebsitesTable');
+    const metaEl = document.getElementById('directAcquireProjectWebsitesMeta');
+    const countEl = document.getElementById('directAcquireProjectWebsitesCount');
     if (!tableBody) return;
     tableBody.innerHTML = '';
-    const peers = Array.isArray(directAcquireWebsitePeers) ? directAcquireWebsitePeers : [];
-    state.directAcquireWebsitePeers = peers.slice();
+    const peers = listProjectWebsitePeers(directAcquireWebsitePeers);
     if (countEl) countEl.textContent = `${peers.length} saved`;
     if (!peers.length) {
-      if (metaEl) metaEl.textContent = 'No website peers saved yet.';
+      if (metaEl) metaEl.textContent = 'No project websites saved yet.';
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 8;
-      td.textContent = 'No website peers saved yet.';
+      td.colSpan = 6;
+      td.textContent = 'No project websites saved yet.';
       tr.appendChild(td);
       tableBody.appendChild(tr);
       return;
     }
-    if (metaEl) metaEl.textContent = `${peers.length} website record${peers.length === 1 ? '' : 's'} available for this project.`;
+    if (metaEl) metaEl.textContent = `${peers.length} project website${peers.length === 1 ? '' : 's'} for this project.`;
     peers.forEach((peer) => {
       const tr = document.createElement('tr');
 
+      const domainTd = document.createElement('td');
+      domainTd.className = 'direct-acquire-contact-label';
+      domainTd.textContent = String(peer?.domain || '').trim() || '-';
+      tr.appendChild(domainTd);
+
+      const siteTd = document.createElement('td');
+      if (String(peer?.site_url || '').trim()) {
+        const link = document.createElement('a');
+        link.href = String(peer.site_url).trim();
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = String(peer?.site_url || '').trim();
+        siteTd.appendChild(link);
+      } else {
+        siteTd.textContent = '-';
+      }
+      tr.appendChild(siteTd);
+
+      const titleTd = document.createElement('td');
+      titleTd.textContent = String(peer?.title || '').trim() || '-';
+      tr.appendChild(titleTd);
+
+      const descriptionTd = document.createElement('td');
+      descriptionTd.textContent = String(peer?.notes || '').trim() || '-';
+      tr.appendChild(descriptionTd);
+
+      const updatedTd = document.createElement('td');
+      updatedTd.textContent = String(peer?.updated_at || peer?.last_acquired_at || '').trim() || '-';
+      tr.appendChild(updatedTd);
+
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'actions-col';
+      const editBtn = App.makeIconButton('edit', 'Edit', () => {
+        openDirectAcquireProjectWebsiteEditor(peer).catch((err) => notify(err.message || 'Could not open project website', true));
+      });
+      const deleteBtn = App.makeIconButton('trash', 'Delete', async () => {
+        if (!confirm(`Delete ${String(peer?.domain || peer?.site_url || 'this website').trim()}?`)) return;
+        try {
+          await api(`/api/acquire/website-peers/${encodeURIComponent(peer.id)}`, { method: 'DELETE' });
+          directAcquireWebsitePeers = directAcquireWebsitePeers.filter((item) => String(item?.id || '') !== String(peer.id));
+          const editingId = String(document.getElementById('directAcquireWebsiteDetailsId')?.value || '').trim();
+          if (editingId && editingId === String(peer.id)) setDirectAcquireProjectWebsitePanelVisible(false);
+          renderDirectAcquireWebsiteDetails();
+          renderDirectAcquireProjectWebsitesTable();
+          renderDirectAcquireWebsitePeersTable();
+          syncDirectAcquireResultsVisibility();
+          notify('Project website deleted');
+        } catch (err) {
+          notify(err.message || 'Could not delete project website', true);
+        }
+      }, { danger: true });
+      App.finishTableActionsCell(actionsTd, editBtn, deleteBtn);
+      tr.appendChild(actionsTd);
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function renderDirectAcquireWebsitePeersTable() {
+    const tableBody = document.getElementById('directAcquireWebsitePeersTable');
+    const metaEl = document.getElementById('directAcquireWebsitePeersMeta');
+    const countEl = document.getElementById('directAcquireOtherWebsitesCount');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const peers = listReferenceWebsitePeers(directAcquireWebsitePeers);
+    state.directAcquireWebsitePeers = Array.isArray(directAcquireWebsitePeers) ? directAcquireWebsitePeers.slice() : [];
+    if (countEl) countEl.textContent = `${peers.length} saved`;
+    if (!peers.length) {
+      if (metaEl) metaEl.textContent = 'No peer or model websites saved yet.';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 8;
+      td.textContent = 'No other websites saved yet.';
+      tr.appendChild(td);
+      tableBody.appendChild(tr);
+      return;
+    }
+    if (metaEl) metaEl.textContent = `${peers.length} other website${peers.length === 1 ? '' : 's'} for this project.`;
+    peers.forEach((peer) => {
+      const tr = document.createElement('tr');
+      const referenceRole = getWebsitePeerReferenceRole(peer);
+
       const typeTd = document.createElement('td');
-      typeTd.textContent = String(peer?.site_type || 'peer').trim() === 'source' ? 'Source' : 'Peer';
+      typeTd.textContent = ACQUIRE_WEBSITE_TYPE_LABELS[referenceRole] || 'Peer';
       tr.appendChild(typeTd);
 
       const modelTd = document.createElement('td');
@@ -1561,7 +2226,7 @@ App.acquire = (function () {
       tr.appendChild(sourceTd);
 
       const updatedTd = document.createElement('td');
-      updatedTd.textContent = String(peer?.updated_at || peer?.last_harvested_at || '').trim() || '-';
+      updatedTd.textContent = String(peer?.updated_at || peer?.last_acquired_at || '').trim() || '-';
       tr.appendChild(updatedTd);
 
       const actionsTd = document.createElement('td');
@@ -1574,8 +2239,7 @@ App.acquire = (function () {
 
       const editBtn = App.makeIconButton('edit', 'Edit', () => {
         fillDirectAcquireWebsitePeerForm(peer);
-        const panel = document.getElementById('directAcquireWebsitePeersPanel');
-        if (panel) panel.open = true;
+        scrollAcquireWebPanelIntoView('directAcquireOtherWebsitesSection');
       });
       actionsTd.appendChild(editBtn);
 
@@ -1584,6 +2248,8 @@ App.acquire = (function () {
         try {
           await api(`/api/acquire/website-peers/${encodeURIComponent(peer.id)}`, { method: 'DELETE' });
           directAcquireWebsitePeers = directAcquireWebsitePeers.filter((item) => String(item?.id || '') !== String(peer.id));
+          renderDirectAcquireWebsiteDetails();
+          renderDirectAcquireProjectWebsitesTable();
           renderDirectAcquireWebsitePeersTable();
           if (String(directAcquireWebsitePeerEditingId || '') === String(peer.id)) resetDirectAcquireWebsitePeerForm();
           notify('Website peer deleted');
@@ -1608,7 +2274,12 @@ App.acquire = (function () {
           ? res
           : [];
     state.directAcquireWebsitePeers = directAcquireWebsitePeers.slice();
+    renderDirectAcquireProjectWebsitesTable();
     renderDirectAcquireWebsitePeersTable();
+    if (!document.getElementById('directAcquireProjectWebsitePanel')?.classList.contains('hidden')) {
+      renderDirectAcquireWebsiteDetails();
+    }
+    syncDirectAcquireResultsVisibility();
   }
 
   async function saveDirectAcquireSelectedHashtags() {
@@ -1619,6 +2290,68 @@ App.acquire = (function () {
       body: JSON.stringify({ hashtag }),
     })));
     notify(`Saved ${hashtags.length} hashtag${hashtags.length === 1 ? '' : 's'}`);
+  }
+
+  function syncDirectAcquireSaveKeywordsBtn() {
+    const saveBtn = document.getElementById('directAcquireSaveKeywordsBtn');
+    if (!saveBtn) return;
+    saveBtn.disabled = directAcquireSelectedKeywords.size === 0;
+  }
+
+  function updateDirectAcquireKeywordSelectAllState() {
+    const selectAll = document.getElementById('directAcquireKeywordSelectAll');
+    const tableBody = document.getElementById('directAcquireKeywordTable');
+    if (!selectAll || !tableBody) return;
+    const checkboxes = Array.from(tableBody.querySelectorAll('input[type="checkbox"][data-keyword]'));
+    const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+    selectAll.checked = !!checkboxes.length && checkedCount === checkboxes.length;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+  }
+
+  function applyBulkKeywordExclusion(reason) {
+    const normalizedReason = String(reason || '').trim();
+    if (!normalizedReason) return 0;
+    const selected = Array.from(directAcquireSelectedKeywords).filter(Boolean);
+    if (!selected.length) return 0;
+    const tableBody = document.getElementById('directAcquireKeywordTable');
+    selected.forEach((keyword) => {
+      const row = tableBody
+        ? Array.from(tableBody.querySelectorAll('select[data-keyword-reason]')).find(
+            (select) => String(select.dataset.keyword || '').trim() === keyword
+          )?.closest('tr')
+        : null;
+      const reasonSelect = row ? row.querySelector('select[data-keyword-reason]') : null;
+      if (reasonSelect) reasonSelect.value = normalizedReason;
+    });
+    syncDirectAcquireKeywordExclusionsFromTable();
+    renderDirectAcquireKeywordTable();
+    return selected.length;
+  }
+
+  async function saveDirectAcquireSelectedKeywords() {
+    const labels = Array.from(directAcquireSelectedKeywords).map((value) => String(value || '').trim()).filter(Boolean);
+    if (!labels.length) throw new Error('No keywords selected.');
+    const topicMap = readDirectAcquireKeywordTopics();
+    const topicsByKeyword = [];
+    labels.forEach((keyword) => {
+      const topics = Array.isArray(topicMap[normalizeDirectAcquireKeyword(keyword)])
+        ? topicMap[normalizeDirectAcquireKeyword(keyword)].filter(Boolean)
+        : [];
+      if (!topics.length) return;
+      topicsByKeyword.push({ keyword, topics });
+    });
+    if (!topicsByKeyword.length) {
+      throw new Error('Assign at least one topic to the selected keywords before saving.');
+    }
+    let createdCount = 0;
+    for (const entry of topicsByKeyword) {
+      createdCount += await saveSelectedKeywordsAsContent([entry.keyword], entry.topics);
+    }
+    const noun = topicsByKeyword.length === 1 ? 'keyword' : 'keywords';
+    const createdText = createdCount
+      ? ` and added ${createdCount} keyword content record${createdCount === 1 ? '' : 's'}`
+      : '';
+    notify(`Saved ${topicsByKeyword.length} ${noun}${createdText}`);
   }
 
   function buildContactPayloadFromDirectRun(run) {
@@ -1702,7 +2435,7 @@ App.acquire = (function () {
     return date.toISOString();
   }
 
-  function estimateRedditHarvestSeconds(payload) {
+  function estimateRedditAcquireSeconds(payload) {
     const mode = String(payload?.mode || 'auto');
     const maxPosts = Number(payload?.max_posts || 0);
     const maxComments = Number(payload?.max_comments || 0);
@@ -1718,54 +2451,54 @@ App.acquire = (function () {
     return Math.max(30, Math.min(900, estimate));
   }
 
-  function setRedditHarvestProgress(percent, text) {
-    const wrap = document.getElementById('redditHarvestProgressWrap');
-    const bar = document.getElementById('redditHarvestProgressBar');
-    const label = document.getElementById('redditHarvestProgressText');
+  function setRedditAcquireProgress(percent, text) {
+    const wrap = document.getElementById('redditAcquireProgressWrap');
+    const bar = document.getElementById('redditAcquireProgressBar');
+    const label = document.getElementById('redditAcquireProgressText');
     if (!wrap || !bar || !label) return;
     wrap.classList.remove('hidden');
     bar.value = Math.max(0, Math.min(100, Number(percent) || 0));
     label.textContent = String(text || '').trim() || 'Running…';
   }
 
-  function clearRedditHarvestProgress() {
-    if (redditHarvestProgressTimer) {
-      clearInterval(redditHarvestProgressTimer);
-      redditHarvestProgressTimer = null;
+  function clearRedditAcquireProgress() {
+    if (redditAcquireProgressTimer) {
+      clearInterval(redditAcquireProgressTimer);
+      redditAcquireProgressTimer = null;
     }
   }
 
-  function beginRedditHarvestProgress(payload) {
-    clearRedditHarvestProgress();
+  function beginRedditAcquireProgress(payload) {
+    clearRedditAcquireProgress();
     const startedAt = Date.now();
-    const estimateSeconds = estimateRedditHarvestSeconds(payload);
-    setRedditHarvestProgress(4, 'Queued request (phase 1 of 3)…');
-    setRedditHarvestProgress(12, `Running OpenClaw harvest (phase 2 of 3)… ~${estimateSeconds}s remaining (estimated)`);
-    redditHarvestProgressTimer = setInterval(() => {
+    const estimateSeconds = estimateRedditAcquireSeconds(payload);
+    setRedditAcquireProgress(4, 'Queued request (phase 1 of 3)…');
+    setRedditAcquireProgress(12, `Running OpenClaw acquire (phase 2 of 3)… ~${estimateSeconds}s remaining (estimated)`);
+    redditAcquireProgressTimer = setInterval(() => {
       const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
       const remainingSeconds = Math.max(0, estimateSeconds - elapsedSeconds);
       const ratio = estimateSeconds > 0 ? Math.min(1, elapsedSeconds / estimateSeconds) : 0;
       const pct = Math.min(92, 12 + Math.round(ratio * 80));
       const eta = remainingSeconds > 0 ? `~${remainingSeconds}s remaining (estimated)` : 'finalizing…';
-      setRedditHarvestProgress(pct, `Running OpenClaw harvest (phase 2 of 3)… ${eta}`);
+      setRedditAcquireProgress(pct, `Running OpenClaw acquire (phase 2 of 3)… ${eta}`);
     }, 1000);
     return {
       finishSuccess() {
         const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-        clearRedditHarvestProgress();
-        setRedditHarvestProgress(100, `Completed in ${elapsedSeconds}s.`);
+        clearRedditAcquireProgress();
+        setRedditAcquireProgress(100, `Completed in ${elapsedSeconds}s.`);
       },
       finishError(message) {
-        clearRedditHarvestProgress();
-        setRedditHarvestProgress(100, `Stopped: ${safeText(message) || 'request failed'}`);
+        clearRedditAcquireProgress();
+        setRedditAcquireProgress(100, `Stopped: ${safeText(message) || 'request failed'}`);
       },
     };
   }
 
-  function renderXHarvestItemsTable() {
-    if (!els.xHarvestItemsTable) return;
-    els.xHarvestItemsTable.innerHTML = '';
-    const run = state.xHarvestCurrentRun;
+  function renderXAcquireItemsTable() {
+    if (!els.xAcquireItemsTable) return;
+    els.xAcquireItemsTable.innerHTML = '';
+    const run = state.xAcquireCurrentRun;
     const result = run && run.result ? run.result : null;
     const tweets = Array.isArray(result && result.tweets) ? result.tweets : [];
     const replies = Array.isArray(result && result.replies) ? result.replies : [];
@@ -1780,7 +2513,7 @@ App.acquire = (function () {
       td.colSpan = 5;
       td.textContent = 'No tweets/replies loaded yet.';
       tr.appendChild(td);
-      els.xHarvestItemsTable.appendChild(tr);
+      els.xAcquireItemsTable.appendChild(tr);
     } else {
       rows.forEach((row) => {
         const tweet = row.item || {};
@@ -1798,23 +2531,23 @@ App.acquire = (function () {
           td.textContent = value || '-';
           tr.appendChild(td);
         });
-        els.xHarvestItemsTable.appendChild(tr);
+        els.xAcquireItemsTable.appendChild(tr);
       });
     }
 
-    if (els.xHarvestRawPreview) {
-      els.xHarvestRawPreview.textContent = run ? prettyJson(run) : '{}';
+    if (els.xAcquireRawPreview) {
+      els.xAcquireRawPreview.textContent = run ? prettyJson(run) : '{}';
     }
   }
 
-  function renderRedditHarvestItemsTable() {
-    if (!els.redditHarvestItemsTable) return;
-    els.redditHarvestItemsTable.innerHTML = '';
-    const run = state.redditHarvestCurrentRun;
+  function renderRedditAcquireItemsTable() {
+    if (!els.redditAcquireItemsTable) return;
+    els.redditAcquireItemsTable.innerHTML = '';
+    const run = state.redditAcquireCurrentRun;
     const result = run && run.result ? run.result : null;
     const posts = Array.isArray(result && result.posts) ? result.posts : [];
     const primaryPost = (result && result.post) ? result.post : (posts[0] || null);
-    App.setKeyValueRows(els.redditHarvestPostDetailsBody, primaryPost ? [
+    App.setKeyValueRows(els.redditAcquirePostDetailsBody, primaryPost ? [
       ['Title', String(primaryPost.title || '').trim() || '-'],
       ['Subreddit', String(primaryPost.subreddit || run?.subreddit || '-')],
       ['Author', String(primaryPost.author || '-')],
@@ -1835,7 +2568,7 @@ App.acquire = (function () {
       td.colSpan = 5;
       td.textContent = 'No posts/comments loaded yet.';
       tr.appendChild(td);
-      els.redditHarvestItemsTable.appendChild(tr);
+      els.redditAcquireItemsTable.appendChild(tr);
     } else {
       rows.forEach((row) => {
         const item = row.item || {};
@@ -1852,12 +2585,12 @@ App.acquire = (function () {
           td.textContent = value || '-';
           tr.appendChild(td);
         });
-        els.redditHarvestItemsTable.appendChild(tr);
+        els.redditAcquireItemsTable.appendChild(tr);
       });
     }
 
-    if (els.redditHarvestRawPreview) {
-      els.redditHarvestRawPreview.textContent = run ? prettyJson(run) : '{}';
+    if (els.redditAcquireRawPreview) {
+      els.redditAcquireRawPreview.textContent = run ? prettyJson(run) : '{}';
     }
   }
 
@@ -2559,15 +3292,15 @@ App.acquire = (function () {
       });
 
       const actionsTd = document.createElement('td');
-      const harvestBtn = App.makeIconButton('copy', 'Use In Harvest', () => {
-        const harvestTarget = document.getElementById('redditHarvestTarget');
+      const acquireBtn = App.makeIconButton('copy', 'Use In Acquire', () => {
+        const acquireTarget = document.getElementById('redditAcquireTarget');
         const discoveryTarget = document.getElementById('redditDiscoveryTarget');
         const replyTarget = document.getElementById('redditReplyTarget');
         const nextValue = String(item.discussion_url || '').trim() || String(item.subreddit ? `https://www.reddit.com/r/${item.subreddit}` : '').trim();
-        if (harvestTarget) harvestTarget.value = nextValue;
+        if (acquireTarget) acquireTarget.value = nextValue;
         if (discoveryTarget && !discoveryTarget.value) discoveryTarget.value = nextValue;
         if (replyTarget) replyTarget.value = nextValue;
-        notify('Copied Reddit thread target into harvest form');
+        notify('Copied Reddit thread target into acquire form');
       }, { primary: true });
       const replyBtn = App.makeIconButton('messages', 'Generate Replies', async () => {
         const replyTarget = document.getElementById('redditReplyTarget');
@@ -2580,7 +3313,7 @@ App.acquire = (function () {
           notify(err.message, true);
         }
       }, { marginLeft: '8px' });
-      actionsTd.appendChild(harvestBtn);
+      actionsTd.appendChild(acquireBtn);
       actionsTd.appendChild(replyBtn);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -2618,17 +3351,17 @@ App.acquire = (function () {
     });
   }
 
-  function renderXHarvestRunsTable() {
-    if (!els.xHarvestRunsTable) return;
-    els.xHarvestRunsTable.innerHTML = '';
-    const runs = Array.isArray(state.xHarvestRuns) ? state.xHarvestRuns : [];
+  function renderXAcquireRunsTable() {
+    if (!els.xAcquireRunsTable) return;
+    els.xAcquireRunsTable.innerHTML = '';
+    const runs = Array.isArray(state.xAcquireRuns) ? state.xAcquireRuns : [];
     if (!runs.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 7;
-      td.textContent = 'No X harvest runs yet.';
+      td.textContent = 'No X acquire runs yet.';
       tr.appendChild(td);
-      els.xHarvestRunsTable.appendChild(tr);
+      els.xAcquireRunsTable.appendChild(tr);
       return;
     }
 
@@ -2649,19 +3382,19 @@ App.acquire = (function () {
       });
       const actionsTd = document.createElement('td');
       const viewBtn = App.makeIconButton('view', 'Load', () => {
-        loadXHarvestRun(run.run_id).catch((err) => notify(err.message, true));
+        loadXAcquireRun(run.run_id).catch((err) => notify(err.message, true));
       }, { marginRight: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete', async () => {
         if (!confirm(`Delete X run ${run.run_id}?`)) return;
         try {
           await api(`/api/acquire/x-runs/${encodeURIComponent(run.run_id)}`, { method: 'DELETE' });
-          state.xHarvestRuns = state.xHarvestRuns.filter((item) => String(item.run_id) !== String(run.run_id));
-          if (String(state.xHarvestCurrentRun && state.xHarvestCurrentRun.run_id || '') === String(run.run_id)) {
-            state.xHarvestCurrentRun = null;
-            renderXHarvestItemsTable();
+          state.xAcquireRuns = state.xAcquireRuns.filter((item) => String(item.run_id) !== String(run.run_id));
+          if (String(state.xAcquireCurrentRun && state.xAcquireCurrentRun.run_id || '') === String(run.run_id)) {
+            state.xAcquireCurrentRun = null;
+            renderXAcquireItemsTable();
           }
-          renderXHarvestRunsTable();
-          notify('X harvest run deleted');
+          renderXAcquireRunsTable();
+          notify('X acquire run deleted');
         } catch (err) {
           notify(err.message, true);
         }
@@ -2669,21 +3402,21 @@ App.acquire = (function () {
       actionsTd.appendChild(viewBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
-      els.xHarvestRunsTable.appendChild(tr);
+      els.xAcquireRunsTable.appendChild(tr);
     });
   }
 
-  function renderRedditHarvestRunsTable() {
-    if (!els.redditHarvestRunsTable) return;
-    els.redditHarvestRunsTable.innerHTML = '';
-    const runs = Array.isArray(state.redditHarvestRuns) ? state.redditHarvestRuns : [];
+  function renderRedditAcquireRunsTable() {
+    if (!els.redditAcquireRunsTable) return;
+    els.redditAcquireRunsTable.innerHTML = '';
+    const runs = Array.isArray(state.redditAcquireRuns) ? state.redditAcquireRuns : [];
     if (!runs.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = 7;
-      td.textContent = 'No Reddit harvest runs yet.';
+      td.textContent = 'No Reddit acquire runs yet.';
       tr.appendChild(td);
-      els.redditHarvestRunsTable.appendChild(tr);
+      els.redditAcquireRunsTable.appendChild(tr);
       return;
     }
 
@@ -2705,19 +3438,19 @@ App.acquire = (function () {
 
       const actionsTd = document.createElement('td');
       const viewBtn = App.makeIconButton('view', 'Load', () => {
-        loadRedditHarvestRun(run.run_id).catch((err) => notify(err.message, true));
+        loadRedditAcquireRun(run.run_id).catch((err) => notify(err.message, true));
       }, { marginRight: '8px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete', async () => {
         if (!confirm(`Delete Reddit run ${run.run_id}?`)) return;
         try {
           await api(`/api/acquire/reddit-runs/${encodeURIComponent(run.run_id)}`, { method: 'DELETE' });
-          state.redditHarvestRuns = state.redditHarvestRuns.filter((item) => String(item.run_id) !== String(run.run_id));
-          if (String(state.redditHarvestCurrentRun && state.redditHarvestCurrentRun.run_id || '') === String(run.run_id)) {
-            state.redditHarvestCurrentRun = null;
-            renderRedditHarvestItemsTable();
+          state.redditAcquireRuns = state.redditAcquireRuns.filter((item) => String(item.run_id) !== String(run.run_id));
+          if (String(state.redditAcquireCurrentRun && state.redditAcquireCurrentRun.run_id || '') === String(run.run_id)) {
+            state.redditAcquireCurrentRun = null;
+            renderRedditAcquireItemsTable();
           }
-          renderRedditHarvestRunsTable();
-          notify('Reddit harvest run deleted');
+          renderRedditAcquireRunsTable();
+          notify('Reddit acquire run deleted');
         } catch (err) {
           notify(err.message, true);
         }
@@ -2725,7 +3458,7 @@ App.acquire = (function () {
       actionsTd.appendChild(viewBtn);
       actionsTd.appendChild(deleteBtn);
       tr.appendChild(actionsTd);
-      els.redditHarvestRunsTable.appendChild(tr);
+      els.redditAcquireRunsTable.appendChild(tr);
     });
   }
 
@@ -2733,7 +3466,7 @@ App.acquire = (function () {
   // Data fetching
   // -------------------------------------------------------------------------
 
-  async function refreshHarvestJobs() {
+  async function refreshAcquireJobs() {
     if (!els.acquireJobsTable) return;
     const res = await api('/api/acquire/jobs?limit=200');
     const fetched = Array.isArray(res.jobs) ? res.jobs : [];
@@ -2746,28 +3479,28 @@ App.acquire = (function () {
     state.acquireJobs = Array.from(byId.values())
       .sort((a, b) => String(b.updated_at||'').localeCompare(String(a.updated_at||'')))
       .slice(0, 200);
-    renderHarvestJobsTable();
+    renderAcquireJobsTable();
   }
 
-  async function refreshDirectHarvestRuns() {
+  async function refreshDirectAcquireRuns() {
     if (!els.directAcquireRunsTable) return;
     const res = await api('/api/acquire/direct-runs?limit=20');
     state.directAcquireRuns = Array.isArray(res.runs) ? res.runs : [];
-    renderDirectHarvestRunsTable();
+    renderDirectAcquireRunsTable();
   }
 
-  async function refreshXHarvestRuns() {
-    if (!els.xHarvestRunsTable) return;
+  async function refreshXAcquireRuns() {
+    if (!els.xAcquireRunsTable) return;
     const res = await api('/api/acquire/x-runs?limit=50');
-    state.xHarvestRuns = Array.isArray(res.runs) ? res.runs : [];
-    renderXHarvestRunsTable();
+    state.xAcquireRuns = Array.isArray(res.runs) ? res.runs : [];
+    renderXAcquireRunsTable();
   }
 
-  async function refreshRedditHarvestRuns() {
-    if (!els.redditHarvestRunsTable) return;
+  async function refreshRedditAcquireRuns() {
+    if (!els.redditAcquireRunsTable) return;
     const res = await api('/api/acquire/reddit-runs?limit=50');
-    state.redditHarvestRuns = Array.isArray(res.runs) ? res.runs : [];
-    renderRedditHarvestRunsTable();
+    state.redditAcquireRuns = Array.isArray(res.runs) ? res.runs : [];
+    renderRedditAcquireRunsTable();
   }
 
   async function runRedditDiscovery() {
@@ -2869,38 +3602,39 @@ App.acquire = (function () {
     return res;
   }
 
-  async function loadDirectHarvestRun(runId) {
+  async function loadDirectAcquireRun(runId) {
     const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}`);
     state.directAcquireCurrentRun = res.run || null;
     directAcquireSelectedImages = new Set();
     directAcquireImageCategoryByUrl = new Map();
     directAcquireImagesExpanded = false;
     directAcquireSelectedHashtags = new Set();
-    renderDirectHarvestPagesTable();
+    directAcquireSelectedKeywords = new Set();
+    renderDirectAcquirePagesTable();
   }
 
-  async function loadXHarvestRun(runId) {
+  async function loadXAcquireRun(runId) {
     const res = await api(`/api/acquire/x-runs/${encodeURIComponent(runId)}`);
-    state.xHarvestCurrentRun = res.run || null;
-    renderXHarvestItemsTable();
+    state.xAcquireCurrentRun = res.run || null;
+    renderXAcquireItemsTable();
   }
 
-  async function loadRedditHarvestRun(runId) {
+  async function loadRedditAcquireRun(runId) {
     const res = await api(`/api/acquire/reddit-runs/${encodeURIComponent(runId)}`);
-    state.redditHarvestCurrentRun = res.run || null;
-    renderRedditHarvestItemsTable();
+    state.redditAcquireCurrentRun = res.run || null;
+    renderRedditAcquireItemsTable();
   }
 
   // -------------------------------------------------------------------------
   // OpenClaw actions
   // -------------------------------------------------------------------------
 
-  async function runHarvestRowAction(action, job) {
+  async function runAcquireRowAction(action, job) {
     const jobId = String(job?.id || '').trim();
     if (!jobId) { notify('job_id is required', true); return; }
     try {
       state.acquireBusyByJob[jobId] = true;
-      renderHarvestJobsTable();
+      renderAcquireJobsTable();
       const request = {
         manual_confirmed: true,
         job_id: jobId,
@@ -2918,10 +3652,10 @@ App.acquire = (function () {
       const response = await api(`/api/openclaw/${action}`, { method: 'POST', body: JSON.stringify(request) });
       setPreview(els.acquireRequestPreview, { action, request });
       setPreview(els.acquireResponsePreview, response);
-      const derived = deriveHarvestJobFromResponse({ action, request }, response);
-      if (derived) upsertHarvestJobState(derived);
-      renderHarvestJobsTable();
-      await refreshHarvestJobs();
+      const derived = deriveAcquireJobFromResponse({ action, request }, response);
+      if (derived) upsertAcquireJobState(derived);
+      renderAcquireJobsTable();
+      await refreshAcquireJobs();
       const approvalToken = response?.result?.approval?.approval_token;
       if (approvalToken && els.acquireApprovalTokenInput) els.acquireApprovalTokenInput.value = approvalToken;
       notify(`Acquire ${action} request sent`);
@@ -2929,16 +3663,16 @@ App.acquire = (function () {
       notify(err.message, true);
     } finally {
       delete state.acquireBusyByJob[jobId];
-      renderHarvestJobsTable();
+      renderAcquireJobsTable();
     }
   }
 
-  async function runHarvestRowSequence(job) {
+  async function runAcquireRowSequence(job) {
     const jobId = String(job?.id || '').trim();
     if (!jobId) { notify('job_id is required', true); return; }
     try {
       state.acquireBusyByJob[jobId] = true;
-      renderHarvestJobsTable();
+      renderAcquireJobsTable();
 
       const previewReq = { manual_confirmed: true, job_id: jobId, role: 'marketer' };
       const previewRes = await api('/api/openclaw/preview_job', { method: 'POST', body: JSON.stringify(previewReq) });
@@ -2959,16 +3693,16 @@ App.acquire = (function () {
       setPreview(els.acquireRequestPreview, { action: 'execute_job', request: executeReq });
       setPreview(els.acquireResponsePreview, executeRes);
 
-      const derived = deriveHarvestJobFromResponse({ action: 'execute_job', request: executeReq }, executeRes);
-      if (derived) upsertHarvestJobState(derived);
-      renderHarvestJobsTable();
-      await refreshHarvestJobs();
+      const derived = deriveAcquireJobFromResponse({ action: 'execute_job', request: executeReq }, executeRes);
+      if (derived) upsertAcquireJobState(derived);
+      renderAcquireJobsTable();
+      await refreshAcquireJobs();
       notify(`Acquire run completed for ${jobId}`);
     } catch (err) {
       notify(err.message, true);
     } finally {
       delete state.acquireBusyByJob[jobId];
-      renderHarvestJobsTable();
+      renderAcquireJobsTable();
     }
   }
 
@@ -2980,7 +3714,7 @@ App.acquire = (function () {
     return String(raw || '').split('\n').map((l) => l.trim()).filter(Boolean);
   }
 
-  function buildHarvestRequest(formData) {
+  function buildAcquireRequest(formData) {
     const action = String(formData.get('action') || 'create_job');
     if (formData.get('manual_confirmed') !== 'on') throw new Error('Manual confirmation is required');
     const jobId = String(formData.get('job_id') || '').trim();
@@ -3249,6 +3983,90 @@ App.acquire = (function () {
     refreshDirectAcquireTopics().then(() => renderDirectAcquireKeywordTopicOptions()).catch(() => {});
     refreshDirectAcquireImageCategories().then(() => renderDirectAcquireImageGallery()).catch(() => {});
     refreshDirectAcquireWebsitePeers().catch(() => {});
+    if (String(App.state?.activePage || '') === 'acquireWebPage') {
+      hydrateAcquireWebPage({ scrollToResults: false }).catch(() => {});
+    }
+    const directAcquireUrlInput = document.getElementById('directAcquireUrlInput');
+    if (directAcquireUrlInput && !directAcquireUrlInput.dataset.bound) {
+      directAcquireUrlInput.dataset.bound = '1';
+      let urlHydrateTimer = null;
+      const scheduleUrlHydrate = () => {
+        if (getAcquireWebWebsiteRole() !== 'project') return;
+        if (urlHydrateTimer) clearTimeout(urlHydrateTimer);
+        urlHydrateTimer = setTimeout(() => {
+          const sourceUrl = String(directAcquireUrlInput.value || directAcquireProjectSourceUrl || '').trim();
+          if (sourceUrl) directAcquireProjectSourceUrl = sourceUrl;
+          loadLatestDirectAcquireRunForSourceUrl(sourceUrl)
+            .then((loaded) => {
+              const advancedPanel = document.getElementById('directAcquireAdvancedPanel');
+              if (loaded && advancedPanel) advancedPanel.open = false;
+            })
+            .catch(() => {});
+        }, 350);
+      };
+      directAcquireUrlInput.addEventListener('change', scheduleUrlHydrate);
+      directAcquireUrlInput.addEventListener('blur', scheduleUrlHydrate);
+    }
+    const directAcquireWebsiteRoleSelect = document.getElementById('directAcquireWebsiteRoleSelect');
+    if (directAcquireWebsiteRoleSelect && !directAcquireWebsiteRoleSelect.dataset.bound) {
+      directAcquireWebsiteRoleSelect.dataset.bound = '1';
+      directAcquireWebsiteRoleSelect.addEventListener('change', async () => {
+        applyAcquireWebWebsiteRoleUi();
+        if (getAcquireWebWebsiteRole() === 'project') {
+          const urlInput = document.getElementById('directAcquireUrlInput');
+          if (urlInput && directAcquireProjectSourceUrl) urlInput.value = directAcquireProjectSourceUrl;
+          if (directAcquireProjectSourceUrl) {
+            await loadLatestDirectAcquireRunForSourceUrl(directAcquireProjectSourceUrl);
+          }
+        }
+      });
+    }
+    const directAcquireDiscoverPeersBtn = document.getElementById('directAcquireDiscoverPeersBtn');
+    if (directAcquireDiscoverPeersBtn && !directAcquireDiscoverPeersBtn.dataset.bound) {
+      directAcquireDiscoverPeersBtn.dataset.bound = '1';
+      directAcquireDiscoverPeersBtn.addEventListener('click', async () => {
+        try {
+          await discoverAcquireWebPeers();
+        } catch (err) {
+          notify(err.message || 'Could not discover peers', true);
+        }
+      });
+    }
+    const directAcquireAddReferenceBtn = document.getElementById('directAcquireAddReferenceBtn');
+    if (directAcquireAddReferenceBtn && !directAcquireAddReferenceBtn.dataset.bound) {
+      directAcquireAddReferenceBtn.dataset.bound = '1';
+      directAcquireAddReferenceBtn.addEventListener('click', async () => {
+        try {
+          await addAcquireWebReferenceFromForm();
+        } catch (err) {
+          notify(err.message || 'Could not add reference website', true);
+        }
+      });
+    }
+    const directAcquirePeerDiscoverySaveBtn = document.getElementById('directAcquirePeerDiscoverySaveBtn');
+    if (directAcquirePeerDiscoverySaveBtn && !directAcquirePeerDiscoverySaveBtn.dataset.bound) {
+      directAcquirePeerDiscoverySaveBtn.dataset.bound = '1';
+      directAcquirePeerDiscoverySaveBtn.addEventListener('click', async () => {
+        try {
+          await saveSelectedAcquireWebPeers();
+        } catch (err) {
+          notify(err.message || 'Could not save discovered peers', true);
+        }
+      });
+    }
+    const directAcquirePeerDiscoverySelectAll = document.getElementById('directAcquirePeerDiscoverySelectAll');
+    if (directAcquirePeerDiscoverySelectAll && !directAcquirePeerDiscoverySelectAll.dataset.bound) {
+      directAcquirePeerDiscoverySelectAll.dataset.bound = '1';
+      directAcquirePeerDiscoverySelectAll.addEventListener('change', function () {
+        const checked = !!directAcquirePeerDiscoverySelectAll.checked;
+        directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.map((item) => ({
+          ...item,
+          selected: checked,
+        }));
+        renderDirectAcquirePeerDiscoveryResults();
+      });
+    }
+    populateAcquireWebReferenceModelSelect();
     const directAcquireKeywordExclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
     if (directAcquireKeywordExclusionsInput) {
       try {
@@ -3268,15 +4086,15 @@ App.acquire = (function () {
     const directAcquireKeywordSelectAll = document.getElementById('directAcquireKeywordSelectAll');
     if (directAcquireKeywordSelectAll) {
       directAcquireKeywordSelectAll.addEventListener('change', function () {
-        document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]').forEach((checkbox) => {
-          checkbox.checked = directAcquireKeywordSelectAll.checked;
-          if (directAcquireKeywordSelectAll.checked) {
-            const row = checkbox.closest('tr');
-            const reasonSelect = row ? row.querySelector('select[data-keyword-reason]') : null;
-            if (reasonSelect && !String(reasonSelect.value || '').trim()) reasonSelect.value = 'brand';
-          }
-        });
-        syncDirectAcquireKeywordExclusionsFromTable();
+        const run = state.directAcquireCurrentRun;
+        const keywordLabels = Array.isArray(run?.keyword_labels)
+          ? run.keyword_labels.map(([keyword]) => String(keyword || '').trim()).filter(Boolean)
+          : [];
+        if (directAcquireKeywordSelectAll.checked) {
+          keywordLabels.forEach((keyword) => directAcquireSelectedKeywords.add(keyword));
+        } else {
+          directAcquireSelectedKeywords.clear();
+        }
         renderDirectAcquireKeywordTable();
       });
     }
@@ -3286,8 +4104,7 @@ App.acquire = (function () {
       directAcquireKeywordBulkTopics.addEventListener('change', async function (event) {
         const changedInput = event.target;
         if (!changedInput || changedInput.type !== 'checkbox' || !changedInput.dataset.topic) return;
-        const selected = Array.from(document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]:checked'));
-        if (!selected.length) {
+        if (!directAcquireSelectedKeywords.size) {
           notify('Check at least one keyword first', true);
           changedInput.checked = !changedInput.checked;
           return;
@@ -3296,57 +4113,48 @@ App.acquire = (function () {
           .map((input) => String(input.value || '').trim())
           .filter(Boolean);
         const topicMap = readDirectAcquireKeywordTopics();
-        selected.forEach((checkbox) => {
-          const keyword = normalizeDirectAcquireKeyword(checkbox.dataset.keyword || '');
-          if (!keyword) return;
-          topicMap[keyword] = chosenTopics;
+        directAcquireSelectedKeywords.forEach((keyword) => {
+          const normalized = normalizeDirectAcquireKeyword(keyword);
+          if (!normalized) return;
+          topicMap[normalized] = chosenTopics;
         });
         writeDirectAcquireKeywordTopics(topicMap);
-        const selectedLabels = selected
-          .map((checkbox) => String(checkbox.dataset.keyword || '').trim())
-          .filter(Boolean);
-        let createdCount = 0;
-        if (chosenTopics.length) {
-          try {
-            createdCount = await saveSelectedKeywordsAsContent(selectedLabels, chosenTopics);
-          } catch (err) {
-            notify(err.message || 'Could not save selected keywords as content', true);
-          }
-        }
         renderDirectAcquireKeywordTopicOptions();
         renderDirectAcquireKeywordTable();
-        const noun = selected.length === 1 ? 'keyword' : 'keywords';
-        const createdText = createdCount ? ` and added ${createdCount} keyword content record${createdCount === 1 ? '' : 's'}` : '';
-        notify(`Updated topics for ${selected.length} ${noun}${createdText}`);
+        const count = directAcquireSelectedKeywords.size;
+        const noun = count === 1 ? 'keyword' : 'keywords';
+        notify(`Updated topics for ${count} ${noun}`);
         directAcquireKeywordBulkTopics.removeAttribute('open');
+      });
+    }
+    const directAcquireSaveKeywordsBtn = document.getElementById('directAcquireSaveKeywordsBtn');
+    if (directAcquireSaveKeywordsBtn) {
+      directAcquireSaveKeywordsBtn.addEventListener('click', async () => {
+        try {
+          await saveDirectAcquireSelectedKeywords();
+        } catch (err) {
+          notify(err.message || 'Could not save selected keywords', true);
+        }
       });
     }
     if (directAcquireKeywordBulkReason) {
       directAcquireKeywordBulkReason.addEventListener('change', function () {
         const reason = String(directAcquireKeywordBulkReason.value || '').trim();
+        directAcquireKeywordBulkReason.value = '';
         if (!reason) return;
-        const selected = Array.from(document.querySelectorAll('#directAcquireKeywordTable input[type="checkbox"][data-keyword]:checked'));
-        if (!selected.length) {
+        if (!directAcquireSelectedKeywords.size) {
           notify('Check at least one keyword first', true);
-          directAcquireKeywordBulkReason.value = '';
           return;
         }
-        selected.forEach((checkbox) => {
-          const row = checkbox.closest('tr');
-          const reasonSelect = row ? row.querySelector('select[data-keyword-reason]') : null;
-          if (reasonSelect) reasonSelect.value = reason;
-        });
-        syncDirectAcquireKeywordExclusionsFromTable();
-        renderDirectAcquireKeywordTable();
-        directAcquireKeywordBulkReason.value = '';
+        const count = applyBulkKeywordExclusion(reason);
+        const noun = count === 1 ? 'keyword' : 'keywords';
+        notify(`Excluded ${count} ${noun}`);
       });
     }
     const directAcquireHashtagSelectAll = document.getElementById('directAcquireHashtagSelectAll');
     if (directAcquireHashtagSelectAll) {
       directAcquireHashtagSelectAll.addEventListener('change', function () {
-        const hashtags = Array.isArray(state.directAcquireCurrentRun?.hashtag_summary?.hashtags)
-          ? state.directAcquireCurrentRun.hashtag_summary.hashtags
-          : [];
+        const hashtags = filterDirectAcquireHashtagRows(state.directAcquireCurrentRun?.hashtag_summary?.hashtags);
         hashtags.forEach((item) => {
           const hashtag = String(item?.hashtag || '').trim();
           if (!hashtag) return;
@@ -3423,7 +4231,7 @@ App.acquire = (function () {
       directAcquireWebsitePeersRefreshBtn.addEventListener('click', async () => {
         try {
           await refreshDirectAcquireWebsitePeers();
-          notify('Website peers refreshed');
+          notify('Reference websites refreshed');
         } catch (err) {
           notify(err.message || 'Could not refresh website peers', true);
         }
@@ -3435,6 +4243,55 @@ App.acquire = (function () {
         resetDirectAcquireWebsitePeerForm();
       });
     }
+    const directAcquireWebsiteDetailsForm = document.getElementById('directAcquireWebsiteDetailsForm');
+    if (directAcquireWebsiteDetailsForm && !directAcquireWebsiteDetailsForm.dataset.bound) {
+      directAcquireWebsiteDetailsForm.dataset.bound = '1';
+      directAcquireWebsiteDetailsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const formData = new FormData(directAcquireWebsiteDetailsForm);
+          const siteUrl = String(formData.get('site_url') || '').trim();
+          const title = String(formData.get('title') || '').trim();
+          const notes = String(formData.get('notes') || '').trim();
+          const isProject = formData.get('is_project_website') === 'on';
+          const editingId = String(formData.get('id') || '').trim();
+          if (!siteUrl) throw new Error('Website URL is required.');
+          const referenceRole = isProject ? 'project' : 'peer';
+          const projectUrl = String(directAcquireProjectSourceUrl || state.directAcquireCurrentRun?.source_url || siteUrl).trim();
+          const payload = {
+            site_url: siteUrl,
+            source_url: isProject ? siteUrl : projectUrl,
+            title,
+            notes,
+            reference_role: referenceRole,
+            site_type: isProject ? 'source' : 'peer',
+            website_model: isProject ? 'Source Website' : '',
+            metadata: { reference_role: referenceRole },
+          };
+          if (!payload.source_url) throw new Error('Project website is required.');
+          if (editingId) {
+            await api(`/api/acquire/website-peers/${encodeURIComponent(editingId)}`, {
+              method: 'PATCH',
+              body: JSON.stringify(payload),
+            });
+            notify('Website details updated');
+          } else {
+            await api('/api/acquire/website-peers', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+            notify('Website details saved');
+          }
+          await refreshDirectAcquireWebsitePeers();
+          if (!isProject) setDirectAcquireProjectWebsitePanelVisible(false);
+        } catch (err) {
+          notify(err.message || 'Could not save website details', true);
+        }
+      });
+    }
+    document.querySelectorAll('.acquire-web-expandable-summary .page-heading-actions, .acquire-web-expandable-summary .direct-acquire-dropdown').forEach((el) => {
+      el.addEventListener('click', (event) => event.stopPropagation());
+    });
     const directAcquireWebsitePeerForm = document.getElementById('directAcquireWebsitePeerForm');
     if (directAcquireWebsitePeerForm) {
       populateWebsitePeerModelSelect(document.getElementById('directAcquireWebsitePeerType'));
@@ -3443,6 +4300,7 @@ App.acquire = (function () {
         try {
           const formData = new FormData(directAcquireWebsitePeerForm);
           const existingPeer = directAcquireWebsitePeers.find((item) => String(item?.id || '') === String(directAcquireWebsitePeerEditingId || '')) || null;
+          const referenceRole = String(formData.get('reference_role') || 'peer').trim().toLowerCase() === 'model' ? 'model' : 'peer';
           const payload = {
             source_url: String(formData.get('source_url') || '').trim(),
             site_url: String(formData.get('site_url') || '').trim(),
@@ -3451,24 +4309,30 @@ App.acquire = (function () {
             matched_keywords: String(formData.get('matched_keywords') || '').trim(),
             snippet: String(formData.get('snippet') || '').trim(),
             notes: String(formData.get('notes') || '').trim(),
+            reference_role: referenceRole,
+            site_type: 'peer',
+            metadata: { reference_role: referenceRole },
           };
           if (!payload.site_url) throw new Error('Website URL is required.');
-          if (!payload.source_url && state.directAcquireCurrentRun?.source_url) {
-            payload.source_url = String(state.directAcquireCurrentRun.source_url || '').trim();
+          if (!payload.source_url) {
+            payload.source_url = String(directAcquireProjectSourceUrl || state.directAcquireCurrentRun?.source_url || '').trim();
           }
-          payload.site_type = deriveWebsitePeerScope(payload, existingPeer);
+          if (!payload.source_url) throw new Error('Project website is required.');
+          if (referenceRole === 'model' && !payload.website_model) {
+            throw new Error('Model category is required for model websites.');
+          }
           if (directAcquireWebsitePeerEditingId) {
             await api(`/api/acquire/website-peers/${encodeURIComponent(directAcquireWebsitePeerEditingId)}`, {
               method: 'PATCH',
               body: JSON.stringify(payload),
             });
-            notify('Website peer updated');
+            notify('Other website updated');
           } else {
             await api('/api/acquire/website-peers', {
               method: 'POST',
               body: JSON.stringify(payload),
             });
-            notify('Website peer created');
+            notify('Other website created');
           }
           resetDirectAcquireWebsitePeerForm();
           await refreshDirectAcquireWebsitePeers();
@@ -3477,41 +4341,41 @@ App.acquire = (function () {
         }
       });
     }
-    clearRedditHarvestProgress();
-    const redditProgressWrap = document.getElementById('redditHarvestProgressWrap');
-    const redditProgressBar = document.getElementById('redditHarvestProgressBar');
-    const redditProgressText = document.getElementById('redditHarvestProgressText');
+    clearRedditAcquireProgress();
+    const redditProgressWrap = document.getElementById('redditAcquireProgressWrap');
+    const redditProgressBar = document.getElementById('redditAcquireProgressBar');
+    const redditProgressText = document.getElementById('redditAcquireProgressText');
     if (redditProgressWrap) redditProgressWrap.classList.remove('hidden');
     if (redditProgressBar) redditProgressBar.value = 0;
-    if (redditProgressText) redditProgressText.textContent = 'Idle — ready to run Reddit harvest.';
+    if (redditProgressText) redditProgressText.textContent = 'Idle — ready to run Reddit acquire.';
     if (els.acquireForm) {
       els.acquireForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
-          const built = buildHarvestRequest(new FormData(els.acquireForm));
+          const built = buildAcquireRequest(new FormData(els.acquireForm));
           setPreview(els.acquireRequestPreview, built);
           const response = await api(`/api/openclaw/${built.action}`, { method: 'POST', body: JSON.stringify(built.request) });
           setPreview(els.acquireResponsePreview, response);
-          const derived = deriveHarvestJobFromResponse(built, response);
-          if (derived) { upsertHarvestJobState(derived); renderHarvestJobsTable(); }
+          const derived = deriveAcquireJobFromResponse(built, response);
+          if (derived) { upsertAcquireJobState(derived); renderAcquireJobsTable(); }
           const createdId = response?.result?.job?.id;
           if (createdId && els.acquireJobIdInput) els.acquireJobIdInput.value = createdId;
           const token = response?.result?.approval?.approval_token;
           if (token && els.acquireApprovalTokenInput) els.acquireApprovalTokenInput.value = token;
-          await refreshHarvestJobs();
+          await refreshAcquireJobs();
           notify(`Acquire ${built.action} request sent`);
         } catch (err) { notify(err.message, true); }
       });
     }
     if (els.acquireRefreshJobsBtn) {
       els.acquireRefreshJobsBtn.addEventListener('click', async () => {
-        try { await refreshHarvestJobs(); notify('Acquire jobs refreshed'); }
+        try { await refreshAcquireJobs(); notify('Acquire jobs refreshed'); }
         catch (err) { notify(err.message, true); }
       });
     }
     if (els.directAcquireRefreshBtn) {
       els.directAcquireRefreshBtn.addEventListener('click', async () => {
-        try { await refreshDirectHarvestRuns(); notify('Direct acquire runs refreshed'); }
+        try { await refreshDirectAcquireRuns(); notify('Direct acquire runs refreshed'); }
         catch (err) { notify(err.message, true); }
       });
     }
@@ -3521,8 +4385,12 @@ App.acquire = (function () {
         try {
           startDirectAcquireProgress();
           const formData = new FormData(els.directAcquireForm);
+          const acquireUrl = String(formData.get('source_url') || directAcquireProjectSourceUrl || '').trim()
+            || String(await fetchProjectWebsiteUrl()).trim();
+          if (!acquireUrl) throw new Error('Project website URL is required.');
+          directAcquireProjectSourceUrl = acquireUrl;
           const payload = {
-            source_url: String(formData.get('source_url') || '').trim(),
+            source_url: acquireUrl,
             max_pages: Number(formData.get('max_pages') || 10),
             peer_sites_limit: Number(formData.get('peer_sites_limit') || 20),
             images_limit: Number(formData.get('images_limit') || 20),
@@ -3544,21 +4412,29 @@ App.acquire = (function () {
           directAcquireImageCategoryByUrl = new Map();
           directAcquireImagesExpanded = false;
           directAcquireSelectedHashtags = new Set();
-          renderDirectHarvestPagesTable();
+          directAcquireSelectedKeywords = new Set();
+          renderDirectAcquirePagesTable();
+          setDirectAcquireProjectWebsitePanelVisible(false);
           try {
             await refreshDirectAcquireWebsitePeers();
           } catch (_) {
             // keep the direct acquire result visible even if peer-table refresh fails
           }
-          await refreshDirectHarvestRuns();
-          finishDirectAcquireProgress(true, `Harvest complete (${res.run?.pages_succeeded || 0} pages processed).`);
+          await refreshDirectAcquireRuns();
+          const advancedPanel = document.getElementById('directAcquireAdvancedPanel');
+          if (advancedPanel) advancedPanel.open = false;
+          finishDirectAcquireProgress(true, `Acquire complete (${res.run?.pages_succeeded || 0} pages processed).`);
+          const results = document.getElementById('directAcquireResultsWrap');
+          if (results && typeof results.scrollIntoView === 'function') {
+            window.setTimeout(() => results.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+          }
           const peerSaveCount = Number(res.website_peers_saved_count || 0) || 0;
           const peerSaveError = String(res.website_peers_error || '').trim();
           const peerSaveText = peerSaveCount ? ` and saved ${peerSaveCount} website peer record${peerSaveCount === 1 ? '' : 's'}` : '';
           notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)${peerSaveText}`);
           if (peerSaveError) notify(peerSaveError, true);
         } catch (err) {
-          finishDirectAcquireProgress(false, err.message || 'Harvest failed.');
+          finishDirectAcquireProgress(false, err.message || 'Acquire failed.');
           notify(err.message, true);
         }
       });
@@ -3573,21 +4449,21 @@ App.acquire = (function () {
         }
       });
     }
-    if (els.xHarvestRefreshBtn) {
-      els.xHarvestRefreshBtn.addEventListener('click', async () => {
+    if (els.xAcquireRefreshBtn) {
+      els.xAcquireRefreshBtn.addEventListener('click', async () => {
         try {
-          await refreshXHarvestRuns();
-          notify('X harvest runs refreshed');
+          await refreshXAcquireRuns();
+          notify('X acquire runs refreshed');
         } catch (err) {
           notify(err.message, true);
         }
       });
     }
-    if (els.xHarvestForm) {
-      els.xHarvestForm.addEventListener('submit', async (e) => {
+    if (els.xAcquireForm) {
+      els.xAcquireForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
-          const formData = new FormData(els.xHarvestForm);
+          const formData = new FormData(els.xAcquireForm);
           const payload = {
             query: String(formData.get('query') || '').trim(),
             hashtags: String(formData.get('hashtags') || '').split(/[,\s]+/g).map((item) => item.trim()).filter(Boolean),
@@ -3603,24 +4479,24 @@ App.acquire = (function () {
           if (!payload.query && !payload.hashtags.length) {
             throw new Error('Add at least one query keyword or hashtag.');
           }
-          const res = await api('/api/acquire/x-harvest', {
+          const res = await api('/api/acquire/x-acquire', {
             method: 'POST',
             body: JSON.stringify(payload),
           });
-          state.xHarvestCurrentRun = res.run || null;
-          renderXHarvestItemsTable();
-          await refreshXHarvestRuns();
-          notify(`X harvest complete (${(state.xHarvestCurrentRun?.stats?.total_tweets || 0)} tweets, ${(state.xHarvestCurrentRun?.stats?.total_replies || 0)} replies)`);
+          state.xAcquireCurrentRun = res.run || null;
+          renderXAcquireItemsTable();
+          await refreshXAcquireRuns();
+          notify(`X acquire complete (${(state.xAcquireCurrentRun?.stats?.total_tweets || 0)} tweets, ${(state.xAcquireCurrentRun?.stats?.total_replies || 0)} replies)`);
         } catch (err) {
           notify(err.message, true);
         }
       });
     }
-    if (els.redditHarvestRefreshBtn) {
-      els.redditHarvestRefreshBtn.addEventListener('click', async () => {
+    if (els.redditAcquireRefreshBtn) {
+      els.redditAcquireRefreshBtn.addEventListener('click', async () => {
         try {
-          await refreshRedditHarvestRuns();
-          notify('Reddit harvest runs refreshed');
+          await refreshRedditAcquireRuns();
+          notify('Reddit acquire runs refreshed');
         } catch (err) {
           notify(err.message, true);
         }
@@ -3669,16 +4545,16 @@ App.acquire = (function () {
     if (redditDiscoveryUseTargetBtn) {
       redditDiscoveryUseTargetBtn.addEventListener('click', () => {
         const discoveryTarget = document.getElementById('redditDiscoveryTarget');
-        const harvestTarget = document.getElementById('redditHarvestTarget');
+        const acquireTarget = document.getElementById('redditAcquireTarget');
         const value = String(discoveryTarget && discoveryTarget.value || '').trim();
         if (!value) {
           notify('Add a Reddit discovery target first', true);
           return;
         }
-        if (harvestTarget) harvestTarget.value = value;
+        if (acquireTarget) acquireTarget.value = value;
         const replyTarget = document.getElementById('redditReplyTarget');
         if (replyTarget) replyTarget.value = value;
-        notify('Copied discovery target into harvest form');
+        notify('Copied discovery target into acquire form');
       });
     }
     const redditReplyCandidatesForm = document.getElementById('redditReplyCandidatesForm');
@@ -3872,16 +4748,16 @@ App.acquire = (function () {
         notify('BlueSky posting operator UI scaffold is ready');
       });
     }
-    if (els.redditHarvestForm) {
-      els.redditHarvestForm.addEventListener('submit', async (e) => {
-        const submitBtn = els.redditHarvestForm.querySelector('button[type="submit"]');
+    if (els.redditAcquireForm) {
+      els.redditAcquireForm.addEventListener('submit', async (e) => {
+        const submitBtn = els.redditAcquireForm.querySelector('button[type="submit"]');
         e.preventDefault();
         let progress = null;
         let controller = null;
         let timer = null;
         let watchdog = null;
         try {
-          const formData = new FormData(els.redditHarvestForm);
+          const formData = new FormData(els.redditAcquireForm);
           const payload = {
             target: String(formData.get('target') || '').trim(),
             mode: String(formData.get('mode') || 'auto').trim().toLowerCase(),
@@ -3896,29 +4772,29 @@ App.acquire = (function () {
           };
           if (!payload.target) throw new Error('Subreddit or post URL is required.');
           if (submitBtn) submitBtn.disabled = true;
-          progress = beginRedditHarvestProgress(payload);
+          progress = beginRedditAcquireProgress(payload);
           controller = new AbortController();
           timer = setTimeout(() => controller.abort(), 180000);
-          const apiPromise = api('/api/acquire/reddit-harvest', {
+          const apiPromise = api('/api/acquire/reddit-acquire', {
             method: 'POST',
             body: JSON.stringify(payload),
             signal: controller.signal,
           });
           const watchdogPromise = new Promise((_, reject) => {
-            watchdog = setTimeout(() => reject(new Error('Reddit harvest watchdog timeout after 190s. Please retry with lower limits.')), 190000);
+            watchdog = setTimeout(() => reject(new Error('Reddit acquire watchdog timeout after 190s. Please retry with lower limits.')), 190000);
           });
           const res = await Promise.race([apiPromise, watchdogPromise]);
-          state.redditHarvestCurrentRun = res.run || null;
+          state.redditAcquireCurrentRun = res.run || null;
           if (progress) {
-            setRedditHarvestProgress(96, 'Saving harvest results (phase 3 of 3)…');
+            setRedditAcquireProgress(96, 'Saving acquire results (phase 3 of 3)…');
             progress.finishSuccess();
           }
-          renderRedditHarvestItemsTable();
-          await refreshRedditHarvestRuns();
-          notify(`Reddit harvest complete (${(state.redditHarvestCurrentRun?.stats?.total_posts || 0)} posts, ${(state.redditHarvestCurrentRun?.stats?.total_comments || 0)} comments)`);
+          renderRedditAcquireItemsTable();
+          await refreshRedditAcquireRuns();
+          notify(`Reddit acquire complete (${(state.redditAcquireCurrentRun?.stats?.total_posts || 0)} posts, ${(state.redditAcquireCurrentRun?.stats?.total_comments || 0)} comments)`);
         } catch (err) {
           if (err?.name === 'AbortError') {
-            err = new Error('Reddit harvest timed out after 180s. Try smaller limits (10 posts / 20 comments) and retry.');
+            err = new Error('Reddit acquire timed out after 180s. Try smaller limits (10 posts / 20 comments) and retry.');
           }
           if (progress) progress.finishError(err?.message || 'request failed');
           notify(err.message, true);
@@ -3930,13 +4806,13 @@ App.acquire = (function () {
       });
     }
 
-    if (els.xHarvestRunsTable) {
-      refreshXHarvestRuns().catch((err) => notify(err.message, true));
-      renderXHarvestItemsTable();
+    if (els.xAcquireRunsTable) {
+      refreshXAcquireRuns().catch((err) => notify(err.message, true));
+      renderXAcquireItemsTable();
     }
-    if (els.redditHarvestRunsTable) {
-      refreshRedditHarvestRuns().catch((err) => notify(err.message, true));
-      renderRedditHarvestItemsTable();
+    if (els.redditAcquireRunsTable) {
+      refreshRedditAcquireRuns().catch((err) => notify(err.message, true));
+      renderRedditAcquireItemsTable();
     }
     renderRedditDiscoveryTable(null);
     setRedditDiscoveryStatus('Reddit discovery is idle.', false);
@@ -3950,13 +4826,22 @@ App.acquire = (function () {
   }
 
   return {
-    manifest: { id: 'acquire', label: 'Acquire', pageId: 'acquirePage', pagePrefixes: ['acquireSettingsPage'] },
+    manifest: {
+      id: 'acquire',
+      label: 'Acquire',
+      pageId: 'acquirePage',
+      pagePrefixes: ['acquireSettingsPage'],
+      secondaryPages: ['acquireWebPage'],
+    },
     init,
     onPageActivated(targetPageId) {
       if (targetPageId === 'acquireSettingsPage') {
         renderAcquireSettingsPage();
       }
+      if (targetPageId === 'acquireWebPage') {
+        hydrateAcquireWebPage().catch((err) => notify(err.message || 'Could not load prior acquire', true));
+      }
     },
-    refreshHarvestJobs, refreshDirectHarvestRuns, refreshXHarvestRuns, refreshRedditHarvestRuns, renderHarvestJobsTable
+    refreshAcquireJobs, refreshDirectAcquireRuns, refreshXAcquireRuns, refreshRedditAcquireRuns, renderAcquireJobsTable
   };
 })();

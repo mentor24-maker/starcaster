@@ -140,7 +140,7 @@
                 <th>Role</th>
                 <th>Description</th>
                 <th>Created</th>
-                <th class="settings-projects-actions-heading actions-col">Actions</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="settingsProjectsTableBody"></tbody>
@@ -155,65 +155,58 @@
             </div>
             <div id="settingsProjectsList" class="settings-project-list"></div>
           </div>
-
-          <div class="card settings-project-column">
-            <h3 style="margin-top: 0;">Project Details</h3>
-            <div id="settingsProjectDetailsEmpty" class="meta">Select a project to view details.</div>
-            <div id="settingsProjectDetailsPanel" class="stack-form labeled-form hidden">
-              <div class="project-details-layout">
-                <div class="project-details-form">
-                  <div class="form-row">
-                    <label>Project Name</label>
-                    <input id="settingsProjectDetailsName" readonly />
-                  </div>
-                  <div class="form-row">
-                    <label>Slug</label>
-                    <input id="settingsProjectDetailsSlug" readonly />
-                  </div>
-                  <div class="form-row">
-                    <label>Description</label>
-                    <textarea id="settingsProjectDetailsDescription" rows="4" readonly></textarea>
-                  </div>
-                  <div class="form-row">
-                    <label for="settingsProjectDefaultUrlInput">Default URL</label>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
-                      <input id="settingsProjectDefaultUrlInput" required placeholder="https://example.com" style="min-width: 260px;" />
-                      <button id="settingsProjectDefaultUrlSaveBtn" type="button" class="btn btn-primary">Save URL</button>
-                    </div>
-                  </div>
-                  <p class="meta" style="margin-top: 0;">Required for this project. Used as the default link for Campaign and Promote: Social posts when no campaign-specific URL is selected.</p>
-                  <div class="form-row">
-                    <label>Role</label>
-                    <input id="settingsProjectDetailsRole" readonly />
-                  </div>
-                  <div class="form-row">
-                    <label>Created</label>
-                    <input id="settingsProjectDetailsCreatedAt" readonly />
-                  </div>
-                  <div class="form-row">
-                    <label for="settingsProjectTimezoneSelect">Schedule Timezone</label>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
-                      <select id="settingsProjectTimezoneSelect" style="min-width: 220px;"></select>
-                      <button id="settingsProjectTimezoneSaveBtn" type="button" class="btn btn-primary">Save Timezone</button>
-                    </div>
-                  </div>
-                  <p class="meta" style="margin-top: 0;">Used when scheduling Promote: Social posts. Pick the IANA region for this workspace (defaults to UTC until you save).</p>
+        </div>
+        <p class="meta">If no project is selected in your session, the top-right banner shows a Projects link. When active, its logo/name entry links here. Edit opens the project editor and sets that project as your active workspace.</p>
+      </section>
+      <section id="settingsProjectDetailPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-click="settings.openProjectsPage">Settings: Projects</a>: Edit</h2>
+        </div>
+        <div class="card">
+          <div id="settingsProjectDetailsEmpty" class="meta hidden">Project not found.</div>
+          <div id="settingsProjectDetailsPanel" class="stack-form labeled-form">
+            <div class="project-details-layout">
+              <div class="project-details-form">
+                <div class="form-row">
+                  <label for="settingsProjectDetailsName">Project Name</label>
+                  <input id="settingsProjectDetailsName" required />
                 </div>
-                <div class="project-details-media">
-                  <div class="form-row">
-                    <label for="settingsProjectLogoFile">Project Logo</label>
-                    <input id="settingsProjectLogoFile" type="file" accept="image/*" />
-                  </div>
-                  <div class="project-logo-preview-wrap">
-                    <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
-                    <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
-                  </div>
+                <div class="form-row">
+                  <label for="settingsProjectDetailsSlug">Slug</label>
+                  <input id="settingsProjectDetailsSlug" required />
+                </div>
+                <div class="form-row">
+                  <label for="settingsProjectDefaultUrlInput">Default URL</label>
+                  <input id="settingsProjectDefaultUrlInput" required placeholder="https://example.com" />
+                </div>
+                <p class="meta project-details-field-hint">Required for this project. Used as the default link for Campaign and Promote: Social posts when no campaign-specific URL is selected.</p>
+                <div class="form-row">
+                  <label for="settingsProjectDetailsDescription">Description</label>
+                  <textarea id="settingsProjectDetailsDescription" rows="4"></textarea>
+                </div>
+                <div class="form-row">
+                  <label for="settingsProjectTimezoneSelect">Schedule Timezone</label>
+                  <select id="settingsProjectTimezoneSelect"></select>
+                </div>
+                <p class="meta project-details-field-hint">Used when scheduling Promote: Social posts. Pick the IANA region for this workspace.</p>
+                <div class="form-row project-details-save-row">
+                  <div></div>
+                  <button id="settingsProjectDetailsSaveBtn" type="button" class="btn btn-primary">Save Project</button>
+                </div>
+              </div>
+              <div class="project-details-media">
+                <div class="form-row">
+                  <label for="settingsProjectLogoFile">Project Logo</label>
+                  <input id="settingsProjectLogoFile" type="file" accept="image/*" />
+                </div>
+                <div class="project-logo-preview-wrap">
+                  <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
+                  <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="meta">If no project is selected in your session, the top-right banner shows a Projects link. When active, its logo/name entry links here.</p>
       </section>
       <section id="settingsAgentsPage" class="app-page hidden">
         <h2>Settings: Agents</h2>
@@ -244,8 +237,8 @@
             <input id="dbPromoLeadFieldsTable" name="promo_lead_fields_table" />
           
           
-            <label for="dbYoutubeRunsTable">YouTube Runs Table</label>
-            <input id="dbYoutubeRunsTable" name="youtube_harvest_runs_table" />
+            <label for="dbYoutubeRunsTable">YouTube Details Table</label>
+            <input id="dbYoutubeRunsTable" name="acquire_youtube_details_table" />
           
           <div></div>
               <button type="submit" class="btn btn-primary">Save Database Connection</button>
