@@ -87,7 +87,8 @@ App.promoteSocial = (function () {
   }
 
   function socialTextLimitForPublisher(publisher) {
-    if (safeText(publisher).toLowerCase() === 'facebook_personal') return 63206;
+    const key = safeText(publisher).toLowerCase();
+    if (key === 'facebook_personal' || key === 'facebook') return 63206;
     return SOCIAL_TEXT_LIMIT;
   }
 
@@ -182,8 +183,17 @@ App.promoteSocial = (function () {
   function buildSocialText(campaign) {
     const config = parseConfig(campaign);
     const hidden = new Set(Array.isArray(config.hiddenContentFieldIds) ? config.hiddenContentFieldIds : []);
+    const delivery = socialDeliveryForCampaign(campaign, config);
+    const textLimit = socialTextLimitForPublisher(delivery.publisher);
+    const platform = safeText(delivery.targetPlatform).toLowerCase();
+    const isFacebookChannel = platform === 'facebook' || platform === 'facebook_personal';
+    const usesPostCopy = !hidden.has('campaignPostSelect')
+      && (isFacebookChannel || hidden.has('campaignTweetSelect'));
+    const primaryCopy = usesPostCopy
+      ? captionText(config.postLabel)
+      : (hidden.has('campaignTweetSelect') ? '' : captionText(config.tweetLabel));
     const baseParts = [
-      hidden.has('campaignTweetSelect') ? '' : captionText(config.tweetLabel),
+      primaryCopy,
       hidden.has('campaignTaglineSelect') ? '' : captionText(config.taglineLabel),
     ].filter(Boolean);
     const ctaText = hidden.has('campaignCtaSelect') ? '' : appendCtaUrl(captionText(config.ctaLabel));
@@ -206,15 +216,15 @@ App.promoteSocial = (function () {
     };
 
     let text = compose();
-    while (hashtags.length && characterCount(text) > SOCIAL_TEXT_LIMIT) {
+    while (hashtags.length && characterCount(text) > textLimit) {
       hashtags = hashtags.slice(0, -1);
       text = compose();
     }
-    if (includeCta && characterCount(text) > SOCIAL_TEXT_LIMIT) {
+    if (includeCta && characterCount(text) > textLimit) {
       includeCta = false;
       text = compose();
     }
-    if (includeLink && characterCount(text) > SOCIAL_TEXT_LIMIT) {
+    if (includeLink && characterCount(text) > textLimit) {
       includeLink = false;
       text = compose();
     }

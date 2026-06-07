@@ -56,6 +56,13 @@ App.campaigns = (function () {
     'campaignPrimaryImageSelect',
     'campaignPrimaryVideoSelect',
   ];
+  const FACEBOOK_SOCIAL_CONTENT_TEMPLATE_FIELDS = [
+    'campaignPostSelect',
+    'campaignCtaSelect',
+    'campaignHashtagGroupSelect',
+    'campaignPrimaryImageSelect',
+    'campaignPrimaryVideoSelect',
+  ];
   const CAMPAIGN_CONTENT_TEMPLATES = {
     default: {
       hint: 'Social campaigns use short copy, a CTA, hashtags, and primary image and video by default.',
@@ -74,6 +81,18 @@ App.campaigns = (function () {
       visibleMechanics: ['campaignSegmentSelect'],
       requiredMechanics: [],
       visibleContent: SOCIAL_CONTENT_TEMPLATE_FIELDS,
+    },
+    facebook: {
+      hint: 'Facebook campaigns use post copy, a CTA, hashtags, and primary image and video by default.',
+      visibleMechanics: ['campaignSegmentSelect'],
+      requiredMechanics: [],
+      visibleContent: FACEBOOK_SOCIAL_CONTENT_TEMPLATE_FIELDS,
+    },
+    facebook_personal: {
+      hint: 'Facebook Personal campaigns use post copy, a CTA, hashtags, and primary image and video by default.',
+      visibleMechanics: ['campaignSegmentSelect'],
+      requiredMechanics: [],
+      visibleContent: FACEBOOK_SOCIAL_CONTENT_TEMPLATE_FIELDS,
     },
   };
 
@@ -248,6 +267,22 @@ App.campaigns = (function () {
   function selectedCampaignTweetRow() {
     if (!contentFieldIsActive('campaignTweetSelect')) return null;
     return findById(builderTweets, byId('campaignTweetSelect')?.value);
+  }
+
+  function selectedCampaignPostRow() {
+    if (!contentFieldIsActive('campaignPostSelect')) return null;
+    return findById(builderPosts, byId('campaignPostSelect')?.value);
+  }
+
+  function campaignSocialTextLimit() {
+    const channel = selectedCampaignChannel();
+    const platform = channelPlatformKey(channel);
+    if (platform === 'facebook' || platform === 'facebook_personal') return 63206;
+    return TWEET_CHARACTER_LIMIT;
+  }
+
+  function campaignUsesPostCopy() {
+    return contentFieldIsActive('campaignPostSelect') && !contentFieldIsActive('campaignTweetSelect');
   }
 
   function parseCampaignConfig(campaign) {
@@ -950,6 +985,7 @@ App.campaigns = (function () {
   }
 
   function campaignPreviewChannelKind() {
+    if (campaignUsesPostCopy()) return 'post';
     const channelSelect = byId('campaignChannelSelect');
     const channelText = `${selectedOptionText(channelSelect)} ${safeText(channelSelect?.value)}`.toLowerCase();
     if (channelText.includes('twitter') || /\bx\b/.test(channelText)) return 'tweet';
@@ -957,15 +993,20 @@ App.campaigns = (function () {
   }
 
   function buildCampaignTweetPreview() {
-    const tweetRow = selectedCampaignTweetRow();
+    const usePost = campaignUsesPostCopy();
+    const postRow = usePost ? selectedCampaignPostRow() : null;
+    const tweetRow = usePost ? null : selectedCampaignTweetRow();
     const taglineRow = contentFieldIsActive('campaignTaglineSelect')
       ? findById(builderTaglines, byId('campaignTaglineSelect')?.value)
       : null;
     const ctaRow = contentFieldIsActive('campaignCtaSelect')
       ? findById(builderCtas, byId('campaignCtaSelect')?.value)
       : null;
+    const primaryCopy = usePost
+      ? safeText(postRow?.post || selectedOptionTextIfValue(byId('campaignPostSelect')))
+      : safeText(tweetRow?.content || selectedOptionTextIfValue(byId('campaignTweetSelect')));
     const baseParts = [
-      safeText(tweetRow?.content || selectedOptionTextIfValue(byId('campaignTweetSelect'))),
+      primaryCopy,
       safeText(taglineRow?.tagline || selectedOptionTextIfValue(byId('campaignTaglineSelect'))),
     ].filter(Boolean);
     const ctaText = appendCtaUrl(ctaRow?.cta || selectedOptionTextIfValue(byId('campaignCtaSelect')));
@@ -984,16 +1025,17 @@ App.campaigns = (function () {
       return withHashtags.filter(Boolean).join('\n\n');
     };
 
+    const textLimit = campaignSocialTextLimit();
     let text = compose();
-    while (hashtags.length && characterCount(text) > TWEET_CHARACTER_LIMIT) {
+    while (hashtags.length && characterCount(text) > textLimit) {
       hashtags = hashtags.slice(0, -1);
       text = compose();
     }
-    if (includeCta && characterCount(text) > TWEET_CHARACTER_LIMIT) {
+    if (includeCta && characterCount(text) > textLimit) {
       includeCta = false;
       text = compose();
     }
-    if (includeLink && characterCount(text) > TWEET_CHARACTER_LIMIT) {
+    if (includeLink && characterCount(text) > textLimit) {
       includeLink = false;
       text = compose();
     }
@@ -1002,8 +1044,8 @@ App.campaigns = (function () {
     return {
       text,
       count,
-      limit: TWEET_CHARACTER_LIMIT,
-      delta: TWEET_CHARACTER_LIMIT - count,
+      limit: textLimit,
+      delta: textLimit - count,
       removedHashtagCount: originalHashtags.length - hashtags.length,
       ctaDropped: !!ctaText && !includeCta,
       urlMissingFromTweet: Boolean(shareUrl) && !text.includes(shareUrl),
@@ -1014,6 +1056,15 @@ App.campaigns = (function () {
     if (contentFieldIsActive('campaignPrimaryImageSelect')) {
       const image = findById(state.assets, byId('campaignPrimaryImageSelect')?.value);
       if (image) return { type: 'image', asset: image, url: assetPreviewUrl(image) };
+    }
+    const postRow = selectedCampaignPostRow();
+    const postImageId = Number(postRow?.image_asset_id || 0) || 0;
+    if (postImageId) {
+      const postImage = findById(state.assets, postImageId);
+      const postImageUrl = assetPreviewUrl(postImage);
+      if (postImage && postImageUrl) {
+        return { type: 'image', asset: postImage, url: postImageUrl };
+      }
     }
     const tweetRow = selectedCampaignTweetRow();
     const tweetImageId = Number(tweetRow?.image_asset_id || 0) || 0;
@@ -1076,7 +1127,9 @@ App.campaigns = (function () {
 
     const textEl = document.createElement('div');
     textEl.className = text ? 'campaign-preview-tweet-text' : 'campaign-preview-empty';
-    textEl.textContent = text || 'Choose tweet content, a CTA, hashtags, or media to preview this post.';
+    textEl.textContent = text || (campaignUsesPostCopy()
+      ? 'Choose post content, a CTA, hashtags, or media to preview this post.'
+      : 'Choose tweet content, a CTA, hashtags, or media to preview this post.');
     shell.appendChild(textEl);
 
     if (media) {
@@ -1171,6 +1224,8 @@ App.campaigns = (function () {
     if (!raw) return '';
     if (raw === 'twitter' || raw === 'x' || raw.includes('twitter')) return 'x';
     if (raw === 'tik tok' || raw === 'tiktok' || raw.includes('tik tok') || raw.includes('tiktok')) return 'tiktok';
+    if (raw === 'facebook personal' || raw === 'facebook_personal' || raw.includes('facebook personal')) return 'facebook_personal';
+    if (raw === 'facebook' || raw.includes('facebook')) return 'facebook';
     return raw.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   }
 
