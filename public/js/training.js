@@ -7,7 +7,7 @@ App.training = {
     this.elements.tableBody = document.getElementById('trainingContextRepoTable');
     this.elements.countBadge = document.getElementById('trainingContextRepoCount');
     this.elements.refreshBtn = document.getElementById('refreshTrainingCorpusBtn');
-    this.elements.triggerHarvestBtn = document.getElementById('triggerHarvestBtn');
+    this.elements.triggerAcquireBtn = document.getElementById('triggerAcquireBtn');
     this.elements.filesystemRefreshBtn = document.getElementById('trainingFilesystemRefreshBtn');
     
     this.elements.viewerModal = document.getElementById('trainingCorpusViewerModal');
@@ -79,22 +79,22 @@ App.training = {
       this.elements.refreshBtn.addEventListener('click', () => this.loadCorpus());
     }
 
-    if (this.elements.triggerHarvestBtn) {
-      this.elements.triggerHarvestBtn.addEventListener('click', async () => {
-        const btn = this.elements.triggerHarvestBtn;
+    if (this.elements.triggerAcquireBtn) {
+      this.elements.triggerAcquireBtn.addEventListener('click', async () => {
+        const btn = this.elements.triggerAcquireBtn;
         btn.disabled = true;
         const originalText = btn.textContent;
-        btn.textContent = "Starting Harvest...";
+        btn.textContent = "Starting Acquire...";
         try {
-          const res = await fetch('/api/develop/training/harvest', { method: 'POST' });
+          const res = await fetch('/api/develop/training/acquire', { method: 'POST' });
           if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.error || 'Failed to start harvest');
+            throw new Error(err.error || 'Failed to start acquire');
           }
-          alert("Knowledge harvest started in the background. Check logs for progress. You can refresh knowledge manually after a few moments.");
+          alert("Knowledge acquire started in the background. Check logs for progress. You can refresh knowledge manually after a few moments.");
         } catch (e) {
           console.error(e);
-          alert("Error starting harvest: " + e.message);
+          alert("Error starting acquire: " + e.message);
         } finally {
           btn.disabled = false;
           btn.textContent = originalText;

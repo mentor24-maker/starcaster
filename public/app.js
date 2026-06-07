@@ -184,6 +184,14 @@ App.bootMainApp = function bootMainApp() {
     }
   }
 
+  if (App.projectContext?.init) {
+    try {
+      App.projectContext.init();
+    } catch (err) {
+      console.error('Project context init failed:', err);
+    }
+  }
+
   if (App.assetFieldImport?.init) {
     try {
       App.assetFieldImport.init();

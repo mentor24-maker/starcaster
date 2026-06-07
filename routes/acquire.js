@@ -16,6 +16,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listAcquireJobs }    = require('../lib/acquireJobs');
 const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
 const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
+const { runPeerDiscovery } = require('../lib/peerDiscovery');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const {
   listWebsitePeers,
@@ -25,22 +26,22 @@ const {
   deleteWebsitePeer,
   upsertWebsitePeersFromRun,
 } = require('../lib/websitePeersStore');
-const { runYoutubeHarvest } = require('../lib/acquire/YoutubeDetailsRun');
-const { runXHarvest } = require('../lib/acquire/XAcquireRun');
-const { runRedditHarvest } = require('../lib/acquire/RedditAcquireRun');
+const { runYoutubeAcquire } = require('../lib/acquire/YoutubeDetailsRun');
+const { runXAcquire } = require('../lib/acquire/XAcquireRun');
+const { runRedditAcquire } = require('../lib/acquire/RedditAcquireRun');
 const {
-  createXHarvestRun,
-  listXHarvestRuns,
-  getXHarvestRun,
-  deleteXHarvestRun,
+  createXAcquireRun,
+  listXAcquireRuns,
+  getXAcquireRun,
+  deleteXAcquireRun,
 } = require('../lib/acquire/XAcquireStore');
 const {
-  createRedditHarvestRun,
-  listRedditHarvestRuns,
-  getRedditHarvestRun,
-  deleteRedditHarvestRun,
+  createRedditAcquireRun,
+  listRedditAcquireRuns,
+  getRedditAcquireRun,
+  deleteRedditAcquireRun,
 } = require('../lib/acquire/RedditAcquireStore');
-const { runYoutubeCommentHarvest } = require('../lib/acquire/YoutubeCommentsRun');
+const { runYoutubeCommentAcquire } = require('../lib/acquire/YoutubeCommentsRun');
 const { runYoutubeCommentMiner } = require('../lib/acquire/YoutubeCommentMiner');
 const { resolveYoutubeApiKey } = require('../lib/acquire/youtubeApiKey');
 const { postYoutubeComment } = require('../lib/acquire/YoutubeCommentPost');
@@ -49,11 +50,11 @@ const {
   generateYoutubeCommentSuggestions
 } = require('../lib/acquire/YoutubeCommentSuggestions');
 const {
-  createYoutubeHarvestRun,
-  listYoutubeHarvestRuns,
-  getYoutubeHarvestRun,
-  updateYoutubeHarvestRun,
-  deleteYoutubeHarvestRun,
+  createYoutubeAcquireRun,
+  listYoutubeAcquireRuns,
+  getYoutubeAcquireRun,
+  updateYoutubeAcquireRun,
+  deleteYoutubeAcquireRun,
   runSummary
 } = require('../lib/acquire/YoutubeDetailsStore');
 const { captureYoutubeContact } = require('../lib/acquire/YoutubeContactCapture');
@@ -78,6 +79,7 @@ const {
   deleteYoutubeVideo,
 } = require('../lib/acquire/YoutubeVideosStore');
 const { sbQuery, tableConfig } = require('../lib/supabase');
+const { scopedListQuery, scopedIdQuery } = require('../lib/projectScope');
 const {
   listYoutubeTopics,
   createYoutubeTopic,
@@ -166,8 +168,8 @@ function isYoutubeVideoBanned(tags) {
   return tokens.includes('banned') || tokens.some((token) => token.startsWith('ban_reason:'));
 }
 
-async function listYoutubeBanProfiles(limit = 1000) {
-  const res = await listYoutubeVideos(limit);
+async function listYoutubeBanProfiles(limit = 1000, scope = null) {
+  const res = await listYoutubeVideos(limit, scope);
   if (!res.ok) return [];
   return toArray(res.data)
     .filter((row) => isYoutubeVideoBanned(row?.tags))
@@ -242,32 +244,30 @@ function extractYoutubeVideoId(value) {
   return '';
 }
 
-async function listYoutubeDiagnosticsForUrl(videoUrl) {
+async function listYoutubeDiagnosticsForUrl(videoUrl, scope = null) {
   const normalizedUrl = safeText(videoUrl);
   const videoId = extractYoutubeVideoId(normalizedUrl);
   const cfg = tableConfig();
+  const detailsTable = cfg.acquireYoutubeDetails;
+  const commentsTable = cfg.acquireYoutubeComments;
+  const detailsByUrlQuery = normalizedUrl
+    ? await scopedListQuery(detailsTable, `video_url=eq.${encodeURIComponent(normalizedUrl)}&select=run_id,video_url,video_id,title,channel_name,topic,tags,transcript_status,created_at,updated_at&order=created_at.desc&limit=10`, scope)
+    : '';
+  const detailsByIdQuery = videoId
+    ? await scopedListQuery(detailsTable, `video_id=eq.${encodeURIComponent(videoId)}&select=run_id,video_url,video_id,title,channel_name,topic,tags,transcript_status,created_at,updated_at&order=created_at.desc&limit=10`, scope)
+    : '';
+  const commentsByUrlQuery = normalizedUrl
+    ? await scopedListQuery(commentsTable, `video_url=eq.${encodeURIComponent(normalizedUrl)}&select=run_id,video_url,video_id,title,channel_name,comment_count,created_at,updated_at&order=created_at.desc&limit=10`, scope)
+    : '';
+  const commentsByIdQuery = videoId
+    ? await scopedListQuery(commentsTable, `video_id=eq.${encodeURIComponent(videoId)}&select=run_id,video_url,video_id,title,channel_name,comment_count,created_at,updated_at&order=created_at.desc&limit=10`, scope)
+    : '';
   const [videosRes, detailsByUrlRes, detailsByIdRes, commentsByUrlRes, commentsByIdRes] = await Promise.all([
-    listYoutubeVideos(1000),
-    normalizedUrl ? sbQuery({
-      method: 'GET',
-      table: cfg.harvestYoutubeDetails,
-      query: `video_url=eq.${encodeURIComponent(normalizedUrl)}&select=run_id,video_url,video_id,title,channel_name,category,tags,transcript_status,created_at,updated_at&order=created_at.desc&limit=10`,
-    }) : Promise.resolve({ ok: true, data: [] }),
-    videoId ? sbQuery({
-      method: 'GET',
-      table: cfg.harvestYoutubeDetails,
-      query: `video_id=eq.${encodeURIComponent(videoId)}&select=run_id,video_url,video_id,title,channel_name,category,tags,transcript_status,created_at,updated_at&order=created_at.desc&limit=10`,
-    }) : Promise.resolve({ ok: true, data: [] }),
-    normalizedUrl ? sbQuery({
-      method: 'GET',
-      table: cfg.harvestYoutubeComments,
-      query: `video_url=eq.${encodeURIComponent(normalizedUrl)}&select=run_id,video_url,video_id,title,channel_name,comment_count,created_at,updated_at&order=created_at.desc&limit=10`,
-    }) : Promise.resolve({ ok: true, data: [] }),
-    videoId ? sbQuery({
-      method: 'GET',
-      table: cfg.harvestYoutubeComments,
-      query: `video_id=eq.${encodeURIComponent(videoId)}&select=run_id,video_url,video_id,title,channel_name,comment_count,created_at,updated_at&order=created_at.desc&limit=10`,
-    }) : Promise.resolve({ ok: true, data: [] }),
+    listYoutubeVideos(1000, scope),
+    normalizedUrl ? sbQuery({ method: 'GET', table: detailsTable, query: detailsByUrlQuery }) : Promise.resolve({ ok: true, data: [] }),
+    videoId ? sbQuery({ method: 'GET', table: detailsTable, query: detailsByIdQuery }) : Promise.resolve({ ok: true, data: [] }),
+    normalizedUrl ? sbQuery({ method: 'GET', table: commentsTable, query: commentsByUrlQuery }) : Promise.resolve({ ok: true, data: [] }),
+    videoId ? sbQuery({ method: 'GET', table: commentsTable, query: commentsByIdQuery }) : Promise.resolve({ ok: true, data: [] }),
   ]);
 
   const canonicalVideos = videosRes.ok
@@ -304,26 +304,26 @@ async function listYoutubeDiagnosticsForUrl(videoUrl) {
   };
 }
 
-async function previewYoutubeHarvestDiagnostics(videoUrl) {
+async function previewYoutubeAcquireDiagnostics(videoUrl) {
   const normalizedUrl = safeText(videoUrl);
   if (!normalizedUrl) {
     return { video_url: '', ok: false, error: 'video_url is required' };
   }
 
   try {
-    const result = await runYoutubeHarvest({ video_url: normalizedUrl });
+    const result = await runYoutubeAcquire({ video_url: normalizedUrl });
     return {
       video_url: normalizedUrl,
       ok: true,
-      harvested_at: new Date().toISOString(),
+      acquired_at: new Date().toISOString(),
       result: result || {},
     };
   } catch (error) {
     return {
       video_url: normalizedUrl,
       ok: false,
-      harvested_at: new Date().toISOString(),
-      error: safeText(error?.message) || 'YouTube harvest preview failed',
+      acquired_at: new Date().toISOString(),
+      error: safeText(error?.message) || 'YouTube acquire preview failed',
     };
   }
 }
@@ -674,7 +674,7 @@ async function callOpenClawResponses(inputPayload) {
   }
 
   const basePrompt = [
-    'You are harvesting Reddit data for analytics.',
+    'You are acquiring Reddit data for analytics.',
     'Use browser automation with human-in-the-loop as needed.',
     `Target: ${safeText(inputPayload?.target)}`,
     `Mode: ${safeText(inputPayload?.mode || 'auto')}`,
@@ -744,7 +744,7 @@ async function callOpenClawResponses(inputPayload) {
   const retryPrompt = [
     'Convert the following content into strict JSON with keys:',
     '{"subreddit":"","post":null,"posts":[],"comments":[],"errors":[]}',
-    'If content is not harvest data, return empty arrays and set errors with a short explanation.',
+    'If content is not acquire data, return empty arrays and set errors with a short explanation.',
     'No markdown. No prose. JSON only.',
     '',
     'CONTENT START',
@@ -968,18 +968,18 @@ async function callOpenClawYoutubeReplyOffers(inputPayload) {
   return { ok: true, status: 200, data: { offers: deduped } };
 }
 
-function findHarvestShape(node, depth = 0) {
+function findAcquireShape(node, depth = 0) {
   if (!node || depth > 12) return null;
   if (typeof node === 'string') {
     const parsedFromMixed = extractJsonFromText(node);
     if (parsedFromMixed) {
-      return findHarvestShape(parsedFromMixed, depth + 1);
+      return findAcquireShape(parsedFromMixed, depth + 1);
     }
     return null;
   }
   if (Array.isArray(node)) {
     for (const item of node) {
-      const found = findHarvestShape(item, depth + 1);
+      const found = findAcquireShape(item, depth + 1);
       if (found) return found;
     }
     return null;
@@ -996,17 +996,17 @@ function findHarvestShape(node, depth = 0) {
   for (const value of Object.values(node)) {
     const parsed = maybeParseJson(value);
     if (parsed) {
-      const foundParsed = findHarvestShape(parsed, depth + 1);
+      const foundParsed = findAcquireShape(parsed, depth + 1);
       if (foundParsed) return foundParsed;
     }
-    const found = findHarvestShape(value, depth + 1);
+    const found = findAcquireShape(value, depth + 1);
     if (found) return found;
   }
   return null;
 }
 
-function normalizeOpenClawHarvestResult(rawPayload, inputPayload, trace = {}) {
-  const shaped = findHarvestShape(rawPayload) || {};
+function normalizeOpenClawAcquireResult(rawPayload, inputPayload, trace = {}) {
+  const shaped = findAcquireShape(rawPayload) || {};
   const postsFromShape = Array.isArray(shaped.posts) ? shaped.posts : [];
   const postFromShape = shaped.post && typeof shaped.post === 'object' ? shaped.post : null;
   const comments = Array.isArray(shaped.comments) ? shaped.comments : [];
@@ -1040,11 +1040,11 @@ function normalizeOpenClawHarvestResult(rawPayload, inputPayload, trace = {}) {
   };
 }
 
-async function runRedditHarvestViaOpenClaw(inputPayload) {
+async function runRedditAcquireViaOpenClaw(inputPayload) {
   const responseCall = await callOpenClawResponses(inputPayload);
   if (!responseCall.ok) {
     try {
-      const backup = await runRedditHarvest({
+      const backup = await runRedditAcquire({
         ...inputPayload,
         source_mode: 'public',
         max_posts: Math.min(Number(inputPayload?.max_posts || 100) || 100, 5),
@@ -1107,15 +1107,15 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
   const outputText = extractOpenClawOutputText(responseCall.data || {});
   const parsedFromText = extractJsonFromText(outputText);
   const rawPayload = parsedFromText || responseCall.data || {};
-  const normalized = normalizeOpenClawHarvestResult(rawPayload, inputPayload, {
+  const normalized = normalizeOpenClawAcquireResult(rawPayload, inputPayload, {
     jobId: safeText(responseCall.data?.id),
     steps: [{ action: 'responses', ok: true, status: Number(responseCall.status || 0) || 200 }],
   });
 
   if (!normalized.posts.length && !normalized.comments.length && !normalized.post) {
-    // Fallback: attempt direct Reddit harvest path so the run can still complete.
+    // Fallback: attempt direct Reddit acquire path so the run can still complete.
     try {
-      const backup = await runRedditHarvest({
+      const backup = await runRedditAcquire({
         ...inputPayload,
         source_mode: 'public',
         max_posts: Math.min(Number(inputPayload?.max_posts || 100) || 100, 5),
@@ -1164,7 +1164,7 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
         errors: [
           {
             stage: 'openclaw',
-            message: 'OpenClaw finished but did not return structured Reddit harvest data.',
+            message: 'OpenClaw finished but did not return structured Reddit acquire data.',
             hint: 'Use smaller limits (10 posts / 100 comments) and retry, or inspect raw payload in Run Detail.',
           },
         ],
@@ -1185,7 +1185,6 @@ async function runRedditHarvestViaOpenClaw(inputPayload) {
 async function handle(req, res, pathname, method) {
   const urlObj = getUrlObj(req);
   const projectScope = requestProjectScope(req);
-  pathname = String(pathname || '').replace(/^\/api\/harvest(?=\/|$)/, '/api/acquire');
 
   // GET /api/acquire/jobs — read-only, no extra limit
   if (pathname === '/api/acquire/jobs' && method === 'GET') {
@@ -1247,33 +1246,83 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { websitePeer: result.data }), true;
   }
 
-  // POST /api/acquire/website-peers/discover — discover peer-site candidates without saving them yet
-  if (pathname === '/api/acquire/website-peers/discover' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.direct')) return true;
+  // POST /api/acquire/peer-discovery — keyword-only crawl, Google search, similarity rank (top 5)
+  if (pathname === '/api/acquire/peer-discovery' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'acquire.direct')) return true;
     const body = await parseJsonBody(req);
     const sourceUrl = safeText(body?.source_url || body?.site_url);
     if (!sourceUrl) return sendErr(res, 400, 'source_url is required'), true;
-    const run = await runDirectAcquire({
+    const scope = requestProjectScope(req);
+    const discovery = await runPeerDiscovery({
       source_url: sourceUrl,
       max_pages: Number(body?.max_pages || 10) || 10,
       body_snippet_chars: Number(body?.body_snippet_chars || 500) || 500,
-      capture_contact_data: body?.capture_contact_data === true || String(body?.capture_contact_data || '').trim().toLowerCase() === 'true',
-      acquire_peer_sites: true,
-      peer_sites_limit: Number(body?.peer_sites_limit || 20) || 20,
-      images_limit: Number(body?.images_limit || 20) || 20,
       keyword_exclusions: body?.keyword_exclusions || '',
-      persist_run: false,
-    });
+      keyword_count: Number(body?.keyword_count || 5) || 5,
+      results_per_keyword: Number(body?.results_per_keyword || 30) || 30,
+      output_count: Number(body?.output_count || 5) || 5,
+      light_fetch_count: Number(body?.light_fetch_count || 20) || 20,
+    }, scope);
+    return sendOk(res, 200, discovery, discovery), true;
+  }
+
+  // POST /api/acquire/website-peers/discover — discover peer-site candidates without saving them yet
+  if (pathname === '/api/acquire/website-peers/discover' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'acquire.direct')) return true;
+    const body = await parseJsonBody(req);
+    const sourceUrl = safeText(body?.source_url || body?.site_url);
+    if (!sourceUrl) return sendErr(res, 400, 'source_url is required'), true;
+    const scope = requestProjectScope(req);
+    const discovery = await runPeerDiscovery({
+      source_url: sourceUrl,
+      max_pages: Number(body?.max_pages || 10) || 10,
+      body_snippet_chars: Number(body?.body_snippet_chars || 500) || 500,
+      keyword_exclusions: body?.keyword_exclusions || '',
+      keyword_count: Number(body?.keyword_count || 5) || 5,
+      results_per_keyword: Number(body?.results_per_keyword || 30) || 30,
+      output_count: Number(body?.peer_sites_limit || body?.output_count || 5) || 5,
+      light_fetch_count: Number(body?.light_fetch_count || 20) || 20,
+    }, scope);
+    const peers = Array.isArray(discovery?.results) ? discovery.results : [];
+    const peerSummary = {
+      enabled: true,
+      configured: !!discovery?.configured,
+      provider: String(discovery?.provider || 'google_custom_search'),
+      error: String(discovery?.error || '').trim(),
+      searched_keywords: Array.isArray(discovery?.searched_keywords) ? discovery.searched_keywords : [],
+      raw_results_count: Number(discovery?.raw_results_count || 0) || 0,
+      unique_domains_count: Number(discovery?.unique_domains_count || 0) || 0,
+      filtered_count: Number(discovery?.filtered_count || 0) || 0,
+      peers: peers.map((item) => ({
+        domain: item.domain,
+        url: item.url,
+        title: item.title,
+        snippet: item.snippet,
+        rank: item.rank,
+        hits: item.hits,
+        matched_keywords: item.matched_keywords,
+        model: item.website_model,
+        other_models: item.other_models,
+        similarity_score: item.similarity_score,
+        suggested_reference_role: item.suggested_reference_role,
+        reasons: item.reasons,
+      })),
+      suggested_models: [],
+      errors: Array.isArray(discovery?.errors) ? discovery.errors : [],
+      version: String(discovery?.version || '').trim(),
+    };
     return sendOk(res, 200, {
-      source_url: run?.source_url || sourceUrl,
-      pages_succeeded: Number(run?.pages_succeeded || 0) || 0,
-      keyword_summary: run?.keyword_summary || {},
-      peer_summary: run?.peer_summary || {},
+      source_url: discovery?.source_url || sourceUrl,
+      pages_succeeded: Number(discovery?.pages_succeeded || 0) || 0,
+      keyword_summary: discovery?.keyword_summary || {},
+      peer_summary: peerSummary,
+      discovery,
     }, {
-      source_url: run?.source_url || sourceUrl,
-      pages_succeeded: Number(run?.pages_succeeded || 0) || 0,
-      keyword_summary: run?.keyword_summary || {},
-      peer_summary: run?.peer_summary || {},
+      source_url: discovery?.source_url || sourceUrl,
+      pages_succeeded: Number(discovery?.pages_succeeded || 0) || 0,
+      keyword_summary: discovery?.keyword_summary || {},
+      peer_summary: peerSummary,
+      discovery,
     }), true;
   }
 
@@ -1302,7 +1351,7 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/direct-run — ⚡ RATE LIMITED (hits external web)
   if (pathname === '/api/acquire/direct-run' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.direct')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.direct')) return true;
 
     const body = await parseJsonBody(req);
     const scope = requestProjectScope(req);
@@ -1328,15 +1377,16 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/youtube — ⚡ RATE LIMITED (hits YouTube + transcript APIs)
   if (pathname === '/api/acquire/youtube' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
 
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const inputPayload = {
       ...(body || {}),
       category: String(body?.category || '').trim(),
     };
-    const result    = await runYoutubeHarvest(inputPayload);
-    const createRes = await createYoutubeHarvestRun(inputPayload, result);
+    const result    = await runYoutubeAcquire(inputPayload);
+    const createRes = await createYoutubeAcquireRun(inputPayload, result, scope);
     if (!createRes.ok) {
       return sendErr(res, createRes.status || 500, createRes.error,
         { details: createRes.raw ? [String(createRes.raw)] : [] }), true;
@@ -1373,9 +1423,9 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
-  // POST /api/acquire/x-harvest — ⚡ RATE LIMITED (hits X recent search API)
-  if (pathname === '/api/acquire/x-harvest' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.x')) return true;
+  // POST /api/acquire/x-acquire
+  if (pathname === '/api/acquire/x-acquire' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'acquire.x')) return true;
 
     const body = await parseJsonBody(req);
     const inputPayload = {
@@ -1394,25 +1444,25 @@ async function handle(req, res, pathname, method) {
       segment_id: String(body?.segment_id || '').trim(),
       segment_label: String(body?.segment_label || '').trim(),
     };
-    const harvest = await runXHarvest(inputPayload);
-    if (!harvest.ok) {
-      return sendErr(res, harvest.status || 500, harvest.error || 'X harvest failed', {
+    const acquireResult = await runXAcquire(inputPayload);
+    if (!acquireResult.ok) {
+      return sendErr(res, acquireResult.status || 500, acquireResult.error || 'X acquire failed', {
         details: [
-          String(harvest.endpoint || ''),
-          harvest.oauth1 ? `oauth1: ${JSON.stringify(harvest.oauth1)}` : '',
-          harvest.oauth2 ? `oauth2: ${JSON.stringify(harvest.oauth2)}` : '',
-          JSON.stringify(harvest.data || {}),
+          String(acquireResult.endpoint || ''),
+          acquireResult.oauth1 ? `oauth1: ${JSON.stringify(acquireResult.oauth1)}` : '',
+          acquireResult.oauth2 ? `oauth2: ${JSON.stringify(acquireResult.oauth2)}` : '',
+          JSON.stringify(acquireResult.data || {}),
         ].filter(Boolean),
       }), true;
     }
     const scope = requestProjectScope(req);
-    const saved = createXHarvestRun(inputPayload, harvest.data || {}, scope);
+    const saved = createXAcquireRun(inputPayload, acquireResult.data || {}, scope);
     const run = saved.data || null;
     logActivity({
       action: 'acquire.x',
       entityType: 'acquire',
       entityId: run?.run_id || null,
-      summary: `X harvest acquired ${Number(run?.stats?.total_tweets || 0) || 0} tweets`,
+      summary: `X acquire acquired ${Number(run?.stats?.total_tweets || 0) || 0} tweets`,
       meta: {
         query: String(run?.query || ''),
         hashtags: Array.isArray(run?.hashtags) ? run.hashtags.join(',') : '',
@@ -1420,14 +1470,14 @@ async function handle(req, res, pathname, method) {
         total_replies: Number(run?.stats?.total_replies || 0) || 0,
       },
     });
-    return sendOk(res, 200, { run: run || null, result: harvest.data || {} }, { run: run || null, result: harvest.data || {} }), true;
+    return sendOk(res, 200, { run: run || null, result: acquireResult.data || {} }, { run: run || null, result: acquireResult.data || {} }), true;
   }
 
   // GET /api/acquire/x-runs — read-only
   if (pathname === '/api/acquire/x-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
     const scope = requestProjectScope(req);
-    const result = listXHarvestRuns(limit, scope);
+    const result = listXAcquireRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -1438,7 +1488,7 @@ async function handle(req, res, pathname, method) {
   if (xRunMatch && method === 'GET') {
     const id = decodeURIComponent(xRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = getXHarvestRun(id, scope);
+    const result = getXAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -1447,20 +1497,20 @@ async function handle(req, res, pathname, method) {
   if (xRunMatch && method === 'DELETE') {
     const id = decodeURIComponent(xRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = deleteXHarvestRun(id, scope);
+    const result = deleteXAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.x_deleted',
       entityType: 'acquire',
       entityId: id,
-      summary: `X harvest run deleted: ${id}`,
+      summary: `X acquire run deleted: ${id}`,
     });
     return sendOk(res, 200, result.data, result.data), true;
   }
 
-  // POST /api/acquire/reddit-harvest — ⚡ RATE LIMITED (OpenClaw browser-based harvest)
-  if (pathname === '/api/acquire/reddit-harvest' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.reddit')) return true;
+  // POST /api/acquire/reddit-acquire
+  if (pathname === '/api/acquire/reddit-acquire' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'acquire.reddit')) return true;
 
     const body = await parseJsonBody(req);
     const inputPayload = {
@@ -1487,33 +1537,33 @@ async function handle(req, res, pathname, method) {
       max_comments: inputPayload.max_comments,
       routeBudgetMs,
     });
-    const harvest = await Promise.race([
-      runRedditHarvestViaOpenClaw(inputPayload),
+    const acquireResult = await Promise.race([
+      runRedditAcquireViaOpenClaw(inputPayload),
       (async () => {
         await waitFor(routeBudgetMs);
-        return { ok: false, status: 504, error: `Reddit harvest route timed out after ${routeBudgetMs}ms` };
+        return { ok: false, status: 504, error: `Reddit acquire route timed out after ${routeBudgetMs}ms` };
       })(),
     ]);
-    console.log('[acquire.reddit] harvest-finished', {
-      ok: !!harvest?.ok,
-      status: Number(harvest?.status || 0) || 0,
+    console.log('[acquire.reddit] acquire-finished', {
+      ok: !!acquireResult?.ok,
+      status: Number(acquireResult?.status || 0) || 0,
       elapsedMs: Date.now() - startedAt,
     });
-    if (!harvest.ok) {
-      return sendErr(res, harvest.status || 500, harvest.error || 'Reddit harvest failed', {
+    if (!acquireResult.ok) {
+      return sendErr(res, acquireResult.status || 500, acquireResult.error || 'Reddit acquire failed', {
         details: [
-          String(harvest.data?.hint || ''),
-          String(harvest.data?.type || ''),
-          String(harvest.data?.job_id || ''),
+          String(acquireResult.data?.hint || ''),
+          String(acquireResult.data?.type || ''),
+          String(acquireResult.data?.job_id || ''),
         ].filter(Boolean),
       }), true;
     }
     const scope = requestProjectScope(req);
     const saved = await Promise.race([
-      Promise.resolve(createRedditHarvestRun(inputPayload, harvest.data || {}, scope)),
+      Promise.resolve(createRedditAcquireRun(inputPayload, acquireResult.data || {}, scope)),
       (async () => {
         await waitFor(10000);
-        return { ok: false, status: 504, error: 'Reddit harvest save timed out after 10000ms' };
+        return { ok: false, status: 504, error: 'Reddit acquire save timed out after 10000ms' };
       })(),
     ]);
     if (!saved?.ok) {
@@ -1521,7 +1571,7 @@ async function handle(req, res, pathname, method) {
         status: Number(saved?.status || 0) || 0,
         error: safeText(saved?.error),
       });
-      return sendErr(res, saved.status || 500, saved.error || 'Failed to save Reddit harvest run'), true;
+      return sendErr(res, saved.status || 500, saved.error || 'Failed to save Reddit acquire run'), true;
     }
     const run = saved.data || null;
     console.log('[acquire.reddit] done', {
@@ -1534,7 +1584,7 @@ async function handle(req, res, pathname, method) {
       action: 'acquire.reddit',
       entityType: 'acquire',
       entityId: run?.run_id || null,
-      summary: `Reddit harvest acquired ${Number(run?.stats?.total_posts || 0) || 0} posts`,
+      summary: `Reddit acquire acquired ${Number(run?.stats?.total_posts || 0) || 0} posts`,
       meta: {
         mode: String(run?.mode || ''),
         target: String(run?.target || ''),
@@ -1543,14 +1593,14 @@ async function handle(req, res, pathname, method) {
         total_comments: Number(run?.stats?.total_comments || 0) || 0,
       },
     });
-    return sendOk(res, 200, { run: run || null, result: harvest.data || {} }, { run: run || null, result: harvest.data || {} }), true;
+    return sendOk(res, 200, { run: run || null, result: acquireResult.data || {} }, { run: run || null, result: acquireResult.data || {} }), true;
   }
 
   // GET /api/acquire/reddit-runs — read-only
   if (pathname === '/api/acquire/reddit-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
     const scope = requestProjectScope(req);
-    const result = listRedditHarvestRuns(limit, scope);
+    const result = listRedditAcquireRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -1561,7 +1611,7 @@ async function handle(req, res, pathname, method) {
   if (redditRunMatch && method === 'GET') {
     const id = decodeURIComponent(redditRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = getRedditHarvestRun(id, scope);
+    const result = getRedditAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -1570,19 +1620,20 @@ async function handle(req, res, pathname, method) {
   if (redditRunMatch && method === 'DELETE') {
     const id = decodeURIComponent(redditRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = deleteRedditHarvestRun(id, scope);
+    const result = deleteRedditAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.reddit_deleted',
       entityType: 'acquire',
       entityId: id,
-      summary: `Reddit harvest run deleted: ${id}`,
+      summary: `Reddit acquire run deleted: ${id}`,
     });
     return sendOk(res, 200, result.data, result.data), true;
   }
 
   if (pathname === '/api/acquire/youtube-topics' && method === 'GET') {
-    const result = await listYoutubeTopics();
+    const scope = requestProjectScope(req);
+    const result = await listYoutubeTopics(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const topics = (Array.isArray(result.data) ? result.data : []).map(rowToYoutubeTopic);
     return sendOk(res, 200, topics, { topics }, { total: topics.length }), true;
@@ -1590,12 +1641,13 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/acquire/youtube-topics' && method === 'POST') {
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const topic = String(body?.topic || '').trim();
     if (!topic) {
       return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await createYoutubeTopic({ topic });
+    const result = await createYoutubeTopic({ topic }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToYoutubeTopic(created), { topic: rowToYoutubeTopic(created) }), true;
@@ -1604,7 +1656,8 @@ async function handle(req, res, pathname, method) {
   const youtubeTopicIdMatch = pathname.match(/^\/api\/acquire\/youtube-topics\/(\d+)\/?$/);
   if (youtubeTopicIdMatch && method === 'GET') {
     const topicId = Number(youtubeTopicIdMatch[1]);
-    const result = await getYoutubeTopicById(topicId);
+    const scope = requestProjectScope(req);
+    const result = await getYoutubeTopicById(topicId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const row = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!row) return sendErr(res, 404, 'Topic not found', { code: 'NOT_FOUND' }), true;
@@ -1614,12 +1667,13 @@ async function handle(req, res, pathname, method) {
   if (youtubeTopicIdMatch && method === 'PATCH') {
     const topicId = Number(youtubeTopicIdMatch[1]);
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const topic = String(body?.topic || '').trim();
     if (!topic) {
       return sendErr(res, 400, 'topic is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateYoutubeTopic(topicId, { topic });
+    const result = await updateYoutubeTopic(topicId, { topic }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const updated = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!updated) return sendErr(res, 404, 'Topic not found', { code: 'NOT_FOUND' }), true;
@@ -1628,7 +1682,8 @@ async function handle(req, res, pathname, method) {
 
   if (youtubeTopicIdMatch && method === 'DELETE') {
     const topicId = Number(youtubeTopicIdMatch[1]);
-    const result = await deleteYoutubeTopic(topicId);
+    const scope = requestProjectScope(req);
+    const result = await deleteYoutubeTopic(topicId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
     if (!deleted) return sendErr(res, 404, 'Topic not found', { code: 'NOT_FOUND' }), true;
@@ -1637,9 +1692,10 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/youtube-comments — ⚡ RATE LIMITED (hits YouTube Data API)
   if (pathname === '/api/acquire/youtube-comments' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
 
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const videoUrl = String(body?.video_url || '').trim();
     if (!videoUrl) {
       return sendErr(res, 400, 'video_url is required', { code: 'VALIDATION_ERROR' }), true;
@@ -1653,10 +1709,10 @@ async function handle(req, res, pathname, method) {
     };
 
     try {
-      const result = await runYoutubeCommentHarvest(input);
+      const result = await runYoutubeCommentAcquire(input);
 
       // Persist to the acquire YouTube comments table
-      const saveRes = await createCommentRun(input, result);
+      const saveRes = await createCommentRun(input, result, scope);
       const run_id = saveRes.data?.run_id || null;
 
       logActivity({
@@ -1674,9 +1730,10 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/youtube-comments/miner — ⚡ RATE LIMITED (batch comments + filtering/tagging)
   if (pathname === '/api/acquire/youtube-comments/miner' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
 
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const input = {
       targets: body?.targets || body?.targets_text || '',
       videos_per_channel: Number(body?.videos_per_channel || 5) || 5,
@@ -1702,18 +1759,18 @@ async function handle(req, res, pathname, method) {
       }), true;
     }
 
-    const saveRes = await createMinerRun(input, mined.data || {});
+    const saveRes = await createMinerRun(input, mined.data || {}, scope);
     const runId = saveRes?.ok ? safeText(saveRes?.data?.run_id) : '';
 
     logActivity({
       action: 'acquire.youtube_comment_miner',
       entityType: 'acquire',
       entityId: runId || null,
-      summary: `YouTube Comment Miner processed ${Number(mined?.data?.stats?.harvested_videos || 0) || 0} videos`,
+      summary: `YouTube Comment Miner processed ${Number(mined?.data?.stats?.acquired_videos || 0) || 0} videos`,
       meta: {
         run_id: runId || null,
         resolved_videos: Number(mined?.data?.stats?.resolved_videos || 0) || 0,
-        harvested_videos: Number(mined?.data?.stats?.harvested_videos || 0) || 0,
+        acquired_videos: Number(mined?.data?.stats?.acquired_videos || 0) || 0,
         total_comments_raw: Number(mined?.data?.stats?.total_comments_raw || 0) || 0,
         total_comments_filtered: Number(mined?.data?.stats?.total_comments_filtered || 0) || 0,
       },
@@ -1750,7 +1807,7 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/youtube-reply-offers — generate 3 tailored reply offers for one comment
   if (pathname === '/api/acquire/youtube-reply-offers' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
     const body = await parseJsonBody(req);
     const input = {
       comment: safeText(body?.comment),
@@ -1779,9 +1836,10 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/youtube-research — build candidate YouTube targets from messaging + phrases
   if (pathname === '/api/acquire/youtube-research' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
 
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const apiKey = resolveYoutubeApiKey();
     if (!apiKey) {
       return sendErr(res, 400, 'YouTube API key is not configured. Go to Settings > APIs > YouTube and add your key.'), true;
@@ -1852,7 +1910,7 @@ async function handle(req, res, pathname, method) {
       }
     }
 
-    const banProfiles = await listYoutubeBanProfiles(1000);
+    const banProfiles = await listYoutubeBanProfiles(1000, scope);
     const filteredDiscovered = discovered.filter((hit) => !isResearchCandidateExcluded(hit, banProfiles));
 
     const dedupedVideos = [];
@@ -1935,7 +1993,7 @@ async function handle(req, res, pathname, method) {
       },
       warnings: warnings.slice(0, 300),
     };
-    const saveRes = await createResearchRun(researchInput, resultPayload);
+    const saveRes = await createResearchRun(researchInput, resultPayload, scope);
     const runId = saveRes?.ok ? safeText(saveRes?.data?.run_id) : '';
     resultPayload.research.run_id = runId;
 
@@ -1959,7 +2017,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/youtube-research-runs
   if (pathname === '/api/acquire/youtube-research-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
-    const result = await listResearchRuns(limit);
+    const scope = requestProjectScope(req);
+    const result = await listResearchRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data || [], { runs: result.data || [] }, { total: Array.isArray(result.data) ? result.data.length : 0 }), true;
   }
@@ -1968,7 +2027,8 @@ async function handle(req, res, pathname, method) {
   const youtubeResearchRunMatch = pathname.match(/^\/api\/acquire\/youtube-research-runs\/([^/]+)$/);
   if (youtubeResearchRunMatch && method === 'GET') {
     const id = decodeURIComponent(youtubeResearchRunMatch[1]);
-    const result = await getResearchRun(id);
+    const scope = requestProjectScope(req);
+    const result = await getResearchRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const run = result.data || {};
     const research = run?.result?.research || {};
@@ -1992,7 +2052,8 @@ async function handle(req, res, pathname, method) {
   // DELETE /api/acquire/youtube-research-runs/:id
   if (youtubeResearchRunMatch && method === 'DELETE') {
     const id = decodeURIComponent(youtubeResearchRunMatch[1]);
-    const result = await deleteResearchRun(id);
+    const scope = requestProjectScope(req);
+    const result = await deleteResearchRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.youtube_research_deleted',
@@ -2006,7 +2067,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/youtube-miner-runs
   if (pathname === '/api/acquire/youtube-miner-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 30);
-    const result = await listMinerRuns(limit);
+    const scope = requestProjectScope(req);
+    const result = await listMinerRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data || [], { runs: result.data || [] }, { total: Array.isArray(result.data) ? result.data.length : 0 }), true;
   }
@@ -2015,7 +2077,8 @@ async function handle(req, res, pathname, method) {
   const youtubeMinerRunMatch = pathname.match(/^\/api\/acquire\/youtube-miner-runs\/([^/]+)$/);
   if (youtubeMinerRunMatch && method === 'GET') {
     const id = decodeURIComponent(youtubeMinerRunMatch[1]);
-    const result = await getMinerRun(id);
+    const scope = requestProjectScope(req);
+    const result = await getMinerRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -2023,14 +2086,15 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/youtube-target-history
   if (pathname === '/api/acquire/youtube-target-history' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 400);
-    const result = await listTargetHistory(limit);
+    const scope = requestProjectScope(req);
+    const result = await listTargetHistory(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data || [], { targets: result.data || [] }, { total: Array.isArray(result.data) ? result.data.length : 0 }), true;
   }
 
   // POST /api/acquire/youtube-comment — ⚡ RATE LIMITED (writes to YouTube)
   if (pathname === '/api/acquire/youtube-comment' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
 
     const body = await parseJsonBody(req);
     const videoUrl = String(body?.video_url || '').trim();
@@ -2061,7 +2125,7 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/youtube-comment-suggestions — ⚡ RATE LIMITED (LLM)
   if (pathname === '/api/acquire/youtube-comment-suggestions' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
 
     const body = await parseJsonBody(req);
     const input = buildYoutubeCommentSuggestionInput({
@@ -2081,7 +2145,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/youtube-comment-runs — list persisted comment runs
   if (pathname === '/api/acquire/youtube-comment-runs' && method === 'GET') {
     const limit  = Number(urlObj.searchParams.get('limit') || 20);
-    const result = await listCommentRuns(limit);
+    const scope = requestProjectScope(req);
+    const result = await listCommentRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = result.data || [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -2090,7 +2155,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/youtube-videos — canonical video repository
   if (pathname === '/api/acquire/youtube-videos' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 200);
-    const result = await listYoutubeVideos(limit);
+    const scope = requestProjectScope(req);
+    const result = await listYoutubeVideos(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const videos = result.data || [];
     return sendOk(res, 200, videos, { videos }, { total: videos.length }), true;
@@ -2098,9 +2164,10 @@ async function handle(req, res, pathname, method) {
 
   // POST /api/acquire/youtube-videos/backfill-details
   if (pathname === '/api/acquire/youtube-videos/backfill-details' && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
 
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const limit = Math.max(1, Math.min(Number(body?.limit || 25) || 25, 200));
     const delayMs = Math.max(0, Math.min(Number(body?.delay_ms || 0) || 0, 5000));
     const force = body?.force === true;
@@ -2115,7 +2182,7 @@ async function handle(req, res, pathname, method) {
 
     let targets = requestedUrls;
     if (!targets.length) {
-      const videosRes = await listYoutubeVideos(1000);
+      const videosRes = await listYoutubeVideos(1000, scope);
       if (!videosRes.ok) return sendErr(res, videosRes.status || 500, videosRes.error), true;
       targets = toArray(videosRes.data)
         .filter((video) => safeText(video.video_url))
@@ -2147,7 +2214,7 @@ async function handle(req, res, pathname, method) {
       }), true;
     }
 
-    const existingVideosRes = await listYoutubeVideos(1000);
+    const existingVideosRes = await listYoutubeVideos(1000, scope);
     const existingVideos = existingVideosRes.ok ? toArray(existingVideosRes.data) : [];
     const byUrl = new Map(existingVideos.map((video) => [safeText(video.video_url), video]));
     const items = [];
@@ -2168,20 +2235,20 @@ async function handle(req, res, pathname, method) {
 
       try {
         const providedMetadata = itemsByUrl.get(videoUrl) || {};
-        const harvestInput = {
+        const acquireInput = {
           video_url: videoUrl,
           title: safeText(providedMetadata.title || existing?.title),
           channel_name: safeText(providedMetadata.channel_name || existing?.channel_name),
           category: safeText(existing?.category),
           tags: safeText(existing?.tags),
         };
-        const result = await runYoutubeHarvest(harvestInput);
-        const createRes = await createYoutubeHarvestRun(harvestInput, result);
+        const result = await runYoutubeAcquire(acquireInput);
+        const createRes = await createYoutubeAcquireRun(acquireInput, result, scope);
         if (!createRes.ok) {
           items.push({
             video_url: videoUrl,
             status: 'failed',
-            error: safeText(createRes.error) || 'Failed to save harvested details',
+            error: safeText(createRes.error) || 'Failed to save acquired details',
           });
         } else {
           const summary = runSummary(createRes.data);
@@ -2198,7 +2265,7 @@ async function handle(req, res, pathname, method) {
         items.push({
           video_url: videoUrl,
           status: 'failed',
-          error: safeText(err?.message) || 'YouTube detail harvest failed',
+          error: safeText(err?.message) || 'YouTube detail acquire failed',
         });
       }
 
@@ -2234,17 +2301,18 @@ async function handle(req, res, pathname, method) {
   // POST /api/acquire/youtube-videos/diagnostics
   if (pathname === '/api/acquire/youtube-videos/diagnostics' && method === 'POST') {
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const targets = uniqueYoutubeUrls(body?.video_urls).slice(0, 25);
-    const includeHarvestPreview = body?.include_harvest_preview === true;
+    const includeAcquirePreview = body?.include_acquire_preview === true;
     if (!targets.length) {
       return sendErr(res, 400, 'video_urls is required', { code: 'VALIDATION_ERROR' }), true;
     }
 
     const diagnostics = [];
     for (const videoUrl of targets) {
-      const item = await listYoutubeDiagnosticsForUrl(videoUrl);
-      if (includeHarvestPreview) {
-        item.harvest_preview = await previewYoutubeHarvestDiagnostics(videoUrl);
+      const item = await listYoutubeDiagnosticsForUrl(videoUrl, scope);
+      if (includeAcquirePreview) {
+        item.acquire_preview = await previewYoutubeAcquireDiagnostics(videoUrl);
       }
       diagnostics.push(item);
     }
@@ -2256,7 +2324,8 @@ async function handle(req, res, pathname, method) {
   const youtubeVideoMatch = pathname.match(/^\/api\/acquire\/youtube-videos\/([^/]+)$/);
   if (youtubeVideoMatch && method === 'GET') {
     const id = decodeURIComponent(youtubeVideoMatch[1]);
-    const result = await getYoutubeVideo(id);
+    const scope = requestProjectScope(req);
+    const result = await getYoutubeVideo(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { video: result.data }), true;
   }
@@ -2265,6 +2334,7 @@ async function handle(req, res, pathname, method) {
   if (youtubeVideoMatch && method === 'PATCH') {
     const id = decodeURIComponent(youtubeVideoMatch[1]);
     const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const patch = {};
     if (body?.category != null) patch.topic = safeText(body.category);
     if (body?.topic != null) patch.topic = safeText(body.topic);
@@ -2274,12 +2344,12 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateYoutubeVideo(id, patch);
+    const result = await updateYoutubeVideo(id, patch, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
 
-    // Keep the detail run in sync for flows that still read from the original harvest table.
+    // Keep the detail run in sync for flows that still read from the original acquire table.
     if (safeText(result.data?.detail_run_id)) {
-      await updateYoutubeHarvestRun(result.data.detail_run_id, patch).catch(() => null);
+      await updateYoutubeAcquireRun(result.data.detail_run_id, patch, scope).catch(() => null);
     }
 
     return sendOk(res, 200, result.data, { video: result.data }), true;
@@ -2288,7 +2358,8 @@ async function handle(req, res, pathname, method) {
   // DELETE /api/acquire/youtube-videos/:id
   if (youtubeVideoMatch && method === 'DELETE') {
     const id = decodeURIComponent(youtubeVideoMatch[1]);
-    const result = await deleteYoutubeVideo(id);
+    const scope = requestProjectScope(req);
+    const result = await deleteYoutubeVideo(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { video: result.data }), true;
   }
@@ -2297,7 +2368,8 @@ async function handle(req, res, pathname, method) {
   const commentRunMatch = pathname.match(/^\/api\/acquire\/youtube-comment-runs\/([^/]+)$/);
   if (commentRunMatch && method === 'GET') {
     const id     = decodeURIComponent(commentRunMatch[1]);
-    const result = await getCommentRun(id);
+    const scope = requestProjectScope(req);
+    const result = await getCommentRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -2305,7 +2377,8 @@ async function handle(req, res, pathname, method) {
   // DELETE /api/acquire/youtube-comment-runs/:id
   if (commentRunMatch && method === 'DELETE') {
     const id     = decodeURIComponent(commentRunMatch[1]);
-    const result = await deleteCommentRun(id);
+    const scope = requestProjectScope(req);
+    const result = await deleteCommentRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.youtube_comments_deleted', entityType: 'acquire', entityId: id,
@@ -2317,7 +2390,8 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/youtube-runs — read-only
   if (pathname === '/api/acquire/youtube-runs' && method === 'GET') {
     const limit  = Number(urlObj.searchParams.get('limit') || 20);
-    const result = await listYoutubeHarvestRuns(limit);
+    const scope = requestProjectScope(req);
+    const result = await listYoutubeAcquireRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = result.data || [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -2326,15 +2400,16 @@ async function handle(req, res, pathname, method) {
   // POST /api/acquire/youtube-runs/:id/rerun — ⚡ RATE LIMITED
   const youtubeRerunMatch = pathname.match(/^\/api\/acquire\/youtube-runs\/([^/]+)\/rerun$/);
   if (youtubeRerunMatch && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube.rerun')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube.rerun')) return true;
 
     await parseJsonBody(req);
-    const priorRes = await getYoutubeHarvestRun(decodeURIComponent(youtubeRerunMatch[1]));
+    const scope = requestProjectScope(req);
+    const priorRes = await getYoutubeAcquireRun(decodeURIComponent(youtubeRerunMatch[1]), scope);
     if (!priorRes.ok) return sendErr(res, priorRes.status || 500, priorRes.error), true;
     const prior     = priorRes.data;
     const rerunInput = { video_url: prior.video_url, category: String(prior.category || '').trim() };
-    const result    = await runYoutubeHarvest(rerunInput);
-    const createRes = await createYoutubeHarvestRun(rerunInput, result);
+    const result    = await runYoutubeAcquire(rerunInput);
+    const createRes = await createYoutubeAcquireRun(rerunInput, result, scope);
     if (!createRes.ok) return sendErr(res, createRes.status || 500, createRes.error), true;
     const summary = runSummary(createRes.data);
     logActivity({
@@ -2349,14 +2424,16 @@ async function handle(req, res, pathname, method) {
   // GET /api/acquire/youtube-runs/:id — read-only
   const youtubeRunMatch = pathname.match(/^\/api\/acquire\/youtube-runs\/([^/]+)$/);
   if (youtubeRunMatch && method === 'GET') {
-    const result = await getYoutubeHarvestRun(decodeURIComponent(youtubeRunMatch[1]));
+    const scope = requestProjectScope(req);
+    const result = await getYoutubeAcquireRun(decodeURIComponent(youtubeRunMatch[1]), scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
 
   if (youtubeRunMatch && method === 'PATCH') {
     const id = decodeURIComponent(youtubeRunMatch[1]);
-    const existingRes = await getYoutubeHarvestRun(id);
+    const scope = requestProjectScope(req);
+    const existingRes = await getYoutubeAcquireRun(id, scope);
     if (!existingRes.ok) return sendErr(res, existingRes.status || 500, existingRes.error), true;
 
     const body = await parseJsonBody(req);
@@ -2369,7 +2446,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updateYoutubeHarvestRun(id, patch);
+    const result = await updateYoutubeAcquireRun(id, patch, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: runSummary(result.data) }), true;
   }
@@ -2377,7 +2454,8 @@ async function handle(req, res, pathname, method) {
   // DELETE /api/acquire/youtube-runs/:id
   if (youtubeRunMatch && method === 'DELETE') {
     const id     = decodeURIComponent(youtubeRunMatch[1]);
-    const result = await deleteYoutubeHarvestRun(id);
+    const scope = requestProjectScope(req);
+    const result = await deleteYoutubeAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.youtube_deleted', entityType: 'acquire', entityId: id,
@@ -2390,7 +2468,8 @@ async function handle(req, res, pathname, method) {
   const youtubeAddContactMatch = pathname.match(/^\/api\/acquire\/youtube-runs\/([^/]+)\/add-contact$/);
   if (youtubeAddContactMatch && method === 'POST') {
     const runId = decodeURIComponent(youtubeAddContactMatch[1]);
-    const runRes = await getYoutubeHarvestRun(runId);
+    const scope = requestProjectScope(req);
+    const runRes = await getYoutubeAcquireRun(runId, scope);
     if (!runRes.ok) return sendErr(res, runRes.status || 500, runRes.error), true;
 
     const captureRes = await captureYoutubeContact(runRes.data?.result || {}, runRes.data?.video_url || '');
@@ -2401,10 +2480,10 @@ async function handle(req, res, pathname, method) {
     const run = runRes.data || {};
     const nextRequest = { ...(run.request_json || {}), capture_contact: true };
     const nextResult = { ...(run.result_json || {}), contact_captured: true };
-    await updateYoutubeHarvestRun(runId, {
+    await updateYoutubeAcquireRun(runId, {
       request_json: nextRequest,
       result_json: nextResult,
-    });
+    }, scope);
 
     if (captureRes.data?.contact?.id) {
       logActivity({
@@ -2422,15 +2501,16 @@ async function handle(req, res, pathname, method) {
 
   const youtubeRefreshTranscriptMatch = pathname.match(/^\/api\/acquire\/youtube-runs\/([^/]+)\/refresh-transcript\/?$/);
   if (youtubeRefreshTranscriptMatch && method === 'POST') {
-    if (checkEndpointLimit(req, res, 'harvest.youtube.rerun')) return true;
+    if (checkEndpointLimit(req, res, 'acquire.youtube.rerun')) return true;
 
     await parseJsonBody(req);
+    const scope = requestProjectScope(req);
     const id = decodeURIComponent(youtubeRefreshTranscriptMatch[1]);
-    const existingRes = await getYoutubeHarvestRun(id);
+    const existingRes = await getYoutubeAcquireRun(id, scope);
     if (!existingRes.ok) return sendErr(res, existingRes.status || 500, existingRes.error), true;
     const existing = existingRes.data;
 
-    const result = await runYoutubeHarvest({
+    const result = await runYoutubeAcquire({
       video_url: existing.video_url,
       category: String(existing.category || '').trim(),
     });
@@ -2451,7 +2531,7 @@ async function handle(req, res, pathname, method) {
       },
     };
 
-    const updateRes = await updateYoutubeHarvestRun(id, patch);
+    const updateRes = await updateYoutubeAcquireRun(id, patch, scope);
     if (!updateRes.ok) return sendErr(res, updateRes.status || 500, updateRes.error), true;
     return sendOk(res, 200, updateRes.data, { run: runSummary(updateRes.data) }), true;
   }
@@ -2462,7 +2542,7 @@ async function handle(req, res, pathname, method) {
 const manifest = {
   id:       'acquire',
   label:    'Acquire',
-  prefixes: ['/api/acquire', '/api/harvest']
+  prefixes: ['/api/acquire']
 };
 
 module.exports = { handle, manifest };

@@ -21,11 +21,27 @@ update public.direct_acquire_runs
   set project_id = 'YOUR_PROJECT_ID', owner_user_id = 'YOUR_USER_ID'
   where project_id is null;
 
-update public.x_harvest_runs
+update public.x_acquire_runs
   set project_id = 'YOUR_PROJECT_ID', owner_user_id = 'YOUR_USER_ID'
   where project_id is null;
 
-update public.reddit_harvest_runs
+update public.reddit_acquire_runs
+  set project_id = 'YOUR_PROJECT_ID', owner_user_id = 'YOUR_USER_ID'
+  where project_id is null;
+
+update public.acquire_youtube_details
+  set project_id = 'YOUR_PROJECT_ID', owner_user_id = 'YOUR_USER_ID'
+  where project_id is null;
+
+update public.acquire_youtube_comments
+  set project_id = 'YOUR_PROJECT_ID', owner_user_id = 'YOUR_USER_ID'
+  where project_id is null;
+
+update public.acquire_youtube_videos
+  set project_id = 'YOUR_PROJECT_ID', owner_user_id = 'YOUR_USER_ID'
+  where project_id is null;
+
+update public.acquire_youtube_topics
   set project_id = 'YOUR_PROJECT_ID', owner_user_id = 'YOUR_USER_ID'
   where project_id is null;
 */

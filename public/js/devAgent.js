@@ -1466,7 +1466,7 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
   avatar.className = `dev-chat-avatar ${chat.role}`;
   
   const hasCheckdev = typeof chat.content === 'string' && chat.content.toLowerCase().includes('checkdev');
-  const hasHarvest = typeof chat.content === 'string' && (chat.content.toLowerCase().includes('trigger harvest') || chat.content.toLowerCase().includes('training harvest'));
+  const hasAcquire = typeof chat.content === 'string' && (chat.content.toLowerCase().includes('trigger acquire') || chat.content.toLowerCase().includes('training acquire'));
   
   if (chat.role !== 'user' && (hasCheckdev || isApprovalPrompt)) {
     avatar.classList.add('checkdev-alert');
@@ -1494,12 +1494,12 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
         wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     };
-  } else if (chat.role !== 'user' && hasHarvest) {
-    avatar.classList.add('harvest-alert');
+  } else if (chat.role !== 'user' && hasAcquire) {
+    avatar.classList.add('acquire-alert');
     avatar.style.cursor = 'pointer';
-    avatar.title = 'Click to trigger Training Harvest (Shift-click to dismiss)';
+    avatar.title = 'Click to trigger Training Acquire (Shift-click to dismiss)';
     avatar.onclick = async (e) => {
-      avatar.classList.remove('harvest-alert');
+      avatar.classList.remove('acquire-alert');
       avatar.style.cursor = 'default';
       avatar.title = '';
       
@@ -1507,17 +1507,17 @@ App.devAgent.appendChatNode = function(chat, targetLogContainer = null) {
         return; // Silent dismiss
       }
       
-      App.notify('Triggering Knowledge Harvest...', false);
+      App.notify('Triggering Knowledge Acquire...', false);
       try {
-        const res = await fetch('/api/develop/devAgent/harvest', { method: 'POST' });
+        const res = await fetch('/api/develop/devAgent/acquire', { method: 'POST' });
         if (res.ok) {
-           App.notify('Training Harvest completed!', false);
+           App.notify('Training Acquire completed!', false);
         } else {
-           App.notify('Training Harvest failed.', true);
+           App.notify('Training Acquire failed.', true);
         }
       } catch (err) {
-        console.error('Failed to connect to harvest endpoint.', err);
-        App.notify('Failed to connect to harvest endpoint.', true);
+        console.error('Failed to connect to acquire endpoint.', err);
+        App.notify('Failed to connect to acquire endpoint.', true);
       }
     };
   }

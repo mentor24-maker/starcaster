@@ -135,3 +135,70 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
   color: var(--ink-primary, #111);
 }
+
+.add-contact-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem 2.5rem;
+  align-items: start;
+}
+
+.add-contact-split-heading {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.add-contact-from-project-grid {
+  margin-top: 0;
+}
+
+.add-contact-from-project-combobox {
+  position: relative;
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .add-contact-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.contact-add-projects-modal .c-modal__dialog {
+  max-width: 32rem;
+}
+
+.contact-add-projects-modal-intro {
+  margin: 0 0 1rem;
+  color: var(--ink-primary);
+}
+
+.contact-add-projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.contact-add-projects-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.contact-add-projects-option input[disabled] + span {
+  opacity: 0.65;
+}
+
+.contacts-go-cell.actions-col {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.contacts-go-cell.actions-col .btn {
+  white-space: nowrap;
+}

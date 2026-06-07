@@ -29,13 +29,16 @@ async function handle(req, res, pathname, method) {
     const email = String(body.email || '').trim();
     const channelType = String(body.channelType || body.channel_type || 'organic').trim();
     const contactId = body.contactId || body.contact_id || null;
+    const openclawProfile = String(body.openclawProfile || body.openclaw_profile || '').trim();
 
     const password = String(body.password || '').trim();
 
     if (!channel) return sendErr(res, 400, 'channel is required', { code: 'VALIDATION_ERROR' }), true;
     if (!userName) return sendErr(res, 400, 'userName is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const result = await createChannel({ channel, channelType, contactId, userName, email, password }, scope);
+    const result = await createChannel({
+      channel, channelType, contactId, userName, email, password, openclawProfile,
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToChannel(created), { channel: rowToChannel(created) }), true;
@@ -71,6 +74,9 @@ async function handle(req, res, pathname, method) {
     if ('email' in body) {
       patch.email = String(body.email || '').trim();
       if (!patch.email) return sendErr(res, 400, 'email is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if ('openclawProfile' in body || 'openclaw_profile' in body) {
+      patch.openclawProfile = String(body.openclawProfile || body.openclaw_profile || '').trim();
     }
     if ('password' in body) {
       patch.password = String(body.password || '').trim();

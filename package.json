@@ -27,7 +27,7 @@
     "sync:wyr-tweets-ocr:dry-run": "node scripts/sync_wyr_tweets_from_image_ocr.js",
     "sync:wyr-tweets-ocr:apply": "node scripts/sync_wyr_tweets_from_image_ocr.js --apply",
     "check:vercel-cutover": "node scripts/vercel_cutover_check.js",
-    "import:training-context:apply": "node scripts/harvest_knowledge.mjs",
+    "import:training-context:apply": "node scripts/acquire_knowledge.mjs",
     "sync:dev-logs": "node scripts/sync_dev_logs.mjs"
   },
   "devDependencies": {

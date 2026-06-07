@@ -204,29 +204,21 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-}
-
-.auth-user-menu {
+  gap: 0.5rem;
+  flex-shrink: 0;
   position: relative;
-  display: inline-flex;
-  align-items: center;
+  z-index: 30;
 }
 
-.auth-user-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  display: none;
-  margin-top: 0.35rem;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-input);
-  background: var(--bg-surface);
-  z-index: 40;
+header .auth-header-meta .auth-welcome-name,
+header .auth-header-meta .auth-logout-link {
+  color: var(--btn-text);
 }
 
-.auth-user-menu:hover .auth-user-dropdown {
-  display: block;
+.auth-header-sep {
+  color: var(--btn-text);
+  opacity: 0.65;
+  user-select: none;
 }
 
 .auth-logout-link {

@@ -505,18 +505,18 @@ async function handle(req, res, pathname, requestMethod) {
     return true;
   }
 
-  if (pathname === '/api/develop/devAgent/harvest' && requestMethod === 'POST') {
+  if (pathname === '/api/develop/devAgent/acquire' && requestMethod === 'POST') {
     return new Promise((resolve) => {
       const { exec } = require('child_process');
       const path = require('path');
-      const scriptPath = path.resolve(__dirname, '../scripts/harvest_knowledge.mjs');
+      const scriptPath = path.resolve(__dirname, '../scripts/acquire_knowledge.mjs');
       
       exec(`node ${scriptPath}`, (error, stdout, stderr) => {
         if (error) {
-          console.error(`Harvest Error: ${error}`);
-          resolve(sendErr(res, 500, `Harvest failed: ${error.message}`));
+          console.error(`Acquire Error: ${error}`);
+          resolve(sendErr(res, 500, `Acquire failed: ${error.message}`));
         } else {
-          console.log(`Harvest Output: ${stdout}`);
+          console.log(`Acquire Output: ${stdout}`);
           resolve(sendOk(res, 200, { success: true, output: stdout }));
         }
       });

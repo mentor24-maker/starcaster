@@ -302,14 +302,14 @@
           <div class="page-heading-row" style="margin-bottom: 0.75rem;">
             <h3 style="margin:0;">Captured Images</h3>
           </div>
-          <div id="contactsPeerSiteImagesEmpty" class="meta">No harvested images stored for this website yet.</div>
+          <div id="contactsPeerSiteImagesEmpty" class="meta">No acquired images stored for this website yet.</div>
           <div id="contactsPeerSiteImagesGrid" class="direct-acquire-image-grid"></div>
         </section>
         <section class="card" style="margin-top: 1rem;">
           <div class="page-heading-row" style="margin-bottom: 0.75rem;">
             <h3 style="margin:0;">Website Pages</h3>
           </div>
-          <div id="contactsPeerSitePagesEmpty" class="meta">No harvested page content stored for this website yet.</div>
+          <div id="contactsPeerSitePagesEmpty" class="meta">No acquired page content stored for this website yet.</div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -423,52 +423,74 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="contactsPage">Contacts</a>: Add Contact</h2>
         </div>
-        <form id="contactForm" class="standard-form-grid">
-          <label>First Name</label>
-          <input name="first_name" />
-          
-          <label>Last Name</label>
-          <input name="last_name" />
-          
-          <label>Company</label>
-          <input name="company" />
-          
-          <label>Email</label>
-          <input name="email" required />
-          
-          <label>Website</label>
-          <input name="website" />
-          
-          <label>YouTube</label>
-          <input name="youtube" />
-          
-          <label>Instagram</label>
-          <input name="instagram" />
-          
-          <label>TikTok</label>
-          <input name="tiktok" />
-          
-          <label>Facebook</label>
-          <input name="facebook" />
-          
-          <label>X (Twitter)</label>
-          <input name="x" />
-          
-          <label>BlueSky</label>
-          <input name="bluesky" />
-          
-          <label>Substack</label>
-          <input name="substack" />
-          
-          <label>Medium</label>
-          <input name="medium" />
-          
-          <label>LinkedIn</label>
-          <input name="linkedin" />
-          
-          <div></div>
-          <button type="submit" class="btn btn-primary">Save Contact</button>
-        </form>
+        <div class="add-contact-split">
+          <div class="add-contact-split-col">
+            <h3 class="add-contact-split-heading">New Contact</h3>
+            <form id="contactForm" class="standard-form-grid">
+              <label>First Name</label>
+              <input name="first_name" />
+              
+              <label>Last Name</label>
+              <input name="last_name" />
+              
+              <label>Company</label>
+              <input name="company" />
+              
+              <label>Email</label>
+              <input name="email" required />
+              
+              <label>Website</label>
+              <input name="website" />
+              
+              <label>YouTube</label>
+              <input name="youtube" />
+              
+              <label>Instagram</label>
+              <input name="instagram" />
+              
+              <label>TikTok</label>
+              <input name="tiktok" />
+              
+              <label>Facebook</label>
+              <input name="facebook" />
+              
+              <label>X (Twitter)</label>
+              <input name="x" />
+              
+              <label>BlueSky</label>
+              <input name="bluesky" />
+              
+              <label>Substack</label>
+              <input name="substack" />
+              
+              <label>Medium</label>
+              <input name="medium" />
+              
+              <label>LinkedIn</label>
+              <input name="linkedin" />
+              
+              <div></div>
+              <button type="submit" class="btn btn-primary">Save Contact</button>
+            </form>
+          </div>
+          <div class="add-contact-split-col add-contact-split-col--from-project">
+            <h3 class="add-contact-split-heading">Choose From Other Projects</h3>
+            <div class="standard-form-grid add-contact-from-project-grid">
+              <label for="addContactFromProjectSelect">Project</label>
+              <select id="addContactFromProjectSelect">
+                <option value="">Select a project…</option>
+              </select>
+              <label for="addContactFromProjectSearch">Contact</label>
+              <div class="campaign-combobox add-contact-from-project-combobox">
+                <select id="addContactFromProjectNative" class="campaign-combobox-native" aria-hidden="true" tabindex="-1"></select>
+                <input type="text" id="addContactFromProjectSearch" autocomplete="off" disabled />
+                <div id="addContactFromProjectListbox" class="campaign-combobox-list" role="listbox" hidden></div>
+              </div>
+              <div></div>
+              <button type="button" id="addContactAssignFromProjectBtn" class="btn btn-primary" disabled>Add to This Project</button>
+            </div>
+          </div>
+        </div>
       </section>
       <section id="viewContactPage" class="app-page hidden">
         <div class="page-heading-row">

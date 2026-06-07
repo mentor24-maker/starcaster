@@ -80,6 +80,17 @@ App.promoteSocial = (function () {
     return key;
   }
 
+  function normalizeDeliveryPlatform(channel) {
+    const key = channelPlatform(channel);
+    if (key === 'facebook personal' || key === 'facebook_personal') return 'facebook_personal';
+    return bufferPlatformKey(key);
+  }
+
+  function socialTextLimitForPublisher(publisher) {
+    if (safeText(publisher).toLowerCase() === 'facebook_personal') return 63206;
+    return SOCIAL_TEXT_LIMIT;
+  }
+
   function socialDeliveryForCampaign(campaign, config = parseConfig(campaign)) {
     const selectedChannel = campaignChannel(campaign, config);
     if (safeText(config.channelId) && !selectedChannel) {
@@ -89,9 +100,10 @@ App.promoteSocial = (function () {
         starcasterChannelId: safeText(config.channelId),
         targetPlatform: '',
         targetAccount: '',
+        openclawProfile: '',
       };
     }
-    const platform = bufferPlatformKey(channelPlatform(selectedChannel));
+    const platform = normalizeDeliveryPlatform(selectedChannel);
     const account = channelAccount(selectedChannel);
     if (platform === 'x' || platform === 'tiktok') {
       return {
@@ -99,6 +111,16 @@ App.promoteSocial = (function () {
         starcasterChannelId: safeText(selectedChannel?.id || config.channelId),
         targetPlatform: platform,
         targetAccount: account,
+        openclawProfile: '',
+      };
+    }
+    if (platform === 'facebook_personal') {
+      return {
+        publisher: 'facebook_personal',
+        starcasterChannelId: safeText(selectedChannel?.id || config.channelId),
+        targetPlatform: 'facebook_personal',
+        targetAccount: account,
+        openclawProfile: safeText(selectedChannel?.openclawProfile),
       };
     }
     return {
@@ -106,6 +128,7 @@ App.promoteSocial = (function () {
       starcasterChannelId: safeText(selectedChannel?.id || config.channelId),
       targetPlatform: platform,
       targetAccount: account,
+      openclawProfile: '',
     };
   }
 
@@ -220,7 +243,47 @@ App.promoteSocial = (function () {
     if (value === 'scheduled') return 'status-social-scheduled';
     if (value === 'publishing') return 'status-social-publishing';
     if (value === 'queued') return 'status-social-queued';
+    if (value === 'awaiting_approval') return 'status-social-awaiting';
     return 'status-social-scheduled';
+  }
+
+  function formatPlatformLabel(channel) {
+    const key = safeText(channel).toLowerCase();
+    if (key === 'facebook_personal') return 'Facebook Personal';
+    return safeText(channel).toUpperCase() || 'X';
+  }
+
+  function openPostPreviewModal(post, previewPayload) {
+    const modal = el('promoteSocialPostFailureModal');
+    const title = el('promoteSocialPostFailureTitle');
+    const meta = el('promoteSocialPostFailureMeta');
+    const body = el('promoteSocialPostFailureBody');
+    if (!modal || !body) return;
+    if (title) title.textContent = 'Facebook Personal Preview';
+    if (meta) {
+      meta.textContent = `${formatPlatformLabel(post?.channel)} · Job ${safeText(previewPayload?.openclawJobId || post?.diagnostics?.openclawJobId) || 'pending'}`;
+    }
+    body.textContent = JSON.stringify(previewPayload || post?.diagnostics || {}, null, 2);
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+
+  async function reviewFacebookPersonalPreview(post) {
+    const res = await promoteSocialApi(
+      `/api/promote/social/posts/${encodeURIComponent(post.id)}/facebook-personal/preview`
+    );
+    const preview = res?.preview || res?.data?.preview || res || {};
+    openPostPreviewModal(post, preview);
+  }
+
+  async function approveFacebookPersonalPost(post) {
+    if (!confirm('Approve this Facebook Personal preview and publish the post?')) return;
+    await promoteSocialApi(
+      `/api/promote/social/posts/${encodeURIComponent(post.id)}/facebook-personal/approve`,
+      { method: 'POST' }
+    );
+    notify('Facebook Personal post approved and published');
+    await refresh();
   }
 
   function formatDiagnosticsText(diag) {
@@ -293,6 +356,19 @@ App.promoteSocial = (function () {
       link.textContent = 'Failed';
       link.setAttribute('aria-label', 'View failure details');
       link.addEventListener('click', () => openPostFailureModal(post));
+      statusTd.appendChild(link);
+      return statusTd;
+    }
+
+    if (status === 'awaiting_approval') {
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'status-pill status-social-awaiting promote-social-status-failed-link';
+      link.textContent = 'Awaiting Approval';
+      link.setAttribute('aria-label', 'Review Facebook Personal preview');
+      link.addEventListener('click', () => {
+        reviewFacebookPersonalPreview(post).catch((err) => notify(err.message, true));
+      });
       statusTd.appendChild(link);
       return statusTd;
     }
@@ -618,7 +694,7 @@ App.promoteSocial = (function () {
     posts.forEach((post) => {
       const tr = document.createElement('tr');
       const platformTd = document.createElement('td');
-      platformTd.textContent = safeText(post.channel).toUpperCase() || 'X';
+      platformTd.textContent = formatPlatformLabel(post.channel);
       tr.appendChild(platformTd);
 
       tr.appendChild(renderPostStatusCell(post));
@@ -660,8 +736,27 @@ App.promoteSocial = (function () {
 
       const actionsTd = document.createElement('td');
       actionsTd.classList.add('promote-social-posts-actions-cell');
-      const canPublish = post.status !== 'published' && post.status !== 'publishing';
+      const isAwaitingApproval = safeText(post.status).toLowerCase() === 'awaiting_approval';
+      const canPublish = post.status !== 'published' && post.status !== 'publishing' && !isAwaitingApproval;
       const actionButtons = [];
+
+      if (isAwaitingApproval) {
+        actionButtons.push(App.makeIconButton('preview', 'Review Preview', async function () {
+          try {
+            await reviewFacebookPersonalPreview(post);
+          } catch (err) {
+            notify(err.message, true);
+          }
+        }));
+        actionButtons.push(App.makeIconButton('approve', 'Approve & Post', async function () {
+          try {
+            await approveFacebookPersonalPost(post);
+          } catch (err) {
+            notify(err.message, true);
+            await refresh();
+          }
+        }, { primary: true }));
+      }
 
       if (canPublish) {
         const label = post.status === 'failed' ? 'Retry' : 'Publish Now';
@@ -714,13 +809,19 @@ App.promoteSocial = (function () {
     if (preview.urlMissingFromText) {
       throw new Error('Post text is over the current limit and the project URL could not be kept. Shorten copy, tagline, CTA, or hashtags, or use a shorter Website URL on the project or profile.');
     }
-    if (characterCount(text) > SOCIAL_TEXT_LIMIT) throw new Error(`Post text is ${characterCount(text) - SOCIAL_TEXT_LIMIT} characters over the current limit.`);
     const config = preview.config;
-    const publishNow = !!options?.publishNow;
     const delivery = socialDeliveryForCampaign(campaign, config);
     if (delivery.missingChannel) {
       throw new Error('Campaign channel details are not loaded yet. Refresh Promote Social and try again.');
     }
+    if (delivery.publisher === 'facebook_personal' && !safeText(delivery.openclawProfile)) {
+      throw new Error('Facebook Personal channel is missing OpenClaw Profile. Edit the channel under Channels and set the profile name.');
+    }
+    const textLimit = socialTextLimitForPublisher(delivery.publisher);
+    if (characterCount(text) > textLimit) {
+      throw new Error(`Post text is ${characterCount(text) - textLimit} characters over the limit for this channel.`);
+    }
+    const publishNow = !!options?.publishNow;
     const payload = {
       text,
       channel: delivery.publisher,
@@ -728,6 +829,7 @@ App.promoteSocial = (function () {
       starcasterChannelId: delivery.starcasterChannelId,
       targetPlatform: delivery.targetPlatform,
       targetAccount: delivery.targetAccount,
+      openclawProfile: delivery.openclawProfile,
       imageAlt: config.primaryImageLabel || '',
       publishNow,
     };
@@ -752,8 +854,14 @@ App.promoteSocial = (function () {
     if (!campaign) { notify('Select a campaign first', true); return; }
     try {
       setStatus('Sending...');
-      await queueCampaignPost(campaign, { publishNow: true });
-      notify('Post sent to publisher');
+      const delivery = socialDeliveryForCampaign(campaign, parseConfig(campaign));
+      const res = await queueCampaignPost(campaign, { publishNow: true });
+      const post = res?.post || res?.data?.post || null;
+      if (delivery.publisher === 'facebook_personal' || safeText(post?.status).toLowerCase() === 'awaiting_approval') {
+        notify('Facebook Personal preview queued — review and approve in the posts table');
+      } else {
+        notify('Post sent to publisher');
+      }
       setStatus('');
       await refresh();
     } catch (err) {

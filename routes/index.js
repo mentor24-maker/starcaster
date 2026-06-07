@@ -22,10 +22,12 @@
  */
 
 const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname } = require('./http');
+const { handleProjectDelete } = require('../lib/projectDeleteHandler');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
-const { getUserFromSessionToken } = require('../lib/authStore');
+const { getUserFromSessionToken, getAuthSession } = require('../lib/authStore');
 const { resolveCurrentProject } = require('../lib/projectsStore');
+const { requireProjectContext } = require('../lib/requireProjectContext');
 
 const auth        = require('./auth');
 const projects    = require('./projects');
@@ -140,6 +142,7 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
+      routesVersion: 'project-delete-v2',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
@@ -195,8 +198,10 @@ async function handleRequest(req, res) {
     pathname === assets.IMPORT_DRIVE_FOLDER_PATH && method === 'GET';
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
-  const authUser = await getUserFromSessionToken(sessionToken);
+  const authSession = await getAuthSession(sessionToken);
+  const authUser = authSession?.user || null;
 
+  req.authSession = authSession || null;
   req.authUser = authUser || null;
   req.projectContext = null;
   req.cronPublish = isCronAuthorized;
@@ -216,10 +221,25 @@ async function handleRequest(req, res) {
     const projectContextResult = await resolveCurrentProject({
       userId: String(authUser.id || '').trim(),
       requestedProjectId,
-      autoCreateDefault: true,
+      sessionActiveProjectId: String(authSession?.activeProjectId || '').trim(),
+      autoCreateDefault: false,
     });
     if (projectContextResult.ok) {
       req.projectContext = projectContextResult.data || null;
+    }
+  }
+
+  if (
+    authUser
+    && pathname.startsWith('/api/')
+    && !isAuthRoute
+    && !isDebugRoute
+    && !isWebhookRoute
+    && !isCronAuthorized
+  ) {
+    const projectRequired = requireProjectContext(req, pathname, method);
+    if (!projectRequired.ok) {
+      return sendErr(res, projectRequired.status || 400, projectRequired.message, { code: projectRequired.code });
     }
   }
 
@@ -330,6 +350,20 @@ async function handleRequest(req, res) {
     if (messaging.isMessagingFormatImportPath(pathname) && method === 'POST') {
       const handled = await messaging.handleFormatImport(req, res, pathname, String(method || '').toUpperCase());
       if (handled) return;
+    }
+
+    const requestMethod = String(method || '').toUpperCase();
+    if (authUser && pathname.startsWith('/api/projects')) {
+      const deleteByIdMatch = pathname.match(/^\/api\/projects\/([^/]+)\/delete\/?$/);
+      if (deleteByIdMatch && requestMethod === 'POST') {
+        const projectId = decodeURIComponent(deleteByIdMatch[1] || '').trim();
+        await handleProjectDelete(req, res, projectId, authUser.id);
+        return;
+      }
+      if (pathname === '/api/projects/delete' && requestMethod === 'POST') {
+        await handleProjectDelete(req, res, '', authUser.id);
+        return;
+      }
     }
 
     for (const mod of ROUTE_MODULES) {

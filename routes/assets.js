@@ -55,6 +55,7 @@ const {
 } = require('../lib/assetFieldImport');
 
 const { sbQuery, tableConfig } = require('../lib/supabase');
+const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listYoutubeVideos } = require('../lib/acquire/YoutubeVideosStore');
 
 // Google Vertex SDK
@@ -1033,7 +1034,8 @@ async function handle(req, res, pathname, method) {
     }
 
     // 2. Base Fetch
-    let vidsRes = await listYoutubeVideos(400); 
+    const scope = requestProjectScope(req);
+    let vidsRes = await listYoutubeVideos(400, scope); 
     if (vidsRes.ok && Array.isArray(vidsRes.data)) {
       vidsRes.data.forEach(v => {
         if (!filteredMap.has(v.video_id)) {
