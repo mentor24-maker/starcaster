@@ -2591,6 +2591,18 @@ button[type="submit"] {
   min-height: 0;
 }
 
+.campaign-form-submit-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+  width: 100%;
+}
+
+.campaign-form-submit-row .btn {
+  white-space: nowrap;
+  width: fit-content;
+}
+
 .asset-edit-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
