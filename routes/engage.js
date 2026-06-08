@@ -2318,6 +2318,14 @@ async function handle(req, res, pathname, method) {
 
     if (!text) return sendErr(res, 400, 'Post text is required', { code: 'VALIDATION_ERROR' }), true;
     if (text.length > maxLen) return sendErr(res, 400, `${channel.toUpperCase()} posts must be ${maxLen} characters or fewer`, { code: 'VALIDATION_ERROR' }), true;
+
+    const scope = requestProjectScope(req);
+    const userId = safeText(req?.authUser?.id);
+    let resolvedOpenClawProfile = openclawProfile;
+    if (channel === 'facebook_personal' && !resolvedOpenClawProfile && starcasterChannelId) {
+      const channelRes = await getChannelOpenClawProfile(starcasterChannelId, scope);
+      if (channelRes.ok) resolvedOpenClawProfile = safeText(channelRes.data.openclawProfile);
+    }
     if (channel === 'facebook_personal' && !resolvedOpenClawProfile && !starcasterChannelId) {
       return sendErr(res, 400, 'Facebook Personal posts require a channel with OpenClaw Profile configured', { code: 'VALIDATION_ERROR' }), true;
     }
@@ -2331,14 +2339,7 @@ async function handle(req, res, pathname, method) {
       }
     }
 
-    const scope = requestProjectScope(req);
-    const userId = safeText(req?.authUser?.id);
-    let resolvedOpenClawProfile = openclawProfile;
     const taggedPeople = campaignId ? await resolveTaggedPeopleForCampaign(campaignId, scope) : [];
-    if (channel === 'facebook_personal' && !resolvedOpenClawProfile && starcasterChannelId) {
-      const channelRes = await getChannelOpenClawProfile(starcasterChannelId, scope);
-      if (channelRes.ok) resolvedOpenClawProfile = safeText(channelRes.data.openclawProfile);
-    }
     if (!publishNow) {
       if (scheduledForWall) {
         const tz = await getProjectTimezoneForUser(safeText(scope.projectId), userId);
