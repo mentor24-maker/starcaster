@@ -1305,11 +1305,13 @@ App.settings = (function () {
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'FACEBOOK_401';
     } else if (platform === 'facebook_personal') {
-      const res = await api('/api/promote/social/facebook-personal/status');
-      testOk = res?.configured === true;
-      summary = testOk ? 'OpenClaw gateway configured for Facebook Personal' : 'OpenClaw gateway is not configured';
-      details = JSON.stringify(res || {}, null, 2);
-      blockerCode = testOk ? '' : 'OPENCLAW_NOT_CONFIGURED';
+      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/facebook-personal/auth-test'));
+      testOk = parsed.authOk;
+      summary = testOk
+        ? 'OpenClaw /v1/responses auth test passed'
+        : `OpenClaw gateway test failed: ${parsed.error || 'unknown error'}`;
+      details = JSON.stringify(parsed.raw || {}, null, 2);
+      blockerCode = testOk ? '' : 'OPENCLAW_AUTH_FAILED';
     } else if (platform === 'instagram') {
       const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/instagram/auth-test'));
       testOk = parsed.authOk;
