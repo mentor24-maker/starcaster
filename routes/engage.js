@@ -1815,7 +1815,28 @@ async function handle(req, res, pathname, method) {
     const payload = {
       configured: facebookPersonalPublisher.isOpenClawConfigured(),
       publishMode: 'openclaw_browser',
+      protocol: 'openresponses_v1',
     };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/promote/social/facebook-personal/auth-test' && requestMethod === 'GET') {
+    const { testOpenClawGateway } = require('../lib/openclawResponsesClient');
+    const result = await testOpenClawGateway();
+    const payload = {
+      authOk: !!result.authOk,
+      configured: facebookPersonalPublisher.isOpenClawConfigured(),
+      protocol: result.protocol || 'openresponses_v1',
+      baseUrl: safeText(result.baseUrl),
+      error: safeText(result.error),
+      sample: safeText(result.sample),
+    };
+    if (!result.ok) {
+      return sendErr(res, result.status || 502, payload.error || 'OpenClaw gateway auth test failed', {
+        code: 'OPENCLAW_AUTH_FAILED',
+        details: payload,
+      }), true;
+    }
     return sendOk(res, 200, payload, payload), true;
   }
 
