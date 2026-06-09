@@ -653,9 +653,12 @@ App.acquire = (function () {
             && String(peer?.suggested_reference_role || 'peer').trim().toLowerCase() === 'peer',
         };
       }).filter((peer) => peer.url && peer.domain);
-      state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
-        ? `Search phrases: ${searchedKeywords.join(', ')}`
+      const classificationNote = discovery?.classification_gemini_used
+        ? ` Classified ${Number(discovery.classification_gemini_count || 0) || 0} site(s) with Gemini.`
         : '';
+      state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
+        ? `Search phrases: ${searchedKeywords.join(', ')}.${classificationNote}`
+        : classificationNote.trim();
       renderDirectAcquirePeerDiscoveryResults();
       setDirectAcquireResultsVisible(true);
       const count = directAcquirePeerDiscoveryResults.length;
