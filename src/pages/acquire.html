@@ -84,8 +84,9 @@
             <button id="directAcquireDiscoverPeersBtn" type="button" class="btn btn-primary acquire-web-acquire-btn hidden">Discover Peers</button>
             <button id="directAcquireAddReferenceBtn" type="button" class="btn acquire-web-acquire-btn hidden">Add Reference</button>
             <div id="directAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+              <div id="directAcquireProgressEstimate" class="asset-upload-progress-estimate">Estimated time: 5 minutes</div>
               <div id="directAcquireProgressText" class="asset-upload-progress-text">Acquiring website...</div>
-              <progress id="directAcquireProgressBar" max="100" value="8"></progress>
+              <progress id="directAcquireProgressBar" max="100" value="5"></progress>
             </div>
           </div>
         </form>
@@ -337,6 +338,25 @@
           <div class="table-wrap">
             <table>
               <thead>
+                <tr class="table-filter-row">
+                  <th style="width: 44px;"></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterScore" type="search" placeholder="Filter score" autocomplete="off" /></th>
+                  <th>
+                    <select id="directAcquirePeerDiscoveryFilterType" aria-label="Filter type">
+                      <option value="">All Types</option>
+                      <option value="project">Project</option>
+                      <option value="peer">Peer</option>
+                      <option value="model">Model</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="directAcquirePeerDiscoveryFilterModelCategory" multiple size="4" title="Model categories (multi-select)" aria-label="Filter model categories"></select>
+                  </th>
+                  <th><input id="directAcquirePeerDiscoveryFilterDomain" type="search" placeholder="Filter domain" autocomplete="off" /></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterSite" type="search" placeholder="Filter site" autocomplete="off" /></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterKeywords" type="search" placeholder="Filter keywords" autocomplete="off" /></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterReasons" type="search" placeholder="Filter reasons" autocomplete="off" /></th>
+                </tr>
                 <tr>
                   <th style="width: 44px;"><input id="directAcquirePeerDiscoverySelectAll" type="checkbox" aria-label="Select All" /></th>
                   <th>Score</th>
@@ -1574,6 +1594,7 @@
               <button type="submit" class="btn btn-primary">Run Reddit Acquire</button>
           <!-- reddit-progress-v2 -->
           <div id="redditAcquireProgressWrap" class="asset-upload-progress" aria-live="polite">
+            <div id="redditAcquireProgressEstimate" class="asset-upload-progress-estimate hidden"></div>
             <div id="redditAcquireProgressText" class="asset-upload-progress-text">Idle — ready to run Reddit acquire.</div>
             <progress id="redditAcquireProgressBar" max="100" value="0"></progress>
           </div>

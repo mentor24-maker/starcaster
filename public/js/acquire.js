@@ -67,12 +67,21 @@ App.acquire = (function () {
       return hashtag && !isDirectAcquireTwoCharacterHashtag(hashtag);
     });
   }
-  let directAcquireProgressTimer = null;
+  let directAcquireProgressController = null;
   let directAcquireTopics = [];
   let directAcquireWebsitePeers = [];
   let directAcquireWebsitePeerEditingId = '';
   let directAcquireProjectSourceUrl = '';
   let directAcquirePeerDiscoveryResults = [];
+  const directAcquirePeerDiscoveryFilters = {
+    type: '',
+    modelCategories: [],
+    score: '',
+    domain: '',
+    site: '',
+    keywords: '',
+    reasons: '',
+  };
   const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
   const ACQUIRE_WEBSITE_ROLE_LABELS = {
     project: 'Project Website',
@@ -463,6 +472,137 @@ App.acquire = (function () {
     if (panel) panel.classList.toggle('hidden', !visible);
   }
 
+  function populateDirectAcquirePeerDiscoveryModelCategoryFilter() {
+    const select = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
+    if (!select || select.dataset.populated === '1') return;
+    select.dataset.populated = '1';
+    select.innerHTML = '';
+    WEBSITE_PEER_MODELS.forEach((label) => {
+      const option = document.createElement('option');
+      option.value = label;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+  }
+
+  function readDirectAcquirePeerDiscoveryFiltersFromDom() {
+    const typeEl = document.getElementById('directAcquirePeerDiscoveryFilterType');
+    const modelEl = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
+    directAcquirePeerDiscoveryFilters.type = String(typeEl?.value || '').trim().toLowerCase();
+    directAcquirePeerDiscoveryFilters.modelCategories = modelEl
+      ? Array.from(modelEl.selectedOptions).map((option) => String(option.value || '').trim()).filter(Boolean)
+      : [];
+    directAcquirePeerDiscoveryFilters.score = String(document.getElementById('directAcquirePeerDiscoveryFilterScore')?.value || '').trim().toLowerCase();
+    directAcquirePeerDiscoveryFilters.domain = String(document.getElementById('directAcquirePeerDiscoveryFilterDomain')?.value || '').trim().toLowerCase();
+    directAcquirePeerDiscoveryFilters.site = String(document.getElementById('directAcquirePeerDiscoveryFilterSite')?.value || '').trim().toLowerCase();
+    directAcquirePeerDiscoveryFilters.keywords = String(document.getElementById('directAcquirePeerDiscoveryFilterKeywords')?.value || '').trim().toLowerCase();
+    directAcquirePeerDiscoveryFilters.reasons = String(document.getElementById('directAcquirePeerDiscoveryFilterReasons')?.value || '').trim().toLowerCase();
+  }
+
+  function getPeerDiscoveryItemType(item) {
+    return String(item?.suggested_reference_role || 'peer').trim().toLowerCase() === 'model' ? 'model' : 'peer';
+  }
+
+  function peerDiscoveryItemMatchesFilters(item) {
+    const filters = directAcquirePeerDiscoveryFilters;
+    if (filters.type) {
+      if (filters.type === 'project') return false;
+      if (getPeerDiscoveryItemType(item) !== filters.type) return false;
+    }
+    if (Array.isArray(filters.modelCategories) && filters.modelCategories.length) {
+      const model = String(item?.website_model || 'Direct Competitors').trim();
+      if (!filters.modelCategories.includes(model)) return false;
+    }
+    if (filters.score) {
+      const scoreText = Number(item?.similarity_score || 0).toFixed(1).toLowerCase();
+      if (!scoreText.includes(filters.score) && !String(item?.similarity_score || '').toLowerCase().includes(filters.score)) {
+        return false;
+      }
+    }
+    if (filters.domain) {
+      const domain = String(item?.domain || '').trim().toLowerCase();
+      if (!domain.includes(filters.domain)) return false;
+    }
+    if (filters.site) {
+      const siteHaystack = [
+        String(item?.url || '').trim(),
+        String(item?.title || '').trim(),
+      ].join(' ').toLowerCase();
+      if (!siteHaystack.includes(filters.site)) return false;
+    }
+    if (filters.keywords) {
+      const keywordHaystack = (Array.isArray(item?.matched_keywords) ? item.matched_keywords : [])
+        .map((keyword) => String(keyword || '').trim())
+        .join(', ')
+        .toLowerCase();
+      if (!keywordHaystack.includes(filters.keywords)) return false;
+    }
+    if (filters.reasons) {
+      const reasonHaystack = (Array.isArray(item?.reasons) ? item.reasons : [])
+        .map((reason) => String(reason || '').trim())
+        .join('; ')
+        .toLowerCase();
+      if (!reasonHaystack.includes(filters.reasons)) return false;
+    }
+    return true;
+  }
+
+  function getFilteredPeerDiscoveryEntries() {
+    const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
+    return results
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => peerDiscoveryItemMatchesFilters(item));
+  }
+
+  function resetDirectAcquirePeerDiscoveryFilters() {
+    directAcquirePeerDiscoveryFilters.type = '';
+    directAcquirePeerDiscoveryFilters.modelCategories = [];
+    directAcquirePeerDiscoveryFilters.score = '';
+    directAcquirePeerDiscoveryFilters.domain = '';
+    directAcquirePeerDiscoveryFilters.site = '';
+    directAcquirePeerDiscoveryFilters.keywords = '';
+    directAcquirePeerDiscoveryFilters.reasons = '';
+    const typeEl = document.getElementById('directAcquirePeerDiscoveryFilterType');
+    if (typeEl) typeEl.value = '';
+    ['directAcquirePeerDiscoveryFilterScore', 'directAcquirePeerDiscoveryFilterDomain', 'directAcquirePeerDiscoveryFilterSite', 'directAcquirePeerDiscoveryFilterKeywords', 'directAcquirePeerDiscoveryFilterReasons'].forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = '';
+    });
+    const modelEl = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
+    if (modelEl) Array.from(modelEl.options).forEach((option) => { option.selected = false; });
+  }
+
+  function bindDirectAcquirePeerDiscoveryFilters() {
+    populateDirectAcquirePeerDiscoveryModelCategoryFilter();
+    const rerender = () => {
+      readDirectAcquirePeerDiscoveryFiltersFromDom();
+      renderDirectAcquirePeerDiscoveryResults();
+    };
+    const ids = [
+      'directAcquirePeerDiscoveryFilterScore',
+      'directAcquirePeerDiscoveryFilterDomain',
+      'directAcquirePeerDiscoveryFilterSite',
+      'directAcquirePeerDiscoveryFilterKeywords',
+      'directAcquirePeerDiscoveryFilterReasons',
+    ];
+    ids.forEach((id) => {
+      const input = document.getElementById(id);
+      if (!input || input.dataset.bound === '1') return;
+      input.dataset.bound = '1';
+      input.addEventListener('input', rerender);
+    });
+    const typeEl = document.getElementById('directAcquirePeerDiscoveryFilterType');
+    if (typeEl && typeEl.dataset.bound !== '1') {
+      typeEl.dataset.bound = '1';
+      typeEl.addEventListener('change', rerender);
+    }
+    const modelEl = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
+    if (modelEl && modelEl.dataset.bound !== '1') {
+      modelEl.dataset.bound = '1';
+      modelEl.addEventListener('change', rerender);
+    }
+  }
+
   function renderDirectAcquirePeerDiscoveryResults() {
     const tableBody = document.getElementById('directAcquirePeerDiscoveryTable');
     const metaEl = document.getElementById('directAcquirePeerDiscoveryMeta');
@@ -471,7 +611,9 @@ App.acquire = (function () {
     const selectAll = document.getElementById('directAcquirePeerDiscoverySelectAll');
     if (!tableBody) return;
     tableBody.innerHTML = '';
+    readDirectAcquirePeerDiscoveryFiltersFromDom();
     const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
+    const filteredEntries = getFilteredPeerDiscoveryEntries();
     setDirectAcquirePeerDiscoveryPanelVisible(results.length > 0);
     if (!results.length) {
       if (metaEl) metaEl.textContent = String(state.directAcquirePeerDiscoveryError || '').trim() || 'No peer discovery run yet.';
@@ -483,7 +625,22 @@ App.acquire = (function () {
       }
       return;
     }
-    results.forEach((item, index) => {
+    if (!filteredEntries.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 8;
+      td.textContent = 'No discovered peers match the current filters.';
+      tr.appendChild(td);
+      tableBody.appendChild(tr);
+      if (metaEl) metaEl.textContent = `Showing 0 of ${results.length} candidate${results.length === 1 ? '' : 's'}.`;
+      if (saveBtn) saveBtn.disabled = results.every((item) => item.selected === false);
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+      return;
+    }
+    filteredEntries.forEach(({ item, index }) => {
       const tr = document.createElement('tr');
 
       const selectTd = document.createElement('td');
@@ -543,50 +700,52 @@ App.acquire = (function () {
       tableBody.appendChild(tr);
     });
     const selectedCount = results.filter((item) => item.selected !== false).length;
+    const filteredSelectedCount = filteredEntries.filter(({ item }) => item.selected !== false).length;
     if (metaEl) {
-      const peerCount = results.filter((item) => String(item.suggested_reference_role || 'peer').toLowerCase() === 'peer').length;
-      const modelCount = results.length - peerCount;
-      metaEl.textContent = `${results.length} candidate${results.length === 1 ? '' : 's'} (${peerCount} peer${peerCount === 1 ? '' : 's'}, ${modelCount} model${modelCount === 1 ? '' : 's'}). Peers sorted first.`;
+      const visiblePeerCount = filteredEntries.filter(({ item }) => getPeerDiscoveryItemType(item) === 'peer').length;
+      const visibleModelCount = filteredEntries.length - visiblePeerCount;
+      const countPrefix = filteredEntries.length === results.length
+        ? `${results.length} candidate${results.length === 1 ? '' : 's'}`
+        : `Showing ${filteredEntries.length} of ${results.length} candidate${results.length === 1 ? '' : 's'}`;
+      metaEl.textContent = `${countPrefix} (${visiblePeerCount} peer${visiblePeerCount === 1 ? '' : 's'}, ${visibleModelCount} model${visibleModelCount === 1 ? '' : 's'} visible). Peers sorted first.`;
     }
     if (saveBtn) saveBtn.disabled = selectedCount === 0;
     if (selectAll) {
-      selectAll.checked = selectedCount === results.length;
-      selectAll.indeterminate = selectedCount > 0 && selectedCount < results.length;
+      selectAll.checked = filteredSelectedCount === filteredEntries.length && filteredEntries.length > 0;
+      selectAll.indeterminate = filteredSelectedCount > 0 && filteredSelectedCount < filteredEntries.length;
     }
+  }
+
+  function createDirectAcquireProgressController(estimatedMs, onStart, onFinish) {
+    if (directAcquireProgressController) directAcquireProgressController.stop();
+    directAcquireProgressController = App.estimatedProgress.createController({
+      wrap: 'directAcquireProgressWrap',
+      bar: 'directAcquireProgressBar',
+      text: 'directAcquireProgressText',
+      estimate: 'directAcquireProgressEstimate',
+      estimatedMs,
+      onStart,
+      onFinish,
+    });
+    return directAcquireProgressController;
   }
 
   function startPeerDiscoveryProgress() {
-    const wrap = document.getElementById('directAcquireProgressWrap');
-    const bar = document.getElementById('directAcquireProgressBar');
-    const text = document.getElementById('directAcquireProgressText');
     const discoverBtn = document.getElementById('directAcquireDiscoverPeersBtn');
-    if (wrap) wrap.classList.remove('hidden');
-    if (bar) bar.value = 8;
-    if (text) text.textContent = 'Discovering peers...';
-    if (discoverBtn) discoverBtn.disabled = true;
-    if (directAcquireProgressTimer) clearInterval(directAcquireProgressTimer);
-    directAcquireProgressTimer = setInterval(() => {
-      if (!bar) return;
-      const current = Number(bar.value || 0) || 0;
-      bar.value = Math.min(92, current + (current < 35 ? 5 : current < 65 ? 3 : 1.5));
-    }, 650);
+    createDirectAcquireProgressController(
+      App.estimatedProgress.ESTIMATES.peerDiscovery,
+      () => { if (discoverBtn) discoverBtn.disabled = true; },
+      () => { if (discoverBtn) discoverBtn.disabled = false; }
+    ).start('Discovering peers...');
   }
 
   function finishPeerDiscoveryProgress(ok, message) {
-    const wrap = document.getElementById('directAcquireProgressWrap');
-    const bar = document.getElementById('directAcquireProgressBar');
-    const text = document.getElementById('directAcquireProgressText');
-    const discoverBtn = document.getElementById('directAcquireDiscoverPeersBtn');
-    if (directAcquireProgressTimer) {
-      clearInterval(directAcquireProgressTimer);
-      directAcquireProgressTimer = null;
-    }
-    if (bar) bar.value = ok ? 100 : Math.max(8, Number(bar.value || 0) || 0);
-    if (text) text.textContent = String(message || (ok ? 'Peer discovery complete.' : 'Peer discovery failed.')).trim();
-    if (discoverBtn) discoverBtn.disabled = false;
-    if (wrap) {
-      setTimeout(() => wrap.classList.add('hidden'), ok ? 900 : 1800);
-    }
+    if (!directAcquireProgressController) return;
+    directAcquireProgressController.finish(
+      ok,
+      String(message || (ok ? 'Peer discovery complete.' : 'Peer discovery failed.')).trim()
+    );
+    directAcquireProgressController = null;
   }
 
   async function discoverAcquireWebPeers() {
@@ -636,6 +795,7 @@ App.acquire = (function () {
           return `${peerSourceDomain}::${domain}`;
         })
       );
+      resetDirectAcquirePeerDiscoveryFilters();
       directAcquirePeerDiscoveryResults = peers.map((peer) => {
         const domain = String(peer?.domain || '').trim().toLowerCase();
         return {
@@ -666,6 +826,7 @@ App.acquire = (function () {
       notify(count ? `Discovered ${count} peer candidate${count === 1 ? '' : 's'}` : 'No peer candidates returned', !count);
       if (count) scrollAcquireWebPanelIntoView('directAcquirePeerDiscoveryPanel');
     } catch (err) {
+      resetDirectAcquirePeerDiscoveryFilters();
       directAcquirePeerDiscoveryResults = [];
       state.directAcquirePeerDiscoveryError = String(err.message || 'Peer discovery failed.').trim();
       state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
@@ -857,37 +1018,21 @@ App.acquire = (function () {
   }
 
   function startDirectAcquireProgress() {
-    const wrap = document.getElementById('directAcquireProgressWrap');
-    const bar = document.getElementById('directAcquireProgressBar');
-    const text = document.getElementById('directAcquireProgressText');
     const submitBtn = document.getElementById('directAcquireSubmitBtn');
-    if (wrap) wrap.classList.remove('hidden');
-    if (bar) bar.value = 8;
-    if (text) text.textContent = 'Acquiring website...';
-    if (submitBtn) submitBtn.disabled = true;
-    if (directAcquireProgressTimer) clearInterval(directAcquireProgressTimer);
-    directAcquireProgressTimer = setInterval(() => {
-      if (!bar) return;
-      const current = Number(bar.value || 0) || 0;
-      bar.value = Math.min(92, current + (current < 35 ? 5 : current < 65 ? 3 : 1.5));
-    }, 650);
+    createDirectAcquireProgressController(
+      App.estimatedProgress.ESTIMATES.websiteAcquire,
+      () => { if (submitBtn) submitBtn.disabled = true; },
+      () => { if (submitBtn) submitBtn.disabled = false; }
+    ).start('Acquiring website...');
   }
 
   function finishDirectAcquireProgress(ok, message) {
-    const wrap = document.getElementById('directAcquireProgressWrap');
-    const bar = document.getElementById('directAcquireProgressBar');
-    const text = document.getElementById('directAcquireProgressText');
-    const submitBtn = document.getElementById('directAcquireSubmitBtn');
-    if (directAcquireProgressTimer) {
-      clearInterval(directAcquireProgressTimer);
-      directAcquireProgressTimer = null;
-    }
-    if (bar) bar.value = ok ? 100 : Math.max(8, Number(bar.value || 0) || 0);
-    if (text) text.textContent = String(message || (ok ? 'Acquire complete.' : 'Acquire failed.')).trim();
-    if (submitBtn) submitBtn.disabled = false;
-    if (wrap) {
-      setTimeout(() => wrap.classList.add('hidden'), ok ? 900 : 1800);
-    }
+    if (!directAcquireProgressController) return;
+    directAcquireProgressController.finish(
+      ok,
+      String(message || (ok ? 'Acquire complete.' : 'Acquire failed.')).trim()
+    );
+    directAcquireProgressController = null;
   }
 
   function renderSectionSettingsNav(activePageId) {
@@ -2482,6 +2627,11 @@ App.acquire = (function () {
     clearRedditAcquireProgress();
     const startedAt = Date.now();
     const estimateSeconds = estimateRedditAcquireSeconds(payload);
+    const estimateEl = document.getElementById('redditAcquireProgressEstimate');
+    if (estimateEl) {
+      estimateEl.textContent = App.estimatedProgress.formatEstimateLabel(estimateSeconds * 1000);
+      estimateEl.classList.remove('hidden');
+    }
     setRedditAcquireProgress(4, 'Queued request (phase 1 of 3)…');
     setRedditAcquireProgress(12, `Running OpenClaw acquire (phase 2 of 3)… ~${estimateSeconds}s remaining (estimated)`);
     redditAcquireProgressTimer = setInterval(() => {
@@ -4069,13 +4219,15 @@ App.acquire = (function () {
       directAcquirePeerDiscoverySelectAll.dataset.bound = '1';
       directAcquirePeerDiscoverySelectAll.addEventListener('change', function () {
         const checked = !!directAcquirePeerDiscoverySelectAll.checked;
-        directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.map((item) => ({
-          ...item,
-          selected: checked,
-        }));
+        readDirectAcquirePeerDiscoveryFiltersFromDom();
+        const visibleIndexes = new Set(getFilteredPeerDiscoveryEntries().map((entry) => entry.index));
+        directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.map((item, index) => (
+          visibleIndexes.has(index) ? { ...item, selected: checked } : item
+        ));
         renderDirectAcquirePeerDiscoveryResults();
       });
     }
+    bindDirectAcquirePeerDiscoveryFilters();
     populateAcquireWebReferenceModelSelect();
     const directAcquireKeywordExclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
     if (directAcquireKeywordExclusionsInput) {
