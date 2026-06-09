@@ -459,6 +459,21 @@
           </form>
         </div>
 
+        <div id="facebookPagePickerModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="facebookPagePickerModalTitle">
+          <div class="modal-content standard-form-grid" style="display:block;max-width:520px;">
+            <div class="standard-form-grid-full page-heading-row">
+              <h3 id="facebookPagePickerModalTitle">Connection: Select Facebook Page</h3>
+            </div>
+            <label for="facebookPagePickerSelect">Page</label>
+            <select id="facebookPagePickerSelect"></select>
+            <div></div>
+            <div class="table-actions-row">
+              <button type="button" id="facebookPagePickerCancelBtn" class="btn btn-ghost">Cancel</button>
+              <button type="button" id="facebookPagePickerSaveBtn" class="btn btn-primary">Connect Page</button>
+            </div>
+          </div>
+        </div>
+
         <h3 style="margin-top:1rem;">Channel Connections</h3>
         <p class="docs-intro">Click a channel to open its API form. Connection Ops expands for channels that support gate tracking.</p>
         <div class="table-wrap">
