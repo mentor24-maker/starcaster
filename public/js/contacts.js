@@ -126,7 +126,7 @@ App.contacts = (function () {
   let activeWebsitePeerDetail = null;
   let activeWebsitePeerRun = null;
   let websitePeerDiscoveryResults = [];
-  let contactsPeerSitesProgressTimer = null;
+  let contactsPeerSitesProgressController = null;
   const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
 
   const EXPLORE_FILTER_MODES = [
@@ -824,38 +824,24 @@ App.contacts = (function () {
   }
 
   function startContactsPeerSitesProgress() {
-    const wrap = document.getElementById('contactsPeerSitesAcquireProgressWrap');
-    const bar = document.getElementById('contactsPeerSitesAcquireProgressBar');
-    const text = document.getElementById('contactsPeerSitesAcquireProgressText');
     const button = document.getElementById('contactsPeerSitesAcquireBtn');
-    if (wrap) wrap.classList.remove('hidden');
-    if (bar) bar.value = 8;
-    if (text) text.textContent = 'Reviewing website content and discovering peer sites...';
-    if (button) button.disabled = true;
-    if (contactsPeerSitesProgressTimer) clearInterval(contactsPeerSitesProgressTimer);
-    contactsPeerSitesProgressTimer = setInterval(function () {
-      if (!bar) return;
-      const value = Number(bar.value || 0);
-      const step = value < 72 ? 5 : (value < 90 ? 2 : 1);
-      bar.value = Math.min(value + step, 94);
-    }, 320);
+    if (contactsPeerSitesProgressController) contactsPeerSitesProgressController.stop();
+    contactsPeerSitesProgressController = App.estimatedProgress.createController({
+      wrap: 'contactsPeerSitesAcquireProgressWrap',
+      bar: 'contactsPeerSitesAcquireProgressBar',
+      text: 'contactsPeerSitesAcquireProgressText',
+      estimate: 'contactsPeerSitesAcquireProgressEstimate',
+      estimatedMs: App.estimatedProgress.ESTIMATES.contactsPeerSites,
+      onStart: function () { if (button) button.disabled = true; },
+      onFinish: function () { if (button) button.disabled = false; },
+    });
+    contactsPeerSitesProgressController.start('Reviewing website content and discovering peer sites...');
   }
 
   function finishContactsPeerSitesProgress(success, message) {
-    const wrap = document.getElementById('contactsPeerSitesAcquireProgressWrap');
-    const bar = document.getElementById('contactsPeerSitesAcquireProgressBar');
-    const text = document.getElementById('contactsPeerSitesAcquireProgressText');
-    const button = document.getElementById('contactsPeerSitesAcquireBtn');
-    if (contactsPeerSitesProgressTimer) {
-      clearInterval(contactsPeerSitesProgressTimer);
-      contactsPeerSitesProgressTimer = null;
-    }
-    if (bar) bar.value = success ? 100 : 0;
-    if (text && message) text.textContent = message;
-    if (button) button.disabled = false;
-    window.setTimeout(function () {
-      if (wrap) wrap.classList.add('hidden');
-    }, success ? 900 : 1800);
+    if (!contactsPeerSitesProgressController) return;
+    contactsPeerSitesProgressController.finish(success, message);
+    contactsPeerSitesProgressController = null;
   }
 
   function fillWebsitePeerForm(peer) {

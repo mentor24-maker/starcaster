@@ -41,7 +41,7 @@ App.messaging = (function () {
   let imageAssetOptionsLoaded = false;
   let imageAssetOptionsProjectId = '';
   let imageAssetOptionsLoading = null;
-  let messagingTopicsProgressTimer = null;
+  let messagingTopicsProgressController = null;
   let activeMessagingContentCategory = '';
   const headlineTableState = {
     filters: {
@@ -3983,37 +3983,24 @@ App.messaging = (function () {
   }
 
   function startMessagingTopicsProgress() {
-    const wrap = document.getElementById('messagingTopicsProgressWrap');
-    const bar = document.getElementById('messagingTopicsProgressBar');
-    const text = document.getElementById('messagingTopicsProgressText');
     const button = document.getElementById('messagingTopicsGenerateBtn');
-    if (wrap) wrap.classList.remove('hidden');
-    if (bar) bar.value = 10;
-    if (text) text.textContent = 'Reviewing website data and training context...';
-    if (button) button.disabled = true;
-    if (messagingTopicsProgressTimer) clearInterval(messagingTopicsProgressTimer);
-    messagingTopicsProgressTimer = setInterval(function () {
-      if (!bar) return;
-      const current = Number(bar.value || 0);
-      if (current < 82) bar.value = current + 4;
-    }, 700);
+    if (messagingTopicsProgressController) messagingTopicsProgressController.stop();
+    messagingTopicsProgressController = App.estimatedProgress.createController({
+      wrap: 'messagingTopicsProgressWrap',
+      bar: 'messagingTopicsProgressBar',
+      text: 'messagingTopicsProgressText',
+      estimate: 'messagingTopicsProgressEstimate',
+      estimatedMs: App.estimatedProgress.ESTIMATES.messagingTopics,
+      onStart: function () { if (button) button.disabled = true; },
+      onFinish: function () { if (button) button.disabled = false; },
+    });
+    messagingTopicsProgressController.start('Reviewing website data and training context...');
   }
 
   function finishMessagingTopicsProgress(success, message) {
-    const wrap = document.getElementById('messagingTopicsProgressWrap');
-    const bar = document.getElementById('messagingTopicsProgressBar');
-    const text = document.getElementById('messagingTopicsProgressText');
-    const button = document.getElementById('messagingTopicsGenerateBtn');
-    if (messagingTopicsProgressTimer) {
-      clearInterval(messagingTopicsProgressTimer);
-      messagingTopicsProgressTimer = null;
-    }
-    if (bar) bar.value = success ? 100 : 0;
-    if (text && message) text.textContent = message;
-    if (button) button.disabled = false;
-    window.setTimeout(function () {
-      if (wrap) wrap.classList.add('hidden');
-    }, success ? 900 : 1800);
+    if (!messagingTopicsProgressController) return;
+    messagingTopicsProgressController.finish(success, message);
+    messagingTopicsProgressController = null;
   }
 
   function renderMessagingTopicSuggestions(groups, sourceUrl) {

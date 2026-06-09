@@ -367,8 +367,9 @@
             <button id="directAcquireDiscoverPeersBtn" type="button" class="btn btn-primary acquire-web-acquire-btn hidden">Discover Peers</button>
             <button id="directAcquireAddReferenceBtn" type="button" class="btn acquire-web-acquire-btn hidden">Add Reference</button>
             <div id="directAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+              <div id="directAcquireProgressEstimate" class="asset-upload-progress-estimate">Estimated time: 5 minutes</div>
               <div id="directAcquireProgressText" class="asset-upload-progress-text">Acquiring website...</div>
-              <progress id="directAcquireProgressBar" max="100" value="8"></progress>
+              <progress id="directAcquireProgressBar" max="100" value="5"></progress>
             </div>
           </div>
         </form>
@@ -620,6 +621,25 @@
           <div class="table-wrap">
             <table>
               <thead>
+                <tr class="table-filter-row">
+                  <th style="width: 44px;"></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterScore" type="search" placeholder="Filter score" autocomplete="off" /></th>
+                  <th>
+                    <select id="directAcquirePeerDiscoveryFilterType" aria-label="Filter type">
+                      <option value="">All Types</option>
+                      <option value="project">Project</option>
+                      <option value="peer">Peer</option>
+                      <option value="model">Model</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="directAcquirePeerDiscoveryFilterModelCategory" multiple size="4" title="Model categories (multi-select)" aria-label="Filter model categories"></select>
+                  </th>
+                  <th><input id="directAcquirePeerDiscoveryFilterDomain" type="search" placeholder="Filter domain" autocomplete="off" /></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterSite" type="search" placeholder="Filter site" autocomplete="off" /></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterKeywords" type="search" placeholder="Filter keywords" autocomplete="off" /></th>
+                  <th><input id="directAcquirePeerDiscoveryFilterReasons" type="search" placeholder="Filter reasons" autocomplete="off" /></th>
+                </tr>
                 <tr>
                   <th style="width: 44px;"><input id="directAcquirePeerDiscoverySelectAll" type="checkbox" aria-label="Select All" /></th>
                   <th>Score</th>
@@ -1857,6 +1877,7 @@
               <button type="submit" class="btn btn-primary">Run Reddit Acquire</button>
           <!-- reddit-progress-v2 -->
           <div id="redditAcquireProgressWrap" class="asset-upload-progress" aria-live="polite">
+            <div id="redditAcquireProgressEstimate" class="asset-upload-progress-estimate hidden"></div>
             <div id="redditAcquireProgressText" class="asset-upload-progress-text">Idle — ready to run Reddit acquire.</div>
             <progress id="redditAcquireProgressBar" max="100" value="0"></progress>
           </div>
@@ -3539,8 +3560,9 @@
           </div>
         </form>
         <div id="contactsPeerSitesAcquireProgressWrap" class="asset-upload-progress hidden" aria-live="polite" style="margin-bottom: 1rem;">
+          <div id="contactsPeerSitesAcquireProgressEstimate" class="asset-upload-progress-estimate">Estimated time: 5 minutes</div>
           <div id="contactsPeerSitesAcquireProgressText" class="asset-upload-progress-text">Acquiring peer sites...</div>
-          <progress id="contactsPeerSitesAcquireProgressBar" max="100" value="8"></progress>
+          <progress id="contactsPeerSitesAcquireProgressBar" max="100" value="5"></progress>
         </div>
         <section id="contactsPeerSitesDiscoveryWrap" class="card hidden" style="margin-bottom: 1rem;">
           <div class="page-heading-row" style="margin-bottom: 0.75rem;">
@@ -7996,8 +8018,9 @@
           <button id="messagingTopicsGenerateBtn" type="button" class="btn">Generate AI Suggestions</button>
         </div>
         <div id="messagingTopicsProgressWrap" class="asset-upload-progress hidden" aria-live="polite">
+          <div id="messagingTopicsProgressEstimate" class="asset-upload-progress-estimate">Estimated time: 4 minutes</div>
           <div id="messagingTopicsProgressText" class="asset-upload-progress-text">Reviewing website data and training context...</div>
-          <progress id="messagingTopicsProgressBar" max="100" value="8"></progress>
+          <progress id="messagingTopicsProgressBar" max="100" value="5"></progress>
         </div>
         <section id="messagingTopicsSuggestionsWrap" class="hidden" style="margin-top: 1rem;">
           <div class="page-heading-row">
@@ -9788,6 +9811,21 @@
           </form>
         </div>
 
+        <div id="facebookPagePickerModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="facebookPagePickerModalTitle">
+          <div class="modal-content standard-form-grid" style="display:block;max-width:520px;">
+            <div class="standard-form-grid-full page-heading-row">
+              <h3 id="facebookPagePickerModalTitle">Connection: Select Facebook Page</h3>
+            </div>
+            <label for="facebookPagePickerSelect">Page</label>
+            <select id="facebookPagePickerSelect"></select>
+            <div></div>
+            <div class="table-actions-row">
+              <button type="button" id="facebookPagePickerCancelBtn" class="btn btn-ghost">Cancel</button>
+              <button type="button" id="facebookPagePickerSaveBtn" class="btn btn-primary">Connect Page</button>
+            </div>
+          </div>
+        </div>
+
         <h3 style="margin-top:1rem;">Channel Connections</h3>
         <p class="docs-intro">Click a channel to open its API form. Connection Ops expands for channels that support gate tracking.</p>
         <div class="table-wrap">
@@ -10196,6 +10234,7 @@
   <!-- Module order matters: core first, then features, then app (orchestrator) last -->
 
   <script src="/js/core.js"></script>
+  <script src="/js/estimatedProgress.js"></script>
   <script src="/js/projectContext.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/components.js"></script>

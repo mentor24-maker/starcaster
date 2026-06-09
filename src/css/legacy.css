@@ -540,6 +540,14 @@ button[type="submit"] {
 .table-filter-row select {
   margin: 0;
 }
+.table-filter-row select[multiple] {
+  min-width: 10rem;
+  max-width: 100%;
+  vertical-align: top;
+}
+#directAcquirePeerDiscoveryFilterModelCategory {
+  min-height: 4.5rem;
+}
 
 .assets-bulk-action-row {
   display: flex;
@@ -2625,6 +2633,11 @@ button[type="submit"] {
   background: #f8fbff;
 }
 
+.asset-upload-progress-estimate {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-bottom: 0.2rem;
+}
 .asset-upload-progress-text {
   font-size: 0.86rem;
   color: #1f2937;
