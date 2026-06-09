@@ -1829,6 +1829,14 @@ button[type=submit] {
 .table-filter-row select {
   margin: 0;
 }
+.table-filter-row select[multiple] {
+  min-width: 10rem;
+  max-width: 100%;
+  vertical-align: top;
+}
+#directAcquirePeerDiscoveryFilterModelCategory {
+  min-height: 4.5rem;
+}
 .assets-bulk-action-row {
   display: flex;
   justify-content: center;
@@ -3721,6 +3729,11 @@ button[type=submit] {
   border-radius: 8px;
   padding: 0.45rem 0.55rem;
   background: #f8fbff;
+}
+.asset-upload-progress-estimate {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-bottom: 0.2rem;
 }
 .asset-upload-progress-text {
   font-size: 0.86rem;
