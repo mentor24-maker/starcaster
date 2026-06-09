@@ -47,6 +47,8 @@ App.settings = (function () {
     data: null,
     supported: [],
     byPlatform: {},
+    facebookConnection: null,
+    facebookHandoffId: '',
   };
   const PROJECT_LOGO_STORAGE_KEY = 'alphire.projectLogoMap';
   /** IANA zones for project scheduling (Promote: Social). */
@@ -1209,6 +1211,127 @@ App.settings = (function () {
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
+  function readHashQueryParams() {
+    const raw = String(window.location.hash || '').replace(/^#/, '');
+    const qs = raw.includes('&') ? raw.slice(raw.indexOf('&') + 1) : '';
+    return new URLSearchParams(qs);
+  }
+
+  function clearFacebookOAuthHashParams() {
+    try {
+      const pageId = 'settingsPage';
+      const nextHash = `#page=${encodeURIComponent(pageId)}`;
+      if (window.location.hash !== nextHash) {
+        window.history.replaceState({ pageId }, '', nextHash);
+      }
+    } catch (_) {}
+  }
+
+  async function refreshFacebookConnectionStatus() {
+    try {
+      const res = await api('/api/promote/social/facebook/connection');
+      connectionOpsState.facebookConnection = res?.project || res?.data?.project || null;
+    } catch {
+      connectionOpsState.facebookConnection = null;
+    }
+  }
+
+  function setFacebookPagePickerVisible(visible) {
+    const modal = document.getElementById('facebookPagePickerModal');
+    if (!modal) return;
+    modal.classList.toggle('hidden', !visible);
+  }
+
+  async function openFacebookPagePicker(handoffId) {
+    const id = String(handoffId || '').trim();
+    if (!id) return;
+    connectionOpsState.facebookHandoffId = id;
+    const select = document.getElementById('facebookPagePickerSelect');
+    if (!select) return;
+    select.innerHTML = '<option value="">Loading pages...</option>';
+    setFacebookPagePickerVisible(true);
+    const res = await api(`/api/promote/social/facebook/oauth/handoff/${encodeURIComponent(id)}`);
+    const pages = Array.isArray(res?.pages) ? res.pages : (Array.isArray(res?.data?.pages) ? res.data.pages : []);
+    if (!pages.length) {
+      select.innerHTML = '<option value="">No pages available</option>';
+      notify('Facebook page handoff expired. Connect again.', true);
+      return;
+    }
+    select.innerHTML = pages.map((page) => {
+      const pageId = String(page?.id || '').trim();
+      const name = String(page?.name || pageId).trim();
+      return `<option value="${pageId.replace(/"/g, '&quot;')}">${name.replace(/</g, '&lt;')}</option>`;
+    }).join('');
+  }
+
+  async function saveFacebookPagePicker() {
+    const handoffId = String(connectionOpsState.facebookHandoffId || '').trim();
+    const select = document.getElementById('facebookPagePickerSelect');
+    const pageId = String(select?.value || '').trim();
+    if (!handoffId || !pageId) {
+      notify('Select a Facebook Page first', true);
+      return;
+    }
+    const res = await api('/api/promote/social/facebook/oauth/select-page', {
+      method: 'POST',
+      body: JSON.stringify({ handoffId, pageId }),
+    });
+    setFacebookPagePickerVisible(false);
+    connectionOpsState.facebookHandoffId = '';
+    await refreshFacebookConnectionStatus();
+    await refreshConnectionOps('facebook');
+    const pageName = String(res?.pageName || res?.data?.pageName || '').trim();
+    notify(pageName ? `Connected Facebook Page: ${pageName}` : 'Facebook Page connected.');
+  }
+
+  async function startFacebookPageOAuth() {
+    const res = await api('/api/promote/social/facebook/oauth/start');
+    const url = String(res?.url || res?.data?.url || '').trim();
+    if (!url) throw new Error('Facebook OAuth start URL missing');
+    window.location.href = url;
+  }
+
+  async function disconnectFacebookPage() {
+    if (!window.confirm('Disconnect the Facebook Page from this project?')) return;
+    await api('/api/promote/social/facebook/connection', { method: 'DELETE' });
+    connectionOpsState.facebookConnection = null;
+    await refreshConnectionOps('facebook');
+    notify('Facebook Page disconnected.');
+  }
+
+  async function handleFacebookOAuthReturn() {
+    const params = readHashQueryParams();
+    const status = String(params.get('fb_oauth') || '').trim().toLowerCase();
+    if (!status) return;
+
+    if (status === 'select_page') {
+      const handoffId = String(params.get('fb_handoff') || '').trim();
+      clearFacebookOAuthHashParams();
+      connectionOpsState.platform = 'facebook';
+      setConnectionOpsPanelVisible(true);
+      await refreshConnectionOps('facebook');
+      if (handoffId) await openFacebookPagePicker(handoffId);
+      return;
+    }
+
+    clearFacebookOAuthHashParams();
+    connectionOpsState.platform = 'facebook';
+    setConnectionOpsPanelVisible(true);
+    await refreshFacebookConnectionStatus();
+    await refreshConnectionOps('facebook');
+
+    if (status === 'connected') {
+      const pageName = String(params.get('fb_page') || '').trim();
+      notify(pageName ? `Connected Facebook Page: ${pageName}` : 'Facebook Page connected.');
+      return;
+    }
+
+    if (status === 'error') {
+      const errText = String(params.get('fb_error') || 'Facebook OAuth failed').trim();
+      notify(errText, true);
+    }
+  }
+
   function renderConnectionOpsSummary(data) {
     const wrap = document.getElementById('connectionOpsSummary');
     if (!wrap) return;
@@ -1243,12 +1366,24 @@ App.settings = (function () {
               : (platform === 'instagram'
               ? 'Run Instagram Auth Test'
               : (platform === 'threads' ? 'Run Threads Auth Test' : 'Run Channel Test'))))));
+    const fbConn = platform === 'facebook' ? (connectionOpsState.facebookConnection || null) : null;
+    const fbConnected = Boolean(fbConn?.connected);
+    const fbPageLine = fbConnected
+      ? `Connected: ${String(fbConn.pageName || fbConn.pageId || 'Page').trim()}`
+      : 'Not connected via OAuth';
+    const facebookOAuthBlock = platform === 'facebook'
+      ? `<div><strong>Page OAuth</strong><br><span class="meta">${fbPageLine}</span><div class="table-actions-row" style="margin-top:0.35rem;">
+          <button type="button" id="connectionOpsFacebookConnectBtn" class="btn btn-primary">Connect Facebook Page</button>
+          ${fbConnected ? '<button type="button" id="connectionOpsFacebookDisconnectBtn" class="btn btn-ghost">Disconnect</button>' : ''}
+        </div></div>`
+      : '';
     wrap.innerHTML = `
       <div><strong>Readiness</strong><br><span class="${badgeClass}">${String(level).toUpperCase()} (${score})</span></div>
       <div><strong>Required Fields</strong><br>${readiness.reqPct || 0}%</div>
       <div><strong>Human Gates</strong><br>${readiness.completedGates || 0}/${readiness.totalGates || 0}</div>
       <div><strong>Next Action</strong><br>${String(data.nextAction || '-')}</div>
       <div><strong>Latest Attempt</strong><br>${latestAttempt ? `${formatStatus(latestAttempt.status)} · ${formatDateTime(latestAttempt.createdAt)}` : 'No attempts logged'}</div>
+      ${facebookOAuthBlock}
       <div><strong>Quick Test</strong><br>${supportsTest ? '<button id="connectionOpsRunTestBtn" type="button" class="btn btn-connection-ops-quick-test">Run Test</button>' : '-'}</div>
     `;
     const testBtn = document.getElementById('connectionOpsRunTestBtn');
@@ -1259,6 +1394,26 @@ App.settings = (function () {
           await runConnectionOpsTest();
         } catch (err) {
           notify(err.message || 'Connection test failed', true);
+        }
+      });
+    }
+    const fbConnectBtn = document.getElementById('connectionOpsFacebookConnectBtn');
+    if (fbConnectBtn) {
+      fbConnectBtn.addEventListener('click', async () => {
+        try {
+          await startFacebookPageOAuth();
+        } catch (err) {
+          notify(err.message || 'Could not start Facebook OAuth', true);
+        }
+      });
+    }
+    const fbDisconnectBtn = document.getElementById('connectionOpsFacebookDisconnectBtn');
+    if (fbDisconnectBtn) {
+      fbDisconnectBtn.addEventListener('click', async () => {
+        try {
+          await disconnectFacebookPage();
+        } catch (err) {
+          notify(err.message || 'Could not disconnect Facebook Page', true);
         }
       });
     }
@@ -1369,8 +1524,8 @@ App.settings = (function () {
       links.push({ label: 'X API Docs', url: 'https://developer.x.com/en/docs/x-api' });
     } else if (platform === 'facebook') {
       links.push({ label: 'Meta App Dashboard', url: 'https://developers.facebook.com/apps/' });
-      links.push({ label: 'Graph API Explorer', url: 'https://developers.facebook.com/tools/explorer/' });
       links.push({ label: 'Facebook Pages API Docs', url: 'https://developers.facebook.com/docs/pages-api/' });
+      links.push({ label: 'OAuth Redirect URI', url: `${String(window.location.origin || '').replace(/\/+$/, '')}/api/promote/social/facebook/oauth/callback` });
     } else if (platform === 'instagram') {
       links.push({ label: 'Meta App Dashboard', url: 'https://developers.facebook.com/apps/' });
       links.push({ label: 'Instagram Content Publishing Docs', url: 'https://developers.facebook.com/docs/instagram-platform/content-publishing' });
@@ -1497,6 +1652,7 @@ App.settings = (function () {
     const platform = String(platformInput || connectionOpsState.platform || '').trim().toLowerCase();
     if (!platform) return;
     connectionOpsState.platform = platform;
+    if (platform === 'facebook') await refreshFacebookConnectionStatus();
     try {
       setConnectionOpsStatus(`Loading ${platform} readiness...`);
       const res = await api(`/api/settings/connection-ops/${encodeURIComponent(platform)}`);
@@ -2022,6 +2178,33 @@ App.settings = (function () {
       });
     }
 
+    const facebookPagePickerSaveBtn = document.getElementById('facebookPagePickerSaveBtn');
+    if (facebookPagePickerSaveBtn) {
+      facebookPagePickerSaveBtn.addEventListener('click', async () => {
+        try {
+          await saveFacebookPagePicker();
+        } catch (err) {
+          notify(err.message || 'Could not connect Facebook Page', true);
+        }
+      });
+    }
+    const facebookPagePickerCancelBtn = document.getElementById('facebookPagePickerCancelBtn');
+    if (facebookPagePickerCancelBtn) {
+      facebookPagePickerCancelBtn.addEventListener('click', () => {
+        connectionOpsState.facebookHandoffId = '';
+        setFacebookPagePickerVisible(false);
+      });
+    }
+    const facebookPagePickerModal = document.getElementById('facebookPagePickerModal');
+    if (facebookPagePickerModal) {
+      facebookPagePickerModal.addEventListener('click', (event) => {
+        if (event.target === facebookPagePickerModal) {
+          connectionOpsState.facebookHandoffId = '';
+          setFacebookPagePickerVisible(false);
+        }
+      });
+    }
+
     closeApiSettingsForm();
     setConnectionOpsPanelVisible(false);
     refreshConnectionOpsPlatforms()
@@ -2046,6 +2229,7 @@ App.settings = (function () {
         connectionOpsState.platform = connectionOpsState.supported[0];
       }
       await refreshConnectionOps();
+      await handleFacebookOAuthReturn();
       activeChannelLabel = '';
       closeApiSettingsForm();
       setConnectionOpsPanelVisible(false);

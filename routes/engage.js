@@ -22,6 +22,11 @@ const blueskyClient = require('../lib/blueskyClient');
 const bufferClient = require('../lib/bufferClient');
 const { stageCampaignVideoForBuffer } = require('../lib/bufferVideoStaging');
 const metaClients = require('../lib/metaClients');
+const metaOAuth = require('../lib/metaOAuth');
+const { verifyOAuthState } = require('../lib/metaOAuthState');
+const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
+const { getAppPublicOrigin } = require('../lib/appOrigin');
+const connectionOpsStore = require('../lib/connectionOpsStore');
 const redditClient = require('../lib/redditClient');
 const { discoverRedditThreads } = require('../lib/redditThreadDiscovery');
 const { generateRedditReplyCandidates } = require('../lib/redditReplyCandidates');
@@ -1304,7 +1309,8 @@ async function publishStoredPost(post, req) {
       }
     }
   } else if (channel === 'facebook') {
-    result = await metaClients.createFacebookPost(post.text, imageOpts);
+    const fbCreds = await metaClients.resolveFacebookCredentials({ projectId: scope.projectId });
+    result = await metaClients.createFacebookPost(post.text, imageOpts, fbCreds);
   } else if (channel === 'threads') {
     result = await metaClients.createThreadsPost(post.text, imageOpts);
   } else if (channel === 'instagram') {
@@ -1469,6 +1475,34 @@ async function publishStoredPost(post, req) {
   });
 
   return { ok: true, status: 200, data: { post: published, remote: result.data } };
+}
+
+function sendRedirect(res, location) {
+  res.statusCode = 302;
+  res.setHeader('Location', String(location || '/'));
+  res.setHeader('Cache-Control', 'no-store');
+  res.end();
+  return true;
+}
+
+function settingsOAuthReturnUrl(origin, params = {}) {
+  const base = `${String(origin || '').replace(/\/+$/, '')}/#page=settingsPage`;
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const text = safeText(value);
+    if (text) query.set(key, text);
+  });
+  const qs = query.toString();
+  return qs ? `${base}&${qs}` : base;
+}
+
+async function markFacebookPageConnectedGates(scope) {
+  try {
+    await connectionOpsStore.updateGate('facebook', 'saved_credentials', true, scope);
+    await connectionOpsStore.updateGate('facebook', 'auth_check_passed', true, scope);
+  } catch {
+    // Non-fatal: gates can be marked manually.
+  }
 }
 
 async function handle(req, res, pathname, method) {
@@ -1840,21 +1874,214 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, payload), true;
   }
 
+  if (pathname === '/api/promote/social/facebook/oauth/start' && requestMethod === 'GET') {
+    const scope = requestProjectScope(req);
+    if (!scope.projectId) {
+      return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    }
+    if (!metaOAuth.isMetaAppConfigured()) {
+      return sendErr(res, 400, 'Meta app_id and app_secret are required (Vercel env or Settings > APIs > Meta)', { code: 'META_APP_NOT_CONFIGURED' }), true;
+    }
+    const origin = getAppPublicOrigin(req);
+    const start = metaOAuth.buildOAuthStartUrl({
+      origin,
+      projectId: scope.projectId,
+      userId: scope.userId,
+    });
+    if (!start.ok) {
+      return sendErr(res, start.status || 400, start.error || 'Could not start Facebook OAuth', { code: 'FACEBOOK_OAUTH_START_FAILED' }), true;
+    }
+    return sendOk(res, 200, start.data, start.data), true;
+  }
+
+  if (pathname === '/api/promote/social/facebook/oauth/callback' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const origin = getAppPublicOrigin(req);
+    const redirectUri = metaOAuth.buildRedirectUri(origin);
+    const oauthError = safeText(urlObj.searchParams.get('error'));
+    const oauthErrorDesc = safeText(urlObj.searchParams.get('error_description'));
+    if (oauthError) {
+      return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+        fb_oauth: 'error',
+        fb_error: oauthErrorDesc || oauthError,
+      })), true;
+    }
+
+    const stateRaw = safeText(urlObj.searchParams.get('state'));
+    const stateRes = verifyOAuthState(stateRaw);
+    if (!stateRes.ok) {
+      return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+        fb_oauth: 'error',
+        fb_error: stateRes.error || 'Invalid OAuth state',
+      })), true;
+    }
+
+    const code = safeText(urlObj.searchParams.get('code'));
+    if (!code) {
+      return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+        fb_oauth: 'error',
+        fb_error: 'Missing OAuth code',
+      })), true;
+    }
+
+    const exchange = await metaOAuth.completeOAuthCodeExchange(code, redirectUri);
+    if (!exchange.ok) {
+      return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+        fb_oauth: 'error',
+        fb_error: exchange.error || 'Facebook OAuth failed',
+      })), true;
+    }
+
+    const pages = Array.isArray(exchange.data?.pages) ? exchange.data.pages : [];
+    const scope = {
+      projectId: stateRes.data.projectId,
+      userId: stateRes.data.userId,
+    };
+
+    if (pages.length === 1) {
+      const page = pages[0];
+      const saved = await projectSocialCredentialsStore.saveFacebookPage(scope.projectId, {
+        pageId: page.id,
+        pageName: page.name,
+        accessToken: page.access_token,
+      });
+      if (!saved.ok) {
+        return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+          fb_oauth: 'error',
+          fb_error: saved.error || 'Could not save Facebook Page credentials',
+        })), true;
+      }
+      await markFacebookPageConnectedGates(scope);
+      return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+        fb_oauth: 'connected',
+        fb_page: page.name,
+      })), true;
+    }
+
+    const handoff = await projectSocialCredentialsStore.createOAuthHandoff({
+      projectId: scope.projectId,
+      userId: scope.userId,
+      pages,
+    });
+    if (!handoff.ok) {
+      return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+        fb_oauth: 'error',
+        fb_error: handoff.error || 'Could not create page selection handoff',
+      })), true;
+    }
+    return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+      fb_oauth: 'select_page',
+      fb_handoff: handoff.data.id,
+    })), true;
+  }
+
+  const fbOAuthHandoffMatch = String(pathname || '').match(/^\/api\/promote\/social\/facebook\/oauth\/handoff\/([^/]+)\/?$/);
+  if (fbOAuthHandoffMatch && requestMethod === 'GET') {
+    const scope = requestProjectScope(req);
+    const handoffId = decodeURIComponent(fbOAuthHandoffMatch[1] || '');
+    const handoff = await projectSocialCredentialsStore.getOAuthHandoff(handoffId);
+    if (!handoff) {
+      return sendErr(res, 404, 'OAuth handoff not found or expired', { code: 'HANDOFF_NOT_FOUND' }), true;
+    }
+    if (handoff.projectId !== scope.projectId || handoff.userId !== scope.userId) {
+      return sendErr(res, 403, 'OAuth handoff does not match active project', { code: 'HANDOFF_FORBIDDEN' }), true;
+    }
+    const pages = (Array.isArray(handoff.pages) ? handoff.pages : []).map((page) => ({
+      id: safeText(page.id),
+      name: safeText(page.name),
+    })).filter((page) => page.id);
+    return sendOk(res, 200, { handoffId, pages }, { handoffId, pages }), true;
+  }
+
+  if (pathname === '/api/promote/social/facebook/oauth/select-page' && requestMethod === 'POST') {
+    const scope = requestProjectScope(req);
+    if (!scope.projectId) {
+      return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    }
+    const body = await parseJsonBody(req);
+    const handoffId = safeText(body?.handoffId || body?.handoff_id);
+    const pageId = safeText(body?.pageId || body?.page_id);
+    if (!handoffId || !pageId) {
+      return sendErr(res, 400, 'handoffId and pageId are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const handoff = await projectSocialCredentialsStore.getOAuthHandoff(handoffId);
+    if (!handoff) {
+      return sendErr(res, 404, 'OAuth handoff not found or expired', { code: 'HANDOFF_NOT_FOUND' }), true;
+    }
+    if (handoff.projectId !== scope.projectId || handoff.userId !== scope.userId) {
+      return sendErr(res, 403, 'OAuth handoff does not match active project', { code: 'HANDOFF_FORBIDDEN' }), true;
+    }
+    const page = (Array.isArray(handoff.pages) ? handoff.pages : []).find((item) => safeText(item.id) === pageId);
+    if (!page) {
+      return sendErr(res, 404, 'Selected page not found in handoff', { code: 'PAGE_NOT_FOUND' }), true;
+    }
+    const saved = await projectSocialCredentialsStore.saveFacebookPage(scope.projectId, {
+      pageId: page.id,
+      pageName: page.name,
+      accessToken: page.access_token,
+    });
+    if (!saved.ok) {
+      return sendErr(res, saved.status || 500, saved.error || 'Could not save Facebook Page credentials', { code: 'SAVE_FAILED' }), true;
+    }
+    await projectSocialCredentialsStore.deleteOAuthHandoff(handoffId);
+    await markFacebookPageConnectedGates(scope);
+    const summary = projectSocialCredentialsStore.publicFacebookPageSummary(saved.data);
+    return sendOk(res, 200, summary, summary), true;
+  }
+
+  if (pathname === '/api/promote/social/facebook/connection' && requestMethod === 'GET') {
+    const scope = requestProjectScope(req);
+    const cred = scope.projectId
+      ? await projectSocialCredentialsStore.getFacebookPage(scope.projectId)
+      : null;
+    const projectConnection = projectSocialCredentialsStore.publicFacebookPageSummary(cred);
+    const globalCreds = metaClients.getFacebookCredentials();
+    const payload = {
+      project: projectConnection,
+      globalConfigured: metaClients.isFacebookConfigured(globalCreds),
+      metaAppConfigured: metaOAuth.isMetaAppConfigured(),
+      oauthAvailable: metaOAuth.isMetaAppConfigured(),
+    };
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  if (pathname === '/api/promote/social/facebook/connection' && requestMethod === 'DELETE') {
+    const scope = requestProjectScope(req);
+    if (!scope.projectId) {
+      return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    }
+    const deleted = await projectSocialCredentialsStore.deleteFacebookPage(scope.projectId);
+    if (!deleted.ok) {
+      return sendErr(res, deleted.status || 500, deleted.error || 'Could not disconnect Facebook Page', { code: 'DELETE_FAILED' }), true;
+    }
+    return sendOk(res, 200, { disconnected: true }, { disconnected: true }), true;
+  }
+
   if (pathname === '/api/promote/social/facebook/status' && requestMethod === 'GET') {
-    const creds = metaClients.getFacebookCredentials();
+    const scope = requestProjectScope(req);
+    const creds = await metaClients.resolveFacebookCredentials({ projectId: scope.projectId });
     const payload = {
       configured: metaClients.isFacebookConfigured(creds),
       hasAccessToken: Boolean(creds.accessToken),
       hasPageId: Boolean(creds.pageId),
+      pageName: safeText(creds.pageName),
+      source: safeText(creds.source) || 'global',
       baseUrl: creds.baseUrl || '',
+      metaAppConfigured: metaOAuth.isMetaAppConfigured(),
     };
     return sendOk(res, 200, payload, payload), true;
   }
 
   if (pathname === '/api/promote/social/facebook/auth-test' && requestMethod === 'GET') {
-    const creds = metaClients.getFacebookCredentials();
+    const scope = requestProjectScope(req);
+    const creds = await metaClients.resolveFacebookCredentials({ projectId: scope.projectId });
     if (!metaClients.isFacebookConfigured(creds)) {
-      return sendOk(res, 200, { configured: false, authOk: false, error: 'Missing Facebook access_token/page_id' }, { configured: false, authOk: false }), true;
+      return sendOk(res, 200, {
+        configured: false,
+        authOk: false,
+        error: 'Connect a Facebook Page or save access_token/page_id in Settings > APIs > Meta',
+        metaAppConfigured: metaOAuth.isMetaAppConfigured(),
+      }, { configured: false, authOk: false }), true;
     }
     const auth = await metaClients.checkFacebookAuth(creds);
     if (!auth.ok) {
@@ -1864,6 +2091,8 @@ async function handle(req, res, pathname, method) {
         status: Number(auth.status || 0) || 0,
         endpoint: String(auth.endpoint || ''),
         error: String(auth.error || 'Auth failed'),
+        pageName: safeText(creds.pageName),
+        source: safeText(creds.source) || 'global',
       }, { configured: true, authOk: false }), true;
     }
     return sendOk(res, 200, {
@@ -1872,6 +2101,8 @@ async function handle(req, res, pathname, method) {
       status: Number(auth.status || 200) || 200,
       endpoint: String(auth.endpoint || ''),
       page: auth.data || null,
+      pageName: safeText(creds.pageName) || safeText(auth.data?.name),
+      source: safeText(creds.source) || 'global',
     }, { configured: true, authOk: true }), true;
   }
 
@@ -2174,6 +2405,7 @@ async function handle(req, res, pathname, method) {
         diagnostics: post.diagnostics || null,
       }));
     const creds = xClient.getXCredentials();
+    const fbResolved = await metaClients.resolveFacebookCredentials({ projectId: scope.projectId });
     const payload = {
       checkedAt: new Date().toISOString(),
       xConfig: {
@@ -2212,15 +2444,15 @@ async function handle(req, res, pathname, method) {
           baseUrl: bf.baseUrl || '',
         };
       })(),
-      facebookConfig: (() => {
-        const fb = metaClients.getFacebookCredentials();
-        return {
-          configured: metaClients.isFacebookConfigured(fb),
-          hasAccessToken: Boolean(fb.accessToken),
-          hasPageId: Boolean(fb.pageId),
-          baseUrl: fb.baseUrl || '',
-        };
-      })(),
+      facebookConfig: {
+        configured: metaClients.isFacebookConfigured(fbResolved),
+        hasAccessToken: Boolean(fbResolved.accessToken),
+        hasPageId: Boolean(fbResolved.pageId),
+        pageName: safeText(fbResolved.pageName),
+        source: safeText(fbResolved.source) || 'global',
+        metaAppConfigured: metaOAuth.isMetaAppConfigured(),
+        baseUrl: fbResolved.baseUrl || '',
+      },
       threadsConfig: (() => {
         const th = metaClients.getThreadsCredentials();
         return {

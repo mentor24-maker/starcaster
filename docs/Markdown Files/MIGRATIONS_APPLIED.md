@@ -123,6 +123,8 @@ All paths relative to `docs/`.
 ### Acquire & Engage
 
 - `011_multitenancy_acquire_engage.sql` — **primary** engage + direct acquire + harvest tables
+- `website_peers_setup.sql` — `website_peers` table (greenfield)
+- `website_peers_last_acquired_at_migration.sql` — add `last_acquired_at` (legacy DBs had `last_harvested_at`)
 - `supabase_acquire_migrations.sql`, `supabase_acquire_youtube_*.sql`, `supabase_engage_youtube_comment_agents.sql`
 
 ### Settings & training

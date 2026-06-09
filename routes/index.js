@@ -194,6 +194,8 @@ async function handleRequest(req, res) {
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
   const isWebhookRoute = pathname === '/api/develop/devAgent/worker' || pathname.startsWith('/api/tasks');
+  const isFacebookOAuthCallback =
+    pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
   const isImportDriveFolderHealth =
     pathname === assets.IMPORT_DRIVE_FOLDER_PATH && method === 'GET';
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
@@ -211,7 +213,7 @@ async function handleRequest(req, res) {
     if (handled) return;
   }
 
-  if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !authUser) {
+  if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !authUser) {
 
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
