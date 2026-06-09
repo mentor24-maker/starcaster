@@ -505,6 +505,10 @@ App.acquire = (function () {
       typeTd.textContent = String(item.suggested_reference_role || 'peer').toLowerCase() === 'model' ? 'Model' : 'Peer';
       tr.appendChild(typeTd);
 
+      const modelTd = document.createElement('td');
+      modelTd.textContent = String(item.website_model || '').trim() || 'Direct Competitors';
+      tr.appendChild(modelTd);
+
       const domainTd = document.createElement('td');
       domainTd.className = 'direct-acquire-contact-label';
       domainTd.textContent = String(item.domain || '').trim() || '-';
@@ -540,7 +544,9 @@ App.acquire = (function () {
     });
     const selectedCount = results.filter((item) => item.selected !== false).length;
     if (metaEl) {
-      metaEl.textContent = `${results.length} candidate${results.length === 1 ? '' : 's'} ranked by similarity.`;
+      const peerCount = results.filter((item) => String(item.suggested_reference_role || 'peer').toLowerCase() === 'peer').length;
+      const modelCount = results.length - peerCount;
+      metaEl.textContent = `${results.length} candidate${results.length === 1 ? '' : 's'} (${peerCount} peer${peerCount === 1 ? '' : 's'}, ${modelCount} model${modelCount === 1 ? '' : 's'}). Peers sorted first.`;
     }
     if (saveBtn) saveBtn.disabled = selectedCount === 0;
     if (selectAll) {
@@ -598,10 +604,10 @@ App.acquire = (function () {
           max_pages: Number(maxPagesSelect?.value || 10) || 10,
           body_snippet_chars: Number(document.getElementById('directAcquireSnippetInput')?.value || 600) || 600,
           keyword_exclusions: String(exclusionsInput?.value || '').trim(),
-          keyword_count: 5,
-          results_per_keyword: 30,
-          output_count: 5,
-          light_fetch_count: 20,
+          keyword_count: 10,
+          results_per_keyword: 10,
+          output_count: 100,
+          light_fetch_count: 15,
         }),
       });
       const payload = result?.data || result || {};
@@ -643,7 +649,8 @@ App.acquire = (function () {
           suggested_reference_role: String(peer?.suggested_reference_role || 'peer').trim().toLowerCase() === 'model' ? 'model' : 'peer',
           similarity_score: Number(peer?.similarity_score || 0) || 0,
           reasons: Array.isArray(peer?.reasons) ? peer.reasons.slice() : [],
-          selected: !existingKeys.has(`${sourceDomain}::${domain}`),
+          selected: !existingKeys.has(`${sourceDomain}::${domain}`)
+            && String(peer?.suggested_reference_role || 'peer').trim().toLowerCase() === 'peer',
         };
       }).filter((peer) => peer.url && peer.domain);
       state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
