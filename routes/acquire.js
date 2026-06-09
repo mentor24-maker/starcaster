@@ -1246,7 +1246,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { websitePeer: result.data }), true;
   }
 
-  // POST /api/acquire/peer-discovery — keyword-only crawl, Google search, similarity rank (top 5)
+  // POST /api/acquire/peer-discovery — keyword crawl, web search, classify up to 100 candidates
   if (pathname === '/api/acquire/peer-discovery' && method === 'POST') {
     if (checkEndpointLimit(req, res, 'acquire.direct')) return true;
     const body = await parseJsonBody(req);
@@ -1258,10 +1258,10 @@ async function handle(req, res, pathname, method) {
       max_pages: Number(body?.max_pages || 10) || 10,
       body_snippet_chars: Number(body?.body_snippet_chars || 500) || 500,
       keyword_exclusions: body?.keyword_exclusions || '',
-      keyword_count: Number(body?.keyword_count || 5) || 5,
-      results_per_keyword: Number(body?.results_per_keyword || 30) || 30,
-      output_count: Number(body?.output_count || 5) || 5,
-      light_fetch_count: Number(body?.light_fetch_count || 20) || 20,
+      keyword_count: Number(body?.keyword_count || 10) || 10,
+      results_per_keyword: Number(body?.results_per_keyword || 10) || 10,
+      output_count: Number(body?.output_count || 100) || 100,
+      light_fetch_count: Number(body?.light_fetch_count || 15) || 15,
     }, scope);
     return sendOk(res, 200, discovery, discovery), true;
   }
@@ -1278,10 +1278,10 @@ async function handle(req, res, pathname, method) {
       max_pages: Number(body?.max_pages || 10) || 10,
       body_snippet_chars: Number(body?.body_snippet_chars || 500) || 500,
       keyword_exclusions: body?.keyword_exclusions || '',
-      keyword_count: Number(body?.keyword_count || 5) || 5,
-      results_per_keyword: Number(body?.results_per_keyword || 30) || 30,
-      output_count: Number(body?.peer_sites_limit || body?.output_count || 5) || 5,
-      light_fetch_count: Number(body?.light_fetch_count || 20) || 20,
+      keyword_count: Number(body?.keyword_count || 10) || 10,
+      results_per_keyword: Number(body?.results_per_keyword || 10) || 10,
+      output_count: Number(body?.peer_sites_limit || body?.output_count || 100) || 100,
+      light_fetch_count: Number(body?.light_fetch_count || 15) || 15,
     }, scope);
     const peers = Array.isArray(discovery?.results) ? discovery.results : [];
     const peerSummary = {
