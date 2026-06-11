@@ -445,6 +445,7 @@ App.assets = (function () {
     if (els.assetSizeRow) els.assetSizeRow.classList.add('hidden');
     renderAssetPreview(null);
     setAssetFormMode(false);
+    App.assetImageEditor?.close?.();
   }
 
   function renderCategoryOptionsByType(assetType, selectedCategory) {
@@ -782,6 +783,11 @@ App.assets = (function () {
     if (els.assetSizeRow) els.assetSizeRow.classList.remove('hidden');
     renderAssetPreview(asset);
     setAssetFormMode(true);
+    if (String(asset.assetType || '').trim() === 'Image') {
+      App.assetImageEditor?.openForAsset?.(asset, assetImageUrl(asset, { preferThumbnail: false }));
+    } else {
+      App.assetImageEditor?.close?.();
+    }
     App.setActivePage('addAssetPage');
   }
 
@@ -1632,6 +1638,30 @@ App.assets = (function () {
     resetAssetForm();
     prefillUploadFormsFromActiveFilters();
     syncAssetsHeaderControls();
+    App.assetImageEditor?.init?.({
+      onSaved: async (updatedAsset) => {
+        if (!updatedAsset?.id) return;
+        const idx = (state.assets || []).findIndex((item) => Number(item.id || 0) === Number(updatedAsset.id || 0));
+        if (idx >= 0) state.assets[idx] = { ...state.assets[idx], ...updatedAsset };
+        if (Number(editingAssetId || 0) === Number(updatedAsset.id || 0)) {
+          if (els.assetDimensionsText) {
+            const width = Math.max(0, Number(updatedAsset.imageWidth || 0) || 0);
+            const height = Math.max(0, Number(updatedAsset.imageHeight || 0) || 0);
+            if (width > 0 && height > 0) {
+              els.assetDimensionsText.textContent = `${width} x ${height}`;
+              els.assetDimensionsRow?.classList.remove('hidden');
+            }
+          }
+          if (els.assetSizeText) {
+            const bytes = Math.max(0, Number(updatedAsset.size || 0) || 0);
+            els.assetSizeText.textContent = `${formatBytes(bytes)} (${bytes} B)`;
+            els.assetSizeRow?.classList.remove('hidden');
+          }
+          renderAssetPreview(updatedAsset);
+        }
+        await refresh();
+      },
+    });
   }
 
   return {

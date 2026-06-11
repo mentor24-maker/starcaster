@@ -11,3 +11,5 @@ data/api_settings.json
 docs/archives/
 files/google_console_oauth_client_secret_*.json
 .env*.local
+.claude/
+starcaster-cookies.txt

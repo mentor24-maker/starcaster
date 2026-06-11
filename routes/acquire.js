@@ -25,6 +25,9 @@ const {
   updateWebsitePeer,
   deleteWebsitePeer,
   upsertWebsitePeersFromRun,
+  listDiscoveryCandidates,
+  persistDiscoveryResults,
+  promoteDiscoveryCandidates,
 } = require('../lib/websitePeersStore');
 const { runYoutubeAcquire } = require('../lib/acquire/YoutubeDetailsRun');
 const { runXAcquire } = require('../lib/acquire/XAcquireRun');
@@ -1246,6 +1249,35 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { websitePeer: result.data }), true;
   }
 
+  // GET /api/acquire/peer-discovery/candidates — reload saved discovery candidates for a source URL
+  if (pathname === '/api/acquire/peer-discovery/candidates' && method === 'GET') {
+    const sourceUrl = safeText(urlObj.searchParams.get('source_url') || urlObj.searchParams.get('site_url'));
+    if (!sourceUrl) return sendErr(res, 400, 'source_url is required'), true;
+    const scope = requestProjectScope(req);
+    const result = await listDiscoveryCandidates(sourceUrl, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const candidates = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, {
+      source_url: sourceUrl,
+      run: result.run || {},
+      candidates,
+    }, {
+      source_url: sourceUrl,
+      run: result.run || {},
+      candidates,
+      total: candidates.length,
+    }), true;
+  }
+
+  // POST /api/acquire/peer-discovery/promote — move selected discovery candidates into Other Websites
+  if (pathname === '/api/acquire/peer-discovery/promote' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
+    const result = await promoteDiscoveryCandidates(body?.ids || body?.candidate_ids || [], scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
   // POST /api/acquire/peer-discovery — keyword crawl, web search, classify up to 100 candidates
   if (pathname === '/api/acquire/peer-discovery' && method === 'POST') {
     if (checkEndpointLimit(req, res, 'acquire.direct')) return true;
@@ -1263,6 +1295,13 @@ async function handle(req, res, pathname, method) {
       output_count: Number(body?.output_count || 100) || 100,
       light_fetch_count: Number(body?.light_fetch_count || 15) || 15,
     }, scope);
+    const persistence = await persistDiscoveryResults(discovery, scope);
+    discovery.persistence = persistence.ok
+      ? {
+        saved_count: Number(persistence.data?.count || 0) || 0,
+        cleared_count: Number(persistence.data?.cleared || 0) || 0,
+      }
+      : { error: String(persistence.error || 'Could not save discovery candidates').trim() };
     return sendOk(res, 200, discovery, discovery), true;
   }
 

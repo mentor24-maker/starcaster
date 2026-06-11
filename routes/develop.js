@@ -62,6 +62,25 @@ const {
 } = require('../lib/developExtensionsManagerStore');
 const { listContacts, createContact, updateContact, rowToContact } = require('../lib/ContactsStore');
 const { savePollSubmission, getPollResults } = require('../lib/pollSubmissionsStore');
+const {
+  listSavedSections,
+  createSavedSection,
+  updateSavedSection,
+  deleteSavedSection,
+} = require('../lib/developSavedSectionsStore');
+const {
+  listProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+} = require('../lib/developProductsStore');
+const {
+  listLevelEvents,
+  createLevelEvent,
+  updateLevelEvent,
+  deleteLevelEvent,
+} = require('../lib/gameLevelEventsStore');
+const { normalizeBuilderDocument, serializeBuilderDocument } = require('../lib/builder');
 
 let playwrightChromium = null;
 function getChromium() {
@@ -333,6 +352,8 @@ async function handle(req, res, pathname, method) {
     const module = await createModule({
       name,
       moduleType,
+      moduleClass: body.moduleClass || body.module_class,
+      modules: Array.isArray(body.modules) ? body.modules : [],
       classId: body.classId || body.class_id,
       settings: body && typeof body.settings === 'object' ? body.settings : {},
     }, scope);
@@ -1068,6 +1089,105 @@ async function handle(req, res, pathname, method) {
     } catch (err) {
       return sendErr(res, 500, err.message || 'Could not fetch poll results'), true;
     }
+  }
+
+  if (pathname === '/api/develop/layout/normalize' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const document = normalizeBuilderDocument({
+      pageBackground: body?.pageBackground || body?.page_background,
+      sections: body?.layoutSections || body?.layout_sections || body?.sections,
+    });
+    return sendOk(res, 200, document, {
+      document: serializeBuilderDocument(document),
+    }), true;
+  }
+
+  if (pathname === '/api/develop/saved-sections' && requestMethod === 'GET') {
+    const result = await listSavedSections(undefined, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load saved sections'), true;
+    const savedSections = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, savedSections, { savedSections }, { total: savedSections.length }), true;
+  }
+
+  if (pathname === '/api/develop/saved-sections' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createSavedSection({ name, section: body.section }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create saved section'), true;
+    return sendOk(res, 201, result.data, { savedSection: result.data }), true;
+  }
+
+  const savedSectionMatch = pathname.match(/^\/api\/develop\/saved-sections\/([^/]+)$/);
+  if (savedSectionMatch && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const result = await updateSavedSection(savedSectionMatch[1], {
+      name: body.name,
+      section: body.section,
+    }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update saved section'), true;
+    return sendOk(res, 200, result.data, { savedSection: result.data }), true;
+  }
+  if (savedSectionMatch && requestMethod === 'DELETE') {
+    const result = await deleteSavedSection(savedSectionMatch[1], scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete saved section'), true;
+    return sendOk(res, 200, result.data, { savedSection: result.data }), true;
+  }
+
+  if (pathname === '/api/develop/products' && requestMethod === 'GET') {
+    const result = await listProducts(undefined, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load products'), true;
+    const products = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, products, { products }, { total: products.length }), true;
+  }
+
+  if (pathname === '/api/develop/products' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const name = String(body.name || '').trim();
+    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await createProduct(body, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create product'), true;
+    return sendOk(res, 201, result.data, { product: result.data }), true;
+  }
+
+  const productMatch = pathname.match(/^\/api\/develop\/products\/([^/]+)$/);
+  if (productMatch && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const result = await updateProduct(productMatch[1], body, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update product'), true;
+    return sendOk(res, 200, result.data, { product: result.data }), true;
+  }
+  if (productMatch && requestMethod === 'DELETE') {
+    const result = await deleteProduct(productMatch[1], scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete product'), true;
+    return sendOk(res, 200, result.data, { product: result.data }), true;
+  }
+
+  if (pathname === '/api/develop/game/events' && requestMethod === 'GET') {
+    const result = await listLevelEvents(undefined, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load game events'), true;
+    const levelEvents = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, levelEvents, { levelEvents }, { total: levelEvents.length }), true;
+  }
+
+  if (pathname === '/api/develop/game/events' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await createLevelEvent(body, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create game event'), true;
+    return sendOk(res, 201, result.data, { levelEvent: result.data }), true;
+  }
+
+  const gameEventMatch = pathname.match(/^\/api\/develop\/game\/events\/([^/]+)$/);
+  if (gameEventMatch && requestMethod === 'PATCH') {
+    const body = await parseJsonBody(req);
+    const result = await updateLevelEvent(gameEventMatch[1], body, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update game event'), true;
+    return sendOk(res, 200, result.data, { levelEvent: result.data }), true;
+  }
+  if (gameEventMatch && requestMethod === 'DELETE') {
+    const result = await deleteLevelEvent(gameEventMatch[1], scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete game event'), true;
+    return sendOk(res, 200, result.data, { levelEvent: result.data }), true;
   }
 
   return false;

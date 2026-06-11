@@ -35,6 +35,7 @@ App.manifests = [
   App.promoteSocial,
   App.engageComments,
   App.docsApiSetup,
+  App.builder,
   App.develop,
   App.activityLog,
   App.observe,          // Integrates observe.js page views and API quotas
