@@ -208,30 +208,6 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { success: true }, { message: 'Password Reset Successful' }), true;
   }
 
-  
-  if (pathname === '/api/auth/debugSession' && method === 'GET') {
-    const report = { };
-    report.cookies = req.headers.cookie;
-    report.authHeader = req.headers.authorization;
-    report.tokenValue = readSessionToken(req);
-    report.supabaseUrl = process.env.SUPABASE_URL ? 'PRESENT' : 'MISSING';
-    report.supabaseKey = process.env.SUPABASE_SERVICE_KEY ? 'PRESENT' : 'MISSING';
-    report.isConfigured = require('../lib/supabase').isConfigured();
-    
-    if (report.tokenValue && report.isConfigured) {
-        try {
-            const { sbQuery } = require('../lib/supabase');
-            const q = 'select=*&token=eq.' + encodeURIComponent(report.tokenValue) + '&limit=1';
-            const sRes = await sbQuery({ method: 'GET', table: require('../lib/authStore').AUTH_SESSIONS_TABLE, query: q });
-            report.sessionDbResponse = sRes;
-        } catch (e) {
-            report.sessionDbResponseError = e.message;
-        }
-    }
-
-    return sendOk(res, 200, report, report), true;
-  }
-
   if (pathname === '/api/auth/logout' && method === 'POST') {
     const token = readSessionToken(req);
     if (token) await deleteSession(token);

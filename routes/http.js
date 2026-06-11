@@ -16,9 +16,47 @@ function sendJson(res, status, payload) {
   return true;
 }
 
+/**
+ * Cross-origin requests are only honored for explicitly allowed origins.
+ * The app is same-origin (UI and API share a domain), so most requests
+ * carry no Origin header and need no CORS headers at all.
+ * Allowlist sources: CORS_ALLOWED_ORIGINS (comma-separated), the public
+ * app origin env vars, the Vercel deployment URL, and localhost for dev.
+ */
+function getAllowedOrigins() {
+  const origins = new Set();
+  const fromEnv = String(process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+  for (const origin of fromEnv) origins.add(origin);
+
+  const publicOrigin = String(
+    process.env.PUBLIC_APP_ORIGIN
+    || process.env.APP_PUBLIC_ORIGIN
+    || process.env.PUBLIC_BASE_URL
+    || ''
+  ).trim().replace(/\/+$/, '');
+  if (publicOrigin) origins.add(publicOrigin);
+
+  const vercelUrl = String(process.env.VERCEL_URL || '').trim().replace(/\/+$/, '');
+  if (vercelUrl) origins.add(`https://${vercelUrl}`);
+
+  return origins;
+}
+
+function isOriginAllowed(origin) {
+  if (!origin) return false;
+  if (getAllowedOrigins().has(origin.replace(/\/+$/, ''))) return true;
+  // Local development servers on any port.
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+}
+
 function setCors(res, req) {
-  const origin = (req && req.headers && req.headers.origin) ? req.headers.origin : '*';
+  const origin = (req && req.headers && req.headers.origin) ? req.headers.origin : '';
+  if (!origin || !isOriginAllowed(origin)) return;
   res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-project-id');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
