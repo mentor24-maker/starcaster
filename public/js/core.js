@@ -504,7 +504,8 @@ App.getInitialPage = function getInitialPage() {
 };
 
 App.setActivePage = function setActivePage(pageId, options = {}) {
-  const normalizedPageId = normalizeInitialPageId(pageId);
+  const rawPageId = String(pageId || '').trim();
+  const normalizedPageId = options.skipNormalize === true ? rawPageId : normalizeInitialPageId(pageId);
   const target = isValidPageId(normalizedPageId) ? String(normalizedPageId) : 'contactsPage';
   const shouldPersist = options.persist !== false;
 
@@ -875,6 +876,7 @@ App.ACTION_ICONS = {
   plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   archive: '<path d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 7V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   ban: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 16.5 16.5 7.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
 App.makeInlineIcon = function makeInlineIcon(iconKey, extraClass = '') {

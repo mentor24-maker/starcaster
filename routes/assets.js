@@ -1,7 +1,8 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
-const { listAssets, createAsset, updateAsset, deleteAsset, rowToAsset } = require('../lib/assetsStore');
+const { listAssets, createAsset, updateAsset, deleteAsset, getAssetById, rowToAsset } = require('../lib/assetsStore');
+const { fetchAssetImageBuffer } = require('../lib/assetImageBytes');
 const {
   listAssociationsForAsset,
   createAssociation,
@@ -20,7 +21,7 @@ const {
   fetchDriveFileMedia,
 } = require('../lib/googleDrive');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
-const { importImageAssetWithThumbnail } = require('../lib/assetImageImport');
+const { importImageAssetWithThumbnail, replaceImageAssetWithThumbnail } = require('../lib/assetImageImport');
 const { isConfigured: isGoogleDriveConfigured } = require('../lib/googleDrive');
 
 const IMPORT_DRIVE_FOLDER_PATH = '/api/assets/import-drive-folder';
@@ -333,6 +334,80 @@ async function handle(req, res, pathname, method) {
   }
 
   const assetIdMatch = normalizedPath.match(/^\/api\/assets\/(\d+)$/);
+  const assetReplaceImageMatch = normalizedPath.match(/^\/api\/assets\/(\d+)\/replace-image$/);
+  const assetSourceMediaMatch = normalizedPath.match(/^\/api\/assets\/(\d+)\/source-media$/);
+
+  if (assetSourceMediaMatch && requestMethod === 'GET') {
+    const assetId = Number(assetSourceMediaMatch[1]);
+    const existing = await getAssetById(assetId, scope);
+    if (!existing.ok) {
+      return sendErr(res, existing.status || 404, existing.error || 'Asset not found', { code: 'NOT_FOUND' }), true;
+    }
+
+    const asset = rowToAsset(row);
+    if (asset?.assetType !== 'Image') {
+      return sendErr(res, 400, 'Only image assets have source media', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const media = await fetchAssetImageBuffer(asset);
+    if (!media.ok) {
+      return sendErr(res, media.status || 500, media.error || 'Could not load image', { code: 'SOURCE_MEDIA_FAILED' }), true;
+    }
+
+    res.statusCode = 200;
+    res.setHeader('Content-Type', media.data.contentType || 'application/octet-stream');
+    res.setHeader('Content-Length', String(media.data.buffer.length || 0));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.end(media.data.buffer);
+    return true;
+  }
+
+  if (assetReplaceImageMatch && requestMethod === 'POST') {
+    if (!isAssetStorageConfigured()) {
+      return sendErr(
+        res,
+        400,
+        'No asset storage backend is configured. Configure Vercel Blob token or Google Drive credentials.',
+        { code: 'ASSET_STORAGE_NOT_CONFIGURED' }
+      ), true;
+    }
+
+    const body = await parseJsonBody(req);
+    const assetId = Number(assetReplaceImageMatch[1]);
+    const fileName = String(body.fileName || '').trim();
+    const mimeType = String(body.mimeType || 'image/jpeg').trim();
+    const fileBase64 = String(body.fileBase64 || '').trim();
+
+    if (!fileName || !fileBase64) {
+      return sendErr(res, 400, 'fileName and fileBase64 are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (fileBase64.length > MAX_UPLOAD_BASE64_CHARS) {
+      return sendErr(res, 413, 'File is too large for this upload path. Use files up to about 7MB.', { code: 'PAYLOAD_TOO_LARGE' }), true;
+    }
+    if (!String(mimeType || '').toLowerCase().startsWith('image/')) {
+      return sendErr(res, 400, 'replace-image only accepts image files', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const result = await replaceImageAssetWithThumbnail(
+      assetId,
+      {
+        fileName,
+        mimeType,
+        fileBase64,
+        assetName: String(body.assetName || body.asset_name || fileName).trim(),
+        category: String(body.category || '').trim(),
+        aspect: String(body.aspect || '').trim(),
+      },
+      scope
+    );
+
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error, { code: 'REPLACE_IMAGE_FAILED' }), true;
+    }
+
+    return sendOk(res, result.status || 200, result.data, result.data), true;
+  }
+
   if (assetIdMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const assetId = Number(assetIdMatch[1]);
