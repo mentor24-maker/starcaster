@@ -288,6 +288,34 @@
                 <span id="assetDimensionsText">-</span>
               </div>
             </div>
+            <div id="assetImageEditorPanel" class="asset-image-editor hidden" aria-hidden="true">
+              <div class="asset-image-editor-header">
+                <h3>Image Editor</h3>
+                <p class="meta">Drag on the image to crop. Adjust output size, then save the edited image.</p>
+              </div>
+              <div class="asset-image-editor-stage-wrap">
+                <canvas id="assetImageEditorCanvas" class="asset-image-editor-canvas" aria-label="Image crop canvas"></canvas>
+              </div>
+              <div class="asset-image-editor-controls">
+                <label class="stack-form" for="assetImageEditorOutputWidth">
+                  <span>Output Width</span>
+                  <input id="assetImageEditorOutputWidth" type="number" min="1" step="1" />
+                </label>
+                <label class="stack-form" for="assetImageEditorOutputHeight">
+                  <span>Output Height</span>
+                  <input id="assetImageEditorOutputHeight" type="number" min="1" step="1" />
+                </label>
+                <label class="checkbox-row asset-image-editor-lock-row" for="assetImageEditorLockAspect">
+                  <input id="assetImageEditorLockAspect" type="checkbox" checked />
+                  <span>Lock Proportions</span>
+                </label>
+              </div>
+              <div class="asset-image-editor-crop-meta" id="assetImageEditorCropMeta">Crop: full image</div>
+              <div class="asset-image-editor-actions">
+                <button type="button" id="assetImageEditorResetBtn" class="btn btn-ghost">Reset Crop</button>
+                <button type="button" id="assetImageEditorSaveBtn" class="btn btn-primary">Save Edited Image</button>
+              </div>
+            </div>
           </aside>
         </div>
       </section>

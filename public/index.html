@@ -303,8 +303,8 @@
                 </select>
                 <input id="directAcquireUrlInput" name="source_url" type="text" class="hero-action-input acquire-youtube-hero-input" aria-label="Website URL" />
               </div>
-              <select id="directAcquireReferenceModelSelect" class="acquire-web-reference-model-select hidden" aria-label="Model Category">
-                <option value="">Model Category</option>
+              <select id="directAcquireReferenceModelSelect" class="acquire-web-reference-model-select hidden" aria-label="Category">
+                <option value="">Category</option>
               </select>
             </div>
             <div class="acquire-web-hero-options-row">
@@ -344,11 +344,11 @@
                     <div class="form-row">
                       <label for="directAcquireImagesLimitSelect">Images to Acquire</label>
                       <select id="directAcquireImagesLimitSelect" name="images_limit">
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                        <option value="20" selected>20</option>
-                        <option value="50">50</option>
+                        <option value="20">20</option>
+                        <option value="50" selected>50</option>
                         <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
                       </select>
                     </div>
                     <div class="form-row">
@@ -580,6 +580,65 @@
             </span>
           </summary>
           <div class="acquire-web-expandable-body">
+            <div id="directAcquireImageFilters" class="direct-acquire-image-filters">
+              <div class="direct-acquire-image-filters-grid">
+                <input id="directAcquireImageFilterQuery" type="search" placeholder="Filter filename or URL" autocomplete="off" aria-label="Filter Filename Or URL" />
+                <select id="directAcquireImageFilterFormat" aria-label="Filter Format">
+                  <option value="">All Formats</option>
+                  <option value="jpeg">JPEG</option>
+                  <option value="png">PNG</option>
+                  <option value="webp">WebP</option>
+                  <option value="svg">SVG</option>
+                  <option value="gif">GIF</option>
+                  <option value="avif">AVIF</option>
+                  <option value="ico">ICO</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+                <select id="directAcquireImageFilterSource" aria-label="Filter Source">
+                  <option value="">All Sources</option>
+                  <option value="img-src">IMG Src</option>
+                  <option value="img-srcset">IMG Srcset</option>
+                  <option value="picture-source">Picture Source</option>
+                  <option value="css-background">CSS Background</option>
+                  <option value="data-lazy">Lazy / Data Attr</option>
+                  <option value="data-cms">CMS Path</option>
+                  <option value="meta-og">Open Graph</option>
+                  <option value="meta-twitter">Twitter Card</option>
+                  <option value="link-icon">Favicon / App Icon</option>
+                </select>
+                <select id="directAcquireImageFilterRole" aria-label="Filter Role">
+                  <option value="">All Roles</option>
+                  <option value="photo">Photo</option>
+                  <option value="background">Background</option>
+                  <option value="logo">Logo</option>
+                  <option value="icon">Icon</option>
+                  <option value="svg">SVG</option>
+                  <option value="favicon">Favicon</option>
+                  <option value="flag">Flag</option>
+                  <option value="avatar">Avatar</option>
+                  <option value="tracking">Tracking</option>
+                  <option value="decorative">Decorative</option>
+                </select>
+                <select id="directAcquireImageFilterAspect" aria-label="Filter Aspect Ratio">
+                  <option value="">All Aspect Ratios</option>
+                  <option value="square">Square</option>
+                  <option value="landscape">Landscape</option>
+                  <option value="portrait">Portrait</option>
+                  <option value="wide">Wide</option>
+                  <option value="tall">Tall</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+                <input id="directAcquireImageFilterPage" type="search" placeholder="Filter source page URL" autocomplete="off" aria-label="Filter Source Page URL" />
+                <input id="directAcquireImageFilterMinWidth" type="number" min="0" step="1" placeholder="Min width px" aria-label="Minimum Width Pixels" />
+                <input id="directAcquireImageFilterMaxWidth" type="number" min="0" step="1" placeholder="Max width px" aria-label="Maximum Width Pixels" />
+              </div>
+              <div class="page-heading-actions direct-acquire-image-filter-actions">
+                <span id="directAcquireImageFilterCount" class="meta">Showing 0 of 0</span>
+                <button id="directAcquireImageSelectFilteredBtn" type="button" class="btn">Select Filtered</button>
+                <button id="directAcquireImageDeselectFilteredBtn" type="button" class="btn">Deselect Filtered</button>
+                <button id="directAcquireImageClearFiltersBtn" type="button" class="btn btn-ghost">Clear Filters</button>
+              </div>
+            </div>
             <div id="directAcquireImagesEmpty" class="meta">No images captured yet.</div>
             <div id="directAcquireImageGallery" class="direct-acquire-image-gallery"></div>
             <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
@@ -614,41 +673,46 @@
             <h3 style="margin:0;">Discovered Peers</h3>
             <div class="page-heading-actions">
               <span id="directAcquirePeerDiscoveryMeta" class="meta">No peer discovery run yet.</span>
-              <button id="directAcquirePeerDiscoverySaveBtn" type="button" class="btn btn-primary" disabled>Add Selected Peers</button>
+              <button id="directAcquirePeerDiscoverySaveBtn" type="button" class="btn btn-primary" disabled>Add to Other Websites</button>
             </div>
           </div>
           <div id="directAcquirePeerDiscoveryKeywords" class="meta" style="margin-bottom: 0.75rem;"></div>
           <div class="table-wrap">
-            <table>
+            <table class="direct-acquire-peer-discovery-table">
               <thead>
                 <tr class="table-filter-row">
                   <th style="width: 44px;"></th>
                   <th><input id="directAcquirePeerDiscoveryFilterScore" type="search" placeholder="Filter score" autocomplete="off" /></th>
-                  <th>
+                  <th class="direct-acquire-peer-discovery-type-col">
                     <select id="directAcquirePeerDiscoveryFilterType" aria-label="Filter type">
                       <option value="">All Types</option>
                       <option value="project">Project</option>
                       <option value="peer">Peer</option>
                       <option value="model">Model</option>
+                      <option value="other">Other</option>
                     </select>
                   </th>
-                  <th>
-                    <select id="directAcquirePeerDiscoveryFilterModelCategory" multiple size="4" title="Model categories (multi-select)" aria-label="Filter model categories"></select>
+                  <th class="direct-acquire-peer-discovery-category-col">
+                    <select id="directAcquirePeerDiscoveryFilterCategory" aria-label="Filter category">
+                      <option value="">All Categories</option>
+                    </select>
                   </th>
                   <th><input id="directAcquirePeerDiscoveryFilterDomain" type="search" placeholder="Filter domain" autocomplete="off" /></th>
                   <th><input id="directAcquirePeerDiscoveryFilterSite" type="search" placeholder="Filter site" autocomplete="off" /></th>
                   <th><input id="directAcquirePeerDiscoveryFilterKeywords" type="search" placeholder="Filter keywords" autocomplete="off" /></th>
-                  <th><input id="directAcquirePeerDiscoveryFilterReasons" type="search" placeholder="Filter reasons" autocomplete="off" /></th>
+                  <th class="actions-col contacts-go-cell">
+                    <button id="directAcquirePeerDiscoveryFilterGoBtn" type="button" class="btn">Filter</button>
+                  </th>
                 </tr>
                 <tr>
                   <th style="width: 44px;"><input id="directAcquirePeerDiscoverySelectAll" type="checkbox" aria-label="Select All" /></th>
                   <th>Score</th>
-                  <th>Type</th>
-                  <th>Model Category</th>
+                  <th class="direct-acquire-peer-discovery-type-col">Type</th>
+                  <th class="direct-acquire-peer-discovery-category-col">Category</th>
                   <th>Domain</th>
                   <th>Site</th>
                   <th>Matched Keywords</th>
-                  <th>Reasons</th>
+                  <th class="actions-col">Actions</th>
                 </tr>
               </thead>
               <tbody id="directAcquirePeerDiscoveryTable"></tbody>
@@ -671,9 +735,10 @@
             <select id="directAcquireWebsitePeerReferenceRole" name="reference_role">
               <option value="peer">Peer</option>
               <option value="model">Model</option>
+              <option value="other">Other</option>
             </select>
 
-            <label for="directAcquireWebsitePeerType">Model Category</label>
+            <label for="directAcquireWebsitePeerType">Category</label>
             <select id="directAcquireWebsitePeerType" name="website_model"></select>
 
             <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
@@ -709,7 +774,7 @@
               <thead>
                 <tr>
                   <th>Website Type</th>
-                  <th>Model Category</th>
+                  <th>Category</th>
                   <th>Domain</th>
                   <th>Site</th>
                   <th>Matched Keywords</th>
@@ -903,11 +968,11 @@
               
                 <label for="acquireSettingsImagesLimit">Images to Acquire</label>
                 <select id="acquireSettingsImagesLimit">
-                  <option value="5">5</option>
-                  <option value="10">10</option>
                   <option value="20">20</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="500">500</option>
                 </select>
               
                 <label for="acquireSettingsSnippetLength">Snippet Length</label>
@@ -2392,6 +2457,34 @@
               <div id="assetDimensionsRow" class="asset-preview-meta-row hidden">
                 <span class="asset-preview-label">Dimensions:</span>
                 <span id="assetDimensionsText">-</span>
+              </div>
+            </div>
+            <div id="assetImageEditorPanel" class="asset-image-editor hidden" aria-hidden="true">
+              <div class="asset-image-editor-header">
+                <h3>Image Editor</h3>
+                <p class="meta">Drag on the image to crop. Adjust output size, then save the edited image.</p>
+              </div>
+              <div class="asset-image-editor-stage-wrap">
+                <canvas id="assetImageEditorCanvas" class="asset-image-editor-canvas" aria-label="Image crop canvas"></canvas>
+              </div>
+              <div class="asset-image-editor-controls">
+                <label class="stack-form" for="assetImageEditorOutputWidth">
+                  <span>Output Width</span>
+                  <input id="assetImageEditorOutputWidth" type="number" min="1" step="1" />
+                </label>
+                <label class="stack-form" for="assetImageEditorOutputHeight">
+                  <span>Output Height</span>
+                  <input id="assetImageEditorOutputHeight" type="number" min="1" step="1" />
+                </label>
+                <label class="checkbox-row asset-image-editor-lock-row" for="assetImageEditorLockAspect">
+                  <input id="assetImageEditorLockAspect" type="checkbox" checked />
+                  <span>Lock Proportions</span>
+                </label>
+              </div>
+              <div class="asset-image-editor-crop-meta" id="assetImageEditorCropMeta">Crop: full image</div>
+              <div class="asset-image-editor-actions">
+                <button type="button" id="assetImageEditorResetBtn" class="btn btn-ghost">Reset Crop</button>
+                <button type="button" id="assetImageEditorSaveBtn" class="btn btn-primary">Save Edited Image</button>
               </div>
             </div>
           </aside>
@@ -4328,8 +4421,18 @@
           </button>
         </div>
         <div class="page-heading-actions" style="justify-content:center; margin-top:1rem;">
+          <button type="button" onclick="App.setActivePage('developBuilderWorkspacePage')" class="btn btn-primary">Open Builder Workspace</button>
           <button type="button" onclick="App.setActivePage('developModulesPage')" class="btn">Open Modules Library</button>
         </div>
+      </section>
+      <section id="developBuilderWorkspacePage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Workspace</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <div id="builderReactRootHub" class="builder-react-root hidden" aria-hidden="true"></div>
       </section>
       <section id="developModulesPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -4762,11 +4865,13 @@
           <h2 id="developLandingPagesFormTitle">Builder: Create Page</h2>
           <div class="page-heading-actions">
             <button id="developLandingPageHeaderPreviewBtn" type="button" class="btn">Preview</button>
-            <button id="developLandingPageHeaderSaveBtn" type="button" class="btn">Save</button>
+            <button id="developLandingPageHeaderSaveBtn" type="button" class="btn btn-primary">Save Page</button>
             
           </div>
         </div>
-        <div id="developLandingPagesModularHost"></div>
+        <div id="developLandingPagesModularHost">
+          <div id="builderReactRootPage" class="builder-react-root hidden" aria-hidden="true"></div>
+        </div>
         <form id="developLandingPagesForm" class="standard-form-grid">
           <input id="developLandingPageIdInput" name="page_id" type="hidden" />
           <div class="develop-landing-pages-grid">
@@ -5274,6 +5379,7 @@
         </div>
         <div id="developEmailTemplatesPrimaryTableHost" class="develop-template-records-host"></div>
         <div id="developTemplatesModularHost">
+        <div id="builderReactRootTemplate" class="builder-react-root hidden" aria-hidden="true"></div>
         <section id="developPageTemplateEditorPanel" class="develop-template-section develop-template-editor">
           <div class="develop-template-section-header-row">
             <button
@@ -10258,7 +10364,10 @@
 
   <script src="/js/richtext-vendor.js"></script>
   <script src="/js/richtext.js"></script>
-  <script src="/js/develop.js?v=3"></script>
+  <script src="/builder-bundle.js"></script>
+  <script src="/js/builder.js"></script>
+  <script src="/js/developNavMenu.js?v=2"></script>
+  <script src="/js/develop.js?v=14"></script>
   <script src="/js/polls.js"></script>
   <script src="/js/activityLog.js"></script>
   <script src="/js/observe.js"></script>
@@ -10266,7 +10375,8 @@
   <script src="/js/assetAssociations.js?v=1.0"></script>
   <script src="/js/assetFieldImport.js?v=2.3"></script>
   <script src="/js/pageHeadingNav.js?v=1.0"></script>
-  <script src="/js/assets.js?v=1.2"></script>
+  <script src="/js/assetImageEditor.js?v=3"></script>
+  <script src="/js/assets.js?v=1.3"></script>
   <script src="/js/assetsVideo.js?v=1.6"></script>
   <script src="/js/assetCategories.js"></script>
   <script src="/js/channels.js"></script>

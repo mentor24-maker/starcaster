@@ -215,6 +215,40 @@ App.develop = (function () {
       ],
     },
     {
+      value: 'navigation',
+      label: 'Navigation',
+      description: 'WordPress-style website menu with links, submenus, and theme locations.',
+      starterName: 'Main Menu',
+      defaults: {
+        menuName: 'Main Menu',
+        menuLocation: 'primary',
+        variant: 'horizontal',
+        navItems: App.developNavMenu?.defaultNavMenuItemsJson?.() || '[]',
+        navFontSize: 16,
+        navBold: false,
+        navBorderRadius: 0,
+        navPadding: '8px 12px',
+        navColor: '#173c61',
+        navHoverColor: '#0b82d4',
+        navHoverBackground: '#e8f4ff',
+        showSubmenuIndicator: true,
+      },
+      fields: [
+        { key: 'menuName', label: 'Menu Name', control: 'text', placeholder: 'Main Menu' },
+        { key: 'menuLocation', label: 'Theme Location', control: 'select', options: ['primary', 'footer', 'social'] },
+        { key: 'variant', label: 'Layout', control: 'select', options: ['horizontal', 'vertical'] },
+        { key: 'navItems', label: 'Menu Structure', control: 'nav-menu-editor' },
+        { key: 'navFontSize', label: 'Link Font Size', control: 'number', min: 10, max: 48, step: 1 },
+        { key: 'navBold', label: 'Bold Links', control: 'checkbox' },
+        { key: 'navBorderRadius', label: 'Link Border Radius', control: 'number', min: 0, max: 48, step: 1 },
+        { key: 'navPadding', label: 'Link Padding', control: 'text', placeholder: '8px 12px' },
+        { key: 'navColor', label: 'Link Color', control: 'color' },
+        { key: 'navHoverColor', label: 'Hover Text Color', control: 'color' },
+        { key: 'navHoverBackground', label: 'Hover Background', control: 'color' },
+        { key: 'showSubmenuIndicator', label: 'Show Submenu Indicator', control: 'checkbox' },
+      ],
+    },
+    {
       value: 'poll',
       label: 'Poll',
       description: 'An interactive poll module that displays a question from your Polls database.',
@@ -330,9 +364,9 @@ App.develop = (function () {
         { key: 'columnsCount', label: 'Columns', control: 'number', min: 1, max: 8, step: 1 },
         { key: 'rowsCount', label: 'Rows', control: 'number', min: 1, max: 20, step: 1 },
         { key: 'tableContents', label: 'Contents', control: 'table-contents-editor' },
-        { key: 'headerColor', label: 'Header Color', control: 'color' },
+        { key: 'headerColor', label: 'Header Color', control: 'color', allowTransparent: true },
         { key: 'headerTextColor', label: 'Header Text Color', control: 'color' },
-        { key: 'borderColor', label: 'Border Color', control: 'color' },
+        { key: 'borderColor', label: 'Border Color', control: 'color', allowTransparent: true },
         { key: 'borderThickness', label: 'Border Thickness', control: 'number', min: 0, max: 8, step: 1 },
         { key: 'cellPadding', label: 'Cell Padding', control: 'number', min: 4, max: 40, step: 1 },
         { key: 'style', label: 'Style', control: 'select', options: ['clean', 'boxed', 'minimal', 'editorial'] },
@@ -350,6 +384,14 @@ App.develop = (function () {
         pitchId: '',
         textAlign: 'left',
         textColor: '#173c61',
+        background: {
+          mode: 'color',
+          color: '#ffffff',
+          color2: '#eaf4ff',
+          imageUrl: '',
+          imageAssetId: '',
+          styleKey: '',
+        },
         backgroundColor: '#ffffff',
         maxWidth: 'full',
       },
@@ -357,7 +399,7 @@ App.develop = (function () {
         { key: 'content', label: 'Content', control: 'richtext', rows: 8, placeholder: '<p>Write your content here.</p>', contentSource: 'pitch', contentSettingKey: 'pitchId', contentLabel: 'Saved Pitch' },
         { key: 'textAlign', label: 'Text Alignment', control: 'select', options: ['left', 'center', 'right'] },
         { key: 'textColor', label: 'Text Color', control: 'color' },
-        { key: 'backgroundColor', label: 'Background Color', control: 'color' },
+        { key: 'background', label: 'Background', control: 'modular-background' },
         { key: 'maxWidth', label: 'Width', control: 'select', options: ['compact', 'standard', 'wide', 'full'] },
       ],
     },
@@ -499,6 +541,12 @@ App.develop = (function () {
     return String(value || '').trim();
   }
 
+  function safeNumericSetting(value, fallback = '') {
+    if (value === 0 || value === '0') return '0';
+    const parsed = safeText(value, 20);
+    return parsed === '' ? fallback : parsed;
+  }
+
   function escapeHtml(value) {
     return safeText(value)
       .replace(/&/g, '&amp;')
@@ -510,6 +558,38 @@ App.develop = (function () {
 
   function safeHtml(value) {
     return typeof value === 'string' ? value.trim() : '';
+  }
+
+  function getModularTextBlockHtml(module) {
+    return safeHtml(module?.settings?.content)
+      || safeHtml(module?.settings?.text)
+      || escapeHtml(safeText(module?.text));
+  }
+
+  function isModularTextBlockModule(module) {
+    const type = safeText(module?.type).toLowerCase();
+    if (type === 'textarea') return true;
+    if (type !== 'text') return false;
+    const settings = module?.settings && typeof module.settings === 'object' ? module.settings : {};
+    return Boolean(
+      safeHtml(settings.content)
+      || safeText(settings.textAlign)
+      || safeText(settings.maxWidth)
+    );
+  }
+
+  function buildModularTextBlockInlineStyle(settings) {
+    const next = settings && typeof settings === 'object' ? settings : {};
+    const style = {};
+    if (next.textColor) style.color = safeText(next.textColor);
+    if (next.textAlign) style.textAlign = safeText(next.textAlign);
+    const bg = normalizeBackgroundSettings(next.background, next.backgroundColor, next.backgroundImageId);
+    Object.assign(style, getBuilderBackgroundCssStyle(bg));
+    if (bg.mode !== 'none') {
+      style.padding = '0.5rem 0.75rem';
+      style.borderRadius = '12px';
+    }
+    return styleObjectToCssText(style);
   }
 
   function byId(id) {
@@ -1263,6 +1343,27 @@ App.develop = (function () {
     return asset;
   }
 
+  function bindAssetPickerTrigger(element, openPicker, label = 'Choose image') {
+    if (!element || typeof openPicker !== 'function') return;
+    const trigger = element;
+    if (trigger.tagName !== 'BUTTON') {
+      trigger.setAttribute('role', 'button');
+      if (!trigger.hasAttribute('tabindex')) trigger.tabIndex = 0;
+    }
+    trigger.setAttribute('aria-label', label);
+    trigger.classList.add('develop-asset-picker-trigger');
+    const activate = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openPicker(event);
+    };
+    trigger.addEventListener('click', activate);
+    trigger.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      activate(event);
+    });
+  }
+
   function openImageAssetPicker(target, options = {}) {
     const config = resolveImagePickerConfig(target);
     const selectId = safeText(config?.selectId) || safeText(target);
@@ -1476,7 +1577,200 @@ App.develop = (function () {
     }
     renderGrid();
     modal.open();
+    const parentModalCandidates = Array.from(document.querySelectorAll(
+      'dialog[open], .develop-module-editor-modal, .c-modal__backdrop.develop-nested-modal-backdrop'
+    )).filter((el) => el !== modal.el && !modal.el.contains(el));
+    const openParentModal = parentModalCandidates[parentModalCandidates.length - 1];
+    if (openParentModal && modal?.el && modal.el.parentNode !== openParentModal) {
+      openParentModal.appendChild(modal.el);
+    }
     return modal;
+  }
+
+  function getDevelopImageAssets(currentValue = '') {
+    const rows = getThemeImageAssets();
+    const currentId = safeText(currentValue);
+    if (currentId && !rows.some((asset) => String(asset.id) === currentId)) {
+      const currentAsset = (Array.isArray(state.assets) ? state.assets : []).find((asset) => String(asset.id) === currentId);
+      if (currentAsset && safeText(currentAsset.assetType) === 'Image') rows.unshift(currentAsset);
+    }
+    return rows;
+  }
+
+  function mountDevelopInlineImagePicker(container, options = {}) {
+    if (!container) return null;
+    const {
+      inputId = 'developInlineImagePickerInput',
+      initialValue = '',
+      title = 'Image',
+      emptyMessage = 'No matching images found.',
+      onChange = () => {},
+      onPreview,
+    } = options;
+
+    container.className = 'develop-inline-image-picker';
+    container.textContent = '';
+
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.id = inputId;
+    hiddenInput.value = safeText(initialValue);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'develop-theme-picker-toolbar develop-inline-image-picker-toolbar';
+
+    const filterInput = document.createElement('input');
+    filterInput.type = 'search';
+    filterInput.placeholder = 'Search images by name, category, or tag';
+    filterInput.setAttribute('aria-label', 'Search Images');
+
+    const categoryFilter = document.createElement('select');
+    categoryFilter.setAttribute('aria-label', 'Filter Category');
+
+    const tagFilter = document.createElement('select');
+    tagFilter.setAttribute('aria-label', 'Filter Tag');
+
+    const resultCount = document.createElement('div');
+    resultCount.className = 'develop-theme-picker-result-count';
+    resultCount.textContent = '0 images';
+
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'btn btn-ghost';
+    clearBtn.textContent = 'Clear Selection';
+
+    toolbar.appendChild(filterInput);
+    toolbar.appendChild(categoryFilter);
+    toolbar.appendChild(tagFilter);
+    toolbar.appendChild(resultCount);
+    toolbar.appendChild(clearBtn);
+
+    const grid = document.createElement('div');
+    grid.className = 'develop-theme-picker-groups develop-inline-image-picker-grid';
+
+    container.appendChild(hiddenInput);
+    container.appendChild(toolbar);
+    container.appendChild(grid);
+
+    const setSelectedId = (value) => {
+      hiddenInput.value = safeText(value);
+      renderGrid();
+      onChange(safeText(value));
+    };
+
+    function syncPickerFilters() {
+      const scopedAssets = getDevelopImageAssets(hiddenInput.value);
+      const categoryValues = Array.from(new Set(scopedAssets.map((asset) => safeText(asset?.category)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      const tagValues = Array.from(new Set(
+        scopedAssets.flatMap((asset) => {
+          const tags = Array.isArray(asset?.tags)
+            ? asset.tags
+            : safeText(asset?.tags).split(/[;,]+/g);
+          return tags.map((item) => safeText(item)).filter(Boolean);
+        })
+      )).sort((a, b) => a.localeCompare(b));
+
+      setSelectOptions(
+        categoryFilter,
+        categoryValues.map((value) => ({ value, label: value })),
+        'All Categories',
+        safeText(categoryFilter.value)
+      );
+      setSelectOptions(
+        tagFilter,
+        tagValues.map((value) => ({ value, label: value })),
+        'All Tags',
+        safeText(tagFilter.value)
+      );
+    }
+
+    function openInlineImagePreview(asset) {
+      if (!asset || !App.components || typeof App.components.Modal !== 'function') return;
+      const imageUrl = toDirectAssetUrl(asset.location);
+      if (!imageUrl) return;
+      const previewBody = document.createElement('div');
+      previewBody.className = 'develop-theme-image-preview-modal-body';
+      const pParser = new DOMParser();
+      const pDoc = pParser.parseFromString(`
+        <div class="develop-theme-image-preview-stage">
+          <img src="${imageUrl}" alt="${escapeHtml(safeText(assetLabel(asset, title)))}" />
+        </div>
+        <div class="develop-theme-image-preview-meta">
+          <strong>${escapeHtml(safeText(assetLabel(asset, title)))}</strong>
+          <span>${escapeHtml(safeText(asset.category) || 'Image')}</span>
+        </div>
+      `, 'text/html');
+      previewBody.textContent = '';
+      Array.from(pDoc.body.childNodes).forEach((node) => previewBody.appendChild(node.cloneNode(true)));
+      const previewModal = App.components.Modal({
+        title: safeText(assetLabel(asset, title)) || title,
+        body: previewBody,
+        dialogClass: 'develop-theme-image-preview-modal',
+      });
+      applyDevelopNestedModalPresentation(previewModal, {
+        anchor: 'upper-right',
+        transparentBackdrop: true,
+      });
+      previewModal.open();
+    }
+
+    function renderGrid() {
+      syncPickerFilters();
+      const filter = safeText(filterInput.value).toLowerCase();
+      const categoryValue = safeText(categoryFilter.value);
+      const tagValue = safeText(tagFilter.value).toLowerCase();
+      const assets = getDevelopImageAssets(hiddenInput.value).filter((asset) => {
+        if (categoryValue && safeText(asset?.category) !== categoryValue) return false;
+        const tagText = getAssetTagText(asset).toLowerCase();
+        if (tagValue && !tagText.includes(tagValue)) return false;
+        if (!filter) return true;
+        const haystack = [
+          assetLabel(asset, ''),
+          safeText(asset.category),
+          safeText(asset.assetName),
+          safeText(asset.location),
+          safeText(asset?.aspect),
+          tagText,
+        ].join(' ').toLowerCase();
+        return haystack.includes(filter);
+      });
+      resultCount.textContent = `${assets.length} image${assets.length === 1 ? '' : 's'}`;
+      grid.textContent = '';
+      if (!App.assetPicker || typeof App.assetPicker.renderGroupedImageGrid !== 'function') {
+        const fallback = document.createElement('div');
+        fallback.className = 'meta';
+        fallback.textContent = 'Image picker is unavailable.';
+        grid.appendChild(fallback);
+        return;
+      }
+      App.assetPicker.renderGroupedImageGrid(grid, {
+        assets,
+        getSelectedId: () => hiddenInput.value,
+        toDirectAssetUrl,
+        assetLabel: (asset) => assetLabel(asset, title),
+        emptyMessage,
+        onChoose: (asset) => setSelectedId(String(asset.id)),
+        onPreview: typeof onPreview === 'function' ? onPreview : openInlineImagePreview,
+      });
+    }
+
+    filterInput.addEventListener('input', renderGrid);
+    categoryFilter.addEventListener('change', renderGrid);
+    tagFilter.addEventListener('change', renderGrid);
+    clearBtn.addEventListener('click', () => setSelectedId(''));
+
+    renderGrid();
+
+    return {
+      getValue: () => safeText(hiddenInput.value),
+      setValue: (value) => setSelectedId(value),
+      clear: () => setSelectedId(''),
+      refresh: renderGrid,
+    };
+  }
+
+  function markDevelopModuleEditorDialogExpanded(panel) {
+    panel?.querySelector('.develop-module-editor-modal__dialog')?.classList.add('develop-module-editor-modal__dialog--expanded');
   }
 
   function applyDevelopNestedModalPresentation(modal, options = {}) {
@@ -1761,22 +2055,18 @@ App.develop = (function () {
 
     const buildImageChooser = (targetCell, host) => {
       const controls = document.createElement('div');
-      controls.className = 'develop-inline-asset-nav';
+      controls.className = 'develop-inline-asset-nav develop-inline-asset-nav--table-cell';
       const chooseBtn = document.createElement('button');
       chooseBtn.type = 'button';
-      const status = document.createElement('span');
-      status.className = 'develop-inline-asset-status';
+      chooseBtn.className = 'btn btn-ghost';
+      const status = document.createElement('button');
+      status.type = 'button';
+      status.className = 'develop-inline-asset-status develop-inline-asset-status-btn';
       const clearBtn = document.createElement('button');
       clearBtn.type = 'button';
+      clearBtn.className = 'btn btn-ghost';
       clearBtn.textContent = 'Clear';
-      const updateState = () => {
-        const asset = getAssetById(targetCell.imageAssetId);
-        chooseBtn.textContent = asset ? 'Change Image' : 'Choose Image';
-        status.textContent = asset ? assetLabel(asset, 'Image') : 'No image selected';
-      };
-      chooseBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
+      const openPicker = () => {
         openImageAssetPicker(
           { selectId: '', title: 'Table Cell Image' },
           {
@@ -1791,7 +2081,27 @@ App.develop = (function () {
             },
           }
         );
-      });
+      };
+      const updateState = () => {
+        const asset = getAssetById(targetCell.imageAssetId);
+        const imageUrl = asset ? toDirectAssetUrl(asset.location) : '';
+        chooseBtn.textContent = asset ? 'Change Image' : 'Choose Image';
+        status.textContent = '';
+        if (imageUrl) {
+          const img = document.createElement('img');
+          img.src = imageUrl;
+          img.alt = assetLabel(asset, 'Image');
+          status.appendChild(img);
+          const label = document.createElement('span');
+          label.className = 'develop-inline-asset-status-label';
+          label.textContent = assetLabel(asset, 'Image');
+          status.appendChild(label);
+        } else {
+          status.textContent = 'No image selected';
+        }
+      };
+      bindAssetPickerTrigger(chooseBtn, openPicker, 'Choose table cell image');
+      bindAssetPickerTrigger(status, openPicker, 'Choose table cell image');
       clearBtn.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1807,22 +2117,18 @@ App.develop = (function () {
 
     const buildVideoChooser = (targetCell, host) => {
       const controls = document.createElement('div');
-      controls.className = 'develop-inline-asset-nav';
+      controls.className = 'develop-inline-asset-nav develop-inline-asset-nav--table-cell';
       const chooseBtn = document.createElement('button');
       chooseBtn.type = 'button';
-      const status = document.createElement('span');
-      status.className = 'develop-inline-asset-status';
+      chooseBtn.className = 'btn btn-ghost';
+      const status = document.createElement('button');
+      status.type = 'button';
+      status.className = 'develop-inline-asset-status develop-inline-asset-status-btn';
       const clearBtn = document.createElement('button');
       clearBtn.type = 'button';
+      clearBtn.className = 'btn btn-ghost';
       clearBtn.textContent = 'Clear';
-      const updateState = () => {
-        const asset = getAssetById(targetCell.videoAssetId);
-        chooseBtn.textContent = asset ? 'Change Video' : 'Choose Video';
-        status.textContent = asset ? assetLabel(asset, 'Video') : 'No video selected';
-      };
-      chooseBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
+      const openPicker = () => {
         openVideoAssetPicker({
           title: 'Table Cell Video',
           getValue: () => safeText(targetCell.videoAssetId),
@@ -1833,7 +2139,14 @@ App.develop = (function () {
             updateState();
           },
         });
-      });
+      };
+      const updateState = () => {
+        const asset = getAssetById(targetCell.videoAssetId);
+        chooseBtn.textContent = asset ? 'Change Video' : 'Choose Video';
+        status.textContent = asset ? assetLabel(asset, 'Video') : 'No video selected';
+      };
+      bindAssetPickerTrigger(chooseBtn, openPicker, 'Choose table cell video');
+      bindAssetPickerTrigger(status, openPicker, 'Choose table cell video');
       clearBtn.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -3036,6 +3349,42 @@ App.develop = (function () {
     }
 
     definition.fields.forEach((field) => {
+      if (field.control === 'modular-background') {
+        const bgPrefix = `${prefix}_${field.key}`;
+        const background = normalizeBackgroundSettings(
+          settings?.[field.key],
+          settings?.backgroundColor,
+          settings?.backgroundImageId
+        );
+        const wrap = document.createElement('div');
+        wrap.className = 'stack-form develop-module-background-field-wrap';
+        wrap.setAttribute('data-module-bg-field-key', field.key);
+        const controlsParser = new DOMParser();
+        const controlsDoc = controlsParser.parseFromString(
+          buildModularBackgroundControlsHtml(bgPrefix, background),
+          'text/html'
+        );
+        Array.from(controlsDoc.body.childNodes).forEach((node) => wrap.appendChild(node.cloneNode(true)));
+        host.appendChild(wrap);
+        const imagePickerHost = wrap.querySelector(`#${bgPrefix}ImagePickerHost`);
+        if (imagePickerHost) {
+          mountDevelopInlineImagePicker(imagePickerHost, {
+            inputId: `${bgPrefix}ImageAssetInput`,
+            initialValue: safeText(background.imageAssetId),
+            title: safeText(field.label) || 'Background Image',
+            onChange: (assetId) => {
+              const urlInput = wrap.querySelector(`#${bgPrefix}ImageUrlInput`);
+              if (urlInput && assetId) urlInput.value = getLandingPageAssetUrl(assetId) || urlInput.value;
+            },
+          });
+        }
+        syncModularBackgroundControlVisibility(wrap, bgPrefix);
+        wrap.querySelector(`#${bgPrefix}ModeSelect`)?.addEventListener('change', () => {
+          syncModularBackgroundControlVisibility(wrap, bgPrefix);
+        });
+        return;
+      }
+
       const wrap = document.createElement('label');
       wrap.className = field.control === 'textarea' ? 'stack-form' : 'stack-form';
       if (prefix === 'developModuleField') {
@@ -3111,13 +3460,16 @@ App.develop = (function () {
 
         const chooseBtn = document.createElement('button');
         chooseBtn.type = 'button';
+        chooseBtn.className = 'btn btn-ghost';
         chooseBtn.textContent = currentAsset ? `Change ${pickerConfig.title}` : `Choose ${pickerConfig.title}`;
 
-        const status = document.createElement('span');
-        status.className = 'develop-inline-asset-status';
+        const status = document.createElement('button');
+        status.type = 'button';
+        status.className = 'develop-inline-asset-status develop-inline-asset-status-btn';
 
         const clearBtn = document.createElement('button');
         clearBtn.type = 'button';
+        clearBtn.className = 'btn btn-ghost';
         clearBtn.textContent = 'Clear';
 
         const preview = document.createElement('div');
@@ -3142,9 +3494,7 @@ App.develop = (function () {
           }
         };
 
-        chooseBtn.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
+        const openPicker = () => {
           const modal = openImageAssetPicker(pickerConfig, {
             dialogClass: 'develop-module-image-picker-modal',
             backdropClass: 'develop-module-image-picker-backdrop',
@@ -3189,7 +3539,12 @@ App.develop = (function () {
           if (!modal) {
             notify(`Could not open the image picker for ${pickerConfig.title}`, true);
           }
-        });
+        };
+
+        const pickerLabel = `Choose ${pickerConfig.title}`;
+        bindAssetPickerTrigger(chooseBtn, openPicker, pickerLabel);
+        bindAssetPickerTrigger(status, openPicker, pickerLabel);
+        bindAssetPickerTrigger(preview, openPicker, pickerLabel);
 
         clearBtn.addEventListener('click', (event) => {
           event.preventDefault();
@@ -3225,15 +3580,19 @@ App.develop = (function () {
         const pickerControls = document.createElement('div');
         pickerControls.className = 'develop-inline-asset-nav';
 
+        const videoTitle = safeText(field.pickerTitle) || safeText(field.label) || 'Video';
         const chooseBtn = document.createElement('button');
         chooseBtn.type = 'button';
-        chooseBtn.textContent = currentAsset ? `Change ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}` : `Choose ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}`;
+        chooseBtn.className = 'btn btn-ghost';
+        chooseBtn.textContent = currentAsset ? `Change ${videoTitle}` : `Choose ${videoTitle}`;
 
-        const status = document.createElement('span');
-        status.className = 'develop-inline-asset-status';
+        const status = document.createElement('button');
+        status.type = 'button';
+        status.className = 'develop-inline-asset-status develop-inline-asset-status-btn';
 
         const clearBtn = document.createElement('button');
         clearBtn.type = 'button';
+        clearBtn.className = 'btn btn-ghost';
         clearBtn.textContent = 'Clear';
 
         const preview = document.createElement('div');
@@ -3242,19 +3601,17 @@ App.develop = (function () {
         const updatePickerState = () => {
           const selectedId = safeText(control.value);
           const asset = getAssetById(selectedId);
-          chooseBtn.textContent = asset ? `Change ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}` : `Choose ${safeText(field.pickerTitle) || safeText(field.label) || 'Video'}`;
-          status.textContent = asset ? assetLabel(asset, safeText(field.pickerTitle) || safeText(field.label) || 'Video') : 'No video selected';
+          chooseBtn.textContent = asset ? `Change ${videoTitle}` : `Choose ${videoTitle}`;
+          status.textContent = asset ? assetLabel(asset, videoTitle) : 'No video selected';
           preview.textContent = '';
           const meta = document.createElement('span');
           meta.textContent = asset ? (safeText(asset.category) || 'Video asset') : 'No video selected';
           preview.appendChild(meta);
         };
 
-        chooseBtn.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
+        const openPicker = () => {
           openVideoAssetPicker({
-            title: safeText(field.pickerTitle) || safeText(field.label) || 'Video',
+            title: videoTitle,
             getValue: () => safeText(control.value),
             setValue: (nextValue) => {
               control.value = safeText(nextValue);
@@ -3263,7 +3620,11 @@ App.develop = (function () {
               updatePickerState();
             },
           });
-        });
+        };
+
+        bindAssetPickerTrigger(chooseBtn, openPicker, `Choose ${videoTitle}`);
+        bindAssetPickerTrigger(status, openPicker, `Choose ${videoTitle}`);
+        bindAssetPickerTrigger(preview, openPicker, `Choose ${videoTitle}`);
 
         clearBtn.addEventListener('click', (event) => {
           event.preventDefault();
@@ -3434,6 +3795,89 @@ App.develop = (function () {
         wrap.appendChild(preview);
         wrap.appendChild(control);
         updateTableState();
+        host.appendChild(wrap);
+        return;
+      }
+
+      if (field.control === 'nav-menu-editor') {
+        const editorId = `${prefix}_${field.key}`;
+        wrap.className = 'stack-form develop-module-nav-menu-field';
+
+        control = document.createElement('input');
+        control.type = 'hidden';
+        control.id = editorId;
+        control.value = typeof value === 'string'
+          ? value
+          : (App.developNavMenu?.serializeNavMenuItems?.(value) || '[]');
+        control.setAttribute('data-module-field-key', field.key);
+        control.setAttribute('data-module-field-control', field.control);
+
+        const pickerControls = document.createElement('div');
+        pickerControls.className = 'develop-inline-asset-nav';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'btn btn-ghost';
+        editBtn.textContent = 'Edit Menu';
+
+        const status = document.createElement('span');
+        status.className = 'develop-inline-asset-status';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'btn btn-ghost';
+        clearBtn.textContent = 'Reset';
+
+        const preview = document.createElement('div');
+        preview.className = 'develop-nav-menu-inline-preview';
+
+        const updateNavState = () => {
+          status.textContent = App.developNavMenu?.getNavMenuSummary?.(control.value) || 'No menu items';
+          preview.innerHTML = App.developNavMenu?.buildNavigationModuleMarkup?.({
+            menuName: safeText(settings?.menuName) || 'Menu Preview',
+            menuLocation: safeText(settings?.menuLocation) || 'primary',
+            variant: safeText(settings?.variant) || 'horizontal',
+            navItems: control.value,
+            navFontSize: settings?.navFontSize,
+            navBold: settings?.navBold,
+            navBorderRadius: settings?.navBorderRadius,
+            navPadding: settings?.navPadding,
+            navColor: settings?.navColor,
+            navHoverColor: settings?.navHoverColor,
+            navHoverBackground: settings?.navHoverBackground,
+            showSubmenuIndicator: settings?.showSubmenuIndicator,
+          }, { includeDataAttrs: false }) || '';
+        };
+
+        editBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          App.developNavMenu?.openNavMenuEditor?.({
+            title: field.label || 'Edit Menu',
+            getValue: () => control.value,
+            setValue: (nextValue) => {
+              control.value = safeText(nextValue, 500000);
+            },
+            afterChange: () => {
+              updateNavState();
+            },
+          });
+        });
+
+        clearBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          control.value = App.developNavMenu?.defaultNavMenuItemsJson?.() || '[]';
+          updateNavState();
+        });
+
+        pickerControls.appendChild(editBtn);
+        pickerControls.appendChild(status);
+        pickerControls.appendChild(clearBtn);
+        wrap.appendChild(pickerControls);
+        wrap.appendChild(preview);
+        wrap.appendChild(control);
+        updateNavState();
         host.appendChild(wrap);
         return;
       }
@@ -3647,9 +4091,53 @@ App.develop = (function () {
         wrap.appendChild(status);
         
       } else if (field.control === 'color') {
-        control = document.createElement('input');
-        control.type = 'color';
-        control.value = safeText(value) || '#173c61';
+        const fallbackColor = normalizeModuleHexColorValue(definition.defaults?.[field.key], '#173c61');
+        const storedColor = safeText(value);
+        const isTransparent = Boolean(field.allowTransparent) && isTransparentBuilderColor(storedColor);
+        if (field.allowTransparent) {
+          control = document.createElement('input');
+          control.type = 'hidden';
+          control.value = isTransparent ? 'transparent' : resolveModuleColorValue(storedColor, fallbackColor);
+          const fieldRow = document.createElement('div');
+          fieldRow.className = 'develop-module-color-field-row';
+          const colorInput = document.createElement('input');
+          colorInput.type = 'color';
+          colorInput.className = 'develop-module-color-field-swatch';
+          colorInput.value = normalizeModuleHexColorValue(
+            isTransparent ? fallbackColor : storedColor,
+            fallbackColor
+          );
+          colorInput.disabled = isTransparent;
+          const transparentLabel = document.createElement('label');
+          transparentLabel.className = 'checkbox-row develop-module-color-transparent-row';
+          const transparentCheck = document.createElement('input');
+          transparentCheck.type = 'checkbox';
+          transparentCheck.checked = isTransparent;
+          transparentCheck.setAttribute('data-color-transparent-toggle', field.key);
+          const transparentText = document.createElement('span');
+          transparentText.textContent = 'Transparent';
+          transparentLabel.appendChild(transparentCheck);
+          transparentLabel.appendChild(transparentText);
+          const syncColorValue = () => {
+            control.value = transparentCheck.checked
+              ? 'transparent'
+              : normalizeModuleHexColorValue(colorInput.value, fallbackColor);
+          };
+          transparentCheck.addEventListener('change', () => {
+            colorInput.disabled = transparentCheck.checked;
+            syncColorValue();
+          });
+          colorInput.addEventListener('input', () => {
+            if (!transparentCheck.checked) syncColorValue();
+          });
+          fieldRow.appendChild(colorInput);
+          fieldRow.appendChild(transparentLabel);
+          wrap.appendChild(fieldRow);
+        } else {
+          control = document.createElement('input');
+          control.type = 'color';
+          control.value = normalizeModuleHexColorValue(storedColor, fallbackColor);
+        }
       } else if (field.control === 'number') {
         control = document.createElement('input');
         control.type = 'number';
@@ -3693,13 +4181,31 @@ App.develop = (function () {
   function getDevelopModuleSettingsFromHost(type, options = {}) {
     const definition = getDevelopModuleTypeDefinition(type) || MODULE_TYPE_DEFINITIONS[0];
     const prefix = safeText(options.prefix) || 'developModuleField';
+    const root = options.hostElement && typeof options.hostElement.querySelector === 'function'
+      ? options.hostElement
+      : document;
     const settings = {};
     definition.fields.forEach((field) => {
-      const input = byId(`${prefix}_${field.key}`);
+      if (field.control === 'modular-background') {
+        const bgPrefix = `${prefix}_${field.key}`;
+        const controlsRoot = root.querySelector(`[data-modular-bg-prefix="${bgPrefix}"]`);
+        const panel = controlsRoot?.closest('.develop-module-background-field-wrap') || root;
+        const background = backgroundSettingsForSave(readModularBackgroundFromPanel(panel, bgPrefix));
+        settings[field.key] = background;
+        const bg = normalizeBackgroundSettings(background);
+        settings.backgroundColor = bg.mode === 'color'
+          ? safeText(bg.color)
+          : (bg.mode === 'transparent' ? 'transparent' : '');
+        if (bg.mode === 'image') {
+          settings.backgroundImageId = safeText(bg.imageAssetId, 120);
+        }
+        return;
+      }
+      const input = root.querySelector(`#${prefix}_${field.key}`) || byId(`${prefix}_${field.key}`);
       if (!input) return;
       if (field.contentSource) {
         const contentSettingKey = safeText(field.contentSettingKey) || `${field.key}SourceId`;
-        const sourceInput = byId(`${prefix}_${field.key}_source`);
+        const sourceInput = root.querySelector(`#${prefix}_${field.key}_source`) || byId(`${prefix}_${field.key}_source`);
         settings[contentSettingKey] = safeText(sourceInput?.value);
       }
       if (field.control === 'checkbox') {
@@ -3710,7 +4216,15 @@ App.develop = (function () {
           : String(input.innerHTML || '').trim();
       } else if (field.control === 'number') {
         const raw = safeText(input.value);
-        settings[field.key] = raw ? Number(raw) : '';
+        if (raw === '') {
+          settings[field.key] = '';
+        } else {
+          const parsed = Number(raw);
+          settings[field.key] = Number.isFinite(parsed) ? parsed : '';
+        }
+      } else if (field.control === 'color' && field.allowTransparent) {
+        const transparentToggle = root.querySelector(`[data-color-transparent-toggle="${field.key}"]`);
+        settings[field.key] = transparentToggle?.checked ? 'transparent' : safeText(input.value, 10000);
       } else {
         settings[field.key] = safeText(input.value, 10000);
       }
@@ -3719,7 +4233,10 @@ App.develop = (function () {
   }
 
   function getDevelopModuleSettingsFromForm(type) {
-    return getDevelopModuleSettingsFromHost(type, { prefix: 'developModuleField' });
+    return getDevelopModuleSettingsFromHost(type, {
+      prefix: 'developModuleField',
+      hostElement: byId('developModulesSettingsFields'),
+    });
   }
 
   function getDevelopModulePayloadFromForm() {
@@ -3745,6 +4262,12 @@ App.develop = (function () {
     if (type === 'button') {
       const ctaLabel = getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(settings.ctaId))?.label || '';
       return `${safeText(settings.label) || ctaLabel || 'Button'} · ${safeText(settings.style) || 'solid'} · ${safeText(settings.linkUrl) || 'No link set'}`;
+    }
+    if (type === 'navigation') {
+      const menuName = safeText(settings.menuName) || 'Menu';
+      const summary = App.developNavMenu?.getNavMenuSummary?.(settings.navItems) || 'No menu items';
+      const location = safeText(settings.menuLocation) || 'primary';
+      return `${menuName} · ${location} · ${summary}`;
     }
     if (type === 'image') {
       const imageAsset = getAssetById(settings.imageAssetId);
@@ -3920,7 +4443,7 @@ App.develop = (function () {
   async function loadSavedModules() {
     try {
       const result = await api('/api/develop/modules');
-      savedModules = Array.isArray(result.modules) ? result.modules : [];
+      savedModules = App.normalizeApiArray(result, 'modules');
       const starterModules = getDevelopModuleStarterBlueprints();
       const canonicalModules = getCanonicalSavedModules(savedModules);
       const missingStarterModules = starterModules.filter((starter) => !canonicalModules.some((module) => {
@@ -3940,7 +4463,7 @@ App.develop = (function () {
           });
         }
         const seeded = await api('/api/develop/modules');
-        savedModules = Array.isArray(seeded.modules) ? seeded.modules : [];
+        savedModules = App.normalizeApiArray(seeded, 'modules');
       }
     } catch (_) {
       savedModules = [];
@@ -4032,8 +4555,12 @@ App.develop = (function () {
   }
 
 
-  function updateDevelopModuleTypeFields(settings = null) {
+  async function updateDevelopModuleTypeFields(settings = null) {
     const type = safeText(byId('developModulesTypeSelect')?.value) || 'header';
+    const definition = getDevelopModuleTypeDefinition(type);
+    if (definition?.fields?.some((field) => field.control === 'modular-background')) {
+      await ensureAssetsLoaded().catch(() => {});
+    }
     renderDevelopModuleSettingsFields(type, settings || {});
   }
 
@@ -5036,9 +5563,38 @@ App.develop = (function () {
       padding: '',
       backgroundColor: '',
       backgroundImageId: '',
+      background: createDefaultBackgroundSettings(),
       borderColor: '#999',
       borderThickness: '1',
       borderRadius: '14',
+    };
+  }
+
+  function normalizeContainerSettings(value) {
+    const next = value && typeof value === 'object' && !Array.isArray(value)
+      ? value
+      : {};
+    const legacyColor = safeText(next.backgroundColor);
+    const legacyImageId = safeText(next.backgroundImageId, 120);
+    let background = normalizeBackgroundSettings(next.background, legacyColor, legacyImageId);
+    if (!next.background && legacyImageId && background.mode !== 'image') {
+      background = normalizeBackgroundSettings({
+        mode: 'image',
+        imageAssetId: legacyImageId,
+        imageUrl: getLandingPageAssetUrl(legacyImageId) || '',
+      }, legacyColor);
+    }
+    return {
+      margin: safeText(next.margin, 20),
+      padding: safeText(next.padding, 20),
+      backgroundColor: background.mode === 'color'
+        ? safeText(background.color)
+        : (background.mode === 'transparent' ? 'transparent' : legacyColor),
+      backgroundImageId: background.mode === 'image' ? safeText(background.imageAssetId, 120) : legacyImageId,
+      background,
+      borderColor: safeText(next.borderColor, 20) || '#999',
+      borderThickness: safeNumericSetting(next.borderThickness, '1'),
+      borderRadius: safeNumericSetting(next.borderRadius, '14'),
     };
   }
 
@@ -5052,16 +5608,7 @@ App.develop = (function () {
     const next = { ...defaults };
     Object.entries(value).forEach(([columnId, raw]) => {
       const cleanId = safeText(columnId) || 'col1';
-      const settings = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-      next[cleanId] = {
-        margin: safeText(settings.margin, 20),
-        padding: safeText(settings.padding, 20),
-        backgroundColor: safeText(settings.backgroundColor, 20),
-        backgroundImageId: safeText(settings.backgroundImageId, 120),
-        borderColor: safeText(settings.borderColor, 20) || '#999',
-        borderThickness: safeText(settings.borderThickness, 20) || '1',
-        borderRadius: safeText(settings.borderRadius, 20) || '14',
-      };
+      next[cleanId] = normalizeContainerSettings(raw);
     });
     return next;
   }
@@ -5080,10 +5627,14 @@ App.develop = (function () {
       .map((section, index) => {
         if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
         const id = safeText(section.id) || `section_${index + 1}`;
-        const layout = safeText(section.layout) || '6';
+        const layout = resolveLegacySectionLayout(section);
         const title = safeText(section.title, 255);
         const collapsed = Boolean(section.collapsed);
-        const rowSettings = normalizeRowSettings(section.rowSettings);
+        const rowSettings = normalizeRowSettings({
+          ...(section.rowSettings && typeof section.rowSettings === 'object' ? section.rowSettings : {}),
+          background: section.rowSettings?.background || section.background,
+          overlayScreen: section.rowSettings?.overlayScreen || section.overlayScreen,
+        });
         const columnIds = getModularPageLayoutMeta(layout).columns.map((column) => safeText(column.id) || 'col1');
         const containerSettings = normalizeContainerSettingsMap(section.containerSettings, columnIds);
         const modules = Array.isArray(section.modules)
@@ -5095,7 +5646,7 @@ App.develop = (function () {
                 sourceModuleId: safeText(module.sourceModuleId),
                 name: safeText(module.name, 255),
                 type: safeText(module.type) || 'text',
-                column: safeText(module.column) || 'main',
+                column: safeText(module.column) || getModularPageLayoutColumnIds(layout)[0] || 'col1',
                 contentId: safeText(module.contentId),
                 assetId: safeText(module.assetId),
                 text: safeText(module.text, 10000),
@@ -5144,15 +5695,302 @@ App.develop = (function () {
     { value: 'poll', label: 'Poll', fieldKey: null },
     { value: 'spacer', label: 'Spacer', fieldKey: null },
     { value: 'text', label: 'Text', fieldKey: null },
+    { value: 'navigation', label: 'Navigation', fieldKey: null },
   ];
 
+  const NORMIE_LAYOUT_TO_LEGACY = {
+    single: '6',
+    banner: '6',
+    'hero-split': '4-2',
+    'two-column': '3-3',
+    'three-column': '2-2-2',
+    'one-four-one': '1-4-1',
+    'four-two': '4-2',
+    'two-four': '2-4',
+    'one-five': '1-5',
+    'five-one': '5-1',
+  };
+
+  const LEGACY_TO_NORMIE_LAYOUT = {
+    '6': 'single',
+    '3-3': 'two-column',
+    '2-2-2': 'three-column',
+    '1-4-1': 'one-four-one',
+    '4-2': 'four-two',
+    '2-4': 'two-four',
+    '1-5': 'one-five',
+    '5-1': 'five-one',
+  };
+
+  function getNormieLayoutColumnKeys(layout) {
+    const columnCount = getModularPageLayoutMeta(layout).columns.length;
+    if (columnCount === 3) return ['left', 'center', 'right'];
+    if (columnCount === 2) return ['left', 'right'];
+    return ['main'];
+  }
+
+  function inferLegacyLayoutFromNormieCellKeys(section) {
+    const cellKeys = new Set(
+      [
+        ...Object.keys(section?.cellBackgrounds || {}),
+        ...Object.keys(section?.cellPadding || {}),
+        ...Object.keys(section?.cellBorderWidth || {}),
+      ].map((key) => safeText(key).toLowerCase()).filter(Boolean)
+    );
+    if (cellKeys.has('center') || (cellKeys.has('left') && cellKeys.has('right') && cellKeys.size >= 3)) {
+      return '2-2-2';
+    }
+    if (cellKeys.has('left') && cellKeys.has('right')) {
+      return '3-3';
+    }
+    if (cellKeys.has('main') || cellKeys.size <= 1) {
+      return '6';
+    }
+    return '';
+  }
+
+  function resolveLegacySectionLayout(section) {
+    const hintedLayout = safeText(section?.layout);
+    if (hintedLayout) {
+      return getModularPageLayoutMeta(hintedLayout).value;
+    }
+    const inferredLayout = inferLegacyLayoutFromNormieCellKeys(section);
+    if (inferredLayout) {
+      return inferredLayout;
+    }
+    const modules = Array.isArray(section?.modules) ? section.modules : [];
+    const legacyColumns = new Set(modules.map((module) => {
+      const column = safeText(module?.column).toLowerCase();
+      if (/^col\d+$/.test(column)) return column;
+      return mapNormieColumnToLegacy(column, '2-2-2');
+    }));
+    if (legacyColumns.has('col2') || legacyColumns.has('col3')) return '2-2-2';
+    return '6';
+  }
+
+  function resolveNormieLayoutFromSection(section) {
+    const legacyLayout = resolveLegacySectionLayout(section);
+    return LEGACY_TO_NORMIE_LAYOUT[legacyLayout] || safeText(section?.layout).toLowerCase() || 'single';
+  }
+
+  function mapLegacyColumnToNormie(column, layout) {
+    const legacyCol = safeText(column).toLowerCase() || '';
+    const legacyLayout = getModularPageLayoutMeta(layout).value;
+    const normieKeys = getNormieLayoutColumnKeys(legacyLayout);
+    if (normieKeys.length === 1) return normieKeys[0] || 'main';
+    if (['left', 'center', 'right', 'main'].includes(legacyCol)) {
+      return legacyCol === 'main' ? (normieKeys[0] || 'main') : legacyCol;
+    }
+    if (/^col\d+$/.test(legacyCol)) {
+      const legacyCols = getModularPageLayoutColumnIds(legacyLayout);
+      const idx = legacyCols.indexOf(legacyCol);
+      if (idx >= 0 && normieKeys[idx]) return normieKeys[idx];
+    }
+    return normieKeys[0] || 'main';
+  }
+
+  function modulesForNormieSave(section, legacyLayout) {
+    return (Array.isArray(section?.modules) ? section.modules : []).map((module) => ({
+      ...module,
+      column: mapLegacyColumnToNormie(module?.column, legacyLayout),
+    }));
+  }
+
+  function mapNormieColumnToLegacy(column, layout) {
+    const normieCol = safeText(column).toLowerCase() || 'main';
+    if (/^col\d+$/.test(normieCol)) return normieCol;
+    const layoutKey = safeText(layout).toLowerCase();
+    const legacyLayout = NORMIE_LAYOUT_TO_LEGACY[layoutKey] || layoutKey;
+    const meta = getModularPageLayoutMeta(legacyLayout);
+    const legacyCols = meta.columns.map((entry) => safeText(entry.id) || 'col1');
+    const normieKeys = getNormieLayoutColumnKeys(layout);
+    if (normieKeys.length === 1) return legacyCols[0] || 'col1';
+    const idx = normieKeys.indexOf(normieCol);
+    if (idx >= 0 && legacyCols[idx]) return legacyCols[idx];
+    if (normieCol === 'main' || normieCol === 'left') return legacyCols[0] || 'col1';
+    if (normieCol === 'center') return legacyCols[1] || legacyCols[0] || 'col1';
+    if (normieCol === 'right') return legacyCols[legacyCols.length - 1] || 'col2';
+    return legacyCols[0] || 'col1';
+  }
+
+  function isNormieModularSection(section) {
+    if (!section || typeof section !== 'object') return false;
+    const layout = safeText(section.layout).toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(NORMIE_LAYOUT_TO_LEGACY, layout)) return true;
+    if (section.cellBackgrounds || section.cellPadding) return true;
+    const column = safeText(section.modules?.[0]?.column).toLowerCase();
+    return ['main', 'left', 'right', 'center'].includes(column);
+  }
+
+  function mapNormieModuleTypeToLegacy(module) {
+    const type = safeText(module?.type).toLowerCase();
+    const settings = module?.settings && typeof module.settings === 'object' ? module.settings : {};
+    if (type === 'header' || type === 'heading') return 'header';
+    if (type === 'contact-form') return 'form';
+    if (type === 'current-poll') return 'poll';
+    if (type === 'text') {
+      if (safeText(settings.headingLevel) || safeText(settings.level)) return 'header';
+      if (safeText(module.contentId)) return 'pitch';
+      if (safeText(settings.content) || safeText(settings.textAlign) || safeText(settings.maxWidth)) return 'textarea';
+    }
+    if (type === 'textarea') return 'textarea';
+    if (type === 'button' || type === 'image' || type === 'video' || type === 'form' || type === 'poll') return type;
+    return type || 'text';
+  }
+
+  function mapNormieModuleSettingsToLegacy(legacyType, settings, module) {
+    const next = settings && typeof settings === 'object'
+      ? JSON.parse(JSON.stringify(settings))
+      : {};
+    if (legacyType === 'header') {
+      if (!safeText(next.headingLevel) && safeText(next.level)) {
+        const level = safeText(next.level).toLowerCase();
+        next.headingLevel = /^h[1-6]$/.test(level) ? level.toUpperCase() : 'H2';
+      }
+    }
+    if (legacyType === 'form' && !safeText(next.formId)) {
+      next.formId = safeText(module?.contentId) || safeText(next.formId);
+    }
+    if (legacyType === 'pitch' && !safeText(module?.contentId) && safeText(next.contentId)) {
+      // keep contentId on module, not settings
+    }
+    if (legacyType === 'textarea') {
+      next.background = normalizeBackgroundSettings(next.background, next.backgroundColor, next.backgroundImageId);
+    }
+    return next;
+  }
+
+  function remapNormieModulesToLegacyEditorShape(sections) {
+    return (Array.isArray(sections) ? sections : []).map((section) => {
+      if (!section || typeof section !== 'object') return section;
+      const legacyLayout = resolveLegacySectionLayout(section);
+      const modules = (Array.isArray(section.modules) ? section.modules : []).map((module) => {
+        if (!module || typeof module !== 'object') return module;
+        const legacyType = mapNormieModuleTypeToLegacy(module);
+        const settings = mapNormieModuleSettingsToLegacy(legacyType, module.settings, module);
+        const text = safeText(module.text, 10000)
+          || safeText(settings.text, 10000)
+          || safeText(module.settings?.text, 10000);
+        return {
+          ...module,
+          type: legacyType,
+          column: mapNormieColumnToLegacy(module.column, legacyLayout),
+          contentId: legacyType === 'pitch'
+            ? (safeText(module.contentId) || safeText(settings.contentId))
+            : safeText(module.contentId),
+          text,
+          settings,
+        };
+      });
+      return { ...section, modules };
+    });
+  }
+
+  function coerceNormieSectionToLegacy(section, index) {
+    const legacyLayout = resolveLegacySectionLayout(section);
+    const meta = getModularPageLayoutMeta(legacyLayout);
+    const legacyColumnIds = meta.columns.map((entry) => safeText(entry.id) || 'col1');
+    const normieColumnKeys = getNormieLayoutColumnKeys(legacyLayout);
+    const containerSettings = {};
+    legacyColumnIds.forEach((colId, columnIndex) => {
+      const normieKey = normieColumnKeys[columnIndex] || normieColumnKeys[0] || 'main';
+      const bg = section.cellBackgrounds?.[normieKey];
+      containerSettings[colId] = normalizeContainerSettings({
+        margin: safeText(section.cellVerticalMargin?.[normieKey]) || '0',
+        padding: safeText(section.cellPadding?.[normieKey]) || '18',
+        background: bg,
+        backgroundColor: bg && bg.mode === 'color' ? safeText(bg.color) : '',
+        borderThickness: safeText(section.cellBorderWidth?.[normieKey]) || '1',
+        borderColor: safeText(section.cellBorderColor?.[normieKey]) || '#d9e4ef',
+        borderRadius: safeText(section.cellBorderRadius?.[normieKey]) || '24',
+      });
+    });
+    const rowBg = section.background || section.rowSettings?.background;
+    const rowSettings = normalizeRowSettings({
+      margin: safeText(section.marginTop) || '0',
+      padding: '20',
+      backgroundColor: rowBg && rowBg.mode === 'color' ? safeText(rowBg.color) : safeText(section.rowSettings?.backgroundColor),
+      background: rowBg,
+      overlayScreen: section.overlayScreen || section.rowSettings?.overlayScreen,
+    });
+    const modules = (Array.isArray(section.modules) ? section.modules : []).map((module, moduleIndex) => {
+      const legacyType = mapNormieModuleTypeToLegacy(module);
+      const settings = mapNormieModuleSettingsToLegacy(legacyType, module.settings, module);
+      return {
+        id: safeText(module.id) || `section_${index + 1}_module_${moduleIndex + 1}`,
+        sourceModuleId: safeText(module.sourceModuleId),
+        name: safeText(module.name, 255),
+        type: legacyType,
+        column: mapNormieColumnToLegacy(module.column, legacyLayout),
+        contentId: legacyType === 'pitch'
+          ? (safeText(module.contentId) || safeText(settings.contentId))
+          : safeText(module.contentId),
+        assetId: safeText(module.assetId),
+        text: safeText(module.text, 10000) || safeText(settings.text, 10000),
+        collapsed: Boolean(module.collapsed),
+        settings,
+      };
+    });
+    return {
+      id: safeText(section.id) || `section_${index + 1}`,
+      layout: legacyLayout,
+      title: safeText(section.title, 255),
+      collapsed: Boolean(section.collapsed),
+      rowSettings,
+      containerSettings,
+      modules,
+    };
+  }
+
+  function resolveModularLayoutSectionsForEditor(source) {
+    const raw = source?.layoutSections ?? source?.sections;
+    if (!raw) return createDefaultModularPageSections();
+    const sections = Array.isArray(raw)
+      ? raw
+      : (raw && typeof raw === 'object' && Array.isArray(raw.sections) ? raw.sections : []);
+    if (!sections.length) return createDefaultModularPageSections();
+    let resolved;
+    if (sections.some(isNormieModularSection)) {
+      resolved = sections
+        .map((section, sectionIndex) => coerceNormieSectionToLegacy(section, sectionIndex))
+        .filter(Boolean);
+    } else {
+      resolved = normalizePageTemplateLayoutSections(sections);
+      if (!resolved.length) return createDefaultModularPageSections();
+    }
+    return remapNormieModulesToLegacyEditorShape(resolved);
+  }
+
+  function getModularSectionModulesForColumn(section, columnId) {
+    const column = safeText(columnId) || 'col1';
+    return (Array.isArray(section?.modules) ? section.modules : []).filter((module) => {
+      const moduleColumn = safeText(module?.column);
+      return moduleColumn === column || mapNormieColumnToLegacy(moduleColumn, section.layout) === column;
+    });
+  }
+
+  function getModularEditorLayoutSections(source) {
+    return resolveModularLayoutSectionsForEditor(
+      source && typeof source === 'object' && !Array.isArray(source)
+        ? source
+        : { layoutSections: source }
+    );
+  }
+
   function getModularPageLayoutMeta(layout) {
-    const normalized = safeText(layout);
+    const normalized = safeText(layout).toLowerCase();
     const legacyMap = {
       banner: '6',
       single: '6',
       'hero-form-right': '4-2',
+      'hero-split': '4-2',
       'two-column': '3-3',
+      'three-column': '2-2-2',
+      'one-four-one': '1-4-1',
+      'four-two': '4-2',
+      'two-four': '2-4',
+      'one-five': '1-5',
+      'five-one': '5-1',
       'feature-grid-2': '3-3',
     };
     const resolved = legacyMap[normalized] || normalized;
@@ -5182,17 +6020,342 @@ App.develop = (function () {
       margin: '',
       padding: '20',
       backgroundColor: '',
+      background: createDefaultBackgroundSettings(),
+      overlayScreen: createDefaultRowOverlayScreenSettings(),
     };
+  }
+
+  function createDefaultRowOverlayScreenSettings() {
+    return {
+      background: createDefaultBackgroundSettings(),
+      opacity: 100,
+    };
+  }
+
+  function normalizeRowOverlayScreenSettings(value) {
+    const next = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const opacityRaw = Number(next.opacity);
+    const opacity = Number.isFinite(opacityRaw)
+      ? Math.min(100, Math.max(0, Math.round(opacityRaw)))
+      : 100;
+    return {
+      background: normalizeBackgroundSettings(next.background),
+      opacity,
+    };
+  }
+
+  function hasActiveRowOverlayScreen(overlayScreen) {
+    return normalizeRowOverlayScreenSettings(overlayScreen).background.mode !== 'none';
+  }
+
+  function buildRowOverlayScreenStyle(overlayScreen) {
+    const normalized = normalizeRowOverlayScreenSettings(overlayScreen);
+    if (!hasActiveRowOverlayScreen(normalized)) return {};
+    const style = getBuilderBackgroundCssStyle(normalized.background);
+    const opacity = normalized.opacity / 100;
+    if (Number.isFinite(opacity) && opacity < 1) {
+      style.opacity = String(opacity);
+    }
+    return style;
+  }
+
+  function overlayScreenSettingsForSave(overlayScreen) {
+    return normalizeRowOverlayScreenSettings(overlayScreen);
+  }
+
+  function readRowOverlayScreenFromPanel(panel, prefix = 'developRowOverlayScreen') {
+    return normalizeRowOverlayScreenSettings({
+      background: readModularBackgroundFromPanel(panel, prefix),
+      opacity: panel.querySelector(`#${prefix}OpacityRange`)?.value,
+    });
+  }
+
+  const BUILDER_BACKGROUND_STYLE_PRESETS = [
+    { value: 'blue-yellow-circles', label: 'Blue Yellow Circles' },
+  ];
+
+  function createDefaultBackgroundSettings() {
+    return {
+      mode: 'none',
+      color: '#ffffff',
+      color2: '#eaf4ff',
+      imageUrl: '',
+      imageAssetId: '',
+      styleKey: '',
+    };
+  }
+
+  function normalizeBackgroundMode(value) {
+    const mode = safeText(value).toLowerCase();
+    if (['none', 'transparent', 'color', 'gradient', 'image', 'style'].includes(mode)) return mode;
+    return 'none';
+  }
+
+  function isTransparentBuilderColor(value) {
+    const trimmed = safeText(value).toLowerCase();
+    if (!trimmed || trimmed === 'transparent') return true;
+    if (/^#[0-9a-f]{8}$/i.test(trimmed) && trimmed.slice(-2) === '00') return true;
+    const rgbaMatch = trimmed.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+    if (rgbaMatch) {
+      const alpha = rgbaMatch[4] !== undefined ? Number(rgbaMatch[4]) : 1;
+      return Number.isFinite(alpha) && alpha <= 0;
+    }
+    return false;
+  }
+
+  function resolveModuleColorValue(value, fallback = '') {
+    const trimmed = safeText(value);
+    if (isTransparentBuilderColor(trimmed)) return 'transparent';
+    return trimmed || fallback;
+  }
+
+  function normalizeModuleHexColorValue(value, fallback = '#173c61') {
+    const trimmed = safeText(value);
+    if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed;
+    return fallback;
+  }
+
+  function normalizeTableBorderThickness(value, fallback = 1) {
+    if (value === '' || value === null || value === undefined) return fallback;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  }
+
+  function getTableModuleBorderThickness(settings) {
+    const raw = settings?.borderThickness ?? settings?.borderWidth;
+    return normalizeTableBorderThickness(raw, 1);
+  }
+
+  function syncTableModuleBorderSettings(settings) {
+    if (!settings || typeof settings !== 'object') return settings;
+    const thickness = getTableModuleBorderThickness(settings);
+    settings.borderThickness = thickness;
+    settings.borderWidth = String(thickness);
+    return settings;
+  }
+
+  function buildTableCellBorderCss(thickness, color, fallbackColor = '#d6e6f5') {
+    const borderThickness = normalizeTableBorderThickness(thickness, 0);
+    if (borderThickness <= 0) {
+      return 'border:0!important;border-width:0!important;border-style:none!important;border-color:transparent!important;border-bottom:0!important;outline:none!important;box-shadow:none!important;';
+    }
+    const borderColor = resolveModuleColorValue(color, fallbackColor);
+    return `border:${borderThickness}px solid ${borderColor}!important;border-bottom:${borderThickness}px solid ${borderColor}!important;`;
+  }
+
+  function normalizeBackgroundSettings(value, legacyColor = '', legacyImageId = '') {
+    const fallbackColor = safeText(legacyColor);
+    const fallbackImageId = safeText(legacyImageId, 120);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      const next = createDefaultBackgroundSettings();
+      if (fallbackImageId) {
+        next.mode = 'image';
+        next.imageAssetId = fallbackImageId;
+        next.imageUrl = getLandingPageAssetUrl(fallbackImageId) || '';
+      } else if (fallbackColor) {
+        next.mode = isTransparentBuilderColor(fallbackColor) ? 'transparent' : 'color';
+        next.color = fallbackColor;
+      }
+      return next;
+    }
+    const background = value;
+    const normalized = {
+      mode: normalizeBackgroundMode(background.mode),
+      color: safeText(background.color) || '#ffffff',
+      color2: safeText(background.color2) || '#eaf4ff',
+      imageUrl: safeText(background.imageUrl, 2000),
+      imageAssetId: safeText(background.imageAssetId, 120),
+      styleKey: safeText(background.styleKey, 80) === 'blue-yellow-circles' ? 'blue-yellow-circles' : '',
+    };
+    if (normalized.mode === 'image' && !normalized.imageUrl && normalized.imageAssetId) {
+      normalized.imageUrl = getLandingPageAssetUrl(normalized.imageAssetId) || '';
+    }
+    if (normalized.mode === 'none' && fallbackImageId) {
+      normalized.mode = 'image';
+      normalized.imageAssetId = fallbackImageId;
+      normalized.imageUrl = getLandingPageAssetUrl(fallbackImageId) || '';
+    } else if (normalized.mode === 'none' && fallbackColor) {
+      normalized.mode = isTransparentBuilderColor(fallbackColor) ? 'transparent' : 'color';
+      normalized.color = fallbackColor;
+    }
+    if (normalized.mode === 'color' && isTransparentBuilderColor(normalized.color)) {
+      normalized.mode = 'transparent';
+    }
+    if (normalized.mode === 'transparent') {
+      normalized.color = 'transparent';
+    }
+    return normalized;
+  }
+
+  function getBuilderBackgroundCssStyle(background) {
+    const bg = normalizeBackgroundSettings(background);
+    if (bg.mode === 'none') return {};
+    if (bg.mode === 'transparent') {
+      return { background: 'transparent', backgroundColor: 'transparent' };
+    }
+    if (bg.mode === 'color') {
+      if (isTransparentBuilderColor(bg.color)) {
+        return { background: 'transparent', backgroundColor: 'transparent' };
+      }
+      return { background: bg.color };
+    }
+    if (bg.mode === 'gradient') {
+      return {
+        backgroundImage: `linear-gradient(135deg, ${bg.color} 0%, ${bg.color2} 100%)`,
+      };
+    }
+    if (bg.mode === 'image' && bg.imageUrl) {
+      return {
+        backgroundImage: `url("${bg.imageUrl}")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      };
+    }
+    if (bg.mode === 'style' && bg.styleKey === 'blue-yellow-circles') {
+      return {
+        background: 'radial-gradient(circle at 15% 15%, rgba(255, 214, 10, 0.35), transparent 18%), radial-gradient(circle at 82% 14%, rgba(23, 183, 238, 0.28), transparent 18%), radial-gradient(circle at 50% 72%, rgba(255, 255, 255, 0.92), transparent 24%), linear-gradient(135deg, #d9f5ff 0%, #f8feff 36%, #fff7bf 100%)',
+      };
+    }
+    return {};
+  }
+
+  function readModularBackgroundFromPanel(panel, prefix) {
+    const mode = normalizeBackgroundMode(panel.querySelector(`#${prefix}ModeSelect`)?.value);
+    const background = createDefaultBackgroundSettings();
+    background.mode = mode;
+    background.color = safeText(panel.querySelector(`#${prefix}ColorPrimaryInput`)?.value) || '#ffffff';
+    background.color2 = safeText(panel.querySelector(`#${prefix}ColorSecondaryInput`)?.value) || '#eaf4ff';
+    background.styleKey = safeText(panel.querySelector(`#${prefix}StyleSelect`)?.value) || '';
+    background.imageAssetId = safeText(panel.querySelector(`#${prefix}ImageAssetInput`)?.value) || '';
+    background.imageUrl = safeText(panel.querySelector(`#${prefix}ImageUrlInput`)?.value, 2000)
+      || (background.imageAssetId ? getLandingPageAssetUrl(background.imageAssetId) : '');
+    return normalizeBackgroundSettings(background);
+  }
+
+  function readRowBackgroundFromPanel(panel) {
+    return readModularBackgroundFromPanel(panel, 'developRowBackground');
+  }
+
+  function syncModularBackgroundControlVisibility(panel, prefix) {
+    const controlsRoot = panel.querySelector(`[data-modular-bg-prefix="${prefix}"]`);
+    if (!controlsRoot) return;
+    const mode = normalizeBackgroundMode(controlsRoot.querySelector(`#${prefix}ModeSelect`)?.value);
+    controlsRoot.querySelectorAll('[data-modular-bg-field]').forEach((el) => {
+      const modes = String(el.getAttribute('data-modular-bg-field') || '').split(',').map((value) => value.trim()).filter(Boolean);
+      el.classList.toggle('hidden', !modes.includes(mode));
+    });
+  }
+
+  function syncRowBackgroundControlVisibility(panel) {
+    syncModularBackgroundControlVisibility(panel, 'developRowBackground');
+  }
+
+  function buildModularBackgroundControlsHtml(prefix, background, options = {}) {
+    const bg = normalizeBackgroundSettings(background);
+    const sectionLabel = safeText(options.sectionLabel) || 'Background';
+    const styleOptions = BUILDER_BACKGROUND_STYLE_PRESETS.map((preset) => (
+      `<option value="${escapeHtml(preset.value)}"${bg.styleKey === preset.value ? ' selected' : ''}>${escapeHtml(preset.label)}</option>`
+    )).join('');
+    return `
+      <div class="develop-modular-background-controls stack-form" data-modular-bg-prefix="${escapeHtml(prefix)}">
+        <label class="stack-form">
+          <span>${escapeHtml(sectionLabel)}</span>
+          <select id="${prefix}ModeSelect">
+            <option value="none"${bg.mode === 'none' ? ' selected' : ''}>None</option>
+            <option value="transparent"${bg.mode === 'transparent' ? ' selected' : ''}>Transparent</option>
+            <option value="color"${bg.mode === 'color' ? ' selected' : ''}>Color</option>
+            <option value="gradient"${bg.mode === 'gradient' ? ' selected' : ''}>Gradient</option>
+            <option value="image"${bg.mode === 'image' ? ' selected' : ''}>Image</option>
+            <option value="style"${bg.mode === 'style' ? ' selected' : ''}>Style</option>
+          </select>
+        </label>
+        <label class="stack-form develop-modular-background-field" data-modular-bg-field="color,gradient">
+          <span>Primary Color</span>
+          <input id="${prefix}ColorPrimaryInput" type="color" value="${escapeHtml(bg.mode === 'transparent' ? '#ffffff' : (bg.color || '#ffffff'))}" />
+        </label>
+        <label class="stack-form develop-modular-background-field" data-modular-bg-field="gradient">
+          <span>Secondary Color</span>
+          <input id="${prefix}ColorSecondaryInput" type="color" value="${escapeHtml(bg.color2 || '#eaf4ff')}" />
+        </label>
+        <label class="stack-form develop-modular-background-field" data-modular-bg-field="style">
+          <span>Style Preset</span>
+          <select id="${prefix}StyleSelect">
+            <option value="">Choose A Style</option>
+            ${styleOptions}
+          </select>
+        </label>
+        <div class="develop-modular-background-field develop-inline-image-picker-wrap" data-modular-bg-field="image">
+          <div class="develop-inline-image-picker-label">Background Image</div>
+          <div id="${prefix}ImagePickerHost"></div>
+        </div>
+        <label class="stack-form develop-modular-background-field" data-modular-bg-field="image">
+          <span>Background Image URL</span>
+          <input id="${prefix}ImageUrlInput" type="text" value="${escapeHtml(bg.imageUrl)}" placeholder="https://..." />
+        </label>
+      </div>
+    `;
+  }
+
+  function buildRowBackgroundControlsHtml(background) {
+    return buildModularBackgroundControlsHtml('developRowBackground', background, { sectionLabel: 'Row Background' });
+  }
+
+  function mountRowOverlayScreenControls(panel, overlayScreen) {
+    if (!panel || panel.querySelector('#developRowOverlayScreenSection')) return false;
+    const body = panel.querySelector('.develop-module-editor-modal__body');
+    const backgroundRoot = panel.querySelector('[data-modular-bg-prefix="developRowBackground"]');
+    if (!body || !backgroundRoot) return false;
+    const template = document.createElement('template');
+    template.innerHTML = buildRowOverlayScreenControlsHtml(overlayScreen).replace(
+      'class="develop-modular-overlay-screen-controls stack-form"',
+      'id="developRowOverlayScreenSection" class="develop-modular-overlay-screen-controls stack-form"'
+    );
+    const overlayRoot = template.content.firstElementChild;
+    if (!overlayRoot) return false;
+    backgroundRoot.parentElement.insertBefore(overlayRoot, backgroundRoot);
+    return true;
+  }
+
+  function buildModularOverlayScreenControlsHtml(prefix, overlayScreen) {
+    const overlay = normalizeRowOverlayScreenSettings(overlayScreen);
+    return `
+      <div class="develop-modular-overlay-screen-controls stack-form">
+        <div class="develop-modular-overlay-screen-controls__heading">Overlay Screen</div>
+        ${buildModularBackgroundControlsHtml(prefix, overlay.background, { sectionLabel: 'Overlay Type' })}
+        <label class="stack-form develop-modular-overlay-screen-opacity">
+          <span>Overlay Opacity</span>
+          <div class="develop-modular-overlay-screen-opacity__row">
+            <input id="${prefix}OpacityRange" type="range" min="0" max="100" step="1" value="${overlay.opacity}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${overlay.opacity}" />
+            <output id="${prefix}OpacityValue" for="${prefix}OpacityRange">${overlay.opacity}%</output>
+          </div>
+        </label>
+      </div>
+    `;
+  }
+
+  function buildRowOverlayScreenControlsHtml(overlayScreen) {
+    return buildModularOverlayScreenControlsHtml('developRowOverlayScreen', overlayScreen);
+  }
+
+  function syncRowOverlayScreenControlVisibility(panel) {
+    syncModularBackgroundControlVisibility(panel, 'developRowOverlayScreen');
   }
 
   function normalizeRowSettings(value) {
     const next = value && typeof value === 'object' && !Array.isArray(value)
       ? value
       : {};
+    const legacyColor = safeText(next.backgroundColor);
+    const background = normalizeBackgroundSettings(next.background, legacyColor);
     return {
       margin: safeText(next.margin),
       padding: safeText(next.padding) || '20',
-      backgroundColor: safeText(next.backgroundColor),
+      backgroundColor: background.mode === 'color'
+        ? safeText(background.color)
+        : (background.mode === 'transparent' ? 'transparent' : legacyColor),
+      background,
+      overlayScreen: normalizeRowOverlayScreenSettings(next.overlayScreen),
     };
   }
 
@@ -5243,6 +6406,7 @@ App.develop = (function () {
     if (!section.containerSettings[cleanId] || typeof section.containerSettings[cleanId] !== 'object' || Array.isArray(section.containerSettings[cleanId])) {
       section.containerSettings[cleanId] = createDefaultContainerSettings();
     }
+    section.containerSettings[cleanId] = normalizeContainerSettings(section.containerSettings[cleanId]);
     return section.containerSettings[cleanId];
   }
 
@@ -5250,7 +6414,41 @@ App.develop = (function () {
     if (!section.rowSettings || typeof section.rowSettings !== 'object' || Array.isArray(section.rowSettings)) {
       section.rowSettings = createDefaultRowSettings();
     }
+    section.rowSettings = normalizeRowSettings({
+      ...section.rowSettings,
+      background: section.rowSettings?.background || section.background,
+      overlayScreen: section.rowSettings?.overlayScreen || section.overlayScreen,
+    });
     return section.rowSettings;
+  }
+
+  function buildSectionRowStyle(section) {
+    return buildRowStyle(getSectionRowSettings(section));
+  }
+
+  function buildModularPageSectionMarkup(section, innerMarkup, layoutValue) {
+    const rowSettings = getSectionRowSettings(section);
+    const rowStyleStr = styleObjectToCssText(buildRowStyle(rowSettings));
+    const overlayStyleStr = styleObjectToCssText(buildRowOverlayScreenStyle(rowSettings.overlayScreen));
+    const overlayMarkup = hasActiveRowOverlayScreen(rowSettings.overlayScreen)
+      ? `<div class="develop-row-overlay-screen"${overlayStyleStr ? ` style="${escapeHtml(overlayStyleStr)}"` : ''}></div>`
+      : '';
+    return `<section class="develop-modular-page-section develop-modular-page-layout-${layoutValue}"${rowStyleStr ? ` style="${escapeHtml(rowStyleStr)}"` : ''}>
+        ${overlayMarkup}
+        <div class="develop-modular-page-section__content">${innerMarkup}</div>
+      </section>`;
+  }
+
+  function appendRowOverlayScreenElement(parent, section) {
+    if (!parent) return null;
+    parent.querySelectorAll('.develop-row-overlay-screen').forEach((node) => node.remove());
+    const rowSettings = getSectionRowSettings(section);
+    if (!hasActiveRowOverlayScreen(rowSettings.overlayScreen)) return null;
+    const overlay = document.createElement('div');
+    overlay.className = 'develop-row-overlay-screen';
+    Object.assign(overlay.style, buildRowOverlayScreenStyle(rowSettings.overlayScreen));
+    parent.insertBefore(overlay, parent.firstChild);
+    return overlay;
   }
 
   function buildRowStyle(settings) {
@@ -5260,12 +6458,15 @@ App.develop = (function () {
     const padding = Number(safeText(next.padding));
     if (Number.isFinite(margin) && margin >= 0) style.margin = `${margin}px`;
     if (Number.isFinite(padding) && padding >= 0) style.padding = `${padding}px`;
-    if (safeText(next.backgroundColor)) style.background = safeText(next.backgroundColor);
+    Object.assign(style, getBuilderBackgroundCssStyle(next.background));
+    if (!style.background && !style.backgroundImage && safeText(next.backgroundColor)) {
+      style.background = safeText(next.backgroundColor);
+    }
     return style;
   }
 
   function buildContainerStyle(settings) {
-    const next = settings && typeof settings === 'object' ? settings : {};
+    const next = normalizeContainerSettings(settings);
     const style = {};
     const margin = Number(safeText(next.margin));
     const padding = Number(safeText(next.padding));
@@ -5273,22 +6474,17 @@ App.develop = (function () {
     const borderRadius = Number(safeText(next.borderRadius));
     if (Number.isFinite(margin) && margin >= 0) style.margin = `${margin}px`;
     if (Number.isFinite(padding) && padding >= 0) style.padding = `${padding}px`;
-    if (safeText(next.backgroundColor)) style.background = safeText(next.backgroundColor);
-    if (safeText(next.borderColor)) style.borderColor = safeText(next.borderColor);
-    if (Number.isFinite(borderThickness) && borderThickness >= 0) {
-      style.borderWidth = `${borderThickness}px`;
-      style.borderStyle = borderThickness > 0 ? 'solid' : 'dashed';
+    Object.assign(style, getBuilderBackgroundCssStyle(next.background));
+    if (!style.background && !style.backgroundImage && safeText(next.backgroundColor)) {
+      style.background = safeText(next.backgroundColor);
+    }
+    if (Number.isFinite(borderThickness) && borderThickness > 0) {
+      style.border = `${borderThickness}px solid ${safeText(next.borderColor) || '#999'}`;
+    } else if (Number.isFinite(borderThickness) && borderThickness === 0) {
+      style.border = '0';
+      style.boxShadow = 'none';
     }
     if (Number.isFinite(borderRadius) && borderRadius >= 0) style.borderRadius = `${borderRadius}px`;
-    const backgroundImageId = safeText(next.backgroundImageId);
-    const backgroundImageUrl = getLandingPageAssetUrl(backgroundImageId);
-    if (backgroundImageUrl) {
-      const base = safeText(next.backgroundColor);
-      style.backgroundImage = `${base ? `linear-gradient(${base}, ${base}), ` : ''}url("${backgroundImageUrl}")`;
-      style.backgroundSize = base ? 'cover, cover' : 'cover';
-      style.backgroundPosition = 'center';
-      style.backgroundRepeat = 'no-repeat';
-    }
     return style;
   }
 
@@ -5382,11 +6578,38 @@ App.develop = (function () {
     return getModularPageLayoutMeta(layout).columns.map((column) => safeText(column.id) || 'col1');
   }
 
+  function moduleBelongsToLayoutColumn(module, sectionLayout, columnId) {
+    const moduleColumn = safeText(module?.column);
+    const legacyColumn = safeText(columnId) || 'col1';
+    if (!moduleColumn) return legacyColumn === getModularPageLayoutColumnIds(sectionLayout)[0];
+    return moduleColumn === legacyColumn
+      || mapNormieColumnToLegacy(moduleColumn, sectionLayout) === legacyColumn;
+  }
+
   function remapSectionToLayout(section, nextLayout) {
     const normalizedNextLayout = getModularPageLayoutMeta(nextLayout).value;
     const currentColumnIds = getModularPageLayoutColumnIds(section.layout);
     const nextColumnIds = getModularPageLayoutColumnIds(normalizedNextLayout);
-    const moduleBuckets = currentColumnIds.map((columnId) => section.modules.filter((module) => safeText(module.column) === columnId));
+    const assignedModuleIds = new Set();
+    const moduleBuckets = currentColumnIds.map((columnId) => (
+      (Array.isArray(section.modules) ? section.modules : []).filter((module) => {
+        const moduleId = safeText(module?.id);
+        if (moduleId && assignedModuleIds.has(moduleId)) return false;
+        if (!moduleBelongsToLayoutColumn(module, section.layout, columnId)) return false;
+        if (moduleId) assignedModuleIds.add(moduleId);
+        return true;
+      })
+    ));
+    const orphanModules = (Array.isArray(section.modules) ? section.modules : []).filter((module) => {
+      const moduleId = safeText(module?.id);
+      return !moduleId || !assignedModuleIds.has(moduleId);
+    });
+    if (orphanModules.length) {
+      const fallbackIndex = nextColumnIds.length === 3
+        ? Math.min(1, nextColumnIds.length - 1)
+        : 0;
+      moduleBuckets[fallbackIndex] = [...(moduleBuckets[fallbackIndex] || []), ...orphanModules];
+    }
     const settingsBuckets = currentColumnIds.map((columnId) => ({ ...getSectionContainerSettings(section, columnId) }));
 
     while (moduleBuckets.length > nextColumnIds.length) {
@@ -5458,6 +6681,8 @@ App.develop = (function () {
         return 'Pod';
       case 'table':
         return 'Tbl';
+      case 'navigation':
+        return 'Nav';
       case 'textarea':
         return 'Txt';
       case 'header':
@@ -5477,8 +6702,19 @@ App.develop = (function () {
     return safeText(module?.name, 255) || safeText(getSavedModuleById(module?.sourceModuleId)?.name, 255) || getModularModuleContentLabel(module);
   }
 
+  function getDefaultModularModulePickerItems() {
+    return MODULE_TYPE_DEFINITIONS
+      .filter((definition) => Boolean(getDevelopModuleTypeDefinition(definition.value)))
+      .map((definition) => ({
+        moduleId: '',
+        value: definition.value,
+        label: definition.label,
+        icon: getModularModuleIcon(definition.value),
+      }));
+  }
+
   function getModularModulePickerItems() {
-    return getCanonicalSavedModules(savedModules)
+    const fromSaved = getCanonicalSavedModules(savedModules)
       .filter((item) => Boolean(getDevelopModuleTypeDefinition(item.moduleType)))
       .map((item) => ({
         moduleId: safeText(item.id),
@@ -5486,6 +6722,7 @@ App.develop = (function () {
         label: safeText(item.name) || getPageModuleTypeMeta(item.moduleType).label,
         icon: getModularModuleIcon(item.moduleType),
       }));
+    return fromSaved.length ? fromSaved : getDefaultModularModulePickerItems();
   }
 
   function buildModularPageGridTemplate(layout) {
@@ -5522,7 +6759,23 @@ App.develop = (function () {
     if (type === 'pod') {
       return safeText(module?.settings?.title) || 'Channel Pod';
     }
-    return safeText(module?.text) || 'No text set';
+    if (type === 'navigation') {
+      const menuName = safeText(module?.settings?.menuName) || safeText(module?.name) || 'Menu';
+      return `${menuName} · ${App.developNavMenu?.getNavMenuSummary?.(module?.settings?.navItems) || 'No menu items'}`;
+    }
+    if (type === 'header' || type === 'heading') {
+      return safeText(module?.settings?.text, 10000)
+        || safeText(module?.text, 10000)
+        || getLandingPageHeadlineLabel(module?.settings?.headlineId || module?.contentId)
+        || 'No text set';
+    }
+    if (type === 'textarea' || type === 'text') {
+      return safeText(module?.settings?.text, 10000)
+        || safeText(module?.settings?.content, 10000)
+        || safeText(module?.text, 10000)
+        || 'No text set';
+    }
+    return safeText(module?.settings?.text, 10000) || safeText(module?.text) || 'No text set';
   }
 
   function getLandingPageMergedContentOverrides(record) {
@@ -5627,10 +6880,24 @@ App.develop = (function () {
     };
   }
 
-  function getLandingPageResolvedTemplateRecord(record) {
+  function getLandingPageResolvedTemplateRecord(record, options = {}) {
     const page = record && typeof record === 'object' ? record : {};
+    if (options.skipTemplateMerge) {
+      return {
+        ...page,
+        layoutSections: getModularEditorLayoutSections(page),
+      };
+    }
     const savedTemplate = getSavedPageTemplateById(page.templateId);
-    if (!savedTemplate) return page;
+    if (!savedTemplate) {
+      return {
+        ...page,
+        layoutSections: getModularEditorLayoutSections(page),
+      };
+    }
+    const rawPageSections = page.layoutSections ?? page.sections;
+    const hasPageLayout = Array.isArray(rawPageSections)
+      || (rawPageSections && typeof rawPageSections === 'object');
     const merged = {
       ...savedTemplate,
       ...page,
@@ -5639,9 +6906,9 @@ App.develop = (function () {
         ...normalizeLandingPageContentOverrides(savedTemplate.contentOverrides),
         ...normalizeLandingPageContentOverrides(page.contentOverrides),
       },
-      layoutSections: normalizePageTemplateLayoutSections(page.layoutSections).length
-        ? normalizePageTemplateLayoutSections(page.layoutSections)
-        : normalizePageTemplateLayoutSections(savedTemplate.layoutSections),
+      layoutSections: hasPageLayout
+        ? getModularEditorLayoutSections(page)
+        : getModularEditorLayoutSections(savedTemplate),
     };
     [
       'primaryColor','backgroundColor','accentColor','formId','leadMagnetId','headlineId','pitchId','ctaId',
@@ -5730,10 +6997,10 @@ App.develop = (function () {
           || 'Table',
         columnsCount: Number(module?.settings?.columnsCount) || 3,
         rowsCount: Number(module?.settings?.rowsCount) || 4,
-        headerColor: safeText(module?.settings?.headerColor) || '#173c61',
+        headerColor: resolveModuleColorValue(module?.settings?.headerColor, '#173c61'),
         headerTextColor: safeText(module?.settings?.headerTextColor) || '#ffffff',
-        borderColor: safeText(module?.settings?.borderColor) || '#d6e6f5',
-        borderThickness: Number(module?.settings?.borderThickness) || 1,
+        borderColor: resolveModuleColorValue(module?.settings?.borderColor, '#d6e6f5'),
+        borderThickness: getTableModuleBorderThickness(module?.settings),
         cellPadding: Number(module?.settings?.cellPadding) || 14,
         striped: module?.settings?.striped !== false,
         compact: Boolean(module?.settings?.compact),
@@ -5745,13 +7012,52 @@ App.develop = (function () {
         ),
       };
     }
-    return safeText(module?.text, 10000);
+    if (type === 'header' || type === 'heading') {
+      return safeText(module?.settings?.text, 10000) || safeText(module?.text, 10000);
+    }
+    if (type === 'navigation') {
+      return module?.settings || {};
+    }
+    if (type === 'textarea' || type === 'text') {
+      return getModularTextBlockHtml(module) || safeText(module?.settings?.text, 10000) || safeText(module?.text, 10000);
+    }
+    return safeText(module?.settings?.text, 10000) || safeText(module?.text, 10000);
+  }
+
+  function getModularPageCanvasStyleVariables(record, sections = []) {
+    const resolvedRecord = record && typeof record === 'object' ? record : {};
+    const canvasStyles = [
+      `--lp-primary:${safeText(resolvedRecord.primaryColor) || DEFAULT_LANDING_PRIMARY};`,
+      `--lp-background:${safeText(resolvedRecord.backgroundColor) || DEFAULT_LANDING_BACKGROUND};`,
+      `--lp-accent:${safeText(resolvedRecord.accentColor) || DEFAULT_LANDING_ACCENT};`,
+    ];
+    const pageBackgroundUrl = getLandingPageAssetUrl(resolvedRecord.backgroundImageId);
+    if (pageBackgroundUrl) {
+      canvasStyles.push(`--lp-page-background-image:url('${safeText(pageBackgroundUrl)}');`);
+      return canvasStyles;
+    }
+    const resolvedSections = Array.isArray(sections) ? sections : [];
+    for (const section of resolvedSections) {
+      const rowStyle = buildSectionRowStyle(section);
+      if (rowStyle.backgroundImage) {
+        canvasStyles.push(`--lp-page-background-image:${rowStyle.backgroundImage};`);
+        if (rowStyle.backgroundSize) canvasStyles.push(`--lp-page-background-size:${rowStyle.backgroundSize};`);
+        if (rowStyle.backgroundPosition) canvasStyles.push(`--lp-page-background-position:${rowStyle.backgroundPosition};`);
+        if (rowStyle.backgroundRepeat) canvasStyles.push(`--lp-page-background-repeat:${rowStyle.backgroundRepeat};`);
+        break;
+      }
+      if (rowStyle.background && rowStyle.background !== 'transparent') {
+        canvasStyles.push(`--lp-background:${safeText(rowStyle.background)};`);
+        break;
+      }
+    }
+    return canvasStyles;
   }
 
   function buildModularLandingPageMarkup(record, options = {}) {
-    const { interactive = false, editableClass = 'develop-landing-editable' } = options;
-    const resolvedRecord = getLandingPageResolvedTemplateRecord(record);
-    const sections = normalizePageTemplateLayoutSections(resolvedRecord.layoutSections);
+    const { interactive = false, editableClass = 'develop-landing-editable', skipTemplateMerge = false } = options;
+    const resolvedRecord = getLandingPageResolvedTemplateRecord(record, { skipTemplateMerge });
+    const sections = getModularEditorLayoutSections(resolvedRecord);
     const attr = (key, label, slot = '') => (
       interactive ? ` data-edit-key="${key}" data-edit-label="${label}"${slot ? ` data-edit-slot="${slot}"` : ''}` : ''
     );
@@ -5762,18 +7068,12 @@ App.develop = (function () {
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
     const baseTemplate = getBaseLandingTemplateById(resolvedRecord.templateId);
-    const canvasStyles = [
-      `--lp-primary:${safeText(resolvedRecord.primaryColor) || DEFAULT_LANDING_PRIMARY};`,
-      `--lp-background:${safeText(resolvedRecord.backgroundColor) || DEFAULT_LANDING_BACKGROUND};`,
-      `--lp-accent:${safeText(resolvedRecord.accentColor) || DEFAULT_LANDING_ACCENT};`,
-    ];
-    const backgroundUrl = getLandingPageAssetUrl(resolvedRecord.backgroundImageId);
-    if (backgroundUrl) canvasStyles.push(`--lp-page-background-image:url('${safeText(backgroundUrl)}');`);
+    const canvasStyles = getModularPageCanvasStyleVariables(resolvedRecord, sections);
     const sectionMarkup = sections.map((section, sectionIndex) => {
       const layout = getModularPageLayoutMeta(section.layout);
       const columns = layout.columns.map((columnDef) => {
         const column = safeText(columnDef.id) || 'col1';
-        const modules = section.modules.filter((module) => safeText(module.column) === column);
+        const modules = getModularSectionModulesForColumn(section, column);
         const moduleMarkup = modules.map((module, moduleIndex) => {
           const moduleKey = `modularModule::${section.id}::${module.id}`;
           const content = buildModularPageModuleContent(resolvedRecord, module);
@@ -5786,10 +7086,7 @@ App.develop = (function () {
             || titleText
             || baseTemplate.headline
           );
-          const textBlockHtml = safeText(
-            module.settings?.content,
-            50000
-          ) || '';
+          const textBlockHtml = getModularTextBlockHtml(module);
           const innerMarkup = (() => {
             if (module.type === 'form') {
               const formFields = Array.isArray(content?.form?.fields) && content.form.fields.length
@@ -5812,6 +7109,11 @@ App.develop = (function () {
                 </label>
               `).join('');
               return `<aside class="develop-template-poll-card" style="background:${escapeHtml(bgColor)};padding:2rem;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.05);"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}><h3 style="margin-top:0;margin-bottom:1.5rem;font-size:1.25rem;">${escapeHtml(question)}</h3><form class="develop-template-runtime-poll-form" data-poll-id="${pollId}"><div class="develop-poll-options">${optionsMarkup}</div><button type="submit" style="margin-top:1rem;width:100%;">${escapeHtml(submitLabel)}</button><div class="develop-poll-status" aria-live="polite" style="margin-top:1rem;font-size:0.9rem;"></div></form></aside>`;
+            }
+            if (module.type === 'navigation') {
+              const navMarkup = App.developNavMenu?.buildNavigationModuleMarkup?.(module.settings || {}, { includeDataAttrs: true })
+                || '<nav class="site-nav"><p class="site-nav-empty">Navigation module</p></nav>';
+              return `<div class="develop-template-navigation-slot"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${navMarkup}</div>`;
             }
             if (module.type === 'button') {
               const sizeMap = {
@@ -5888,16 +7190,25 @@ App.develop = (function () {
                       ? buildResponsiveVideoMarkup({ assetUrl: videoUrl, assetName: 'Video', controls: true }, { className: 'develop-table-video' })
                       : '<div class="develop-template-empty-slot">No video</div>';
                   }
-                  const cellStyle = `padding:${Number(content?.cellPadding) || 14}px;border:${Number(content?.borderThickness) || 1}px solid ${escapeHtml(safeText(content?.borderColor) || '#d6e6f5')};`;
-                  return `<${tag} style="${cellStyle}${rowIndex === 0 ? `background:${escapeHtml(safeText(content?.headerColor) || '#173c61')};color:${escapeHtml(safeText(content?.headerTextColor) || '#ffffff')};` : ''}">${cellInner}</${tag}>`;
+                  const cellStyle = `padding:${Number(content?.cellPadding) || 14}px;${buildTableCellBorderCss(content?.borderThickness, content?.borderColor, '#d6e6f5')}`;
+                  const headerBg = resolveModuleColorValue(content?.headerColor, '#173c61');
+                  const headerStyle = rowIndex === 0
+                    ? `background:${escapeHtml(headerBg)};color:${escapeHtml(safeText(content?.headerTextColor) || '#ffffff')};`
+                    : '';
+                  return `<${tag} style="${cellStyle}${headerStyle}">${cellInner}</${tag}>`;
                 }).join('');
                 const rowStyle = rowIndex > 0 && content?.striped && rowIndex % 2 === 1 ? ' style="background:rgba(11,130,212,0.06);"' : '';
                 return `<tr${rowStyle}>${cellMarkup}</tr>`;
               }).join('');
-              return `<div${editable('develop-template-table-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${content?.caption ? `<div class="develop-template-eyebrow">${escapeHtml(content.caption)}</div>` : ''}<table style="width:100%;border-collapse:collapse;">${rowMarkup}</table></div>`;
+              const tableBorderThickness = getTableModuleBorderThickness({
+                borderThickness: content?.borderThickness,
+                borderWidth: content?.borderWidth,
+              });
+              const tableBorderAttr = tableBorderThickness <= 0 ? ' data-zero-border="true"' : '';
+              return `<div${editable('develop-template-table-slot')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${content?.caption ? `<div class="develop-template-eyebrow">${escapeHtml(content.caption)}</div>` : ''}<table class="develop-module-table"${tableBorderAttr} style="width:100%;border-collapse:collapse;border-spacing:0;${tableBorderThickness <= 0 ? 'border:0!important;' : ''}">${rowMarkup}</table></div>`;
             }
-            if (module.type === 'header') {
-              const headingLevel = safeText(module.settings?.headingLevel).toLowerCase();
+            if (module.type === 'header' || module.type === 'heading') {
+              const headingLevel = safeText(module.settings?.headingLevel || module.settings?.level).toLowerCase();
               const tag = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(headingLevel) ? headingLevel : 'h2';
               const inlineStyle = [
                 module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
@@ -5907,17 +7218,26 @@ App.develop = (function () {
             }
             if (module.type === 'headline') return `<h3${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.headline)}</h3>`;
             if (module.type === 'subheading') return `<h4${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</h4>`;
-            if (module.type === 'textarea') {
-              const inlineStyle = [
-                module.settings?.textColor ? `color:${safeText(module.settings.textColor)};` : '',
-                module.settings?.backgroundColor ? `background:${safeText(module.settings.backgroundColor)};padding:0.5rem 0.75rem;border-radius:12px;` : '',
-                module.settings?.textAlign ? `text-align:${safeText(module.settings.textAlign)};` : '',
-              ].join('');
+            if (module.type === 'textarea' || isModularTextBlockModule(module)) {
+              const inlineStyle = buildModularTextBlockInlineStyle(module.settings);
               return `<div${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}${inlineStyle ? ` style="${inlineStyle}"` : ''}>${textBlockHtml || '<p>No text set</p>'}</div>`;
             }
             if (module.type === 'pitch' || module.type === 'text') return `<p${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || '')}</p>`;
             if (module.type === 'cta') return `<div class="develop-template-cta-row"><button type="button"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Call To Action')}</button></div>`;
             if (module.type === 'eyebrow') return `<div${editable('develop-template-eyebrow')}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || baseTemplate.eyebrow)}</div>`;
+            if (module.type === 'pod') {
+              const podData = buildModularPageModuleContent(resolvedRecord, module);
+              const clickAction = podData.targetPage ? `onclick="if(window.App && App.setActivePage) App.setActivePage('${escapeHtml(podData.targetPage)}');"` : '';
+              return `
+                <div class="pod card-hover"${editable()}${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)} ${clickAction}>
+                  <div class="pod-icon-col"><img src="${escapeHtml(podData.logoUrl || '/images/logos/web.svg')}" class="pod-logo" alt="${escapeHtml(podData.title || 'Pod')} Logo" /></div>
+                  <div class="pod-content">
+                    <h3>${escapeHtml(podData.title || 'Channel Pod')}</h3>
+                    <p>${escapeHtml(podData.description || '')}</p>
+                  </div>
+                </div>
+              `;
+            }
             if (module.type === 'spacer') return '<div style="height:1.25rem;"></div>';
             return `<div class="meta"${attr(moduleKey, 'Module', `module-${sectionIndex}-${moduleIndex}`)}>${escapeHtml(content || titleText || 'Module')}</div>`;
           })();
@@ -5942,8 +7262,13 @@ App.develop = (function () {
         const containerStyleStr = styleObjectToCssText(buildContainerStyle(containerSettings));
         return `<div class="develop-modular-page-column develop-modular-page-column-${column}"${containerStyleStr ? ` style="${escapeHtml(containerStyleStr)}"` : ''}>${moduleMarkup}</div>`;
       }).join('');
-      const rowStyleStr = styleObjectToCssText(buildRowStyle(getSectionRowSettings(section)));
-      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}"${rowStyleStr ? ` style="${escapeHtml(rowStyleStr)}"` : ''}>${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columns}</div></section>`;
+      const rowStyleStr = styleObjectToCssText(buildSectionRowStyle(section));
+      const rowSettings = getSectionRowSettings(section);
+      const overlayStyleStr = styleObjectToCssText(buildRowOverlayScreenStyle(rowSettings.overlayScreen));
+      const overlayMarkup = hasActiveRowOverlayScreen(rowSettings.overlayScreen)
+        ? `<div class="develop-row-overlay-screen"${overlayStyleStr ? ` style="${escapeHtml(overlayStyleStr)}"` : ''}></div>`
+        : '';
+      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}"${rowStyleStr ? ` style="${escapeHtml(rowStyleStr)}"` : ''}>${overlayMarkup}<div class="develop-modular-page-section__content">${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columns}</div></div></section>`;
     }).join('');
     return `<div class="develop-template-canvas develop-modular-page-preview"${attr('backgroundImageId', 'Background Image', 'page-background')} style="${canvasStyles.join(' ')}">${sectionMarkup}</div>`;
   }
@@ -5999,8 +7324,9 @@ App.develop = (function () {
   function buildLandingPageMarkup(record, options = {}) {
     if (!record) return '';
     const resolvedRecord = getLandingPageResolvedTemplateRecord(record);
-    if (normalizePageTemplateKind(resolvedRecord.templateKind) === 'modular' && normalizePageTemplateLayoutSections(resolvedRecord.layoutSections).length) {
-      return buildModularLandingPageMarkup(resolvedRecord, options);
+    const modularSections = getModularEditorLayoutSections(resolvedRecord);
+    if (normalizePageTemplateKind(resolvedRecord.templateKind) === 'modular' && modularSections.length) {
+      return buildModularLandingPageMarkup({ ...resolvedRecord, layoutSections: modularSections }, options);
     }
     const {
       interactive = false,
@@ -7103,19 +8429,24 @@ App.develop = (function () {
           button.appendChild(copySpan);
           button.appendChild(actionSpan);
           button.addEventListener('click', () => {
-            const pageName = `${safeText(template.name) || 'Modular'} Page`;
-            openModularPageTemplateEditor({
-              ...template,
-              id: '',
-              name: pageName,
-              templateId: safeText(template.templateId),
-              layoutSections: normalizePageTemplateLayoutSections(template.layoutSections),
-            }, {
-              mode: 'page',
-              sourceTemplateId: safeText(template.id),
-              targetPage: 'developLandingPagesPage',
-            });
-            modal.close();
+            try {
+              const pageName = `${safeText(template.name) || 'Modular'} Page`;
+              openModularPageTemplateEditor({
+                ...template,
+                id: '',
+                name: pageName,
+                templateId: safeText(template.templateId),
+                pageBackground: template.pageBackground || null,
+                layoutSections: template.layoutSections ?? template.sections ?? [],
+              }, {
+                mode: 'page',
+                sourceTemplateId: safeText(template.id),
+                targetPage: 'developLandingPagesPage',
+              });
+              modal.close();
+            } catch (err) {
+              notify(err.message || 'Could not open page editor', true);
+            }
           });
           list.appendChild(button);
         });
@@ -7143,7 +8474,7 @@ App.develop = (function () {
     loadLandingPageBuilderOptions().catch(() => {
       if (pendingLandingPageFormRecord) applyLandingPageRecordToForm(pendingLandingPageFormRecord);
     });
-    App.setActivePage('developLandingPagesPage');
+    App.setActivePage('developLandingPagesPage', { skipNormalize: true });
   }
 
   function previewCurrentLandingPageForm() {
@@ -7536,8 +8867,12 @@ App.develop = (function () {
         openLandingPagePreview(item);
       });
       const editBtn = App.makeIconButton('edit', 'Edit Page', () => {
-        if (normalizePageTemplateKind(item.templateKind) === 'modular' && normalizePageTemplateLayoutSections(item.layoutSections).length) {
-          openModularPageTemplateEditor(item, {
+        const layoutSections = resolveModularLayoutSectionsForEditor(item);
+        if (normalizePageTemplateKind(item.templateKind) === 'modular' && layoutSections.length) {
+          openModularPageTemplateEditor({
+            ...item,
+            layoutSections,
+          }, {
             mode: 'page',
             sourceTemplateId: safeText(item.templateId),
             targetPage: 'developLandingPagesPage',
@@ -7873,6 +9208,31 @@ App.develop = (function () {
 
   function openModularEmailTemplateEditor(template) {
     if (!template) return;
+    if (App.builder && typeof App.builder.useReactIsland === 'function' && App.builder.useReactIsland()) {
+      App.setActivePage('developTemplatesPage');
+      const mounted = App.builder.mount({
+        surface: 'editor',
+        editorMode: 'template',
+        menuMode: 'templates',
+        record: {
+          ...template,
+          templateKind: 'email',
+          emailSlug: safeText(template.slug || template.emailSlug),
+          pageBackground: template.pageBackground || null,
+          layoutSections: template.layoutSections || [],
+        },
+        onClose: () => {
+          setEmailTemplateEditorVisible(false);
+        },
+        onSaved: async () => {
+          await refresh();
+        },
+      });
+      if (mounted) {
+        setEmailTemplateEditorVisible(false);
+        return;
+      }
+    }
     const builderIdInput = byId('developTemplateEditorIdInput');
     const builderNameInput = byId('developTemplateEditorNameInput');
     const builderSlugInput = byId('developTemplateEditorSlugInput');
@@ -7955,8 +9315,9 @@ App.develop = (function () {
       openEmailTemplatePreviewModal(template);
     });
     const editBtn = App.makeIconButton('edit', 'Edit Template', () => {
-      if ((safeText(template.templateKind).toLowerCase() || 'text') === 'modular') {
-        openModularEmailTemplateEditor(template);
+      const kind = safeText(template.templateKind).toLowerCase() || 'text';
+      if (kind === 'modular' || kind === 'email') {
+        openModularEmailTemplateEditor({ ...template, templateKind: kind === 'email' ? 'email' : 'modular' });
       } else {
         populateEmailTemplateForm(template);
       }
@@ -8068,8 +9429,9 @@ App.develop = (function () {
     const actions = document.createElement('div');
     actions.className = 'page-heading-actions';
     actions.style.justifyContent = 'flex-start';
-    actions.appendChild(App.makeIconButton('view', 'View Template', () => {
+    actions.appendChild(App.makeIconButton('view', 'View Template', async () => {
       if (normalizePageTemplateKind(page.templateKind) === 'modular') {
+        await ensureAssetsLoaded().catch(() => {});
         openModularPageTemplatePreviewModal(page);
       } else {
         openLandingPagePreview(page, { mode: 'template' });
@@ -8726,12 +10088,22 @@ App.develop = (function () {
     }
     if (saveTop) saveTop.textContent = modularPageEditorMode === 'page' ? 'Save Page' : 'Save Modular Template';
     if (saveBottom) saveBottom.textContent = modularPageEditorMode === 'page' ? 'Save Page' : 'Save Modular Template';
+    if (pageHeaderSaveBtn) pageHeaderSaveBtn.textContent = modularPageEditorMode === 'page' ? 'Save Page' : 'Save Template';
     if (closeTop) closeTop.textContent = modularPageEditorMode === 'page' ? 'Back To Pages' : 'Close';
     if (topActions) topActions.classList.toggle('hidden', modularPageEditorMode === 'page');
     if (bottomActions) bottomActions.classList.toggle('hidden', modularPageEditorMode === 'page');
     if (pageHeaderPreviewBtn) pageHeaderPreviewBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
     if (pageHeaderSaveBtn) pageHeaderSaveBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
     if (pageHeaderBackBtn) pageHeaderBackBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
+  }
+
+  function closeModularPageTemplateEditor() {
+    if (App.builder && App.builder.isActive && App.builder.isActive()) {
+      App.builder.unmount();
+    }
+    setPageTemplateEditorVisible(false);
+    modularPageTemplateDraft = null;
+    modularPageEditorOptions = null;
   }
 
   function openModularPageTemplateEditor(template, options = {}) {
@@ -8770,16 +10142,60 @@ App.develop = (function () {
       logoWideId: safeText(source.logoWideId),
       logoSquareId: safeText(source.logoSquareId),
       contentOverrides: normalizeLandingPageContentOverrides(source.contentOverrides),
-      layoutSections: normalizePageTemplateLayoutSections(source.layoutSections).length
-        ? normalizePageTemplateLayoutSections(source.layoutSections)
-        : createDefaultModularPageSections(),
+      layoutSections: resolveModularLayoutSectionsForEditor(source),
     });
     modularPageTemplateDraft = next;
+
+    if (modularPageEditorMode === 'page' && App.builder && App.builder.isActive && App.builder.isActive()) {
+      App.builder.unmount();
+    }
+
+    const useReactBuilder = App.builder
+      && typeof App.builder.useReactIsland === 'function'
+      && App.builder.useReactIsland()
+      && modularPageEditorMode !== 'page';
+
+    if (useReactBuilder) {
+      syncModularPageEditorPlacement();
+      const mounted = App.builder.mount({
+        surface: 'editor',
+        editorMode: modularPageEditorMode,
+        record: {
+          ...source,
+          id: safeText(source.id),
+          name: safeText(source.name, 255) || (modularPageEditorMode === 'page' ? 'Modular Page' : 'Modular Page Template'),
+          templateKind: safeText(source.templateKind) || 'modular',
+          templateId: safeText(options.templateId || source.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id,
+          pageBackground: source.pageBackground || null,
+          layoutSections: source.layoutSections || [],
+          contentOverrides: normalizeLandingPageContentOverrides(source.contentOverrides),
+        },
+        sourceTemplateId: modularPageEditorSourceTemplateId,
+        options: modularPageEditorOptions,
+        onClose: () => {
+          closeModularPageTemplateEditor();
+          if (modularPageEditorMode === 'page') {
+            App.setActivePage('developManageLandingPagesPage');
+          }
+        },
+        onSaved: async () => {
+          await refresh();
+        },
+      });
+      if (mounted) {
+        setPageTemplateEditorVisible(false);
+        if (safeText(options.targetPage)) {
+          App.setActivePage(safeText(options.targetPage), { skipNormalize: true });
+        }
+        return;
+      }
+    }
+
     syncModularPageEditorPlacement();
     syncPageTemplateEditorInputs();
     renderModularPageTemplateEditor();
     if (safeText(options.targetPage)) {
-      App.setActivePage(safeText(options.targetPage));
+      App.setActivePage(safeText(options.targetPage), { skipNormalize: true });
     }
     setPageTemplateEditorVisible(true);
   }
@@ -8908,6 +10324,9 @@ App.develop = (function () {
     host.querySelectorAll('.develop-page-template-row-cell-stack').forEach((node) => {
       node.classList.remove('is-drop-append');
     });
+    host.querySelectorAll('.develop-page-template-row-cell').forEach((node) => {
+      node.classList.remove('is-module-drop-target');
+    });
   }
 
   function getPlacedModuleDropTarget(clientX, clientY, drag) {
@@ -8916,32 +10335,44 @@ App.develop = (function () {
     const target = document.elementFromPoint(clientX, clientY);
     if (!target) return null;
     const stack = target.closest('.develop-page-template-row-cell-stack');
-    if (!stack || !host.contains(stack)) return null;
-    const sectionIndex = Number(stack.dataset.sectionIndex);
-    const column = safeText(stack.dataset.column) || 'col1';
-    if (sectionIndex !== drag.sectionIndex || column !== drag.column) return null;
-    const pill = target.closest('.develop-page-template-module-pill');
-    if (!pill || !stack.contains(pill)) {
+    if (stack && host.contains(stack)) {
+      const sectionIndex = Number(stack.dataset.sectionIndex);
+      const column = safeText(stack.dataset.column) || 'col1';
+      if (sectionIndex !== drag.sectionIndex) return null;
+      const pill = target.closest('.develop-page-template-module-pill');
+      if (!pill || !stack.contains(pill)) {
+        return {
+          type: 'append',
+          stack,
+          sectionIndex,
+          column,
+        };
+      }
+      const moduleIndex = Number(pill.dataset.moduleIndex);
+      if (Number.isNaN(moduleIndex)) return null;
+      if (column === drag.column && moduleIndex === drag.moduleIndex) return null;
+      const rect = pill.getBoundingClientRect();
+      const before = clientY < rect.top + (rect.height / 2);
       return {
-        type: 'append',
-        stack,
+        type: 'module',
+        element: pill,
+        before,
         sectionIndex,
         column,
+        moduleIndex,
       };
     }
-    const moduleIndex = Number(pill.dataset.moduleIndex);
-    if (Number.isNaN(moduleIndex) || moduleIndex === drag.moduleIndex) {
-      return null;
-    }
-    const rect = pill.getBoundingClientRect();
-    const before = clientY < rect.top + (rect.height / 2);
+    const cell = target.closest('.develop-page-template-row-cell');
+    if (!cell || !host.contains(cell)) return null;
+    const sectionIndex = Number(cell.dataset.sectionIndex);
+    const column = safeText(cell.dataset.column) || 'col1';
+    if (sectionIndex !== drag.sectionIndex) return null;
+    const cellStack = cell.querySelector('.develop-page-template-row-cell-stack');
     return {
-      type: 'module',
-      element: pill,
-      before,
+      type: 'append',
+      stack: cellStack || cell,
       sectionIndex,
       column,
-      moduleIndex,
     };
   }
 
@@ -8951,8 +10382,12 @@ App.develop = (function () {
     if (!dropTarget) return null;
     if (dropTarget.type === 'append') {
       dropTarget.stack.classList.add('is-drop-append');
+      const cell = dropTarget.stack.closest('.develop-page-template-row-cell');
+      cell?.classList.add('is-module-drop-target');
     } else if (dropTarget.element) {
       dropTarget.element.classList.add(dropTarget.before ? 'is-drop-before' : 'is-drop-after');
+      const cell = dropTarget.element.closest('.develop-page-template-row-cell');
+      cell?.classList.add('is-module-drop-target');
     }
     return dropTarget;
   }
@@ -8968,21 +10403,22 @@ App.develop = (function () {
     drag.ghost.remove();
     clearPlacedModuleReorderIndicators();
     if (commit && drag.dropTarget) {
+      const targetColumn = safeText(drag.dropTarget.column) || drag.column || 'col1';
       if (drag.dropTarget.type === 'append') {
         moveModularPageModule({
           fromSectionIndex: drag.sectionIndex,
           fromModuleIndex: drag.moduleIndex,
-          toSectionIndex: drag.sectionIndex,
-          toColumn: drag.column,
+          toSectionIndex: drag.dropTarget.sectionIndex,
+          toColumn: targetColumn,
           append: true,
         });
       } else {
         moveModularPageModule({
           fromSectionIndex: drag.sectionIndex,
           fromModuleIndex: drag.moduleIndex,
-          toSectionIndex: drag.sectionIndex,
+          toSectionIndex: drag.dropTarget.sectionIndex,
           toModuleIndex: drag.dropTarget.before ? drag.dropTarget.moduleIndex : drag.dropTarget.moduleIndex + 1,
-          toColumn: drag.column,
+          toColumn: targetColumn,
         });
       }
       renderModularPageTemplateEditor();
@@ -9121,29 +10557,40 @@ App.develop = (function () {
     window.addEventListener('pointercancel', drag.onPointerUp);
   }
 
-  function openModularPageModulePicker(sectionIndex, column) {
+  async function openModularPageModulePicker(sectionIndex, column) {
     closeModularPageModulePicker();
+    if (!savedModules.length) {
+      await loadSavedModules().catch(() => {});
+    }
     const panel = document.createElement('div');
     panel.className = 'develop-module-picker-panel';
     const pParser = new DOMParser();
     const pDoc = pParser.parseFromString(`
       <div class="develop-module-picker-header">
-        <div>
+        <div class="develop-module-picker-header-copy">
           <div class="develop-module-picker-title">Add Module</div>
           <div class="develop-module-picker-subtitle">Drag a module into any row cell, or click one to add it here.</div>
         </div>
-        <button type="button" class="develop-module-picker-close" aria-label="Close module picker">Close</button>
       </div>
       <div class="develop-module-picker-grid"></div>
     `, 'text/html');
     panel.textContent = '';
     Array.from(pDoc.body.childNodes).forEach(n => panel.appendChild(n.cloneNode(true)));
-    const closeBtn = panel.querySelector('.develop-module-picker-close');
-    const grid = panel.querySelector('.develop-module-picker-grid');
-    closeBtn?.addEventListener('click', () => {
+    const pickerHeader = panel.querySelector('.develop-module-picker-header');
+    const closeBtn = App.makeIconButton('close', 'Close', () => {
       closeModularPageModulePicker();
     });
-    getModularModulePickerItems().forEach((item) => {
+    closeBtn.classList.add('develop-module-picker-close');
+    pickerHeader?.appendChild(closeBtn);
+    const grid = panel.querySelector('.develop-module-picker-grid');
+    const pickerItems = getModularModulePickerItems();
+    if (!pickerItems.length && grid) {
+      const empty = document.createElement('p');
+      empty.className = 'develop-module-picker-subtitle';
+      empty.textContent = 'No modules are available yet. Add modules under Builder: Modules, then try again.';
+      grid.appendChild(empty);
+    }
+    pickerItems.forEach((item) => {
       const tile = document.createElement('button');
       tile.type = 'button';
       tile.className = 'develop-module-picker-tile';
@@ -9191,7 +10638,13 @@ App.develop = (function () {
     const nextModule = nextSection?.modules?.[moduleIndex];
     if (!nextModule) return false;
     nextModule.name = safeText(panel.querySelector('#developPageModuleEditorNameInput')?.value, 255);
-    nextModule.settings = getDevelopModuleSettingsFromHost(nextModule.type, { prefix: 'developPageModuleEditorField' });
+    nextModule.settings = getDevelopModuleSettingsFromHost(nextModule.type, {
+      prefix: 'developPageModuleEditorField',
+      hostElement: panel.querySelector('#developPageModuleEditorFields') || panel,
+    });
+    if (nextModule.type === 'table') {
+      nextModule.settings = syncTableModuleBorderSettings(nextModule.settings);
+    }
     if (nextModule.type === 'image' || nextModule.type === 'logo-wide' || nextModule.type === 'logo-square') {
       nextModule.assetId = safeText(nextModule.settings?.imageAssetId || nextModule.assetId);
     }
@@ -9204,7 +10657,7 @@ App.develop = (function () {
     return true;
   }
 
-  function openModularPageModuleEditor(sectionIndex, moduleIndex) {
+  async function openModularPageModuleEditor(sectionIndex, moduleIndex) {
     if (!modularPageTemplateDraft) return;
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
     const section = sections[sectionIndex];
@@ -9217,6 +10670,7 @@ App.develop = (function () {
     }
 
     closeModularPageModuleEditor();
+    await ensureAssetsLoaded().catch(() => {});
     const panel = document.createElement('div');
     panel.className = 'develop-module-editor-modal';
     const eParser = new DOMParser();
@@ -9228,7 +10682,7 @@ App.develop = (function () {
             <h3>${escapeHtml(getModularModuleDisplayName(module) || definition.label)}</h3>
             <p>${escapeHtml(definition.label)} · page-specific settings</p>
           </div>
-          <button type="button" class="develop-module-editor-modal__close">Close</button>
+          <button type="button" class="develop-module-editor-modal__close btn btn-ghost">Close</button>
         </div>
         <div class="develop-module-editor-modal__body">
           <label class="stack-form">
@@ -9292,11 +10746,19 @@ App.develop = (function () {
     nextSection.containerSettings[columnId] = {
       margin: safeText(panel.querySelector('#developContainerMarginInput')?.value),
       padding: safeText(panel.querySelector('#developContainerPaddingInput')?.value),
-      backgroundColor: safeText(panel.querySelector('#developContainerBackgroundColorInput')?.value),
-      backgroundImageId: safeText(panel.querySelector('#developContainerBackgroundImageInput')?.value),
       borderColor: safeText(panel.querySelector('#developContainerBorderColorInput')?.value),
       borderThickness: safeText(panel.querySelector('#developContainerBorderThicknessInput')?.value),
       borderRadius: safeText(panel.querySelector('#developContainerBorderRadiusInput')?.value),
+      ...(() => {
+        const background = readModularBackgroundFromPanel(panel, 'developContainerBackground');
+        return {
+          background,
+          backgroundColor: background.mode === 'color'
+            ? safeText(background.color)
+            : (background.mode === 'transparent' ? 'transparent' : ''),
+          backgroundImageId: background.mode === 'image' ? safeText(background.imageAssetId) : '',
+        };
+      })(),
     };
     modularPageTemplateDraft.layoutSections = nextSections;
     closeModularContainerEditor();
@@ -9318,13 +10780,23 @@ App.develop = (function () {
     const nextSections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
     let nextSection = nextSections[sectionIndex];
     if (!nextSection) return false;
-    const selectedButton = panel.querySelector('[data-row-layout-option].is-selected');
-    const selectedLayout = safeText(selectedButton?.getAttribute('data-row-layout-option')) || getModularPageLayoutMeta(nextSection.layout).value;
+    const selectedLayout = (typeof editor.getSelectedLayout === 'function' ? editor.getSelectedLayout() : '')
+      || safeText(panel.querySelector('[data-row-layout-option].is-selected')?.getAttribute('data-row-layout-option'))
+      || getModularPageLayoutMeta(nextSection.layout).value;
     nextSection = remapSectionToLayout(nextSection, selectedLayout);
     nextSection.rowSettings = {
       margin: safeText(panel.querySelector('#developRowMarginInput')?.value),
       padding: safeText(panel.querySelector('#developRowPaddingInput')?.value),
-      backgroundColor: safeText(panel.querySelector('#developRowBackgroundColorInput')?.value),
+      ...(() => {
+        const background = readRowBackgroundFromPanel(panel);
+        return {
+          background,
+          backgroundColor: background.mode === 'color'
+            ? safeText(background.color)
+            : (background.mode === 'transparent' ? 'transparent' : ''),
+        };
+      })(),
+      overlayScreen: readRowOverlayScreenFromPanel(panel),
     };
     nextSections[sectionIndex] = nextSection;
     modularPageTemplateDraft.layoutSections = nextSections;
@@ -9341,12 +10813,13 @@ App.develop = (function () {
     return changed;
   }
 
-  function openModularRowEditor(sectionIndex) {
+  async function openModularRowEditor(sectionIndex) {
     if (!modularPageTemplateDraft) return;
+    await ensureAssetsLoaded();
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
     const section = sections[sectionIndex];
     if (!section) return;
-    const settings = { ...getSectionRowSettings(section) };
+    const settings = normalizeRowSettings(getSectionRowSettings(section));
     const activeLayout = getModularPageLayoutMeta(section.layout).value;
     closeModularRowEditor();
     const panel = document.createElement('div');
@@ -9360,7 +10833,7 @@ App.develop = (function () {
             <h3>Row Settings</h3>
             <p>${escapeHtml(safeText(section.title) || `Row ${sectionIndex + 1}`)} · page-specific styling</p>
           </div>
-          <button type="button" class="develop-module-editor-modal__close">Close</button>
+          <button type="button" class="develop-module-editor-modal__close btn btn-ghost">Close</button>
         </div>
         <div class="develop-module-editor-modal__body">
           <div class="stack-form" style="margin-bottom:1rem;">
@@ -9382,28 +10855,30 @@ App.develop = (function () {
               <span>Padding</span>
               <input id="developRowPaddingInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.padding))}" />
             </label>
-            <label class="stack-form">
-              <span>Background Color</span>
-              <input id="developRowBackgroundColorInput" type="color" value="${escapeHtml(safeText(settings.backgroundColor) || '#dbe4ec')}" />
-            </label>
           </div>
-          <div class="develop-container-editor-preview">
+          ${buildRowBackgroundControlsHtml(settings.background)}
+          <div class="develop-container-editor-preview develop-module-editor-modal__preview">
             <div class="develop-container-editor-preview__label">Preview</div>
-            <div id="developRowEditorPreviewBox" class="develop-container-editor-preview__box">Row preview</div>
-          </div>
-          <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <button type="button" id="developRowSettingsResetBtn" class="btn">Reset</button>
-            <div style="display: flex; gap: 0.75rem;">
-              <button type="button" id="developRowSettingsCancelBtn" class="btn">Cancel</button>
-              <button type="button" id="developRowSettingsSaveBtn" class="btn btn-primary">Save Row</button>
+            <div id="developRowEditorPreviewBox" class="develop-container-editor-preview__box develop-row-editor-preview">
+              <div id="developRowEditorPreviewOverlay" class="develop-row-overlay-screen"></div>
+              <div id="developRowEditorPreviewColumns" class="develop-row-editor-preview__columns"></div>
             </div>
+          </div>
+        </div>
+        <div class="develop-module-editor-modal__footer">
+          <button type="button" id="developRowSettingsResetBtn" class="btn">Reset</button>
+          <div class="develop-module-editor-modal__footer-actions">
+            <button type="button" id="developRowSettingsCancelBtn" class="btn">Cancel</button>
+            <button type="button" id="developRowSettingsSaveBtn" class="btn btn-primary">Save Row</button>
           </div>
         </div>
       </div>
     `, 'text/html');
     panel.textContent = '';
     Array.from(rDoc.body.childNodes).forEach(n => panel.appendChild(n.cloneNode(true)));
+    mountRowOverlayScreenControls(panel, settings.overlayScreen);
     document.body.appendChild(panel);
+    markDevelopModuleEditorDialogExpanded(panel);
     const close = () => closeModularRowEditor();
     panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
     panel.querySelector('.develop-module-editor-modal__close')?.addEventListener('click', close);
@@ -9415,9 +10890,33 @@ App.develop = (function () {
       const previewSettings = {
         margin: safeText(panel.querySelector('#developRowMarginInput')?.value),
         padding: safeText(panel.querySelector('#developRowPaddingInput')?.value),
-        backgroundColor: safeText(panel.querySelector('#developRowBackgroundColorInput')?.value),
+        background: readRowBackgroundFromPanel(panel),
+        overlayScreen: readRowOverlayScreenFromPanel(panel),
       };
       Object.assign(preview.style, buildRowStyle(previewSettings));
+      const overlay = panel.querySelector('#developRowEditorPreviewOverlay');
+      if (overlay) {
+        const overlayStyle = buildRowOverlayScreenStyle(previewSettings.overlayScreen);
+        Object.keys(overlay.style).forEach((key) => {
+          overlay.style[key] = '';
+        });
+        Object.assign(overlay.style, overlayStyle);
+        overlay.hidden = !hasActiveRowOverlayScreen(previewSettings.overlayScreen);
+      }
+      const columnsHost = panel.querySelector('#developRowEditorPreviewColumns');
+      if (columnsHost) {
+        const layoutValue = selectedLayout || activeLayout;
+        columnsHost.style.gridTemplateColumns = buildModularPageGridTemplate(layoutValue);
+        const columnCount = getModularPageLayoutMeta(layoutValue).columns.length;
+        while (columnsHost.children.length < columnCount) {
+          const cell = document.createElement('div');
+          cell.className = 'develop-row-editor-preview__column';
+          columnsHost.appendChild(cell);
+        }
+        while (columnsHost.children.length > columnCount) {
+          columnsHost.lastElementChild?.remove();
+        }
+      }
     };
     panel.querySelectorAll('[data-row-layout-option]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -9425,19 +10924,97 @@ App.develop = (function () {
         panel.querySelectorAll('[data-row-layout-option]').forEach((node) => {
           node.classList.toggle('is-selected', node === button);
         });
+        updatePreview();
       });
     });
+    let rowImagePicker = null;
+    let rowOverlayImagePicker = null;
     panel.querySelector('#developRowSettingsResetBtn')?.addEventListener('click', () => {
       panel.querySelector('#developRowMarginInput').value = '';
       panel.querySelector('#developRowPaddingInput').value = '';
-      panel.querySelector('#developRowBackgroundColorInput').value = '#dbe4ec';
+      panel.querySelector('#developRowBackgroundModeSelect').value = 'none';
+      panel.querySelector('#developRowBackgroundColorPrimaryInput').value = '#ffffff';
+      panel.querySelector('#developRowBackgroundColorSecondaryInput').value = '#eaf4ff';
+      panel.querySelector('#developRowBackgroundStyleSelect').value = '';
+      rowImagePicker?.clear();
+      panel.querySelector('#developRowBackgroundImageUrlInput').value = '';
+      panel.querySelector('#developRowOverlayScreenModeSelect').value = 'none';
+      panel.querySelector('#developRowOverlayScreenColorPrimaryInput').value = '#ffffff';
+      panel.querySelector('#developRowOverlayScreenColorSecondaryInput').value = '#eaf4ff';
+      panel.querySelector('#developRowOverlayScreenStyleSelect').value = '';
+      panel.querySelector('#developRowOverlayScreenImageUrlInput').value = '';
+      panel.querySelector('#developRowOverlayScreenOpacityRange').value = '100';
+      const overlayOpacityValue = panel.querySelector('#developRowOverlayScreenOpacityValue');
+      if (overlayOpacityValue) overlayOpacityValue.textContent = '100%';
+      rowOverlayImagePicker?.clear();
+      syncRowBackgroundControlVisibility(panel);
+      syncRowOverlayScreenControlVisibility(panel);
       selectedLayout = activeLayout;
       panel.querySelectorAll('[data-row-layout-option]').forEach((node) => {
         node.classList.toggle('is-selected', safeText(node.getAttribute('data-row-layout-option')) === activeLayout);
       });
       updatePreview();
     });
-    ['#developRowMarginInput', '#developRowPaddingInput', '#developRowBackgroundColorInput'].forEach((selector) => {
+    const rowImagePickerHost = panel.querySelector('#developRowBackgroundImagePickerHost');
+    rowImagePicker = rowImagePickerHost
+      ? mountDevelopInlineImagePicker(rowImagePickerHost, {
+        inputId: 'developRowBackgroundImageAssetInput',
+        initialValue: safeText(settings.background?.imageAssetId),
+        title: 'Background Image',
+        onChange: (assetId) => {
+          const urlInput = panel.querySelector('#developRowBackgroundImageUrlInput');
+          if (urlInput && assetId) urlInput.value = getLandingPageAssetUrl(assetId) || urlInput.value;
+          updatePreview();
+        },
+      })
+      : null;
+    const rowOverlayImagePickerHost = panel.querySelector('#developRowOverlayScreenImagePickerHost');
+    rowOverlayImagePicker = rowOverlayImagePickerHost
+      ? mountDevelopInlineImagePicker(rowOverlayImagePickerHost, {
+        inputId: 'developRowOverlayScreenImageAssetInput',
+        initialValue: safeText(settings.overlayScreen?.background?.imageAssetId),
+        title: 'Overlay Image',
+        onChange: (assetId) => {
+          const urlInput = panel.querySelector('#developRowOverlayScreenImageUrlInput');
+          if (urlInput && assetId) urlInput.value = getLandingPageAssetUrl(assetId) || urlInput.value;
+          updatePreview();
+        },
+      })
+      : null;
+    syncRowOverlayScreenControlVisibility(panel);
+    panel.querySelector('#developRowOverlayScreenModeSelect')?.addEventListener('change', () => {
+      syncRowOverlayScreenControlVisibility(panel);
+      updatePreview();
+    });
+    const overlayOpacityRange = panel.querySelector('#developRowOverlayScreenOpacityRange');
+    const overlayOpacityValue = panel.querySelector('#developRowOverlayScreenOpacityValue');
+    overlayOpacityRange?.addEventListener('input', () => {
+      if (overlayOpacityValue) overlayOpacityValue.textContent = `${safeText(overlayOpacityRange.value) || '0'}%`;
+      updatePreview();
+    });
+    [
+      '#developRowOverlayScreenColorPrimaryInput',
+      '#developRowOverlayScreenColorSecondaryInput',
+      '#developRowOverlayScreenStyleSelect',
+      '#developRowOverlayScreenImageUrlInput',
+    ].forEach((selector) => {
+      const input = panel.querySelector(selector);
+      input?.addEventListener('input', updatePreview);
+      input?.addEventListener('change', updatePreview);
+    });
+    syncRowBackgroundControlVisibility(panel);
+    panel.querySelector('#developRowBackgroundModeSelect')?.addEventListener('change', () => {
+      syncRowBackgroundControlVisibility(panel);
+      updatePreview();
+    });
+    [
+      '#developRowMarginInput',
+      '#developRowPaddingInput',
+      '#developRowBackgroundColorPrimaryInput',
+      '#developRowBackgroundColorSecondaryInput',
+      '#developRowBackgroundStyleSelect',
+      '#developRowBackgroundImageUrlInput',
+    ].forEach((selector) => {
       const input = panel.querySelector(selector);
       input?.addEventListener('input', updatePreview);
       input?.addEventListener('change', updatePreview);
@@ -9446,7 +11023,11 @@ App.develop = (function () {
     panel.querySelector('#developRowSettingsSaveBtn')?.addEventListener('click', () => {
       saveActiveModularRowEditor();
     });
-    activeModularRowEditor = { panel, sectionIndex };
+    activeModularRowEditor = {
+      panel,
+      sectionIndex,
+      getSelectedLayout: () => selectedLayout || activeLayout,
+    };
   }
 
   async function openModularContainerEditor(sectionIndex, columnId) {
@@ -9455,14 +11036,8 @@ App.develop = (function () {
     const sections = normalizePageTemplateLayoutSections(modularPageTemplateDraft.layoutSections);
     const section = sections[sectionIndex];
     if (!section) return;
-    const settings = { ...getSectionContainerSettings(section, columnId) };
+    const settings = normalizeContainerSettings(getSectionContainerSettings(section, columnId));
     closeModularContainerEditor();
-    const imageOptions = (Array.isArray(state.assets) ? state.assets : [])
-      .filter((asset) => safeText(asset?.assetType) === 'Image')
-      .map((asset) => ({
-        value: safeText(asset.id),
-        label: assetLabel(asset, safeText(asset.id)),
-      }));
     const panel = document.createElement('div');
     panel.className = 'develop-module-editor-modal';
     const cParser = new DOMParser();
@@ -9474,7 +11049,7 @@ App.develop = (function () {
             <h3>Container Settings</h3>
             <p>${escapeHtml(safeText(columnId).toUpperCase() || 'Container')} · page-specific styling</p>
           </div>
-          <button type="button" class="develop-module-editor-modal__close">Close</button>
+          <button type="button" class="develop-module-editor-modal__close btn btn-ghost">Close</button>
         </div>
         <div class="develop-module-editor-modal__body">
           <div class="grid-form">
@@ -9485,17 +11060,6 @@ App.develop = (function () {
             <label class="stack-form">
               <span>Padding</span>
               <input id="developContainerPaddingInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.padding))}" />
-            </label>
-            <label class="stack-form">
-              <span>Background Color</span>
-              <input id="developContainerBackgroundColorInput" type="color" value="${escapeHtml(safeText(settings.backgroundColor) || '#f0f8ff')}" />
-            </label>
-            <label class="stack-form">
-              <span>Background Image</span>
-              <select id="developContainerBackgroundImageInput">
-                <option value="">None</option>
-                ${imageOptions.map((item) => `<option value="${escapeHtml(item.value)}"${safeText(settings.backgroundImageId) === item.value ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('')}
-              </select>
             </label>
             <label class="stack-form">
               <span>Border Color</span>
@@ -9510,16 +11074,17 @@ App.develop = (function () {
               <input id="developContainerBorderRadiusInput" type="number" min="0" step="1" value="${escapeHtml(safeText(settings.borderRadius))}" />
             </label>
           </div>
-          <div class="develop-container-editor-preview">
+          ${buildModularBackgroundControlsHtml('developContainerBackground', settings.background)}
+          <div class="develop-container-editor-preview develop-module-editor-modal__preview">
             <div class="develop-container-editor-preview__label">Preview</div>
             <div id="developContainerEditorPreviewBox" class="develop-container-editor-preview__box">Container preview</div>
           </div>
-          <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <button type="button" id="developContainerSettingsResetBtn" class="btn">Reset</button>
-            <div style="display: flex; gap: 0.75rem;">
-              <button type="button" id="developContainerSettingsCancelBtn" class="btn">Cancel</button>
-              <button type="button" id="developContainerSettingsSaveBtn" class="btn btn-primary">Save Container</button>
-            </div>
+        </div>
+        <div class="develop-module-editor-modal__footer">
+          <button type="button" id="developContainerSettingsResetBtn" class="btn">Reset</button>
+          <div class="develop-module-editor-modal__footer-actions">
+            <button type="button" id="developContainerSettingsCancelBtn" class="btn">Cancel</button>
+            <button type="button" id="developContainerSettingsSaveBtn" class="btn btn-primary">Save Container</button>
           </div>
         </div>
       </div>
@@ -9527,29 +11092,53 @@ App.develop = (function () {
     panel.textContent = '';
     Array.from(cDoc.body.childNodes).forEach(n => panel.appendChild(n.cloneNode(true)));
     document.body.appendChild(panel);
+    markDevelopModuleEditorDialogExpanded(panel);
     const close = () => closeModularContainerEditor();
     panel.querySelector('.develop-module-editor-modal__backdrop')?.addEventListener('click', close);
     panel.querySelector('.develop-module-editor-modal__close')?.addEventListener('click', close);
     panel.querySelector('#developContainerSettingsCancelBtn')?.addEventListener('click', close);
+    let containerImagePicker = null;
     const updatePreview = () => {
       const preview = panel.querySelector('#developContainerEditorPreviewBox');
       if (!preview) return;
       const previewSettings = {
         margin: safeText(panel.querySelector('#developContainerMarginInput')?.value),
         padding: safeText(panel.querySelector('#developContainerPaddingInput')?.value),
-        backgroundColor: safeText(panel.querySelector('#developContainerBackgroundColorInput')?.value),
-        backgroundImageId: safeText(panel.querySelector('#developContainerBackgroundImageInput')?.value),
         borderColor: safeText(panel.querySelector('#developContainerBorderColorInput')?.value),
         borderThickness: safeText(panel.querySelector('#developContainerBorderThicknessInput')?.value),
         borderRadius: safeText(panel.querySelector('#developContainerBorderRadiusInput')?.value),
+        background: readModularBackgroundFromPanel(panel, 'developContainerBackground'),
       };
       Object.assign(preview.style, buildContainerStyle(previewSettings));
     };
+    const containerImagePickerHost = panel.querySelector('#developContainerBackgroundImagePickerHost');
+    containerImagePicker = containerImagePickerHost
+      ? mountDevelopInlineImagePicker(containerImagePickerHost, {
+        inputId: 'developContainerBackgroundImageAssetInput',
+        initialValue: safeText(settings.background?.imageAssetId || settings.backgroundImageId),
+        title: 'Container Background Image',
+        onChange: (assetId) => {
+          const urlInput = panel.querySelector('#developContainerBackgroundImageUrlInput');
+          if (urlInput && assetId) urlInput.value = getLandingPageAssetUrl(assetId) || urlInput.value;
+          updatePreview();
+        },
+      })
+      : null;
+    syncModularBackgroundControlVisibility(panel, 'developContainerBackground');
+    panel.querySelector('#developContainerBackgroundModeSelect')?.addEventListener('change', () => {
+      syncModularBackgroundControlVisibility(panel, 'developContainerBackground');
+      updatePreview();
+    });
     panel.querySelector('#developContainerSettingsResetBtn')?.addEventListener('click', () => {
       panel.querySelector('#developContainerMarginInput').value = '';
       panel.querySelector('#developContainerPaddingInput').value = '';
-      panel.querySelector('#developContainerBackgroundColorInput').value = '#f0f8ff';
-      panel.querySelector('#developContainerBackgroundImageInput').value = '';
+      panel.querySelector('#developContainerBackgroundModeSelect').value = 'none';
+      panel.querySelector('#developContainerBackgroundColorPrimaryInput').value = '#ffffff';
+      panel.querySelector('#developContainerBackgroundColorSecondaryInput').value = '#eaf4ff';
+      panel.querySelector('#developContainerBackgroundStyleSelect').value = '';
+      containerImagePicker?.clear();
+      panel.querySelector('#developContainerBackgroundImageUrlInput').value = '';
+      syncModularBackgroundControlVisibility(panel, 'developContainerBackground');
       panel.querySelector('#developContainerBorderColorInput').value = '#d6e6f5';
       panel.querySelector('#developContainerBorderThicknessInput').value = '';
       panel.querySelector('#developContainerBorderRadiusInput').value = '';
@@ -9558,8 +11147,10 @@ App.develop = (function () {
     [
       '#developContainerMarginInput',
       '#developContainerPaddingInput',
-      '#developContainerBackgroundColorInput',
-      '#developContainerBackgroundImageInput',
+      '#developContainerBackgroundColorPrimaryInput',
+      '#developContainerBackgroundColorSecondaryInput',
+      '#developContainerBackgroundStyleSelect',
+      '#developContainerBackgroundImageUrlInput',
       '#developContainerBorderColorInput',
       '#developContainerBorderThicknessInput',
       '#developContainerBorderRadiusInput',
@@ -9641,7 +11232,10 @@ App.develop = (function () {
     if (fromModuleIndex < 0 || fromModuleIndex >= fromSection.modules.length) return;
     const [moved] = fromSection.modules.splice(fromModuleIndex, 1);
     if (!moved) return;
-    moved.column = safeText(toColumn) || moved.column || 'main';
+    moved.column = safeText(toColumn)
+      || moved.column
+      || getModularPageLayoutColumnIds(toSection.layout)[0]
+      || 'col1';
 
     let insertIndex = typeof toModuleIndex === 'number' ? toModuleIndex : toSection.modules.length;
     if (append || typeof toModuleIndex !== 'number') insertIndex = toSection.modules.length;
@@ -9709,7 +11303,8 @@ App.develop = (function () {
       const item = document.createElement('div');
       item.className = 'develop-page-template-workspace-row';
       item.dataset.sectionIndex = String(sectionIndex);
-      Object.assign(item.style, buildRowStyle(getSectionRowSettings(section)));
+      Object.assign(item.style, buildSectionRowStyle(section));
+      appendRowOverlayScreenElement(item, section);
       item.draggable = true;
       item.title = 'Drag to reorder row';
       item.addEventListener('dragstart', (event) => {
@@ -9815,7 +11410,10 @@ App.develop = (function () {
         Object.assign(columnDropZone.style, buildContainerStyle(containerSettings));
         const cellModules = section.modules
           .map((module, originalIndex) => ({ module, originalIndex }))
-          .filter((entry) => safeText(entry.module?.column) === columnId);
+          .filter((entry) => {
+            const moduleColumn = safeText(entry.module?.column);
+            return moduleColumn === columnId || mapNormieColumnToLegacy(moduleColumn, section.layout) === columnId;
+          });
         const stack = document.createElement('div');
         stack.className = 'develop-page-template-row-cell-stack';
         stack.dataset.sectionIndex = String(sectionIndex);
@@ -9863,12 +11461,11 @@ App.develop = (function () {
               openModularPageModuleEditor(sectionIndex, originalIndex);
             });
             pill.addEventListener('pointerdown', (event) => {
-              if (event.pointerType === 'mouse' && event.button !== 0) return;
+              if (event.button !== 0) return;
               const interactiveChild = event.target instanceof Element
                 ? event.target.closest('.develop-page-template-module-pill-action')
                 : null;
               if (interactiveChild) return;
-              if (event.pointerType !== 'mouse') return;
               event.preventDefault();
               event.stopPropagation();
               startPlacedPageModulePointerDrag(pill, {
@@ -9911,10 +11508,10 @@ App.develop = (function () {
         addBtn.textContent = '';
         Array.from(abDoc.body.childNodes).forEach(n => addBtn.appendChild(n.cloneNode(true)));
         addBtn.title = 'Add module';
-        addBtn.addEventListener('click', (event) => {
+        addBtn.addEventListener('click', async (event) => {
           event.preventDefault();
           event.stopPropagation();
-          openModularPageModulePicker(sectionIndex, columnId);
+          await openModularPageModulePicker(sectionIndex, columnId);
         });
         columnDropZone.appendChild(settingsBtn);
         columnDropZone.appendChild(stack);
@@ -9927,15 +11524,347 @@ App.develop = (function () {
     });
   }
 
-  function buildModularPageTemplatePayload() {
+  function backgroundSettingsForSave(background) {
+    const bg = normalizeBackgroundSettings(background);
+    if (bg.mode === 'transparent') {
+      return {
+        ...bg,
+        mode: 'color',
+        color: 'transparent',
+      };
+    }
+    return bg;
+  }
+
+  function layoutSectionsForSave(sections) {
+    return normalizePageTemplateLayoutSections(sections).map((section) => {
+      const legacyLayout = resolveLegacySectionLayout(section);
+      const normieLayout = resolveNormieLayoutFromSection({ ...section, layout: legacyLayout });
+      const rowSettings = normalizeRowSettings(section.rowSettings);
+      const columnIds = getModularPageLayoutMeta(legacyLayout).columns.map((column) => safeText(column.id) || 'col1');
+      const containerSettings = normalizeContainerSettingsMap(section.containerSettings, columnIds);
+      const normieColumnKeys = getNormieLayoutColumnKeys(legacyLayout);
+      const cellBackgrounds = {};
+      columnIds.forEach((colId, columnIndex) => {
+        const normieKey = normieColumnKeys[columnIndex] || normieColumnKeys[0] || 'main';
+        const settings = containerSettings[colId] || createDefaultContainerSettings();
+        cellBackgrounds[normieKey] = backgroundSettingsForSave(
+          normalizeBackgroundSettings(settings.background, settings.backgroundColor, settings.backgroundImageId)
+        );
+      });
+      const normieModules = modulesForNormieSave(section, legacyLayout);
+      const cellPadding = {};
+      const cellBorderWidth = {};
+      const cellBorderColor = {};
+      const cellBorderRadius = {};
+      const cellVerticalMargin = {};
+      columnIds.forEach((colId, columnIndex) => {
+        const normieKey = normieColumnKeys[columnIndex] || normieColumnKeys[0] || 'main';
+        const settings = containerSettings[colId] || createDefaultContainerSettings();
+        cellPadding[normieKey] = safeText(settings.padding) || '18';
+        cellBorderWidth[normieKey] = safeNumericSetting(settings.borderThickness, '1');
+        cellBorderColor[normieKey] = safeText(settings.borderColor) || '#d9e4ef';
+        cellBorderRadius[normieKey] = safeText(settings.borderRadius) || '24';
+        cellVerticalMargin[normieKey] = safeText(settings.margin) || '0';
+      });
+      return {
+        ...section,
+        layout: normieLayout,
+        modules: normieModules,
+        rowSettings: {
+          ...rowSettings,
+          background: backgroundSettingsForSave(rowSettings.background),
+          overlayScreen: overlayScreenSettingsForSave(rowSettings.overlayScreen),
+        },
+        background: backgroundSettingsForSave(normalizeBackgroundSettings(rowSettings.background, rowSettings.backgroundColor)),
+        overlayScreen: overlayScreenSettingsForSave(rowSettings.overlayScreen),
+        cellBackgrounds,
+        cellPadding,
+        cellBorderWidth,
+        cellBorderColor,
+        cellBorderRadius,
+        cellVerticalMargin,
+      };
+    });
+  }
+
+  function buildModularPageTemplatePreviewRecord() {
+    flushActiveModularEditors();
+    const draft = modularPageTemplateDraft && typeof modularPageTemplateDraft === 'object'
+      ? modularPageTemplateDraft
+      : {};
+    const draftSections = draft.layoutSections;
     return {
-      id: safeText(byId('developPageTemplateEditorIdInput')?.value),
-      name: safeText(byId('developPageTemplateEditorNameInput')?.value, 255),
+      ...draft,
+      id: safeText(byId('developPageTemplateEditorIdInput')?.value) || safeText(draft.id),
+      name: safeText(byId('developPageTemplateEditorNameInput')?.value, 255) || safeText(draft.name),
       templateKind: 'modular',
       templateId: modularPageEditorMode === 'page'
         ? (safeText(byId('developPageTemplateEditorBaseTemplateSelect')?.value) || modularPageEditorSourceTemplateId || selectedTemplateId || LANDING_TEMPLATES[0].id)
+        : (safeText(draft.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id),
+      layoutSections: layoutSectionsForSave(draftSections),
+    };
+  }
+
+  function syncModularPageDraftFromEditorInputs() {
+    if (!modularPageTemplateDraft) return;
+    const name = safeText(byId('developPageTemplateEditorNameInput')?.value, 255);
+    if (name) modularPageTemplateDraft.name = name;
+    const id = safeText(byId('developPageTemplateEditorIdInput')?.value);
+    if (id) modularPageTemplateDraft.id = id;
+  }
+
+  function resolveLandingPageBaseTemplateId() {
+    const modularTemplateId = safeText(byId('developPageTemplateEditorBaseTemplateSelect')?.value);
+    const selectedModularTemplate = modularTemplateId ? getTemplateById(modularTemplateId) : null;
+    if (safeText(selectedModularTemplate?.templateId)) {
+      return safeText(selectedModularTemplate.templateId);
+    }
+    if (safeText(modularPageTemplateDraft?.templateId)) {
+      return safeText(modularPageTemplateDraft.templateId);
+    }
+    return selectedTemplateId || LANDING_TEMPLATES[0].id;
+  }
+
+  function getModularLayoutColumnCount(layout) {
+    return getModularPageLayoutColumnIds(getModularPageLayoutMeta(layout).value).length;
+  }
+
+  function countModulesInLayoutColumns(section) {
+    const layout = resolveLegacySectionLayout(section);
+    const columnIds = getModularPageLayoutColumnIds(layout);
+    const counts = Object.fromEntries(columnIds.map((colId) => [colId, 0]));
+    (Array.isArray(section?.modules) ? section.modules : []).forEach((module) => {
+      const legacyCol = mapNormieColumnToLegacy(module?.column, layout);
+      if (Object.prototype.hasOwnProperty.call(counts, legacyCol)) {
+        counts[legacyCol] += 1;
+      }
+    });
+    return counts;
+  }
+
+  function modulesLostColumnDistribution(draftSection, savedSection) {
+    const layout = resolveLegacySectionLayout(draftSection);
+    const columnIds = getModularPageLayoutColumnIds(layout);
+    if (columnIds.length <= 1) return false;
+    const draftCounts = countModulesInLayoutColumns(draftSection);
+    const savedCounts = countModulesInLayoutColumns(savedSection);
+    const draftSpread = columnIds.filter((colId) => draftCounts[colId] > 0).length;
+    const savedSpread = columnIds.filter((colId) => savedCounts[colId] > 0).length;
+    const moduleCount = (savedSection?.modules || []).length;
+    return moduleCount > 1 && draftSpread > 1 && savedSpread <= 1;
+  }
+
+  function mergeModulePlacementsFromDraft(draftSection, savedSection) {
+    const draftById = new Map(
+      (Array.isArray(draftSection?.modules) ? draftSection.modules : [])
+        .map((module) => [safeText(module?.id), module])
+        .filter(([id]) => id)
+    );
+    const savedModules = Array.isArray(savedSection?.modules) ? savedSection.modules : [];
+    const draftModules = Array.isArray(draftSection?.modules) ? draftSection.modules : [];
+    const modules = savedModules.map((savedModule, moduleIndex) => {
+      const moduleId = safeText(savedModule?.id);
+      const draftModule = (moduleId && draftById.get(moduleId))
+        || draftModules[moduleIndex]
+        || null;
+      if (!draftModule) return savedModule;
+      const draftColumn = safeText(draftModule.column);
+      if (!draftColumn) return savedModule;
+      return { ...savedModule, column: draftColumn };
+    });
+    draftModules.forEach((draftModule, moduleIndex) => {
+      const moduleId = safeText(draftModule?.id);
+      if (moduleId && modules.some((module) => safeText(module?.id) === moduleId)) return;
+      if (!moduleId && modules[moduleIndex]) {
+        modules[moduleIndex] = { ...modules[moduleIndex], column: safeText(draftModule.column) || modules[moduleIndex].column };
+        return;
+      }
+      if (moduleId && !modules.some((module) => safeText(module?.id) === moduleId)) {
+        modules.push({ ...draftModule });
+      }
+    });
+    const merged = normalizePageTemplateLayoutSections([{
+      ...savedSection,
+      modules,
+    }]);
+    return merged[0] || savedSection;
+  }
+
+  function mergeModularLayoutSectionsAfterSave(draftSections, savedSections) {
+    const normalizedDraft = normalizePageTemplateLayoutSections(draftSections);
+    const normalizedSaved = normalizePageTemplateLayoutSections(savedSections);
+    if (!normalizedDraft.length) return normalizedSaved;
+    if (!normalizedSaved.length) return normalizedDraft;
+    const draftById = new Map(
+      normalizedDraft.map((section) => [safeText(section.id), section]).filter(([id]) => id)
+    );
+    return normalizedSaved.map((savedSection, index) => {
+      const draftSection = draftById.get(safeText(savedSection.id))
+        || normalizedDraft[index]
+        || null;
+      if (!draftSection) return savedSection;
+      let nextSection = savedSection;
+      const savedColumns = getModularLayoutColumnCount(savedSection.layout);
+      const draftColumns = getModularLayoutColumnCount(draftSection.layout);
+      if (savedColumns < draftColumns) {
+        const merged = normalizePageTemplateLayoutSections([{
+          ...savedSection,
+          layout: draftSection.layout,
+          containerSettings: {
+            ...(draftSection.containerSettings || {}),
+            ...(savedSection.containerSettings || {}),
+          },
+          modules: Array.isArray(savedSection.modules) && savedSection.modules.length
+            ? savedSection.modules
+            : (draftSection.modules || []),
+        }]);
+        nextSection = merged[0] || savedSection;
+      }
+      return mergeModulePlacementsFromDraft(draftSection, nextSection);
+    });
+  }
+
+  function setModularSaveButtonState(button, state, defaultLabel = 'Save Page') {
+    if (!button) return;
+    const labels = {
+      idle: defaultLabel,
+      saving: 'Saving…',
+      success: 'Saved',
+    };
+    button.disabled = state === 'saving';
+    button.classList.toggle('is-saving', state === 'saving');
+    button.classList.toggle('is-success', state === 'success');
+    button.classList.toggle('btn-primary', modularPageEditorMode === 'page' && state !== 'success');
+    button.textContent = labels[state] || defaultLabel;
+    if (state === 'success') {
+      window.setTimeout(() => {
+        if (!button.classList.contains('is-success')) return;
+        setModularSaveButtonState(button, 'idle', defaultLabel);
+      }, 1800);
+    }
+  }
+
+  function getModularSaveButtonDefaultLabel(button) {
+    if (button?.id === 'developLandingPageHeaderSaveBtn') {
+      return modularPageEditorMode === 'page' ? 'Save Page' : 'Save Template';
+    }
+    return modularPageEditorMode === 'page' ? 'Save Page' : 'Save Modular Template';
+  }
+
+  async function refreshAfterModularPageSave() {
+    if (modularPageEditorMode === 'page') {
+      await loadSavedLandingPages();
+      renderLandingPagesTable();
+      return;
+    }
+    await loadSavedPageTemplates();
+    renderPageTemplateRecordsTable();
+  }
+
+  async function saveModularPageRecord(triggerButton) {
+    flushActiveModularEditors();
+    syncModularPageDraftFromEditorInputs();
+    const defaultLabel = getModularSaveButtonDefaultLabel(triggerButton);
+    const payload = modularPageEditorMode === 'page'
+      ? buildModularLandingPagePayload()
+      : buildModularPageTemplatePayload();
+    if (!payload) {
+      notify('Nothing to save', true);
+      return false;
+    }
+
+    if (modularPageEditorOptions && typeof modularPageEditorOptions.onSave === 'function') {
+      setModularSaveButtonState(triggerButton, 'saving', defaultLabel);
+      try {
+        await Promise.resolve(modularPageEditorOptions.onSave(payload));
+        setModularSaveButtonState(triggerButton, 'success', defaultLabel);
+        notify(modularPageEditorMode === 'page' ? 'Page saved' : 'Template saved');
+        closeModularPageTemplateEditor();
+        return true;
+      } catch (err) {
+        setModularSaveButtonState(triggerButton, 'idle', defaultLabel);
+        notify(err.message || 'Error executing custom save handler', true);
+        return false;
+      }
+    }
+
+    if (!payload.name) {
+      notify(modularPageEditorMode === 'page' ? 'Page name is required' : 'Template name is required', true);
+      return false;
+    }
+
+    setModularSaveButtonState(triggerButton, 'saving', defaultLabel);
+    const saveButtons = [
+      byId('developPageTemplateEditorSaveBtnTop'),
+      byId('developPageTemplateEditorSaveBtnBottom'),
+      byId('developLandingPageHeaderSaveBtn'),
+    ].filter(Boolean);
+    saveButtons.forEach((button) => {
+      if (button !== triggerButton) button.disabled = true;
+    });
+
+    const draftSectionsSnapshot = normalizePageTemplateLayoutSections(
+      modularPageTemplateDraft?.layoutSections
+    );
+
+    try {
+      const hasId = Boolean(safeText(payload.id));
+      const endpoint = modularPageEditorMode === 'page'
+        ? (hasId
+          ? `/api/develop/landing-pages/${encodeURIComponent(payload.id)}`
+          : '/api/develop/landing-pages')
+        : (hasId
+          ? `/api/develop/page-templates/${encodeURIComponent(payload.id)}`
+          : '/api/develop/page-templates');
+      const method = hasId ? 'PATCH' : 'POST';
+      const result = await api(endpoint, { method, body: JSON.stringify(payload) });
+      const saved = result?.landingPage || result?.page || result?.pageTemplate || result?.data || payload;
+      const savedSections = getModularEditorLayoutSections(saved);
+      const mergedSections = mergeModularLayoutSectionsAfterSave(draftSectionsSnapshot, savedSections);
+      modularPageTemplateDraft = applyLandingPageDefaultSelections({
+        ...modularPageTemplateDraft,
+        ...saved,
+        templateKind: 'modular',
+        layoutSections: mergedSections.length ? mergedSections : draftSectionsSnapshot,
+      });
+      if (byId('developPageTemplateEditorIdInput') && saved?.id) {
+        byId('developPageTemplateEditorIdInput').value = String(saved.id);
+      }
+      await refreshAfterModularPageSave();
+      syncPageTemplateEditorInputs();
+      renderModularPageTemplateEditor();
+      setPageTemplateEditorVisible(true);
+      const successMessage = modularPageEditorMode === 'page'
+        ? (hasId ? 'Page updated' : 'Page created')
+        : (hasId ? 'Modular page template updated' : 'Modular page template created');
+      notify(successMessage);
+      setModularSaveButtonState(triggerButton, 'success', defaultLabel);
+      return true;
+    } catch (err) {
+      notify(err.message || (modularPageEditorMode === 'page' ? 'Could not save page' : 'Could not save modular page template'), true);
+      setModularSaveButtonState(triggerButton, 'idle', defaultLabel);
+      return false;
+    } finally {
+      saveButtons.forEach((button) => {
+        if (button !== triggerButton) button.disabled = false;
+      });
+    }
+  }
+
+  function buildModularPageTemplatePayload() {
+    flushActiveModularEditors();
+    syncModularPageDraftFromEditorInputs();
+    const draftSections = modularPageTemplateDraft?.layoutSections;
+    return {
+      id: safeText(byId('developPageTemplateEditorIdInput')?.value) || safeText(modularPageTemplateDraft?.id),
+      name: safeText(byId('developPageTemplateEditorNameInput')?.value, 255)
+        || safeText(modularPageTemplateDraft?.name, 255),
+      templateKind: 'modular',
+      templateId: modularPageEditorMode === 'page'
+        ? resolveLandingPageBaseTemplateId()
         : (safeText(modularPageTemplateDraft?.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id),
-      layoutSections: normalizePageTemplateLayoutSections(modularPageTemplateDraft?.layoutSections),
+      layoutSections: layoutSectionsForSave(draftSections),
       contentOverrides: {},
       primaryColor: '',
       backgroundColor: '',
@@ -9966,18 +11895,20 @@ App.develop = (function () {
   }
 
   function buildModularLandingPagePayload() {
-    const basePayload = buildModularPageTemplatePayload();
-    return {
-      ...basePayload,
-      templateId: modularPageEditorSourceTemplateId || basePayload.templateId,
-    };
+    return buildModularPageTemplatePayload();
   }
 
   function buildModularPageTemplatePreviewMarkup(template) {
-    const sections = normalizePageTemplateLayoutSections(template?.layoutSections);
+    const sections = getModularEditorLayoutSections(template);
     const renderModule = (module) => {
       const type = safeText(module.type);
       const contentLabel = escapeHtml(getModularModuleContentLabel(module));
+      if (type === 'header' || type === 'heading') return `<h2>${contentLabel}</h2>`;
+      if (type === 'textarea' || isModularTextBlockModule(module)) {
+        const inlineStyle = buildModularTextBlockInlineStyle(module.settings);
+        const html = getModularTextBlockHtml(module) || '<p>No text set</p>';
+        return `<div${inlineStyle ? ` style="${inlineStyle}"` : ''}>${html}</div>`;
+      }
       if (type === 'form') return `<div class="develop-template-form-card"><h3>${contentLabel}</h3><input type="text" placeholder="First Name" /><input type="email" placeholder="Email" /><button type="button">Submit Form</button></div>`;
       if (type === 'image' || type === 'logo-wide' || type === 'logo-square') return `<div class="develop-template-image-slot">${contentLabel}</div>`;
       if (type === 'headline') return `<h3>${contentLabel}</h3>`;
@@ -9986,6 +11917,10 @@ App.develop = (function () {
       if (type === 'cta') return `<div class="develop-template-cta-row"><button type="button">${contentLabel}</button></div>`;
       if (type === 'eyebrow') return `<div class="develop-template-eyebrow">${contentLabel}</div>`;
       if (type === 'spacer') return `<div style="height:1.25rem;"></div>`;
+      if (type === 'navigation') {
+        return App.developNavMenu?.buildNavigationModuleMarkup?.(module.settings || {}, { includeDataAttrs: true })
+          || `<div class="meta">${contentLabel}</div>`;
+      }
       if (type === 'pod') {
         const podData = buildModularPageModuleContent({}, module);
         const clickAction = podData.targetPage ? `onclick="if(window.App && App.setActivePage) App.setActivePage('${escapeHtml(podData.targetPage)}');"` : '';
@@ -10027,17 +11962,18 @@ App.develop = (function () {
       const layout = getModularPageLayoutMeta(section.layout);
       const columnMarkup = layout.columns.map((column) => {
         const columnId = safeText(column.id) || 'col1';
-        const modules = section.modules.filter((module) => safeText(module.column) === columnId);
+        const modules = getModularSectionModulesForColumn(section, columnId);
       return renderColumn(
           modules,
           `develop-modular-page-column develop-modular-page-column-${columnId}`,
           getSectionContainerSettings(section, columnId)
         );
       }).join('');
-      return `<section class="develop-modular-page-section develop-modular-page-layout-${layout.value}" style="${escapeHtml(styleObjectToCssText(buildRowStyle(getSectionRowSettings(section))))}">
-        ${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}
-        <div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columnMarkup}</div>
-      </section>`;
+      return buildModularPageSectionMarkup(
+        section,
+        `${section.title ? `<div class="develop-template-eyebrow">${escapeHtml(section.title)}</div>` : ''}<div class="develop-modular-page-columns" style="grid-template-columns:${buildModularPageGridTemplate(layout.value)};">${columnMarkup}</div>`,
+        layout.value
+      );
     }).join('');
     return `<div class="develop-template-canvas develop-modular-page-preview">${markup}</div>`;
   }
@@ -10045,7 +11981,7 @@ App.develop = (function () {
   function openModularPageTemplatePreviewModal(template) {
     if (!template) return;
     const title = safeText(template.name) || 'Modular Page Template Preview';
-    const pageMarkup = buildModularLandingPageMarkup(template);
+    const pageMarkup = buildModularLandingPageMarkup(template, { skipTemplateMerge: true });
     const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -10316,11 +12252,26 @@ App.develop = (function () {
         min-height: 100%;
       }
       .develop-template-canvas {
+        --lp-primary: #0b82d4;
+        --lp-background: #f5fbff;
+        --lp-accent: #1a4f81;
+        --lp-page-background-image: none;
+        --lp-page-background-overlay: none;
+        --lp-page-background-size: cover;
+        --lp-page-background-position: center center;
+        --lp-page-background-repeat: no-repeat;
         min-height: calc(100vh - 120px);
         padding: 0;
-        background: transparent;
+        border: none;
         border-radius: 0;
         box-shadow: none;
+        background-color: var(--lp-background, #f5fbff);
+        background-image:
+          var(--lp-page-background-overlay, none),
+          var(--lp-page-background-image, none);
+        background-size: var(--lp-page-background-size, cover), var(--lp-page-background-size, cover);
+        background-position: var(--lp-page-background-position, center center), var(--lp-page-background-position, center center);
+        background-repeat: var(--lp-page-background-repeat, no-repeat), var(--lp-page-background-repeat, no-repeat);
       }
       .develop-preview-device-shell[data-device="mobile-portrait"] .develop-template-canvas,
       .develop-preview-device-shell[data-device="mobile-landscape"] .develop-template-canvas,
@@ -10340,7 +12291,6 @@ App.develop = (function () {
       .develop-modular-page-section {
         border: none;
         border-radius: 0;
-        background: transparent;
         padding: 0;
       }
       .develop-modular-page-columns {
@@ -10362,6 +12312,40 @@ App.develop = (function () {
         font-weight: 700;
         text-align: center;
         padding: 1rem;
+      }
+      .develop-template-table-slot .develop-module-table {
+        border-collapse: collapse;
+        border-spacing: 0;
+        background: transparent;
+      }
+      .develop-template-table-slot .develop-module-table th,
+      .develop-template-table-slot .develop-module-table td {
+        border: 0 !important;
+        border-width: 0 !important;
+        border-style: none !important;
+        border-bottom: 0 !important;
+        outline: none;
+        box-shadow: none;
+        background: transparent;
+        color: inherit;
+        font-weight: inherit;
+        cursor: default;
+        user-select: auto;
+        white-space: normal;
+        vertical-align: middle;
+      }
+      .develop-template-table-slot .develop-module-table[data-zero-border="true"] th,
+      .develop-template-table-slot .develop-module-table[data-zero-border="true"] td {
+        border: 0 !important;
+        border-width: 0 !important;
+        border-style: none !important;
+        border-bottom-width: 0 !important;
+      }
+      .develop-template-table-slot .develop-module-table thead tr th {
+        background: inherit;
+        color: inherit;
+        font-weight: inherit;
+        border-bottom-width: 0;
       }
       .develop-template-eyebrow {
         margin-bottom: 0.6rem;
@@ -10857,15 +12841,22 @@ App.develop = (function () {
     renderFormTemplateRecordsTable();
     renderEmailTemplateTables();
     renderPageTemplateRecordsTable();
-    ensureModularPageTemplateDraft();
-    syncPageTemplateEditorInputs();
-    renderModularPageTemplateEditor();
+    const reactBuilderActive = App.builder && typeof App.builder.isActive === 'function' && App.builder.isActive();
+    if (!reactBuilderActive) {
+      ensureModularPageTemplateDraft();
+      syncPageTemplateEditorInputs();
+      renderModularPageTemplateEditor();
+      setPageTemplateEditorVisible(true);
+    } else {
+      setPageTemplateEditorVisible(false);
+    }
     setEmailTemplateEditorVisible(false);
     setCollapsibleSectionExpanded('developTemplateEditorToggle', 'developTemplateEditorBody', false);
     setCollapsibleSectionExpanded('developFormsSectionToggle', 'developFormsSectionBody', false);
     setCollapsibleSectionExpanded('developEmailSectionToggle', 'developEmailSectionBody', false);
-    setCollapsibleSectionExpanded('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', true);
-    setPageTemplateEditorVisible(true);
+    if (!reactBuilderActive) {
+      setCollapsibleSectionExpanded('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', true);
+    }
     renderLandingPageThankYouPage();
     renderThumbnailSourceAssetOptions();
     renderFormTemplateLibrary();
@@ -10876,7 +12867,11 @@ App.develop = (function () {
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
     renderSavedAgentsTable();
-    if (safeText(state.activePage) === 'developLandingPagesPage' && modularPageEditorMode !== 'page') {
+    if (
+      safeText(state.activePage) === 'developLandingPagesPage'
+      && modularPageEditorMode !== 'page'
+      && !reactBuilderActive
+    ) {
       App.setActivePage('developManageLandingPagesPage');
     }
   }
@@ -11652,24 +13647,26 @@ App.develop = (function () {
     }
 
     if (pageTemplateEditorPreviewBtn) {
-      pageTemplateEditorPreviewBtn.addEventListener('click', () => {
+      pageTemplateEditorPreviewBtn.addEventListener('click', async () => {
         if (!modularPageTemplateDraft) {
           notify('Open a modular template first', true);
           return;
         }
+        await ensureAssetsLoaded().catch(() => {});
         flushActiveModularEditors();
-        openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+        openModularPageTemplatePreviewModal(buildModularPageTemplatePreviewRecord());
       });
     }
 
     if (pageTemplateEditorPreviewBtnTop) {
-      pageTemplateEditorPreviewBtnTop.addEventListener('click', () => {
+      pageTemplateEditorPreviewBtnTop.addEventListener('click', async () => {
         if (!modularPageTemplateDraft) {
           notify('Open a modular template first', true);
           return;
         }
+        await ensureAssetsLoaded().catch(() => {});
         flushActiveModularEditors();
-        openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+        openModularPageTemplatePreviewModal(buildModularPageTemplatePreviewRecord());
       });
     }
 
@@ -11685,13 +13682,14 @@ App.develop = (function () {
     }
 
     if (pageHeaderPreviewBtn) {
-      pageHeaderPreviewBtn.addEventListener('click', () => {
+      pageHeaderPreviewBtn.addEventListener('click', async () => {
         if (!modularPageTemplateDraft) {
           notify('Open a modular template first', true);
           return;
         }
+        await ensureAssetsLoaded().catch(() => {});
         flushActiveModularEditors();
-        openModularPageTemplatePreviewModal(buildModularPageTemplatePayload());
+        openModularPageTemplatePreviewModal(buildModularPageTemplatePreviewRecord());
       });
     }
 
@@ -11758,52 +13756,8 @@ App.develop = (function () {
 
     const bindSaveModularPageTemplateButton = (button) => {
       if (!button) return;
-      button.addEventListener('click', async () => {
-        flushActiveModularEditors();
-        const payload = modularPageEditorMode === 'page'
-          ? buildModularLandingPagePayload()
-          : buildModularPageTemplatePayload();
-        if (!payload) return;
-        
-        if (modularPageEditorOptions && typeof modularPageEditorOptions.onSave === 'function') {
-          try {
-            await Promise.resolve(modularPageEditorOptions.onSave(payload));
-            closeModularPageTemplateEditor();
-            return;
-          } catch (err) {
-            notify(err.message || 'Error executing custom save handler', true);
-            return;
-          }
-        }
-
-        if (!payload.name) {
-          notify(modularPageEditorMode === 'page' ? 'Page name is required' : 'Template name is required', true);
-          return;
-        }
-        try {
-          const hasId = Boolean(safeText(payload.id));
-          const endpoint = modularPageEditorMode === 'page'
-            ? (hasId
-              ? `/api/develop/landing-pages/${encodeURIComponent(payload.id)}`
-              : '/api/develop/landing-pages')
-            : (hasId
-              ? `/api/develop/page-templates/${encodeURIComponent(payload.id)}`
-              : '/api/develop/page-templates');
-          const method = hasId ? 'PATCH' : 'POST';
-          const result = await api(endpoint, { method, body: JSON.stringify(payload) });
-          modularPageTemplateDraft = result?.pageTemplate || result?.data || payload;
-          await refresh();
-          syncPageTemplateEditorInputs();
-          renderModularPageTemplateEditor();
-          setPageTemplateEditorVisible(true);
-          notify(
-            modularPageEditorMode === 'page'
-              ? (hasId ? 'Page updated' : 'Page created')
-              : (hasId ? 'Modular page template updated' : 'Modular page template created')
-          );
-        } catch (err) {
-          notify(err.message || (modularPageEditorMode === 'page' ? 'Could not save page' : 'Could not save modular page template'), true);
-        }
+      button.addEventListener('click', () => {
+        saveModularPageRecord(button);
       });
     };
     bindSaveModularPageTemplateButton(byId('developPageTemplateEditorSaveBtnTop'));

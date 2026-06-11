@@ -34,7 +34,7 @@ App.acquire = (function () {
     acquirePeerSites: false,
     maxPages: 10,
     peerSitesLimit: 20,
-    imagesLimit: 20,
+    imagesLimit: 50,
     snippetLength: 600,
   };
   const DIRECT_ACQUIRE_KEYWORD_REASON_OPTIONS = [
@@ -50,6 +50,17 @@ App.acquire = (function () {
   let directAcquireSelectedImages = new Set();
   let directAcquireImageCategoryByUrl = new Map();
   let directAcquireImagesExpanded = false;
+  let directAcquireImageMeasured = new Map();
+  const directAcquireImageFilters = {
+    query: '',
+    format: '',
+    source: '',
+    role: '',
+    aspect: '',
+    pageQuery: '',
+    minWidth: '',
+    maxWidth: '',
+  };
   let directAcquireSelectedHashtags = new Set();
   let directAcquireSelectedKeywords = new Set();
 
@@ -75,23 +86,34 @@ App.acquire = (function () {
   let directAcquirePeerDiscoveryResults = [];
   const directAcquirePeerDiscoveryFilters = {
     type: '',
-    modelCategories: [],
+    category: '',
     score: '',
     domain: '',
     site: '',
     keywords: '',
-    reasons: '',
+  };
+  const directAcquirePeerDiscoveryBulkDraft = {
+    type: '',
+    category: '',
   };
   const WEBSITE_PEER_MODELS = Array.isArray(App.WEBSITE_PEER_MODELS) ? App.WEBSITE_PEER_MODELS.slice() : [];
   const ACQUIRE_WEBSITE_ROLE_LABELS = {
     project: 'Project Website',
     peer: 'Peer Website',
     model: 'Model Website',
+    other: 'Other Website',
   };
   const ACQUIRE_WEBSITE_TYPE_LABELS = {
     peer: 'Peer',
     model: 'Model',
+    other: 'Other',
   };
+
+  function normalizeDiscoveryReferenceRole(role, fallback = 'peer') {
+    const value = String(role || '').trim().toLowerCase();
+    if (value === 'peer' || value === 'model' || value === 'other') return value;
+    return fallback;
+  }
   const SECTION_SETTINGS_LINKS = [
     { label: 'Acquire Settings', pageId: 'acquireSettingsPage' },
     { label: 'Contacts Settings', pageId: 'contactsSettingsPage' },
@@ -361,18 +383,98 @@ App.acquire = (function () {
 
   function getWebsitePeerReferenceRole(peer) {
     const fromPeer = String(peer?.reference_role || '').trim().toLowerCase();
-    if (fromPeer === 'peer' || fromPeer === 'model' || fromPeer === 'project') return fromPeer;
+    if (fromPeer === 'peer' || fromPeer === 'model' || fromPeer === 'other' || fromPeer === 'project') return fromPeer;
     const fromMeta = String(peer?.metadata?.reference_role || '').trim().toLowerCase();
-    if (fromMeta === 'peer' || fromMeta === 'model' || fromMeta === 'project') return fromMeta;
+    if (fromMeta === 'peer' || fromMeta === 'model' || fromMeta === 'other' || fromMeta === 'project') return fromMeta;
     if (String(peer?.site_type || '').trim() === 'source') return 'project';
     return 'peer';
   }
 
+  function isDiscoveryCandidatePeer(peer) {
+    return !!(peer && typeof peer.metadata === 'object' && peer.metadata.discovery_candidate === true);
+  }
+
   function listReferenceWebsitePeers(peers) {
     return (Array.isArray(peers) ? peers : []).filter((peer) => {
+      if (isDiscoveryCandidatePeer(peer)) return false;
       const role = getWebsitePeerReferenceRole(peer);
-      return role === 'peer' || role === 'model';
+      return role === 'peer' || role === 'model' || role === 'other';
     });
+  }
+
+  function discoveryRoleForCategory(websiteModel) {
+    return String(websiteModel || '').trim() === 'Direct Competitors' ? 'peer' : 'model';
+  }
+
+  function discoveryCandidateToResult(peer, sourceUrl = '') {
+    const websiteModel = String(peer?.website_model || '').trim() || 'Direct Competitors';
+    const storedRole = String(peer?.reference_role || peer?.metadata?.reference_role || '').trim().toLowerCase();
+    const referenceRole = storedRole === 'model' || storedRole === 'peer' || storedRole === 'other'
+      ? storedRole
+      : discoveryRoleForCategory(websiteModel);
+    return {
+      id: Number(peer?.id || 0) || 0,
+      source_url: String(peer?.source_url || sourceUrl || '').trim(),
+      url: String(peer?.site_url || '').trim(),
+      domain: String(peer?.domain || '').trim().toLowerCase(),
+      title: String(peer?.title || '').trim(),
+      matched_keywords: Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.slice() : [],
+      snippet: String(peer?.snippet || '').trim(),
+      website_model: websiteModel,
+      suggested_reference_role: referenceRole,
+      similarity_score: Number(peer?.metadata?.similarity_score || 0) || 0,
+      reasons: Array.isArray(peer?.metadata?.reasons) ? peer.metadata.reasons.slice() : [],
+      metadata: peer?.metadata && typeof peer.metadata === 'object' ? { ...peer.metadata } : {},
+      selected: referenceRole === 'peer' && websiteModel === 'Direct Competitors',
+    };
+  }
+
+  async function persistDiscoveryCandidateEdits(index) {
+    const item = directAcquirePeerDiscoveryResults[index];
+    const peerId = Number(item?.id || 0) || 0;
+    if (!peerId) return;
+    const referenceRole = normalizeDiscoveryReferenceRole(item.suggested_reference_role, 'peer');
+    try {
+      await api(`/api/acquire/website-peers/${encodeURIComponent(peerId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          website_model: String(item.website_model || '').trim(),
+          reference_role: referenceRole,
+          metadata: {
+            ...(item.metadata && typeof item.metadata === 'object' ? item.metadata : {}),
+            reference_role: referenceRole,
+          },
+        }),
+      });
+    } catch (err) {
+      notify(err.message || 'Could not save discovery candidate changes', true);
+    }
+  }
+
+  async function loadPersistedPeerDiscovery(sourceUrl) {
+    const normalizedSource = String(sourceUrl || '').trim();
+    if (!normalizedSource) return false;
+    try {
+      const res = await api(`/api/acquire/peer-discovery/candidates?source_url=${encodeURIComponent(normalizedSource)}`);
+      const candidates = Array.isArray(res?.candidates)
+        ? res.candidates
+        : Array.isArray(res?.data?.candidates)
+          ? res.data.candidates
+          : [];
+      if (!candidates.length) return false;
+      const run = res?.run || res?.data?.run || {};
+      directAcquirePeerDiscoveryResults = candidates.map((peer) => discoveryCandidateToResult(peer, normalizedSource));
+      state.directAcquirePeerDiscoveryError = '';
+      state.directAcquirePeerDiscoveryKeywords = String(run?.keyword_line || '').trim()
+        || (Array.isArray(run?.searched_keywords) && run.searched_keywords.length
+          ? `Search phrases: ${run.searched_keywords.join(', ')}.`
+          : 'Loaded saved discovery candidates.');
+      renderDirectAcquirePeerDiscoveryResults();
+      setDirectAcquireResultsVisible(true);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   function listProjectWebsitePeers(peers) {
@@ -430,7 +532,7 @@ App.acquire = (function () {
     select.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = 'Model Category';
+    placeholder.textContent = 'Category';
     select.appendChild(placeholder);
     WEBSITE_PEER_MODELS.forEach((label) => {
       const option = document.createElement('option');
@@ -472,35 +574,65 @@ App.acquire = (function () {
     if (panel) panel.classList.toggle('hidden', !visible);
   }
 
-  function populateDirectAcquirePeerDiscoveryModelCategoryFilter() {
-    const select = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
+  function createPeerDiscoveryReferenceRoleSelect(currentRole) {
+    const select = document.createElement('select');
+    [['peer', 'Peer'], ['model', 'Model'], ['other', 'Other']].forEach(([value, label]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+    select.value = normalizeDiscoveryReferenceRole(currentRole, 'peer');
+    return select;
+  }
+
+  function createPeerDiscoveryCategorySelect(selectedValue) {
+    const select = document.createElement('select');
+    WEBSITE_PEER_MODELS.forEach((model) => {
+      const option = document.createElement('option');
+      option.value = model;
+      option.textContent = model;
+      select.appendChild(option);
+    });
+    const value = String(selectedValue || '').trim();
+    if (value && WEBSITE_PEER_MODELS.includes(value)) select.value = value;
+    else if (WEBSITE_PEER_MODELS.includes('Direct Competitors')) select.value = 'Direct Competitors';
+    else if (WEBSITE_PEER_MODELS.length) select.value = WEBSITE_PEER_MODELS[0];
+    return select;
+  }
+
+  function populateDirectAcquirePeerDiscoveryCategoryFilter() {
+    const select = document.getElementById('directAcquirePeerDiscoveryFilterCategory');
     if (!select || select.dataset.populated === '1') return;
     select.dataset.populated = '1';
+    const current = String(select.value || '').trim();
     select.innerHTML = '';
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = 'All Categories';
+    select.appendChild(allOption);
     WEBSITE_PEER_MODELS.forEach((label) => {
       const option = document.createElement('option');
       option.value = label;
       option.textContent = label;
       select.appendChild(option);
     });
+    if (current && WEBSITE_PEER_MODELS.includes(current)) select.value = current;
   }
 
   function readDirectAcquirePeerDiscoveryFiltersFromDom() {
     const typeEl = document.getElementById('directAcquirePeerDiscoveryFilterType');
-    const modelEl = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
+    const categoryEl = document.getElementById('directAcquirePeerDiscoveryFilterCategory');
     directAcquirePeerDiscoveryFilters.type = String(typeEl?.value || '').trim().toLowerCase();
-    directAcquirePeerDiscoveryFilters.modelCategories = modelEl
-      ? Array.from(modelEl.selectedOptions).map((option) => String(option.value || '').trim()).filter(Boolean)
-      : [];
+    directAcquirePeerDiscoveryFilters.category = String(categoryEl?.value || '').trim();
     directAcquirePeerDiscoveryFilters.score = String(document.getElementById('directAcquirePeerDiscoveryFilterScore')?.value || '').trim().toLowerCase();
     directAcquirePeerDiscoveryFilters.domain = String(document.getElementById('directAcquirePeerDiscoveryFilterDomain')?.value || '').trim().toLowerCase();
     directAcquirePeerDiscoveryFilters.site = String(document.getElementById('directAcquirePeerDiscoveryFilterSite')?.value || '').trim().toLowerCase();
     directAcquirePeerDiscoveryFilters.keywords = String(document.getElementById('directAcquirePeerDiscoveryFilterKeywords')?.value || '').trim().toLowerCase();
-    directAcquirePeerDiscoveryFilters.reasons = String(document.getElementById('directAcquirePeerDiscoveryFilterReasons')?.value || '').trim().toLowerCase();
   }
 
   function getPeerDiscoveryItemType(item) {
-    return String(item?.suggested_reference_role || 'peer').trim().toLowerCase() === 'model' ? 'model' : 'peer';
+    return normalizeDiscoveryReferenceRole(item?.suggested_reference_role, 'peer');
   }
 
   function peerDiscoveryItemMatchesFilters(item) {
@@ -509,9 +641,9 @@ App.acquire = (function () {
       if (filters.type === 'project') return false;
       if (getPeerDiscoveryItemType(item) !== filters.type) return false;
     }
-    if (Array.isArray(filters.modelCategories) && filters.modelCategories.length) {
+    if (filters.category) {
       const model = String(item?.website_model || 'Direct Competitors').trim();
-      if (!filters.modelCategories.includes(model)) return false;
+      if (model !== filters.category) return false;
     }
     if (filters.score) {
       const scoreText = Number(item?.similarity_score || 0).toFixed(1).toLowerCase();
@@ -537,13 +669,6 @@ App.acquire = (function () {
         .toLowerCase();
       if (!keywordHaystack.includes(filters.keywords)) return false;
     }
-    if (filters.reasons) {
-      const reasonHaystack = (Array.isArray(item?.reasons) ? item.reasons : [])
-        .map((reason) => String(reason || '').trim())
-        .join('; ')
-        .toLowerCase();
-      if (!reasonHaystack.includes(filters.reasons)) return false;
-    }
     return true;
   }
 
@@ -554,52 +679,175 @@ App.acquire = (function () {
       .filter(({ item }) => peerDiscoveryItemMatchesFilters(item));
   }
 
+  function isPeerDiscoveryBulkMode() {
+    const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
+    return results.some((item) => item.selected !== false);
+  }
+
+  function resetPeerDiscoveryBulkDraft() {
+    directAcquirePeerDiscoveryBulkDraft.type = '';
+    directAcquirePeerDiscoveryBulkDraft.category = '';
+  }
+
+  function syncPeerDiscoveryFilterControls() {
+    const bulkMode = isPeerDiscoveryBulkMode();
+    const goBtn = document.getElementById('directAcquirePeerDiscoveryFilterGoBtn');
+    if (goBtn) goBtn.textContent = bulkMode ? 'Bulk Edit' : 'Filter';
+
+    const typeEl = document.getElementById('directAcquirePeerDiscoveryFilterType');
+    const categoryEl = document.getElementById('directAcquirePeerDiscoveryFilterCategory');
+    const textFilterIds = [
+      ['directAcquirePeerDiscoveryFilterScore', 'Filter score', 'Score (filter only)'],
+      ['directAcquirePeerDiscoveryFilterDomain', 'Filter domain', 'Domain (filter only)'],
+      ['directAcquirePeerDiscoveryFilterSite', 'Filter site', 'Site (filter only)'],
+      ['directAcquirePeerDiscoveryFilterKeywords', 'Filter keywords', 'Keywords (filter only)'],
+    ];
+
+    if (bulkMode) {
+      if (typeEl?.options?.[0]) typeEl.options[0].textContent = 'Type (leave unchanged)';
+      if (categoryEl?.options?.[0]) categoryEl.options[0].textContent = 'Category (leave unchanged)';
+      if (typeEl) typeEl.value = directAcquirePeerDiscoveryBulkDraft.type;
+      if (categoryEl) categoryEl.value = directAcquirePeerDiscoveryBulkDraft.category;
+      textFilterIds.forEach(([id, , bulkPlaceholder]) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.placeholder = bulkPlaceholder;
+        input.disabled = true;
+        input.value = '';
+      });
+      return;
+    }
+
+    if (typeEl?.options?.[0]) typeEl.options[0].textContent = 'All Types';
+    if (categoryEl?.options?.[0]) categoryEl.options[0].textContent = 'All Categories';
+    if (typeEl) typeEl.value = directAcquirePeerDiscoveryFilters.type;
+    if (categoryEl) categoryEl.value = directAcquirePeerDiscoveryFilters.category;
+    textFilterIds.forEach(([id, filterPlaceholder]) => {
+      const input = document.getElementById(id);
+      if (!input) return;
+      input.placeholder = filterPlaceholder;
+      input.disabled = false;
+    });
+    const scoreEl = document.getElementById('directAcquirePeerDiscoveryFilterScore');
+    const domainEl = document.getElementById('directAcquirePeerDiscoveryFilterDomain');
+    const siteEl = document.getElementById('directAcquirePeerDiscoveryFilterSite');
+    const keywordsEl = document.getElementById('directAcquirePeerDiscoveryFilterKeywords');
+    if (scoreEl) scoreEl.value = directAcquirePeerDiscoveryFilters.score;
+    if (domainEl) domainEl.value = directAcquirePeerDiscoveryFilters.domain;
+    if (siteEl) siteEl.value = directAcquirePeerDiscoveryFilters.site;
+    if (keywordsEl) keywordsEl.value = directAcquirePeerDiscoveryFilters.keywords;
+  }
+
   function resetDirectAcquirePeerDiscoveryFilters() {
     directAcquirePeerDiscoveryFilters.type = '';
-    directAcquirePeerDiscoveryFilters.modelCategories = [];
+    directAcquirePeerDiscoveryFilters.category = '';
     directAcquirePeerDiscoveryFilters.score = '';
     directAcquirePeerDiscoveryFilters.domain = '';
     directAcquirePeerDiscoveryFilters.site = '';
     directAcquirePeerDiscoveryFilters.keywords = '';
-    directAcquirePeerDiscoveryFilters.reasons = '';
-    const typeEl = document.getElementById('directAcquirePeerDiscoveryFilterType');
-    if (typeEl) typeEl.value = '';
-    ['directAcquirePeerDiscoveryFilterScore', 'directAcquirePeerDiscoveryFilterDomain', 'directAcquirePeerDiscoveryFilterSite', 'directAcquirePeerDiscoveryFilterKeywords', 'directAcquirePeerDiscoveryFilterReasons'].forEach((id) => {
-      const input = document.getElementById(id);
-      if (input) input.value = '';
-    });
-    const modelEl = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
-    if (modelEl) Array.from(modelEl.options).forEach((option) => { option.selected = false; });
+    resetPeerDiscoveryBulkDraft();
+    syncPeerDiscoveryFilterControls();
+  }
+
+  function applyPeerDiscoveryTableFilters() {
+    readDirectAcquirePeerDiscoveryFiltersFromDom();
+    renderDirectAcquirePeerDiscoveryResults();
+  }
+
+  async function applyPeerDiscoveryBulkEdit() {
+    const selectedEntries = directAcquirePeerDiscoveryResults
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.selected !== false);
+    if (!selectedEntries.length) {
+      notify('Select one or more rows first', true);
+      return;
+    }
+
+    const nextType = String(directAcquirePeerDiscoveryBulkDraft.type || '').trim().toLowerCase();
+    const nextCategory = String(directAcquirePeerDiscoveryBulkDraft.category || '').trim();
+    if (!nextType && !nextCategory) {
+      notify('Change Type or Category before using Bulk Edit', true);
+      return;
+    }
+
+    let updatedCount = 0;
+    for (const { index } of selectedEntries) {
+      let changed = false;
+      if (nextType === 'peer' || nextType === 'model' || nextType === 'other') {
+        directAcquirePeerDiscoveryResults[index].suggested_reference_role = nextType;
+        changed = true;
+      }
+      if (nextCategory && WEBSITE_PEER_MODELS.includes(nextCategory)) {
+        directAcquirePeerDiscoveryResults[index].website_model = nextCategory;
+        changed = true;
+      }
+      if (!changed) continue;
+      await persistDiscoveryCandidateEdits(index);
+      updatedCount += 1;
+    }
+
+    if (updatedCount) {
+      notify(`Updated ${updatedCount} discovery candidate${updatedCount === 1 ? '' : 's'}`);
+      resetPeerDiscoveryBulkDraft();
+    }
+    renderDirectAcquirePeerDiscoveryResults();
   }
 
   function bindDirectAcquirePeerDiscoveryFilters() {
-    populateDirectAcquirePeerDiscoveryModelCategoryFilter();
-    const rerender = () => {
-      readDirectAcquirePeerDiscoveryFiltersFromDom();
-      renderDirectAcquirePeerDiscoveryResults();
-    };
-    const ids = [
-      'directAcquirePeerDiscoveryFilterScore',
-      'directAcquirePeerDiscoveryFilterDomain',
-      'directAcquirePeerDiscoveryFilterSite',
-      'directAcquirePeerDiscoveryFilterKeywords',
-      'directAcquirePeerDiscoveryFilterReasons',
-    ];
-    ids.forEach((id) => {
+    populateDirectAcquirePeerDiscoveryCategoryFilter();
+
+    const bindTextFilter = (id, key) => {
       const input = document.getElementById(id);
       if (!input || input.dataset.bound === '1') return;
       input.dataset.bound = '1';
-      input.addEventListener('input', rerender);
-    });
+      input.addEventListener('input', () => {
+        if (isPeerDiscoveryBulkMode()) return;
+        directAcquirePeerDiscoveryFilters[key] = String(input.value || '').trim().toLowerCase();
+      });
+    };
+
+    bindTextFilter('directAcquirePeerDiscoveryFilterScore', 'score');
+    bindTextFilter('directAcquirePeerDiscoveryFilterDomain', 'domain');
+    bindTextFilter('directAcquirePeerDiscoveryFilterSite', 'site');
+    bindTextFilter('directAcquirePeerDiscoveryFilterKeywords', 'keywords');
     const typeEl = document.getElementById('directAcquirePeerDiscoveryFilterType');
     if (typeEl && typeEl.dataset.bound !== '1') {
       typeEl.dataset.bound = '1';
-      typeEl.addEventListener('change', rerender);
+      typeEl.addEventListener('change', () => {
+        if (isPeerDiscoveryBulkMode()) {
+          directAcquirePeerDiscoveryBulkDraft.type = String(typeEl.value || '').trim().toLowerCase();
+          return;
+        }
+        directAcquirePeerDiscoveryFilters.type = String(typeEl.value || '').trim().toLowerCase();
+      });
     }
-    const modelEl = document.getElementById('directAcquirePeerDiscoveryFilterModelCategory');
-    if (modelEl && modelEl.dataset.bound !== '1') {
-      modelEl.dataset.bound = '1';
-      modelEl.addEventListener('change', rerender);
+
+    const categoryEl = document.getElementById('directAcquirePeerDiscoveryFilterCategory');
+    if (categoryEl && categoryEl.dataset.bound !== '1') {
+      categoryEl.dataset.bound = '1';
+      categoryEl.addEventListener('change', () => {
+        if (isPeerDiscoveryBulkMode()) {
+          directAcquirePeerDiscoveryBulkDraft.category = String(categoryEl.value || '').trim();
+          return;
+        }
+        directAcquirePeerDiscoveryFilters.category = String(categoryEl.value || '').trim();
+      });
+    }
+
+    const goBtn = document.getElementById('directAcquirePeerDiscoveryFilterGoBtn');
+    if (goBtn && goBtn.dataset.bound !== '1') {
+      goBtn.dataset.bound = '1';
+      goBtn.addEventListener('click', async () => {
+        try {
+          if (isPeerDiscoveryBulkMode()) {
+            await applyPeerDiscoveryBulkEdit();
+          } else {
+            applyPeerDiscoveryTableFilters();
+          }
+        } catch (err) {
+          notify(err.message || 'Could not update discovery candidates', true);
+        }
+      });
     }
   }
 
@@ -611,7 +859,6 @@ App.acquire = (function () {
     const selectAll = document.getElementById('directAcquirePeerDiscoverySelectAll');
     if (!tableBody) return;
     tableBody.innerHTML = '';
-    readDirectAcquirePeerDiscoveryFiltersFromDom();
     const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
     const filteredEntries = getFilteredPeerDiscoveryEntries();
     setDirectAcquirePeerDiscoveryPanelVisible(results.length > 0);
@@ -623,6 +870,7 @@ App.acquire = (function () {
         selectAll.checked = false;
         selectAll.indeterminate = false;
       }
+      syncPeerDiscoveryFilterControls();
       return;
     }
     if (!filteredEntries.length) {
@@ -638,6 +886,7 @@ App.acquire = (function () {
         selectAll.checked = false;
         selectAll.indeterminate = false;
       }
+      syncPeerDiscoveryFilterControls();
       return;
     }
     filteredEntries.forEach(({ item, index }) => {
@@ -648,7 +897,10 @@ App.acquire = (function () {
       checkbox.type = 'checkbox';
       checkbox.checked = item.selected !== false;
       checkbox.addEventListener('change', () => {
+        const wasBulkMode = isPeerDiscoveryBulkMode();
         directAcquirePeerDiscoveryResults[index].selected = checkbox.checked;
+        if (!wasBulkMode && isPeerDiscoveryBulkMode()) resetPeerDiscoveryBulkDraft();
+        if (wasBulkMode && !isPeerDiscoveryBulkMode()) resetPeerDiscoveryBulkDraft();
         renderDirectAcquirePeerDiscoveryResults();
       });
       selectTd.appendChild(checkbox);
@@ -659,12 +911,24 @@ App.acquire = (function () {
       tr.appendChild(scoreTd);
 
       const typeTd = document.createElement('td');
-      typeTd.textContent = String(item.suggested_reference_role || 'peer').toLowerCase() === 'model' ? 'Model' : 'Peer';
+      typeTd.className = 'direct-acquire-peer-discovery-type-col';
+      const typeSelect = createPeerDiscoveryReferenceRoleSelect(item.suggested_reference_role);
+      typeSelect.addEventListener('change', () => {
+        directAcquirePeerDiscoveryResults[index].suggested_reference_role = normalizeDiscoveryReferenceRole(typeSelect.value, 'peer');
+        persistDiscoveryCandidateEdits(index).then(() => renderDirectAcquirePeerDiscoveryResults());
+      });
+      typeTd.appendChild(typeSelect);
       tr.appendChild(typeTd);
 
-      const modelTd = document.createElement('td');
-      modelTd.textContent = String(item.website_model || '').trim() || 'Direct Competitors';
-      tr.appendChild(modelTd);
+      const categoryTd = document.createElement('td');
+      categoryTd.className = 'direct-acquire-peer-discovery-category-col';
+      const categorySelect = createPeerDiscoveryCategorySelect(item.website_model);
+      categorySelect.addEventListener('change', () => {
+        directAcquirePeerDiscoveryResults[index].website_model = String(categorySelect.value || '').trim();
+        persistDiscoveryCandidateEdits(index).then(() => renderDirectAcquirePeerDiscoveryResults());
+      });
+      categoryTd.appendChild(categorySelect);
+      tr.appendChild(categoryTd);
 
       const domainTd = document.createElement('td');
       domainTd.className = 'direct-acquire-contact-label';
@@ -691,11 +955,28 @@ App.acquire = (function () {
         : '-';
       tr.appendChild(keywordsTd);
 
-      const reasonsTd = document.createElement('td');
-      reasonsTd.textContent = Array.isArray(item.reasons) && item.reasons.length
-        ? item.reasons.join('; ')
-        : '-';
-      tr.appendChild(reasonsTd);
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'actions-col';
+      const deleteBtn = App.makeIconButton('trash', 'Delete', async () => {
+        const peerId = Number(item?.id || 0) || 0;
+        if (!peerId) {
+          directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.filter((_, rowIndex) => rowIndex !== index);
+          renderDirectAcquirePeerDiscoveryResults();
+          return;
+        }
+        if (!confirm(`Delete ${String(item?.domain || item?.url || 'this candidate').trim()}?`)) return;
+        try {
+          await api(`/api/acquire/website-peers/${encodeURIComponent(peerId)}`, { method: 'DELETE' });
+          directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.filter((row) => Number(row?.id || 0) !== peerId);
+          await refreshDirectAcquireWebsitePeers();
+          renderDirectAcquirePeerDiscoveryResults();
+          notify('Discovery candidate deleted');
+        } catch (err) {
+          notify(err.message || 'Could not delete discovery candidate', true);
+        }
+      }, { danger: true });
+      actionsTd.appendChild(deleteBtn);
+      tr.appendChild(actionsTd);
 
       tableBody.appendChild(tr);
     });
@@ -703,17 +984,22 @@ App.acquire = (function () {
     const filteredSelectedCount = filteredEntries.filter(({ item }) => item.selected !== false).length;
     if (metaEl) {
       const visiblePeerCount = filteredEntries.filter(({ item }) => getPeerDiscoveryItemType(item) === 'peer').length;
-      const visibleModelCount = filteredEntries.length - visiblePeerCount;
+      const visibleModelCount = filteredEntries.filter(({ item }) => getPeerDiscoveryItemType(item) === 'model').length;
+      const visibleOtherCount = filteredEntries.length - visiblePeerCount - visibleModelCount;
       const countPrefix = filteredEntries.length === results.length
         ? `${results.length} candidate${results.length === 1 ? '' : 's'}`
         : `Showing ${filteredEntries.length} of ${results.length} candidate${results.length === 1 ? '' : 's'}`;
-      metaEl.textContent = `${countPrefix} (${visiblePeerCount} peer${visiblePeerCount === 1 ? '' : 's'}, ${visibleModelCount} model${visibleModelCount === 1 ? '' : 's'} visible). Peers sorted first.`;
+      const otherSuffix = visibleOtherCount
+        ? `, ${visibleOtherCount} other${visibleOtherCount === 1 ? '' : 's'}`
+        : '';
+      metaEl.textContent = `${countPrefix} (${visiblePeerCount} peer${visiblePeerCount === 1 ? '' : 's'}, ${visibleModelCount} model${visibleModelCount === 1 ? '' : 's'}${otherSuffix} visible). Peers sorted first.`;
     }
     if (saveBtn) saveBtn.disabled = selectedCount === 0;
     if (selectAll) {
       selectAll.checked = filteredSelectedCount === filteredEntries.length && filteredEntries.length > 0;
       selectAll.indeterminate = filteredSelectedCount > 0 && filteredSelectedCount < filteredEntries.length;
     }
+    syncPeerDiscoveryFilterControls();
   }
 
   function createDirectAcquireProgressController(estimatedMs, onStart, onFinish) {
@@ -796,34 +1082,49 @@ App.acquire = (function () {
         })
       );
       resetDirectAcquirePeerDiscoveryFilters();
-      directAcquirePeerDiscoveryResults = peers.map((peer) => {
-        const domain = String(peer?.domain || '').trim().toLowerCase();
-        return {
-          source_url: String(discovery?.source_url || projectUrl).trim(),
-          url: String(peer?.url || '').trim(),
-          domain,
-          title: String(peer?.title || '').trim(),
-          matched_keywords: Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.slice() : [],
-          snippet: String(peer?.snippet || '').trim(),
-          website_model: String(peer?.website_model || peer?.model || '').trim() || 'Direct Competitors',
-          suggested_reference_role: String(peer?.suggested_reference_role || 'peer').trim().toLowerCase() === 'model' ? 'model' : 'peer',
-          similarity_score: Number(peer?.similarity_score || 0) || 0,
-          reasons: Array.isArray(peer?.reasons) ? peer.reasons.slice() : [],
-          selected: !existingKeys.has(`${sourceDomain}::${domain}`)
-            && String(peer?.suggested_reference_role || 'peer').trim().toLowerCase() === 'peer',
-        };
-      }).filter((peer) => peer.url && peer.domain);
-      const classificationNote = discovery?.classification_gemini_used
-        ? ` Classified ${Number(discovery.classification_gemini_count || 0) || 0} site(s) with Gemini.`
-        : '';
-      state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
-        ? `Search phrases: ${searchedKeywords.join(', ')}.${classificationNote}`
-        : classificationNote.trim();
-      renderDirectAcquirePeerDiscoveryResults();
+      const persistenceError = String(discovery?.persistence?.error || '').trim();
+      const savedCount = Number(discovery?.persistence?.saved_count || 0) || 0;
+      const loaded = await loadPersistedPeerDiscovery(String(discovery?.source_url || projectUrl).trim());
+      if (!loaded) {
+        directAcquirePeerDiscoveryResults = peers.map((peer) => {
+          const domain = String(peer?.domain || '').trim().toLowerCase();
+          const websiteModel = String(peer?.website_model || peer?.model || '').trim() || 'Direct Competitors';
+          const suggestedReferenceRole = discoveryRoleForCategory(websiteModel);
+          return {
+            source_url: String(discovery?.source_url || projectUrl).trim(),
+            url: String(peer?.url || '').trim(),
+            domain,
+            title: String(peer?.title || '').trim(),
+            matched_keywords: Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.slice() : [],
+            snippet: String(peer?.snippet || '').trim(),
+            website_model: websiteModel,
+            suggested_reference_role: suggestedReferenceRole,
+            similarity_score: Number(peer?.similarity_score || 0) || 0,
+            reasons: Array.isArray(peer?.reasons) ? peer.reasons.slice() : [],
+            selected: !existingKeys.has(`${sourceDomain}::${domain}`)
+              && websiteModel === 'Direct Competitors',
+          };
+        }).filter((peer) => peer.url && peer.domain);
+        const classificationNote = discovery?.classification_gemini_used
+          ? ` Classified ${Number(discovery.classification_gemini_count || 0) || 0} site(s) with Gemini.`
+          : '';
+        state.directAcquirePeerDiscoveryKeywords = searchedKeywords.length
+          ? `Search phrases: ${searchedKeywords.join(', ')}.${classificationNote}`
+          : classificationNote.trim();
+        renderDirectAcquirePeerDiscoveryResults();
+      }
       setDirectAcquireResultsVisible(true);
       const count = directAcquirePeerDiscoveryResults.length;
-      finishPeerDiscoveryProgress(true, count ? `Discovered ${count} peer candidate${count === 1 ? '' : 's'}.` : 'No peer candidates returned.');
-      notify(count ? `Discovered ${count} peer candidate${count === 1 ? '' : 's'}` : 'No peer candidates returned', !count);
+      const saveNote = persistenceError
+        ? ` Saved 0 (${persistenceError}).`
+        : (savedCount ? ` Saved ${savedCount} candidate${savedCount === 1 ? '' : 's'}.` : '');
+      finishPeerDiscoveryProgress(true, count ? `Discovered ${count} peer candidate${count === 1 ? '' : 's'}.${saveNote}` : 'No peer candidates returned.');
+      notify(
+        count
+          ? `Discovered ${count} peer candidate${count === 1 ? '' : 's'}${savedCount ? ' and saved them' : ''}${persistenceError ? ` (${persistenceError})` : ''}`
+          : 'No peer candidates returned',
+        !count || !!persistenceError
+      );
       if (count) scrollAcquireWebPanelIntoView('directAcquirePeerDiscoveryPanel');
     } catch (err) {
       resetDirectAcquirePeerDiscoveryFilters();
@@ -842,61 +1143,24 @@ App.acquire = (function () {
   async function saveSelectedAcquireWebPeers() {
     const selected = directAcquirePeerDiscoveryResults.filter((item) => item.selected !== false);
     if (!selected.length) {
-      notify('Select at least one discovered peer', true);
+      notify('Select at least one discovery candidate', true);
       return;
     }
-    const existingKeys = new Set(
-      (Array.isArray(directAcquireWebsitePeers) ? directAcquireWebsitePeers : []).map((peer) => {
-        const sourceDomain = String(peer?.source_domain || '').trim().toLowerCase();
-        const domain = String(peer?.domain || '').trim().toLowerCase();
-        return `${sourceDomain}::${domain}`;
-      })
-    );
-    let created = 0;
-    let skipped = 0;
-    for (const peer of selected) {
-      let sourceDomain = '';
-      try {
-        sourceDomain = new URL(String(peer.source_url || '').trim()).hostname.replace(/^www\./, '').toLowerCase();
-      } catch (_) {
-        sourceDomain = '';
-      }
-      const key = `${sourceDomain}::${String(peer.domain || '').trim().toLowerCase()}`;
-      if (existingKeys.has(key)) {
-        skipped += 1;
-        continue;
-      }
-      const referenceRole = peer.suggested_reference_role === 'model' ? 'model' : 'peer';
-      await api('/api/acquire/website-peers', {
-        method: 'POST',
-        body: JSON.stringify({
-          source_url: peer.source_url,
-          site_url: peer.url,
-          title: peer.title,
-          matched_keywords: peer.matched_keywords,
-          snippet: peer.snippet,
-          website_model: peer.website_model,
-          reference_role: referenceRole,
-          metadata: {
-            reference_role: referenceRole,
-            discovery_version: 'peer-discovery-v1',
-            similarity_score: peer.similarity_score,
-          },
-        }),
-      });
-      existingKeys.add(key);
-      created += 1;
+    const ids = selected.map((item) => Number(item?.id || 0) || 0).filter(Boolean);
+    if (!ids.length) {
+      notify('Selected candidates are not saved yet. Run discovery again.', true);
+      return;
     }
+    const result = await api('/api/acquire/peer-discovery/promote', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    const promoted = Number(result?.count || result?.data?.count || 0) || 0;
     await refreshDirectAcquireWebsitePeers();
-    directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.map((item) => ({
-      ...item,
-      selected: false,
-    }));
+    const promotedIds = new Set(ids);
+    directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.filter((item) => !promotedIds.has(Number(item?.id || 0)));
     renderDirectAcquirePeerDiscoveryResults();
-    const parts = [];
-    if (created) parts.push(`${created} saved`);
-    if (skipped) parts.push(`${skipped} skipped`);
-    notify(parts.length ? parts.join(', ') : 'No new peers saved', !created);
+    notify(promoted ? `Added ${promoted} website${promoted === 1 ? '' : 's'} to Other Websites` : 'No candidates were promoted', !promoted);
   }
 
   async function addAcquireWebReferenceFromForm() {
@@ -910,7 +1174,7 @@ App.acquire = (function () {
     const websiteModel = role === 'model'
       ? String(modelSelect?.value || '').trim() || (WEBSITE_PEER_MODELS[0] || '')
       : String(WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || '')).trim();
-    if (role === 'model' && !websiteModel) throw new Error('Select a model category.');
+    if (role === 'model' && !websiteModel) throw new Error('Select a category.');
     await api('/api/acquire/website-peers', {
       method: 'POST',
       body: JSON.stringify({
@@ -996,6 +1260,11 @@ App.acquire = (function () {
       await refreshDirectAcquireWebsitePeers();
     } catch (_) {}
     const sourceUrl = String(directAcquireProjectSourceUrl || '').trim();
+    if (sourceUrl) {
+      try {
+        await loadPersistedPeerDiscovery(sourceUrl);
+      } catch (_) {}
+    }
     if (!sourceUrl) {
       setDirectAcquireProjectWebsitePanelVisible(false);
       if (!options.keepResults) syncDirectAcquireResultsVisibility();
@@ -1215,6 +1484,131 @@ App.acquire = (function () {
     });
   }
 
+  function getDirectAcquireImages() {
+    return Array.isArray(state.directAcquireCurrentRun?.image_summary?.images)
+      ? state.directAcquireCurrentRun.image_summary.images
+      : [];
+  }
+
+  function normalizeDirectAcquireImageRecord(item) {
+    const url = String(item?.url || '').trim();
+    const roles = Array.isArray(item?.roles)
+      ? item.roles.map((role) => String(role || '').trim()).filter(Boolean)
+      : [];
+    const sources = Array.isArray(item?.sources)
+      ? item.sources.map((source) => String(source || '').trim()).filter(Boolean)
+      : [];
+    const pageUrls = Array.isArray(item?.page_urls)
+      ? item.page_urls.map((pageUrl) => String(pageUrl || '').trim()).filter(Boolean)
+      : [];
+    return {
+      url,
+      filename: String(item?.filename || sanitizeImageNameFromUrl(url, 0)).trim(),
+      format: String(item?.format || 'unknown').trim().toLowerCase(),
+      sources,
+      roles,
+      page_urls: pageUrls,
+      page_hits: Number(item?.page_hits) || pageUrls.length || 0,
+      width: Number(item?.width) || null,
+      height: Number(item?.height) || null,
+      aspect_ratio: Number(item?.aspect_ratio) || null,
+      aspect_label: String(item?.aspect_label || 'unknown').trim().toLowerCase(),
+      score: Number(item?.score) || 0,
+    };
+  }
+
+  function getDirectAcquireImageDimensions(item) {
+    const measured = directAcquireImageMeasured.get(String(item?.url || '').trim());
+    const width = Number(measured?.width || item?.width) || null;
+    const height = Number(measured?.height || item?.height) || null;
+    return { width, height };
+  }
+
+  function syncDirectAcquireImageFiltersFromUi() {
+    directAcquireImageFilters.query = String(document.getElementById('directAcquireImageFilterQuery')?.value || '').trim().toLowerCase();
+    directAcquireImageFilters.format = String(document.getElementById('directAcquireImageFilterFormat')?.value || '').trim().toLowerCase();
+    directAcquireImageFilters.source = String(document.getElementById('directAcquireImageFilterSource')?.value || '').trim().toLowerCase();
+    directAcquireImageFilters.role = String(document.getElementById('directAcquireImageFilterRole')?.value || '').trim().toLowerCase();
+    directAcquireImageFilters.aspect = String(document.getElementById('directAcquireImageFilterAspect')?.value || '').trim().toLowerCase();
+    directAcquireImageFilters.pageQuery = String(document.getElementById('directAcquireImageFilterPage')?.value || '').trim().toLowerCase();
+    directAcquireImageFilters.minWidth = String(document.getElementById('directAcquireImageFilterMinWidth')?.value || '').trim();
+    directAcquireImageFilters.maxWidth = String(document.getElementById('directAcquireImageFilterMaxWidth')?.value || '').trim();
+  }
+
+  function resetDirectAcquireImageFiltersUi() {
+    const ids = [
+      ['directAcquireImageFilterQuery', ''],
+      ['directAcquireImageFilterFormat', ''],
+      ['directAcquireImageFilterSource', ''],
+      ['directAcquireImageFilterRole', ''],
+      ['directAcquireImageFilterAspect', ''],
+      ['directAcquireImageFilterPage', ''],
+      ['directAcquireImageFilterMinWidth', ''],
+      ['directAcquireImageFilterMaxWidth', ''],
+    ];
+    ids.forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value;
+    });
+    syncDirectAcquireImageFiltersFromUi();
+  }
+
+  function imageMatchesDirectAcquireFilters(item) {
+    const record = normalizeDirectAcquireImageRecord(item);
+    if (!record.url) return false;
+    const filters = directAcquireImageFilters;
+    const dimensions = getDirectAcquireImageDimensions(record);
+    const haystack = `${record.filename} ${record.url}`.toLowerCase();
+    if (filters.query && !haystack.includes(filters.query)) return false;
+    if (filters.format && record.format !== filters.format) return false;
+    if (filters.source && !record.sources.includes(filters.source)) return false;
+    if (filters.role && !record.roles.includes(filters.role)) return false;
+    if (filters.aspect && record.aspect_label !== filters.aspect) return false;
+    if (filters.pageQuery) {
+      const pageHaystack = record.page_urls.join(' ').toLowerCase();
+      if (!pageHaystack.includes(filters.pageQuery)) return false;
+    }
+    if (filters.minWidth) {
+      const minWidth = Number(filters.minWidth);
+      if (Number.isFinite(minWidth) && minWidth > 0 && (!dimensions.width || dimensions.width < minWidth)) return false;
+    }
+    if (filters.maxWidth) {
+      const maxWidth = Number(filters.maxWidth);
+      if (Number.isFinite(maxWidth) && maxWidth > 0 && (!dimensions.width || dimensions.width > maxWidth)) return false;
+    }
+    return true;
+  }
+
+  function getFilteredDirectAcquireImages() {
+    return getDirectAcquireImages()
+      .map((item) => normalizeDirectAcquireImageRecord(item))
+      .filter((item) => imageMatchesDirectAcquireFilters(item));
+  }
+
+  function formatDirectAcquireImageDimensions(item) {
+    const { width, height } = getDirectAcquireImageDimensions(item);
+    if (width && height) return `${width}×${height}`;
+    if (width) return `${width}px wide`;
+    if (height) return `${height}px tall`;
+    return 'Size unknown';
+  }
+
+  function renderDirectAcquireImageBadges(container, item) {
+    container.textContent = '';
+    const badges = [
+      item.format && item.format !== 'unknown' ? item.format.toUpperCase() : '',
+      formatDirectAcquireImageDimensions(item),
+      ...(item.roles || []).slice(0, 3),
+      ...(item.sources || []).slice(0, 1),
+    ].filter(Boolean);
+    badges.forEach((label) => {
+      const badge = document.createElement('span');
+      badge.className = 'direct-acquire-image-badge';
+      badge.textContent = label;
+      container.appendChild(badge);
+    });
+  }
+
   function renderDirectAcquireImageGallery() {
     const gallery = document.getElementById('directAcquireImageGallery');
     const emptyEl = document.getElementById('directAcquireImagesEmpty');
@@ -1225,10 +1619,18 @@ App.acquire = (function () {
     if (!gallery) return;
     gallery.innerHTML = '';
     if (bulkCategory) fillDirectAcquireImageCategorySelect(bulkCategory, bulkCategory.value, 'Select Image Category');
-    const images = Array.isArray(state.directAcquireCurrentRun?.image_summary?.images) ? state.directAcquireCurrentRun.image_summary.images : [];
+    const images = getDirectAcquireImages();
+    const filteredImages = getFilteredDirectAcquireImages();
     pruneDirectAcquireImageState();
+    const filterCount = document.getElementById('directAcquireImageFilterCount');
+    if (filterCount) {
+      filterCount.textContent = `Showing ${filteredImages.length} of ${images.length}`;
+    }
     if (!images.length) {
-      if (emptyEl) emptyEl.classList.remove('hidden');
+      if (emptyEl) {
+        emptyEl.textContent = 'No images captured yet.';
+        emptyEl.classList.remove('hidden');
+      }
       if (seeMoreBtn) seeMoreBtn.classList.add('hidden');
       if (saveBtn) saveBtn.disabled = true;
       if (selectAll) {
@@ -1237,8 +1639,15 @@ App.acquire = (function () {
       }
       return;
     }
-    if (emptyEl) emptyEl.classList.add('hidden');
-    const visibleImages = directAcquireImagesExpanded ? images : images.slice(0, 24);
+    if (emptyEl) {
+      if (!filteredImages.length) {
+        emptyEl.textContent = 'No images match the current filters.';
+        emptyEl.classList.remove('hidden');
+      } else {
+        emptyEl.classList.add('hidden');
+      }
+    }
+    const visibleImages = directAcquireImagesExpanded ? filteredImages : filteredImages.slice(0, 24);
     visibleImages.forEach((item, index) => {
       const url = String(item?.url || '').trim();
       if (!url) return;
@@ -1274,15 +1683,37 @@ App.acquire = (function () {
       img.alt = sanitizeImageNameFromUrl(url, index);
       img.loading = 'lazy';
       img.referrerPolicy = 'no-referrer';
+      img.addEventListener('load', () => {
+        const naturalWidth = Number(img.naturalWidth) || null;
+        const naturalHeight = Number(img.naturalHeight) || null;
+        if (!naturalWidth || !naturalHeight) return;
+        directAcquireImageMeasured.set(url, { width: naturalWidth, height: naturalHeight });
+        const badges = card.querySelector('.direct-acquire-image-badges');
+        if (badges) renderDirectAcquireImageBadges(badges, normalizeDirectAcquireImageRecord(item));
+      });
       link.appendChild(img);
       card.appendChild(link);
+
+      const badges = document.createElement('div');
+      badges.className = 'direct-acquire-image-badges';
+      renderDirectAcquireImageBadges(badges, item);
+      card.appendChild(badges);
 
       const meta = document.createElement('div');
       meta.className = 'direct-acquire-image-meta';
       const name = document.createElement('div');
       name.className = 'direct-acquire-image-name';
-      name.textContent = sanitizeImageNameFromUrl(url, index);
+      name.textContent = item.filename || sanitizeImageNameFromUrl(url, index);
       meta.appendChild(name);
+      if (item.page_urls?.length) {
+        const pageMeta = document.createElement('div');
+        pageMeta.className = 'direct-acquire-image-page';
+        pageMeta.textContent = item.page_urls.length === 1
+          ? item.page_urls[0]
+          : `${item.page_urls.length} pages`;
+        pageMeta.title = item.page_urls.join('\n');
+        meta.appendChild(pageMeta);
+      }
       const categorySelect = document.createElement('select');
       categorySelect.dataset.imageCategory = url;
       fillDirectAcquireImageCategorySelect(categorySelect, directAcquireImageCategoryByUrl.get(url) || '', 'No Category');
@@ -1298,9 +1729,9 @@ App.acquire = (function () {
     });
 
     if (seeMoreBtn) {
-      if (images.length > 24) {
+      if (filteredImages.length > 24) {
         seeMoreBtn.classList.remove('hidden');
-        seeMoreBtn.textContent = directAcquireImagesExpanded ? 'Show Less' : `See More (${images.length - 24} more)`;
+        seeMoreBtn.textContent = directAcquireImagesExpanded ? 'Show Less' : `See More (${filteredImages.length - 24} more)`;
       } else {
         seeMoreBtn.classList.add('hidden');
       }
@@ -1315,8 +1746,10 @@ App.acquire = (function () {
   }
 
   async function saveDirectAcquireSelectedImages() {
-    const images = Array.isArray(state.directAcquireCurrentRun?.image_summary?.images) ? state.directAcquireCurrentRun.image_summary.images : [];
-    const selected = images.filter((item) => directAcquireSelectedImages.has(String(item?.url || '').trim()));
+    const images = getDirectAcquireImages();
+    const selected = images
+      .map((item) => normalizeDirectAcquireImageRecord(item))
+      .filter((item) => directAcquireSelectedImages.has(String(item?.url || '').trim()));
     if (!selected.length) throw new Error('No images selected.');
     const sourceUrl = String(state.directAcquireCurrentRun?.source_url || '').trim();
     let hostTag = '';
@@ -1328,14 +1761,21 @@ App.acquire = (function () {
     await Promise.all(selected.map((item, index) => {
       const url = String(item?.url || '').trim();
       const category = String(directAcquireImageCategoryByUrl.get(url) || '').trim();
+      const roleTags = Array.isArray(item.roles) ? item.roles.slice(0, 6) : [];
+      const sourceTags = Array.isArray(item.sources) ? item.sources.slice(0, 3) : [];
+      const formatTag = item.format && item.format !== 'unknown' ? `format:${item.format}` : '';
       return api('/api/assets', {
         method: 'POST',
         body: JSON.stringify({
-          assetName: sanitizeImageNameFromUrl(url, index),
+          assetName: item.filename || sanitizeImageNameFromUrl(url, index),
           assetType: 'Image',
           category,
           location: url,
-          tags: ['acquire.web', 'web-image'].concat(hostTag ? [hostTag] : []),
+          tags: ['acquire.web', 'web-image']
+            .concat(hostTag ? [hostTag] : [])
+            .concat(formatTag ? [formatTag] : [])
+            .concat(roleTags.map((role) => `role:${role}`))
+            .concat(sourceTags.map((source) => `source:${source}`)),
         }),
       });
     }));
@@ -2199,15 +2639,13 @@ App.acquire = (function () {
     const notesInput = document.getElementById('directAcquireWebsitePeerNotes');
     if (idInput) idInput.value = directAcquireWebsitePeerEditingId;
     const referenceRole = getWebsitePeerReferenceRole(peer);
-    if (roleInput) roleInput.value = referenceRole === 'model' ? 'model' : 'peer';
+    if (roleInput) roleInput.value = normalizeDiscoveryReferenceRole(referenceRole, 'peer');
     if (typeInput) typeInput.value = String(peer?.website_model || '').trim() || (WEBSITE_PEER_MODELS.includes('Direct Competitors') ? 'Direct Competitors' : (WEBSITE_PEER_MODELS[0] || ''));
     if (sourceUrlInput) sourceUrlInput.value = String(peer?.source_url || '').trim();
     if (siteUrlInput) siteUrlInput.value = String(peer?.site_url || '').trim();
     if (titleInput) titleInput.value = String(peer?.title || '').trim();
     if (modelInput) {
-      modelInput.value = referenceRole === 'model'
-        ? ACQUIRE_WEBSITE_TYPE_LABELS.model
-        : ACQUIRE_WEBSITE_TYPE_LABELS.peer;
+      modelInput.value = ACQUIRE_WEBSITE_TYPE_LABELS[referenceRole] || ACQUIRE_WEBSITE_TYPE_LABELS.peer;
     }
     if (keywordsInput) keywordsInput.value = Array.isArray(peer?.matched_keywords) ? peer.matched_keywords.join(', ') : '';
     if (snippetInput) snippetInput.value = String(peer?.snippet || '').trim();
@@ -3417,7 +3855,7 @@ App.acquire = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 9;
+      td.colSpan = 8;
       td.textContent = 'No Reddit thread candidates found for the current filters.';
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -3768,6 +4206,8 @@ App.acquire = (function () {
     directAcquireSelectedImages = new Set();
     directAcquireImageCategoryByUrl = new Map();
     directAcquireImagesExpanded = false;
+    directAcquireImageMeasured = new Map();
+    resetDirectAcquireImageFiltersUi();
     directAcquireSelectedHashtags = new Set();
     directAcquireSelectedKeywords = new Set();
     renderDirectAcquirePagesTable();
@@ -4219,11 +4659,13 @@ App.acquire = (function () {
       directAcquirePeerDiscoverySelectAll.dataset.bound = '1';
       directAcquirePeerDiscoverySelectAll.addEventListener('change', function () {
         const checked = !!directAcquirePeerDiscoverySelectAll.checked;
-        readDirectAcquirePeerDiscoveryFiltersFromDom();
+        const wasBulkMode = isPeerDiscoveryBulkMode();
         const visibleIndexes = new Set(getFilteredPeerDiscoveryEntries().map((entry) => entry.index));
         directAcquirePeerDiscoveryResults = directAcquirePeerDiscoveryResults.map((item, index) => (
           visibleIndexes.has(index) ? { ...item, selected: checked } : item
         ));
+        if (!wasBulkMode && isPeerDiscoveryBulkMode()) resetPeerDiscoveryBulkDraft();
+        if (wasBulkMode && !isPeerDiscoveryBulkMode()) resetPeerDiscoveryBulkDraft();
         renderDirectAcquirePeerDiscoveryResults();
       });
     }
@@ -4339,14 +4781,65 @@ App.acquire = (function () {
     const directAcquireImageSelectAll = document.getElementById('directAcquireImageSelectAll');
     if (directAcquireImageSelectAll) {
       directAcquireImageSelectAll.addEventListener('change', function () {
-        const images = Array.isArray(state.directAcquireCurrentRun?.image_summary?.images) ? state.directAcquireCurrentRun.image_summary.images : [];
-        const visible = (directAcquireImagesExpanded ? images : images.slice(0, 24))
+        syncDirectAcquireImageFiltersFromUi();
+        const visible = (directAcquireImagesExpanded ? getFilteredDirectAcquireImages() : getFilteredDirectAcquireImages().slice(0, 24))
           .map((item) => String(item?.url || '').trim())
           .filter(Boolean);
         visible.forEach((url) => {
           if (directAcquireImageSelectAll.checked) directAcquireSelectedImages.add(url);
           else directAcquireSelectedImages.delete(url);
         });
+        renderDirectAcquireImageGallery();
+      });
+    }
+    const directAcquireImageFilterIds = [
+      'directAcquireImageFilterQuery',
+      'directAcquireImageFilterFormat',
+      'directAcquireImageFilterSource',
+      'directAcquireImageFilterRole',
+      'directAcquireImageFilterAspect',
+      'directAcquireImageFilterPage',
+      'directAcquireImageFilterMinWidth',
+      'directAcquireImageFilterMaxWidth',
+    ];
+    directAcquireImageFilterIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        syncDirectAcquireImageFiltersFromUi();
+        renderDirectAcquireImageGallery();
+      });
+      el.addEventListener('change', () => {
+        syncDirectAcquireImageFiltersFromUi();
+        renderDirectAcquireImageGallery();
+      });
+    });
+    const directAcquireImageSelectFilteredBtn = document.getElementById('directAcquireImageSelectFilteredBtn');
+    if (directAcquireImageSelectFilteredBtn) {
+      directAcquireImageSelectFilteredBtn.addEventListener('click', () => {
+        syncDirectAcquireImageFiltersFromUi();
+        getFilteredDirectAcquireImages().forEach((item) => {
+          const url = String(item?.url || '').trim();
+          if (url) directAcquireSelectedImages.add(url);
+        });
+        renderDirectAcquireImageGallery();
+      });
+    }
+    const directAcquireImageDeselectFilteredBtn = document.getElementById('directAcquireImageDeselectFilteredBtn');
+    if (directAcquireImageDeselectFilteredBtn) {
+      directAcquireImageDeselectFilteredBtn.addEventListener('click', () => {
+        syncDirectAcquireImageFiltersFromUi();
+        getFilteredDirectAcquireImages().forEach((item) => {
+          const url = String(item?.url || '').trim();
+          if (url) directAcquireSelectedImages.delete(url);
+        });
+        renderDirectAcquireImageGallery();
+      });
+    }
+    const directAcquireImageClearFiltersBtn = document.getElementById('directAcquireImageClearFiltersBtn');
+    if (directAcquireImageClearFiltersBtn) {
+      directAcquireImageClearFiltersBtn.addEventListener('click', () => {
+        resetDirectAcquireImageFiltersUi();
         renderDirectAcquireImageGallery();
       });
     }
@@ -4462,7 +4955,7 @@ App.acquire = (function () {
         try {
           const formData = new FormData(directAcquireWebsitePeerForm);
           const existingPeer = directAcquireWebsitePeers.find((item) => String(item?.id || '') === String(directAcquireWebsitePeerEditingId || '')) || null;
-          const referenceRole = String(formData.get('reference_role') || 'peer').trim().toLowerCase() === 'model' ? 'model' : 'peer';
+          const referenceRole = normalizeDiscoveryReferenceRole(formData.get('reference_role'), 'peer');
           const payload = {
             source_url: String(formData.get('source_url') || '').trim(),
             site_url: String(formData.get('site_url') || '').trim(),
@@ -4573,6 +5066,8 @@ App.acquire = (function () {
           directAcquireSelectedImages = new Set();
           directAcquireImageCategoryByUrl = new Map();
           directAcquireImagesExpanded = false;
+          directAcquireImageMeasured = new Map();
+          resetDirectAcquireImageFiltersUi();
           directAcquireSelectedHashtags = new Set();
           directAcquireSelectedKeywords = new Set();
           renderDirectAcquirePagesTable();
