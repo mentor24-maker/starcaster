@@ -1,6 +1,19 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
+
+/**
+ * Builder records created from the React editor have no explicit templateId;
+ * derive a slug-style id from the record's slug or name. Creates get a time
+ * suffix for uniqueness; updates stay stable for an unchanged name.
+ */
+function deriveTemplateId(body, name, { unique = false } = {}) {
+  const explicit = String(body.templateId || '').trim();
+  if (explicit) return explicit;
+  const source = String(body.slug || body.emailSlug || name || '').trim();
+  const base = source.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'builder';
+  return unique ? `${base}-${Date.now().toString(36)}` : base;
+}
 const { exec } = require('child_process');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/developFormsStore');
@@ -206,15 +219,16 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/develop/landing-pages' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
-    const templateId = String(body.templateId || '').trim();
 
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!templateId) return sendErr(res, 400, 'templateId is required', { code: 'VALIDATION_ERROR' }), true;
+    const templateId = deriveTemplateId(body, name, { unique: true });
 
     const result = await createLandingPage({
       name,
       templateKind: body.templateKind || body.template_kind,
       templateId,
+      slug: body.slug,
+      isPublished: body.isPublished ?? body.is_published,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
       accentColor: String(body.accentColor || '').trim(),
@@ -259,10 +273,9 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/develop/page-templates' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
-    const templateId = String(body.templateId || '').trim();
 
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!templateId) return sendErr(res, 400, 'templateId is required', { code: 'VALIDATION_ERROR' }), true;
+    const templateId = deriveTemplateId(body, name, { unique: true });
 
     const result = await createPageTemplate({
       name,
@@ -346,9 +359,12 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/develop/modules' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
-    const moduleType = String(body.moduleType || body.module_type || '').trim();
+    // The React builder saves cell-module groups without an explicit type;
+    // derive it from the first contained module.
+    const moduleType = String(body.moduleType || body.module_type || '').trim()
+      || String((Array.isArray(body.modules) && body.modules[0]?.type) || '').trim()
+      || 'cell';
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!moduleType) return sendErr(res, 400, 'moduleType is required', { code: 'VALIDATION_ERROR' }), true;
     const module = await createModule({
       name,
       moduleType,
@@ -425,12 +441,21 @@ async function handle(req, res, pathname, method) {
   const moduleMatch = pathname.match(/^\/api\/develop\/modules\/([^/]+)$/);
   if (moduleMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
-    const module = await updateModule(moduleMatch[1], {
-      name: String(body.name || '').trim(),
-      moduleType: String(body.moduleType || body.module_type || '').trim(),
-      classId: body.classId !== undefined ? body.classId : body.class_id,
-      settings: body && typeof body.settings === 'object' ? body.settings : {},
-    }, scope);
+    // Only forward provided fields; updateModule merges over the existing record.
+    const input = {};
+    if (body.name !== undefined) input.name = String(body.name || '').trim();
+    if (body.moduleType !== undefined || body.module_type !== undefined) {
+      input.moduleType = String(body.moduleType || body.module_type || '').trim();
+    }
+    if (body.moduleClass !== undefined || body.module_class !== undefined) {
+      input.moduleClass = String(body.moduleClass || body.module_class || '').trim();
+    }
+    if (Array.isArray(body.modules)) input.modules = body.modules;
+    if (body.classId !== undefined || body.class_id !== undefined) {
+      input.classId = body.classId !== undefined ? body.classId : body.class_id;
+    }
+    if (body.settings && typeof body.settings === 'object') input.settings = body.settings;
+    const module = await updateModule(moduleMatch[1], input, scope);
     if (!module) return sendErr(res, 500, 'Could not update module'), true;
     return sendOk(res, 200, module, { module }), true;
   }
@@ -679,6 +704,34 @@ async function handle(req, res, pathname, method) {
 
   const formIdMatch = String(pathname || '').match(/^\/api\/develop\/forms\/([^/]+)\/?$/);
   const emailTemplateIdMatch = String(pathname || '').match(/^\/api\/develop\/email-templates\/([^/]+)\/?$/);
+  const emailTemplateRenderMatch = String(pathname || '').match(/^\/api\/develop\/email-templates\/([^/]+)\/render\/?$/);
+
+  if (emailTemplateRenderMatch && requestMethod === 'POST') {
+    const templateId = decodeURIComponent(emailTemplateRenderMatch[1] || '').trim();
+    if (!templateId) return sendErr(res, 400, 'email template id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const listResult = await listEmailTemplates(undefined, scope);
+    if (!listResult.ok) return sendErr(res, listResult.status || 500, listResult.error || 'Could not load email templates'), true;
+    const template = (Array.isArray(listResult.data) ? listResult.data : [])
+      .find((row) => String(row.id) === templateId);
+    if (!template) return sendErr(res, 404, 'Email template not found', { code: 'NOT_FOUND' }), true;
+
+    const body = await parseJsonBody(req);
+    const { renderBuilderEmailHtmlWithFallback } = require('../lib/builder/email-render');
+    const requested = body && typeof body.mergeContext === 'object' ? body.mergeContext : {};
+    const siteUrl = String(requested.siteUrl || process.env.SITE_URL || '').trim();
+    const mergeContext = {
+      confirmationUrl: String(requested.confirmationUrl || ''),
+      email: String(requested.email || ''),
+      siteUrl,
+    };
+    const html = renderBuilderEmailHtmlWithFallback(
+      template,
+      mergeContext,
+      template.emailFunction || 'signup_confirmation'
+    );
+    return sendOk(res, 200, { html }, { html }), true;
+  }
   const extensionIdMatch = String(pathname || '').match(/^\/api\/develop\/extensions\/([^/]+)\/?$/);
   const extensionUseMatch = String(pathname || '').match(/^\/api\/develop\/extensions\/([^/]+)\/use\/?$/);
   if (formIdMatch && requestMethod === 'PATCH') {
@@ -890,15 +943,16 @@ async function handle(req, res, pathname, method) {
 
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
-    const templateId = String(body.templateId || '').trim();
 
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!templateId) return sendErr(res, 400, 'templateId is required', { code: 'VALIDATION_ERROR' }), true;
+    const templateId = deriveTemplateId(body, name);
 
     const result = await updateLandingPage(landingPageId, {
       name,
       templateKind: body.templateKind || body.template_kind,
       templateId,
+      slug: body.slug,
+      isPublished: body.isPublished ?? body.is_published,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
       accentColor: String(body.accentColor || '').trim(),
@@ -962,10 +1016,9 @@ async function handle(req, res, pathname, method) {
 
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
-    const templateId = String(body.templateId || '').trim();
 
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    if (!templateId) return sendErr(res, 400, 'templateId is required', { code: 'VALIDATION_ERROR' }), true;
+    const templateId = deriveTemplateId(body, name);
 
     const result = await updatePageTemplate(pageTemplateId, {
       name,
