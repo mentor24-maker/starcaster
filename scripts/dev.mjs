@@ -29,7 +29,7 @@ runSync('npm', ['run', 'build:builder']);
 
 const watchers = [
   ['npx', ['esbuild', 'react-entry.js', '--bundle', '--outfile=public/bundle.js', '--loader:.js=jsx', '--watch']],
-  ['npx', ['esbuild', 'builder-react-entry.jsx', '--bundle', '--outfile=public/builder-bundle.js', '--loader:.jsx=jsx', '--loader:.js=jsx', '--watch']],
+  ['node', ['scripts/build_builder_bundle.mjs', '--watch']],
   ['npx', ['esbuild', 'src/css/main.css', '--bundle', '--outfile=public/styles.css', '--watch']],
 ];
 
