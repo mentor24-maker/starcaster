@@ -1,9 +1,11 @@
+import { useState } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
 import {
   BACKGROUND_STYLE_PRESETS,
   createDefaultBackgroundSettings,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
+import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { BuilderSettingRow } from "./builder-setting-row";
 
 type BuilderBackgroundControlsProps = {
@@ -32,6 +34,42 @@ export function BuilderBackgroundControls({
   hideClear = false,
   showColorFieldLabel = true
 }: BuilderBackgroundControlsProps) {
+  const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
+
+  // When no external gallery callback is wired (e.g. cell/page/poll
+  // backgrounds), fall back to the standard self-contained gallery picker so
+  // backgrounds are chosen the same way as every other image.
+  function renderBackgroundGalleryAction() {
+    if (onChooseImage) {
+      return (
+        <button className="secondary-button builder-gallery-button" onClick={onChooseImage} type="button">
+          Choose Background Image
+        </button>
+      );
+    }
+
+    return (
+      <button
+        className="secondary-button builder-gallery-button"
+        onClick={() => setIsFallbackGalleryOpen(true)}
+        type="button"
+      >
+        Choose From Gallery
+      </button>
+    );
+  }
+
+  const fallbackGallery = isFallbackGalleryOpen ? (
+    <BuilderGalleryModal
+      isUploading={false}
+      onSelectImage={(path) => {
+        onChange((current) => ({ ...current, imageUrl: normalizeBuilderAssetUrl(path) }));
+        setIsFallbackGalleryOpen(false);
+      }}
+      onClose={() => setIsFallbackGalleryOpen(false)}
+    />
+  ) : null;
+
   if (horizontal) {
     return (
       <div className="builder-background-controls builder-background-controls-horizontal">
@@ -122,15 +160,7 @@ export function BuilderBackgroundControls({
               />
             </BuilderSettingRow>
             <div className="builder-media-actions">
-              {onChooseImage ? (
-                <button
-                  className="secondary-button builder-gallery-button"
-                  onClick={onChooseImage}
-                  type="button"
-                >
-                  Choose Background Image
-                </button>
-              ) : null}
+              {renderBackgroundGalleryAction()}
               {onUploadImage ? (
                 <label className="secondary-button builder-gallery-button builder-upload-button">
                   <span>Upload Background</span>
@@ -146,6 +176,7 @@ export function BuilderBackgroundControls({
                 </label>
               ) : null}
             </div>
+            {fallbackGallery}
           </>
         ) : null}
 
@@ -271,15 +302,7 @@ export function BuilderBackgroundControls({
             />
           </label>
           <div className="builder-media-actions">
-            {onChooseImage ? (
-              <button
-                className="secondary-button builder-gallery-button"
-                onClick={onChooseImage}
-                type="button"
-              >
-                Choose Background Image
-              </button>
-            ) : null}
+            {renderBackgroundGalleryAction()}
             {onUploadImage ? (
               <label className="secondary-button builder-gallery-button builder-upload-button">
                 <span>Upload Background</span>
@@ -295,6 +318,7 @@ export function BuilderBackgroundControls({
               </label>
             ) : null}
           </div>
+          {fallbackGallery}
         </div>
       ) : null}
     </div>

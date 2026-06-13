@@ -1,7 +1,9 @@
 import Image from "next/image";
 import { type CSSProperties, type DragEvent, useRef, useState } from "react";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
-import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
+import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
+import { BuilderCenteredModal } from "./builder-centered-modal";
+import { BuilderImagePickerField } from "./builder-image-picker-field";
 import type {
   BackgroundSettings,
   BuilderProductRecord,
@@ -772,21 +774,24 @@ function cloneTableCellModule(module: BuilderTemplateModule, suffix: string): Bu
 function TableCellInlinePalette({
   onSelect,
   onClose,
-  position
+  anchor
 }: {
   onSelect: (item: ModulePaletteItem) => void;
   onClose: () => void;
-  position: { top: number; left: number };
+  anchor: BuilderModalAnchor;
 }) {
   const [group, setGroup] = useState<ModulePaletteGroup | null>(null);
   const groups = modulePaletteGroups.filter((g) => g.value !== "table" && g.value !== "contact-form");
   const items = group ? modulePaletteItems.filter((item) => item.group === group) : [];
+  // Keep the popup on-screen even when the cell sits at the far edge of the
+  // workspace (matches the .builder-table-inline-palette CSS box: 260×340).
+  const style = getAnchoredModalStyle(anchor, { width: 260, height: 340, align: "start", gap: 4 });
 
   return (
     <div
       className="builder-table-inline-palette"
       onClick={(e) => e.stopPropagation()}
-      style={{ top: position.top, left: position.left }}
+      style={style}
     >
       <div className="builder-table-palette-header">
         <strong>{group ? "Choose a module" : "Choose a group"}</strong>
@@ -852,7 +857,7 @@ function TableCellModules({
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [palettePos, setPalettePos] = useState({ top: 0, left: 0 });
+  const [paletteAnchor, setPaletteAnchor] = useState<BuilderModalAnchor>({ x: 0, y: 0 });
   const addBtnRef = useRef<HTMLButtonElement | null>(null);
 
   function addModule(item: ModulePaletteItem) {
@@ -908,8 +913,9 @@ function TableCellModules({
             <button type="button" className="builder-icon-button" onClick={() => moveModule(mod.id, 1)} title="Move down">↓</button>
             <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeModule(mod.id)} title="Remove">✕</button>
           </div>
-          {editingId !== mod.id ? renderCompactCellModulePreview(mod) : null}
+          {renderCompactCellModulePreview(mod)}
           {editingId === mod.id && (
+            <BuilderCenteredModal title={mod.name || mod.type} onClose={() => setEditingId(null)}>
             <div className="builder-table-cell-module-editor">
               <label className="field">
                 <span>Module label</span>
@@ -979,7 +985,10 @@ function TableCellModules({
                 <>
                   <label className="field">
                     <span>Media URL</span>
-                    <input type="text" value={mod.settings.url ?? ""} onChange={(e) => updateModuleSettings(mod.id, { url: normalizeBuilderAssetUrl(e.target.value) })} placeholder="https://..." />
+                    <BuilderImagePickerField
+                      value={mod.settings.url ?? ""}
+                      onChange={(url) => updateModuleSettings(mod.id, { url })}
+                    />
                   </label>
                   <div className="builder-table-cell-module-inline-grid">
                     <label className="field">
@@ -1007,6 +1016,7 @@ function TableCellModules({
                 </>
               )}
             </div>
+            </BuilderCenteredModal>
           )}
         </div>
       ))}
@@ -1019,7 +1029,7 @@ function TableCellModules({
             e.stopPropagation();
             if (!paletteOpen && addBtnRef.current) {
               const rect = addBtnRef.current.getBoundingClientRect();
-              setPalettePos({ top: rect.bottom + 4, left: rect.left });
+              setPaletteAnchor({ x: rect.left, y: rect.bottom });
             }
             setPaletteOpen(!paletteOpen);
           }}
@@ -1031,7 +1041,7 @@ function TableCellModules({
           <TableCellInlinePalette
             onSelect={addModule}
             onClose={() => setPaletteOpen(false)}
-            position={palettePos}
+            anchor={paletteAnchor}
           />
         )}
       </div>
@@ -1265,7 +1275,7 @@ function SliderModuleEditor({
             <div className="builder-slider-item-grid">
               <label className="field"><span>Title</span><input type="text" value={item.title} onChange={(e) => updateItem(item.id, { title: e.target.value })} /></label>
               <label className="field"><span>Link</span><input type="text" value={item.linkUrl} onChange={(e) => updateItem(item.id, { linkUrl: e.target.value })} placeholder="/path-or-url" /></label>
-              <label className="field builder-slider-item-grid-full"><span>Image URL</span><input type="text" value={item.imageUrl} onChange={(e) => updateItem(item.id, { imageUrl: normalizeBuilderAssetUrl(e.target.value) })} placeholder="https://..." /></label>
+              <label className="field builder-slider-item-grid-full"><span>Image URL</span><BuilderImagePickerField value={item.imageUrl} onChange={(url) => updateItem(item.id, { imageUrl: url })} /></label>
               <label className="field builder-slider-item-grid-full"><span>Description</span><textarea className="builder-textarea" rows={3} value={item.body} onChange={(e) => updateItem(item.id, { body: e.target.value })} placeholder="Add copy for this slide" /></label>
             </div>
           </div>

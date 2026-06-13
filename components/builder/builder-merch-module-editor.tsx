@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import type { BuilderProductRecord, BuilderTemplateModule } from "@/lib/builder-template";
-import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import { BuilderProductPickerModal } from "@/components/builder/builder-product-picker-modal";
+import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderSettingRow } from "./builder-setting-row";
 
 type MerchModuleEditorProps = {
@@ -77,13 +77,10 @@ export function MerchModuleEditor({ module, products, onUpdateModule }: MerchMod
         </BuilderSettingRow>
 
         <BuilderSettingRow fullWidth label="Image URL">
-          <input
+          <BuilderImagePickerField
             placeholder="https://ih1.redbubble.net/..."
-            type="text"
             value={module.settings.imageUrl ?? ""}
-            onChange={(event) =>
-              updateSettings({ imageUrl: normalizeBuilderAssetUrl(event.target.value) })
-            }
+            onChange={(url) => updateSettings({ imageUrl: url })}
           />
         </BuilderSettingRow>
 
