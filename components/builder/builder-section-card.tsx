@@ -182,7 +182,7 @@ export function BuilderSectionCard({
 
   function getCellStyle(column: string): CSSProperties {
     const borderStyle = (section as unknown as Record<string, Record<string, string>>).cellBorderStyle?.[column] ?? "solid";
-    const borderWidth = Number.parseInt(section.cellBorderWidth[column] ?? "1", 10);
+    const borderWidth = Number.parseInt(section.cellBorderWidth[column] ?? "0", 10);
     const borderRadius = Number.parseInt(section.cellBorderRadius[column] ?? "24", 10);
     const shadow = (section as unknown as Record<string, Record<string, string>>).cellShadow?.[column] ?? "none";
     const opacity = (section as unknown as Record<string, Record<string, string>>).cellOpacity?.[column];
@@ -199,13 +199,11 @@ export function BuilderSectionCard({
       ...getVerticalMarginStyle(section.cellVerticalMargin?.[column] ?? "0"),
       padding: `${section.cellPadding[column] ?? "18"}px`,
       borderStyle: borderStyle === "none" ? "none" : borderStyle,
-      borderWidth: borderStyle === "none" ? 0 : `${Math.max(Number.isFinite(borderWidth) ? borderWidth : 1, 0)}px`,
-      borderColor: section.cellBorderColor[column] ?? "#d9e4ef",
+      borderWidth: borderStyle === "none" ? 0 : `${Math.max(Number.isFinite(borderWidth) ? borderWidth : 0, 0)}px`,
+      borderColor: section.cellBorderColor[column] ?? "transparent",
       borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 24, 0)}px`,
       boxShadow: shadowMap[shadow] ?? "none",
-      opacity: opacity ? Number.parseFloat(opacity) : undefined,
-      alignItems: (section as unknown as Record<string, Record<string, string>>).cellAlignItems?.[column] ?? undefined,
-      justifyContent: (section as unknown as Record<string, Record<string, string>>).cellJustifyContent?.[column] ?? undefined
+      opacity: opacity ? Number.parseFloat(opacity) : undefined
     };
   }
 

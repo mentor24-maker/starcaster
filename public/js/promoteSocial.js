@@ -260,7 +260,53 @@ App.promoteSocial = (function () {
   function formatPlatformLabel(channel) {
     const key = safeText(channel).toLowerCase();
     if (key === 'facebook_personal') return 'Facebook Personal';
+    if (key === 'facebook') return 'Facebook Page';
     return safeText(channel).toUpperCase() || 'X';
+  }
+
+  // Token guards against an in-flight Facebook status lookup overwriting the
+  // destination line after the user has already switched campaigns.
+  let destinationRenderToken = 0;
+
+  async function renderDestination() {
+    const elDest = el('promoteSocialDestination');
+    if (!elDest) return;
+    const token = ++destinationRenderToken;
+    const campaign = getSelectedCampaign();
+    if (!campaign) { elDest.textContent = ''; return; }
+
+    const delivery = socialDeliveryForCampaign(campaign, parseConfig(campaign));
+    if (delivery.missingChannel) {
+      elDest.textContent = 'Destination: campaign channel not loaded yet — refresh and try again.';
+      return;
+    }
+    const platform = safeText(delivery.targetPlatform).toLowerCase();
+    if (!platform) {
+      elDest.textContent = 'Destination: no channel set on this campaign. Pick one in Campaign assembly.';
+      return;
+    }
+    const label = formatPlatformLabel(delivery.publisher);
+
+    if (delivery.publisher === 'facebook') {
+      elDest.textContent = `Destination: ${label} — checking connected Page…`;
+      try {
+        const status = await promoteSocialApi('/api/promote/social/facebook/status');
+        if (token !== destinationRenderToken) return;
+        if (status && status.configured) {
+          const page = safeText(status.pageName) || 'connected Page';
+          elDest.textContent = `Destination: ${label} — ${page}`;
+        } else {
+          elDest.textContent = 'Destination: Facebook — no Page connected. Connect one in Settings → APIs → Meta before sending.';
+        }
+      } catch (_) {
+        if (token !== destinationRenderToken) return;
+        elDest.textContent = `Destination: ${label} (could not verify the connected Page)`;
+      }
+      return;
+    }
+
+    const account = safeText(delivery.targetAccount);
+    elDest.textContent = account ? `Destination: ${label} — ${account}` : `Destination: ${label}`;
   }
 
   function openPostPreviewModal(post, previewPayload) {
@@ -961,6 +1007,7 @@ App.promoteSocial = (function () {
       setStatus(`Could not load queue/history: ${safeText(postsRes.reason?.message) || 'unknown error'}`);
     }
     updateScheduleTimezoneHint();
+    renderDestination();
   }
 
   // --- Init ---
@@ -977,6 +1024,9 @@ App.promoteSocial = (function () {
     if (bufferDiagnosticsBtn) bufferDiagnosticsBtn.addEventListener('click', runBufferDiagnostics);
     if (sendNowBtn) sendNowBtn.addEventListener('click', handleSendNow);
     if (scheduleBtn) scheduleBtn.addEventListener('click', handleSchedule);
+
+    const campaignSelect = el('promoteSocialCampaignSelect');
+    if (campaignSelect) campaignSelect.addEventListener('change', () => { renderDestination(); });
 
     if (publishDueBtn) {
       publishDueBtn.addEventListener('click', async function () {

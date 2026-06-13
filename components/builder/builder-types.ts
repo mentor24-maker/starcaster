@@ -4,7 +4,8 @@ import type {
   BuilderTemplateLayout,
   BuilderTemplateKind,
   BuilderTemplateModuleType,
-  BuilderTemplateRecord
+  BuilderTemplateRecord,
+  BuilderTheme
 } from "@/lib/builder-template";
 import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
@@ -44,6 +45,7 @@ export type BuilderDraft = {
   templateKind: BuilderTemplateKind;
   emailFunction: BuilderEmailFunction | "";
   pageBackground: BackgroundSettings;
+  theme: BuilderTheme;
   layoutSections: import("@/lib/builder-template").BuilderTemplateSection[];
 };
 

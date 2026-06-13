@@ -30,6 +30,7 @@ import {
   getAlignmentClass,
   getButtonModuleStyle,
   getHeadingModuleStyle,
+  getThemeRootVars,
   columnHasOnlySectionScopedOverlayModules,
   getOverlayFlowCollapsedColumnStyle,
   getOverlayFlowCollapsedModuleStyle,
@@ -41,6 +42,7 @@ import {
   resolveSectionScopedOverlaySectionZIndex,
   sectionHasOnlyPageOverlayImageModules,
   sectionHasOnlySectionScopedOverlayModules,
+  getCellContentAlignmentStyle,
   getModuleAlignment,
   getModuleBackgroundSettings,
   getSectionMarginStyle,
@@ -68,6 +70,8 @@ import { getPlayerPortalAuthSettings, PlayerPortalAuthForm } from "@/components/
 type BuilderTemplatePreviewProps = {
   layoutSections: BuilderTemplateSection[];
   pageBackground: import("@/lib/builder-template").BackgroundSettings;
+  /** Document-level theme; when omitted, content renders with the pre-theme baseline. */
+  theme?: import("@/lib/builder-template").BuilderTheme;
   showShell?: boolean;
   emailPreview?: boolean;
   /** When true (Builder /preview), speech bubbles with game/on-load triggers do not auto-fire. */
@@ -214,11 +218,15 @@ function MerchProductCard({ settings }: { settings: Record<string, string> }) {
 export function BuilderTemplatePreview({
   layoutSections,
   pageBackground,
+  theme,
   showShell = true,
   emailPreview = false,
   previewMode = false
 }: BuilderTemplatePreviewProps) {
   const pageStyle = getBuilderBackgroundStyle(pageBackground);
+  // Theme tokens go first so the page background (and any per-module inline
+  // styles further down) still win where they overlap.
+  const rootStyle = { ...getThemeRootVars(theme), ...pageStyle };
   const sitePlayerRegistered = useSitePlayerRegistration();
 
   /** Live and builder previews need the shell so overlay-flow rows stack above the game wash. */
@@ -234,7 +242,7 @@ export function BuilderTemplatePreview({
             : shellClassName
           : undefined
       }
-      style={pageStyle}
+      style={rootStyle}
     >
       {pageOverlaySections.length > 0 ? (
         <div className="builder-preview-overlay-layer" aria-hidden={false}>
@@ -315,7 +323,7 @@ function BuilderSectionPreview({
         const padding = section.cellPadding?.[columnKey] ?? "0";
         const verticalMargin = section.cellVerticalMargin?.[columnKey] ?? "0";
         const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
-        const borderColor = section.cellBorderColor?.[columnKey] ?? "#d9e4ef";
+        const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
         const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
         const isPageOverlayFlowColumn =
           columnModules.length > 0 &&
@@ -335,6 +343,12 @@ function BuilderSectionPreview({
               ? undefined
               : `${borderWidth}px solid ${borderColor}`,
           borderRadius: isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${borderRadius}px`,
+          ...(isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? {}
+            : getCellContentAlignmentStyle(
+                section.cellHAlign?.[columnKey] ?? "left",
+                section.cellVAlign?.[columnKey] ?? "top"
+              )),
           position: "relative"
         };
 
