@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
+import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 
 export type BuilderFloatingSaveAction = {
   label: string;
@@ -127,20 +127,21 @@ export function BuilderFloatingSaveRail({ actions, isSaving }: BuilderFloatingSa
     return null;
   }
 
-  return createPortal(
-    <aside aria-label="Save actions" className="builder-floating-save-rail" style={position}>
-      {actionsRef.current.map((action) => (
-        <button
-          key={action.label}
-          className="submit-button admin-blog-add-button"
-          disabled={isSaving}
-          onClick={action.onSave}
-          type="button"
-        >
-          {isSaving ? action.savingLabel : action.label}
-        </button>
-      ))}
-    </aside>,
-    document.body
+  return (
+    <BuilderBodyPortal>
+      <aside aria-label="Save actions" className="builder-floating-save-rail" style={position}>
+        {actionsRef.current.map((action) => (
+          <button
+            key={action.label}
+            className="submit-button admin-blog-add-button"
+            disabled={isSaving}
+            onClick={action.onSave}
+            type="button"
+          >
+            {isSaving ? action.savingLabel : action.label}
+          </button>
+        ))}
+      </aside>
+    </BuilderBodyPortal>
   );
 }

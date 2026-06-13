@@ -83,8 +83,15 @@ async function readAdminJson<T extends AdminApiPayload>(response: Response, fall
   return data;
 }
 
-export function AdminBuilderEditor() {
-  const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">("templates");
+type AdminBuilderEditorProps = {
+  /** Mode to open in when the editor is mounted to edit a specific record (page/template). */
+  initialMode?: "templates" | "modules" | "pages";
+  /** Id of the page (initialMode "pages") or template (initialMode "templates") to preselect on mount. */
+  initialRecordId?: string;
+};
+
+export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilderEditorProps = {}) {
+  const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">(initialMode ?? "templates");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
   const [pages, setPages] = useState<BuilderPageRecord[]>([]);
@@ -120,8 +127,11 @@ export function AdminBuilderEditor() {
   const [collapsedBuilderPanels, setCollapsedBuilderPanels] = useState({
     rowConfigurations: true,
     rows: false,
-    workspace: true
+    // Reveal the workspace immediately when we mount to edit a specific record;
+    // otherwise the page's sections stay hidden behind a collapsed panel.
+    workspace: !initialRecordId
   });
+  const appliedInitialSelectionRef = useRef(false);
   const [savedSectionSelectKey, setSavedSectionSelectKey] = useState(0);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -273,6 +283,30 @@ export function AdminBuilderEditor() {
     setIsPublishedPage(page?.isPublished ?? true);
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
+
+  // When mounted to edit a specific record (e.g. the legacy "Edit Page" action
+  // mounts this island with a record), preselect it once its list has loaded so
+  // the editor opens on that page/template instead of the empty default view.
+  useEffect(() => {
+    if (appliedInitialSelectionRef.current || !initialRecordId) {
+      return;
+    }
+
+    if (initialMode === "pages") {
+      const match = pages.find((entry) => String(entry.id) === String(initialRecordId));
+      if (!match) return;
+      appliedInitialSelectionRef.current = true;
+      setSelectedPageId(match.id);
+      return;
+    }
+
+    if (initialMode === "templates") {
+      const match = pageTemplates.find((entry) => String(entry.id) === String(initialRecordId));
+      if (!match) return;
+      appliedInitialSelectionRef.current = true;
+      setSelectedTemplateId(match.id);
+    }
+  }, [initialMode, initialRecordId, pages, pageTemplates]);
 
   useEffect(() => {
     if (builderMode !== "pages") {
@@ -1452,7 +1486,10 @@ export function AdminBuilderEditor() {
 
   async function savePage() {
     if (!draft.name.trim()) { setError("Page title is required."); return; }
-    if (!pageSlug.trim()) { setError("Page slug is required."); return; }
+    // An empty slug is the root/home page (the DB unique index excludes empty
+    // slugs). Allow saving an existing root page without a slug; only require
+    // one when creating a new page so we don't silently mint duplicate roots.
+    if (!selectedPageId && !pageSlug.trim()) { setError("Page slug is required."); return; }
     if (!pageTemplateId) { setError("Select a template before saving a page."); return; }
     setIsSaving(true); setError(null); setMessage(null);
     try {

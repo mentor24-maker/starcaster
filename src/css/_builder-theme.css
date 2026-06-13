@@ -32,6 +32,21 @@
   line-height: var(--bx-line-base, 1.6);
 }
 
+/* Block children need explicit token rules: paragraphs carry a global
+ * `p { color: var(--ink-secondary) }` that out-specifies the container, so the
+ * container color never cascades into them. li/blockquote only inherit the
+ * container today, but get explicit rules so the token always wins. Each
+ * fallback equals the element's current rendered color to stay non-regressing
+ * (p = --ink-secondary #475569; li/blockquote inherit #214c71). */
+.builder-react-root .builder-preview-shell .builder-preview-text p {
+  color: var(--bx-text, var(--ink-secondary));
+}
+
+.builder-react-root .builder-preview-shell .builder-preview-text li,
+.builder-react-root .builder-preview-shell .builder-preview-text blockquote {
+  color: var(--bx-text, #214c71);
+}
+
 /* Links inside body content. */
 .builder-react-root .builder-preview-shell .builder-preview-text a {
   color: var(--bx-link, inherit);
