@@ -2106,7 +2106,7 @@ export function BuilderModuleCard({
             />
           ) : null}
 
-          {(isStandardImage || module.type === "video") && (
+          {(isStandardImage || isVideoModule) && (
             <label className="field">
               <span>{isVideoModule ? "Video embed URL" : "URL"}</span>
               <input
@@ -2227,7 +2227,7 @@ export function BuilderModuleCard({
             </div>
           ) : null}
 
-          {(isStandardImage || module.type === "video") ? (
+          {(isStandardImage || isVideoModule) ? (
             <div className="builder-media-actions">
               <button className="secondary-button builder-gallery-button" onClick={onOpenGallery} type="button">Choose From Gallery</button>
               <label className="secondary-button builder-gallery-button builder-upload-button">

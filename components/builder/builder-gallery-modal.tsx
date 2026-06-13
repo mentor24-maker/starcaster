@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { GalleryMediaFilterBar } from "@/components/gallery-media-filter-bar";
 import { getRichTextGalleryModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { buildGalleryMediaCategoryOptions } from "@/lib/gallery-media-category";
@@ -63,7 +63,8 @@ export function BuilderGalleryModal({
     return null;
   }
 
-  return createPortal(
+  return (
+    <BuilderBodyPortal>
     <div
       className={`builder-gallery-overlay${isAnchored ? " builder-gallery-overlay-anchored" : ""}`}
       onClick={onClose}
@@ -174,7 +175,7 @@ export function BuilderGalleryModal({
           ) : null}
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
+    </BuilderBodyPortal>
   );
 }

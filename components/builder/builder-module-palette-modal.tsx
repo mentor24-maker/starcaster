@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import type { CSSProperties } from "react";
+import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import type { BuilderCellModuleRecord } from "@/lib/builder-template";
 import {
   getSavedModulePaletteIcon,
@@ -128,7 +128,8 @@ export function BuilderModulePaletteModal({
     return null;
   }
 
-  return createPortal(
+  return (
+    <BuilderBodyPortal>
     <div
       className={`builder-gallery-overlay${isAnchored ? " builder-gallery-overlay-anchored" : ""}`}
       onClick={onClose}
@@ -253,7 +254,7 @@ export function BuilderModulePaletteModal({
           </div>
         )}
       </div>
-    </div>,
-    document.body
+    </div>
+    </BuilderBodyPortal>
   );
 }
