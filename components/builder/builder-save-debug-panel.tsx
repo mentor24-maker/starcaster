@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import type { BuilderModuleEditorFocus } from "@/components/builder/builder-module-repository-list";
 
 const DEBUG_STORAGE_KEY = "builderSaveDebug";
@@ -89,7 +89,8 @@ export function BuilderSaveDebugPanel({
   const stateFocusKind = repositorySaveFocus?.kind ?? "(none)";
   const refFocusKind = repositorySaveRefFocus?.kind ?? "(none)";
 
-  return createPortal(
+  return (
+    <BuilderBodyPortal>
     <aside aria-label="Builder save diagnostics" className="builder-save-debug-panel">
       <strong>Builder Save Debug</strong>
       <p className="builder-save-debug-hint">
@@ -145,7 +146,7 @@ export function BuilderSaveDebugPanel({
           <dd>{anchorInfo}</dd>
         </div>
       </dl>
-    </aside>,
-    document.body
+    </aside>
+    </BuilderBodyPortal>
   );
 }

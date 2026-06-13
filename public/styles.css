@@ -11364,6 +11364,13 @@ body.asset-associations-modal-open {
   color: var(--bx-text, #214c71);
   line-height: var(--bx-line-base, 1.6);
 }
+.builder-react-root .builder-preview-shell .builder-preview-text p {
+  color: var(--bx-text, var(--ink-secondary));
+}
+.builder-react-root .builder-preview-shell .builder-preview-text li,
+.builder-react-root .builder-preview-shell .builder-preview-text blockquote {
+  color: var(--bx-text, #214c71);
+}
 .builder-react-root .builder-preview-shell .builder-preview-text a {
   color: var(--bx-link, inherit);
 }

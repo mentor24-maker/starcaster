@@ -18,7 +18,16 @@ type BuilderWorkspaceProps = {
   onSaved?: (record: unknown) => void;
 };
 
-export default function BuilderWorkspace({ surface = 'hub', onClose }: BuilderWorkspaceProps) {
+export default function BuilderWorkspace({ surface = 'hub', editorMode, record, onClose }: BuilderWorkspaceProps) {
+  // The legacy app mounts this island to edit a specific record (page or
+  // template). Translate that mount contract into the editor's own mode +
+  // preselection so it opens on the requested record instead of the default
+  // (empty) Templates view.
+  const initialMode = editorMode === 'page' ? 'pages' : editorMode === 'template' ? 'templates' : undefined;
+  const recordId = record?.id;
+  const initialRecordId =
+    recordId === undefined || recordId === null || recordId === '' ? undefined : String(recordId);
+
   return (
     <div className="builder-react-root">
       {surface !== 'hub' && typeof onClose === 'function' ? (
@@ -28,7 +37,7 @@ export default function BuilderWorkspace({ surface = 'hub', onClose }: BuilderWo
           </button>
         </div>
       ) : null}
-      <AdminBuilderEditor />
+      <AdminBuilderEditor initialMode={initialMode} initialRecordId={initialRecordId} />
     </div>
   );
 }
