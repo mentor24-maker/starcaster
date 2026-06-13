@@ -14,6 +14,10 @@
       "destination": "/public/terms-of-service.html"
     },
     {
+      "source": "/data-deletion",
+      "destination": "/public/data-deletion.html"
+    },
+    {
       "source": "/",
       "destination": "/public/index.html"
     },

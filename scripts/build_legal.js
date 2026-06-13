@@ -9,17 +9,35 @@ const PAGES = [
     outFile: 'privacy-policy.html',
     title: 'Privacy Policy — StarCaster',
     bodyFile: '_privacy-body.html',
-    sibling: { href: '/terms-of-service', label: 'Terms of Service' },
+    siblings: [
+      { href: '/terms-of-service', label: 'Terms of Service' },
+      { href: '/data-deletion', label: 'Data Deletion' },
+    ],
   },
   {
     outFile: 'terms-of-service.html',
     title: 'Terms of Service — StarCaster',
     bodyFile: '_terms-body.html',
-    sibling: { href: '/privacy-policy', label: 'Privacy Policy' },
+    siblings: [
+      { href: '/privacy-policy', label: 'Privacy Policy' },
+      { href: '/data-deletion', label: 'Data Deletion' },
+    ],
+  },
+  {
+    outFile: 'data-deletion.html',
+    title: 'Data Deletion Instructions — StarCaster',
+    bodyFile: '_data-deletion-body.html',
+    siblings: [
+      { href: '/privacy-policy', label: 'Privacy Policy' },
+      { href: '/terms-of-service', label: 'Terms of Service' },
+    ],
   },
 ];
 
-function shell({ title, body, sibling }) {
+function shell({ title, body, siblings }) {
+  const footerLinks = [{ href: '/', label: 'Home' }, ...(siblings || [])]
+    .map((link) => `<a href="${link.href}">${link.label}</a>`)
+    .join('\n    <span aria-hidden="true"> · </span>\n    ');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -39,9 +57,7 @@ function shell({ title, body, sibling }) {
 ${body}
   </main>
   <footer class="legal-standalone-footer">
-    <a href="/">Home</a>
-    <span aria-hidden="true"> · </span>
-    <a href="${sibling.href}">${sibling.label}</a>
+    ${footerLinks}
   </footer>
 </body>
 </html>
@@ -64,7 +80,7 @@ function buildLegalPages() {
     const html = shell({
       title: page.title,
       body,
-      sibling: page.sibling,
+      siblings: page.siblings,
     });
     const outPath = path.join(publicDir, page.outFile);
     fs.writeFileSync(outPath, html, 'utf8');
