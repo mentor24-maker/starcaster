@@ -6,12 +6,14 @@ import {
   BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
   BUILDER_PREVIEW_STORAGE_KEY,
   createDefaultBackgroundSettings,
+  createDefaultTheme,
   normalizeBuilderDocument
 } from "@/lib/builder-template";
 
 type PreviewDraft = {
   name: string;
   pageBackground: ReturnType<typeof createDefaultBackgroundSettings>;
+  theme: ReturnType<typeof normalizeBuilderDocument>["theme"];
   layoutSections: ReturnType<typeof normalizeBuilderDocument>["layoutSections"];
 };
 
@@ -42,12 +44,14 @@ export function BuilderPreviewPage() {
       setDraft({
         name: String(parsed.name ?? "").trim(),
         pageBackground: document.pageBackground,
+        theme: document.theme,
         layoutSections: document.layoutSections
       });
     } catch {
       setDraft({
         name: "",
         pageBackground: createDefaultBackgroundSettings(),
+        theme: createDefaultTheme(),
         layoutSections: []
       });
     }
@@ -114,6 +118,7 @@ export function BuilderPreviewPage() {
               <BuilderTemplatePreview
                 layoutSections={draft.layoutSections}
                 pageBackground={draft.pageBackground}
+                theme={draft.theme}
                 previewMode
                 showShell={false}
               />

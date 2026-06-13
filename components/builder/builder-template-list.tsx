@@ -1,4 +1,4 @@
-import type { BackgroundSettings, BuilderTemplateKind, BuilderTemplateRecord } from "@/lib/builder-template";
+import type { BackgroundSettings, BuilderTemplateKind, BuilderTemplateRecord, BuilderTheme } from "@/lib/builder-template";
 import {
   BUILDER_EMAIL_FUNCTIONS,
   BUILDER_EMAIL_MERGE_TOKENS,
@@ -8,6 +8,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
 import { formatTemplateTimestamp } from "./builder-utils";
 
 type BuilderTemplateListProps = {
@@ -17,6 +18,7 @@ type BuilderTemplateListProps = {
   templateKind: BuilderTemplateKind;
   emailFunction: BuilderEmailFunction | "";
   pageBackground: BackgroundSettings;
+  theme: BuilderTheme;
   previewDevice: "desktop" | "mobile";
   isSaving: boolean;
   onSelectTemplate: (templateId: string) => void;
@@ -26,6 +28,7 @@ type BuilderTemplateListProps = {
   onSetTemplateKind: (kind: BuilderTemplateKind) => void;
   onSetEmailFunction: (value: BuilderEmailFunction | "") => void;
   onUpdatePageBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
+  onUpdateTheme: (updater: (theme: BuilderTheme) => BuilderTheme) => void;
   onSetPreviewDevice: (device: "desktop" | "mobile") => void;
   onPreviewDraft: () => void;
   onNewTemplate: () => void;
@@ -39,6 +42,7 @@ export function BuilderTemplateList({
   templateKind,
   emailFunction,
   pageBackground,
+  theme,
   previewDevice,
   isSaving,
   onSelectTemplate,
@@ -48,6 +52,7 @@ export function BuilderTemplateList({
   onSetTemplateKind,
   onSetEmailFunction,
   onUpdatePageBackground,
+  onUpdateTheme,
   onSetPreviewDevice,
   onPreviewDraft,
   onNewTemplate,
@@ -341,6 +346,12 @@ export function BuilderTemplateList({
               compact
               onChange={onUpdatePageBackground}
             />
+            {!isEmailTemplate ? (
+              <div className="builder-theme-panel">
+                <h3 className="builder-theme-panel-title">Theme · Typography</h3>
+                <BuilderThemeTypographySettings theme={theme} onChange={onUpdateTheme} />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
