@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  createDefaultTheme,
   formatRichTextContent,
   normalizeBuilderAssetUrl,
+  normalizeBuilderDocument,
   normalizeBuilderModuleSettingsForType,
   normalizeBuilderModules,
   normalizeBuilderSection,
   normalizeLayoutSections,
-  resolveBuilderModuleType
+  normalizeTheme,
+  resolveBuilderModuleType,
+  serializeBuilderDocument
 } from "@/lib/builder-template";
 
 describe("normalizeBuilderModuleSettingsForType", () => {
@@ -209,5 +213,72 @@ describe("floating-image module migration", () => {
     expect(sections[0]?.modules[0]?.type).toBe("floating-image");
     expect(sections[0]?.modules[0]?.settings.offsetY).toBe("-479");
     expect(sections[0]?.modules[0]?.settings.positionMode).toBeUndefined();
+  });
+});
+
+describe("normalizeTheme", () => {
+  it("returns a no-op default theme for missing/invalid input", () => {
+    const fallback = createDefaultTheme();
+    expect(normalizeTheme(undefined)).toEqual(fallback);
+    expect(normalizeTheme(null)).toEqual(fallback);
+    expect(normalizeTheme([])).toEqual(fallback);
+    expect(normalizeTheme("nope")).toEqual(fallback);
+    // The default is a pure "inherit" theme — no fonts, no scale, no overrides.
+    expect(fallback.typography.fonts).toEqual({ heading: "", body: "", mono: "" });
+    expect(fallback.typography.scale).toEqual({ baseSize: 0, ratio: 0, baseLineHeight: 0 });
+    expect(fallback.typography.elements).toEqual({});
+  });
+
+  it("keeps valid values and clamps/drops invalid ones", () => {
+    const theme = normalizeTheme({
+      typography: {
+        fonts: { heading: "oswald", body: "not-a-font", mono: "" },
+        scale: { baseSize: 999, ratio: 1.25, baseLineHeight: 0 },
+        colors: { heading: "#FFF", link: "rgb(0,0,0)", text: "garbage" },
+        elements: {
+          h1: { fontSize: 48, fontWeight: 700, color: "#123456", textTransform: "uppercase" },
+          p: { lineHeight: 1.6, letterSpacing: 0, marginBottom: 24 },
+          bogus: { fontSize: 12 },
+          h2: { fontSize: 0, color: "" }
+        }
+      }
+    });
+
+    expect(theme.typography.fonts).toEqual({ heading: "oswald", body: "", mono: "" });
+    // baseSize clamps to its max; baseLineHeight 0 stays "inherit".
+    expect(theme.typography.scale).toEqual({ baseSize: 100, ratio: 1.25, baseLineHeight: 0 });
+    expect(theme.typography.colors.heading).toBe("#ffffff");
+    expect(theme.typography.colors.link).toBe("#000000");
+    expect(theme.typography.colors.text).toBe("");
+    expect(theme.typography.elements.h1).toEqual({
+      fontSize: 48,
+      fontWeight: 700,
+      color: "#123456",
+      textTransform: "uppercase"
+    });
+    // letterSpacing 0 is dropped (unset); only the set fields survive.
+    expect(theme.typography.elements.p).toEqual({ lineHeight: 1.6, marginBottom: 24 });
+    // Unknown element keys are discarded; elements that normalize to empty are omitted.
+    expect(theme.typography.elements).not.toHaveProperty("bogus");
+    expect(theme.typography.elements).not.toHaveProperty("h2");
+  });
+
+  it("round-trips theme through document normalize/serialize", () => {
+    const input = {
+      pageBackground: { mode: "none" },
+      theme: { typography: { fonts: { heading: "lora" }, elements: { h1: { fontSize: 40 } } } },
+      sections: []
+    };
+    const serialized = serializeBuilderDocument(input);
+    expect(serialized.theme.typography.fonts.heading).toBe("lora");
+    expect(serialized.theme.typography.elements.h1).toEqual({ fontSize: 40 });
+
+    const reloaded = normalizeBuilderDocument(serialized);
+    expect(reloaded.theme).toEqual(serialized.theme);
+  });
+
+  it("defaults theme when a document has none", () => {
+    expect(normalizeBuilderDocument({ sections: [] }).theme).toEqual(createDefaultTheme());
+    expect(normalizeBuilderDocument([]).theme).toEqual(createDefaultTheme());
   });
 });

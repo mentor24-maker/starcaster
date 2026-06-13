@@ -1,7 +1,8 @@
-import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord } from "@/lib/builder-template";
+import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, BuilderTheme } from "@/lib/builder-template";
 import { useEffect, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
 import { formatTemplateTimestamp } from "./builder-utils";
 
 type BuilderPageListProps = {
@@ -10,6 +11,7 @@ type BuilderPageListProps = {
   selectedPageId: string;
   draftName: string;
   pageBackground: BackgroundSettings;
+  theme: BuilderTheme;
   pageSlug: string;
   pageTemplateId: string;
   isPublishedPage: boolean;
@@ -20,6 +22,7 @@ type BuilderPageListProps = {
   onDeletePage: (pageId: string, pageName: string) => void;
   onSetDraftName: (name: string) => void;
   onUpdatePageBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
+  onUpdateTheme: (updater: (theme: BuilderTheme) => BuilderTheme) => void;
   onSetPageSlug: (slug: string) => void;
   onApplyTemplate: (templateId: string) => void;
   onSetIsPublished: (isPublished: boolean) => void;
@@ -36,6 +39,7 @@ export function BuilderPageList({
   selectedPageId,
   draftName,
   pageBackground,
+  theme,
   pageSlug,
   pageTemplateId,
   isPublishedPage,
@@ -46,6 +50,7 @@ export function BuilderPageList({
   onDeletePage,
   onSetDraftName,
   onUpdatePageBackground,
+  onUpdateTheme,
   onSetPageSlug,
   onApplyTemplate,
   onSetIsPublished,
@@ -307,6 +312,10 @@ export function BuilderPageList({
                 showColorFieldLabel={false}
                 onChange={onUpdatePageBackground}
               />
+              <div className="builder-theme-panel">
+                <h3 className="builder-theme-panel-title">Theme · Typography</h3>
+                <BuilderThemeTypographySettings theme={theme} onChange={onUpdateTheme} />
+              </div>
             </div>
             <div className="builder-meta-grid-pages-actions">
               <button

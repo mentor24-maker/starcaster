@@ -22,7 +22,8 @@ import {
   type BuilderTemplateLayout,
   type BuilderTemplateModule,
   type BuilderTemplateRecord,
-  type BuilderTemplateSection
+  type BuilderTemplateSection,
+  type BuilderTheme
 } from "@/lib/builder-template";
 import { getDefaultEmailTemplateName, type BuilderEmailFunction } from "@/lib/builder-email-template";
 import { inferModuleClassFromBuilderModules, resolveModuleClassForBuilderModule } from "@/lib/module-class-triggers";
@@ -351,6 +352,10 @@ export function AdminBuilderEditor() {
 
   function updatePageBackground(updater: (bg: BackgroundSettings) => BackgroundSettings) {
     setDraft((c) => ({ ...c, pageBackground: updater(c.pageBackground) }));
+  }
+
+  function updateTheme(updater: (theme: BuilderTheme) => BuilderTheme) {
+    setDraft((c) => ({ ...c, theme: updater(c.theme) }));
   }
 
   function updateSection(sectionId: string, updater: (s: BuilderTemplateSection) => BuilderTemplateSection) {
@@ -1173,7 +1178,7 @@ export function AdminBuilderEditor() {
     setPageTemplateId(templateId);
     const template = pageLayoutTemplates.find((t) => t.id === templateId) ?? null;
     if (!template) { setDraft(createDraftFromPage(null)); return; }
-    setDraft((c) => ({ id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, layoutSections: template.layoutSections }));
+    setDraft((c) => ({ id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
   }
 
   async function makeTemplateFromPage() {
@@ -1192,6 +1197,7 @@ export function AdminBuilderEditor() {
         body: JSON.stringify({
           name: templateName,
           pageBackground: draft.pageBackground,
+          theme: draft.theme,
           layoutSections: draft.layoutSections
         })
       });
@@ -1427,6 +1433,7 @@ export function AdminBuilderEditor() {
           templateKind: draft.templateKind,
           emailFunction: draft.emailFunction,
           pageBackground: draft.pageBackground,
+          theme: draft.theme,
           layoutSections: draft.layoutSections
         })
       });
@@ -1452,7 +1459,7 @@ export function AdminBuilderEditor() {
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, isPublished: isPublishedPage, pageBackground: draft.pageBackground, layoutSections: draft.layoutSections })
+        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, isPublished: isPublishedPage, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
       });
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       setMessage(selectedPageId ? "Page updated." : "Page created.");
@@ -1529,7 +1536,7 @@ export function AdminBuilderEditor() {
   // --- Preview ---
 
   function openPreviewPage() {
-    window.localStorage.setItem(BUILDER_PREVIEW_STORAGE_KEY, JSON.stringify({ name: draft.name, pageBackground: draft.pageBackground, layoutSections: draft.layoutSections }));
+    window.localStorage.setItem(BUILDER_PREVIEW_STORAGE_KEY, JSON.stringify({ name: draft.name, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections }));
     window.localStorage.setItem(
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
       isEmailTemplateDraft ? "email" : previewDevice
@@ -1538,7 +1545,7 @@ export function AdminBuilderEditor() {
   }
 
   function openTemplatePreview(template: BuilderTemplateRecord) {
-    window.localStorage.setItem(BUILDER_PREVIEW_STORAGE_KEY, JSON.stringify({ name: template.name, pageBackground: template.pageBackground, layoutSections: template.layoutSections }));
+    window.localStorage.setItem(BUILDER_PREVIEW_STORAGE_KEY, JSON.stringify({ name: template.name, pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
     window.localStorage.setItem(
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
       template.templateKind === "email" ? "email" : previewDevice
@@ -1552,7 +1559,7 @@ export function AdminBuilderEditor() {
     if (!page) return;
     window.localStorage.setItem(
       BUILDER_PREVIEW_STORAGE_KEY,
-      JSON.stringify({ name: page.name, pageBackground: page.pageBackground, layoutSections: page.layoutSections })
+      JSON.stringify({ name: page.name, pageBackground: page.pageBackground, theme: page.theme, layoutSections: page.layoutSections })
     );
     window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, previewDevice);
     window.open(`${window.location.origin}/develop-preview.html`, "_blank");
@@ -1737,6 +1744,7 @@ export function AdminBuilderEditor() {
           templateKind={draft.templateKind}
           emailFunction={draft.emailFunction}
           pageBackground={draft.pageBackground}
+          theme={draft.theme}
           previewDevice={previewDevice}
           isSaving={isSaving}
           onSelectTemplate={setSelectedTemplateId}
@@ -1746,6 +1754,7 @@ export function AdminBuilderEditor() {
           onSetTemplateKind={setTemplateKind}
           onSetEmailFunction={setEmailFunction}
           onUpdatePageBackground={updatePageBackground}
+          onUpdateTheme={updateTheme}
           onSetPreviewDevice={setPreviewDevice}
           onPreviewDraft={openPreviewPage}
           onNewTemplate={startNewTemplate}
@@ -1780,6 +1789,7 @@ export function AdminBuilderEditor() {
           selectedPageId={selectedPageId}
           draftName={draft.name}
           pageBackground={draft.pageBackground}
+          theme={draft.theme}
           pageSlug={pageSlug}
           pageTemplateId={pageTemplateId}
           isPublishedPage={isPublishedPage}
@@ -1790,6 +1800,7 @@ export function AdminBuilderEditor() {
           onDeletePage={(id, name) => void deletePageById(id, name)}
           onSetDraftName={setDraftName}
           onUpdatePageBackground={updatePageBackground}
+          onUpdateTheme={updateTheme}
           onSetPageSlug={setPageSlug}
           onApplyTemplate={applyTemplateToPage}
           onSetIsPublished={setIsPublishedPage}

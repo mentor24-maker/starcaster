@@ -6,6 +6,7 @@ import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
+  BUILDER_HEADING_FONTS,
   HEADING_VARIANT_PRESETS,
   type HeadingVariantPresetKey
 } from "./builder-utils";
@@ -73,6 +74,18 @@ export function BuilderHeadingModuleSettings({
           placeholder="Enter heading"
         />
       </BuilderSettingRow>
+      <BuilderSettingRow label="Font" fullWidth>
+        <select
+          value={settings.fontFamily ?? ""}
+          onChange={(event) => updateSetting("fontFamily", event.target.value)}
+        >
+          {BUILDER_HEADING_FONTS.map((font) => (
+            <option key={font.key || "default"} value={font.key}>
+              {font.label}
+            </option>
+          ))}
+        </select>
+      </BuilderSettingRow>
       <div className="builder-button-setting-columns">
         <div className="builder-button-setting-column">
           <BuilderSettingRow label="Level">
@@ -105,17 +118,29 @@ export function BuilderHeadingModuleSettings({
               onChange={(event) => updateSetting("color", event.target.value)}
             />
           </BuilderSettingRow>
-          {!compact ? (
-            <BuilderSettingRow label="Bold">
-              <select
-                value={settings.bold ?? "true"}
-                onChange={(event) => updateSetting("bold", event.target.value)}
-              >
-                <option value="true">On</option>
-                <option value="false">Off</option>
-              </select>
-            </BuilderSettingRow>
-          ) : null}
+          <BuilderSettingRow label="Weight">
+            <select
+              value={settings.fontWeight ?? (settings.bold === "false" ? "500" : "800")}
+              onChange={(event) => updateSetting("fontWeight", event.target.value)}
+            >
+              <option value="400">Regular (400)</option>
+              <option value="500">Medium (500)</option>
+              <option value="600">Semibold (600)</option>
+              <option value="700">Bold (700)</option>
+              <option value="800">Extrabold (800)</option>
+              <option value="900">Black (900)</option>
+            </select>
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Align">
+            <select
+              value={settings.textAlign ?? "left"}
+              onChange={(event) => updateSetting("textAlign", event.target.value)}
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </BuilderSettingRow>
         </div>
         <div className="builder-button-setting-column">
           {!compact ? (
@@ -146,6 +171,37 @@ export function BuilderHeadingModuleSettings({
                   <option value="false">Off</option>
                   <option value="true">On</option>
                 </select>
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Transform">
+                <select
+                  value={settings.textTransform ?? "none"}
+                  onChange={(event) => updateSetting("textTransform", event.target.value)}
+                >
+                  <option value="none">None</option>
+                  <option value="uppercase">UPPERCASE</option>
+                  <option value="capitalize">Capitalize</option>
+                  <option value="lowercase">lowercase</option>
+                </select>
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Line Height">
+                <input
+                  type="number"
+                  min={0.8}
+                  max={3}
+                  step={0.05}
+                  value={settings.lineHeight ?? "1.2"}
+                  onChange={(event) => updateSetting("lineHeight", event.target.value)}
+                />
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Letter Spacing">
+                <input
+                  type="number"
+                  min={-5}
+                  max={20}
+                  step={0.5}
+                  value={settings.letterSpacing ?? "0"}
+                  onChange={(event) => updateSetting("letterSpacing", event.target.value)}
+                />
               </BuilderSettingRow>
             </>
           ) : null}

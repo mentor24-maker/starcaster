@@ -11,6 +11,7 @@ import {
   getOverlayFlowCollapsedSectionStyle,
   getSpeechBubbleBodyStyle,
   getSpeechBubbleModuleStyle,
+  getThemeRootVars,
   isFloatingImageModule,
   isOverlayImageModule,
   sectionHasOnlyOverlayImageModules,
@@ -19,6 +20,7 @@ import {
   isSectionScopedOverlayDecor,
   resolveSectionScopedOverlaySectionZIndex
 } from "@/components/builder/builder-utils";
+import { createDefaultTheme, normalizeTheme } from "@/lib/builder-template";
 
 describe("overlay flow collapse helpers", () => {
   it("detects floating image modules", () => {
@@ -323,5 +325,53 @@ describe("module width styles", () => {
       width: "100%",
       alignSelf: "stretch"
     });
+  });
+});
+
+describe("getThemeRootVars", () => {
+  it("emits no custom properties for a default (no-op) theme", () => {
+    expect(getThemeRootVars(createDefaultTheme())).toEqual({});
+    expect(getThemeRootVars(undefined)).toEqual({});
+  });
+
+  it("resolves font keys to stacks and emits set colors only", () => {
+    const vars = getThemeRootVars(
+      normalizeTheme({
+        typography: {
+          fonts: { heading: "oswald", body: "lora", mono: "" },
+          colors: { text: "#214c71", link: "#0f4f8f" }
+        }
+      })
+    ) as Record<string, string>;
+
+    expect(vars["--bx-font-heading"]).toBe("'Oswald', 'Arial Narrow', sans-serif");
+    expect(vars["--bx-font-body"]).toBe("'Lora', Georgia, serif");
+    expect(vars).not.toHaveProperty("--bx-font-mono");
+    expect(vars["--bx-text"]).toBe("#214c71");
+    expect(vars["--bx-link"]).toBe("#0f4f8f");
+    expect(vars).not.toHaveProperty("--bx-heading");
+  });
+
+  it("derives the H1–H6 scale from baseSize × ratio^(6 − level)", () => {
+    const vars = getThemeRootVars(
+      normalizeTheme({
+        typography: { scale: { baseSize: 16, ratio: 1.25, baseLineHeight: 1.5 } }
+      })
+    ) as Record<string, string>;
+
+    expect(vars["--bx-size-base"]).toBe("16px");
+    expect(vars["--bx-line-base"]).toBe("1.5");
+    expect(vars["--bx-size-h6"]).toBe("16px"); // ratio^0
+    expect(vars["--bx-size-h5"]).toBe("20px"); // 16 × 1.25
+    expect(vars["--bx-size-h1"]).toBe("48.83px"); // 16 × 1.25^5, rounded
+  });
+
+  it("omits the derived scale unless both baseSize and ratio are set", () => {
+    const vars = getThemeRootVars(
+      normalizeTheme({ typography: { scale: { baseSize: 18, ratio: 0, baseLineHeight: 0 } } })
+    ) as Record<string, string>;
+
+    expect(vars["--bx-size-base"]).toBe("18px");
+    expect(vars).not.toHaveProperty("--bx-size-h1");
   });
 });

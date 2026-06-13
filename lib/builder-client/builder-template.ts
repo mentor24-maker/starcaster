@@ -82,6 +82,75 @@ export type RowOverlayScreenSettings = {
   opacity: number;
 };
 
+/**
+ * Document-level Theme. Lives alongside pageBackground/sections in the layout
+ * document JSON. Typography is the first (and currently only) facet; palette and
+ * spacing facets are expected to follow. All values use "inherit" sentinels
+ * (empty string for text, 0 for numbers) so the default theme is a visual no-op
+ * — absent/default theme renders exactly like the pre-theme baseline.
+ */
+export type BuilderThemeFontRole = "heading" | "body" | "mono";
+
+export type BuilderThemeElement =
+  | "h1"
+  | "h2"
+  | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
+  | "p"
+  | "a"
+  | "blockquote"
+  | "button"
+  | "nav"
+  | "caption"
+  | "code";
+
+/**
+ * Sparse per-element override. Only fields the user has set are present; absent
+ * fields inherit from the typography scale / font roles / element CSS defaults.
+ */
+export type BuilderThemeElementStyle = {
+  /** Font key (same keyspace as BUILDER_HEADING_FONTS); "" = inherit role font. */
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  lineHeight?: number;
+  letterSpacing?: number;
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
+  color?: string;
+  marginTop?: number;
+  marginBottom?: number;
+  /** CSS text-shadow value (drop shadow); "" = none. */
+  textShadow?: string;
+};
+
+export type BuilderThemeTypography = {
+  /** Named font slots that elements inherit from unless individually overridden. */
+  fonts: Record<BuilderThemeFontRole, string>;
+  /** Modular type scale: H1–H6 derive from baseSize × ratioⁿ unless overridden. */
+  scale: {
+    baseSize: number;
+    ratio: number;
+    baseLineHeight: number;
+  };
+  /** Semantic color roles wired to the palette, not raw hex at call sites. */
+  colors: {
+    text: string;
+    heading: string;
+    muted: string;
+    link: string;
+    linkHover: string;
+    selection: string;
+  };
+  /** Sparse map — only elements the user has customized are present. */
+  elements: Partial<Record<BuilderThemeElement, BuilderThemeElementStyle>>;
+};
+
+export type BuilderTheme = {
+  typography: BuilderThemeTypography;
+};
+
 export type BuilderTemplateSection = {
   id: string;
   title: string;
@@ -118,6 +187,7 @@ export type BuilderTemplateRecord = {
   templateKind: BuilderTemplateKind;
   emailFunction: BuilderEmailFunction | "";
   pageBackground: BackgroundSettings;
+  theme: BuilderTheme;
   layoutSections: BuilderTemplateSection[];
   createdAt: string;
   updatedAt: string;
@@ -129,6 +199,7 @@ export type BuilderPageRecord = {
   slug: string;
   templateId: string;
   pageBackground: BackgroundSettings;
+  theme: BuilderTheme;
   layoutSections: BuilderTemplateSection[];
   createdAt: string;
   updatedAt: string;
@@ -401,6 +472,42 @@ export function normalizeSignedOffsetValue(value: unknown, fallback = "0", min =
   return String(normalized);
 }
 
+function normalizeDecimalValue(value: unknown, fallback: string, min: number, max: number) {
+  const parsed = Number.parseFloat(String(value ?? fallback));
+  const fallbackValue = Number.parseFloat(fallback);
+  const normalized = Number.isFinite(parsed)
+    ? Math.min(Math.max(parsed, min), max)
+    : Math.min(Math.max(Number.isFinite(fallbackValue) ? fallbackValue : min, min), max);
+  // Drop trailing zeros so saved values stay tidy (1.20 -> 1.2, 0.0 -> 0).
+  return String(Number(normalized.toFixed(2)));
+}
+
+// Keep these in sync with BUILDER_HEADING_FONTS in components/builder/builder-utils.ts.
+const HEADING_FONT_KEYS = new Set([
+  "",
+  "inter",
+  "poppins",
+  "montserrat",
+  "oswald",
+  "archivo",
+  "space-grotesk",
+  "bebas",
+  "playfair",
+  "merriweather",
+  "lora"
+]);
+const HEADING_TEXT_ALIGN_KEYS = new Set(["left", "center", "right"]);
+const HEADING_TEXT_TRANSFORM_KEYS = new Set(["none", "uppercase", "lowercase", "capitalize"]);
+const HEADING_FONT_WEIGHTS = new Set(["400", "500", "600", "700", "800", "900"]);
+
+function normalizeHeadingFontWeight(value: unknown, bold: unknown) {
+  const candidate = String(value ?? "");
+  if (HEADING_FONT_WEIGHTS.has(candidate)) {
+    return candidate;
+  }
+  return bold === "false" ? "500" : "800";
+}
+
 export function normalizeBackgroundMode(
   value: unknown
 ): BackgroundSettings["mode"] {
@@ -466,6 +573,151 @@ export function normalizeRowOverlayScreenSettings(value: unknown): RowOverlayScr
   return {
     background: normalizeBackgroundSettings(overlay.background),
     opacity
+  };
+}
+
+const THEME_ELEMENT_KEYS = new Set<BuilderThemeElement>([
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "p",
+  "a",
+  "blockquote",
+  "button",
+  "nav",
+  "caption",
+  "code"
+]);
+const THEME_TEXT_TRANSFORMS = new Set(["none", "uppercase", "lowercase", "capitalize"]);
+
+export function createDefaultTheme(): BuilderTheme {
+  // Pure "inherit" defaults — emitting this theme produces no overrides, so an
+  // absent or default theme is indistinguishable from the pre-theme baseline.
+  return {
+    typography: {
+      fonts: { heading: "", body: "", mono: "" },
+      scale: { baseSize: 0, ratio: 0, baseLineHeight: 0 },
+      colors: { text: "", heading: "", muted: "", link: "", linkHover: "", selection: "" },
+      elements: {}
+    }
+  };
+}
+
+/** Optional theme color: "" when blank/unset, otherwise a normalized hex. */
+function normalizeThemeColor(value: unknown): string {
+  if (!String(value ?? "").trim()) {
+    return "";
+  }
+  return normalizeBuilderHexColor(value, "");
+}
+
+/** Clamp a number into [min, max]; returns 0 ("inherit") for blank/invalid. */
+function normalizeThemeNumber(value: unknown, min: number, max: number): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num === 0) {
+    return 0;
+  }
+  return Math.min(max, Math.max(min, num));
+}
+
+function normalizeThemeFontKey(value: unknown): string {
+  const key = safeText(value, 40);
+  return HEADING_FONT_KEYS.has(key) ? key : "";
+}
+
+function normalizeThemeElementStyle(value: unknown): BuilderThemeElementStyle | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const style: BuilderThemeElementStyle = {};
+
+  const fontFamily = normalizeThemeFontKey(raw.fontFamily);
+  if (fontFamily) style.fontFamily = fontFamily;
+
+  const fontSize = normalizeThemeNumber(raw.fontSize, 6, 400);
+  if (fontSize) style.fontSize = fontSize;
+
+  const fontWeight = normalizeThemeNumber(raw.fontWeight, 100, 900);
+  if (fontWeight) style.fontWeight = fontWeight;
+
+  const lineHeight = normalizeThemeNumber(raw.lineHeight, 0.5, 4);
+  if (lineHeight) style.lineHeight = lineHeight;
+
+  // letterSpacing/margins allow negatives; only 0 means "unset".
+  const letterSpacing = normalizeThemeNumber(raw.letterSpacing, -20, 60);
+  if (letterSpacing) style.letterSpacing = letterSpacing;
+
+  const marginTop = normalizeThemeNumber(raw.marginTop, -400, 400);
+  if (marginTop) style.marginTop = marginTop;
+
+  const marginBottom = normalizeThemeNumber(raw.marginBottom, -400, 400);
+  if (marginBottom) style.marginBottom = marginBottom;
+
+  const transform = safeText(raw.textTransform, 20);
+  if (transform && transform !== "none" && THEME_TEXT_TRANSFORMS.has(transform)) {
+    style.textTransform = transform as BuilderThemeElementStyle["textTransform"];
+  }
+
+  const color = normalizeThemeColor(raw.color);
+  if (color) style.color = color;
+
+  const textShadow = safeText(raw.textShadow, 200);
+  if (textShadow) style.textShadow = textShadow;
+
+  return Object.keys(style).length > 0 ? style : null;
+}
+
+export function normalizeTheme(value: unknown): BuilderTheme {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return createDefaultTheme();
+  }
+  const theme = value as Record<string, unknown>;
+  const typography =
+    theme.typography && typeof theme.typography === "object" && !Array.isArray(theme.typography)
+      ? (theme.typography as Record<string, unknown>)
+      : {};
+
+  const fonts = (typography.fonts ?? {}) as Record<string, unknown>;
+  const scale = (typography.scale ?? {}) as Record<string, unknown>;
+  const colors = (typography.colors ?? {}) as Record<string, unknown>;
+  const rawElements =
+    typography.elements && typeof typography.elements === "object" && !Array.isArray(typography.elements)
+      ? (typography.elements as Record<string, unknown>)
+      : {};
+
+  const elements: Partial<Record<BuilderThemeElement, BuilderThemeElementStyle>> = {};
+  for (const key of Object.keys(rawElements)) {
+    if (!THEME_ELEMENT_KEYS.has(key as BuilderThemeElement)) continue;
+    const normalized = normalizeThemeElementStyle(rawElements[key]);
+    if (normalized) elements[key as BuilderThemeElement] = normalized;
+  }
+
+  return {
+    typography: {
+      fonts: {
+        heading: normalizeThemeFontKey(fonts.heading),
+        body: normalizeThemeFontKey(fonts.body),
+        mono: normalizeThemeFontKey(fonts.mono)
+      },
+      scale: {
+        baseSize: normalizeThemeNumber(scale.baseSize, 10, 100),
+        ratio: normalizeThemeNumber(scale.ratio, 1, 2.5),
+        baseLineHeight: normalizeThemeNumber(scale.baseLineHeight, 0.8, 3)
+      },
+      colors: {
+        text: normalizeThemeColor(colors.text),
+        heading: normalizeThemeColor(colors.heading),
+        muted: normalizeThemeColor(colors.muted),
+        link: normalizeThemeColor(colors.link),
+        linkHover: normalizeThemeColor(colors.linkHover),
+        selection: normalizeThemeColor(colors.selection)
+      },
+      elements
+    }
   };
 }
 
@@ -805,6 +1057,16 @@ export function normalizeBuilderModuleSettingsForType(
     settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacy, "0");
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    settings.fontFamily = HEADING_FONT_KEYS.has(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";
+    settings.fontWeight = normalizeHeadingFontWeight(settings.fontWeight, settings.bold);
+    settings.textAlign = HEADING_TEXT_ALIGN_KEYS.has(settings.textAlign ?? "")
+      ? settings.textAlign
+      : "left";
+    settings.textTransform = HEADING_TEXT_TRANSFORM_KEYS.has(settings.textTransform ?? "")
+      ? settings.textTransform
+      : "none";
+    settings.lineHeight = normalizeDecimalValue(settings.lineHeight, "1.2", 0.8, 3);
+    settings.letterSpacing = normalizeDecimalValue(settings.letterSpacing, "0", -5, 20);
   }
 
   if (type === "current-poll") {
@@ -1109,8 +1371,8 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         cellVerticalMargin: normalizeCellMetric(normalizedSection.cellVerticalMargin, layout, "0", 0, 160),
         cellMobileHidden: normalizeCellColor(normalizedSection.cellMobileHidden, layout, "false"),
         cellDesktopHidden: normalizeCellColor(normalizedSection.cellDesktopHidden, layout, "false"),
-        cellBorderWidth: normalizeCellMetric(normalizedSection.cellBorderWidth, layout, "1", 0, 20),
-        cellBorderColor: normalizeCellColor(normalizedSection.cellBorderColor, layout, "#d9e4ef"),
+        cellBorderWidth: normalizeCellMetric(normalizedSection.cellBorderWidth, layout, "0", 0, 20),
+        cellBorderColor: normalizeCellColor(normalizedSection.cellBorderColor, layout, "transparent"),
         cellBorderRadius: normalizeCellMetric(normalizedSection.cellBorderRadius, layout, "24", 0, 60),
         cellBorderStyle: normalizeCellColor(normalizedSection.cellBorderStyle, layout, "solid"),
         cellShadow: normalizeCellColor(normalizedSection.cellShadow, layout, "none"),
@@ -1143,8 +1405,8 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     cellVerticalMargin: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellMobileHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellDesktopHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
-    cellBorderWidth: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "1"])),
-    cellBorderColor: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "#d9e4ef"])),
+    cellBorderWidth: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellBorderColor: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "transparent"])),
     cellBorderRadius: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "24"])),
     cellBorderStyle: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "solid"])),
     cellShadow: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "none"])),
@@ -1166,6 +1428,12 @@ export function createEmptyModule(
           fontSize: "32",
           color: "#18324a",
           bold: "true",
+          fontFamily: "",
+          fontWeight: "800",
+          textAlign: "left",
+          lineHeight: "1.2",
+          letterSpacing: "0",
+          textTransform: "none",
           italic: "false",
           underline: "false",
           dropShadow: "false",
@@ -1382,6 +1650,7 @@ export function rowToBuilderTemplate(row: Record<string, unknown>): BuilderTempl
     templateKind: normalizeTemplateKind(row.template_kind ?? row.templateKind),
     emailFunction: normalizeEmailFunction(row.email_function ?? row.emailFunction),
     pageBackground: document.pageBackground,
+    theme: document.theme,
     layoutSections: document.layoutSections,
     createdAt: safeText(row.created_at ?? row.createdAt, 120),
     updatedAt: safeText(row.updated_at ?? row.updatedAt, 120)
@@ -1397,6 +1666,7 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
     slug: safeText(row.slug, 255),
     templateId: safeText(row.template_id ?? row.templateId, 120),
     pageBackground: document.pageBackground,
+    theme: document.theme,
     layoutSections: document.layoutSections,
     createdAt: safeText(row.created_at ?? row.createdAt, 120),
     updatedAt: safeText(row.updated_at ?? row.updatedAt, 120),
@@ -1406,28 +1676,33 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
 
 export function normalizeBuilderDocument(value: unknown): {
   pageBackground: BackgroundSettings;
+  theme: BuilderTheme;
   layoutSections: BuilderTemplateSection[];
 } {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const document = value as Record<string, unknown>;
     return {
       pageBackground: normalizeBackgroundSettings(document.pageBackground),
+      theme: normalizeTheme(document.theme),
       layoutSections: normalizeLayoutSections(document.sections ?? document.layoutSections)
     };
   }
 
   return {
     pageBackground: createDefaultBackgroundSettings(),
+    theme: createDefaultTheme(),
     layoutSections: normalizeLayoutSections(value)
   };
 }
 
 export function serializeBuilderDocument(input: {
   pageBackground?: unknown;
+  theme?: unknown;
   layoutSections?: unknown;
 }) {
   return {
     pageBackground: normalizeBackgroundSettings(input.pageBackground),
+    theme: normalizeTheme(input.theme),
     sections: normalizeLayoutSections(input.layoutSections)
   };
 }

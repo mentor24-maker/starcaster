@@ -254,6 +254,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
         ? (body.layoutSections || body.layout_sections)
         : [],
@@ -306,6 +307,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
         ? (body.layoutSections || body.layout_sections)
         : [],
@@ -978,6 +980,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
         ? (body.layoutSections || body.layout_sections)
         : [],
@@ -1049,6 +1052,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
         ? (body.layoutSections || body.layout_sections)
         : [],
@@ -1148,6 +1152,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const document = normalizeBuilderDocument({
       pageBackground: body?.pageBackground || body?.page_background,
+      theme: body?.theme,
       sections: body?.layoutSections || body?.layout_sections || body?.sections,
     });
     return sendOk(res, 200, document, {

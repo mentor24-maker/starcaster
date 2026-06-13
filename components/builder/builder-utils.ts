@@ -6,7 +6,8 @@ import type {
   BuilderTemplateKind,
   BuilderTemplateModule,
   BuilderTemplateRecord,
-  BuilderTemplateSection
+  BuilderTemplateSection,
+  BuilderTheme
 } from "@/lib/builder-template";
 import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/game-overlay-layer";
 import {
   createDefaultBackgroundSettings,
+  createDefaultTheme,
   getBuilderBackgroundStyle,
   normalizeBackgroundMode,
   normalizeBuilderAssetUrl,
@@ -33,6 +35,7 @@ export function createDraftFromTemplate(template?: BuilderTemplateRecord | null)
       templateKind: "modular",
       emailFunction: "",
       pageBackground: createDefaultBackgroundSettings(),
+      theme: createDefaultTheme(),
       layoutSections: []
     };
   }
@@ -43,6 +46,7 @@ export function createDraftFromTemplate(template?: BuilderTemplateRecord | null)
     templateKind: template.templateKind,
     emailFunction: template.emailFunction,
     pageBackground: template.pageBackground,
+    theme: template.theme,
     layoutSections: template.layoutSections
   };
 }
@@ -55,6 +59,7 @@ export function createDraftFromPage(page?: BuilderPageRecord | null): BuilderDra
       templateKind: "modular",
       emailFunction: "",
       pageBackground: createDefaultBackgroundSettings(),
+      theme: createDefaultTheme(),
       layoutSections: []
     };
   }
@@ -65,6 +70,7 @@ export function createDraftFromPage(page?: BuilderPageRecord | null): BuilderDra
     templateKind: "modular",
     emailFunction: "",
     pageBackground: page.pageBackground,
+    theme: page.theme,
     layoutSections: page.layoutSections
   };
 }
@@ -89,6 +95,27 @@ export function getModuleAlignment(settings: Record<string, string>): "left" | "
   }
 
   return "left";
+}
+
+/**
+ * Container content alignment (cellHAlign/cellVAlign). Returns a flex-column
+ * style aligning everything inside the cell; empty for the left/top default
+ * so untouched containers keep normal block stacking.
+ */
+export function getCellContentAlignmentStyle(hAlign: string, vAlign: string): CSSProperties {
+  const horizontal = hAlign === "center" || hAlign === "right" ? hAlign : "left";
+  const vertical = vAlign === "center" || vAlign === "middle" ? "center" : vAlign === "bottom" ? "bottom" : "top";
+
+  if (horizontal === "left" && vertical === "top") {
+    return {};
+  }
+
+  return {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: horizontal === "center" ? "center" : horizontal === "right" ? "flex-end" : "stretch",
+    justifyContent: vertical === "center" ? "center" : vertical === "bottom" ? "flex-end" : "flex-start"
+  };
 }
 
 export function getVerticalMarginStyle(value: unknown): CSSProperties {
@@ -706,6 +733,103 @@ export const HEADING_VARIANT_PRESETS = {
 
 export type HeadingVariantPresetKey = keyof typeof HEADING_VARIANT_PRESETS;
 
+/**
+ * Curated Google Fonts subset offered for heading-style modules. Keep this list
+ * in sync with BUILDER_GOOGLE_FONTS_HREF (the stylesheet that actually loads the
+ * families) and with the <link> tags in src/layout.html / public/develop-preview.html.
+ */
+export const BUILDER_HEADING_FONTS = [
+  { key: "", label: "Default (theme)", stack: "" },
+  { key: "inter", label: "Inter", stack: "'Inter', system-ui, sans-serif" },
+  { key: "poppins", label: "Poppins", stack: "'Poppins', system-ui, sans-serif" },
+  { key: "montserrat", label: "Montserrat", stack: "'Montserrat', system-ui, sans-serif" },
+  { key: "oswald", label: "Oswald", stack: "'Oswald', 'Arial Narrow', sans-serif" },
+  { key: "archivo", label: "Archivo", stack: "'Archivo', system-ui, sans-serif" },
+  { key: "space-grotesk", label: "Space Grotesk", stack: "'Space Grotesk', system-ui, sans-serif" },
+  { key: "bebas", label: "Bebas Neue", stack: "'Bebas Neue', Impact, sans-serif" },
+  { key: "playfair", label: "Playfair Display", stack: "'Playfair Display', Georgia, serif" },
+  { key: "merriweather", label: "Merriweather", stack: "'Merriweather', Georgia, serif" },
+  { key: "lora", label: "Lora", stack: "'Lora', Georgia, serif" }
+] as const;
+
+export const BUILDER_GOOGLE_FONTS_HREF =
+  "https://fonts.googleapis.com/css2?" +
+  [
+    "family=Inter:wght@400;500;600;700;800;900",
+    "family=Poppins:wght@400;500;600;700;800",
+    "family=Montserrat:wght@400;500;600;700;800;900",
+    "family=Oswald:wght@400;500;600;700",
+    "family=Archivo:wght@400;500;600;700;800;900",
+    "family=Space+Grotesk:wght@400;500;600;700",
+    "family=Bebas+Neue",
+    "family=Playfair+Display:wght@400;500;600;700;800;900",
+    "family=Merriweather:wght@400;700;900",
+    "family=Lora:wght@400;500;600;700"
+  ].join("&") +
+  "&display=swap";
+
+export function getHeadingFontStack(fontFamily: string | undefined): string | undefined {
+  if (!fontFamily) {
+    return undefined;
+  }
+  return BUILDER_HEADING_FONTS.find((font) => font.key === fontFamily)?.stack || undefined;
+}
+
+/**
+ * Emit a theme's GLOBAL typography tokens as CSS custom properties for the
+ * preview content root (.builder-preview-shell). Only tokens the user has set
+ * are emitted, so an absent/default theme yields an empty object and content
+ * keeps its pre-theme baseline (the fallbacks baked into _builder-theme.css).
+ *
+ * Covers font roles, semantic colors, and the modular type scale. H1–H6 sizes
+ * derive from baseSize × ratio^(6 − level), so H6 == baseSize and H1 is largest.
+ * Per-element overrides (theme.typography.elements) are applied by a later slice.
+ */
+export function getThemeRootVars(theme: BuilderTheme | undefined): CSSProperties {
+  const vars: Record<string, string> = {};
+  if (!theme) {
+    return vars as CSSProperties;
+  }
+  const { fonts, scale, colors } = theme.typography;
+
+  const headingStack = getHeadingFontStack(fonts.heading);
+  if (headingStack) vars["--bx-font-heading"] = headingStack;
+  const bodyStack = getHeadingFontStack(fonts.body);
+  if (bodyStack) vars["--bx-font-body"] = bodyStack;
+  const monoStack = getHeadingFontStack(fonts.mono);
+  if (monoStack) vars["--bx-font-mono"] = monoStack;
+
+  if (colors.text) vars["--bx-text"] = colors.text;
+  if (colors.heading) vars["--bx-heading"] = colors.heading;
+  if (colors.muted) vars["--bx-muted"] = colors.muted;
+  if (colors.link) vars["--bx-link"] = colors.link;
+  if (colors.linkHover) vars["--bx-link-hover"] = colors.linkHover;
+  if (colors.selection) vars["--bx-selection"] = colors.selection;
+
+  if (scale.baseSize) vars["--bx-size-base"] = `${scale.baseSize}px`;
+  if (scale.baseLineHeight) vars["--bx-line-base"] = String(scale.baseLineHeight);
+  if (scale.baseSize && scale.ratio) {
+    for (let level = 1; level <= 6; level += 1) {
+      const size = scale.baseSize * scale.ratio ** (6 - level);
+      vars[`--bx-size-h${level}`] = `${Math.round(size * 100) / 100}px`;
+    }
+  }
+
+  return vars as CSSProperties;
+}
+
+const HEADING_TEXT_TRANSFORMS = new Set(["none", "uppercase", "lowercase", "capitalize"]);
+const HEADING_TEXT_ALIGNS = new Set(["left", "center", "right"]);
+
+function getHeadingFontWeight(settings: Record<string, string>): number {
+  const explicit = Number.parseInt(settings.fontWeight ?? "", 10);
+  if (Number.isFinite(explicit) && explicit >= 100 && explicit <= 900) {
+    return explicit;
+  }
+  // Backward compatibility for headings saved before the weight selector existed.
+  return settings.bold === "false" ? 500 : 800;
+}
+
 export function getHeadingModuleStyle(settings: Record<string, string>): CSSProperties {
   const fontSize = Number.parseInt(settings.fontSize ?? "32", 10);
   const color = settings.color || "#18324a";
@@ -713,13 +837,27 @@ export function getHeadingModuleStyle(settings: Record<string, string>): CSSProp
   const nudgeTransform = getModuleNudgeTransform(settings);
   const verticalOffset = Number.parseInt(normalizeSignedOffsetValue(settings.verticalOffset, "0"), 10);
   const offsetY = Number.isFinite(verticalOffset) ? verticalOffset : 0;
+  const fontFamily = getHeadingFontStack(settings.fontFamily);
+  const lineHeight = Number.parseFloat(settings.lineHeight ?? "");
+  const letterSpacing = Number.parseFloat(settings.letterSpacing ?? "");
+  const textAlign = HEADING_TEXT_ALIGNS.has(settings.textAlign ?? "") ? settings.textAlign : undefined;
+  const textTransform = HEADING_TEXT_TRANSFORMS.has(settings.textTransform ?? "")
+    ? settings.textTransform
+    : undefined;
 
   return {
     margin: 0,
     fontSize: `${Math.max(Number.isFinite(fontSize) ? fontSize : 32, 10)}px`,
     color,
-    fontWeight: settings.bold === "false" ? 500 : 800,
+    ...(fontFamily ? { fontFamily } : {}),
+    fontWeight: getHeadingFontWeight(settings),
     fontStyle: settings.italic === "true" ? "italic" : "normal",
+    ...(textAlign ? { textAlign: textAlign as CSSProperties["textAlign"] } : {}),
+    ...(Number.isFinite(lineHeight) && lineHeight > 0 ? { lineHeight } : {}),
+    ...(Number.isFinite(letterSpacing) ? { letterSpacing: `${letterSpacing}px` } : {}),
+    ...(textTransform && textTransform !== "none"
+      ? { textTransform: textTransform as CSSProperties["textTransform"] }
+      : {}),
     textDecoration: settings.underline === "true" ? "underline" : "none",
     textDecorationColor: settings.underline === "true" ? color : undefined,
     textShadow: dropShadow,

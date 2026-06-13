@@ -1,0 +1,71 @@
+/*
+ * StarCaster Builder — document Theme typography (content layer).
+ *
+ * Starcaster-owned, hand-edited. Loaded AFTER _builder-react.css (the generated
+ * extract from Normie) so it wins on source order; never edit the generated file.
+ * This is deliberately separate from _builder-react-overrides.css: that file
+ * styles editor CHROME and avoids .builder-preview-*; this file styles the user's
+ * page CONTENT inside the preview shell.
+ *
+ * How it works: getThemeRootVars() (components/builder/builder-utils.ts) injects
+ * the document theme's --bx-* custom properties onto the .builder-preview-shell
+ * root. Each rule reads a token with a fallback equal to the pre-theme baseline,
+ * so an absent/default theme renders identically to before. Per-module inline
+ * styles (getHeadingModuleStyle) still win over these rules where they overlap.
+ *
+ * Scope: .builder-preview-shell only — the editor canvas and module editors keep
+ * the baseline (no --bx-* vars are injected there).
+ *
+ * Slice 2 wires the GLOBAL tokens: font roles, semantic colors, body rhythm, and
+ * the H1 step of the type scale. The remaining scale steps (H2–H6 sizes) and the
+ * per-element overrides (theme.typography.elements) land with the Typography panel.
+ */
+
+/* Body font role → cascades to all content unless a heading/element overrides it. */
+.builder-react-root .builder-preview-shell {
+  font-family: var(--bx-font-body, inherit);
+}
+
+/* Body text blocks (text modules). Fallbacks match _builder-react.css:6370. */
+.builder-react-root .builder-preview-shell .builder-preview-text {
+  color: var(--bx-text, #214c71);
+  line-height: var(--bx-line-base, 1.6);
+}
+
+/* Links inside body content. */
+.builder-react-root .builder-preview-shell .builder-preview-text a {
+  color: var(--bx-link, inherit);
+}
+
+.builder-react-root .builder-preview-shell .builder-preview-text a:hover {
+  color: var(--bx-link-hover, var(--bx-link, inherit));
+}
+
+/* Heading font role.
+ * - Heading modules (.builder-preview-heading): inline font-family is set only
+ *   when the module picks a specific face, so "Default (theme)" inherits this.
+ * - Rich-text headings live inside .builder-preview-text. */
+.builder-react-root .builder-preview-shell .builder-preview-heading,
+.builder-react-root .builder-preview-shell .builder-preview-text h1,
+.builder-react-root .builder-preview-shell .builder-preview-text h2,
+.builder-react-root .builder-preview-shell .builder-preview-text h3,
+.builder-react-root .builder-preview-shell .builder-preview-text h4,
+.builder-react-root .builder-preview-shell .builder-preview-text h5,
+.builder-react-root .builder-preview-shell .builder-preview-text h6 {
+  font-family: var(--bx-font-heading, inherit);
+}
+
+/* Heading color role (rich-text headings; heading modules carry inline color). */
+.builder-react-root .builder-preview-shell .builder-preview-text h1,
+.builder-react-root .builder-preview-shell .builder-preview-text h2,
+.builder-react-root .builder-preview-shell .builder-preview-text h3,
+.builder-react-root .builder-preview-shell .builder-preview-text h4,
+.builder-react-root .builder-preview-shell .builder-preview-text h5,
+.builder-react-root .builder-preview-shell .builder-preview-text h6 {
+  color: var(--bx-heading, inherit);
+}
+
+/* Type scale — H1 step. Fallback matches _builder-react.css:2111. */
+.builder-react-root .builder-preview-shell .builder-preview-text h1 {
+  font-size: var(--bx-size-h1, clamp(2.25rem, 4.2vw, 4rem));
+}

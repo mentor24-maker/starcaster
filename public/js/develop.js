@@ -345,7 +345,7 @@ App.develop = (function () {
       description: 'A presentation-ready table block for charts, pricing grids, and structured tabular data.',
       starterName: 'Table',
       defaults: {
-        caption: 'Data Table',
+        caption: '',
         headlineId: '',
         columnsCount: 3,
         rowsCount: 4,
@@ -6994,7 +6994,7 @@ App.develop = (function () {
         caption: safeText(module?.settings?.caption)
           || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(module?.settings?.headlineId))?.content
           || getDevelopModuleContentSourceOptions('headline').find((item) => item.value === safeText(module?.settings?.headlineId))?.label
-          || 'Table',
+          || '',
         columnsCount: Number(module?.settings?.columnsCount) || 3,
         rowsCount: Number(module?.settings?.rowsCount) || 4,
         headerColor: resolveModuleColorValue(module?.settings?.headerColor, '#173c61'),
@@ -10152,8 +10152,7 @@ App.develop = (function () {
 
     const useReactBuilder = App.builder
       && typeof App.builder.useReactIsland === 'function'
-      && App.builder.useReactIsland()
-      && modularPageEditorMode !== 'page';
+      && App.builder.useReactIsland();
 
     if (useReactBuilder) {
       syncModularPageEditorPlacement();
@@ -12395,7 +12394,6 @@ App.develop = (function () {
       }
       .develop-template-image-slot,
       .develop-template-video-slot {
-        min-height: 140px;
         display: block;
         border-radius: 0;
         border: none;
@@ -12406,13 +12404,19 @@ App.develop = (function () {
         text-align: center;
         overflow: hidden;
       }
+      .develop-template-image-slot {
+        min-height: 0;
+      }
+      .develop-template-video-slot {
+        min-height: 140px;
+      }
       .develop-template-image-slot img {
         width: 100%;
-        height: 100%;
-        max-width: none;
-        max-height: none;
-        object-fit: cover;
+        height: auto;
+        max-width: 100%;
+        object-fit: contain;
         display: block;
+        margin: 0 auto;
       }
       .develop-template-video-slot {
         aspect-ratio: 16 / 9;
@@ -12425,6 +12429,114 @@ App.develop = (function () {
         max-width: 100%;
         border: 0;
         object-fit: cover;
+      }
+      /* Website navigation module (matches src/css/legacy.css) */
+      .site-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 4px;
+        padding: 8px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(15, 79, 143, 0.12);
+        box-shadow: 0 10px 28px rgba(15, 55, 90, 0.08);
+      }
+      .site-nav--vertical {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .site-nav-menu,
+      .site-nav-submenu,
+      .site-nav ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .site-nav-menu {
+        display: flex;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: stretch;
+        min-width: 0;
+      }
+      .site-nav-menu--vertical {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .site-nav-submenu {
+        margin-top: 0.35rem;
+        padding: 0.35rem 0 0;
+        display: grid;
+        gap: 0.2rem;
+      }
+      .site-nav-menu--horizontal .site-nav-item--has-children {
+        position: relative;
+      }
+      .site-nav-menu--horizontal .site-nav-submenu {
+        position: absolute;
+        top: calc(100% - 2px);
+        left: 0;
+        z-index: 4;
+        min-width: 180px;
+        padding: 0.45rem;
+        border: 1px solid rgba(15, 79, 143, 0.14);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 14px 32px rgba(15, 55, 90, 0.16);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(4px);
+        transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+      }
+      .site-nav-menu--horizontal .site-nav-item--has-children:hover > .site-nav-submenu,
+      .site-nav-menu--horizontal .site-nav-item--has-children:focus-within > .site-nav-submenu {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+      .site-nav-item {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .site-nav-menu--horizontal > .site-nav-item {
+        flex: 0 0 auto;
+      }
+      .site-nav-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        min-height: 40px;
+        padding: var(--site-nav-link-padding, 8px 12px);
+        border-radius: var(--site-nav-link-radius, 12px);
+        color: var(--site-nav-link-color, #173c61);
+        text-decoration: none;
+        font-weight: 600;
+        white-space: nowrap;
+        transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+      }
+      .site-nav-link:hover,
+      .site-nav-link:focus-visible {
+        background: var(--site-nav-link-hover-bg, #e8f4ff);
+        color: var(--site-nav-link-hover-color, #0b82d4);
+        transform: translateY(-1px);
+      }
+      .site-nav-submenu-indicator {
+        font-size: 0.75rem;
+        opacity: 0.75;
+      }
+      .site-nav-empty {
+        margin: 0;
+        padding: 0.75rem 1rem;
+        color: #587592;
+        font-size: 0.9rem;
       }
       .meta {
         color: #587592;

@@ -80,10 +80,10 @@ export function BuilderCellStyleSettings({
         <BuilderSettingRow label="Width" fullWidth>
           <BuilderNumberSelectControl
             disabled={borderDisabled}
-            value={section.cellBorderWidth[column] ?? "1"}
+            value={section.cellBorderWidth[column] ?? "0"}
             min={0}
             max={20}
-            fallback="1"
+            fallback="0"
             onChange={(value) => onUpdateCellBorderWidth(column, value)}
           />
         </BuilderSettingRow>
@@ -91,7 +91,11 @@ export function BuilderCellStyleSettings({
           <input
             type="color"
             disabled={borderDisabled}
-            value={section.cellBorderColor[column] ?? "#d9e4ef"}
+            value={
+              /^#[0-9a-f]{6}$/i.test(section.cellBorderColor[column] ?? "")
+                ? section.cellBorderColor[column]
+                : "#d9e4ef"
+            }
             onChange={(event) => onUpdateCellBorderColor(column, event.target.value)}
           />
         </BuilderSettingRow>
@@ -167,7 +171,7 @@ export function BuilderCellStyleSettings({
         <BuilderSettingRow label="Vertical" fullWidth>
           <select value={vAlign} onChange={(event) => onSetCellExtra(column, "cellVAlign", event.target.value)}>
             <option value="top">Top</option>
-            <option value="center">Center</option>
+            <option value="center">Middle</option>
             <option value="bottom">Bottom</option>
           </select>
         </BuilderSettingRow>
