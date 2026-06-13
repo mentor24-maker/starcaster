@@ -5,6 +5,10 @@ App.assetFieldImport = (function assetFieldImportModule() {
 
   const DEFAULT_INCLUDES = ' or ';
 
+  // Asset-source types require an Includes filter (WYR file-name matching).
+  // Messaging-source types treat an empty Includes as "match all".
+  const ASSET_SOURCE_TYPES = new Set(['image', 'video', 'audio', 'lead_magnet', 'file']);
+
   const FIELD_TYPES = [
     { id: 'image', label: 'Image', group: 'Assets' },
     { id: 'video', label: 'Video', group: 'Assets' },
@@ -16,10 +20,17 @@ App.assetFieldImport = (function assetFieldImportModule() {
     { id: 'subheading', label: 'Sub-heading', group: 'Messaging' },
     { id: 'tagline', label: 'Tagline', group: 'Messaging' },
     { id: 'pitch', label: 'Pitch', group: 'Messaging' },
-    { id: 'article', label: 'Article', group: 'Messaging' },
     { id: 'email', label: 'Email', group: 'Messaging' },
     { id: 'post', label: 'Post', group: 'Messaging' },
+    { id: 'description', label: 'Description', group: 'Messaging' },
+    { id: 'transcript', label: 'Transcript', group: 'Messaging' },
+    { id: 'comment', label: 'Comment', group: 'Messaging' },
     { id: 'hashtag', label: 'Hashtag', group: 'Messaging' },
+    { id: 'cta', label: 'Call to Action', group: 'Messaging' },
+    { id: 'article', label: 'Article', group: 'Messaging' },
+    { id: 'report', label: 'Report', group: 'Messaging' },
+    { id: 'white-paper', label: 'White Paper', group: 'Messaging' },
+    { id: 'ebook', label: 'eBook', group: 'Messaging' },
   ];
 
   const FALLBACK_SUPPORTED_PAIRS = new Set(['image:tweet', 'image:headline', 'tweet:headline', 'tweet:post']);
@@ -36,7 +47,20 @@ App.assetFieldImport = (function assetFieldImportModule() {
   const TARGET_LABELS = {
     tweet: 'tweet',
     headline: 'headline',
+    subheading: 'sub-heading',
+    tagline: 'tagline',
+    pitch: 'pitch',
+    email: 'email',
     post: 'post',
+    description: 'description',
+    transcript: 'transcript',
+    comment: 'comment',
+    hashtag: 'hashtag',
+    cta: 'call to action',
+    article: 'article',
+    report: 'report',
+    'white-paper': 'white paper',
+    ebook: 'eBook',
   };
 
   let modal;
@@ -57,7 +81,9 @@ App.assetFieldImport = (function assetFieldImportModule() {
 
   function isSupported(fromType, toType) {
     const key = pairKey(fromType, toType);
-    if (!key || key === ':') return false;
+    if (!key || key === ':' || fromType === toType) return false;
+    // All messaging-to-messaging pairs are handled by the generic AI handler.
+    if (!ASSET_SOURCE_TYPES.has(fromType) && fromType && toType) return true;
     return supportedPairs.has(key);
   }
 
@@ -130,6 +156,10 @@ App.assetFieldImport = (function assetFieldImportModule() {
     });
   }
 
+  function isAssetSource(fromType) {
+    return ASSET_SOURCE_TYPES.has(String(fromType || '').trim().toLowerCase());
+  }
+
   function syncUi() {
     const fromType = String(fromSelect?.value || '').trim();
     const toType = String(toSelect?.value || '').trim();
@@ -144,7 +174,9 @@ App.assetFieldImport = (function assetFieldImportModule() {
     }
 
     if (runBtn) {
-      runBtn.disabled = running || !supported || !includes;
+      // Asset-source imports require an Includes filter; messaging-to-messaging do not.
+      const needsIncludes = isAssetSource(fromType);
+      runBtn.disabled = running || !supported || (needsIncludes && !includes);
     }
   }
 
@@ -168,11 +200,14 @@ App.assetFieldImport = (function assetFieldImportModule() {
     const ocrCount = Number(data?.ocrCount || 0);
     const filenameFallbackCount = Number(data?.filenameFallbackCount || 0);
     const transformErrors = Number(data?.transformErrors || 0);
+    const fromType = String(data?.fromType || '').trim();
+    const assetSource = ASSET_SOURCE_TYPES.has(fromType);
+    const sourceNoun = assetSource ? 'image' : (fromType || 'item');
     const label = targetLabel(data?.toType);
     const plural = planned === 1 ? label : `${label}s`;
 
     if (planned > 0 && created === 0 && skipped === 0) {
-      let msg = `Matched ${matched} image(s). Ready to create ${planned} ${plural}.`;
+      let msg = `Matched ${matched} ${sourceNoun}(s). Ready to create ${planned} ${plural}.`;
       if (ocrCount || filenameFallbackCount) {
         msg += ` (${ocrCount} OCR, ${filenameFallbackCount} file name)`;
       }
@@ -185,7 +220,7 @@ App.assetFieldImport = (function assetFieldImportModule() {
     if (ocrCount) parts.push(`${ocrCount} OCR`);
     if (filenameFallbackCount) parts.push(`${filenameFallbackCount} file name`);
     if (transformErrors) parts.push(`${transformErrors} failed`);
-    return parts.length ? parts.join(', ') + '.' : 'No matching images found.';
+    return parts.length ? parts.join(', ') + '.' : `No matching ${sourceNoun}s found.`;
   }
 
   async function refreshAfterImport(toType) {
@@ -218,7 +253,7 @@ App.assetFieldImport = (function assetFieldImportModule() {
       notify('This import combination is not supported yet.', true);
       return;
     }
-    if (!includes) {
+    if (isAssetSource(fromType) && !includes) {
       notify('Enter Includes text to filter file names.', true);
       return;
     }
@@ -227,7 +262,9 @@ App.assetFieldImport = (function assetFieldImportModule() {
     syncUi();
     if (resultEl) {
       resultEl.classList.remove('hidden');
-      resultEl.textContent = 'Running OCR and building items…';
+      resultEl.textContent = isAssetSource(fromType)
+        ? 'Running OCR and building items…'
+        : 'Repurposing content with AI…';
     }
 
     try {
@@ -287,12 +324,15 @@ App.assetFieldImport = (function assetFieldImportModule() {
 
   function openModal(preset = {}) {
     ensureInitialized();
-    const fromType = String(preset.fromType || 'image').trim();
-    const toType = String(preset.toType || 'tweet').trim();
+    const fromType = String(preset.fromType || 'tweet').trim();
+    const toType = String(preset.toType || 'post').trim();
     setSelectValue(fromSelect, fromType);
     setSelectValue(toSelect, toType);
+    // Only pre-fill the WYR default for asset-source imports; leave empty for text-to-text.
     if (includesInput && !String(includesInput.value || '').trim()) {
-      includesInput.value = DEFAULT_INCLUDES;
+      if (isAssetSource(fromType)) {
+        includesInput.value = DEFAULT_INCLUDES;
+      }
     }
     setModalOpen(true);
   }
