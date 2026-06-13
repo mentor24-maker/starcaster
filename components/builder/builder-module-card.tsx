@@ -416,7 +416,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
             background: bgColor
           }}
         >
-          {td.headers.length > 0 && (
+          {td.headers.length > 0 && module.settings.showColumnHeads !== "false" && (
             <thead>
               <tr>
                 {td.headers.map((h, i) => (
@@ -1156,7 +1156,14 @@ function TableModuleEditor({
           />
         </BuilderInlineNumberSelectRow>
         <label className="field"><span>Border color</span><input type="color" value={module.settings.borderColor ?? "#cccccc"} onChange={(e) => updateSetting("borderColor", e.target.value)} /></label>
-        <label className="field"><span>Background</span><input type="color" value={module.settings.backgroundColor ?? "#ffffff"} onChange={(e) => updateSetting("backgroundColor", e.target.value)} /></label>
+        <label className="field builder-checkbox-field">
+          <span>Show Column Heads</span>
+          <input
+            type="checkbox"
+            checked={module.settings.showColumnHeads !== "false"}
+            onChange={(e) => updateSetting("showColumnHeads", e.target.checked ? "true" : "false")}
+          />
+        </label>
       </div>
       <div className="builder-table-structure-actions">
         <span>Columns: {colCount}</span>
@@ -2062,12 +2069,16 @@ export function BuilderModuleCard({
               </div>
             ) : (
               <div className="builder-module-chrome">
-                <BuilderBackgroundControls
-                  label="Background"
-                  background={getModuleBackgroundSettings(module.settings)}
-                  horizontal
-                  onChange={onUpdateModuleBackground}
-                />
+                {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
+                    the standard modal's gradient/image/style modes are no-ops on a bubble. */}
+                {module.type !== "speech-bubble" ? (
+                  <BuilderBackgroundControls
+                    label="Background"
+                    background={getModuleBackgroundSettings(module.settings)}
+                    horizontal
+                    onChange={onUpdateModuleBackground}
+                  />
+                ) : null}
                 <BuilderSettingRow label="Alignment" fullWidth>
                   <BuilderAlignmentIconGroup
                     value={moduleAlignment}
