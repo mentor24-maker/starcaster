@@ -936,7 +936,7 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
         className="builder-preview-table"
         style={{ borderCollapse: "collapse", width: "100%", border: `${borderW}px solid ${borderC}`, background: bgColor }}
       >
-        {td.headers.length > 0 && (
+        {td.headers.length > 0 && module.settings.showColumnHeads !== "false" && (
           <thead>
             <tr>
               {td.headers.map((h, i) => (
