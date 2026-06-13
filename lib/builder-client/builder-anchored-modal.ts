@@ -8,29 +8,64 @@ export type BuilderModalAnchor = {
 const ANCHOR_GAP_PX = 8;
 const VIEWPORT_EDGE_PADDING_PX = 16;
 
+export type AnchoredModalOptions = {
+  width: number;
+  height: number;
+  /**
+   * Horizontal placement relative to the anchor: "center" puts the anchor at
+   * the modal's horizontal center (good for buttons whose center you tracked),
+   * "start" puts the anchor at the modal's left edge (good for dropdowns).
+   */
+  align?: "center" | "start";
+  /** Smallest height to reserve before clamping (avoids a sliver-height modal). */
+  minHeight?: number;
+  /** Distance between the anchor and the modal edge. */
+  gap?: number;
+};
+
+/**
+ * Collision-aware fixed positioning for a popup anchored to a viewport point.
+ *
+ * Keeps the popup fully on-screen regardless of where the trigger sits:
+ *  - flips vertically to whichever side of the anchor has more room and sizes
+ *    `maxHeight` to fit (so a trigger near the bottom opens upward, etc.);
+ *  - shifts horizontally toward the viewport center and clamps so neither edge
+ *    is clipped (this is what keeps a far-right trigger's popup reachable).
+ *
+ * Returns `maxHeight` rather than a fixed height so shorter content doesn't get
+ * padded out; pair with `overflow-y: auto` for tall content.
+ */
 export function getAnchoredModalStyle(
   anchor: BuilderModalAnchor,
-  options: { width: number; height: number }
+  options: AnchoredModalOptions
 ): CSSProperties {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  const modalWidth = Math.min(options.width, viewportWidth - VIEWPORT_EDGE_PADDING_PX * 2);
-  const halfWidth = modalWidth / 2;
-  const left = Math.min(
-    Math.max(anchor.x, VIEWPORT_EDGE_PADDING_PX + halfWidth),
-    viewportWidth - VIEWPORT_EDGE_PADDING_PX - halfWidth
-  );
-  const spaceAboveAnchor = Math.max(anchor.y - ANCHOR_GAP_PX - 24, 180);
-  const modalHeight = Math.min(options.height, spaceAboveAnchor, viewportHeight - 32);
+  const edge = VIEWPORT_EDGE_PADDING_PX;
+  const gap = options.gap ?? ANCHOR_GAP_PX;
+  const align = options.align ?? "center";
+
+  const width = Math.min(options.width, viewportWidth - edge * 2);
+
+  // Vertical: open toward whichever side of the anchor has more room, then cap
+  // the height to what actually fits there.
+  const spaceAbove = anchor.y - gap - edge;
+  const spaceBelow = viewportHeight - anchor.y - gap - edge;
+  const openAbove = spaceAbove > spaceBelow;
+  const room = Math.max(openAbove ? spaceAbove : spaceBelow, options.minHeight ?? 0);
+  const maxHeight = Math.min(options.height, room, viewportHeight - edge * 2);
+
+  // Horizontal: position per alignment, then clamp both edges into the viewport
+  // (effectively nudging the popup back toward center when near an edge).
+  const rawLeft = align === "center" ? anchor.x - width / 2 : anchor.x;
+  const left = Math.min(Math.max(rawLeft, edge), Math.max(edge, viewportWidth - edge - width));
 
   return {
     position: "fixed",
     left,
-    bottom: viewportHeight - anchor.y + ANCHOR_GAP_PX,
-    transform: "translateX(-50%)",
-    width: modalWidth,
-    height: modalHeight,
-    maxHeight: modalHeight
+    width,
+    maxHeight,
+    ...(openAbove ? { bottom: viewportHeight - anchor.y + gap } : { top: anchor.y + gap })
   };
 }
 
