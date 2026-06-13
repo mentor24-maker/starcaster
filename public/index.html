@@ -16,7 +16,7 @@
 </head>
 
 <body>
-  <section id="authLanding" class="auth-landing hidden" style="--auth-bg-image: url('/images/background_galaxy_1920x1080.jpg')">
+  <section id="authLanding" class="auth-landing hidden" style="--auth-bg-image: url('/images/background_galaxy_star_1920x1080.jpg')">
     <div class="auth-content">
       <div class="auth-banner">
         <img class="auth-banner-logo" src="/images/logo_starcaster_1200x180.png" alt="StarCaster by Alphire" />
@@ -6768,7 +6768,9 @@
   We retain information for as long as your account is active or as needed to provide the
   Service, comply with legal obligations, resolve disputes, and enforce agreements. You may
   request deletion of your account data subject to applicable law and legitimate retention
-  needs (for example backups or audit logs).
+  needs (for example backups or audit logs). See our
+  <a href="/data-deletion">Data Deletion Instructions</a> for how to request removal of your
+  data, including data associated with Facebook login.
 </p>
 
 <h2>Security</h2>
@@ -6789,7 +6791,7 @@
 <p>
   Depending on your location, you may have rights to access, correct, delete, restrict, or
   port personal data, and to object to certain processing. To exercise these rights, contact
-  us at <a href="mailto:privacy@alphi.re">privacy@alphi.re</a>. You may also unsubscribe
+  us at <a href="mailto:support@starcaster.pro">support@starcaster.pro</a>. You may also unsubscribe
   from non-essential marketing emails using instructions in those messages.
 </p>
 
@@ -6810,7 +6812,7 @@
 <h2>Contact Us</h2>
 <p>
   Alphire<br />
-  Email: <a href="mailto:privacy@alphi.re">privacy@alphi.re</a><br />
+  Email: <a href="mailto:support@starcaster.pro">support@starcaster.pro</a><br />
   Website: <a href="https://alphi.re">https://alphi.re</a>
 </p>
 
@@ -6841,7 +6843,7 @@
   You must be at least 16 years old and able to form a binding contract to use the Service.
   You are responsible for maintaining the confidentiality of your account credentials and for
   all activity under your account. Notify us promptly at
-  <a href="mailto:support@alphi.re">support@alphi.re</a> if you suspect unauthorized access.
+  <a href="mailto:support@starcaster.pro">support@starcaster.pro</a> if you suspect unauthorized access.
 </p>
 
 <h2>The Service</h2>
@@ -6926,7 +6928,9 @@
 <p>
   You may stop using the Service at any time. We may suspend or terminate your account for
   violation of these Terms, non-payment, or risk to the Service. Upon termination, your right
-  to access the Service ends; provisions that by nature should survive will survive.
+  to access the Service ends; provisions that by nature should survive will survive. To request
+  deletion of your account data, including data associated with Facebook login, see our
+  <a href="/data-deletion">Data Deletion Instructions</a>.
 </p>
 
 <h2>Governing Law</h2>
@@ -6947,7 +6951,7 @@
 <h2>Contact</h2>
 <p>
   Alphire<br />
-  Email: <a href="mailto:support@alphi.re">support@alphi.re</a><br />
+  Email: <a href="mailto:support@starcaster.pro">support@starcaster.pro</a><br />
   Website: <a href="https://alphi.re">https://alphi.re</a>
 </p>
 
@@ -7265,6 +7269,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Articles</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'article' }); return false;">Import Other Formats</button>
             <button id="messagingArticlesToggleFormBtn" type="button" class="btn">Add Article</button>
           </div>
         </div>
@@ -7358,6 +7363,7 @@
         <div id="messagingTweetsPageHeading" class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tweets</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tweet' }); return false;">Import Other Formats</button>
             <button id="messagingTweetsToggleFormBtn" type="button" class="btn">Add Tweet</button>
           </div>
         </div>
@@ -7734,6 +7740,9 @@
       <section id="messagingEmailsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Emails</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'email' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Email writing workspace placeholder.</p>
       </section>
@@ -7741,6 +7750,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Pitches</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'pitch' }); return false;">Import Other Formats</button>
             <button id="openMessagingTopicsFromPitchesBtn" type="button" class="btn">Topics</button>
             <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
           </div>
@@ -7887,6 +7897,9 @@
       <section id="messagingCommentsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Comments</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'comment' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Comment writing workspace placeholder.</p>
       </section>
@@ -7895,6 +7908,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Hashtags</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'hashtag' }); return false;">Import Other Formats</button>
             <button id="messagingHashtagsToggleFormBtn" type="button" class="btn">Add Hashtags</button>
           </div>
         </div>
@@ -8291,6 +8305,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Sub-headings</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'subheading' }); return false;">Import Other Formats</button>
             <button id="openMessagingTopicsFromSubheadingsBtn" type="button" class="btn">Topics</button>
             <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
           </div>
@@ -8438,6 +8453,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Taglines</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tagline' }); return false;">Import Other Formats</button>
             <button id="openMessagingTopicsFromTaglinesBtn" type="button" class="btn">Topics</button>
             <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
           </div>
@@ -8585,6 +8601,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Reports</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'report' }); return false;">Import Other Formats</button>
             <button id="messagingReportsToggleFormBtn" type="button" class="btn">Add Report</button>
           </div>
         </div>
@@ -8686,6 +8703,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: White Papers</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'white-paper' }); return false;">Import Other Formats</button>
             <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn">Add White Paper</button>
           </div>
         </div>
@@ -8787,6 +8805,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: eBooks</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'ebook' }); return false;">Import Other Formats</button>
             <button id="messagingEbooksToggleFormBtn" type="button" class="btn">Add eBook</button>
           </div>
         </div>
@@ -8887,18 +8906,27 @@
       <section id="messagingDescriptionsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Descriptions</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'description' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Description writing workspace placeholder.</p>
       </section>
       <section id="messagingTranscriptsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Transcripts</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'transcript' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Transcript writing workspace placeholder.</p>
       </section>
       <section id="messagingCtasPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: CTAs</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'cta' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>CTA writing workspace placeholder.</p>
       </section>
