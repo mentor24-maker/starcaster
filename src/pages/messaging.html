@@ -306,6 +306,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Articles</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'article' }); return false;">Import Other Formats</button>
             <button id="messagingArticlesToggleFormBtn" type="button" class="btn">Add Article</button>
           </div>
         </div>
@@ -399,6 +400,7 @@
         <div id="messagingTweetsPageHeading" class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tweets</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tweet' }); return false;">Import Other Formats</button>
             <button id="messagingTweetsToggleFormBtn" type="button" class="btn">Add Tweet</button>
           </div>
         </div>
@@ -775,6 +777,9 @@
       <section id="messagingEmailsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Emails</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'email' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Email writing workspace placeholder.</p>
       </section>
@@ -782,6 +787,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Pitches</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'pitch' }); return false;">Import Other Formats</button>
             <button id="openMessagingTopicsFromPitchesBtn" type="button" class="btn">Topics</button>
             <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
           </div>
@@ -928,6 +934,9 @@
       <section id="messagingCommentsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Comments</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'comment' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Comment writing workspace placeholder.</p>
       </section>
@@ -936,6 +945,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Hashtags</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'hashtag' }); return false;">Import Other Formats</button>
             <button id="messagingHashtagsToggleFormBtn" type="button" class="btn">Add Hashtags</button>
           </div>
         </div>
@@ -1332,6 +1342,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Sub-headings</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'subheading' }); return false;">Import Other Formats</button>
             <button id="openMessagingTopicsFromSubheadingsBtn" type="button" class="btn">Topics</button>
             <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
           </div>
@@ -1479,6 +1490,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Taglines</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tagline' }); return false;">Import Other Formats</button>
             <button id="openMessagingTopicsFromTaglinesBtn" type="button" class="btn">Topics</button>
             <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
           </div>
@@ -1626,6 +1638,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Reports</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'report' }); return false;">Import Other Formats</button>
             <button id="messagingReportsToggleFormBtn" type="button" class="btn">Add Report</button>
           </div>
         </div>
@@ -1727,6 +1740,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: White Papers</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'white-paper' }); return false;">Import Other Formats</button>
             <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn">Add White Paper</button>
           </div>
         </div>
@@ -1828,6 +1842,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: eBooks</h2>
           <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'ebook' }); return false;">Import Other Formats</button>
             <button id="messagingEbooksToggleFormBtn" type="button" class="btn">Add eBook</button>
           </div>
         </div>
@@ -1928,18 +1943,27 @@
       <section id="messagingDescriptionsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Descriptions</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'description' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Description writing workspace placeholder.</p>
       </section>
       <section id="messagingTranscriptsPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Transcripts</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'transcript' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>Transcript writing workspace placeholder.</p>
       </section>
       <section id="messagingCtasPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: CTAs</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'cta' }); return false;">Import Other Formats</button>
+          </div>
         </div>
         <p>CTA writing workspace placeholder.</p>
       </section>
