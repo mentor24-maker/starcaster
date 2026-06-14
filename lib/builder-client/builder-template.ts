@@ -158,6 +158,10 @@ export type BuilderTemplateSection = {
   alignment: "left" | "center" | "right";
   marginTop: string;
   marginBottom: string;
+  rowBorderWidth: string;
+  rowBorderColor: string;
+  rowBorderStyle: string;
+  rowBorderRadius: string;
   mobileHidden: string;
   desktopHidden: string;
   mobileLayout: "stack" | "keep" | "reverse-stack";
@@ -1361,6 +1365,14 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
           0,
           160
         ),
+        rowBorderWidth: normalizeSpacingValue(normalizedSection.rowBorderWidth, "0", 0, 20),
+        rowBorderColor: normalizeBuilderHexColor(
+          typeof normalizedSection.rowBorderColor === "string" ? normalizedSection.rowBorderColor : ""
+        ) || "#000000",
+        rowBorderStyle: ["solid", "dashed", "dotted"].includes(normalizedSection.rowBorderStyle as string)
+          ? (normalizedSection.rowBorderStyle as string)
+          : "solid",
+        rowBorderRadius: normalizeSpacingValue(normalizedSection.rowBorderRadius, "0", 0, 60),
         mobileHidden: normalizeBooleanText(normalizedSection.mobileHidden),
         desktopHidden: normalizeBooleanText(normalizedSection.desktopHidden),
         mobileLayout: normalizeMobileLayout(normalizedSection.mobileLayout),
@@ -1393,6 +1405,10 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     alignment: "left",
     marginTop: "0",
     marginBottom: "0",
+    rowBorderWidth: "0",
+    rowBorderColor: "#000000",
+    rowBorderStyle: "solid",
+    rowBorderRadius: "0",
     mobileHidden: "false",
     desktopHidden: "false",
     mobileLayout: "stack",

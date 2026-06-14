@@ -4,6 +4,7 @@ import type { RichTextGalleryBinding } from "@/components/builder/builder-types"
 import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import type {
   BackgroundSettings,
   BuilderProductRecord,
@@ -895,6 +896,10 @@ function TableCellModules({
     );
   }
 
+  function updateCellModule(id: string, updater: (current: BuilderTemplateModule) => BuilderTemplateModule) {
+    onUpdate(cellKey, modules.map((m) => (m.id === id ? updater(m) : m)));
+  }
+
   return (
     <div className="builder-table-cell-modules" onClick={(e) => e.stopPropagation()}>
       {modules.map((mod) => (
@@ -990,29 +995,30 @@ function TableCellModules({
                       onChange={(url) => updateModuleSettings(mod.id, { url })}
                     />
                   </label>
-                  <div className="builder-table-cell-module-inline-grid">
-                    <label className="field">
-                      <span>Alt text</span>
-                      <input type="text" value={mod.settings.alt ?? ""} onChange={(e) => updateModuleSettings(mod.id, { alt: e.target.value })} placeholder="Image description" />
-                    </label>
-                    <label className="field">
-                      <span>Size</span>
-                      <select value={mod.settings.size ?? "100"} onChange={(e) => updateModuleSettings(mod.id, { size: e.target.value })}>
-                        <option value="10">10%</option>
-                        <option value="15">15%</option>
-                        <option value="25">25%</option>
-                        <option value="33">33%</option>
-                        <option value="50">50%</option>
-                        <option value="66">66%</option>
-                        <option value="75">75%</option>
-                        <option value="100">100%</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Border color</span>
-                      <input type="color" value={mod.settings.borderColor ?? "#0f4f8f"} onChange={(e) => updateModuleSettings(mod.id, { borderColor: e.target.value })} />
-                    </label>
-                  </div>
+                  <BuilderSettingRow label="Alignment" fullWidth>
+                    <BuilderAlignmentIconGroup
+                      value={getModuleAlignment(mod.settings)}
+                      onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
+                    />
+                  </BuilderSettingRow>
+                  <label className="field">
+                    <span>Link</span>
+                    <input
+                      type="text"
+                      value={mod.settings.linkUrl ?? ""}
+                      onChange={(e) => updateModuleSettings(mod.id, { linkUrl: normalizeBuilderAssetUrl(e.target.value) })}
+                      placeholder="/path-or-url"
+                    />
+                  </label>
+                  <label className="field builder-checkbox-field">
+                    <span>New Tab</span>
+                    <input
+                      type="checkbox"
+                      checked={mod.settings.newTab === "true"}
+                      onChange={(e) => updateModuleSettings(mod.id, { newTab: e.target.checked ? "true" : "false" })}
+                    />
+                  </label>
+                  <BuilderImageModuleSettings module={mod} onUpdateModule={(updater) => updateCellModule(mod.id, updater)} />
                 </>
               )}
             </div>
@@ -2284,62 +2290,7 @@ export function BuilderModuleCard({
           ) : null}
 
           {isStandardImage ? (
-            <>
-              <label className="field">
-                <span>Alt text</span>
-                <input type="text" value={module.settings.alt ?? ""} onChange={(event) => onUpdateModule((current) => ({ ...current, settings: { ...current.settings, alt: event.target.value } }))} placeholder="Image description" />
-              </label>
-              <div className="builder-image-controls-grid">
-                <label className="field">
-                  <span>Size</span>
-                  <select value={module.settings.size ?? "100"} onChange={(event) => onUpdateModule((current) => ({ ...current, settings: { ...current.settings, size: event.target.value } }))}>
-                    <option value="10">10%</option>
-                    <option value="15">15%</option>
-                    <option value="25">25%</option>
-                    <option value="33">33%</option>
-                    <option value="50">50%</option>
-                    <option value="66">66%</option>
-                    <option value="75">75%</option>
-                    <option value="100">100%</option>
-                  </select>
-                </label>
-                <BuilderInlineNumberSelectRow>
-                  <BuilderInlineNumberSelect
-                    label="Border thickness"
-                    value={module.settings.borderThickness ?? "0"}
-                    min={0}
-                    max={24}
-                    fallback="0"
-                    onChange={(borderThickness) =>
-                      onUpdateModule((current) => ({ ...current, settings: { ...current.settings, borderThickness } }))
-                    }
-                  />
-                  <BuilderInlineNumberSelect
-                    label="Border radius"
-                    value={module.settings.borderRadius ?? "18"}
-                    min={0}
-                    max={80}
-                    fallback="18"
-                    onChange={(borderRadius) =>
-                      onUpdateModule((current) => ({ ...current, settings: { ...current.settings, borderRadius } }))
-                    }
-                  />
-                </BuilderInlineNumberSelectRow>
-                <label className="field"><span>Border color</span><input type="color" value={module.settings.borderColor ?? "#0f4f8f"} onChange={(event) => onUpdateModule((current) => ({ ...current, settings: { ...current.settings, borderColor: event.target.value } }))} /></label>
-                <label className="field">
-                  <span>Effect</span>
-                  <select value={module.settings.effect ?? "none"} onChange={(event) => onUpdateModule((current) => ({ ...current, settings: { ...current.settings, effect: event.target.value } }))}>
-                    <option value="none">None</option>
-                    <option value="bounce">Bounce</option>
-                    <option value="fast-bounce">Fast Bounce</option>
-                    <option value="big-bounce">Big Bounce</option>
-                    <option value="spin">Spin</option>
-                    <option value="cruise">Cruise</option>
-                    <option value="tumbleweed">Tumbleweed</option>
-                  </select>
-                </label>
-              </div>
-            </>
+            <BuilderImageModuleSettings module={module} onUpdateModule={onUpdateModule} />
           ) : null}
 
           {module.type === "heading" ? (

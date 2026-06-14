@@ -140,6 +140,52 @@ export function BuilderSectionControls({
             }
           />
         </BuilderSettingRow>
+        <BuilderSettingRow label="Border Width">
+          <BuilderNumberSelectControl
+            value={section.rowBorderWidth ?? "0"}
+            min={0}
+            max={20}
+            fallback="0"
+            onChange={(rowBorderWidth) =>
+              onUpdateSection((current) => ({ ...current, rowBorderWidth }))
+            }
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Border Style">
+          <select
+            disabled={Number(section.rowBorderWidth ?? "0") === 0}
+            value={section.rowBorderStyle ?? "solid"}
+            onChange={(event) =>
+              onUpdateSection((current) => ({ ...current, rowBorderStyle: event.target.value }))
+            }
+          >
+            <option value="solid">Solid</option>
+            <option value="dashed">Dashed</option>
+            <option value="dotted">Dotted</option>
+          </select>
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Border Color">
+          <input
+            type="color"
+            disabled={Number(section.rowBorderWidth ?? "0") === 0}
+            value={/^#[0-9a-f]{6}$/i.test(section.rowBorderColor ?? "") ? section.rowBorderColor : "#000000"}
+            onChange={(event) =>
+              onUpdateSection((current) => ({ ...current, rowBorderColor: event.target.value }))
+            }
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Border Radius">
+          <BuilderNumberSelectControl
+            disabled={Number(section.rowBorderWidth ?? "0") === 0}
+            value={section.rowBorderRadius ?? "0"}
+            min={0}
+            max={60}
+            fallback="0"
+            onChange={(rowBorderRadius) =>
+              onUpdateSection((current) => ({ ...current, rowBorderRadius }))
+            }
+          />
+        </BuilderSettingRow>
       </div>
       <BuilderBackgroundControls
         hideModeRow
