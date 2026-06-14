@@ -1964,10 +1964,12 @@ App.contacts = (function () {
     let allProjects = [];
 
     try {
+      // Race each call against a 6-second timeout so a hung Supabase query can't freeze the panel
+      const tout = (p) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), 6000))]);
       const [membershipsRes, invitesRes, projectsRes] = await Promise.all([
-        api(`/api/contacts/${encodeURIComponent(contactId)}/project-memberships`).catch(() => null),
-        api(`/api/contacts/${encodeURIComponent(contactId)}/project-invitations`).catch(() => null),
-        api('/api/projects').catch(() => null),
+        tout(api(`/api/contacts/${encodeURIComponent(contactId)}/project-memberships`).catch(() => null)),
+        tout(api(`/api/contacts/${encodeURIComponent(contactId)}/project-invitations`).catch(() => null)),
+        tout(api('/api/projects').catch(() => null)),
       ]);
       memberProjectIds = Array.isArray(membershipsRes?.projectIds) ? membershipsRes.projectIds : [];
       invitations      = Array.isArray(invitesRes?.invitations)   ? invitesRes.invitations   : [];
