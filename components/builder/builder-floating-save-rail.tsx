@@ -44,7 +44,7 @@ function readShellAnchorPosition(): CSSProperties {
   if (preferredLeft > maxLeft || rect.width >= window.innerWidth - 48) {
     return {
       top: `${top}px`,
-      right: "20px",
+      right: "40px",
       left: "auto",
       transform: "translateY(-50%)",
       visibility: "visible"
