@@ -22128,8 +22128,6 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
 }
 
 /* src/css/main.css */
-
-/* Contact Edit — two-column layout */
 .contact-edit-two-col {
   display: grid;
   grid-template-columns: 1fr 340px;
