@@ -6377,21 +6377,53 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-table-design-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
+  gap: 10px;
+  font-size: 12px;
+}
+.builder-react-root .builder-table-border-row {
+  display: flex;
+  align-items: center;
   gap: 16px;
 }
-.builder-react-root .builder-table-structure-actions {
+.builder-react-root .builder-table-color-field {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #214c71;
+  white-space: nowrap;
+}
+.builder-react-root .builder-table-color-field span {
+  flex-shrink: 0;
+}
+.builder-react-root .builder-table-color-field input[type=color] {
+  width: 28px;
+  height: 24px;
+  padding: 1px 2px;
+  border: 1px solid rgba(9, 16, 24, 0.15);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.builder-react-root .builder-table-design-grid .builder-inline-number-field {
+  font-size: 12px;
+}
+.builder-react-root .builder-table-structure-actions {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 600;
   color: #214c71;
 }
+.builder-react-root .builder-table-structure-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .builder-react-root .builder-table-structure-actions .secondary-button {
-  font-size: 12px;
-  padding: 4px 10px;
+  font-size: 11px;
+  padding: 3px 9px;
   min-width: auto;
 }
 .builder-react-root .builder-table-editor-scroll {
