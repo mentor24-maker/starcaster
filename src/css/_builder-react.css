@@ -8679,8 +8679,8 @@
 
 .builder-react-root .builder-gallery-modal.builder-module-palette-modal {
   width: min(1200px, calc(100vw - 32px));
-  height: min(800px, calc(100dvh - 32px));
-  max-height: min(800px, calc(100dvh - 32px));
+  height: min(800px, 80dvh);
+  max-height: min(800px, 80dvh);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -8722,7 +8722,6 @@
   padding: 0;
 }
 
-.builder-react-root .builder-gallery-modal.builder-module-palette-modal.is-anchored,
 .builder-react-root .builder-gallery-modal.builder-gallery-modal-rich-text.is-anchored {
   position: fixed;
   margin: 0;
@@ -8731,6 +8730,20 @@
   height: calc(100dvh - 200px) !important;
   max-height: calc(100dvh - 200px);
   overflow: hidden;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: 20px;
+}
+
+.builder-react-root .builder-gallery-modal.builder-module-palette-modal.is-anchored {
+  position: fixed;
+  margin: 0;
+  width: calc(100vw - 200px) !important;
+  max-width: calc(100vw - 200px);
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
@@ -8955,6 +8968,41 @@
 
 .builder-react-root .builder-module-item-card-saved strong {
   text-wrap: balance;
+}
+
+.builder-react-root .builder-module-palette-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-link {
+  font-weight: 700;
+  color: #0a8fc4;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-link:hover {
+  color: #076b96;
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-sep {
+  color: rgba(9, 16, 24, 0.38);
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-current {
+  font-weight: 700;
+  color: var(--night);
 }
 
 .builder-react-root .builder-module-palette-empty {

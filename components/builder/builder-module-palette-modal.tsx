@@ -23,7 +23,7 @@ type BuilderModulePaletteModalProps = {
   activeGroup: ModulePaletteGroup | null;
   anchor?: ModulePaletteAnchor | null;
   cellModules?: BuilderCellModuleRecord[];
-  onSelectGroup: (group: ModulePaletteGroup) => void;
+  onSelectGroup: (group: ModulePaletteGroup | null) => void;
   onSelectItem: (item: ModulePaletteItem) => void;
   onSelectSavedModule?: (cellModuleId: string) => void;
   onClose: () => void;
@@ -67,13 +67,15 @@ function getAnchoredModulePaletteStyle(anchor: ModulePaletteAnchor): CSSProperti
     Math.max(anchor.x, VIEWPORT_EDGE_PADDING_PX + halfWidth),
     viewportWidth - VIEWPORT_EDGE_PADDING_PX - halfWidth
   );
-  const spaceAboveAnchor = Math.max(anchor.y - ANCHOR_GAP_PX - 24, 220);
-  const modalHeight = Math.min(MODULE_PALETTE_HEIGHT_PX, spaceAboveAnchor, viewportHeight - 32);
+  const modalHeight = Math.floor(Math.min(MODULE_PALETTE_HEIGHT_PX, viewportHeight * 0.8));
+  const idealBottom = viewportHeight - anchor.y + ANCHOR_GAP_PX;
+  const maxBottom = viewportHeight - modalHeight - VIEWPORT_EDGE_PADDING_PX;
+  const bottom = Math.max(VIEWPORT_EDGE_PADDING_PX, Math.min(idealBottom, maxBottom));
 
   return {
     position: "fixed",
     left,
-    bottom: viewportHeight - anchor.y + ANCHOR_GAP_PX,
+    bottom,
     transform: "translateX(-50%)",
     width: modalWidth,
     height: modalHeight,
@@ -147,11 +149,19 @@ export function BuilderModulePaletteModal({
           <div>
             <div className="panel-label">Module Library</div>
             {activeGroup ? (
-              <p className="page-copy admin-copy">
-                {classOnlyGroup
-                  ? "Choose a saved module from the Special Effects class in your repository."
-                  : "Pick a starter module or insert a saved module with the same class."}
-              </p>
+              <nav aria-label="Module navigation" className="builder-module-palette-breadcrumb">
+                <button
+                  className="builder-module-palette-breadcrumb-link"
+                  onClick={() => onSelectGroup(null)}
+                  type="button"
+                >
+                  Module Categories
+                </button>
+                <span aria-hidden="true" className="builder-module-palette-breadcrumb-sep">›</span>
+                <strong className="builder-module-palette-breadcrumb-current">
+                  {modulePaletteGroups.find((g) => g.value === activeGroup)?.label ?? activeGroup}
+                </strong>
+              </nav>
             ) : null}
           </div>
           <div className="builder-gallery-header-actions">
@@ -173,19 +183,6 @@ export function BuilderModulePaletteModal({
 
         {activeGroup ? (
           <>
-            <div className="builder-module-group-tabs">
-              {displayGroups.map((group) => (
-                <button
-                  className={`builder-module-group-tab ${activeGroup === group.value ? "is-active" : ""}`}
-                  key={group.value}
-                  onClick={() => onSelectGroup(group.value)}
-                  type="button"
-                >
-                  <span className="builder-module-group-icon">{group.icon}</span>
-                  <span>{group.label}</span>
-                </button>
-              ))}
-            </div>
             {starterModules.length > 0 ? (
               <div className="builder-module-palette-section">
                 <div className="builder-module-palette-section-label">Starter Modules</div>
