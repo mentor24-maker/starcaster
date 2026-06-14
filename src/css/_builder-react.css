@@ -5514,6 +5514,7 @@
 .builder-react-root .builder-module-preview-table,
 .builder-react-root .builder-preview-table {
   font-size: 13px;
+  background: transparent;
 }
 
 .builder-react-root .builder-module-preview-table th,
