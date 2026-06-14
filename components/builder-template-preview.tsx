@@ -288,6 +288,7 @@ function BuilderSectionPreview({
   const sectionStyle = getBuilderBackgroundStyle(section.background);
   const columnKeys = getLayoutColumns(section.layout);
   const isNavigationSection = section.modules.length > 0 && section.modules.every((module) => module.type === "navigation");
+  const hasNavigationModule = section.modules.some((module) => module.type === "navigation");
   const isPageOverlayFlowSection = sectionHasOnlyPageOverlayImageModules(section);
   const isSectionOverlaySlot = sectionHasOnlySectionScopedOverlayModules(section);
   const isOverlayLayoutCollapsed = isPageOverlayFlowSection || isSectionOverlaySlot;
@@ -301,7 +302,7 @@ function BuilderSectionPreview({
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
-      : isNavigationSection
+      : hasNavigationModule
       ? { position: "relative", zIndex: 10 }
       : {}),
     ...(rowBorderWidth > 0 && !isNavigationSection && !isOverlayLayoutCollapsed
