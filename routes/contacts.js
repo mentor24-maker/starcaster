@@ -797,8 +797,8 @@ ${contextDump}`;
     const html = `
       <div style="background-color:#f3f4f6; padding:24px 16px;">
         <div style="font-family:Arial,sans-serif; line-height:1.6; color:#111827; max-width:600px; margin:0 auto; border:1px solid #000; border-radius:20px; overflow:hidden; background:#ffffff;">
-          <div style="background:#000; padding:28px 24px; text-align:center;">
-            <img src="${logoUrl}" alt="Starcaster" style="display:block; margin:0 auto; width:90%; max-width:100%; height:auto;" />
+          <div style="background:#000; padding:0; line-height:0;">
+            <img src="${logoUrl}" alt="Starcaster" style="display:block; width:100%; height:auto; margin:0; padding:0;" />
           </div>
           <div style="padding:2rem 2.5rem;">
             <h2 style="margin:0 0 1rem; text-align:center;">You're invited to ${projectName}</h2>
