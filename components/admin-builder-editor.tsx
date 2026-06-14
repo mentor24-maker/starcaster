@@ -126,7 +126,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   const [activeModuleGroup, setActiveModuleGroup] = useState<ModulePaletteGroup | null>(null);
   const [collapsedBuilderPanels, setCollapsedBuilderPanels] = useState({
     rowConfigurations: true,
-    rows: false,
     // Reveal the workspace immediately when we mount to edit a specific record;
     // otherwise the page's sections stay hidden behind a collapsed panel.
     workspace: !initialRecordId
@@ -1864,18 +1863,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
             </button>
             {!collapsedBuilderPanels.workspace ? (
               <div className="builder-workspace-pods">
-                <div className="builder-workspace-nested-pod builder-rows-pod">
-                  <button
-                    aria-expanded={!collapsedBuilderPanels.rows}
-                    className="builder-panel-toggle"
-                    onClick={() => toggleBuilderPanel("rows")}
-                    type="button"
-                  >
-                    <span className="panel-label">Rows</span>
-                    <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.rows} /></span>
-                  </button>
-                  {!collapsedBuilderPanels.rows ? (
-                    <>
                     <div className="builder-layout-toolbar">
                       {layoutOptions.map((layout) => renderLayoutTile(layout))}
                       <label className="field builder-cell-repository-select">
@@ -2023,9 +2010,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                   </div>
                 )}
                     </div>
-                    </>
-                  ) : null}
-                </div>
               </div>
             ) : null}
           </div>

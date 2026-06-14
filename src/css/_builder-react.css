@@ -3238,7 +3238,7 @@
 }
 
 .builder-react-root .builder-pages-list-shell {
-  --builder-pages-actions-width: 260px;
+  --builder-pages-actions-width: 280px;
 }
 
 .builder-react-root .builder-pages-list-table {
@@ -3285,7 +3285,7 @@
 .builder-react-root .builder-pages-list-heading-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
   width: var(--builder-pages-actions-width);
   min-width: var(--builder-pages-actions-width);
   max-width: var(--builder-pages-actions-width);
@@ -3305,6 +3305,7 @@
 
 .builder-react-root .builder-pages-list-heading-actions .builder-panel-heading-button {
   flex: 1;
+  width: auto;
   justify-content: center;
 }
 
@@ -3320,7 +3321,7 @@
 }
 
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-layout {
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr) 280px;
 }
 
 .builder-react-root .builder-pages-crud-heading-primary {
@@ -3346,18 +3347,17 @@
 }
 
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions {
-  width: 260px;
-  min-width: 260px;
-  max-width: 260px;
-  gap: 12px;
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  gap: 20px;
   padding: 0;
   justify-content: flex-start;
 }
 
 .builder-react-root .builder-pages-crud-heading-actions .builder-panel-heading-button {
   flex: 1;
-  max-width: 100%;
-  padding-inline: 18px;
+  width: auto;
   justify-content: center;
 }
 
