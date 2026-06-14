@@ -1936,6 +1936,131 @@ App.contacts = (function () {
     if (els.contactEditId) els.contactEditId.value = activeContactId;
     fillContactForm(els.contactEditForm, contact);
     App.setActivePage('editContactPage');
+    loadContactEditRightPanel(activeContactId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Contact edit page — right panel (projects + invite)
+  // ---------------------------------------------------------------------------
+
+  async function loadContactEditRightPanel(contactId) {
+    const listEl    = document.getElementById('contactEditProjectList');
+    const selectEl  = document.getElementById('contactEditProjectSelect');
+    const statusEl  = document.getElementById('contactEditInviteStatus');
+    if (!listEl && !selectEl) return;
+
+    if (listEl) {
+      listEl.innerHTML = '<p class="contact-edit-panel-empty">Loading…</p>';
+    }
+    if (statusEl) {
+      statusEl.textContent = '';
+      statusEl.classList.add('hidden');
+      statusEl.classList.remove('error');
+    }
+
+    // Fetch memberships and invitations in parallel
+    let memberProjectIds = [];
+    let invitations = [];
+    let allProjects = [];
+
+    try {
+      const [membershipsRes, invitesRes, projectsRes] = await Promise.all([
+        api(`/api/contacts/${encodeURIComponent(contactId)}/project-memberships`).catch(() => null),
+        api(`/api/contacts/${encodeURIComponent(contactId)}/project-invitations`).catch(() => null),
+        api('/api/projects').catch(() => null),
+      ]);
+      memberProjectIds = Array.isArray(membershipsRes?.projectIds) ? membershipsRes.projectIds : [];
+      invitations      = Array.isArray(invitesRes?.invitations)   ? invitesRes.invitations   : [];
+      allProjects      = Array.isArray(projectsRes?.projects)     ? projectsRes.projects
+                       : Array.isArray(projectsRes)               ? projectsRes
+                       : [];
+    } catch (_) {}
+
+    // Render project membership list
+    if (listEl) {
+      listEl.innerHTML = '';
+      if (!allProjects.length && !memberProjectIds.length) {
+        listEl.innerHTML = '<p class="contact-edit-panel-empty">No projects found.</p>';
+      } else {
+        const shownIds = new Set();
+        memberProjectIds.forEach((pid) => {
+          shownIds.add(pid);
+          const proj   = allProjects.find((p) => p.id === pid);
+          const name   = escapeHtml(proj?.name || pid);
+          const invite = invitations.find((inv) => inv.projectId === pid && inv.status === 'pending');
+          const item   = document.createElement('div');
+          item.className = 'contact-edit-project-item';
+          item.innerHTML = name
+            + (invite ? '<span class="cpi-badge invited">Invite pending</span>' : '<span class="cpi-badge">Member</span>');
+          listEl.appendChild(item);
+        });
+        // Show invited-only projects (not yet a member)
+        invitations.forEach((inv) => {
+          if (shownIds.has(inv.projectId) || inv.status !== 'pending') return;
+          const proj = allProjects.find((p) => p.id === inv.projectId);
+          const name = escapeHtml(proj?.name || inv.projectId);
+          const item = document.createElement('div');
+          item.className = 'contact-edit-project-item';
+          item.innerHTML = name + '<span class="cpi-badge invited">Invite pending</span>';
+          listEl.appendChild(item);
+        });
+        if (!listEl.children.length) {
+          listEl.innerHTML = '<p class="contact-edit-panel-empty">Not in any projects yet.</p>';
+        }
+      }
+    }
+
+    // Populate project dropdown (all projects the admin can access)
+    if (selectEl) {
+      selectEl.innerHTML = '<option value="">— Select a project —</option>';
+      allProjects.forEach((p) => {
+        const opt = document.createElement('option');
+        opt.value = String(p.id || '');
+        opt.textContent = String(p.name || p.id || '');
+        selectEl.appendChild(opt);
+      });
+    }
+  }
+
+  async function sendContactProjectInvite(contactId) {
+    const selectEl = document.getElementById('contactEditProjectSelect');
+    const statusEl = document.getElementById('contactEditInviteStatus');
+    const inviteBtn = document.getElementById('contactEditInviteBtn');
+    const projectId = String(selectEl?.value || '').trim();
+
+    if (!projectId) {
+      if (statusEl) {
+        statusEl.textContent = 'Please select a project first.';
+        statusEl.classList.remove('hidden', 'error');
+        statusEl.classList.add('error');
+      }
+      return;
+    }
+
+    if (inviteBtn) inviteBtn.disabled = true;
+    if (statusEl) {
+      statusEl.textContent = 'Sending invitation…';
+      statusEl.classList.remove('hidden', 'error');
+    }
+
+    try {
+      await api(`/api/contacts/${encodeURIComponent(contactId)}/invite-to-project`, {
+        method: 'POST',
+        body: JSON.stringify({ projectId }),
+      });
+      if (statusEl) {
+        statusEl.textContent = 'Invitation sent!';
+        statusEl.classList.remove('error');
+      }
+      loadContactEditRightPanel(contactId);
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = err.message || 'Failed to send invitation.';
+        statusEl.classList.add('error');
+      }
+    } finally {
+      if (inviteBtn) inviteBtn.disabled = false;
+    }
   }
 
   function openClonePage(contactOrId) {
@@ -3916,6 +4041,12 @@ App.contacts = (function () {
     }
     if (els.cloneEditedContactBtn) {
       els.cloneEditedContactBtn.addEventListener('click', () => openClonePage(activeContactId));
+    }
+
+    const contactEditInviteBtn = document.getElementById('contactEditInviteBtn');
+    if (contactEditInviteBtn && !contactEditInviteBtn.dataset.bound) {
+      contactEditInviteBtn.dataset.bound = 'true';
+      contactEditInviteBtn.addEventListener('click', () => sendContactProjectInvite(activeContactId));
     }
     if (els.contactEditForm) {
       els.contactEditForm.addEventListener('submit', async (e) => {

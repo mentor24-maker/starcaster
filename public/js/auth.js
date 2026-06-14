@@ -1,5 +1,21 @@
 window.App = window.App || {};
 
+// Detect a contact project-invite token in the URL hash before anything else runs.
+// Stored here so the login/register handlers can consume it after authentication.
+App.auth = App.auth || {};
+(function detectProjectInviteHash() {
+  try {
+    const hash = String(window.location.hash || '');
+    const m = hash.match(/[#&]project-invite=([^&]+)/);
+    if (m) {
+      App.auth._pendingProjectInviteToken = decodeURIComponent(m[1]);
+      // Clean the token from the address bar so it isn't bookmarked or shared
+      const clean = window.location.pathname + window.location.search;
+      window.history.replaceState(null, '', clean);
+    }
+  } catch (_) {}
+}());
+
 App.auth = {
   manifest: {
     id: 'auth',
@@ -183,6 +199,33 @@ App.auth.handleUnauthorized = function handleUnauthorized() {
   App.auth._setMessage('');
 };
 
+App.auth._consumePendingProjectInvite = async function _consumePendingProjectInvite() {
+  const token = App.auth._pendingProjectInviteToken;
+  if (!token) return;
+  App.auth._pendingProjectInviteToken = null;
+  try {
+    const res = await App.api('/api/contacts/accept-project-invite', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+    const projectId = String(res?.projectId || res?.data?.projectId || '').trim();
+    if (!projectId) return;
+    // Switch to the invited project once the main app and project context are ready
+    const doSwitch = async () => {
+      if (App.projectContext?.switchSessionProject) {
+        await App.projectContext.switchSessionProject(projectId, { keepView: false, refresh: true });
+      } else {
+        await App.api('/api/projects/active', {
+          method: 'POST',
+          body: JSON.stringify({ projectId }),
+        });
+      }
+    };
+    // Give the boot sequence a moment to finish initialising modules
+    setTimeout(() => { doSwitch().catch(() => {}); }, 200);
+  } catch (_) {}
+};
+
 App.auth._persistSessionToken = function _persistSessionToken(res) {
   const token = String(res?.sessionToken || res?.data?.sessionToken || '').trim();
   if (token && typeof App.setSessionToken === 'function') {
@@ -282,6 +325,8 @@ App.auth.init = function init(bootMainApp) {
         await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._runAuthenticatedCallbacks();
+        App.auth._consumePendingProjectInvite();
         App.auth._setMessage('');
       } catch (err) {
         App.auth._setMessage(err.message || 'Login failed', true);
@@ -310,6 +355,8 @@ App.auth.init = function init(bootMainApp) {
         await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._runAuthenticatedCallbacks();
+        App.auth._consumePendingProjectInvite();
         App.auth._setMessage('');
       } catch (err) {
         App.auth._setMessage(err.message || 'Registration failed', true);
@@ -389,6 +436,10 @@ App.auth.init = function init(bootMainApp) {
         App.setActivePage('settingsProfilePage');
       }
     });
+  }
+
+  if (App.auth._pendingProjectInviteToken) {
+    App.auth._setMessage('Log in or register to accept your project invitation.', false);
   }
 
   App.auth._sessionCheckPending = true;
