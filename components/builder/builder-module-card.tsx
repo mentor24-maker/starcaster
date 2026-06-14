@@ -1482,6 +1482,43 @@ function SocialShareModuleEditor({
   );
 }
 
+function parseNavPadding(navPadding: string): { v: number; h: number } {
+  const parts = (navPadding || "").trim().split(/\s+/);
+  const v = parseInt(parts[0]) || 8;
+  const h = parts.length > 1 ? parseInt(parts[1]) || 12 : v;
+  return { v, h };
+}
+
+function NavColorField({
+  label,
+  value,
+  defaultColor,
+  onChange
+}: {
+  label: string;
+  value: string;
+  defaultColor: string;
+  onChange: (v: string) => void;
+}) {
+  const isSet = !!value;
+  return (
+    <BuilderSettingRow label={label} fullWidth>
+      <div className="builder-nav-color-field">
+        <input
+          type="color"
+          value={isSet ? value : defaultColor}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        {isSet ? (
+          <button type="button" className="builder-nav-color-clear" onClick={() => onChange("")} title="Reset to default">✕</button>
+        ) : (
+          <span className="builder-nav-color-hint">default</span>
+        )}
+      </div>
+    </BuilderSettingRow>
+  );
+}
+
 function NavModuleEditor({
   module,
   onUpdateModule
@@ -1490,6 +1527,7 @@ function NavModuleEditor({
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 }) {
   const items = parseNavItems(module.settings);
+  const { v: padV, h: padH } = parseNavPadding(module.settings.navPadding ?? "");
 
   function persist(nextItems: NavItem[]) {
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, navItems: serializeNavItems(nextItems) } }));
@@ -1519,36 +1557,79 @@ function NavModuleEditor({
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
   }
 
+  function updatePadding(v: number, h: number) {
+    updateSetting("navPadding", `${v}px ${h}px`);
+  }
+
   return (
     <>
-      <div className="builder-slider-design-grid">
-        <label className="field"><span>Font size (px)</span><input type="number" min="10" max="48" value={module.settings.navFontSize ?? "16"} onChange={(e) => updateSetting("navFontSize", e.target.value)} /></label>
-        <label className="field builder-checkbox-field"><span>Bold</span><input type="checkbox" checked={module.settings.navBold === "true"} onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")} /></label>
-        <label className="field"><span>Border radius (px)</span><input type="number" min="0" max="48" value={module.settings.navBorderRadius ?? "0"} onChange={(e) => updateSetting("navBorderRadius", e.target.value)} /></label>
-        <label className="field"><span>Padding</span><input type="text" value={module.settings.navPadding ?? "8px 12px"} onChange={(e) => updateSetting("navPadding", e.target.value)} placeholder="8px 12px" /></label>
-        <label className="field"><span>Text color</span><input type="text" value={module.settings.navColor ?? ""} onChange={(e) => updateSetting("navColor", e.target.value)} placeholder="#ffffff" /></label>
-        <label className="field"><span>Hover text color</span><input type="text" value={module.settings.navHoverColor ?? ""} onChange={(e) => updateSetting("navHoverColor", e.target.value)} placeholder="#ffffff" /></label>
-        <label className="field"><span>Hover background</span><input type="text" value={module.settings.navHoverBackground ?? ""} onChange={(e) => updateSetting("navHoverBackground", e.target.value)} placeholder="#e8f8ff" /></label>
+      <div className="builder-nav-section-label">Style</div>
+      <div className="builder-nav-style-grid">
+        <BuilderInlineNumberSelectRow>
+          <BuilderInlineNumberSelect
+            label="Font size"
+            value={module.settings.navFontSize ?? "16"}
+            min={10}
+            max={48}
+            fallback="16"
+            onChange={(v) => updateSetting("navFontSize", v)}
+          />
+          <BuilderInlineNumberSelect
+            label="Radius"
+            value={module.settings.navBorderRadius ?? "0"}
+            min={0}
+            max={48}
+            fallback="0"
+            onChange={(v) => updateSetting("navBorderRadius", v)}
+          />
+        </BuilderInlineNumberSelectRow>
+        <BuilderInlineNumberSelectRow>
+          <BuilderInlineNumberSelect
+            label="Pad V"
+            value={String(padV)}
+            min={0}
+            max={40}
+            fallback="8"
+            onChange={(v) => updatePadding(Number(v), padH)}
+          />
+          <BuilderInlineNumberSelect
+            label="Pad H"
+            value={String(padH)}
+            min={0}
+            max={60}
+            fallback="12"
+            onChange={(v) => updatePadding(padV, Number(v))}
+          />
+        </BuilderInlineNumberSelectRow>
+        <BuilderSettingRow label="Bold" fullWidth>
+          <input
+            type="checkbox"
+            checked={module.settings.navBold === "true"}
+            onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")}
+          />
+        </BuilderSettingRow>
+        <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" onChange={(v) => updateSetting("navColor", v)} />
+        <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" onChange={(v) => updateSetting("navHoverColor", v)} />
+        <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" onChange={(v) => updateSetting("navHoverBackground", v)} />
       </div>
-      <div className="builder-slider-items">
+
+      <div className="builder-nav-section-label">Links</div>
+      <div className="builder-nav-items">
         {items.map((item, index) => (
-          <div key={item.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>{item.label || `Link ${index + 1}`}</strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Delete link">✕</button>
-              </div>
+          <div key={item.id} className="builder-nav-item-row">
+            <div className="builder-nav-item-fields">
+              <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
+              <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
             </div>
-            <div className="builder-slider-item-grid">
-              <label className="field"><span>Label</span><input type="text" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} /></label>
-              <label className="field"><span>Link</span><input type="text" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" /></label>
+            <div className="builder-nav-item-actions">
+              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
+              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
+              <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
             </div>
           </div>
         ))}
       </div>
-      <button type="button" className="secondary-button" onClick={addItem}>Add Nav Item</button>
+      <button type="button" className="secondary-button" onClick={addItem}>+ Add Link</button>
     </>
   );
 }
