@@ -5401,23 +5401,22 @@
 }
 
 /* --- Nav module editor --- */
-.builder-react-root .builder-nav-section-label {
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-top: 4px;
-}
-
 .builder-react-root .builder-nav-style-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
+  padding: 8px 0 4px;
 }
 
-.builder-react-root .builder-nav-style-grid .builder-inline-number-row {
-  gap: 24px;
+.builder-react-root .builder-nav-four-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.builder-react-root .builder-nav-four-row .builder-inline-number-field {
+  flex: 1;
+  min-width: 0;
 }
 
 .builder-react-root .builder-nav-color-field {
