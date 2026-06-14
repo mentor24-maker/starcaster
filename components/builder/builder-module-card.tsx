@@ -404,7 +404,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const borderW = Number.parseInt(module.settings.borderWidth || "1", 10);
     const borderC = module.settings.borderColor || "#cccccc";
     const cellPad = Number.parseInt(module.settings.cellPadding || "8", 10);
-    const bgColor = module.settings.backgroundColor || "#ffffff";
+    const bgMode = module.settings.backgroundMode || "none";
+    const bgColor = bgMode !== "none" ? (module.settings.backgroundColor || "#ffffff") : undefined;
 
     return (
       <div className="builder-module-preview-table-wrap">
@@ -414,7 +415,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
             borderCollapse: "collapse",
             width: "100%",
             border: `${borderW}px solid ${borderC}`,
-            background: bgColor
+            ...(bgColor ? { background: bgColor } : {})
           }}
         >
           {td.headers.length > 0 && module.settings.showColumnHeads !== "false" && (
@@ -1143,27 +1144,27 @@ function TableModuleEditor({
   return (
     <>
       <div className="builder-table-design-grid">
-        <BuilderInlineNumberSelectRow>
+        <div className="builder-table-border-row">
           <BuilderInlineNumberSelect
-            label="Border width"
+            label="Border"
             value={module.settings.borderWidth ?? "1"}
             min={0}
             max={6}
             fallback="1"
             onChange={(value) => updateSetting("borderWidth", value)}
           />
-          <BuilderInlineNumberSelect
-            label="Cell padding"
-            value={module.settings.cellPadding ?? "8"}
-            min={2}
-            max={24}
-            fallback="8"
-            onChange={(value) => updateSetting("cellPadding", value)}
-          />
-        </BuilderInlineNumberSelectRow>
-        <label className="field"><span>Border color</span><input type="color" value={module.settings.borderColor ?? "#cccccc"} onChange={(e) => updateSetting("borderColor", e.target.value)} /></label>
+          <label className="builder-table-color-field"><span>Color</span><input type="color" value={module.settings.borderColor ?? "#cccccc"} onChange={(e) => updateSetting("borderColor", e.target.value)} /></label>
+        </div>
+        <BuilderInlineNumberSelect
+          label="Padding"
+          value={module.settings.cellPadding ?? "8"}
+          min={2}
+          max={24}
+          fallback="8"
+          onChange={(value) => updateSetting("cellPadding", value)}
+        />
         <label className="field builder-checkbox-field">
-          <span>Show Column Heads</span>
+          <span>Column heads</span>
           <input
             type="checkbox"
             checked={module.settings.showColumnHeads !== "false"}
@@ -1172,12 +1173,16 @@ function TableModuleEditor({
         </label>
       </div>
       <div className="builder-table-structure-actions">
-        <span>Columns: {colCount}</span>
-        <button type="button" className="secondary-button" onClick={addColumn} disabled={colCount >= 10}>+ Col</button>
-        <button type="button" className="secondary-button" onClick={removeColumn} disabled={colCount <= 1}>− Col</button>
-        <span>Rows: {td.rowCount}</span>
-        <button type="button" className="secondary-button" onClick={addRow} disabled={td.rowCount >= 100}>+ Row</button>
-        <button type="button" className="secondary-button" onClick={removeRow} disabled={td.rowCount <= 1}>− Row</button>
+        <div className="builder-table-structure-row">
+          <span>Columns: {colCount}</span>
+          <button type="button" className="secondary-button" onClick={addColumn} disabled={colCount >= 10}>+ Col</button>
+          <button type="button" className="secondary-button" onClick={removeColumn} disabled={colCount <= 1}>− Col</button>
+        </div>
+        <div className="builder-table-structure-row">
+          <span>Rows: {td.rowCount}</span>
+          <button type="button" className="secondary-button" onClick={addRow} disabled={td.rowCount >= 100}>+ Row</button>
+          <button type="button" className="secondary-button" onClick={removeRow} disabled={td.rowCount <= 1}>− Row</button>
+        </div>
       </div>
       <div className="builder-table-editor-scroll">
         <table className="builder-table-editor builder-table-editor-modules">
