@@ -19,6 +19,7 @@ import {
 } from "@/lib/builder-template";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
@@ -1526,110 +1527,110 @@ function NavModuleEditor({
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 }) {
+  const [styleCollapsed, setStyleCollapsed] = useState(false);
+  const [linksCollapsed, setLinksCollapsed] = useState(false);
   const items = parseNavItems(module.settings);
   const { v: padV, h: padH } = parseNavPadding(module.settings.navPadding ?? "");
 
   function persist(nextItems: NavItem[]) {
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, navItems: serializeNavItems(nextItems) } }));
   }
-
   function updateItem(id: string, updates: Partial<NavItem>) {
     persist(items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
-
   function moveItem(id: string, direction: -1 | 1) {
     const index = items.findIndex((item) => item.id === id);
     const target = index + direction;
     if (index < 0 || target < 0 || target >= items.length) return;
-    const nextItems = [...items];
-    const [moved] = nextItems.splice(index, 1);
-    nextItems.splice(target, 0, moved);
-    persist(nextItems);
+    const next = [...items];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    persist(next);
   }
-
   function removeItem(id: string) { persist(items.filter((item) => item.id !== id)); }
-
   function addItem() {
     persist([...items, { id: `nav-${Date.now()}-${items.length + 1}`, label: "", href: "" }]);
   }
-
   function updateSetting(key: string, value: string) {
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
   }
-
   function updatePadding(v: number, h: number) {
     updateSetting("navPadding", `${v}px ${h}px`);
   }
 
   return (
     <>
-      <div className="builder-nav-section-label">Style</div>
-      <div className="builder-nav-style-grid">
-        <BuilderInlineNumberSelectRow>
-          <BuilderInlineNumberSelect
-            label="Font size"
-            value={module.settings.navFontSize ?? "16"}
-            min={10}
-            max={48}
-            fallback="16"
-            onChange={(v) => updateSetting("navFontSize", v)}
-          />
-          <BuilderInlineNumberSelect
-            label="Radius"
-            value={module.settings.navBorderRadius ?? "0"}
-            min={0}
-            max={48}
-            fallback="0"
-            onChange={(v) => updateSetting("navBorderRadius", v)}
-          />
-        </BuilderInlineNumberSelectRow>
-        <BuilderInlineNumberSelectRow>
-          <BuilderInlineNumberSelect
-            label="Pad V"
-            value={String(padV)}
-            min={0}
-            max={40}
-            fallback="8"
-            onChange={(v) => updatePadding(Number(v), padH)}
-          />
-          <BuilderInlineNumberSelect
-            label="Pad H"
-            value={String(padH)}
-            min={0}
-            max={60}
-            fallback="12"
-            onChange={(v) => updatePadding(padV, Number(v))}
-          />
-        </BuilderInlineNumberSelectRow>
-        <BuilderSettingRow label="Bold" fullWidth>
-          <input
-            type="checkbox"
-            checked={module.settings.navBold === "true"}
-            onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")}
-          />
-        </BuilderSettingRow>
-        <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" onChange={(v) => updateSetting("navColor", v)} />
-        <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" onChange={(v) => updateSetting("navHoverColor", v)} />
-        <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" onChange={(v) => updateSetting("navHoverBackground", v)} />
+      <div className="builder-cell-panel">
+        <BuilderCellPanelHeader
+          title="Style"
+          isCollapsed={styleCollapsed}
+          onToggle={() => setStyleCollapsed((c) => !c)}
+        />
+        {!styleCollapsed && (
+          <div className="builder-nav-style-grid">
+            <div className="builder-nav-four-row">
+              <BuilderInlineNumberSelect
+                label="Font"
+                value={module.settings.navFontSize ?? "16"}
+                min={10} max={48} fallback="16"
+                onChange={(v) => updateSetting("navFontSize", v)}
+              />
+              <BuilderInlineNumberSelect
+                label="Radius"
+                value={module.settings.navBorderRadius ?? "0"}
+                min={0} max={48} fallback="0"
+                onChange={(v) => updateSetting("navBorderRadius", v)}
+              />
+              <BuilderInlineNumberSelect
+                label="Pad V"
+                value={String(padV)}
+                min={0} max={40} fallback="8"
+                onChange={(v) => updatePadding(Number(v), padH)}
+              />
+              <BuilderInlineNumberSelect
+                label="Pad H"
+                value={String(padH)}
+                min={0} max={60} fallback="12"
+                onChange={(v) => updatePadding(padV, Number(v))}
+              />
+            </div>
+            <BuilderSettingRow label="Bold" fullWidth>
+              <input type="checkbox" checked={module.settings.navBold === "true"} onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")} />
+            </BuilderSettingRow>
+            <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" onChange={(v) => updateSetting("navColor", v)} />
+            <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" onChange={(v) => updateSetting("navHoverColor", v)} />
+            <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" onChange={(v) => updateSetting("navHoverBackground", v)} />
+          </div>
+        )}
       </div>
 
-      <div className="builder-nav-section-label">Links</div>
-      <div className="builder-nav-items">
-        {items.map((item, index) => (
-          <div key={item.id} className="builder-nav-item-row">
-            <div className="builder-nav-item-fields">
-              <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
-              <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
+      <div className="builder-cell-panel">
+        <BuilderCellPanelHeader
+          title="Links"
+          isCollapsed={linksCollapsed}
+          onToggle={() => setLinksCollapsed((c) => !c)}
+        />
+        {!linksCollapsed && (
+          <>
+            <div className="builder-nav-items">
+              {items.map((item, index) => (
+                <div key={item.id} className="builder-nav-item-row">
+                  <div className="builder-nav-item-fields">
+                    <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
+                    <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
+                  </div>
+                  <div className="builder-nav-item-actions">
+                    <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
+                    <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
+                    <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="builder-nav-item-actions">
-              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-              <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
-            </div>
-          </div>
-        ))}
+            <button type="button" className="secondary-button" onClick={addItem}>+ Add Link</button>
+          </>
+        )}
       </div>
-      <button type="button" className="secondary-button" onClick={addItem}>+ Add Link</button>
     </>
   );
 }
