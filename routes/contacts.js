@@ -23,7 +23,7 @@ const {
   assignContactToProjects,
   listContactMembershipProjectIds,
 } = require('../lib/ContactsStore');
-const { listProjectsForUser } = require('../lib/projectsStore');
+const { listProjectsForUser, addMemberToProject } = require('../lib/projectsStore');
 const {
   listSegments, createSegment, updateSegment, deleteSegment,
   listCampaigns, createCampaign, updateCampaign, deleteCampaign,
@@ -795,26 +795,28 @@ ${contextDump}`;
     const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email;
 
     const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827; max-width: 600px; border: 1px solid #000; border-radius: 20px; overflow: hidden;">
-        <div style="background: #000; padding: 24px; text-align: center;">
-          <img src="${logoUrl}" alt="Starcaster" width="300" style="max-width: 100%; height: auto;" />
-        </div>
-        <div style="padding: 2rem;">
-          <h2 style="margin: 0 0 1rem;">You're invited to ${projectName}</h2>
-          <p>Hi ${contactName},</p>
-          <p>You've been invited to access <strong>${projectName}</strong> on Starcaster.</p>
-          <p style="margin: 2rem 0;">
-            <a href="${inviteUrl}" style="display:inline-block; padding:12px 24px; background:#0b3d7a; color:#fff; text-decoration:none; border-radius:6px; font-weight:600;">Accept Invitation</a>
-          </p>
-          <p style="font-size:0.9rem; color:#4b5563;">Or copy this link:<br><a href="${inviteUrl}">${inviteUrl}</a></p>
-          <p style="font-size:0.85rem; color:#6b7280;">This invitation expires in 7 days. If you did not expect this, you can ignore it.</p>
+      <div style="background-color:#f3f4f6; padding:24px 16px;">
+        <div style="font-family:Arial,sans-serif; line-height:1.6; color:#111827; max-width:600px; margin:0 auto; border:1px solid #000; border-radius:20px; overflow:hidden; background:#ffffff;">
+          <div style="background:#000; padding:28px 24px; text-align:center;">
+            <img src="${logoUrl}" alt="Starcaster" width="240" style="display:block; margin:0 auto; max-width:100%; height:auto;" />
+          </div>
+          <div style="padding:2rem 2.5rem;">
+            <h2 style="margin:0 0 1rem; text-align:center;">You're invited to ${projectName}</h2>
+            <p>Hi ${contactName},</p>
+            <p>You've been invited to access <strong>${projectName}</strong> on Starcaster.</p>
+            <p style="margin:2rem 0; text-align:center;">
+              <a href="${inviteUrl}" style="display:inline-block; padding:12px 32px; background:#0b3d7a; color:#fff; text-decoration:none; border-radius:6px; font-weight:600;">Accept Invitation</a>
+            </p>
+            <p style="font-size:0.9rem; color:#4b5563;">Or copy this link:<br><a href="${inviteUrl}">${inviteUrl}</a></p>
+            <p style="font-size:0.85rem; color:#6b7280; margin-bottom:0;">This invitation expires in 7 days. If you did not expect this, you can ignore it.</p>
+          </div>
         </div>
       </div>
     `.trim();
 
     const mail = await sendEmail({
       to: contact.email,
-      subject: `You're invited to ${projectName} on StarCaster`,
+      subject: `You're invited to ${projectName} on Starcaster`,
       html,
     });
     if (!mail.ok) {
@@ -901,8 +903,15 @@ ${contextDump}`;
     if (!token) return sendErr(res, 400, 'token is required', { code: 'VALIDATION_ERROR' }), true;
 
     const userEmail = String(req?.authUser?.email || '').trim().toLowerCase();
+    const userId    = String(req?.authUser?.id    || '').trim();
     const result = await acceptContactProjectInvitation(token, userEmail);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+
+    // Grant the accepting user membership in the invited project so they can switch to it
+    const grantedProjectId = String(result.data?.projectId || '').trim();
+    if (grantedProjectId && userId) {
+      await addMemberToProject(grantedProjectId, userId, 'member').catch(() => {});
+    }
 
     return sendOk(res, 200, result.data, { projectId: result.data.projectId }), true;
   }
