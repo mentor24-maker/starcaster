@@ -346,10 +346,10 @@ function BuilderSectionPreview({
             : {}),
           padding: isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${padding}px`,
           border:
-            isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
+            isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
               ? undefined
               : `${borderWidth}px solid ${borderColor}`,
-          borderRadius: isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${borderRadius}px`,
+          borderRadius: isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${borderRadius}px`,
           ...(isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
             ? {}
             : getCellContentAlignmentStyle(
