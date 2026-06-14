@@ -294,12 +294,19 @@ function BuilderSectionPreview({
   const hasPollModules = section.modules.some(
     (module) => module.type === "current-poll" || module.type === "previous-results"
   );
+  const rowBorderWidth = Number(section.rowBorderWidth ?? "0");
   const gridStyle: CSSProperties = {
     ...(isNavigationSection ? {} : sectionStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
+      : {}),
+    ...(rowBorderWidth > 0 && !isNavigationSection && !isOverlayLayoutCollapsed
+      ? {
+          border: `${rowBorderWidth}px ${section.rowBorderStyle ?? "solid"} ${section.rowBorderColor ?? "#000000"}`,
+          borderRadius: `${section.rowBorderRadius ?? "0"}px`
+        }
       : {}),
     display: "grid",
     gridTemplateColumns: getLayoutGridTemplate(section.layout),
@@ -955,7 +962,9 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
                 return (
                   <td key={ci} style={{ border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, verticalAlign: "top" }}>
                     {cellMods.map((m) => (
-                      <BuilderModulePreview key={m.id} module={m} />
+                      <div key={m.id} className={`builder-preview-module ${getAlignmentClass(getModuleAlignment(m.settings))}`}>
+                        <BuilderModulePreview module={m} />
+                      </div>
                     ))}
                   </td>
                 );
