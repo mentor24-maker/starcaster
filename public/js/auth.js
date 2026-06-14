@@ -2,13 +2,17 @@ window.App = window.App || {};
 
 // Detect a contact project-invite token in the URL hash before anything else runs.
 // Stored here so the login/register handlers can consume it after authentication.
+// Detect the project-invite token in the URL hash and clean it from the address bar
+// before the SPA hash-router has a chance to act on it. The token is saved in a local
+// variable and written back onto App.auth AFTER the object is initialised below.
 App.auth = App.auth || {};
+let _detectedProjectInviteToken = null;
 (function detectProjectInviteHash() {
   try {
     const hash = String(window.location.hash || '');
     const m = hash.match(/[#&]project-invite=([^&]+)/);
     if (m) {
-      App.auth._pendingProjectInviteToken = decodeURIComponent(m[1]);
+      _detectedProjectInviteToken = decodeURIComponent(m[1]);
       // Clean the token from the address bar so it isn't bookmarked or shared
       const clean = window.location.pathname + window.location.search;
       window.history.replaceState(null, '', clean);
@@ -25,6 +29,9 @@ App.auth = {
   user: null,
   _started: false,
   _bootMainApp: null,
+  // Preserved from detectProjectInviteHash above (the App.auth = {} below would have
+  // wiped it if we stored directly on App.auth before the reassignment).
+  _pendingProjectInviteToken: _detectedProjectInviteToken,
 };
 
 App.auth._els = {
