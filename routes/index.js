@@ -238,6 +238,7 @@ async function handleRequest(req, res) {
     && !isDebugRoute
     && !isWebhookRoute
     && !isCronAuthorized
+    && !isFacebookOAuthCallback
   ) {
     const projectRequired = requireProjectContext(req, pathname, method);
     if (!projectRequired.ok) {
