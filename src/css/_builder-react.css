@@ -5400,6 +5400,102 @@
   font-size: 12px;
 }
 
+/* --- Nav module editor --- */
+.builder-react-root .builder-nav-section-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.builder-react-root .builder-nav-style-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.builder-react-root .builder-nav-style-grid .builder-inline-number-row {
+  gap: 24px;
+}
+
+.builder-react-root .builder-nav-color-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.builder-react-root .builder-nav-color-field input[type="color"] {
+  width: 32px;
+  height: 26px;
+  padding: 1px 2px;
+  border: 1px solid rgba(9, 16, 24, 0.15);
+  border-radius: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.builder-react-root .builder-nav-color-clear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.builder-react-root .builder-nav-color-clear:hover {
+  color: #e53e3e;
+}
+
+.builder-react-root .builder-nav-color-hint {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.builder-react-root .builder-nav-items {
+  display: grid;
+  gap: 6px;
+}
+
+.builder-react-root .builder-nav-item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.builder-react-root .builder-nav-item-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.builder-react-root .builder-nav-item-label,
+.builder-react-root .builder-nav-item-href {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid rgba(9, 16, 24, 0.1);
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  min-width: 0;
+}
+
+.builder-react-root .builder-nav-item-href {
+  color: #4a7096;
+}
+
+.builder-react-root .builder-nav-item-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .builder-react-root .builder-table-border-row {
   display: flex;
   align-items: center;
