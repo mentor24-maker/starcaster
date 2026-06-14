@@ -404,8 +404,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const borderW = Number.parseInt(module.settings.borderWidth || "1", 10);
     const borderC = module.settings.borderColor || "#cccccc";
     const cellPad = Number.parseInt(module.settings.cellPadding || "8", 10);
-    const bgMode = module.settings.backgroundMode || "none";
-    const bgColor = bgMode !== "none" ? (module.settings.backgroundColor || "#ffffff") : undefined;
+    const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? {};
 
     return (
       <div className="builder-module-preview-table-wrap">
@@ -415,7 +414,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
             borderCollapse: "collapse",
             width: "100%",
             border: `${borderW}px solid ${borderC}`,
-            ...(bgColor ? { background: bgColor } : {})
+            ...tableBgStyle
           }}
         >
           {td.headers.length > 0 && module.settings.showColumnHeads !== "false" && (
