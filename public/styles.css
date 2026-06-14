@@ -4612,6 +4612,7 @@ body.asset-associations-modal-open {
   width: auto;
   min-width: min-content;
   max-width: none;
+  gap: 24px;
 }
 .builder-react-root .builder-pages-crud-heading-actions .builder-panel-heading-button {
   width: fit-content;
