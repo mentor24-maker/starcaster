@@ -855,13 +855,16 @@ function NavigationModulePreview({
   const pathname = usePathname();
   const activePath = normalizeNavPath(pathname || "/");
 
-  let navItems: { href: string; label: string }[] = [];
+  let navItems: { href: string; label: string; id?: string; parentId?: string }[] = [];
   try {
     const parsed = JSON.parse(module.settings.navItems || "[]");
     navItems = Array.isArray(parsed) ? parsed : [];
   } catch {
     navItems = [];
   }
+
+  const topLevelItems = navItems.filter((item) => !item.parentId);
+  const childrenOf = (parentId: string) => navItems.filter((item) => item.parentId === parentId);
 
   const fontSize = module.settings.navFontSize ? `${module.settings.navFontSize}px` : undefined;
   const fontWeight = module.settings.navBold === "true" ? 700 : undefined;
@@ -890,19 +893,52 @@ function NavigationModulePreview({
         } as CSSProperties
       }
     >
-      {navItems.map((item) => {
+      {topLevelItems.map((item) => {
         const href = item.href || "#";
         const isActive = normalizeNavPath(href) === activePath;
+        const itemId = item.id ?? `${href}-${item.label}`;
+        const children = childrenOf(itemId);
+
+        if (children.length === 0) {
+          return (
+            <Link
+              aria-current={isActive ? "page" : undefined}
+              className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
+              href={href}
+              key={itemId}
+            >
+              {item.label}
+            </Link>
+          );
+        }
 
         return (
-          <Link
-            aria-current={isActive ? "page" : undefined}
-            className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
-            href={href}
-            key={`${href}-${item.label}`}
-          >
-            {item.label}
-          </Link>
+          <div key={itemId} className="site-nav-dropdown">
+            <Link
+              aria-current={isActive ? "page" : undefined}
+              className={`site-nav-link site-nav-dropdown-trigger${isActive ? " site-nav-link-active" : ""}`}
+              href={href}
+            >
+              {item.label}
+              <span className="site-nav-dropdown-arrow" aria-hidden>▾</span>
+            </Link>
+            <div className="site-nav-dropdown-menu">
+              {children.map((child) => {
+                const childHref = child.href || "#";
+                const childActive = normalizeNavPath(childHref) === activePath;
+                return (
+                  <Link
+                    key={child.id ?? `${childHref}-${child.label}`}
+                    href={childHref}
+                    aria-current={childActive ? "page" : undefined}
+                    className={`site-nav-link site-nav-dropdown-item${childActive ? " site-nav-link-active" : ""}`}
+                  >
+                    {child.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </nav>
