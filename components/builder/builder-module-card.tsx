@@ -643,6 +643,7 @@ type NavItem = {
   id: string;
   label: string;
   href: string;
+  parentId?: string;
 };
 
 type HeadlineItem = HeadlineRotatorEntry;
@@ -664,7 +665,8 @@ function parseNavItems(settings: Record<string, string>): NavItem[] {
       return {
         id: String(raw.id || `nav-${index + 1}`),
         label: String(raw.label || ""),
-        href: String(raw.href || "")
+        href: String(raw.href || ""),
+        ...(raw.parentId ? { parentId: String(raw.parentId) } : {})
       };
     });
   } catch {
@@ -1613,19 +1615,35 @@ function NavModuleEditor({
         {!linksCollapsed && (
           <>
             <div className="builder-nav-items">
-              {items.map((item, index) => (
-                <div key={item.id} className="builder-nav-item-row">
-                  <div className="builder-nav-item-fields">
-                    <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
-                    <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
+              {items.map((item, index) => {
+                const isParent = items.some((i) => i.parentId === item.id);
+                const topLevelItems = items.filter((i) => !i.parentId && i.id !== item.id);
+                return (
+                  <div key={item.id} className="builder-nav-item-row">
+                    <div className="builder-nav-item-fields">
+                      <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
+                      <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
+                      {!isParent && (
+                        <select
+                          className="builder-nav-item-parent-select"
+                          value={item.parentId ?? ""}
+                          onChange={(e) => updateItem(item.id, { parentId: e.target.value || undefined })}
+                        >
+                          <option value="">— Top level —</option>
+                          {topLevelItems.map((parent) => (
+                            <option key={parent.id} value={parent.id}>{parent.label || `Link ${items.indexOf(parent) + 1}`}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div className="builder-nav-item-actions">
+                      <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
+                      <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
+                      <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
+                    </div>
                   </div>
-                  <div className="builder-nav-item-actions">
-                    <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-                    <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-                    <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <button type="button" className="secondary-button" onClick={addItem}>+ Add Link</button>
           </>
