@@ -301,6 +301,8 @@ function BuilderSectionPreview({
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
+      : isNavigationSection
+      ? { position: "relative", zIndex: 10 }
       : {}),
     ...(rowBorderWidth > 0 && !isNavigationSection && !isOverlayLayoutCollapsed
       ? {
