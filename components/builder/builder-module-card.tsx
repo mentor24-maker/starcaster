@@ -404,7 +404,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const borderW = Number.parseInt(module.settings.borderWidth || "1", 10);
     const borderC = module.settings.borderColor || "#cccccc";
     const cellPad = Number.parseInt(module.settings.cellPadding || "8", 10);
-    const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? {};
+    const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? { background: "transparent" };
 
     return (
       <div className="builder-module-preview-table-wrap">
