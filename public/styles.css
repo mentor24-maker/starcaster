@@ -9111,6 +9111,18 @@ body.asset-associations-modal-open {
   justify-self: end;
   text-align: right;
 }
+.builder-react-root .builder-preview-module.is-align-center {
+  text-align: center;
+}
+.builder-react-root .builder-preview-module.is-align-right {
+  text-align: right;
+}
+.builder-react-root .builder-module-card.is-align-center .builder-module-preview-copy .builder-preview-button {
+  justify-self: center;
+}
+.builder-react-root .builder-module-card.is-align-right .builder-module-preview-copy .builder-preview-button {
+  justify-self: end;
+}
 .builder-react-root .builder-gallery-button {
   min-width: 0;
 }
