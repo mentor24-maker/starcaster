@@ -210,19 +210,19 @@ App.auth._consumePendingProjectInvite = async function _consumePendingProjectInv
     });
     const projectId = String(res?.projectId || res?.data?.projectId || '').trim();
     if (!projectId) return;
-    // Switch to the invited project once the main app and project context are ready
-    const doSwitch = async () => {
-      if (App.projectContext?.switchSessionProject) {
-        await App.projectContext.switchSessionProject(projectId, { keepView: false, refresh: true });
-      } else {
-        await App.api('/api/projects/active', {
-          method: 'POST',
-          body: JSON.stringify({ projectId }),
-        });
-      }
-    };
-    // Give the boot sequence a moment to finish initialising modules
-    setTimeout(() => { doSwitch().catch(() => {}); }, 200);
+    // Set the project server-side so it survives a reload
+    await App.api('/api/projects/active', {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    }).catch(() => {});
+    // Use switchSessionProject if the module is already up; otherwise reload
+    if (App.projectContext?.switchSessionProject) {
+      App.projectContext.switchSessionProject(projectId, { keepView: false, refresh: true }).catch(() => {
+        window.location.reload();
+      });
+    } else {
+      window.location.reload();
+    }
   } catch (_) {}
 };
 
@@ -451,6 +451,7 @@ App.auth.init = function init(bootMainApp) {
         App.auth._showApp();
         App.auth._startMainApp();
         App.auth._runAuthenticatedCallbacks();
+        App.auth._consumePendingProjectInvite();
         App.auth._setMessage('');
       });
     })
