@@ -777,7 +777,7 @@ ${contextDump}`;
 
     const projectsRes = await listProjectsForUser(scope.userId);
     const project = (Array.isArray(projectsRes.data) ? projectsRes.data : []).find((p) => p.id === projectId);
-    const projectName = String(project?.name || 'a StarCaster project');
+    const projectName = String(project?.name || 'a Starcaster project');
 
     const createRes = await createContactProjectInvitation({
       contactId,
@@ -788,20 +788,27 @@ ${contextDump}`;
     if (!createRes.ok) return sendErr(res, createRes.status || 500, createRes.error), true;
 
     const { invitation, rawToken } = createRes.data;
-    const origin     = getAppPublicOrigin(req);
-    const inviteUrl  = `${String(origin || '').replace(/\/+$/, '')}/#project-invite=${encodeURIComponent(rawToken)}`;
+    const origin      = getAppPublicOrigin(req);
+    const appOrigin   = String(origin || '').replace(/\/+$/, '');
+    const inviteUrl   = `${appOrigin}/#project-invite=${encodeURIComponent(rawToken)}`;
+    const logoUrl     = `${appOrigin}/images/logo_starcaster_600x200.png`;
     const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email;
 
     const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827; max-width: 560px;">
-        <h2 style="margin: 0 0 1rem;">You're invited to ${projectName}</h2>
-        <p>Hi ${contactName},</p>
-        <p>You've been invited to access <strong>${projectName}</strong> on StarCaster.</p>
-        <p style="margin: 2rem 0;">
-          <a href="${inviteUrl}" style="display:inline-block; padding:12px 24px; background:#0b3d7a; color:#fff; text-decoration:none; border-radius:6px; font-weight:600;">Accept Invitation</a>
-        </p>
-        <p style="font-size:0.9rem; color:#4b5563;">Or copy this link:<br><a href="${inviteUrl}">${inviteUrl}</a></p>
-        <p style="font-size:0.85rem; color:#6b7280;">This invitation expires in 7 days. If you did not expect this, you can ignore it.</p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827; max-width: 600px; border: 1px solid #000; border-radius: 20px; overflow: hidden;">
+        <div style="background: #000; padding: 24px; text-align: center;">
+          <img src="${logoUrl}" alt="Starcaster" width="300" style="max-width: 100%; height: auto;" />
+        </div>
+        <div style="padding: 2rem;">
+          <h2 style="margin: 0 0 1rem;">You're invited to ${projectName}</h2>
+          <p>Hi ${contactName},</p>
+          <p>You've been invited to access <strong>${projectName}</strong> on Starcaster.</p>
+          <p style="margin: 2rem 0;">
+            <a href="${inviteUrl}" style="display:inline-block; padding:12px 24px; background:#0b3d7a; color:#fff; text-decoration:none; border-radius:6px; font-weight:600;">Accept Invitation</a>
+          </p>
+          <p style="font-size:0.9rem; color:#4b5563;">Or copy this link:<br><a href="${inviteUrl}">${inviteUrl}</a></p>
+          <p style="font-size:0.85rem; color:#6b7280;">This invitation expires in 7 days. If you did not expect this, you can ignore it.</p>
+        </div>
       </div>
     `.trim();
 
