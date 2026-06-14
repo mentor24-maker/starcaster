@@ -242,19 +242,19 @@ export function BuilderPageList({
           </div>
           <div className="builder-pages-crud-heading-actions">
             <button
+              className="submit-button builder-panel-heading-button"
+              onClick={onPreviewDraft}
+              type="button"
+            >
+              Preview
+            </button>
+            <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
               disabled={isSaving}
               onClick={onSavePage}
               type="button"
             >
               {isSaving ? "Saving..." : "Save Page"}
-            </button>
-            <button
-              className="submit-button builder-panel-heading-button"
-              onClick={onPreviewDraft}
-              type="button"
-            >
-              Preview
             </button>
           </div>
         </div>
