@@ -40,6 +40,13 @@ const {
 } = require('../lib/contactPersonasStore');
 const { logActivity } = require('../lib/activityLog');
 const { validate }    = require('../lib/validate');
+const {
+  createContactProjectInvitation,
+  acceptContactProjectInvitation,
+  listContactProjectInvitations,
+} = require('../lib/contactProjectInvitationsStore');
+const { sendEmail } = require('../lib/mailer');
+const { getAppPublicOrigin } = require('../lib/appOrigin');
 
 // ---------------------------------------------------------------------------
 // ID generator
@@ -739,6 +746,85 @@ ${contextDump}`;
     return sendOk(res, 200, projectIds, { projectIds }, { total: projectIds.length }), true;
   }
 
+  // GET /api/contacts/:id/project-invitations — list pending invitations for a contact
+  const contactInvitationsMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/project-invitations$/);
+  if (contactInvitationsMatch && method === 'GET') {
+    const contactId = decodeURIComponent(contactInvitationsMatch[1]);
+    const result = await listContactProjectInvitations(contactId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { invitations: result.data }), true;
+  }
+
+  // POST /api/contacts/:id/invite-to-project — send a project invitation email to a contact
+  const contactInviteMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/invite-to-project$/);
+  if (contactInviteMatch && method === 'POST') {
+    const scope     = requestScope(req);
+    const contactId = decodeURIComponent(contactInviteMatch[1]);
+    const body      = await parseJsonBody(req);
+    const projectId = String(body?.projectId || '').trim();
+
+    if (!projectId) return sendErr(res, 400, 'projectId is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!userCanAccessProject(scope, projectId)) {
+      return sendErr(res, 403, 'Project not found or access denied', { code: 'FORBIDDEN' }), true;
+    }
+
+    const contactRes = await getContact(contactId, scope);
+    if (!contactRes.ok) return sendErr(res, contactRes.status || 404, contactRes.error), true;
+    const contact = rowToContact(contactRes.data);
+    if (!contact?.email) {
+      return sendErr(res, 400, 'Contact must have an email address to receive an invitation.', { code: 'NO_EMAIL' }), true;
+    }
+
+    const projectsRes = await listProjectsForUser(scope.userId);
+    const project = (Array.isArray(projectsRes.data) ? projectsRes.data : []).find((p) => p.id === projectId);
+    const projectName = String(project?.name || 'a StarCaster project');
+
+    const createRes = await createContactProjectInvitation({
+      contactId,
+      projectId,
+      email: contact.email,
+      invitedByUserId: scope.userId,
+    });
+    if (!createRes.ok) return sendErr(res, createRes.status || 500, createRes.error), true;
+
+    const { invitation, rawToken } = createRes.data;
+    const origin     = getAppPublicOrigin(req);
+    const inviteUrl  = `${String(origin || '').replace(/\/+$/, '')}/#project-invite=${encodeURIComponent(rawToken)}`;
+    const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827; max-width: 560px;">
+        <h2 style="margin: 0 0 1rem;">You're invited to ${projectName}</h2>
+        <p>Hi ${contactName},</p>
+        <p>You've been invited to access <strong>${projectName}</strong> on StarCaster.</p>
+        <p style="margin: 2rem 0;">
+          <a href="${inviteUrl}" style="display:inline-block; padding:12px 24px; background:#0b3d7a; color:#fff; text-decoration:none; border-radius:6px; font-weight:600;">Accept Invitation</a>
+        </p>
+        <p style="font-size:0.9rem; color:#4b5563;">Or copy this link:<br><a href="${inviteUrl}">${inviteUrl}</a></p>
+        <p style="font-size:0.85rem; color:#6b7280;">This invitation expires in 7 days. If you did not expect this, you can ignore it.</p>
+      </div>
+    `.trim();
+
+    const mail = await sendEmail({
+      to: contact.email,
+      subject: `You're invited to ${projectName} on StarCaster`,
+      html,
+    });
+    if (!mail.ok) {
+      return sendErr(res, mail.status || 500, mail.error, { code: 'EMAIL_FAILED' }), true;
+    }
+
+    logActivity({
+      action: 'contact.project_invitation_sent',
+      entityType: 'contact',
+      entityId: contactId,
+      summary: `Project invitation sent to ${contact.email} for project ${projectName}`,
+      meta: { projectId, invitationId: invitation.id },
+    });
+
+    return sendOk(res, 200, { invitation, emailed: true, email: contact.email }, { invitation }), true;
+  }
+
   // POST /api/contacts/assign-to-projects — add membership(s) to selected projects
   if (pathname === '/api/contacts/assign-to-projects' && method === 'POST') {
     const scope = requestScope(req);
@@ -798,6 +884,20 @@ ${contextDump}`;
       skipped: allSkipped,
       errors,
     }), true;
+  }
+
+  // POST /api/contacts/accept-project-invite — accept a contact-project invitation token after login
+  // No project context required; user just needs to be authenticated.
+  if (pathname === '/api/contacts/accept-project-invite' && method === 'POST') {
+    const body  = await parseJsonBody(req);
+    const token = String(body?.token || '').trim();
+    if (!token) return sendErr(res, 400, 'token is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const userEmail = String(req?.authUser?.email || '').trim().toLowerCase();
+    const result = await acceptContactProjectInvitation(token, userEmail);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+
+    return sendOk(res, 200, result.data, { projectId: result.data.projectId }), true;
   }
 
   // GET /api/contacts/:id

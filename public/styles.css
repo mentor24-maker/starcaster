@@ -22128,3 +22128,103 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
 }
 
 /* src/css/main.css */
+
+/* Contact Edit — two-column layout */
+.contact-edit-two-col {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 2rem;
+  align-items: start;
+}
+.contact-edit-right {
+  position: sticky;
+  top: 1rem;
+}
+.contact-edit-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+.contact-edit-panel-heading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin: 0 0 0.75rem;
+}
+.contact-edit-project-list {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.contact-edit-project-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+.contact-edit-project-item .cpi-badge {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #1e40af;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.contact-edit-project-item .cpi-badge.invited {
+  background: #fef9c3;
+  color: #92400e;
+}
+.contact-edit-panel-empty {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0;
+}
+.contact-edit-invite-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.contact-edit-project-select {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+.contact-edit-invite-btn {
+  width: 100%;
+}
+.contact-edit-invite-status {
+  font-size: 0.85rem;
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.contact-edit-invite-status.error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+@media (max-width: 900px) {
+  .contact-edit-two-col {
+    grid-template-columns: 1fr;
+  }
+  .contact-edit-right {
+    position: static;
+  }
+}
