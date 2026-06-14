@@ -1935,7 +1935,7 @@ body.asset-associations-modal-open {
 .builder-react-root .site-nav-dropdown-menu {
   display: none;
   position: absolute;
-  top: calc(100% + 6px);
+  top: 100%;
   left: 50%;
   transform: translateX(-50%);
   min-width: 160px;
@@ -1945,7 +1945,7 @@ body.asset-associations-modal-open {
   box-shadow: 0 6px 24px rgba(9, 16, 24, 0.12);
   backdrop-filter: blur(12px);
   z-index: 200;
-  padding: 6px;
+  padding: 10px 6px 6px;
   flex-direction: column;
   gap: 2px;
 }
