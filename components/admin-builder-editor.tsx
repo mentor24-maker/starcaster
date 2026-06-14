@@ -1842,6 +1842,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onApplyTemplate={applyTemplateToPage}
           onSetIsPublished={setIsPublishedPage}
           onNewPage={startNewPage}
+          onBulkCreate={() => {}}
           onPreviewDraft={openPreviewPage}
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}

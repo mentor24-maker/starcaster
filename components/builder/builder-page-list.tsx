@@ -27,6 +27,7 @@ type BuilderPageListProps = {
   onApplyTemplate: (templateId: string) => void;
   onSetIsPublished: (isPublished: boolean) => void;
   onNewPage: () => void;
+  onBulkCreate: () => void;
   onPreviewDraft: () => void;
   onMakeTemplate: () => void;
   onPageEditorFocus: (focused: boolean) => void;
@@ -55,6 +56,7 @@ export function BuilderPageList({
   onApplyTemplate,
   onSetIsPublished,
   onNewPage,
+  onBulkCreate,
   onPreviewDraft,
   onMakeTemplate,
   onPageEditorFocus,
@@ -126,11 +128,18 @@ export function BuilderPageList({
           </div>
           <div className="builder-pages-list-heading-actions">
             <button
-              className="submit-button builder-panel-heading-button"
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
               onClick={handleNewPage}
               type="button"
             >
               New Page
+            </button>
+            <button
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
+              onClick={onBulkCreate}
+              type="button"
+            >
+              Bulk Create
             </button>
           </div>
         </div>
@@ -242,7 +251,7 @@ export function BuilderPageList({
           </div>
           <div className="builder-pages-crud-heading-actions">
             <button
-              className="submit-button builder-panel-heading-button"
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
               onClick={onPreviewDraft}
               type="button"
             >
