@@ -8585,6 +8585,26 @@
   text-align: right;
 }
 
+/* Live template preview: .builder-preview-module is display:block so justify-self on
+   children has no effect. Set text-align on the wrapper so inline-flex buttons center. */
+.builder-react-root .builder-preview-module.is-align-center {
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-module.is-align-right {
+  text-align: right;
+}
+
+/* Editor preview: .builder-module-preview-copy is display:grid so the button <span>
+   is blockified and stretches. Override with justify-self so it centers. */
+.builder-react-root .builder-module-card.is-align-center .builder-module-preview-copy .builder-preview-button {
+  justify-self: center;
+}
+
+.builder-react-root .builder-module-card.is-align-right .builder-module-preview-copy .builder-preview-button {
+  justify-self: end;
+}
+
 .builder-react-root .builder-gallery-button {
   min-width: 0;
 }
