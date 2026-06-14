@@ -1958,57 +1958,43 @@ App.contacts = (function () {
       statusEl.classList.remove('error');
     }
 
-    // Fetch memberships and invitations in parallel
-    let memberProjectIds = [];
+    // Fetch invitations and admin's project list in parallel.
+    // We deliberately do NOT call project-memberships here because that returns
+    // which of the admin's CRM projects contain this contact record — a different
+    // concept from projects this person has actually been invited to.
     let invitations = [];
     let allProjects = [];
 
     try {
-      // Race each call against a 6-second timeout so a hung Supabase query can't freeze the panel
       const tout = (p) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), 6000))]);
-      const [membershipsRes, invitesRes, projectsRes] = await Promise.all([
-        tout(api(`/api/contacts/${encodeURIComponent(contactId)}/project-memberships`).catch(() => null)),
+      const [invitesRes, projectsRes] = await Promise.all([
         tout(api(`/api/contacts/${encodeURIComponent(contactId)}/project-invitations`).catch(() => null)),
         tout(api('/api/projects').catch(() => null)),
       ]);
-      memberProjectIds = Array.isArray(membershipsRes?.projectIds) ? membershipsRes.projectIds : [];
-      invitations      = Array.isArray(invitesRes?.invitations)   ? invitesRes.invitations   : [];
-      allProjects      = Array.isArray(projectsRes?.projects)     ? projectsRes.projects
-                       : Array.isArray(projectsRes)               ? projectsRes
-                       : [];
+      invitations = Array.isArray(invitesRes?.invitations) ? invitesRes.invitations : [];
+      allProjects = Array.isArray(projectsRes?.projects)   ? projectsRes.projects
+                  : Array.isArray(projectsRes)             ? projectsRes
+                  : [];
     } catch (_) {}
 
-    // Render project membership list
+    // Render invitation list — only show projects this contact has been explicitly invited to
     if (listEl) {
       listEl.innerHTML = '';
-      if (!allProjects.length && !memberProjectIds.length) {
-        listEl.innerHTML = '<p class="contact-edit-panel-empty">No projects found.</p>';
+      const relevant = invitations.filter((inv) => inv.status === 'pending' || inv.status === 'accepted');
+      if (!relevant.length) {
+        listEl.innerHTML = '<p class="contact-edit-panel-empty">No project invitations yet.</p>';
       } else {
-        const shownIds = new Set();
-        memberProjectIds.forEach((pid) => {
-          shownIds.add(pid);
-          const proj   = allProjects.find((p) => p.id === pid);
-          const name   = escapeHtml(proj?.name || pid);
-          const invite = invitations.find((inv) => inv.projectId === pid && inv.status === 'pending');
-          const item   = document.createElement('div');
-          item.className = 'contact-edit-project-item';
-          item.innerHTML = name
-            + (invite ? '<span class="cpi-badge invited">Invite pending</span>' : '<span class="cpi-badge">Member</span>');
-          listEl.appendChild(item);
-        });
-        // Show invited-only projects (not yet a member)
-        invitations.forEach((inv) => {
-          if (shownIds.has(inv.projectId) || inv.status !== 'pending') return;
+        relevant.forEach((inv) => {
           const proj = allProjects.find((p) => p.id === inv.projectId);
           const name = escapeHtml(proj?.name || inv.projectId);
           const item = document.createElement('div');
           item.className = 'contact-edit-project-item';
-          item.innerHTML = name + '<span class="cpi-badge invited">Invite pending</span>';
+          const badge = inv.status === 'accepted'
+            ? '<span class="cpi-badge">Access granted</span>'
+            : '<span class="cpi-badge invited">Invite pending</span>';
+          item.innerHTML = name + badge;
           listEl.appendChild(item);
         });
-        if (!listEl.children.length) {
-          listEl.innerHTML = '<p class="contact-edit-panel-empty">Not in any projects yet.</p>';
-        }
       }
     }
 
