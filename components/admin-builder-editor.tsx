@@ -1863,17 +1863,18 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
             </button>
             {!collapsedBuilderPanels.workspace ? (
               <div className="builder-workspace-pods">
-                <div className="builder-workspace-nested-pod">
+                <div className="builder-workspace-nested-pod builder-rows-pod">
                   <button
-                    aria-expanded={!collapsedBuilderPanels.rowConfigurations}
+                    aria-expanded={!collapsedBuilderPanels.rows}
                     className="builder-panel-toggle"
-                    onClick={() => toggleBuilderPanel("rowConfigurations")}
+                    onClick={() => toggleBuilderPanel("rows")}
                     type="button"
                   >
-                    <span className="panel-label">Row Layouts</span>
-                    <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.rowConfigurations} /></span>
+                    <span className="panel-label">Rows</span>
+                    <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.rows} /></span>
                   </button>
-                  {!collapsedBuilderPanels.rowConfigurations ? (
+                  {!collapsedBuilderPanels.rows ? (
+                    <>
                     <div className="builder-layout-toolbar">
                       {layoutOptions.map((layout) => renderLayoutTile(layout))}
                       <label className="field builder-cell-repository-select">
@@ -1893,20 +1894,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                         </select>
                       </label>
                     </div>
-                  ) : null}
-                </div>
-
-                <div className="builder-workspace-nested-pod builder-rows-pod">
-                  <button
-                    aria-expanded={!collapsedBuilderPanels.rows}
-                    className="builder-panel-toggle"
-                    onClick={() => toggleBuilderPanel("rows")}
-                    type="button"
-                  >
-                    <span className="panel-label">Rows</span>
-                    <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.rows} /></span>
-                  </button>
-                  {!collapsedBuilderPanels.rows ? (
                     <div
                       className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}`}
                       onDragOver={(event) => { event.preventDefault(); setDragOverWorkspace(true); }}
@@ -1978,7 +1965,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                 ) : draft.layoutSections.length === 0 ? (
                   <div className="builder-workspace-empty">
                     <div className="builder-workspace-empty-title">Drop a row onto the workspace</div>
-                    <div className="builder-workspace-empty-copy">Drag a row layout from Row Layouts above, or click one to add it instantly.</div>
+                    <div className="builder-workspace-empty-copy">Click a row layout above, or drag one onto the workspace.</div>
                   </div>
                 ) : (
                   <div className="builder-sections">
@@ -2035,6 +2022,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                   </div>
                 )}
                     </div>
+                    </>
                   ) : null}
                 </div>
               </div>
