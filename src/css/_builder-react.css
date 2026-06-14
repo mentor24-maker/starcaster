@@ -396,6 +396,39 @@
   white-space: nowrap;
 }
 
+.builder-react-root .site-nav--vertical {
+  flex-direction: column;
+  border-radius: 14px;
+  align-items: stretch;
+}
+
+.builder-react-root .site-nav--vertical .site-nav-link {
+  flex: unset;
+  justify-content: flex-start;
+}
+
+.builder-react-root .site-nav--vertical .site-nav-dropdown {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.builder-react-root .site-nav--vertical .site-nav-dropdown-menu {
+  position: static;
+  display: flex;
+  transform: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 0 4px 16px;
+  background: transparent;
+  backdrop-filter: none;
+  z-index: auto;
+  min-width: 0;
+}
+
+.builder-react-root .site-nav--vertical .site-nav-dropdown-item {
+  white-space: normal;
+}
+
 .builder-react-root .page-eyebrow {
   font-size: 0.94rem;
   font-weight: 800;
@@ -3205,7 +3238,7 @@
 }
 
 .builder-react-root .builder-pages-list-shell {
-  --builder-pages-actions-width: 220px;
+  --builder-pages-actions-width: 260px;
 }
 
 .builder-react-root .builder-pages-list-table {
@@ -3252,7 +3285,7 @@
 .builder-react-root .builder-pages-list-heading-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
   width: var(--builder-pages-actions-width);
   min-width: var(--builder-pages-actions-width);
   max-width: var(--builder-pages-actions-width);
@@ -3271,7 +3304,7 @@
 }
 
 .builder-react-root .builder-pages-list-heading-actions .builder-panel-heading-button {
-  width: 100%;
+  flex: 1;
   justify-content: center;
 }
 
@@ -3287,7 +3320,7 @@
 }
 
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-layout {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 260px;
 }
 
 .builder-react-root .builder-pages-crud-heading-primary {
@@ -3313,16 +3346,17 @@
 }
 
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions {
-  width: auto;
-  min-width: min-content;
-  max-width: none;
-  gap: 24px;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  gap: 12px;
+  padding: 0;
+  justify-content: flex-start;
 }
 
 .builder-react-root .builder-pages-crud-heading-actions .builder-panel-heading-button {
-  width: fit-content;
+  flex: 1;
   max-width: 100%;
-  margin-inline: auto;
   padding-inline: 18px;
   justify-content: center;
 }
@@ -5465,6 +5499,12 @@
 .builder-react-root .builder-nav-four-row .builder-inline-number-field {
   flex: 1;
   min-width: 0;
+}
+
+.builder-react-root .builder-nav-dir-levels-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .builder-react-root .builder-nav-color-field {
