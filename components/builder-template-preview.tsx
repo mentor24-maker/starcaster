@@ -874,6 +874,9 @@ function NavigationModulePreview({
   const color = module.settings.navColor || undefined;
   const hoverColor = module.settings.navHoverColor || undefined;
   const hoverBackground = module.settings.navHoverBackground || undefined;
+  const marginV = module.settings.navMarginV ? `${module.settings.navMarginV}px` : undefined;
+  const rawAlignment = module.settings.navAlignment ?? "center";
+  const justifyContent = rawAlignment === "left" ? "flex-start" : rawAlignment === "right" ? "flex-end" : "center";
 
   return (
     <nav
@@ -887,6 +890,8 @@ function NavigationModulePreview({
           borderRadius,
           padding,
           color,
+          justifyContent,
+          ...(marginV ? { marginTop: marginV, marginBottom: marginV } : {}),
           "--site-nav-link-color": color,
           "--site-nav-link-hover-color": hoverColor,
           "--site-nav-link-hover-bg": hoverBackground

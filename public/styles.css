@@ -6479,7 +6479,7 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-nav-item-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 0.8fr 1fr 1fr;
   gap: 4px;
   flex: 1;
   min-width: 0;
@@ -6502,15 +6502,7 @@ body.asset-associations-modal-open {
   gap: 2px;
   flex-shrink: 0;
 }
-.builder-react-root .builder-nav-item-fields {
-  grid-template-columns: 1fr 1fr;
-}
-.builder-react-root .builder-nav-item-fields:has(.builder-nav-item-parent-select) {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto;
-}
 .builder-react-root .builder-nav-item-parent-select {
-  grid-column: 1 / -1;
   padding: 4px 6px;
   border: 1px solid rgba(9, 16, 24, 0.1);
   border-radius: 6px;
@@ -6518,6 +6510,11 @@ body.asset-associations-modal-open {
   background: rgba(255, 255, 255, 0.85);
   color: #6a8fa8;
   min-width: 0;
+  width: 100%;
+}
+.builder-react-root .builder-nav-item-parent-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .builder-react-root .builder-table-border-row {
   display: flex;

@@ -1524,10 +1524,12 @@ function NavColorField({
 
 function NavModuleEditor({
   module,
-  onUpdateModule
+  onUpdateModule,
+  onUpdateModuleBackground
 }: {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  onUpdateModuleBackground: (updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
 }) {
   const [styleCollapsed, setStyleCollapsed] = useState(false);
   const [linksCollapsed, setLinksCollapsed] = useState(false);
@@ -1595,13 +1597,34 @@ function NavModuleEditor({
                 min={0} max={60} fallback="12"
                 onChange={(v) => updatePadding(padV, Number(v))}
               />
+              <BuilderInlineNumberSelect
+                label="Margin V"
+                value={module.settings.navMarginV ?? "0"}
+                min={0} max={80} fallback="0"
+                onChange={(v) => updateSetting("navMarginV", v)}
+              />
             </div>
             <BuilderSettingRow label="Bold" fullWidth>
               <input type="checkbox" checked={module.settings.navBold === "true"} onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")} />
             </BuilderSettingRow>
+            <BuilderSettingRow label="Alignment" fullWidth>
+              <select
+                value={module.settings.navAlignment ?? "center"}
+                onChange={(e) => updateSetting("navAlignment", e.target.value)}
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </BuilderSettingRow>
             <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" onChange={(v) => updateSetting("navColor", v)} />
             <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" onChange={(v) => updateSetting("navHoverColor", v)} />
             <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" onChange={(v) => updateSetting("navHoverBackground", v)} />
+            <BuilderBackgroundControls
+              label="Background"
+              background={getModuleBackgroundSettings(module.settings)}
+              onChange={onUpdateModuleBackground}
+            />
           </div>
         )}
       </div>
@@ -1621,20 +1644,20 @@ function NavModuleEditor({
                 return (
                   <div key={item.id} className="builder-nav-item-row">
                     <div className="builder-nav-item-fields">
+                      <select
+                        className="builder-nav-item-parent-select"
+                        value={item.parentId ?? ""}
+                        disabled={isParent}
+                        title={isParent ? "This item has sub-items and cannot itself be a sub-item" : undefined}
+                        onChange={(e) => updateItem(item.id, { parentId: e.target.value || undefined })}
+                      >
+                        <option value="">Top level</option>
+                        {topLevelItems.map((parent) => (
+                          <option key={parent.id} value={parent.id}>{parent.label || `Link ${items.indexOf(parent) + 1}`}</option>
+                        ))}
+                      </select>
                       <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
                       <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
-                      {!isParent && (
-                        <select
-                          className="builder-nav-item-parent-select"
-                          value={item.parentId ?? ""}
-                          onChange={(e) => updateItem(item.id, { parentId: e.target.value || undefined })}
-                        >
-                          <option value="">— Top level —</option>
-                          {topLevelItems.map((parent) => (
-                            <option key={parent.id} value={parent.id}>{parent.label || `Link ${items.indexOf(parent) + 1}`}</option>
-                          ))}
-                        </select>
-                      )}
                     </div>
                     <div className="builder-nav-item-actions">
                       <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
@@ -2403,7 +2426,7 @@ export function BuilderModuleCard({
 
           {module.type === "table" && <TableModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
-          {module.type === "navigation" && <NavModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "navigation" && <NavModuleEditor module={module} onUpdateModule={onUpdateModule} onUpdateModuleBackground={onUpdateModuleBackground} />}
           {module.type === "headline-rotator" && <HeadlineRotatorModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "poll-category-list" && (
             <PollCategoryListModuleEditor
