@@ -879,11 +879,13 @@ function NavigationModulePreview({
   const hoverBackground = module.settings.navHoverBackground || undefined;
   const marginV = module.settings.navMarginV ? `${module.settings.navMarginV}px` : undefined;
   const rawAlignment = module.settings.navAlignment ?? "center";
-  const justifyContent = rawAlignment === "left" ? "flex-start" : rawAlignment === "right" ? "flex-end" : "center";
+  const flexAlign = rawAlignment === "left" ? "flex-start" : rawAlignment === "right" ? "flex-end" : "center";
+  const isVertical = module.settings.navDirection === "vertical";
+  const navLevels = Number.parseInt(module.settings.navLevels ?? "2", 10) || 2;
 
   return (
     <nav
-      className={`site-nav builder-preview-nav-${variant || "site-nav"}`}
+      className={`site-nav builder-preview-nav-${variant || "site-nav"}${isVertical ? " site-nav--vertical" : ""}`}
       aria-label="Main navigation"
       style={
         {
@@ -893,7 +895,8 @@ function NavigationModulePreview({
           borderRadius,
           padding,
           color,
-          justifyContent,
+          ...(isVertical ? { alignItems: flexAlign } : {}),
+          ...(isVertical ? {} : { justifyContent: flexAlign }),
           ...(marginV ? { marginTop: marginV, marginBottom: marginV } : {}),
           "--site-nav-link-color": color,
           "--site-nav-link-hover-color": hoverColor,
@@ -905,7 +908,7 @@ function NavigationModulePreview({
         const href = item.href || "#";
         const isActive = normalizeNavPath(href) === activePath;
         const itemId = item.id ?? `${href}-${item.label}`;
-        const children = childrenOf(itemId);
+        const children = navLevels >= 2 ? childrenOf(itemId) : [];
 
         if (children.length === 0) {
           return (
@@ -928,7 +931,7 @@ function NavigationModulePreview({
               href={href}
             >
               {item.label}
-              <span className="site-nav-dropdown-arrow" aria-hidden>▾</span>
+              {!isVertical && <span className="site-nav-dropdown-arrow" aria-hidden>▾</span>}
             </Link>
             <div className="site-nav-dropdown-menu">
               {children.map((child) => {
