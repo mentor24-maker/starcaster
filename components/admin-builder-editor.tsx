@@ -8,6 +8,7 @@ import {
   BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
   BUILDER_PREVIEW_STORAGE_KEY,
   createDefaultBackgroundSettings,
+  createDefaultTheme,
   createEmptyModule,
   createEmptySection,
   getLayoutColumns,
@@ -40,6 +41,7 @@ import {
 } from "./builder/builder-utils";
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList } from "./builder/builder-page-list";
+import { BuilderBulkCreate, type BulkCreateResult } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
   type BuilderModuleEditorFocus,
@@ -135,6 +137,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showBulkCreate, setShowBulkCreate] = useState(false);
 
   // --- Derived values ---
 
@@ -1506,6 +1509,38 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     } finally { setIsSaving(false); }
   }
 
+  async function bulkCreatePages(
+    templateId: string,
+    items: Array<{ name: string; slug: string }>
+  ): Promise<BulkCreateResult[]> {
+    const template = pageLayoutTemplates.find((t) => t.id === templateId) ?? null;
+    const results = await Promise.all(
+      items.map(async (item): Promise<BulkCreateResult> => {
+        try {
+          const response = await builderAdminFetch("/api/admin/pages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: item.name,
+              slug: item.slug,
+              templateId,
+              isPublished: false,
+              pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
+              theme: template?.theme ?? createDefaultTheme(),
+              layoutSections: template?.layoutSections ?? []
+            })
+          });
+          const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to create page.");
+          return { name: item.name, slug: item.slug, page: data.page };
+        } catch (e) {
+          return { name: item.name, slug: item.slug, error: e instanceof Error ? e.message : "Failed to create page." };
+        }
+      })
+    );
+    await loadPages();
+    return results;
+  }
+
   async function deleteTemplateById(templateId: string, templateName: string) {
     if (!templateId) { setDraft(createDraftFromTemplate(null)); return; }
     if (!window.confirm(`Delete template "${templateName}"? This cannot be undone.`)) return;
@@ -1731,6 +1766,15 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           <button className={builderMode === "templates" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("templates")} type="button">Templates</button>
           <button className={builderMode === "modules" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("modules")} type="button">Modules</button>
           <button className={builderMode === "pages" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("pages")} type="button">Pages</button>
+          {builderMode === "pages" ? (
+            <button
+              className="submit-button admin-blog-add-button builder-header-bulk-create"
+              onClick={() => setShowBulkCreate(true)}
+              type="button"
+            >
+              Bulk Create
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1818,6 +1862,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onModuleEditorFocusChange={handleModuleEditorFocusChange}
           onRepositoryEditingActiveChange={handleRepositoryEditingActiveChange}
         />
+      ) : showBulkCreate ? (
+        <BuilderBulkCreate
+          templates={pageLayoutTemplates}
+          savedSections={savedSections}
+          onBack={() => setShowBulkCreate(false)}
+          onBulkCreatePages={(templateId, items) => bulkCreatePages(templateId, items)}
+          onEditPage={(pageId) => { setShowBulkCreate(false); setSelectedPageId(pageId); }}
+        />
       ) : (
         <BuilderPageList
           pages={pages}
@@ -1841,7 +1893,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onApplyTemplate={applyTemplateToPage}
           onSetIsPublished={setIsPublishedPage}
           onNewPage={startNewPage}
-          onBulkCreate={() => {}}
+          onBulkCreate={() => setShowBulkCreate(true)}
           onPreviewDraft={openPreviewPage}
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}

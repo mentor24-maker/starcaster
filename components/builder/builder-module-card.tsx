@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { type CSSProperties, type DragEvent, useRef, useState } from "react";
+import { type CSSProperties, type DragEvent, type ReactNode, useRef, useState } from "react";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
@@ -1617,6 +1617,27 @@ function NavModuleEditor({
                 <option value="right">Right</option>
               </select>
             </BuilderSettingRow>
+            <div className="builder-nav-dir-levels-row">
+              <BuilderSettingRow label="Direction" fullWidth>
+                <select
+                  value={module.settings.navDirection ?? "horizontal"}
+                  onChange={(e) => updateSetting("navDirection", e.target.value)}
+                >
+                  <option value="horizontal">Horizontal</option>
+                  <option value="vertical">Vertical</option>
+                </select>
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Levels" fullWidth>
+                <select
+                  value={module.settings.navLevels ?? "2"}
+                  onChange={(e) => updateSetting("navLevels", e.target.value)}
+                >
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+              </BuilderSettingRow>
+            </div>
             <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" onChange={(v) => updateSetting("navColor", v)} />
             <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" onChange={(v) => updateSetting("navHoverColor", v)} />
             <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" onChange={(v) => updateSetting("navHoverBackground", v)} />
@@ -1951,6 +1972,27 @@ function HeadlineRotatorModuleEditor({
   );
 }
 
+function ModuleEditorWrapper({
+  isPopped,
+  title,
+  onClose,
+  children
+}: {
+  isPopped: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (isPopped) {
+    return (
+      <BuilderCenteredModal title={title} onClose={onClose} maxWidth={680}>
+        <div className="builder-module-editor">{children}</div>
+      </BuilderCenteredModal>
+    );
+  }
+  return <div className="builder-module-editor">{children}</div>;
+}
+
 export function BuilderModuleCard({
   module,
   sectionId,
@@ -1977,6 +2019,7 @@ export function BuilderModuleCard({
   moduleClassOverride,
   onModuleDragStart
 }: BuilderModuleCardProps) {
+    const [isPopped, setIsPopped] = useState(false);
     const richTextGalleryProps: RichTextGalleryBinding = {
       onOpenGallery: onOpenRichTextGallery,
       onUploadGalleryImage: onUploadRichTextGalleryImage
@@ -2035,6 +2078,7 @@ export function BuilderModuleCard({
         ) : (
           <div className="builder-section-actions">
             <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
+            <button aria-label="Open editor in popup" className={`builder-icon-button${isPopped ? " builder-icon-button-active" : ""}`} onClick={() => setIsPopped((p) => !p)} title="Open editor in popup" type="button">⤢</button>
             <button aria-label="Move module up" className="builder-icon-button" onClick={onMoveUp} title="Move module up" type="button">↑</button>
             <button aria-label="Move module down" className="builder-icon-button" onClick={onMoveDown} title="Move module down" type="button">↓</button>
             <button
@@ -2079,8 +2123,8 @@ export function BuilderModuleCard({
         </div>
       ) : null}
 
-      {isExpanded ? (
-        <div className="builder-module-editor">
+      {(isExpanded || isPopped) ? (
+        <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
           <BuilderSettingRow label="Label" fullWidth>
             <input
               type="text"
@@ -2561,7 +2605,7 @@ export function BuilderModuleCard({
           ) : null}
           </>
           )}
-        </div>
+        </ModuleEditorWrapper>
       ) : null}
     </div>
   );
