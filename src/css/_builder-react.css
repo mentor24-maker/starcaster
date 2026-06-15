@@ -3435,6 +3435,14 @@
   margin-bottom: 16px;
 }
 
+.builder-react-root .builder-bulk-create-template-warning {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: #7a5200;
+  font-style: italic;
+}
+
 .builder-react-root .builder-bulk-create-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -10166,6 +10174,13 @@
   color: var(--error-notice-text, #9f2d2d);
   background: var(--error-notice-bg, #ffe4ea);
   border: 2px solid var(--error-notice-border, #9f2d2d);
+  box-shadow: none;
+}
+
+.builder-react-root .notice.warning {
+  color: #7a5200;
+  background: #fff8e1;
+  border: 2px solid #f0a500;
   box-shadow: none;
 }
 

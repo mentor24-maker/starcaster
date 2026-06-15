@@ -4555,14 +4555,17 @@ body.asset-associations-modal-open {
   table-layout: fixed;
   width: 100%;
 }
+.builder-react-root .builder-pages-list-table col.builder-pages-col-check {
+  width: 40px;
+}
 .builder-react-root .builder-pages-list-table col.builder-pages-col-title {
-  width: 32%;
+  width: 30%;
 }
 .builder-react-root .builder-pages-list-table col.builder-pages-col-slug {
-  width: 18%;
+  width: 17%;
 }
 .builder-react-root .builder-pages-list-table col.builder-pages-col-template {
-  width: 22%;
+  width: 20%;
 }
 .builder-react-root .builder-pages-list-table col.builder-pages-col-updated {
   width: 9.5rem;
@@ -4608,6 +4611,43 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-pages-list-columns-row th {
   border-top: 1px solid rgba(9, 16, 24, 0.08);
+}
+.builder-react-root .builder-pages-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 4px;
+}
+.builder-react-root .builder-pages-filter-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(9, 16, 24, 0.18);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.builder-react-root .builder-pages-filter-input:focus {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: -1px;
+}
+.builder-react-root .builder-pages-delete-selected {
+  white-space: nowrap;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 0.88rem;
+}
+.builder-react-root .builder-pages-delete-selected.is-no-selection {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+.builder-react-root .builder-pages-check-cell {
+  width: 40px;
+  text-align: center;
+  padding-inline: 8px;
 }
 .builder-react-root .builder-pages-crud-heading-layout {
   display: grid;
@@ -4669,6 +4709,13 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-bulk-create-notice {
   margin-bottom: 16px;
+}
+.builder-react-root .builder-bulk-create-template-warning {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: #7a5200;
+  font-style: italic;
 }
 .builder-react-root .builder-bulk-create-form {
   display: grid;
@@ -10459,6 +10506,12 @@ body.asset-associations-modal-open {
   color: var(--error-notice-text, #9f2d2d);
   background: var(--error-notice-bg, #ffe4ea);
   border: 2px solid var(--error-notice-border, #9f2d2d);
+  box-shadow: none;
+}
+.builder-react-root .notice.warning {
+  color: #7a5200;
+  background: #fff8e1;
+  border: 2px solid #f0a500;
   box-shadow: none;
 }
 @media (max-width: 900px) {

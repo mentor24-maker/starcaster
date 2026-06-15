@@ -90,6 +90,8 @@ export function BuilderBulkCreate({
 
   const selectedMenu = menuOptions.find((opt) => opt.id === selectedMenuId);
   const menuItems = selectedMenu?.items ?? [];
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
+  const selectedTemplateSectionCount = selectedTemplate?.layoutSections.length ?? 0;
 
   function handleMenuChange(menuId: string) {
     setSelectedMenuId(menuId);
@@ -146,10 +148,15 @@ export function BuilderBulkCreate({
               <option value="">Select a template</option>
               {templates.map((template) => (
                 <option key={template.id} value={template.id}>
-                  {template.name}
+                  {template.name} ({template.layoutSections.length} section{template.layoutSections.length !== 1 ? "s" : ""})
                 </option>
               ))}
             </select>
+            {selectedTemplateId && selectedTemplateSectionCount === 0 ? (
+              <span className="builder-bulk-create-template-warning">
+                This template has no sections — pages will be created empty.
+              </span>
+            ) : null}
           </label>
 
           <label className="field">
