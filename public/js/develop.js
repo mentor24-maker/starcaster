@@ -14073,6 +14073,30 @@ App.develop = (function () {
       });
     }
 
+    const populateFromWebBtn = byId('developPopulateFromWebBtn');
+    if (populateFromWebBtn && !populateFromWebBtn.dataset.bound) {
+      populateFromWebBtn.dataset.bound = '1';
+      populateFromWebBtn.addEventListener('click', async () => {
+        if (!window.confirm('Populate Builder pages with content from the latest web crawl?\n\nThis adds a Paragraph section to each page whose name exactly matches a crawled page title. Existing sections are not changed.')) return;
+        populateFromWebBtn.disabled = true;
+        populateFromWebBtn.textContent = 'Populating…';
+        try {
+          const result = await api('/api/develop/landing-pages/populate-from-acquire', { method: 'POST' });
+          const n = Array.isArray(result.populated) ? result.populated.length : 0;
+          const s = Array.isArray(result.skipped) ? result.skipped.filter(x => x.reason === 'no_match').length : 0;
+          const src = result.sourceUrl ? ` from ${result.sourceUrl}` : '';
+          await loadSavedLandingPages();
+          renderLandingPagesTable();
+          notify(`Populated ${n} page${n === 1 ? '' : 's'}${src}. ${s} page${s === 1 ? '' : 's'} had no matching crawled content.`);
+        } catch (err) {
+          notify(err.message || 'Could not populate pages', true);
+        } finally {
+          populateFromWebBtn.disabled = false;
+          populateFromWebBtn.textContent = 'Populate from Web';
+        }
+      });
+    }
+
     if (landingPageBulkEditBtn) {
       landingPageBulkEditBtn.addEventListener('click', () => {
         const ids = Array.from(selectedLandingPageIds);
