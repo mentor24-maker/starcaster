@@ -226,8 +226,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); }, []);
 
   useEffect(() => {
-    (window as unknown as Record<string, unknown>).builderOpenBulkCreate = () => setShowBulkCreate(true);
-    return () => { delete (window as unknown as Record<string, unknown>).builderOpenBulkCreate; };
+    const handler = () => setShowBulkCreate(true);
+    window.addEventListener("builder:openBulkCreate", handler);
+    return () => window.removeEventListener("builder:openBulkCreate", handler);
   }, []);
 
   useEffect(() => {
