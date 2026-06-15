@@ -191,7 +191,7 @@ export function BuilderPageList({
                           </button>
                           <button
                             className="polls-icon-button polls-icon-button-view"
-                            onClick={() => onPreviewPage(page.slug)}
+                            onClick={() => onPreviewPage(page.slug || page.id)}
                             type="button"
                             aria-label="Preview page"
                             title="Preview page"

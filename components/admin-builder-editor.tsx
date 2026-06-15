@@ -1524,6 +1524,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
               name: item.name,
               slug: item.slug,
               templateId,
+              templateKind: "modular",
               isPublished: false,
               pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
               theme: template?.theme ?? createDefaultTheme(),
