@@ -14565,6 +14565,27 @@ App.develop = (function () {
     if (!runSelect || runSelect.dataset.bound) return;
     runSelect.dataset.bound = '1';
 
+    function fillTable(tbodyId, rows, emptyColspan, renderRow) {
+      const tbody = byId(tbodyId);
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="${emptyColspan}" style="color:#999;font-style:italic;">None</td></tr>`;
+        return;
+      }
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = renderRow(row);
+        tbody.appendChild(tr);
+      }
+    }
+
+    function contentBadge(hasContent, chars) {
+      return hasContent
+        ? `<span style="color:#2a7a2a;">&#10003; ${chars ? (chars).toLocaleString() + ' chars' : 'has content'}</span>`
+        : `<span style="color:#c00;">&#10007; no snippet</span>`;
+    }
+
     async function loadDiagnostics(runId) {
       if (diagnosticsDiv) diagnosticsDiv.style.display = 'none';
       if (msgDiv) msgDiv.textContent = 'Loading diagnostics…';
@@ -14579,88 +14600,74 @@ App.develop = (function () {
             const opt = document.createElement('option');
             opt.value = run.run_id;
             const d = run.started_at ? new Date(run.started_at).toLocaleDateString() : '';
-            opt.textContent = `${run.source_url}${d ? '  (' + d + ')' : ''}  —  ${run.pages_succeeded || 0} pages crawled`;
+            opt.textContent = `${run.source_url}${d ? '  (' + d + ')' : ''}  —  ${run.pages_succeeded || 0} pages`;
             runSelect.appendChild(opt);
           }
           if (!runSelect.options.length) {
             const opt = document.createElement('option');
             opt.value = '';
-            opt.textContent = 'No crawl runs found';
+            opt.textContent = 'No crawl runs found — run a web crawl first';
             runSelect.appendChild(opt);
           }
           if (data.selectedRunId) runSelect.value = data.selectedRunId;
         }
 
-        const matchesBody = byId('developPopulateMatchesBody');
-        const matchCount = byId('developPopulateMatchCount');
-        const matchNote = byId('developPopulateMatchNote');
-        const ubBody = byId('developPopulateUnmatchedBuilderBody');
-        const ubCount = byId('developPopulateUnmatchedBuilderCount');
-        const uaBody = byId('developPopulateUnmatchedAcquiredBody');
-        const uaCount = byId('developPopulateUnmatchedAcquiredCount');
+        const exactMatches = data.exactMatches || [];
+        const eCount = byId('developPopulateExactCount');
+        if (eCount) eCount.textContent = exactMatches.length;
+        fillTable('developPopulateExactBody', exactMatches, 5, (m) =>
+          `<td>${escapeHtml(m.builderName)}</td>`
+          + `<td style="font-size:0.88em;">${escapeHtml(m.acquiredTitle)}</td>`
+          + `<td style="font-size:0.88em;color:#555;">${escapeHtml(m.acquiredSlug)}</td>`
+          + `<td style="font-size:0.82em;color:#888;">${escapeHtml(m.matchedBy || '')}</td>`
+          + `<td>${contentBadge(m.hasContent, m.chars)}</td>`
+        );
 
-        const matches = data.matches || [];
-        if (matchCount) matchCount.textContent = matches.length;
-        if (matchNote) {
-          matchNote.textContent = matches.length
-            ? `${matches.length} Builder page${matches.length !== 1 ? 's' : ''} will receive content when you run populate.`
-            : 'No exact title↔name matches found. See the tables below to understand the mismatch.';
-        }
-        if (matchesBody) {
-          matchesBody.innerHTML = '';
-          if (matches.length) {
-            for (const m of matches) {
-              const tr = document.createElement('tr');
-              const same = m.builderName.toLowerCase().trim() === m.acquiredTitle.toLowerCase().trim();
-              const contentCell = m.hasContent
-                ? `<span style="color:#2a7a2a;">&#10003; ${(m.chars || 0).toLocaleString()} chars</span>`
-                : `<span style="color:#c00;">&#10007; no snippet</span>`;
-              tr.innerHTML = `<td>${escapeHtml(m.builderName)}</td>`
-                + `<td${same ? '' : ' style="color:#a00;"'}>${escapeHtml(m.acquiredTitle)}</td>`
-                + `<td style="font-size:0.82em;color:#555;">${escapeHtml(m.acquiredUrl)}</td>`
-                + `<td>${contentCell}</td>`;
-              matchesBody.appendChild(tr);
-            }
-          } else {
-            matchesBody.innerHTML = '<tr><td colspan="4" style="color:#999;font-style:italic;">No matches</td></tr>';
-          }
-        }
+        const partialMatches = data.partialMatches || [];
+        const pCount = byId('developPopulatePartialCount');
+        if (pCount) pCount.textContent = partialMatches.length;
+        fillTable('developPopulatePartialBody', partialMatches, 4, (m) => {
+          const candidateHtml = (m.candidates || []).map((c) =>
+            `<div style="font-size:0.85em;margin-bottom:2px;"><strong>${escapeHtml(c.acquiredSlug)}</strong> — ${escapeHtml(c.acquiredTitle)}</div>`
+          ).join('');
+          const allBy = [...new Set((m.candidates || []).map((c) => c.matchedBy))].join(', ');
+          const anyContent = (m.candidates || []).some((c) => c.hasContent);
+          const ambiguous = (m.candidates || []).length > 1;
+          return `<td>${escapeHtml(m.builderName)}${ambiguous ? ' <span style="color:#c00;font-size:0.8em;">(ambiguous)</span>' : ''}</td>`
+            + `<td>${candidateHtml}</td>`
+            + `<td style="font-size:0.82em;color:#888;">${escapeHtml(allBy)}</td>`
+            + `<td>${contentBadge(anyContent, null)}</td>`;
+        });
 
         const unmatchedBuilder = data.unmatchedBuilderPages || [];
+        const ubCount = byId('developPopulateUnmatchedBuilderCount');
         if (ubCount) ubCount.textContent = unmatchedBuilder.length;
-        if (ubBody) {
-          ubBody.innerHTML = '';
-          if (unmatchedBuilder.length) {
-            for (const p of unmatchedBuilder) {
-              const tr = document.createElement('tr');
-              tr.innerHTML = `<td>${escapeHtml(p.name)}</td><td style="color:#888;">${escapeHtml(p.slug)}</td>`;
-              ubBody.appendChild(tr);
-            }
-          } else {
-            ubBody.innerHTML = '<tr><td colspan="2" style="color:#999;font-style:italic;">All Builder pages matched</td></tr>';
-          }
-        }
+        fillTable('developPopulateUnmatchedBuilderBody', unmatchedBuilder, 2, (p) =>
+          `<td>${escapeHtml(p.name)}</td><td style="color:#888;">${escapeHtml(p.slug)}</td>`
+        );
 
         const unmatchedAcquired = data.unmatchedAcquiredPages || [];
+        const uaCount = byId('developPopulateUnmatchedAcquiredCount');
         if (uaCount) uaCount.textContent = unmatchedAcquired.length;
-        if (uaBody) {
-          uaBody.innerHTML = '';
-          if (unmatchedAcquired.length) {
-            for (const p of unmatchedAcquired) {
-              const tr = document.createElement('tr');
-              tr.innerHTML = `<td>${escapeHtml(p.title)}</td><td style="font-size:0.82em;color:#555;">${escapeHtml(p.url)}</td>`;
-              uaBody.appendChild(tr);
-            }
-          } else {
-            uaBody.innerHTML = '<tr><td colspan="2" style="color:#999;font-style:italic;">All crawled pages matched</td></tr>';
-          }
-        }
+        fillTable('developPopulateUnmatchedAcquiredBody', unmatchedAcquired, 3, (p) =>
+          `<td style="font-size:0.88em;">${escapeHtml(p.title)}</td>`
+          + `<td style="font-size:0.88em;color:#555;">${escapeHtml(p.slug || '')}</td>`
+          + `<td style="font-size:0.82em;color:#888;">${escapeHtml(p.url)}</td>`
+        );
 
-        const hasContent = matches.some((m) => m.hasContent);
+        const hasContent = exactMatches.some((m) => m.hasContent)
+          || partialMatches.some((m) => (m.candidates || []).length === 1 && (m.candidates[0] || {}).hasContent);
         if (runBtn) runBtn.disabled = !hasContent;
         if (msgDiv) msgDiv.textContent = '';
         if (diagnosticsDiv) diagnosticsDiv.style.display = '';
       } catch (err) {
+        if (runSelect.options.length <= 1) {
+          runSelect.innerHTML = '';
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'Error loading — try refreshing';
+          runSelect.appendChild(opt);
+        }
         if (msgDiv) msgDiv.textContent = `Error: ${err.message || 'Could not load diagnostics'}`;
       }
     }
