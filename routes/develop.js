@@ -942,8 +942,8 @@ async function handle(req, res, pathname, method) {
       title: String(p.title || ''),
       url: String(p.url || ''),
       slug: extractUrlSlug(String(p.url || '')),
-      chars: p.body_snippet ? String(p.body_snippet).length : 0,
-      hasContent: !!(p.title && p.body_snippet),
+      chars: (p.body_html || p.body_snippet) ? String(p.body_html || p.body_snippet).length : 0,
+      hasContent: !!(p.title && (p.body_html || p.body_snippet)),
     }));
 
     const exactMatches = [];
@@ -997,9 +997,11 @@ async function handle(req, res, pathname, method) {
     if (!run) return sendErr(res, 404, 'No acquire run found. Run a web crawl first.'), true;
 
     const acquiredPages = Array.isArray(run.pages)
-      ? run.pages.filter((p) => p.title && p.body_snippet)
+      ? run.pages.filter((p) => p.title && (p.body_html || p.body_snippet))
       : [];
     if (!acquiredPages.length) return sendErr(res, 400, 'The selected acquire run has no pages with content.'), true;
+
+    const runDomain = (() => { try { return new URL(run.source_url).hostname.replace(/^www\./, ''); } catch (_) { return ''; } })();
 
     const pagesResult = await listLandingPages(undefined, scope);
     if (!pagesResult.ok) return sendErr(res, 500, 'Could not load Builder pages.'), true;
@@ -1018,11 +1020,12 @@ async function handle(req, res, pathname, method) {
         skipped.push({ name: builderPage.name, reason }); continue;
       }
 
+      const content = String(match.body_html || match.body_snippet || '');
       const sectionId = `web-content-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-      const moduleId  = `web-para-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const moduleId  = `web-html-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const newSection = {
-        id: sectionId, title: '', layout: 'col1',
-        modules: [{ id: moduleId, type: 'text', column: 'col1', name: '', text: String(match.body_snippet || ''), settings: { variant: 'paragraph' } }],
+        id: sectionId, title: runDomain, layout: 'col1',
+        modules: [{ id: moduleId, type: 'text', column: 'col1', name: '', text: content, settings: { variant: 'paragraph' } }],
       };
 
       const existingSections = Array.isArray(builderPage.layoutSections) ? builderPage.layoutSections : [];
@@ -1033,7 +1036,7 @@ async function handle(req, res, pathname, method) {
       );
 
       if (updateResult.ok) {
-        populated.push({ name: builderPage.name, slug: builderPage.slug, chars: match.body_snippet.length, matchedBy: match.matchedBy || 'exact' });
+        populated.push({ name: builderPage.name, slug: builderPage.slug, chars: content.length, matchedBy: match.matchedBy || 'exact' });
       } else {
         skipped.push({ name: builderPage.name, reason: updateResult.error || 'update_failed' });
       }
