@@ -891,9 +891,8 @@ async function handle(req, res, pathname, method) {
       slug: String(p.slug || ''),
     }));
 
-    if (!run) {
-      return sendOk(res, 200, { runs, selectedRunId: null, sourceUrl: null, acquiredPages: [], builderPages, matches: [], unmatchedBuilderPages: builderPages, unmatchedAcquiredPages: [] }), true;
-    }
+    const noRunResult = { runs, selectedRunId: null, sourceUrl: null, acquiredPages: [], builderPages, matches: [], unmatchedBuilderPages: builderPages, unmatchedAcquiredPages: [] };
+    if (!run) return sendOk(res, 200, noRunResult, noRunResult), true;
 
     const acquiredPages = (Array.isArray(run.pages) ? run.pages : []).map((p) => ({
       title: String(p.title || ''),
@@ -916,7 +915,7 @@ async function handle(req, res, pathname, method) {
       }
     }
 
-    return sendOk(res, 200, {
+    const result = {
       runs,
       selectedRunId: run.run_id,
       sourceUrl: run.source_url,
@@ -925,7 +924,8 @@ async function handle(req, res, pathname, method) {
       matches,
       unmatchedBuilderPages: builderPages.filter((p) => !matchedBuilderIds.has(p.id)),
       unmatchedAcquiredPages: acquiredPages.filter((p) => !matchedAcquiredUrls.has(p.url)),
-    }), true;
+    };
+    return sendOk(res, 200, result, result), true;
   }
 
   // POST /api/develop/landing-pages/populate-from-acquire
