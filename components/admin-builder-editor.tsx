@@ -226,6 +226,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); }, []);
 
   useEffect(() => {
+    (window as unknown as Record<string, unknown>).builderOpenBulkCreate = () => setShowBulkCreate(true);
+    return () => { delete (window as unknown as Record<string, unknown>).builderOpenBulkCreate; };
+  }, []);
+
+  useEffect(() => {
     async function loadMediaLibrary() {
       try {
         const response = await builderAdminFetch("/api/admin/media", { cache: "no-store" });
