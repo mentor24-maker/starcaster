@@ -3348,6 +3348,12 @@
   font-size: 0.88rem;
 }
 
+.builder-react-root .builder-pages-delete-selected.is-no-selection {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
 .builder-react-root .builder-pages-check-cell {
   width: 40px;
   text-align: center;
