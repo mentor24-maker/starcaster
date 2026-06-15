@@ -8,7 +8,6 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
-import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
 import { formatTemplateTimestamp } from "./builder-utils";
 
 type BuilderTemplateListProps = {
@@ -42,7 +41,6 @@ export function BuilderTemplateList({
   templateKind,
   emailFunction,
   pageBackground,
-  theme,
   previewDevice,
   isSaving,
   onSelectTemplate,
@@ -52,7 +50,6 @@ export function BuilderTemplateList({
   onSetTemplateKind,
   onSetEmailFunction,
   onUpdatePageBackground,
-  onUpdateTheme,
   onSetPreviewDevice,
   onPreviewDraft,
   onNewTemplate,
@@ -346,12 +343,6 @@ export function BuilderTemplateList({
               compact
               onChange={onUpdatePageBackground}
             />
-            {!isEmailTemplate ? (
-              <div className="builder-theme-panel">
-                <h3 className="builder-theme-panel-title">Theme · Typography</h3>
-                <BuilderThemeTypographySettings theme={theme} onChange={onUpdateTheme} />
-              </div>
-            ) : null}
           </div>
         ) : null}
       </div>

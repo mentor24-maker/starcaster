@@ -2316,6 +2316,27 @@ App.develop = (function () {
       logoSquareId: safeText(byId('developThemesLogoSquareSelect')?.value),
       featureImageId: safeText(byId('developThemesFeatureImageSelect')?.value),
       backgroundImageId: safeText(byId('developThemesBackgroundImageSelect')?.value),
+      typography: {
+        fonts: {
+          heading: safeText(byId('developThemesHeadingFontSelect')?.value),
+          body: safeText(byId('developThemesBodyFontSelect')?.value),
+          mono: '',
+        },
+        colors: {
+          text: safeText(byId('developThemesTextColorInput')?.value),
+          heading: safeText(byId('developThemesHeadingColorInput')?.value),
+          link: safeText(byId('developThemesLinkColorInput')?.value),
+          linkHover: safeText(byId('developThemesLinkHoverColorInput')?.value),
+          muted: '',
+          selection: '',
+        },
+        scale: {
+          baseSize: Number(byId('developThemesBaseSizeInput')?.value) || 0,
+          ratio: Number(byId('developThemesScaleRatioSelect')?.value) || 0,
+          baseLineHeight: Number(byId('developThemesLineHeightInput')?.value) || 0,
+        },
+        elements: {},
+      },
     };
   }
 
@@ -2349,6 +2370,15 @@ App.develop = (function () {
     renderThemeAssetSelect('developThemesLogoSquareSelect', '', 'None');
     renderThemeAssetSelect('developThemesFeatureImageSelect', '', 'None');
     renderThemeAssetSelect('developThemesBackgroundImageSelect', '', 'None');
+    if (byId('developThemesHeadingFontSelect')) byId('developThemesHeadingFontSelect').value = '';
+    if (byId('developThemesBodyFontSelect')) byId('developThemesBodyFontSelect').value = '';
+    if (byId('developThemesTextColorInput')) byId('developThemesTextColorInput').value = '#214c71';
+    if (byId('developThemesHeadingColorInput')) byId('developThemesHeadingColorInput').value = '#18324a';
+    if (byId('developThemesLinkColorInput')) byId('developThemesLinkColorInput').value = '#0f4f8f';
+    if (byId('developThemesLinkHoverColorInput')) byId('developThemesLinkHoverColorInput').value = '#0f4f8f';
+    if (byId('developThemesBaseSizeInput')) byId('developThemesBaseSizeInput').value = '';
+    if (byId('developThemesScaleRatioSelect')) byId('developThemesScaleRatioSelect').value = '';
+    if (byId('developThemesLineHeightInput')) byId('developThemesLineHeightInput').value = '';
     syncThemeRangeLabels();
     setThemeStatus('');
     renderThemesPreview();
@@ -2373,6 +2403,19 @@ App.develop = (function () {
     renderThemeAssetSelect('developThemesLogoSquareSelect', safeText(theme.logoSquareId), 'None');
     renderThemeAssetSelect('developThemesFeatureImageSelect', safeText(theme.featureImageId), 'None');
     renderThemeAssetSelect('developThemesBackgroundImageSelect', safeText(theme.backgroundImageId), 'None');
+    const typo = theme.typography || {};
+    const typoFonts = typo.fonts || {};
+    const typoColors = typo.colors || {};
+    const typoScale = typo.scale || {};
+    if (byId('developThemesHeadingFontSelect')) byId('developThemesHeadingFontSelect').value = safeText(typoFonts.heading);
+    if (byId('developThemesBodyFontSelect')) byId('developThemesBodyFontSelect').value = safeText(typoFonts.body);
+    if (byId('developThemesTextColorInput')) byId('developThemesTextColorInput').value = typoColors.text || '#214c71';
+    if (byId('developThemesHeadingColorInput')) byId('developThemesHeadingColorInput').value = typoColors.heading || '#18324a';
+    if (byId('developThemesLinkColorInput')) byId('developThemesLinkColorInput').value = typoColors.link || '#0f4f8f';
+    if (byId('developThemesLinkHoverColorInput')) byId('developThemesLinkHoverColorInput').value = typoColors.linkHover || '#0f4f8f';
+    if (byId('developThemesBaseSizeInput')) byId('developThemesBaseSizeInput').value = typoScale.baseSize ? String(typoScale.baseSize) : '';
+    if (byId('developThemesScaleRatioSelect')) byId('developThemesScaleRatioSelect').value = typoScale.ratio ? String(typoScale.ratio) : '';
+    if (byId('developThemesLineHeightInput')) byId('developThemesLineHeightInput').value = typoScale.baseLineHeight ? String(typoScale.baseLineHeight) : '';
     syncThemeRangeLabels();
     setThemeStatus('');
     renderThemesPreview();
