@@ -427,11 +427,15 @@
         </div>
         <p>Match crawled pages to Builder pages by title, then inject each page's content as a Paragraph section. Use the diagnostics below to verify matches before running.</p>
 
-        <div class="standard-form-grid" style="max-width:480px; margin-bottom:1.5rem;">
+        <div class="standard-form-grid develop-populate-run-row" style="margin-bottom:1.5rem;">
           <label for="developPopulateRunSelect">Crawl Run</label>
-          <select id="developPopulateRunSelect">
-            <option value="">Loading&hellip;</option>
-          </select>
+          <div class="develop-populate-run-controls">
+            <select id="developPopulateRunSelect">
+              <option value="">Loading&hellip;</option>
+            </select>
+            <button id="developPopulateDeleteRunBtn" type="button" class="btn btn-danger" disabled title="Delete this crawl run">Delete Run</button>
+            <button id="developPopulatePurgeRunsBtn" type="button" class="btn" title="Delete all runs except the most recent">Purge Old</button>
+          </div>
         </div>
 
         <div id="developPopulateDiagnostics" style="display:none;">
@@ -475,7 +479,7 @@
           <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These crawled pages were not used in any exact match.</p>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Crawled Title</th><th>URL Slug</th><th>URL</th></tr></thead>
+              <thead><tr><th>Crawled Title</th><th>URL Slug</th><th>URL</th><th>Content</th></tr></thead>
               <tbody id="developPopulateUnmatchedAcquiredBody"></tbody>
             </table>
           </div>
