@@ -8633,6 +8633,18 @@ App.develop = (function () {
 
   function openLandingPagePreview(record, options = {}) {
     if (!record) return;
+    if (normalizePageTemplateKind(record.templateKind) === 'modular') {
+      try {
+        window.localStorage.setItem('normie_builder_preview_draft', JSON.stringify({
+          name: record.name,
+          pageBackground: record.pageBackground,
+          theme: record.theme,
+          layoutSections: record.layoutSections,
+        }));
+      } catch (_) {}
+      window.open(window.location.origin + '/develop-preview.html', '_blank');
+      return;
+    }
     ensureAssetsLoaded()
       .catch(() => {})
       .finally(() => {
