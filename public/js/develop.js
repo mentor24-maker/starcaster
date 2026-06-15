@@ -14555,6 +14555,148 @@ App.develop = (function () {
     }
   }
 
+  function openPopulateFromWebPage() {
+    App.setActivePage('developPopulateFromWebPage');
+    const runSelect = byId('developPopulateRunSelect');
+    const diagnosticsDiv = byId('developPopulateDiagnostics');
+    const msgDiv = byId('developPopulateDiagnosticsMsg');
+    const runBtn = byId('developPopulateRunBtn');
+
+    if (!runSelect || runSelect.dataset.bound) return;
+    runSelect.dataset.bound = '1';
+
+    async function loadDiagnostics(runId) {
+      if (diagnosticsDiv) diagnosticsDiv.style.display = 'none';
+      if (msgDiv) msgDiv.textContent = 'Loading diagnostics…';
+      if (runBtn) runBtn.disabled = true;
+      try {
+        const qs = runId ? `?runId=${encodeURIComponent(runId)}` : '';
+        const data = await api(`/api/develop/landing-pages/populate-diagnostics${qs}`);
+
+        if (runSelect.options.length <= 1) {
+          runSelect.innerHTML = '';
+          for (const run of (data.runs || [])) {
+            const opt = document.createElement('option');
+            opt.value = run.run_id;
+            const d = run.started_at ? new Date(run.started_at).toLocaleDateString() : '';
+            opt.textContent = `${run.source_url}${d ? '  (' + d + ')' : ''}  —  ${run.pages_succeeded || 0} pages crawled`;
+            runSelect.appendChild(opt);
+          }
+          if (!runSelect.options.length) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'No crawl runs found';
+            runSelect.appendChild(opt);
+          }
+          if (data.selectedRunId) runSelect.value = data.selectedRunId;
+        }
+
+        const matchesBody = byId('developPopulateMatchesBody');
+        const matchCount = byId('developPopulateMatchCount');
+        const matchNote = byId('developPopulateMatchNote');
+        const ubBody = byId('developPopulateUnmatchedBuilderBody');
+        const ubCount = byId('developPopulateUnmatchedBuilderCount');
+        const uaBody = byId('developPopulateUnmatchedAcquiredBody');
+        const uaCount = byId('developPopulateUnmatchedAcquiredCount');
+
+        const matches = data.matches || [];
+        if (matchCount) matchCount.textContent = matches.length;
+        if (matchNote) {
+          matchNote.textContent = matches.length
+            ? `${matches.length} Builder page${matches.length !== 1 ? 's' : ''} will receive content when you run populate.`
+            : 'No exact title↔name matches found. See the tables below to understand the mismatch.';
+        }
+        if (matchesBody) {
+          matchesBody.innerHTML = '';
+          if (matches.length) {
+            for (const m of matches) {
+              const tr = document.createElement('tr');
+              const same = m.builderName.toLowerCase().trim() === m.acquiredTitle.toLowerCase().trim();
+              const contentCell = m.hasContent
+                ? `<span style="color:#2a7a2a;">&#10003; ${(m.chars || 0).toLocaleString()} chars</span>`
+                : `<span style="color:#c00;">&#10007; no snippet</span>`;
+              tr.innerHTML = `<td>${escapeHtml(m.builderName)}</td>`
+                + `<td${same ? '' : ' style="color:#a00;"'}>${escapeHtml(m.acquiredTitle)}</td>`
+                + `<td style="font-size:0.82em;color:#555;">${escapeHtml(m.acquiredUrl)}</td>`
+                + `<td>${contentCell}</td>`;
+              matchesBody.appendChild(tr);
+            }
+          } else {
+            matchesBody.innerHTML = '<tr><td colspan="4" style="color:#999;font-style:italic;">No matches</td></tr>';
+          }
+        }
+
+        const unmatchedBuilder = data.unmatchedBuilderPages || [];
+        if (ubCount) ubCount.textContent = unmatchedBuilder.length;
+        if (ubBody) {
+          ubBody.innerHTML = '';
+          if (unmatchedBuilder.length) {
+            for (const p of unmatchedBuilder) {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `<td>${escapeHtml(p.name)}</td><td style="color:#888;">${escapeHtml(p.slug)}</td>`;
+              ubBody.appendChild(tr);
+            }
+          } else {
+            ubBody.innerHTML = '<tr><td colspan="2" style="color:#999;font-style:italic;">All Builder pages matched</td></tr>';
+          }
+        }
+
+        const unmatchedAcquired = data.unmatchedAcquiredPages || [];
+        if (uaCount) uaCount.textContent = unmatchedAcquired.length;
+        if (uaBody) {
+          uaBody.innerHTML = '';
+          if (unmatchedAcquired.length) {
+            for (const p of unmatchedAcquired) {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `<td>${escapeHtml(p.title)}</td><td style="font-size:0.82em;color:#555;">${escapeHtml(p.url)}</td>`;
+              uaBody.appendChild(tr);
+            }
+          } else {
+            uaBody.innerHTML = '<tr><td colspan="2" style="color:#999;font-style:italic;">All crawled pages matched</td></tr>';
+          }
+        }
+
+        const hasContent = matches.some((m) => m.hasContent);
+        if (runBtn) runBtn.disabled = !hasContent;
+        if (msgDiv) msgDiv.textContent = '';
+        if (diagnosticsDiv) diagnosticsDiv.style.display = '';
+      } catch (err) {
+        if (msgDiv) msgDiv.textContent = `Error: ${err.message || 'Could not load diagnostics'}`;
+      }
+    }
+
+    runSelect.addEventListener('change', () => loadDiagnostics(runSelect.value));
+
+    if (runBtn && !runBtn.dataset.bound) {
+      runBtn.dataset.bound = '1';
+      runBtn.addEventListener('click', async () => {
+        const runId = runSelect.value;
+        if (!runId) return;
+        if (!window.confirm('Populate matched Builder pages with web crawl content?\n\nThis adds a Paragraph section to each matched page. Existing sections are not changed.')) return;
+        runBtn.disabled = true;
+        runBtn.textContent = 'Running…';
+        try {
+          const result = await api('/api/develop/landing-pages/populate-from-acquire', {
+            method: 'POST',
+            body: JSON.stringify({ runId }),
+          });
+          const n = Array.isArray(result.populated) ? result.populated.length : 0;
+          notify(`Populated ${n} page${n === 1 ? '' : 's'} from ${result.sourceUrl || 'crawl'}.`);
+          await loadSavedLandingPages();
+          renderLandingPagesTable();
+          await loadDiagnostics(runSelect.value);
+        } catch (err) {
+          notify(err.message || 'Could not populate pages', true);
+        } finally {
+          runBtn.disabled = false;
+          runBtn.textContent = 'Run Populate';
+        }
+      });
+    }
+
+    loadDiagnostics('');
+  }
+
   function openBulkCreateFromManagePage() {
     if (!App.builder || typeof App.builder.useReactIsland !== 'function' || !App.builder.useReactIsland()) {
       App.setActivePage('developPage');
@@ -14587,5 +14729,6 @@ App.develop = (function () {
     openModularPageTemplateEditor,
     buildModularPageTemplatePreviewMarkup,
     openBulkCreateFromManagePage,
+    openPopulateFromWebPage,
   };
 })();
