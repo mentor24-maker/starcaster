@@ -1560,6 +1560,20 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     } catch (e) { setError(e instanceof Error ? e.message : "Failed to delete template."); }
   }
 
+  async function populateFromAcquire() {
+    if (!window.confirm("Populate Builder pages with content from the latest web crawl?\n\nThis adds a Paragraph section to each page whose name exactly matches a crawled page title. Existing sections are not changed.")) return;
+    setError(null); setMessage(null); setIsSaving(true);
+    try {
+      const response = await builderAdminFetch("/api/admin/pages/populate-from-acquire", { method: "POST" });
+      const data = await readAdminJson<{ populated?: Array<{name: string; slug: string; chars: number}>; skipped?: Array<{name: string; reason: string}>; sourceUrl?: string; error?: string }>(response, "Failed to populate pages.");
+      const n = data.populated?.length ?? 0;
+      const s = (data.skipped ?? []).filter((x) => x.reason === "no_match").length;
+      setMessage(`Populated ${n} page${n !== 1 ? "s" : ""} from ${data.sourceUrl ?? "crawl"}. ${s} page${s !== 1 ? "s" : ""} had no matching crawled content.`);
+      await loadPages();
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to populate pages."); }
+    finally { setIsSaving(false); }
+  }
+
   async function deletePageById(pageId: string, pageName: string) {
     if (!pageId) { startNewPage(); return; }
     if (!window.confirm(`Delete page "${pageName}"? This cannot be undone.`)) return;
@@ -1920,6 +1934,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onSetIsPublished={setIsPublishedPage}
           onNewPage={startNewPage}
           onBulkCreate={() => setShowBulkCreate(true)}
+          onPopulateFromWeb={() => void populateFromAcquire()}
           onPreviewDraft={openPreviewPage}
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}

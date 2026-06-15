@@ -32,6 +32,7 @@ type BuilderPageListProps = {
   onSetIsPublished: (isPublished: boolean) => void;
   onNewPage: () => void;
   onBulkCreate: () => void;
+  onPopulateFromWeb: () => void;
   onPreviewDraft: () => void;
   onMakeTemplate: () => void;
   onPageEditorFocus: (focused: boolean) => void;
@@ -62,6 +63,7 @@ export function BuilderPageList({
   onSetIsPublished,
   onNewPage,
   onBulkCreate,
+  onPopulateFromWeb,
   onPreviewDraft,
   onMakeTemplate,
   onPageEditorFocus,
@@ -233,6 +235,14 @@ export function BuilderPageList({
               type="button"
             >
               Bulk Create
+            </button>
+            <button
+              className="secondary-button builder-panel-heading-button"
+              disabled={isSaving}
+              onClick={onPopulateFromWeb}
+              type="button"
+            >
+              Populate from Web
             </button>
           </div>
         </div>

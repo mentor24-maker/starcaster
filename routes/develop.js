@@ -15,6 +15,7 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
   return unique ? `${base}-${Date.now().toString(36)}` : base;
 }
 const { exec } = require('child_process');
+const { listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/developFormsStore');
 const {
@@ -869,6 +870,73 @@ async function handle(req, res, pathname, method) {
     const removed = await deleteExtension(extensionId, scope);
     if (!removed.ok) return sendErr(res, removed.status || 500, removed.error || 'Could not delete extension'), true;
     return sendOk(res, 200, removed.data, { extension: removed.data }), true;
+  }
+
+  // POST /api/develop/landing-pages/populate-from-acquire
+  if (pathname === '/api/develop/landing-pages/populate-from-acquire' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+
+    // Resolve which acquire run to use
+    let run = null;
+    if (body.runId) {
+      run = await getDirectAcquireRun(String(body.runId), scope);
+    } else {
+      const runs = await listDirectAcquireRuns(50, scope);
+      if (body.sourceUrl) {
+        const norm = (s) => String(s || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+        const target = norm(body.sourceUrl);
+        const hit = runs.find((r) => norm(r.source_url) === target);
+        if (hit) run = await getDirectAcquireRun(hit.run_id, scope);
+      }
+      if (!run && runs.length) run = await getDirectAcquireRun(runs[0].run_id, scope);
+    }
+
+    if (!run) return sendErr(res, 404, 'No acquire run found. Run a web crawl first.'), true;
+
+    const acquiredPages = Array.isArray(run.pages)
+      ? run.pages.filter((p) => p.title && p.body_snippet)
+      : [];
+    if (!acquiredPages.length) return sendErr(res, 400, 'The selected acquire run has no pages with content.'), true;
+
+    const pagesResult = await listLandingPages(undefined, scope);
+    if (!pagesResult.ok) return sendErr(res, 500, 'Could not load Builder pages.'), true;
+    const builderPages = pagesResult.data || [];
+
+    const populated = [];
+    const skipped = [];
+
+    for (const builderPage of builderPages) {
+      const builderName = String(builderPage.name || '').trim();
+      const match = acquiredPages.find(
+        (ap) => String(ap.title || '').trim().toLowerCase() === builderName.toLowerCase()
+      );
+
+      if (!match) { skipped.push({ name: builderPage.name, reason: 'no_match' }); continue; }
+
+      const sectionId = `web-content-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const moduleId  = `web-para-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const newSection = {
+        id: sectionId,
+        title: '',
+        layout: 'col1',
+        modules: [{ id: moduleId, type: 'text', column: 'col1', name: '', text: String(match.body_snippet || ''), settings: { variant: 'paragraph' } }],
+      };
+
+      const existingSections = Array.isArray(builderPage.layoutSections) ? builderPage.layoutSections : [];
+      const updateResult = await updateLandingPage(
+        String(builderPage.id),
+        { layoutSections: [...existingSections, newSection], pageBackground: builderPage.pageBackground, theme: builderPage.theme },
+        scope
+      );
+
+      if (updateResult.ok) {
+        populated.push({ name: builderPage.name, slug: builderPage.slug, chars: match.body_snippet.length });
+      } else {
+        skipped.push({ name: builderPage.name, reason: updateResult.error || 'update_failed' });
+      }
+    }
+
+    return sendOk(res, 200, { populated, skipped, sourceUrl: run.source_url }), true;
   }
 
   const landingPageIdMatch = String(pathname || '').match(/^\/api\/develop\/landing-pages\/([^/]+)\/?$/);
