@@ -14604,9 +14604,59 @@ App.develop = (function () {
     const diagnosticsDiv = byId('developPopulateDiagnostics');
     const msgDiv = byId('developPopulateDiagnosticsMsg');
     const runBtn = byId('developPopulateRunBtn');
+    const deleteRunBtn = byId('developPopulateDeleteRunBtn');
+    const purgeRunsBtn = byId('developPopulatePurgeRunsBtn');
 
     if (!runSelect || runSelect.dataset.bound) return;
     runSelect.dataset.bound = '1';
+
+    // content keyed by acquiredUrl for the preview modal
+    let contentByUrl = {};
+
+    function openContentPreviewModal(url) {
+      const item = contentByUrl[url];
+      if (!item) return;
+      let modal = byId('developAcquiredContentModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'developAcquiredContentModal';
+        modal.className = 'develop-content-modal-backdrop';
+        modal.innerHTML = [
+          '<div class="develop-content-modal">',
+          '  <div class="develop-content-modal-header">',
+          '    <div>',
+          '      <strong id="developAcquiredContentTitle"></strong>',
+          '      <a id="developAcquiredContentUrl" href="#" target="_blank" rel="noopener noreferrer" class="develop-content-modal-url"></a>',
+          '    </div>',
+          '    <button type="button" id="developAcquiredContentClose" class="btn" aria-label="Close">&times;</button>',
+          '  </div>',
+          '  <div class="develop-content-modal-body" id="developAcquiredContentBody"></div>',
+          '</div>',
+        ].join('');
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('is-open'); });
+        byId('developAcquiredContentClose').addEventListener('click', () => modal.classList.remove('is-open'));
+      }
+      byId('developAcquiredContentTitle').textContent = item.title || 'Crawled Page Content';
+      const urlEl = byId('developAcquiredContentUrl');
+      urlEl.textContent = item.url || '';
+      urlEl.href = item.url || '#';
+      const bodyEl = byId('developAcquiredContentBody');
+      bodyEl.innerHTML = item.content
+        ? item.content
+        : '<em style="color:#999">No HTML content captured — this run predates the body_html feature. Re-run the crawl to capture full content.</em>';
+      modal.classList.add('is-open');
+    }
+
+    // delegated click on content preview buttons
+    const pageSec = byId('developPopulateFromWebPage');
+    if (pageSec && !pageSec.dataset.contentBound) {
+      pageSec.dataset.contentBound = '1';
+      pageSec.addEventListener('click', (e) => {
+        const btn = e.target.closest('.develop-content-preview-btn');
+        if (btn) openContentPreviewModal(btn.dataset.url || '');
+      });
+    }
 
     function fillTable(tbodyId, rows, emptyColspan, renderRow) {
       const tbody = byId(tbodyId);
@@ -14623,10 +14673,32 @@ App.develop = (function () {
       }
     }
 
-    function contentBadge(hasContent, chars) {
-      return hasContent
-        ? `<span style="color:#2a7a2a;">&#10003; ${chars ? (chars).toLocaleString() + ' chars' : 'has content'}</span>`
-        : `<span style="color:#c00;">&#10007; no snippet</span>`;
+    function contentBadge(hasContent, chars, url) {
+      if (!hasContent) return `<span style="color:#c00;">&#10007; no content</span>`;
+      const label = `&#10003; ${chars ? Number(chars).toLocaleString() + ' chars' : 'has content'}`;
+      if (url) {
+        return `<button type="button" class="develop-content-preview-btn" data-url="${escapeHtml(url)}" title="Preview captured content">${label}</button>`;
+      }
+      return `<span style="color:#2a7a2a;">${label}</span>`;
+    }
+
+    function rebuildRunSelect(runs, selectedRunId) {
+      runSelect.innerHTML = '';
+      for (const run of (runs || [])) {
+        const opt = document.createElement('option');
+        opt.value = run.run_id;
+        const d = run.started_at ? new Date(run.started_at).toLocaleDateString() : '';
+        opt.textContent = `${run.source_url}${d ? '  (' + d + ')' : ''}  —  ${run.pages_succeeded || 0} pages`;
+        runSelect.appendChild(opt);
+      }
+      if (!runSelect.options.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No crawl runs found — run a web crawl first';
+        runSelect.appendChild(opt);
+      }
+      if (selectedRunId) runSelect.value = selectedRunId;
+      if (deleteRunBtn) deleteRunBtn.disabled = !runSelect.value;
     }
 
     async function loadDiagnostics(runId) {
@@ -14637,49 +14709,40 @@ App.develop = (function () {
         const qs = runId ? `?runId=${encodeURIComponent(runId)}` : '';
         const data = await api(`/api/develop/landing-pages/populate-diagnostics${qs}`);
 
-        if (runSelect.options.length <= 1) {
-          runSelect.innerHTML = '';
-          for (const run of (data.runs || [])) {
-            const opt = document.createElement('option');
-            opt.value = run.run_id;
-            const d = run.started_at ? new Date(run.started_at).toLocaleDateString() : '';
-            opt.textContent = `${run.source_url}${d ? '  (' + d + ')' : ''}  —  ${run.pages_succeeded || 0} pages`;
-            runSelect.appendChild(opt);
-          }
-          if (!runSelect.options.length) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = 'No crawl runs found — run a web crawl first';
-            runSelect.appendChild(opt);
-          }
-          if (data.selectedRunId) runSelect.value = data.selectedRunId;
-        }
+        rebuildRunSelect(data.runs, data.selectedRunId);
+        contentByUrl = {};
 
         const exactMatches = data.exactMatches || [];
         const eCount = byId('developPopulateExactCount');
         if (eCount) eCount.textContent = exactMatches.length;
+        exactMatches.forEach((m) => {
+          if (m.acquiredUrl) contentByUrl[m.acquiredUrl] = { title: m.acquiredTitle, url: m.acquiredUrl, content: m.content || '' };
+        });
         fillTable('developPopulateExactBody', exactMatches, 5, (m) =>
           `<td>${escapeHtml(m.builderName)}</td>`
           + `<td style="font-size:0.88em;">${escapeHtml(m.acquiredTitle)}</td>`
           + `<td style="font-size:0.88em;color:#555;">${escapeHtml(m.acquiredSlug)}</td>`
           + `<td style="font-size:0.82em;color:#888;">${escapeHtml(m.matchedBy || '')}</td>`
-          + `<td>${contentBadge(m.hasContent, m.chars)}</td>`
+          + `<td>${contentBadge(m.hasContent, m.chars, m.acquiredUrl)}</td>`
         );
 
         const partialMatches = data.partialMatches || [];
         const pCount = byId('developPopulatePartialCount');
         if (pCount) pCount.textContent = partialMatches.length;
         fillTable('developPopulatePartialBody', partialMatches, 4, (m) => {
-          const candidateHtml = (m.candidates || []).map((c) =>
-            `<div style="font-size:0.85em;margin-bottom:2px;"><strong>${escapeHtml(c.acquiredSlug)}</strong> — ${escapeHtml(c.acquiredTitle)}</div>`
-          ).join('');
+          const candidateHtml = (m.candidates || []).map((c) => {
+            if (c.acquiredUrl) contentByUrl[c.acquiredUrl] = { title: c.acquiredTitle, url: c.acquiredUrl, content: c.content || '' };
+            return `<div style="font-size:0.85em;margin-bottom:2px;">`
+              + `<strong>${escapeHtml(c.acquiredSlug)}</strong> — ${escapeHtml(c.acquiredTitle)} `
+              + contentBadge(c.hasContent, c.chars, c.acquiredUrl)
+              + `</div>`;
+          }).join('');
           const allBy = [...new Set((m.candidates || []).map((c) => c.matchedBy))].join(', ');
-          const anyContent = (m.candidates || []).some((c) => c.hasContent);
           const ambiguous = (m.candidates || []).length > 1;
           return `<td>${escapeHtml(m.builderName)}${ambiguous ? ' <span style="color:#c00;font-size:0.8em;">(ambiguous)</span>' : ''}</td>`
             + `<td>${candidateHtml}</td>`
             + `<td style="font-size:0.82em;color:#888;">${escapeHtml(allBy)}</td>`
-            + `<td>${contentBadge(anyContent, null)}</td>`;
+            + `<td></td>`;
         });
 
         const unmatchedBuilder = data.unmatchedBuilderPages || [];
@@ -14692,10 +14755,14 @@ App.develop = (function () {
         const unmatchedAcquired = data.unmatchedAcquiredPages || [];
         const uaCount = byId('developPopulateUnmatchedAcquiredCount');
         if (uaCount) uaCount.textContent = unmatchedAcquired.length;
-        fillTable('developPopulateUnmatchedAcquiredBody', unmatchedAcquired, 3, (p) =>
+        unmatchedAcquired.forEach((p) => {
+          if (p.url) contentByUrl[p.url] = { title: p.title, url: p.url, content: p.content || '' };
+        });
+        fillTable('developPopulateUnmatchedAcquiredBody', unmatchedAcquired, 4, (p) =>
           `<td style="font-size:0.88em;">${escapeHtml(p.title)}</td>`
           + `<td style="font-size:0.88em;color:#555;">${escapeHtml(p.slug || '')}</td>`
           + `<td style="font-size:0.82em;color:#888;">${escapeHtml(p.url)}</td>`
+          + `<td>${contentBadge(p.hasContent, p.chars, p.url)}</td>`
         );
 
         const hasContent = exactMatches.some((m) => m.hasContent)
@@ -14704,8 +14771,7 @@ App.develop = (function () {
         if (msgDiv) msgDiv.textContent = '';
         if (diagnosticsDiv) diagnosticsDiv.style.display = '';
       } catch (err) {
-        if (runSelect.options.length <= 1) {
-          runSelect.innerHTML = '';
+        if (!runSelect.options.length) {
           const opt = document.createElement('option');
           opt.value = '';
           opt.textContent = 'Error loading — try refreshing';
@@ -14715,7 +14781,51 @@ App.develop = (function () {
       }
     }
 
-    runSelect.addEventListener('change', () => loadDiagnostics(runSelect.value));
+    runSelect.addEventListener('change', () => {
+      if (deleteRunBtn) deleteRunBtn.disabled = !runSelect.value;
+      loadDiagnostics(runSelect.value);
+    });
+
+    if (deleteRunBtn && !deleteRunBtn.dataset.bound) {
+      deleteRunBtn.dataset.bound = '1';
+      deleteRunBtn.addEventListener('click', async () => {
+        const runId = runSelect.value;
+        if (!runId) return;
+        const label = runSelect.options[runSelect.selectedIndex]?.textContent || runId;
+        if (!window.confirm(`Delete this crawl run?\n\n${label}`)) return;
+        deleteRunBtn.disabled = true;
+        deleteRunBtn.textContent = 'Deleting…';
+        try {
+          await api(`/api/develop/acquire-runs/${encodeURIComponent(runId)}`, { method: 'DELETE' });
+          notify('Crawl run deleted.');
+          await loadDiagnostics('');
+        } catch (err) {
+          notify(err.message || 'Could not delete run', true);
+        } finally {
+          deleteRunBtn.textContent = 'Delete Run';
+        }
+      });
+    }
+
+    if (purgeRunsBtn && !purgeRunsBtn.dataset.bound) {
+      purgeRunsBtn.dataset.bound = '1';
+      purgeRunsBtn.addEventListener('click', async () => {
+        if (!window.confirm('Delete all crawl runs except the most recent one?')) return;
+        purgeRunsBtn.disabled = true;
+        purgeRunsBtn.textContent = 'Purging…';
+        try {
+          const result = await api('/api/develop/acquire-runs/purge', { method: 'DELETE' });
+          const n = result.deleted || 0;
+          notify(n > 0 ? `Deleted ${n} old run${n === 1 ? '' : 's'}.` : 'Nothing to purge — only one run exists.');
+          await loadDiagnostics('');
+        } catch (err) {
+          notify(err.message || 'Could not purge runs', true);
+        } finally {
+          purgeRunsBtn.disabled = false;
+          purgeRunsBtn.textContent = 'Purge Old';
+        }
+      });
+    }
 
     if (runBtn && !runBtn.dataset.bound) {
       runBtn.dataset.bound = '1';
