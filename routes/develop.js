@@ -108,6 +108,24 @@ function nextId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// Propagate typography from a saved theme to all landing pages and templates so
+// the change takes effect site-wide without requiring each page to be re-saved.
+async function propagateTypographyToAllPages(typography, scope) {
+  if (!typography || typeof typography !== 'object') return;
+  const pagesResult = await listLandingPages(undefined, scope);
+  if (!pagesResult.ok) return;
+  const pages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
+  await Promise.allSettled(pages.map(async (page) => {
+    const existingTheme = page.theme && typeof page.theme === 'object' ? page.theme : {};
+    const mergedTheme = { ...existingTheme, typography };
+    await updateLandingPage(String(page.id), {
+      layoutSections: page.layoutSections,
+      pageBackground: page.pageBackground,
+      theme: mergedTheme,
+    }, scope);
+  }));
+}
+
 // Normalize a string for fuzzy page matching: lowercase, strip site-name suffix after pipe/dash,
 // replace hyphens/underscores with spaces, collapse whitespace.
 function normForMatch(s) {
@@ -384,6 +402,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
+    const typography = body.typography && typeof body.typography === 'object' ? body.typography : null;
     const result = await createTheme({
       name,
       primaryColor: String(body.primaryColor || '').trim(),
@@ -397,8 +416,10 @@ async function handle(req, res, pathname, method) {
       logoSquareId: String(body.logoSquareId || '').trim(),
       featureImageId: String(body.featureImageId || '').trim(),
       backgroundImageId: String(body.backgroundImageId || '').trim(),
+      typography,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
+    if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
     return sendOk(res, 201, result.data, { theme: result.data }), true;
   }
 
@@ -465,6 +486,7 @@ async function handle(req, res, pathname, method) {
   const themeMatch = pathname.match(/^\/api\/develop\/themes\/([^/]+)$/);
   if (themeMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
+    const typography = body.typography && typeof body.typography === 'object' ? body.typography : null;
     const result = await updateTheme(themeMatch[1], {
       name: String(body.name || '').trim(),
       primaryColor: String(body.primaryColor || '').trim(),
@@ -478,8 +500,10 @@ async function handle(req, res, pathname, method) {
       logoSquareId: String(body.logoSquareId || '').trim(),
       featureImageId: String(body.featureImageId || '').trim(),
       backgroundImageId: String(body.backgroundImageId || '').trim(),
+      typography,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
+    if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
     return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
 
