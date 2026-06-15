@@ -293,7 +293,7 @@
           <div class="page-heading-actions">
             <button id="developOpenCreateLandingPageBtn" type="button" class="btn">Create Page</button>
             <button type="button" onclick="App.develop.openBulkCreateFromManagePage();" class="btn">Bulk Create</button>
-            <button id="developPopulateFromWebBtn" type="button" class="btn">Populate from Web</button>
+            <button type="button" onclick="App.develop.openPopulateFromWebPage();" class="btn">Populate from Web</button>
             <button type="button" onclick="App.setActivePage('developPage')" class="btn">Back To Builder</button>
           </div>
         </div>
@@ -328,6 +328,68 @@
           </table>
         </div>
       </section>
+      <section id="developPopulateFromWebPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-page="developManageLandingPagesPage">Builder: Pages</a> &rsaquo; Populate from Web</h2>
+          <div class="page-heading-actions">
+            <button id="developPopulateRunBtn" type="button" class="btn" disabled>Run Populate</button>
+          </div>
+        </div>
+        <p>Match crawled pages to Builder pages by title, then inject each page's content as a Paragraph section. Use the diagnostics below to verify matches before running.</p>
+
+        <div class="standard-form-grid" style="max-width:480px; margin-bottom:1.5rem;">
+          <label for="developPopulateRunSelect">Crawl Run</label>
+          <select id="developPopulateRunSelect">
+            <option value="">Loading&hellip;</option>
+          </select>
+        </div>
+
+        <div id="developPopulateDiagnostics" style="display:none;">
+
+          <div class="page-heading-row" style="margin-bottom:0.75rem;">
+            <h3 style="margin:0;">Matches <span id="developPopulateMatchCount" class="badge"></span></h3>
+          </div>
+          <p id="developPopulateMatchNote" style="color:#666; font-size:0.9em; margin-bottom:0.75rem;"></p>
+          <div class="table-wrap" id="developPopulateMatchesWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Builder Page Name</th>
+                  <th>Crawled Page Title</th>
+                  <th>URL</th>
+                  <th>Content</th>
+                </tr>
+              </thead>
+              <tbody id="developPopulateMatchesBody"></tbody>
+            </table>
+          </div>
+
+          <div class="page-heading-row" style="margin:1.5rem 0 0.75rem;">
+            <h3 style="margin:0;">Unmatched Builder Pages <span id="developPopulateUnmatchedBuilderCount" class="badge"></span></h3>
+          </div>
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These Builder pages have no crawled page whose title exactly matches their name (case-insensitive).</p>
+          <div class="table-wrap" id="developPopulateUnmatchedBuilderWrap">
+            <table>
+              <thead><tr><th>Builder Page Name</th><th>Slug</th></tr></thead>
+              <tbody id="developPopulateUnmatchedBuilderBody"></tbody>
+            </table>
+          </div>
+
+          <div class="page-heading-row" style="margin:1.5rem 0 0.75rem;">
+            <h3 style="margin:0;">Unmatched Crawled Pages <span id="developPopulateUnmatchedAcquiredCount" class="badge"></span></h3>
+          </div>
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These crawled pages have no Builder page whose name exactly matches their title (case-insensitive).</p>
+          <div class="table-wrap" id="developPopulateUnmatchedAcquiredWrap">
+            <table>
+              <thead><tr><th>Crawled Title</th><th>URL</th></tr></thead>
+              <tbody id="developPopulateUnmatchedAcquiredBody"></tbody>
+            </table>
+          </div>
+
+        </div>
+        <div id="developPopulateDiagnosticsMsg" style="padding:1rem 0; color:#666;"></div>
+      </section>
+
       <section id="developLandingPagesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="developManageLandingPagesPage">Builder: Pages</a></h2>
