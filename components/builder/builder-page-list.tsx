@@ -247,12 +247,12 @@ export function BuilderPageList({
               value={filterText}
             />
             <button
-              className="danger-button builder-pages-delete-selected"
-              disabled={checkedIds.size === 0 || isSaving}
-              onClick={() => onDeletePages([...checkedIds])}
+              className={`danger-button builder-pages-delete-selected${checkedIds.size === 0 ? " is-no-selection" : ""}`}
+              disabled={isSaving}
+              onClick={() => { if (checkedIds.size > 0) onDeletePages([...checkedIds]); }}
               type="button"
             >
-              Delete Selected{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+              {isSaving ? "Deleting…" : checkedIds.size > 0 ? `Delete Selected (${checkedIds.size})` : "Delete Selected"}
             </button>
           </div>
         ) : null}

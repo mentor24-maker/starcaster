@@ -1572,7 +1572,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     if (pageIds.length === 0) return;
     const n = pageIds.length;
     if (!window.confirm(`Delete ${n} page${n !== 1 ? "s" : ""}? This cannot be undone.`)) return;
-    setError(null); setMessage(null);
+    setError(null); setMessage(null); setIsSaving(true);
     let failed = 0;
     for (const id of pageIds) {
       try {
@@ -1581,6 +1581,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
         if (selectedPageId === id) startNewPage();
       } catch { failed++; }
     }
+    setIsSaving(false);
     if (failed > 0) setError(`${failed} page${failed !== 1 ? "s" : ""} could not be deleted.`);
     else setMessage(`${n} page${n !== 1 ? "s" : ""} deleted.`);
     await loadPages();
