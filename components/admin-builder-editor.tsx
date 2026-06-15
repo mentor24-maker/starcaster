@@ -1568,6 +1568,24 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     } catch (e) { setError(e instanceof Error ? e.message : "Failed to delete page."); }
   }
 
+  async function deletePagesByIds(pageIds: string[]) {
+    if (pageIds.length === 0) return;
+    const n = pageIds.length;
+    if (!window.confirm(`Delete ${n} page${n !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setError(null); setMessage(null);
+    let failed = 0;
+    for (const id of pageIds) {
+      try {
+        const response = await builderAdminFetch(`/api/admin/pages/${id}`, { method: "DELETE" });
+        await readAdminJson<{ error?: string }>(response, "Failed to delete page.");
+        if (selectedPageId === id) startNewPage();
+      } catch { failed++; }
+    }
+    if (failed > 0) setError(`${failed} page${failed !== 1 ? "s" : ""} could not be deleted.`);
+    else setMessage(`${n} page${n !== 1 ? "s" : ""} deleted.`);
+    await loadPages();
+  }
+
   async function clonePageById(pageId: string) {
     const source = pages.find((page) => page.id === pageId);
 
@@ -1887,6 +1905,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onPreviewPage={openPagePreview}
           onClonePage={(id) => void clonePageById(id)}
           onDeletePage={(id, name) => void deletePageById(id, name)}
+          onDeletePages={(ids) => void deletePagesByIds(ids)}
           onSetDraftName={setDraftName}
           onUpdatePageBackground={updatePageBackground}
           onUpdateTheme={updateTheme}

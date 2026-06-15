@@ -1,9 +1,12 @@
 import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, BuilderTheme } from "@/lib/builder-template";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
 import { formatTemplateTimestamp } from "./builder-utils";
+
+type SortField = "name" | "slug" | "template" | "updatedAt";
+type SortDir = "asc" | "desc";
 
 type BuilderPageListProps = {
   pages: BuilderPageRecord[];
@@ -20,6 +23,7 @@ type BuilderPageListProps = {
   onPreviewPage: (slug: string) => void;
   onClonePage: (pageId: string) => void;
   onDeletePage: (pageId: string, pageName: string) => void;
+  onDeletePages: (pageIds: string[]) => void;
   onSetDraftName: (name: string) => void;
   onUpdatePageBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onUpdateTheme: (updater: (theme: BuilderTheme) => BuilderTheme) => void;
@@ -49,6 +53,7 @@ export function BuilderPageList({
   onPreviewPage,
   onClonePage,
   onDeletePage,
+  onDeletePages,
   onSetDraftName,
   onUpdatePageBackground,
   onUpdateTheme,
@@ -66,6 +71,11 @@ export function BuilderPageList({
     pages: true,
     details: true
   });
+  const [filterText, setFilterText] = useState("");
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<SortField>("updatedAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const shouldFocusDetailsRef = useRef(false);
 
@@ -79,6 +89,89 @@ export function BuilderPageList({
   useEffect(() => {
     onPageEditorFocus(!collapsedPanels.details || Boolean(selectedPageId));
   }, [collapsedPanels.details, onPageEditorFocus, selectedPageId]);
+
+  // Remove stale checked IDs when the pages list changes (e.g. after delete)
+  useEffect(() => {
+    const validIds = new Set(pages.map((p) => p.id));
+    setCheckedIds((prev) => {
+      const next = new Set([...prev].filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [pages]);
+
+  const filteredPages = useMemo(() => {
+    const q = filterText.trim().toLowerCase();
+    const result = q
+      ? pages.filter(
+          (p) => p.name.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q)
+        )
+      : pages;
+    return result.slice().sort((a, b) => {
+      let av = "";
+      let bv = "";
+      if (sortField === "name") {
+        av = a.name.toLowerCase();
+        bv = b.name.toLowerCase();
+      } else if (sortField === "slug") {
+        av = a.slug.toLowerCase();
+        bv = b.slug.toLowerCase();
+      } else if (sortField === "template") {
+        av = (templates.find((t) => t.id === a.templateId)?.name ?? "").toLowerCase();
+        bv = (templates.find((t) => t.id === b.templateId)?.name ?? "").toLowerCase();
+      } else {
+        av = a.updatedAt;
+        bv = b.updatedAt;
+      }
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [pages, filterText, sortField, sortDir, templates]);
+
+  const allVisibleChecked =
+    filteredPages.length > 0 && filteredPages.every((p) => checkedIds.has(p.id));
+  const someVisibleChecked =
+    filteredPages.some((p) => checkedIds.has(p.id)) && !allVisibleChecked;
+
+  function handleCheckAll() {
+    if (allVisibleChecked) {
+      setCheckedIds((prev) => {
+        const next = new Set(prev);
+        filteredPages.forEach((p) => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setCheckedIds((prev) => {
+        const next = new Set(prev);
+        filteredPages.forEach((p) => next.add(p.id));
+        return next;
+      });
+    }
+  }
+
+  function handleCheckRow(pageId: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) next.delete(pageId);
+      else next.add(pageId);
+      return next;
+    });
+  }
+
+  function handleSort(field: SortField) {
+    if (field === sortField) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }
+
+  function sortIndicator(field: SortField) {
+    if (field !== sortField) return <span className="admin-table-sort-indicator">↕</span>;
+    return (
+      <span className="admin-table-sort-indicator">{sortDir === "asc" ? "▲" : "▼"}</span>
+    );
+  }
 
   function openDetailsAndFocus() {
     shouldFocusDetailsRef.current = true;
@@ -143,9 +236,31 @@ export function BuilderPageList({
             </button>
           </div>
         </div>
+
+        {!collapsedPanels.pages ? (
+          <div className="builder-pages-filter-bar">
+            <input
+              className="builder-pages-filter-input"
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Search pages…"
+              type="search"
+              value={filterText}
+            />
+            <button
+              className="danger-button builder-pages-delete-selected"
+              disabled={checkedIds.size === 0 || isSaving}
+              onClick={() => onDeletePages([...checkedIds])}
+              type="button"
+            >
+              Delete Selected{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+            </button>
+          </div>
+        ) : null}
+
         <div className="table-shell builder-templates-shell">
           <table className="polls-table builder-templates-table builder-pages-list-table">
             <colgroup>
+              <col className="builder-pages-col-check" />
               <col className="builder-pages-col-title" />
               <col className="builder-pages-col-slug" />
               <col className="builder-pages-col-template" />
@@ -155,21 +270,72 @@ export function BuilderPageList({
             <thead>
               {!collapsedPanels.pages ? (
                 <tr className="builder-pages-list-columns-row">
-                  <th>Title</th>
-                  <th>Slug</th>
-                  <th>Template</th>
-                  <th>Updated</th>
+                  <th className="builder-pages-check-cell">
+                    <input
+                      aria-label="Select all pages"
+                      checked={allVisibleChecked}
+                      onChange={handleCheckAll}
+                      ref={(el) => { if (el) el.indeterminate = someVisibleChecked; }}
+                      title={allVisibleChecked ? "Deselect all" : "Select all"}
+                      type="checkbox"
+                    />
+                  </th>
+                  <th>
+                    <button
+                      className={`admin-table-sort-button${sortField === "name" ? " is-active" : ""}`}
+                      onClick={() => handleSort("name")}
+                      type="button"
+                    >
+                      Title {sortIndicator("name")}
+                    </button>
+                  </th>
+                  <th>
+                    <button
+                      className={`admin-table-sort-button${sortField === "slug" ? " is-active" : ""}`}
+                      onClick={() => handleSort("slug")}
+                      type="button"
+                    >
+                      Slug {sortIndicator("slug")}
+                    </button>
+                  </th>
+                  <th>
+                    <button
+                      className={`admin-table-sort-button${sortField === "template" ? " is-active" : ""}`}
+                      onClick={() => handleSort("template")}
+                      type="button"
+                    >
+                      Template {sortIndicator("template")}
+                    </button>
+                  </th>
+                  <th>
+                    <button
+                      className={`admin-table-sort-button${sortField === "updatedAt" ? " is-active" : ""}`}
+                      onClick={() => handleSort("updatedAt")}
+                      type="button"
+                    >
+                      Updated {sortIndicator("updatedAt")}
+                    </button>
+                  </th>
                   <th className="crud-actions-cell">Actions</th>
                 </tr>
               ) : null}
             </thead>
             {!collapsedPanels.pages ? (
               <tbody>
-                {pages.map((page) => {
+                {filteredPages.map((page) => {
                   const isSelected = page.id === selectedPageId;
+                  const isChecked = checkedIds.has(page.id);
 
                   return (
                     <tr className={isSelected ? "is-selected-row" : undefined} key={page.id}>
+                      <td className="builder-pages-check-cell">
+                        <input
+                          aria-label={`Select ${page.name || "Untitled page"}`}
+                          checked={isChecked}
+                          onChange={() => handleCheckRow(page.id)}
+                          type="checkbox"
+                        />
+                      </td>
                       <td>
                         <strong>{page.name || "Untitled page"}</strong>
                       </td>
@@ -223,9 +389,11 @@ export function BuilderPageList({
                     </tr>
                   );
                 })}
-                {pages.length === 0 ? (
+                {filteredPages.length === 0 ? (
                   <tr>
-                    <td className="empty-cell" colSpan={5}>No pages found.</td>
+                    <td className="empty-cell" colSpan={6}>
+                      {pages.length === 0 ? "No pages found." : "No pages match your search."}
+                    </td>
                   </tr>
                 ) : null}
               </tbody>
