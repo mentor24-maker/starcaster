@@ -17010,6 +17010,89 @@ button.develop-inline-asset-status-btn:focus-visible {
   letter-spacing: 0.05em;
   color: var(--subtext);
 }
+.develop-populate-run-row {
+  max-width: 720px;
+}
+.develop-populate-run-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.develop-populate-run-controls select {
+  flex: 1;
+  min-width: 0;
+}
+.develop-content-preview-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #2a7a2a;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  white-space: nowrap;
+}
+.develop-content-preview-btn:hover {
+  color: #1a5a1a;
+  text-decoration: underline;
+}
+.develop-content-modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9900;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.develop-content-modal-backdrop.is-open {
+  display: flex;
+}
+.develop-content-modal {
+  background: var(--bg-surface, #fff);
+  border-radius: var(--radius-container, 10px);
+  border: 1px solid var(--border, #ddd);
+  max-width: 860px;
+  width: 100%;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.22);
+}
+.develop-content-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border, #ddd);
+  flex-shrink: 0;
+}
+.develop-content-modal-url {
+  display: block;
+  font-size: 0.8em;
+  color: var(--subtext, #888);
+  word-break: break-all;
+  margin-top: 0.15rem;
+}
+.develop-content-modal-body {
+  overflow-y: auto;
+  padding: 1.25rem;
+  flex: 1;
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+.develop-content-modal-body h1,
+.develop-content-modal-body h2,
+.develop-content-modal-body h3,
+.develop-content-modal-body h4 {
+  margin: 0.8em 0 0.3em;
+}
+.develop-content-modal-body p {
+  margin: 0 0 0.6em;
+}
 .develop-themes-preview-frame {
   padding: 1.2rem;
   border-radius: 18px;

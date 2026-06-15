@@ -15,7 +15,7 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
   return unique ? `${base}-${Date.now().toString(36)}` : base;
 }
 const { exec } = require('child_process');
-const { listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
+const { listDirectAcquireRuns, getDirectAcquireRun, deleteDirectAcquireRun, purgeOldAcquireRuns } = require('../lib/directAcquire');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/developFormsStore');
 const {
@@ -942,6 +942,19 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, removed.data, { extension: removed.data }), true;
   }
 
+  // DELETE /api/develop/acquire-runs/purge  — delete all but the most recent run
+  if (pathname === '/api/develop/acquire-runs/purge' && requestMethod === 'DELETE') {
+    const deleted = await purgeOldAcquireRuns(scope).catch(() => 0);
+    return sendOk(res, 200, { deleted }), true;
+  }
+
+  // DELETE /api/develop/acquire-runs/:runId  — delete a specific run
+  const acquireRunMatch = pathname.match(/^\/api\/develop\/acquire-runs\/([^/]+)$/);
+  if (acquireRunMatch && requestMethod === 'DELETE') {
+    await deleteDirectAcquireRun(decodeURIComponent(acquireRunMatch[1]), scope).catch(() => {});
+    return sendOk(res, 200, { ok: true }), true;
+  }
+
   // GET /api/develop/landing-pages/populate-diagnostics
   if (pathname === '/api/develop/landing-pages/populate-diagnostics' && requestMethod === 'GET') {
     const qs = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
@@ -968,6 +981,7 @@ async function handle(req, res, pathname, method) {
       slug: extractUrlSlug(String(p.url || '')),
       chars: (p.body_html || p.body_snippet) ? String(p.body_html || p.body_snippet).length : 0,
       hasContent: !!(p.title && (p.body_html || p.body_snippet)),
+      content: String(p.body_html || p.body_snippet || '').slice(0, 15000),
     }));
 
     const exactMatches = [];
@@ -978,11 +992,11 @@ async function handle(req, res, pathname, method) {
     for (const bp of builderPages) {
       const { exact, partials } = findAcquiredPageMatch(bp.name, acquiredPages);
       if (exact) {
-        exactMatches.push({ builderPageId: bp.id, builderName: bp.name, builderSlug: bp.slug, acquiredTitle: exact.title, acquiredUrl: exact.url, acquiredSlug: exact.slug, matchedBy: exact.matchedBy, chars: exact.chars, hasContent: exact.hasContent });
+        exactMatches.push({ builderPageId: bp.id, builderName: bp.name, builderSlug: bp.slug, acquiredTitle: exact.title, acquiredUrl: exact.url, acquiredSlug: exact.slug, matchedBy: exact.matchedBy, chars: exact.chars, hasContent: exact.hasContent, content: exact.content });
         exactMatchedBuilderIds.add(bp.id);
         exactMatchedAcquiredUrls.add(exact.url);
       } else if (partials.length) {
-        partialMatches.push({ builderPageId: bp.id, builderName: bp.name, builderSlug: bp.slug, candidates: partials.map((p) => ({ acquiredTitle: p.title, acquiredUrl: p.url, acquiredSlug: p.slug, matchedBy: p.matchedBy, chars: p.chars, hasContent: p.hasContent })) });
+        partialMatches.push({ builderPageId: bp.id, builderName: bp.name, builderSlug: bp.slug, candidates: partials.map((p) => ({ acquiredTitle: p.title, acquiredUrl: p.url, acquiredSlug: p.slug, matchedBy: p.matchedBy, chars: p.chars, hasContent: p.hasContent, content: p.content })) });
         exactMatchedBuilderIds.add(bp.id);
       }
     }
