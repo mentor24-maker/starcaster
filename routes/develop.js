@@ -872,6 +872,62 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, removed.data, { extension: removed.data }), true;
   }
 
+  // GET /api/develop/landing-pages/populate-diagnostics
+  if (pathname === '/api/develop/landing-pages/populate-diagnostics' && requestMethod === 'GET') {
+    const qs = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+    const runs = await listDirectAcquireRuns(50, scope);
+
+    let run = null;
+    if (qs.runId) {
+      run = await getDirectAcquireRun(String(qs.runId), scope);
+    } else if (runs.length) {
+      run = await getDirectAcquireRun(runs[0].run_id, scope);
+    }
+
+    const pagesResult = await listLandingPages(undefined, scope);
+    const builderPages = (pagesResult.ok ? pagesResult.data || [] : []).map((p) => ({
+      id: String(p.id),
+      name: String(p.name || ''),
+      slug: String(p.slug || ''),
+    }));
+
+    if (!run) {
+      return sendOk(res, 200, { runs, selectedRunId: null, sourceUrl: null, acquiredPages: [], builderPages, matches: [], unmatchedBuilderPages: builderPages, unmatchedAcquiredPages: [] }), true;
+    }
+
+    const acquiredPages = (Array.isArray(run.pages) ? run.pages : []).map((p) => ({
+      title: String(p.title || ''),
+      url: String(p.url || ''),
+      chars: p.body_snippet ? String(p.body_snippet).length : 0,
+      hasContent: !!(p.title && p.body_snippet),
+    }));
+
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const matches = [];
+    const matchedBuilderIds = new Set();
+    const matchedAcquiredUrls = new Set();
+
+    for (const bp of builderPages) {
+      const ap = acquiredPages.find((p) => norm(p.title) === norm(bp.name));
+      if (ap) {
+        matches.push({ builderPageId: bp.id, builderName: bp.name, acquiredTitle: ap.title, acquiredUrl: ap.url, chars: ap.chars, hasContent: ap.hasContent });
+        matchedBuilderIds.add(bp.id);
+        matchedAcquiredUrls.add(ap.url);
+      }
+    }
+
+    return sendOk(res, 200, {
+      runs,
+      selectedRunId: run.run_id,
+      sourceUrl: run.source_url,
+      acquiredPages,
+      builderPages,
+      matches,
+      unmatchedBuilderPages: builderPages.filter((p) => !matchedBuilderIds.has(p.id)),
+      unmatchedAcquiredPages: acquiredPages.filter((p) => !matchedAcquiredUrls.has(p.url)),
+    }), true;
+  }
+
   // POST /api/develop/landing-pages/populate-from-acquire
   if (pathname === '/api/develop/landing-pages/populate-from-acquire' && requestMethod === 'POST') {
     const body = await parseJsonBody(req).catch(() => ({}));
