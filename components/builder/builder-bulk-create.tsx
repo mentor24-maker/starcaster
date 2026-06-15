@@ -103,10 +103,13 @@ export function BuilderBulkCreate({
     if (!selectedMenuId) { setError("Select a menu."); return; }
     if (menuItems.length === 0) { setError("The selected menu has no items."); return; }
 
-    const items: BulkCreateItem[] = menuItems.map((item) => ({
-      name: item.label,
-      slug: item.href.replace(/^\/+/, "").replace(/\/+$/, ""),
-    }));
+    const items: BulkCreateItem[] = menuItems.map((item) => {
+      const pathSlug = item.href.startsWith("/")
+        ? item.href.replace(/^\/+/, "").replace(/\/+$/, "")
+        : "";
+      const slug = pathSlug || item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      return { name: item.label, slug };
+    });
 
     setIsGenerating(true);
     setError(null);
