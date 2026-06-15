@@ -254,6 +254,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      pageBackground: body.pageBackground || body.page_background,
       theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
         ? (body.layoutSections || body.layout_sections)
@@ -307,6 +308,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      pageBackground: body.pageBackground || body.page_background,
       theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
         ? (body.layoutSections || body.layout_sections)
