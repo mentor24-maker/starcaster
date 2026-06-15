@@ -8778,14 +8778,14 @@ App.develop = (function () {
     selectedLandingPageIds = new Set(Array.from(selectedLandingPageIds).filter((id) => visibleIds.includes(id) || savedLandingPages.some((item) => safeText(item.id) === id)));
 
     const selectAll = byId('developLandingPagesSelectAllVisible');
-    const bulkBtn = byId('developLandingPagesBulkEditBtn');
+    const bulkDeleteBtn = byId('developLandingPagesBulkDeleteBtn');
     if (selectAll) {
       const selectedVisibleCount = visibleIds.filter((id) => selectedLandingPageIds.has(id)).length;
       selectAll.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
       selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
       selectAll.disabled = visibleIds.length === 0;
     }
-    if (bulkBtn) bulkBtn.disabled = !selectedLandingPageIds.size;
+    if (bulkDeleteBtn) bulkDeleteBtn.disabled = !selectedLandingPageIds.size;
   }
 
   function renderLandingPagesTable() {
@@ -13981,6 +13981,7 @@ App.develop = (function () {
     const landingPageNameFilter = byId('developLandingPagesNameFilter');
     const landingPageTemplateFilter = byId('developLandingPagesTemplateFilter');
     const landingPageSelectAll = byId('developLandingPagesSelectAllVisible');
+    const landingPageBulkDeleteBtn = byId('developLandingPagesBulkDeleteBtn');
     const landingPageBulkEditBtn = byId('developLandingPagesBulkEditBtn');
     const landingPageBulkEditForm = byId('developLandingPagesBulkEditForm');
     const landingPageBulkEditSummary = byId('developLandingPagesBulkEditSummary');
@@ -14029,13 +14030,41 @@ App.develop = (function () {
       });
     }
 
-    if (landingPageBulkEditBtn) {
-      landingPageBulkEditBtn.addEventListener('click', () => {
+    if (landingPageBulkDeleteBtn) {
+      landingPageBulkDeleteBtn.addEventListener('click', async () => {
         const ids = Array.from(selectedLandingPageIds);
         if (!ids.length) {
           notify('Select at least one page first', true);
           return;
         }
+        const n = ids.length;
+        if (!window.confirm(`Delete ${n} page${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
+        landingPageBulkDeleteBtn.disabled = true;
+        landingPageBulkDeleteBtn.textContent = 'Deleting…';
+        let failed = 0;
+        for (const id of ids) {
+          try {
+            await api(`/api/develop/landing-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            selectedLandingPageIds.delete(id);
+          } catch (_) {
+            failed++;
+          }
+        }
+        await refresh();
+        syncLandingPageTableControls();
+        if (failed) {
+          notify(`${failed} page${failed === 1 ? '' : 's'} could not be deleted`, true);
+        } else {
+          notify(`${n} page${n === 1 ? '' : 's'} deleted`);
+        }
+        landingPageBulkDeleteBtn.textContent = 'Delete Selected';
+      });
+    }
+
+    if (landingPageBulkEditBtn) {
+      landingPageBulkEditBtn.addEventListener('click', () => {
+        const ids = Array.from(selectedLandingPageIds);
+        if (!ids.length) { notify('Select at least one page first', true); return; }
         if (landingPageBulkEditSummary) {
           landingPageBulkEditSummary.textContent = `${ids.length} page${ids.length === 1 ? '' : 's'} selected.`;
         }
