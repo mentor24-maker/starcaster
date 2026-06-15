@@ -14555,6 +14555,26 @@ App.develop = (function () {
     }
   }
 
+  function openBulkCreateFromManagePage() {
+    if (!App.builder || typeof App.builder.useReactIsland !== 'function' || !App.builder.useReactIsland()) {
+      App.setActivePage('developPage');
+      return;
+    }
+    syncModularPageEditorPlacement();
+    const mounted = App.builder.mount({
+      surface: 'editor',
+      editorMode: 'page',
+      onClose: () => { App.setActivePage('developManageLandingPagesPage'); },
+      onSaved: async () => {},
+    });
+    if (mounted) {
+      App.setActivePage('developLandingPagesPage', { skipNormalize: true });
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('builder:openBulkCreate'));
+      }, 150);
+    }
+  }
+
   return {
     manifest: { id: 'develop', label: 'Develop', pageId: 'developPage', pagePrefixes: ['develop'] },
     init,
@@ -14565,6 +14585,7 @@ App.develop = (function () {
     openAgentsPage,
     openAgentsCreate,
     openModularPageTemplateEditor,
-    buildModularPageTemplatePreviewMarkup
+    buildModularPageTemplatePreviewMarkup,
+    openBulkCreateFromManagePage,
   };
 })();
