@@ -108,6 +108,52 @@ function nextId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// Normalize a string for fuzzy page matching: lowercase, strip site-name suffix after pipe/dash,
+// replace hyphens/underscores with spaces, collapse whitespace.
+function normForMatch(s) {
+  return String(s || '').trim().toLowerCase()
+    .replace(/\s*[|–—]\s*.*$/, '')    // strip " | Site Name" suffix
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractUrlSlug(url) {
+  try {
+    const segments = new URL(url).pathname.split('/').filter(Boolean);
+    return segments[segments.length - 1] || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+// Returns { exact: acquiredPageWithMeta|null, partials: acquiredPageWithMeta[] }
+function findAcquiredPageMatch(builderName, acquiredPages) {
+  const bn = normForMatch(builderName);
+  if (!bn) return { exact: null, partials: [] };
+  const partials = [];
+  for (const ap of acquiredPages) {
+    const slug = extractUrlSlug(ap.url);
+    const titleNorm = normForMatch(ap.title);
+    const slugNorm = normForMatch(slug);
+    if (titleNorm === bn || slugNorm === bn) {
+      return { exact: { ...ap, slug, matchedBy: titleNorm === bn ? 'title' : 'slug' }, partials: [] };
+    }
+    const titleContainsName = titleNorm && titleNorm.includes(bn);
+    const nameContainsTitle = titleNorm && titleNorm.length > 2 && bn.includes(titleNorm);
+    const slugContainsName  = slugNorm  && slugNorm.includes(bn);
+    const nameContainsSlug  = slugNorm  && slugNorm.length > 2 && bn.includes(slugNorm);
+    if (titleContainsName || nameContainsTitle || slugContainsName || nameContainsSlug) {
+      const matchedBy = titleContainsName ? 'title-contains-name'
+        : nameContainsTitle ? 'name-contains-title'
+        : slugContainsName  ? 'slug-contains-name'
+        : 'name-contains-slug';
+      partials.push({ ...ap, slug, matchedBy });
+    }
+  }
+  return { exact: null, partials };
+}
+
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
@@ -886,32 +932,34 @@ async function handle(req, res, pathname, method) {
 
     const pagesResult = await listLandingPages(undefined, scope);
     const builderPages = (pagesResult.ok ? pagesResult.data || [] : []).map((p) => ({
-      id: String(p.id),
-      name: String(p.name || ''),
-      slug: String(p.slug || ''),
+      id: String(p.id), name: String(p.name || ''), slug: String(p.slug || ''),
     }));
 
-    const noRunResult = { runs, selectedRunId: null, sourceUrl: null, acquiredPages: [], builderPages, matches: [], unmatchedBuilderPages: builderPages, unmatchedAcquiredPages: [] };
+    const noRunResult = { runs, selectedRunId: null, sourceUrl: null, acquiredPages: [], builderPages, exactMatches: [], partialMatches: [], unmatchedBuilderPages: builderPages, unmatchedAcquiredPages: [] };
     if (!run) return sendOk(res, 200, noRunResult, noRunResult), true;
 
     const acquiredPages = (Array.isArray(run.pages) ? run.pages : []).map((p) => ({
       title: String(p.title || ''),
       url: String(p.url || ''),
+      slug: extractUrlSlug(String(p.url || '')),
       chars: p.body_snippet ? String(p.body_snippet).length : 0,
       hasContent: !!(p.title && p.body_snippet),
     }));
 
-    const norm = (s) => String(s || '').trim().toLowerCase();
-    const matches = [];
-    const matchedBuilderIds = new Set();
-    const matchedAcquiredUrls = new Set();
+    const exactMatches = [];
+    const partialMatches = [];
+    const exactMatchedBuilderIds = new Set();
+    const exactMatchedAcquiredUrls = new Set();
 
     for (const bp of builderPages) {
-      const ap = acquiredPages.find((p) => norm(p.title) === norm(bp.name));
-      if (ap) {
-        matches.push({ builderPageId: bp.id, builderName: bp.name, acquiredTitle: ap.title, acquiredUrl: ap.url, chars: ap.chars, hasContent: ap.hasContent });
-        matchedBuilderIds.add(bp.id);
-        matchedAcquiredUrls.add(ap.url);
+      const { exact, partials } = findAcquiredPageMatch(bp.name, acquiredPages);
+      if (exact) {
+        exactMatches.push({ builderPageId: bp.id, builderName: bp.name, builderSlug: bp.slug, acquiredTitle: exact.title, acquiredUrl: exact.url, acquiredSlug: exact.slug, matchedBy: exact.matchedBy, chars: exact.chars, hasContent: exact.hasContent });
+        exactMatchedBuilderIds.add(bp.id);
+        exactMatchedAcquiredUrls.add(exact.url);
+      } else if (partials.length) {
+        partialMatches.push({ builderPageId: bp.id, builderName: bp.name, builderSlug: bp.slug, candidates: partials.map((p) => ({ acquiredTitle: p.title, acquiredUrl: p.url, acquiredSlug: p.slug, matchedBy: p.matchedBy, chars: p.chars, hasContent: p.hasContent })) });
+        exactMatchedBuilderIds.add(bp.id);
       }
     }
 
@@ -921,9 +969,10 @@ async function handle(req, res, pathname, method) {
       sourceUrl: run.source_url,
       acquiredPages,
       builderPages,
-      matches,
-      unmatchedBuilderPages: builderPages.filter((p) => !matchedBuilderIds.has(p.id)),
-      unmatchedAcquiredPages: acquiredPages.filter((p) => !matchedAcquiredUrls.has(p.url)),
+      exactMatches,
+      partialMatches,
+      unmatchedBuilderPages: builderPages.filter((p) => !exactMatchedBuilderIds.has(p.id)),
+      unmatchedAcquiredPages: acquiredPages.filter((p) => !exactMatchedAcquiredUrls.has(p.url)),
     };
     return sendOk(res, 200, result, result), true;
   }
@@ -932,16 +981,14 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/develop/landing-pages/populate-from-acquire' && requestMethod === 'POST') {
     const body = await parseJsonBody(req).catch(() => ({}));
 
-    // Resolve which acquire run to use
     let run = null;
     if (body.runId) {
       run = await getDirectAcquireRun(String(body.runId), scope);
     } else {
       const runs = await listDirectAcquireRuns(50, scope);
       if (body.sourceUrl) {
-        const norm = (s) => String(s || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-        const target = norm(body.sourceUrl);
-        const hit = runs.find((r) => norm(r.source_url) === target);
+        const normUrl = (s) => String(s || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+        const hit = runs.find((r) => normUrl(r.source_url) === normUrl(body.sourceUrl));
         if (hit) run = await getDirectAcquireRun(hit.run_id, scope);
       }
       if (!run && runs.length) run = await getDirectAcquireRun(runs[0].run_id, scope);
@@ -962,19 +1009,19 @@ async function handle(req, res, pathname, method) {
     const skipped = [];
 
     for (const builderPage of builderPages) {
-      const builderName = String(builderPage.name || '').trim();
-      const match = acquiredPages.find(
-        (ap) => String(ap.title || '').trim().toLowerCase() === builderName.toLowerCase()
-      );
+      const { exact, partials } = findAcquiredPageMatch(String(builderPage.name || ''), acquiredPages);
+      // Use exact match, or the sole partial match candidate (unambiguous).
+      const match = exact || (partials.length === 1 ? partials[0] : null);
 
-      if (!match) { skipped.push({ name: builderPage.name, reason: 'no_match' }); continue; }
+      if (!match) {
+        const reason = partials.length > 1 ? 'multiple_partial_matches' : 'no_match';
+        skipped.push({ name: builderPage.name, reason }); continue;
+      }
 
       const sectionId = `web-content-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const moduleId  = `web-para-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const newSection = {
-        id: sectionId,
-        title: '',
-        layout: 'col1',
+        id: sectionId, title: '', layout: 'col1',
         modules: [{ id: moduleId, type: 'text', column: 'col1', name: '', text: String(match.body_snippet || ''), settings: { variant: 'paragraph' } }],
       };
 
@@ -986,13 +1033,14 @@ async function handle(req, res, pathname, method) {
       );
 
       if (updateResult.ok) {
-        populated.push({ name: builderPage.name, slug: builderPage.slug, chars: match.body_snippet.length });
+        populated.push({ name: builderPage.name, slug: builderPage.slug, chars: match.body_snippet.length, matchedBy: match.matchedBy || 'exact' });
       } else {
         skipped.push({ name: builderPage.name, reason: updateResult.error || 'update_failed' });
       }
     }
 
-    return sendOk(res, 200, { populated, skipped, sourceUrl: run.source_url }), true;
+    const result = { populated, skipped, sourceUrl: run.source_url };
+    return sendOk(res, 200, result, result), true;
   }
 
   const landingPageIdMatch = String(pathname || '').match(/^\/api\/develop\/landing-pages\/([^/]+)\/?$/);
