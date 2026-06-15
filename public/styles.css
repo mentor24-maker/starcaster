@@ -16996,6 +16996,20 @@ button.develop-inline-asset-status-btn:focus-visible {
 .develop-themes-preview-host {
   margin-top: 0.2rem;
 }
+.develop-themes-typography-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+  align-items: start;
+}
+.develop-themes-section-label {
+  margin: 0 0 0.1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--subtext);
+}
 .develop-themes-preview-frame {
   padding: 1.2rem;
   border-radius: 18px;

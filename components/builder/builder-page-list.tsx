@@ -2,7 +2,6 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, Buil
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
-import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
 import { formatTemplateTimestamp } from "./builder-utils";
 
 type SortField = "name" | "slug" | "template" | "updatedAt";
@@ -45,7 +44,6 @@ export function BuilderPageList({
   selectedPageId,
   draftName,
   pageBackground,
-  theme,
   pageSlug,
   pageTemplateId,
   isPublishedPage,
@@ -57,7 +55,6 @@ export function BuilderPageList({
   onDeletePages,
   onSetDraftName,
   onUpdatePageBackground,
-  onUpdateTheme,
   onSetPageSlug,
   onApplyTemplate,
   onSetIsPublished,
@@ -499,10 +496,6 @@ export function BuilderPageList({
                 showColorFieldLabel={false}
                 onChange={onUpdatePageBackground}
               />
-              <div className="builder-theme-panel">
-                <h3 className="builder-theme-panel-title">Theme · Typography</h3>
-                <BuilderThemeTypographySettings theme={theme} onChange={onUpdateTheme} />
-              </div>
             </div>
             <div className="builder-meta-grid-pages-actions">
               <button
