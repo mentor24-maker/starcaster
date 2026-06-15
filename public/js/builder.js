@@ -39,6 +39,8 @@ App.builder = (function () {
     if (emailPanel) emailPanel.classList.add('hidden');
     const landingForm = document.getElementById('developLandingPagesForm');
     if (landingForm) landingForm.classList.add('hidden');
+    const pageHeader = document.getElementById('developLandingPagesHeader');
+    if (pageHeader) pageHeader.classList.add('hidden');
   }
 
   function showVanillaBuilderPanels(editorMode, templateKind) {
@@ -54,6 +56,8 @@ App.builder = (function () {
     }
     const landingForm = document.getElementById('developLandingPagesForm');
     if (landingForm && editorMode !== 'page') landingForm.classList.remove('hidden');
+    const pageHeader = document.getElementById('developLandingPagesHeader');
+    if (pageHeader && editorMode !== 'page') pageHeader.classList.remove('hidden');
   }
 
   function unmount() {

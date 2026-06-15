@@ -4650,6 +4650,114 @@ body.asset-associations-modal-open {
   width: auto;
   justify-content: center;
 }
+.builder-react-root .builder-bulk-create-shell {
+  padding: 16px 20px 20px;
+}
+.builder-react-root .builder-bulk-create-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.builder-react-root .builder-bulk-create-back {
+  flex-shrink: 0;
+}
+.builder-react-root .builder-bulk-create-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.builder-react-root .builder-bulk-create-notice {
+  margin-bottom: 16px;
+}
+.builder-react-root .builder-bulk-create-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.builder-react-root .builder-bulk-create-preview {
+  border-top: 1px solid rgba(9, 16, 24, 0.08);
+  padding-top: 16px;
+}
+.builder-react-root .builder-bulk-create-preview-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(9, 16, 24, 0.6);
+  margin-bottom: 10px;
+}
+.builder-react-root .builder-bulk-create-item-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.builder-react-root .builder-bulk-create-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.builder-react-root .builder-bulk-create-item-name {
+  flex: 0 0 auto;
+  min-width: 120px;
+}
+.builder-react-root .builder-bulk-create-item-slug {
+  color: rgba(9, 16, 24, 0.5);
+  font-size: 12px;
+}
+.builder-react-root .builder-bulk-create-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.builder-react-root .builder-bulk-create-results-shell {
+  padding: 16px 20px 20px;
+  border-top: 1px solid rgba(9, 16, 24, 0.08);
+}
+.builder-react-root .builder-bulk-create-results-header {
+  margin-bottom: 14px;
+}
+.builder-react-root .builder-bulk-create-results-summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(9, 16, 24, 0.6);
+}
+.builder-react-root .builder-bulk-create-results-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-title {
+  width: 35%;
+}
+.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-slug {
+  width: 30%;
+}
+.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-status {
+  width: auto;
+}
+.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-actions {
+  width: 80px;
+}
+.builder-react-root .builder-bulk-create-results-table th.crud-actions-cell,
+.builder-react-root .builder-bulk-create-results-table td.crud-actions-cell {
+  width: 80px;
+  min-width: 80px;
+}
+.builder-react-root .builder-bulk-create-row-error td {
+  opacity: 0.6;
+}
+.builder-react-root .builder-bulk-create-status-ok {
+  color: #1a7d4a;
+  font-size: 13px;
+  font-weight: 500;
+}
+.builder-react-root .builder-bulk-create-status-error {
+  color: #c0392b;
+  font-size: 12px;
+}
 .builder-react-root .builder-modules-crud-shell {
   max-width: 100%;
 }
@@ -5720,17 +5828,22 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-module-card .builder-module-editor .field > span {
   color: var(--builder-label-on-module);
 }
-.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-shell {
+.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-shell,
+.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-shell {
   background: #ffffff;
   border-color: rgba(15, 79, 143, 0.14);
 }
-.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-toolbar {
+.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-toolbar,
+.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-toolbar {
   background: #eceff3;
   border-bottom-color: rgba(9, 16, 24, 0.1);
 }
 .builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-content,
 .builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-content .ProseMirror,
-.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-code-view {
+.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-code-view,
+.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-content,
+.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-content .ProseMirror,
+.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-code-view {
   background: #ffffff;
 }
 .builder-react-root .builder-table-cell-module-editor .builder-rich-text-shell,
@@ -5890,6 +6003,10 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-icon-button-danger {
   color: #991f1f;
+}
+.builder-react-root .builder-icon-button-active {
+  color: #0a6fa8;
+  background: rgba(10, 111, 168, 0.12);
 }
 .builder-react-root .builder-section-controls,
 .builder-react-root .builder-section-settings {
@@ -7083,6 +7200,10 @@ body.asset-associations-modal-open {
   gap: 16px;
   border-top: 1px solid rgba(9, 16, 24, 0.08);
   padding-top: 16px;
+}
+.builder-react-root .builder-centered-modal .builder-module-editor {
+  border-top: none;
+  padding-top: 0;
 }
 .builder-react-root .builder-module-preview-copy {
   display: grid;
