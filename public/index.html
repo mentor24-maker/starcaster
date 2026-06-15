@@ -4855,42 +4855,46 @@
 
         <div id="developPopulateDiagnostics" style="display:none;">
 
-          <div class="page-heading-row" style="margin-bottom:0.75rem;">
-            <h3 style="margin:0;">Matches <span id="developPopulateMatchCount" class="badge"></span></h3>
+          <div class="page-heading-row" style="margin-bottom:0.5rem;">
+            <h3 style="margin:0;">Exact Matches <span id="developPopulateExactCount" class="badge"></span></h3>
           </div>
-          <p id="developPopulateMatchNote" style="color:#666; font-size:0.9em; margin-bottom:0.75rem;"></p>
-          <div class="table-wrap" id="developPopulateMatchesWrap">
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">Builder page name matches crawled URL slug or stripped title exactly. These will be populated when you click Run Populate.</p>
+          <div class="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>Builder Page Name</th>
-                  <th>Crawled Page Title</th>
-                  <th>URL</th>
-                  <th>Content</th>
-                </tr>
-              </thead>
-              <tbody id="developPopulateMatchesBody"></tbody>
+              <thead><tr><th>Builder Page</th><th>Crawled Title</th><th>URL Slug</th><th>Matched By</th><th>Content</th></tr></thead>
+              <tbody id="developPopulateExactBody"></tbody>
             </table>
           </div>
 
-          <div class="page-heading-row" style="margin:1.5rem 0 0.75rem;">
+          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
+            <h3 style="margin:0;">Partial Matches <span id="developPopulatePartialCount" class="badge"></span></h3>
+          </div>
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">Builder page name is a substring match with a crawled page. Pages with exactly one candidate will also be populated; pages with multiple candidates need manual review.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Builder Page</th><th>Candidates</th><th>Matched By</th><th>Content</th></tr></thead>
+              <tbody id="developPopulatePartialBody"></tbody>
+            </table>
+          </div>
+
+          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
             <h3 style="margin:0;">Unmatched Builder Pages <span id="developPopulateUnmatchedBuilderCount" class="badge"></span></h3>
           </div>
-          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These Builder pages have no crawled page whose title exactly matches their name (case-insensitive).</p>
-          <div class="table-wrap" id="developPopulateUnmatchedBuilderWrap">
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">No crawled page title or URL slug matched these Builder page names at all.</p>
+          <div class="table-wrap">
             <table>
               <thead><tr><th>Builder Page Name</th><th>Slug</th></tr></thead>
               <tbody id="developPopulateUnmatchedBuilderBody"></tbody>
             </table>
           </div>
 
-          <div class="page-heading-row" style="margin:1.5rem 0 0.75rem;">
+          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
             <h3 style="margin:0;">Unmatched Crawled Pages <span id="developPopulateUnmatchedAcquiredCount" class="badge"></span></h3>
           </div>
-          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These crawled pages have no Builder page whose name exactly matches their title (case-insensitive).</p>
-          <div class="table-wrap" id="developPopulateUnmatchedAcquiredWrap">
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These crawled pages were not used in any exact match.</p>
+          <div class="table-wrap">
             <table>
-              <thead><tr><th>Crawled Title</th><th>URL</th></tr></thead>
+              <thead><tr><th>Crawled Title</th><th>URL Slug</th><th>URL</th></tr></thead>
               <tbody id="developPopulateUnmatchedAcquiredBody"></tbody>
             </table>
           </div>
