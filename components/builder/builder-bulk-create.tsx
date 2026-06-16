@@ -1,5 +1,5 @@
 import type { BuilderPageRecord, BuilderSavedSectionRecord, BuilderTemplateRecord } from "@/lib/builder-template";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CONTENT_DISPLAY_MODELS } from "./builder-content-models";
 import type { BuilderMenuItem } from "./builder-menu";
 
@@ -33,6 +33,7 @@ type BuilderBulkCreateProps = {
   savedSections: BuilderSavedSectionRecord[];
   acquireRuns: AcquireRunSummary[];
   onBack: () => void;
+  onRefreshRuns?: () => void;
   onBulkCreatePages: (templateId: string, items: BulkCreateItem[]) => Promise<BulkCreateResult[]>;
   onBulkCreateWithModel: (
     templateId: string,
@@ -48,6 +49,7 @@ export function BuilderBulkCreate({
   savedSections,
   acquireRuns,
   onBack,
+  onRefreshRuns,
   onBulkCreatePages,
   onBulkCreateWithModel,
   onEditPage,
@@ -60,6 +62,16 @@ export function BuilderBulkCreate({
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generated, setGenerated] = useState(false);
+
+  // Refresh crawl runs when this panel mounts so the list is current.
+  useEffect(() => { onRefreshRuns?.(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Only show templates that have actual content sections (stubs with empty sections
+  // are only meaningful in Page Details, not Bulk Create).
+  const createableTemplates = useMemo(
+    () => templates.filter((t) => t.layoutSections.length > 0),
+    [templates],
+  );
 
   const menuOptions = useMemo((): MenuOption[] => {
     const options: MenuOption[] = [];
@@ -109,8 +121,7 @@ export function BuilderBulkCreate({
 
   const selectedMenu = menuOptions.find((opt) => opt.id === selectedMenuId);
   const menuItems = selectedMenu?.items ?? [];
-  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
-  const selectedTemplateSectionCount = selectedTemplate?.layoutSections.length ?? 0;
+  const selectedTemplate = createableTemplates.find((t) => t.id === selectedTemplateId) ?? null;
   const useContentModel = Boolean(selectedModelId);
 
   function handleMenuChange(menuId: string) {
@@ -177,17 +188,12 @@ export function BuilderBulkCreate({
             <span>Template</span>
             <select value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
               <option value="">Select a template</option>
-              {templates.map((template) => (
+              {createableTemplates.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.name} ({template.layoutSections.length} section{template.layoutSections.length !== 1 ? "s" : ""})
                 </option>
               ))}
             </select>
-            {selectedTemplateId && selectedTemplateSectionCount === 0 ? (
-              <span className="builder-bulk-create-template-warning">
-                This template has no sections — pages will be created empty.
-              </span>
-            ) : null}
           </label>
 
           <label className="field">
