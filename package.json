@@ -29,6 +29,7 @@
     "verify:import-from-fields": "node scripts/verify_import_from_fields_route.js",
     "sync:wyr-tweets-ocr:dry-run": "node scripts/sync_wyr_tweets_from_image_ocr.js",
     "sync:wyr-tweets-ocr:apply": "node scripts/sync_wyr_tweets_from_image_ocr.js --apply",
+    "screenshots:platform": "node scripts/capture_platform_screenshots.js",
     "check:vercel-cutover": "node scripts/vercel_cutover_check.js",
     "import:training-context:apply": "node scripts/acquire_knowledge.mjs",
     "sync:dev-logs": "node scripts/sync_dev_logs.mjs",
