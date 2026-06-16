@@ -2,6 +2,7 @@ import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type {
   BackgroundSettings,
   BuilderCellModuleRecord,
+  BuilderPageRecord,
   BuilderProductRecord,
   BuilderTemplateModule,
   BuilderTemplateSection
@@ -57,6 +58,7 @@ type BuilderSectionCardProps = {
   onCloneModule: (sectionId: string, moduleId: string) => void;
   onSaveModule: (moduleId: string) => void;
   cellModules: BuilderCellModuleRecord[];
+  pages?: BuilderPageRecord[];
   products: BuilderProductRecord[];
   onSaveCellModules: (column: string) => void;
   onInsertCellModule: (column: string, cellModuleId: string) => void;
@@ -110,6 +112,7 @@ export function BuilderSectionCard({
   onCloneModule,
   onSaveModule,
   cellModules,
+  pages = [],
   products,
   onSaveCellModules,
   onInsertCellModule,
@@ -437,6 +440,7 @@ export function BuilderSectionCard({
                                 <BuilderModuleCard
                                   isEmailTemplate={isEmailTemplate}
                                   module={module}
+                                  pages={pages}
                                   products={products}
                                   sectionId={section.id}
                                   editorDevice={editorDevice}

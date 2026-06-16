@@ -2023,6 +2023,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                             onCloneModule={(sectionId, moduleId) => cloneModule(sectionId, moduleId)}
                             onSaveModule={(moduleId) => void saveModule(section.id, moduleId)}
                             cellModules={cellModules}
+                            pages={pages}
                             products={products}
                             onSaveCellModules={(col) => void saveCellModules(section.id, col)}
                             onInsertCellModule={(col, cellModuleId) => insertCellModule(section.id, col, cellModuleId)}
@@ -2083,6 +2084,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                         onCloneModule={(sectionId, moduleId) => cloneModule(sectionId, moduleId)}
                         onSaveModule={(moduleId) => void saveModule(section.id, moduleId)}
                         cellModules={cellModules}
+                        pages={pages}
                         products={products}
                         onSaveCellModules={(col) => void saveCellModules(section.id, col)}
                         onInsertCellModule={(col, cellModuleId) => insertCellModule(section.id, col, cellModuleId)}
