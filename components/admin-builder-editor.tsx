@@ -1943,6 +1943,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           savedSections={savedSections}
           acquireRuns={acquireRuns}
           onBack={() => setShowBulkCreate(false)}
+          onRefreshRuns={() => void loadAcquireRuns()}
           onBulkCreatePages={(templateId, items) => bulkCreatePages(templateId, items)}
           onBulkCreateWithModel={(templateId, items, modelId, runId) => bulkCreateWithModel(templateId, items, modelId, runId)}
           onEditPage={(pageId) => { setShowBulkCreate(false); setSelectedPageId(pageId); }}
