@@ -154,6 +154,7 @@ export type BuilderTheme = {
 export type BuilderTemplateSection = {
   id: string;
   title: string;
+  locked: boolean;
   layout: BuilderTemplateLayout;
   alignment: "left" | "center" | "right";
   marginTop: string;
@@ -1352,6 +1353,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
         title: safeText(normalizedSection.title, 255),
         layout,
+        locked: normalizedSection.locked === true,
         alignment: normalizeAlignment(normalizedSection.alignment),
         marginTop: normalizeSpacingValue(
           normalizedSection.marginTop ?? normalizedSection.verticalMargin,
@@ -1401,6 +1403,7 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
   return {
     id: createLocalId("section"),
     title: "",
+    locked: false,
     layout,
     alignment: "left",
     marginTop: "0",
