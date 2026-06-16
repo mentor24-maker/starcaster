@@ -459,7 +459,6 @@ App.develop = (function () {
   let modularPageEditorOptions = null;
   let savedExtensions = [];
   let savedEmailTemplates = [];
-  let savedAgents = [];
   let emailTemplateBlocksDraft = [];
   let landingPageHeadlines = [];
   let landingPageSubheadings = [];
@@ -517,25 +516,7 @@ App.develop = (function () {
     { value: 'catalog', label: 'Catalog' },
     { value: 'custom', label: 'Custom' },
   ];
-  const extensionTableState = {
-    filters: {
-      name: '',
-      extensionType: '',
-      status: '',
-      tags: '',
-    },
-    sort: {
-      key: 'updatedAt',
-      dir: 'desc',
-    },
-  };
   const LANDING_THANK_YOU_STATE_KEY = 'develop_landing_thank_you_state_v1';
-  const SAVED_AGENTS_STORAGE_KEY = 'develop_saved_agents_v1';
-  let extensionManagerConfig = {
-    defaultFilters: {},
-    defaultSortKey: 'updatedAt',
-    defaultSortDir: 'desc',
-  };
 
   function safeText(value) {
     return String(value || '').trim();
@@ -596,235 +577,45 @@ App.develop = (function () {
     return document.getElementById(id);
   }
 
-  function setThemesBuilderVisible(visible) {
-    const panel = byId('developThemesBuilderPanel');
-    const toggle = byId('developThemesBuilderToggleBtn');
-    if (panel) panel.classList.toggle('hidden', !visible);
-    if (toggle) {
-      toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+  function mountThemesReact() {
+    const host = byId('builderReactRootThemes');
+    if (host && window.ThemesReact?.mount) {
+      window.ThemesReact.mount(host);
     }
   }
 
   function openThemesPage() {
-    setThemesBuilderVisible(false);
     App.setActivePage('developThemesPage');
-    refresh().catch((err) => notify(err.message || 'Unable to load themes', true));
+    mountThemesReact();
   }
 
   function openThemesBuilder() {
     App.setActivePage('developThemesPage');
-    setThemesBuilderVisible(true);
-    const panel = byId('developThemesBuilderPanel');
-    if (panel && typeof panel.scrollIntoView === 'function') {
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    mountThemesReact();
+  }
+
+  function mountFormsReact() {
+    const host = byId('builderReactRootForms');
+    if (host && window.FormsReact?.mount) {
+      window.FormsReact.mount(host);
     }
+  }
+
+  function openFormsPage() {
+    App.setActivePage('developFormsPage');
+    mountFormsReact();
   }
 
   function openAgentsPage() {
-    setAgentsBuilderVisible(false);
+    const host = byId('builderReactRootAgents');
+    window.AgentsReact?.mount(host, 'list');
     App.setActivePage('developAgentsPage');
-    refresh().catch((err) => notify(err.message || 'Unable to load agents page', true));
-  }
-
-  function setAgentsBuilderVisible(visible) {
-    const panel = byId('developAgentsBuilderPanel');
-    if (panel) panel.classList.toggle('hidden', !visible);
-  }
-
-  function nextLocalId(prefix) {
-    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  }
-
-  function loadSavedAgents() {
-    try {
-      const raw = String(window.localStorage.getItem(SAVED_AGENTS_STORAGE_KEY) || '').trim();
-      if (!raw) {
-        savedAgents = [];
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      savedAgents = Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-      savedAgents = [];
-    }
-  }
-
-  function persistSavedAgents() {
-    try {
-      window.localStorage.setItem(SAVED_AGENTS_STORAGE_KEY, JSON.stringify(savedAgents));
-    } catch (_) {}
-  }
-
-  function getAgentFormPayload() {
-    const form = els.developAgentsForm;
-    const formData = new FormData(form);
-    return {
-      id: safeText(formData.get('agent_preset_id')),
-      name: safeText(formData.get('agent_name')),
-      action: safeText(formData.get('action')) || 'create_job',
-      job_id: safeText(formData.get('job_id')),
-      workspace_id: safeText(formData.get('workspace_id')) || 'alphire-main',
-      type: safeText(formData.get('type')) || 'acquire.web',
-      requested_by_user_id: safeText(formData.get('requested_by_user_id')) || 'alphire-ui',
-      requested_by_email: safeText(formData.get('requested_by_email')) || 'ops@alphire.ai',
-      payload_json: String(formData.get('payload_json') || '').trim() || '{"source_urls":[],"max_pages":20}',
-      approval_decision: safeText(formData.get('approval_decision')) || 'APPROVE',
-      approval_token: safeText(formData.get('approval_token')),
-      approval_comment: safeText(formData.get('approval_comment')),
-      manual_confirmed: formData.get('manual_confirmed') === 'on',
-    };
-  }
-
-  function populateAgentForm(record) {
-    const form = els.developAgentsForm;
-    if (!form || !record) return;
-    const setValue = (name, value) => {
-      const field = form.elements.namedItem(name);
-      if (!field) return;
-      if (field.type === 'checkbox') {
-        field.checked = Boolean(value);
-      } else {
-        field.value = String(value || '');
-      }
-    };
-    setValue('agent_preset_id', record.id);
-    setValue('agent_name', record.name);
-    setValue('action', record.action);
-    setValue('job_id', record.job_id);
-    setValue('workspace_id', record.workspace_id);
-    setValue('type', record.type);
-    setValue('requested_by_user_id', record.requested_by_user_id);
-    setValue('requested_by_email', record.requested_by_email);
-    setValue('payload_json', record.payload_json);
-    setValue('approval_decision', record.approval_decision);
-    setValue('approval_token', record.approval_token);
-    setValue('approval_comment', record.approval_comment);
-    setValue('manual_confirmed', record.manual_confirmed);
-  }
-
-  function resetAgentsForm() {
-    if (els.developAgentsForm) els.developAgentsForm.reset();
-    const presetId = byId('developAgentPresetIdInput');
-    const nameInput = byId('developAgentNameInput');
-    if (presetId) presetId.value = '';
-    if (nameInput) nameInput.value = '';
-    const actionSelect = byId('agentsActionSelect');
-    if (actionSelect) actionSelect.value = 'agent_api_setup_orchestrator';
-    const workspaceField = els.developAgentsForm?.elements?.namedItem('workspace_id');
-    const typeField = els.developAgentsForm?.elements?.namedItem('type');
-    const requestedById = els.developAgentsForm?.elements?.namedItem('requested_by_user_id');
-    const requestedByEmail = els.developAgentsForm?.elements?.namedItem('requested_by_email');
-    const payload = els.developAgentsForm?.elements?.namedItem('payload_json');
-    if (workspaceField) workspaceField.value = 'alphire-main';
-    if (typeField) typeField.value = 'acquire.web';
-    if (requestedById) requestedById.value = 'alphire-ui';
-    if (requestedByEmail) requestedByEmail.value = 'ops@alphire.ai';
-    if (payload) payload.value = '{"source_urls":[],"max_pages":20}';
-  }
-
-  function renderSavedAgentsTable() {
-    const body = byId('developAgentsTableBody');
-    if (!body) return;
-    if (!savedAgents.length) {
-      body.textContent = '';
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 6;
-      td.className = 'meta';
-      td.textContent = 'No saved agents yet.';
-      tr.appendChild(td);
-      body.appendChild(tr);
-      return;
-    }
-    body.textContent = '';
-    savedAgents
-      .slice()
-      .sort((a, b) => String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || '')))
-      .forEach((item) => {
-        const row = document.createElement('tr');
-        
-        const tdName = document.createElement('td');
-        tdName.textContent = safeText(item.name) || 'Untitled Agent';
-        row.appendChild(tdName);
-        
-        const tdAction = document.createElement('td');
-        tdAction.textContent = safeText(item.action) || '-';
-        row.appendChild(tdAction);
-        
-        const tdWorkspace = document.createElement('td');
-        tdWorkspace.textContent = safeText(item.workspace_id) || '-';
-        row.appendChild(tdWorkspace);
-        
-        const tdType = document.createElement('td');
-        tdType.textContent = safeText(item.type) || '-';
-        row.appendChild(tdType);
-        
-        const tdUpdated = document.createElement('td');
-        tdUpdated.textContent = safeText(item.updatedAt) || '-';
-        row.appendChild(tdUpdated);
-        
-        const actions = document.createElement('td');
-        actions.className = 'develop-agents-actions-cell';
-        row.appendChild(actions);
-        
-        if (actions) {
-          actions.appendChild(App.makeIconButton('edit', 'Edit Agent', () => {
-            populateAgentForm(item);
-            setAgentsBuilderVisible(true);
-            const panel = byId('developAgentsBuilderPanel');
-            if (panel && typeof panel.scrollIntoView === 'function') panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }));
-          actions.appendChild(App.makeIconButton('copy', 'Clone Agent', () => {
-            const clone = { ...item, id: '', name: `${safeText(item.name) || 'Agent'} Copy` };
-            populateAgentForm(clone);
-            const presetId = byId('developAgentPresetIdInput');
-            if (presetId) presetId.value = '';
-            setAgentsBuilderVisible(true);
-          }));
-          actions.appendChild(App.makeIconButton('delete', 'Delete Agent', () => {
-            if (!window.confirm(`Delete agent "${safeText(item.name) || 'Untitled Agent'}"?`)) return;
-            savedAgents = savedAgents.filter((entry) => safeText(entry.id) !== safeText(item.id));
-            persistSavedAgents();
-            renderSavedAgentsTable();
-            notify('Agent deleted');
-          }));
-        }
-        body.appendChild(row);
-      });
-  }
-
-  function saveAgentPresetFromForm({ clone = false } = {}) {
-    const payload = getAgentFormPayload();
-    if (!payload.name) throw new Error('Agent name is required');
-    const now = new Date().toISOString();
-    const nextIdValue = clone || !payload.id ? nextLocalId('agent') : payload.id;
-    const record = {
-      ...payload,
-      id: nextIdValue,
-      updatedAt: now,
-      createdAt: clone || !payload.id
-        ? now
-        : (savedAgents.find((entry) => safeText(entry.id) === safeText(payload.id))?.createdAt || now),
-    };
-    const existingIndex = savedAgents.findIndex((entry) => safeText(entry.id) === safeText(payload.id));
-    if (!clone && existingIndex >= 0) savedAgents.splice(existingIndex, 1, record);
-    else savedAgents.unshift(record);
-    persistSavedAgents();
-    renderSavedAgentsTable();
-    populateAgentForm(record);
-    const presetId = byId('developAgentPresetIdInput');
-    if (presetId) presetId.value = record.id;
-    notify(clone ? 'Agent cloned' : (existingIndex >= 0 ? 'Agent updated' : 'Agent saved'));
   }
 
   function openAgentsCreate() {
+    const host = byId('builderReactRootAgents');
+    window.AgentsReact?.mount(host, 'builder');
     App.setActivePage('developAgentsPage');
-    resetAgentsForm();
-    setAgentsBuilderVisible(true);
-    const panel = byId('developAgentsBuilderPanel');
-    if (panel && typeof panel.scrollIntoView === 'function') {
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
   }
 
   function slugify(value) {
@@ -4363,6 +4154,10 @@ App.develop = (function () {
   }
 
   let savedModulesGrid = null;
+  let savedCellsGrid = null;
+  let savedSectionsLibraryGrid = null;
+  let standalonePageSavedCells = [];
+  let standalonePageSavedSections = [];
 
   function setupSavedModulesGrid() {
     const mountPoint = byId('developModulesGridMountPoint');
@@ -4477,6 +4272,152 @@ App.develop = (function () {
     }
   }
 
+  function setupSavedCellsGrid() {
+    const mountPoint = byId('developSavedCellsGridMountPoint');
+    if (!mountPoint) return;
+
+    const cells = standalonePageSavedCells;
+
+    if (!savedCellsGrid) {
+      savedCellsGrid = App.components.DataGrid({
+        columns: [
+          { key: 'name', label: 'Name', render: (val) => safeText(val) || 'Untitled cell' },
+          { key: 'moduleClass', label: 'Class', render: (val) => safeText(val) || '—' },
+          {
+            key: 'modules',
+            label: 'Contents',
+            render: (val) => {
+              const count = Array.isArray(val) ? val.length : 0;
+              return count === 1 ? '1 module' : `${count} modules`;
+            }
+          },
+          { key: 'id', label: 'ID', render: (val) => safeText(val) },
+          { key: 'updatedAt', label: 'Updated', render: (val) => val ? new Date(val).toLocaleString() : '—' },
+          {
+            key: 'actions',
+            label: 'Actions',
+            sortable: false,
+            render: (val, row) => {
+              const div = document.createElement('div');
+              const cloneBtn = App.makeIconButton('clone', 'Clone Cell', async () => {
+                try {
+                  const payload = {
+                    name: safeText(row.name) + ' (copy)',
+                    moduleClass: safeText(row.moduleClass),
+                    modules: Array.isArray(row.modules) ? JSON.parse(JSON.stringify(row.modules)) : [],
+                  };
+                  await api('/api/develop/modules', { method: 'POST', body: JSON.stringify(payload) });
+                  await loadStandalonePageCells();
+                  setupSavedCellsGrid();
+                  notify('Cell cloned');
+                } catch (err) { notify(err.message, true); }
+              });
+              const deleteBtn = App.makeIconButton('delete', 'Delete Cell', async () => {
+                if (!window.confirm(`Delete cell "${safeText(row.name) || row.id}"?`)) return;
+                try {
+                  await api(`/api/develop/modules/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+                  await loadStandalonePageCells();
+                  setupSavedCellsGrid();
+                  notify('Cell deleted');
+                } catch (err) { notify(err.message, true); }
+              }, { danger: true, marginLeft: '8px' });
+              div.appendChild(cloneBtn);
+              div.appendChild(deleteBtn);
+              return div;
+            }
+          }
+        ],
+        rows: cells,
+        emptyMessage: 'No saved cells yet. Create cells in the Builder by using "Save Cell" inside a section.',
+        filterable: true,
+        sortable: true,
+      });
+      mountPoint.appendChild(savedCellsGrid.el);
+    } else {
+      savedCellsGrid.update({ rows: cells });
+    }
+  }
+
+  function setupSavedSectionsLibraryGrid() {
+    const mountPoint = byId('developSavedSectionsGridMountPoint');
+    if (!mountPoint) return;
+
+    const sections = standalonePageSavedSections;
+
+    if (!savedSectionsLibraryGrid) {
+      savedSectionsLibraryGrid = App.components.DataGrid({
+        columns: [
+          { key: 'name', label: 'Name', render: (val) => safeText(val) || 'Untitled section' },
+          {
+            key: 'section',
+            label: 'Layout',
+            render: (val) => safeText(val && val.layout) || '—'
+          },
+          {
+            key: 'section',
+            label: 'Modules',
+            sortable: false,
+            render: (val) => {
+              const count = Array.isArray(val && val.modules) ? val.modules.length : 0;
+              return String(count);
+            }
+          },
+          { key: 'id', label: 'ID', render: (val) => safeText(val) },
+          { key: 'updatedAt', label: 'Updated', render: (val) => val ? new Date(val).toLocaleString() : '—' },
+          {
+            key: 'actions',
+            label: 'Actions',
+            sortable: false,
+            render: (val, row) => {
+              const div = document.createElement('div');
+              const editBtn = App.makeIconButton('edit', 'Rename Section', async () => {
+                const newName = window.prompt('New name for section:', safeText(row.name))?.trim();
+                if (!newName) return;
+                try {
+                  await api(`/api/develop/saved-sections/${encodeURIComponent(row.id)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ name: newName, section: row.section }),
+                  });
+                  await loadStandalonePageSections();
+                  setupSavedSectionsLibraryGrid();
+                  notify('Section renamed');
+                } catch (err) { notify(err.message, true); }
+              });
+              const cloneBtn = App.makeIconButton('clone', 'Clone Section', async () => {
+                try {
+                  const payload = { name: safeText(row.name) + ' (copy)', section: row.section };
+                  await api('/api/develop/saved-sections', { method: 'POST', body: JSON.stringify(payload) });
+                  await loadStandalonePageSections();
+                  setupSavedSectionsLibraryGrid();
+                  notify('Section cloned');
+                } catch (err) { notify(err.message, true); }
+              }, { marginLeft: '8px' });
+              const deleteBtn = App.makeIconButton('delete', 'Delete Section', async () => {
+                if (!window.confirm(`Delete section "${safeText(row.name) || row.id}"?`)) return;
+                try {
+                  await api(`/api/develop/saved-sections/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+                  await loadStandalonePageSections();
+                  setupSavedSectionsLibraryGrid();
+                  notify('Section deleted');
+                } catch (err) { notify(err.message, true); }
+              }, { danger: true, marginLeft: '8px' });
+              div.appendChild(editBtn);
+              div.appendChild(cloneBtn);
+              div.appendChild(deleteBtn);
+              return div;
+            }
+          }
+        ],
+        rows: sections,
+        emptyMessage: 'No saved sections yet. Save a section from the Builder workspace.',
+        filterable: true,
+        sortable: true,
+      });
+      mountPoint.appendChild(savedSectionsLibraryGrid.el);
+    } else {
+      savedSectionsLibraryGrid.update({ rows: sections });
+    }
+  }
 
   async function loadSavedForms() {
     const result = await api('/api/develop/forms');
@@ -4513,6 +4454,25 @@ App.develop = (function () {
     }
   }
 
+  async function loadStandalonePageCells() {
+    try {
+      const result = await api('/api/develop/modules');
+      const all = App.normalizeApiArray(result, 'modules');
+      standalonePageSavedCells = all.filter((m) => Array.isArray(m.modules) && m.modules.length > 0);
+    } catch (_) {
+      standalonePageSavedCells = [];
+    }
+  }
+
+  async function loadStandalonePageSections() {
+    try {
+      const result = await api('/api/develop/saved-sections');
+      standalonePageSavedSections = Array.isArray(result.savedSections) ? result.savedSections : [];
+    } catch (_) {
+      standalonePageSavedSections = [];
+    }
+  }
+
   async function loadSavedModuleClasses() {
     try {
       const result = await api('/api/develop/module-classes');
@@ -4522,63 +4482,9 @@ App.develop = (function () {
     }
   }
 
-  function renderDevelopModuleClasses() {
-    const tbody = byId('developClassesTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    if (!savedModuleClasses.length) {
-      tbody.innerHTML = '<tr><td colspan="3">No module classes created yet.</td></tr>';
-      return;
-    }
-
-    savedModuleClasses.forEach((cls) => {
-      const row = document.createElement('tr');
-      
-      const nameTd = document.createElement('td');
-      nameTd.textContent = cls.name;
-      
-      const createdTd = document.createElement('td');
-      createdTd.className = 'meta';
-      createdTd.textContent = cls.createdAt ? new Date(cls.createdAt).toLocaleDateString() : '';
-      
-      const actionsTd = document.createElement('td');
-      actionsTd.className = 'develop-agents-actions-cell';
-      
-      const editBtn = App.makeIconButton('edit', 'Edit Class', async () => {
-        const newName = window.prompt(`Rename module class "${safeText(cls.name)}":`, cls.name);
-        if (!newName || newName === cls.name) return;
-        try {
-          await api(`/api/develop/module-classes/${encodeURIComponent(cls.id)}`, { 
-            method: 'PATCH',
-            body: JSON.stringify({ name: newName })
-          });
-          await refresh();
-          notify('Module class renamed');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-
-      const deleteBtn = App.makeIconButton('delete', 'Delete Class', async () => {
-        if (!window.confirm(`Delete module class "${safeText(cls.name)}"?`)) return;
-        try {
-          await api(`/api/develop/module-classes/${encodeURIComponent(cls.id)}`, { method: 'DELETE' });
-          await refresh();
-          notify('Module class deleted');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      }, { danger: true, marginLeft: '8px' });
-      
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(deleteBtn);
-      
-      row.appendChild(nameTd);
-      row.appendChild(createdTd);
-      row.appendChild(actionsTd);
-      tbody.appendChild(row);
-    });
+  async function refreshModuleClasses() {
+    await loadSavedModuleClasses();
+    populateDevelopModulesClassSelect();
   }
 
   function populateDevelopModulesClassSelect() {
@@ -4648,49 +4554,6 @@ App.develop = (function () {
     savedExtensions = Array.isArray(result.extensions) ? result.extensions : [];
   }
 
-  async function loadExtensionManagerConfig() {
-    try {
-      const result = await api('/api/develop/extensions-manager');
-      const manager = result.manager || result.data || {};
-      extensionManagerConfig = {
-        defaultFilters: manager.defaultFilters && typeof manager.defaultFilters === 'object' ? manager.defaultFilters : {},
-        defaultSortKey: safeText(manager.defaultSortKey) || 'updatedAt',
-        defaultSortDir: safeText(manager.defaultSortDir) || 'desc',
-      };
-      extensionTableState.filters = {
-        name: safeText(extensionManagerConfig.defaultFilters.name),
-        extensionType: safeText(extensionManagerConfig.defaultFilters.extensionType),
-        status: safeText(extensionManagerConfig.defaultFilters.status),
-        tags: safeText(extensionManagerConfig.defaultFilters.tags),
-      };
-      extensionTableState.sort = {
-        key: safeText(extensionManagerConfig.defaultSortKey) || 'updatedAt',
-        dir: safeText(extensionManagerConfig.defaultSortDir) || 'desc',
-      };
-    } catch (_) {
-      extensionManagerConfig = {
-        defaultFilters: {},
-        defaultSortKey: 'updatedAt',
-        defaultSortDir: 'desc',
-      };
-    }
-  }
-
-  async function saveExtensionManagerConfig() {
-    try {
-      await api('/api/develop/extensions-manager', {
-        method: 'POST',
-        body: JSON.stringify({
-          defaultFilters: { ...extensionTableState.filters },
-          defaultSortKey: extensionTableState.sort.key,
-          defaultSortDir: extensionTableState.sort.dir,
-        }),
-      });
-    } catch (_) {
-      // Non-blocking UI preference persistence.
-    }
-  }
-
   function getExtensionTypeLabel(value) {
     return EXTENSION_TYPE_OPTIONS.find((item) => item.value === safeText(value))?.label || safeText(value) || '-';
   }
@@ -4704,64 +4567,6 @@ App.develop = (function () {
     const parentPath = buildExtensionPath(item.parentId, map, seen);
     const name = safeText(item.name) || cleanId;
     return parentPath ? `${parentPath} / ${name}` : name;
-  }
-
-  function populateExtensionParentSelect(currentId) {
-    const select = byId('developExtensionParentSelect');
-    if (!select) return;
-    const current = safeText(currentId);
-    const map = new Map(savedExtensions.map((item) => [safeText(item.id), item]));
-    const options = savedExtensions
-      .filter((item) => safeText(item.id) && safeText(item.id) !== current)
-      .map((item) => ({
-        value: item.id,
-        label: buildExtensionPath(item.id, map),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-    setSelectOptions(select, options, 'Parent Extension (Optional)');
-  }
-
-  function resetExtensionManagerForm() {
-    const form = byId('developExtensionManagerForm');
-    if (form) form.reset();
-    const idInput = byId('developExtensionIdInput');
-    const statusSelect = byId('developExtensionStatusSelect');
-    const submitBtn = byId('developExtensionSubmitBtn');
-    if (idInput) idInput.value = '';
-    if (statusSelect) statusSelect.value = 'active';
-    if (submitBtn) submitBtn.textContent = 'Save Extension';
-    populateExtensionParentSelect('');
-  }
-
-  function deriveExtensionSlug(name) {
-    return safeText(name)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 160);
-  }
-
-  function applyExtensionToForm(item) {
-    const idInput = byId('developExtensionIdInput');
-    const nameInput = byId('developExtensionNameInput');
-    const typeSelect = byId('developExtensionTypeSelect');
-    const parentSelect = byId('developExtensionParentSelect');
-    const statusSelect = byId('developExtensionStatusSelect');
-    const tagsInput = byId('developExtensionTagsInput');
-    const summaryInput = byId('developExtensionSummaryInput');
-    const definitionInput = byId('developExtensionDefinitionInput');
-    const submitBtn = byId('developExtensionSubmitBtn');
-    if (idInput) idInput.value = safeText(item?.id);
-    if (nameInput) nameInput.value = safeText(item?.name);
-    if (typeSelect) typeSelect.value = safeText(item?.extensionType);
-    populateExtensionParentSelect(safeText(item?.id));
-    if (parentSelect) parentSelect.value = safeText(item?.parentId);
-    if (statusSelect) statusSelect.value = safeText(item?.status) || 'active';
-    if (tagsInput) tagsInput.value = safeText(item?.tags);
-    if (summaryInput) summaryInput.value = safeText(item?.summary, 1000);
-    if (definitionInput) definitionInput.value = safeText(item?.definition, 10000);
-    if (submitBtn) submitBtn.textContent = 'Update Extension';
-    App.setActivePage('developExtensionsManagerPage');
   }
 
   function sortExtensionsForLanding(rows) {
@@ -4792,7 +4597,14 @@ App.develop = (function () {
       App.setActivePage(launchPageId);
       return;
     }
-    applyExtensionToForm(item);
+    openExtensionsManager();
+    window.ExtensionsReact?.openItem(item);
+  }
+
+  function openExtensionsManager() {
+    const host = byId('builderReactRootExtensions');
+    window.ExtensionsReact?.mount(host);
+    App.setActivePage('developExtensionsManagerPage');
   }
 
   function renderExtensionsLanding() {
@@ -4895,126 +4707,6 @@ App.develop = (function () {
     const roots = sortExtensionsForLanding(byParent.get('root') || []);
     roots.forEach((item) => {
       appendVisibleNodes(item, 0);
-    });
-  }
-
-  function getFilteredSortedExtensions() {
-    const map = new Map(savedExtensions.map((item) => [safeText(item.id), item]));
-    const filters = extensionTableState.filters;
-    const rows = savedExtensions
-      .filter((item) => {
-        const name = safeText(item.name).toLowerCase();
-        const tags = safeText(item.tags).toLowerCase();
-        const type = safeText(item.extensionType);
-        const status = safeText(item.status);
-        if (filters.name && !name.includes(filters.name.toLowerCase())) return false;
-        if (filters.extensionType && type !== filters.extensionType) return false;
-        if (filters.status && status !== filters.status) return false;
-        if (filters.tags && !tags.includes(filters.tags.toLowerCase())) return false;
-        return true;
-      })
-      .map((item) => ({
-        ...item,
-        taxonomyPath: buildExtensionPath(item.id, map),
-      }));
-
-    const { key, dir } = extensionTableState.sort;
-    rows.sort((a, b) => {
-      let left = '';
-      let right = '';
-      if (key === 'updatedAt') {
-        left = new Date(a.updatedAt || 0).getTime();
-        right = new Date(b.updatedAt || 0).getTime();
-      } else if (key === 'taxonomyPath') {
-        left = safeText(a.taxonomyPath).toLowerCase();
-        right = safeText(b.taxonomyPath).toLowerCase();
-      } else {
-        left = safeText(a[key]).toLowerCase();
-        right = safeText(b[key]).toLowerCase();
-      }
-      if (left < right) return dir === 'asc' ? -1 : 1;
-      if (left > right) return dir === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return rows;
-  }
-
-  function renderExtensionsTable() {
-    const tbody = byId('developExtensionsTableBody');
-    const typeFilter = byId('developExtensionsFilterType');
-    const nameFilter = byId('developExtensionsFilterName');
-    const statusFilter = byId('developExtensionsFilterStatus');
-    const tagsFilter = byId('developExtensionsFilterTags');
-    if (!tbody) return;
-    if (nameFilter) nameFilter.value = extensionTableState.filters.name;
-    if (typeFilter) {
-      setSelectOptions(typeFilter, EXTENSION_TYPE_OPTIONS, 'All Types', extensionTableState.filters.extensionType);
-    }
-    if (statusFilter) statusFilter.value = extensionTableState.filters.status;
-    if (tagsFilter) tagsFilter.value = extensionTableState.filters.tags;
-
-    tbody.textContent = '';
-    const rows = getFilteredSortedExtensions();
-    if (!rows.length) {
-      const row = document.createElement('tr');
-      const cell = document.createElement('td');
-      cell.colSpan = 6;
-      cell.textContent = 'No extensions yet.';
-      row.appendChild(cell);
-      tbody.appendChild(row);
-      return;
-    }
-
-    rows.forEach((item) => {
-      const row = document.createElement('tr');
-
-      const nameTd = document.createElement('td');
-      nameTd.textContent = safeText(item.name) || '-';
-
-      const typeTd = document.createElement('td');
-      typeTd.textContent = getExtensionTypeLabel(item.extensionType);
-
-      const pathTd = document.createElement('td');
-      pathTd.textContent = safeText(item.taxonomyPath) || '-';
-
-      const statusTd = document.createElement('td');
-      statusTd.textContent = safeText(item.status) || '-';
-
-      const updatedTd = document.createElement('td');
-      updatedTd.textContent = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-';
-
-      const actionsTd = document.createElement('td');
-      const viewBtn = App.makeIconButton('view', 'Open Extension', () => {
-        openExtensionItem(item).catch((err) => {
-          notify(err.message, true);
-        });
-      });
-      const editBtn = App.makeIconButton('edit', 'Edit Extension', () => {
-        applyExtensionToForm(item);
-        notify(`Loaded extension: ${safeText(item.name) || item.id}`);
-      }, { marginLeft: '8px' });
-      const deleteBtn = App.makeIconButton('delete', 'Delete Extension', async () => {
-        if (!window.confirm(`Delete extension "${safeText(item.name) || item.id}"?`)) return;
-        try {
-          await api(`/api/develop/extensions/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
-          await refresh();
-          notify('Extension deleted');
-          resetExtensionManagerForm();
-        } catch (err) {
-          notify(err.message, true);
-        }
-      }, { danger: true, marginLeft: '8px' });
-      actionsTd.appendChild(viewBtn);
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(deleteBtn);
-
-      row.appendChild(nameTd);
-      row.appendChild(typeTd);
-      row.appendChild(pathTd);
-      row.appendChild(statusTd);
-      row.appendChild(updatedTd);
-      row.appendChild(actionsTd);
-      tbody.appendChild(row);
     });
   }
 
@@ -9413,8 +9105,7 @@ App.develop = (function () {
       actions.className = 'page-heading-actions';
       actions.style.justifyContent = 'flex-start';
       const editBtn = App.makeIconButton('edit', 'Edit Form', () => {
-        App.setActivePage('developFormsPage');
-        setTimeout(() => applySavedFormToBuilder(form), 60);
+        openFormsPage();
       });
       const cloneBtn = App.makeIconButton('clone', 'Clone Form', async () => {
         try {
@@ -12752,8 +12443,7 @@ App.develop = (function () {
         selectedFormTemplateId = template.id;
         renderFormTemplateLibrary();
         renderFormTemplatePreview(template.id);
-        App.setActivePage('developFormsPage');
-        openCreateFormEditor(template.id);
+        openFormsPage();
       });
       copyWrap.appendChild(title);
       copyWrap.appendChild(summary);
@@ -12973,37 +12663,27 @@ App.develop = (function () {
   }
 
   async function refresh() {
-    loadSavedAgents();
     await Promise.all([
       loadSavedForms(),
       loadSavedModuleClasses(),
       loadSavedModules(),
-      loadSavedThemes(),
+      loadStandalonePageCells(),
+      loadStandalonePageSections(),
       loadSavedEmailTemplates(),
       loadSavedLandingPages(),
       loadSavedPageTemplates(),
       loadSavedExtensions(),
-      loadExtensionManagerConfig(),
     ]);
     try {
       await loadLandingPageBuilderOptions();
     } catch (_) {
       await ensureAssetsLoaded().catch(() => {});
     }
-    ensureFormBuilderState(formBuilderState?.formType || FORM_TEMPLATES[0].id);
-    syncFormBuilderInputs();
-    renderFormBuilderFieldConfig();
-    renderFormBuilderPreview();
-    renderSavedForms();
-    renderDevelopModuleClasses();
     populateDevelopModulesClassSelect();
     setupSavedModulesGrid();
-    renderThemesTable();
-    syncThemesBuilder();
-    renderThemesPreview();
+    setupSavedCellsGrid();
+    setupSavedSectionsLibraryGrid();
     renderExtensionsLanding();
-    populateExtensionParentSelect(byId('developExtensionIdInput')?.value);
-    renderExtensionsTable();
     renderLandingPagesTable();
     renderFormTemplateRecordsTable();
     renderEmailTemplateTables();
@@ -13033,7 +12713,6 @@ App.develop = (function () {
     resetEmailTemplateForm({ renderBuilder: false });
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
-    renderSavedAgentsTable();
     if (
       safeText(state.activePage) === 'developLandingPagesPage'
       && modularPageEditorMode !== 'page'
@@ -13044,60 +12723,6 @@ App.develop = (function () {
   }
 
   // ---------------------------------------------------------------------------
-  // Request builders
-  // ---------------------------------------------------------------------------
-
-  function buildAgentsRequest(formData) {
-    const action          = String(formData.get('action') || 'create_job');
-    const manualConfirmed = formData.get('manual_confirmed') === 'on';
-    const payload         = parseJsonInput(formData.get('payload_json'), {});
-    const requestedBy     = {
-      user_id: String(formData.get('requested_by_user_id') || '').trim() || 'alphire-ui',
-      email:   String(formData.get('requested_by_email')   || '').trim() || 'ops@alphire.ai'
-    };
-    const jobId = String(formData.get('job_id') || '').trim();
-
-    if (!manualConfirmed) throw new Error('Manual confirmation is required');
-
-    const request = { manual_confirmed: true };
-
-    if (action === 'create_job') {
-      request.type         = String(formData.get('type')         || '').trim() || 'acquire.web';
-      request.workspace_id = String(formData.get('workspace_id') || '').trim() || 'alphire-main';
-      request.requested_by = requestedBy;
-      request.payload      = payload;
-      request.policy       = { requires_manual_approval: true };
-      return { action, request };
-    }
-
-    if (!jobId) throw new Error('job_id is required for this action');
-    request.job_id = jobId;
-
-    if (action === 'preview_job') {
-      request.requested_by = requestedBy;
-      request.options      = { include_confidence: true, sample_size: 25 };
-      return { action, request };
-    }
-    if (action === 'approve_job') {
-      request.decision    = String(formData.get('approval_decision') || 'APPROVE');
-      request.approver    = requestedBy;
-      request.comment     = String(formData.get('approval_comment') || '').trim();
-      request.constraints = { expires_in_minutes: 30 };
-      return { action, request };
-    }
-    if (action === 'execute_job') {
-      const approvalToken = String(formData.get('approval_token') || '').trim();
-      if (!approvalToken) throw new Error('approval_token is required for execute_job');
-      request.requested_by  = requestedBy;
-      request.approval_token = approvalToken;
-      request.execution     = { priority: 'normal', dry_run: false };
-      return { action, request };
-    }
-    if (action === 'job_status') return { action, request };
-
-    throw new Error('Unsupported action');
-  }
-
   // ---------------------------------------------------------------------------
   // Init — wire up form handlers
   // ---------------------------------------------------------------------------
@@ -13129,8 +12754,7 @@ App.develop = (function () {
     const themesNewBtn = byId('developThemesNewBtn');
     const themesSaveBtn = byId('developThemesSaveBtn');
     const themesDeleteBtn = byId('developThemesDeleteBtn');
-    const agentsSavePresetBtn = byId('developAgentsSavePresetBtn');
-    const agentsClonePresetBtn = byId('developAgentsClonePresetBtn');
+
 
     if (themesBuilderToggleBtn) {
       themesBuilderToggleBtn.addEventListener('click', () => {
@@ -13274,26 +12898,6 @@ App.develop = (function () {
       });
     }
 
-    if (agentsSavePresetBtn) {
-      agentsSavePresetBtn.addEventListener('click', () => {
-        try {
-          saveAgentPresetFromForm({ clone: false });
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
-
-    if (agentsClonePresetBtn) {
-      agentsClonePresetBtn.addEventListener('click', () => {
-        try {
-          saveAgentPresetFromForm({ clone: true });
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
-
     if (landingPreviewAction && typeof App.makeIconButton === 'function') {
       landingPreviewAction.textContent = '';
       landingPreviewAction.appendChild(
@@ -13320,39 +12924,17 @@ App.develop = (function () {
     const developManageClassesModal = byId('developManageClassesModal');
     const developManageClassesBtn = byId('developManageClassesBtn');
     const developManageClassesCloseBtn = byId('developManageClassesCloseBtn');
-    const developClassCreateForm = byId('developClassCreateForm');
 
     if (developManageClassesBtn && developManageClassesModal) {
       developManageClassesBtn.addEventListener('click', () => {
         developManageClassesModal.showModal();
-        renderDevelopModuleClasses();
+        window.ModuleClassesReact?.mount(byId('builderReactRootModuleClasses'));
       });
     }
 
     if (developManageClassesCloseBtn && developManageClassesModal) {
       developManageClassesCloseBtn.addEventListener('click', () => {
         developManageClassesModal.close();
-      });
-    }
-
-    if (developClassCreateForm) {
-      developClassCreateForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const input = byId('developClassNameInput');
-        const name = input ? input.value.trim() : '';
-        if (!name) return;
-        try {
-          await api('/api/develop/module-classes', {
-            method: 'POST',
-            body: JSON.stringify({ name })
-          });
-          if (input) input.value = '';
-          await refresh();
-          renderDevelopModuleClasses(); // Refresh modal table immediately
-          notify('Module class created');
-        } catch (err) {
-          notify(err.message, true);
-        }
       });
     }
 
@@ -13381,6 +12963,8 @@ App.develop = (function () {
     bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: false });
     bindCollapsibleSection('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', { defaultExpanded: true });
     bindCollapsibleSection('developModulesLibraryToggle', 'developModulesLibraryBody', { defaultExpanded: true });
+    bindCollapsibleSection('developSavedCellsToggle', 'developSavedCellsBody', { defaultExpanded: true });
+    bindCollapsibleSection('developSavedSectionsLibraryToggle', 'developSavedSectionsLibraryBody', { defaultExpanded: true });
     bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
 
@@ -14293,118 +13877,6 @@ App.develop = (function () {
       });
     });
 
-    const extensionManagerForm = byId('developExtensionManagerForm');
-    const extensionResetBtn = byId('developExtensionResetBtn');
-    const extensionNameFilter = byId('developExtensionsFilterName');
-    const extensionTypeFilter = byId('developExtensionsFilterType');
-    const extensionStatusFilter = byId('developExtensionsFilterStatus');
-    const extensionTagsFilter = byId('developExtensionsFilterTags');
-
-    if (extensionResetBtn) {
-      extensionResetBtn.addEventListener('click', () => {
-        resetExtensionManagerForm();
-      });
-    }
-
-    if (extensionManagerForm) {
-      extensionManagerForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        try {
-          const formData = new FormData(extensionManagerForm);
-          const extensionId = safeText(formData.get('extension_id'));
-          const existing = savedExtensions.find((item) => safeText(item.id) === extensionId) || null;
-          const payload = {
-            slug: existing?.slug || deriveExtensionSlug(formData.get('name')),
-            name: safeText(formData.get('name')),
-            extensionType: safeText(formData.get('extension_type')),
-            parentId: safeText(formData.get('parent_id')),
-            status: safeText(formData.get('status')) || 'active',
-            tags: safeText(formData.get('tags')),
-            summary: safeText(formData.get('summary'), 1000),
-            definition: safeText(formData.get('definition'), 10000),
-            launchPageId: existing?.launchPageId || '',
-            isFeatured: existing?.isFeatured === true,
-            usageCount: Number(existing?.usageCount || 0) || 0,
-            lastUsedAt: existing?.lastUsedAt || '',
-          };
-          if (!payload.name) throw new Error('Extension name is required');
-          if (!payload.extensionType) throw new Error('Extension type is required');
-          if (payload.parentId && payload.parentId === extensionId) throw new Error('An extension cannot be its own parent');
-
-          if (extensionId) {
-            await api(`/api/develop/extensions/${encodeURIComponent(extensionId)}`, {
-              method: 'PATCH',
-              body: JSON.stringify(payload),
-            });
-          } else {
-            await api('/api/develop/extensions', {
-              method: 'POST',
-              body: JSON.stringify(payload),
-            });
-          }
-
-          await refresh();
-          resetExtensionManagerForm();
-          notify(extensionId ? 'Extension updated' : 'Extension saved');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
-
-    if (extensionNameFilter) {
-      extensionNameFilter.addEventListener('input', () => {
-        extensionTableState.filters.name = safeText(extensionNameFilter.value);
-        renderExtensionsTable();
-        saveExtensionManagerConfig();
-      });
-    }
-
-    if (extensionTypeFilter) {
-      extensionTypeFilter.addEventListener('change', () => {
-        extensionTableState.filters.extensionType = safeText(extensionTypeFilter.value);
-        renderExtensionsTable();
-        saveExtensionManagerConfig();
-      });
-    }
-
-    if (extensionStatusFilter) {
-      extensionStatusFilter.addEventListener('change', () => {
-        extensionTableState.filters.status = safeText(extensionStatusFilter.value);
-        renderExtensionsTable();
-        saveExtensionManagerConfig();
-      });
-    }
-
-    if (extensionTagsFilter) {
-      extensionTagsFilter.addEventListener('input', () => {
-        extensionTableState.filters.tags = safeText(extensionTagsFilter.value);
-        renderExtensionsTable();
-        saveExtensionManagerConfig();
-      });
-    }
-
-    [
-      ['developExtensionsSortNameBtn', 'name', 'asc'],
-      ['developExtensionsSortTypeBtn', 'extensionType', 'asc'],
-      ['developExtensionsSortTaxonomyBtn', 'taxonomyPath', 'asc'],
-      ['developExtensionsSortStatusBtn', 'status', 'asc'],
-      ['developExtensionsSortUpdatedBtn', 'updatedAt', 'desc'],
-    ].forEach(([id, key, defaultDir]) => {
-      const button = byId(id);
-      if (!button) return;
-      button.addEventListener('click', () => {
-        if (extensionTableState.sort.key === key) {
-          extensionTableState.sort.dir = extensionTableState.sort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          extensionTableState.sort.key = key;
-          extensionTableState.sort.dir = defaultDir;
-        }
-        renderExtensionsTable();
-        saveExtensionManagerConfig();
-      });
-    });
-
     if (els.developLandingPagesForm) {
       els.developLandingPagesForm.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -14438,23 +13910,6 @@ App.develop = (function () {
         } catch (err) {
           notify(err.message, true);
         }
-      });
-    }
-
-    if (els.developAgentsForm) {
-      els.developAgentsForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        try {
-          const formData = new FormData(els.developAgentsForm);
-          const built    = buildAgentsRequest(formData);
-          setPreview(els.agentsRequestPreview, built);
-          const result = await api(`/api/openclaw/${built.action}`, {
-            method: 'POST',
-            body: JSON.stringify(built.request)
-          });
-          setPreview(els.agentsResponsePreview, result);
-          notify(`OpenClaw ${built.action} request sent`);
-        } catch (err) { notify(err.message, true); }
       });
     }
 
@@ -14884,11 +14339,14 @@ App.develop = (function () {
     onPageActivated: refresh,
     openThemesPage,
     openThemesBuilder,
+    openFormsPage,
     openAgentsPage,
     openAgentsCreate,
     openModularPageTemplateEditor,
     buildModularPageTemplatePreviewMarkup,
     openBulkCreateFromManagePage,
     openPopulateFromWebPage,
+    refreshModuleClasses,
+    openExtensionsManager,
   };
 })();

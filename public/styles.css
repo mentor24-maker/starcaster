@@ -6055,6 +6055,76 @@ body.asset-associations-modal-open {
   color: #0a6fa8;
   background: rgba(10, 111, 168, 0.12);
 }
+/* Canonical section styles */
+.builder-react-root .builder-section-card-canonical {
+  border-left: 3px solid #7c5cbf;
+}
+.builder-react-root .builder-canonical-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: #7c5cbf;
+  color: #fff;
+  margin-left: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.builder-react-root .builder-canonical-badge-unlinked {
+  background: #a0651a;
+}
+.builder-react-root .builder-canonical-unlock-button,
+.builder-react-root .builder-canonical-relink-button {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 20px;
+  cursor: pointer;
+  border: 1.5px solid;
+}
+.builder-react-root .builder-canonical-unlock-button {
+  color: #7c5cbf;
+  border-color: #7c5cbf;
+  background: rgba(124, 92, 191, 0.08);
+}
+.builder-react-root .builder-canonical-unlock-button:hover {
+  background: rgba(124, 92, 191, 0.18);
+}
+.builder-react-root .builder-canonical-relink-button {
+  color: #a0651a;
+  border-color: #a0651a;
+  background: rgba(160, 101, 26, 0.08);
+}
+.builder-react-root .builder-canonical-relink-button:hover {
+  background: rgba(160, 101, 26, 0.18);
+}
+.builder-react-root .builder-canonical-lock-body {
+  padding: 14px 18px;
+  background: rgba(124, 92, 191, 0.06);
+  border-top: 1px solid rgba(124, 92, 191, 0.2);
+}
+.builder-react-root .builder-canonical-lock-notice {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #4a3870;
+  line-height: 1.5;
+}
+/* Canonical insert checkbox in workspace toolbar */
+.builder-react-root .builder-canonical-insert-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 0 4px;
+}
 .builder-react-root .builder-section-controls,
 .builder-react-root .builder-section-settings {
   display: grid;
@@ -6062,7 +6132,7 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-section-settings-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px 14px;
   align-items: center;
 }
@@ -11821,6 +11891,369 @@ body.asset-associations-modal-open {
   font-size: 0.74rem;
   line-height: 1.4;
   color: #8aa0b4;
+}
+
+/* builder-themes-page */
+.builder-react-root .builder-themes-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.builder-react-root .builder-themes-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--builder-border, #e2e8f0);
+  background: var(--builder-surface, #fff);
+}
+.builder-react-root .builder-themes-selector {
+  min-width: 10rem;
+}
+.builder-react-root .builder-themes-name-input {
+  flex: 1;
+  min-width: 10rem;
+}
+.builder-react-root .builder-themes-status {
+  padding: 0.4rem 1rem;
+  font-size: 0.82rem;
+  color: #16a34a;
+}
+.builder-react-root .builder-themes-status-error {
+  color: #dc2626;
+}
+.builder-react-root .builder-themes-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.5rem;
+  padding: 1.25rem 1rem;
+  align-items: start;
+}
+.builder-react-root .builder-themes-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.builder-react-root .builder-themes-col-heading {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--builder-text-muted, #64748b);
+  border-bottom: 1px solid var(--builder-border, #e2e8f0);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.builder-react-root .builder-themes-sub-heading {
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--builder-text-muted, #64748b);
+  margin: 0.75rem 0 0.25rem;
+}
+.builder-react-root .builder-themes-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+.builder-react-root .builder-themes-slider-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.builder-react-root .builder-themes-slider-value {
+  min-width: 2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--builder-text-muted, #64748b);
+}
+.builder-react-root .builder-themes-asset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+.builder-react-root .builder-themes-asset-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--builder-text-muted, #64748b);
+  margin: 0;
+}
+.builder-react-root .builder-themes-asset-group input[type="text"] {
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+/* builder-forms-page */
+.builder-react-root .builder-forms-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.builder-react-root .builder-forms-page-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--builder-border, #e2e8f0);
+  background: var(--builder-surface, #fff);
+}
+.builder-react-root .builder-forms-page-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--builder-text, #1e3a52);
+  margin-right: auto;
+}
+.builder-react-root .builder-forms-editor {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 1.5rem;
+  padding: 1.25rem 1rem;
+  align-items: start;
+}
+.builder-react-root .builder-forms-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.builder-react-root .builder-forms-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--builder-border, #e2e8f0);
+}
+.builder-react-root .builder-forms-section:last-child {
+  border-bottom: none;
+}
+.builder-react-root .builder-forms-section-heading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--builder-text-muted, #64748b);
+  margin: 0 0 0.35rem;
+}
+.builder-react-root .builder-forms-section-note {
+  font-size: 0.78rem;
+  color: var(--builder-text-muted, #64748b);
+  margin: 0 0 0.25rem;
+}
+.builder-react-root .builder-forms-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.builder-react-root .builder-forms-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+}
+.builder-react-root .builder-forms-field-label {
+  font-size: 0.82rem;
+  color: var(--builder-text, #1e3a52);
+}
+.builder-react-root .builder-forms-editor-preview {
+  position: sticky;
+  top: 1rem;
+}
+.builder-react-root .builder-forms-preview-card {
+  border: 2px solid;
+  border-radius: 10px;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #ffffff 0%, #f5fbff 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.builder-react-root .builder-forms-preview-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}
+.builder-react-root .builder-forms-preview-input {
+  border: 1px solid #c8d8e4;
+  border-radius: 5px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
+  background: #fff;
+  color: #6b7a8d;
+  pointer-events: none;
+}
+.builder-react-root .builder-forms-preview-btn {
+  border: none;
+  border-radius: 5px;
+  padding: 0.55rem 1rem;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: default;
+  margin-top: 0.25rem;
+}
+.builder-react-root .builder-forms-list {
+  padding: 1rem;
+}
+.builder-react-root .builder-forms-empty {
+  color: var(--builder-text-muted, #64748b);
+  font-size: 0.85rem;
+}
+.builder-react-root .builder-forms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.builder-react-root .builder-forms-table th {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 2px solid var(--builder-border, #e2e8f0);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--builder-text-muted, #64748b);
+}
+.builder-react-root .builder-forms-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--builder-border, #e2e8f0);
+  vertical-align: middle;
+}
+.builder-react-root .builder-forms-actions {
+  display: flex;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+/* Module Classes panel (inside manage-classes modal) */
+.builder-mc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.builder-mc-create-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.builder-mc-input {
+  flex: 1;
+}
+
+.builder-mc-inline-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.builder-mc-status {
+  margin: 0;
+}
+
+.builder-mc-table {
+  width: 100%;
+}
+
+.builder-mc-actions {
+  display: flex;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+/* Extensions manager page */
+.builder-ext-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.builder-ext-form-heading {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.builder-ext-form-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.builder-ext-status {
+  margin: 0.5rem 0 0;
+}
+
+.builder-ext-status.is-error {
+  color: var(--color-danger, #c00);
+}
+
+.builder-ext-table-wrap {
+  overflow-x: auto;
+}
+
+.builder-ext-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.builder-ext-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.builder-ext-sort-th {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.builder-ext-sort-th:hover {
+  text-decoration: underline;
+}
+
+.builder-ext-actions {
+  display: flex;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+/* Agents presets page */
+.builder-agents-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.builder-agents-list-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.builder-agents-table {
+  width: 100%;
+}
+
+.builder-agents-actions {
+  display: flex;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.builder-agents-builder-panel {
+  padding: 1rem;
+}
+
+.builder-agents-status {
+  margin: 0;
+}
+
+.builder-agents-status.is-error {
+  color: var(--color-danger, #c00);
 }
 
 /* src/css/_builder-theme.css */
