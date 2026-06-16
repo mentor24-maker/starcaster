@@ -31,6 +31,10 @@ type BuilderSectionCardProps = {
   isEmailTemplate?: boolean;
   isCollapsed: boolean;
   expandedModuleIds: string[];
+  /** Name of the saved section this instance is linked to, if any. */
+  canonicalSourceName?: string;
+  /** Called when the user toggles canonical on/off for this section. */
+  onToggleCanonical?: (checked: boolean) => void;
   onToggleCollapsed: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -91,6 +95,8 @@ export function BuilderSectionCard({
   isEmailTemplate = false,
   isCollapsed,
   expandedModuleIds,
+  canonicalSourceName,
+  onToggleCanonical,
   onToggleCollapsed,
   onMoveUp,
   onMoveDown,
@@ -128,6 +134,10 @@ export function BuilderSectionCard({
   onUploadSectionBackgroundMedia,
   onOpenModulePalette
 }: BuilderSectionCardProps) {
+  const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
+  const isCanonical = sectionAny.canonical === true;
+  const hasCanonicalSource = Boolean(sectionAny.savedSectionId);
+
   const columns = getLayoutColumns(section.layout);
   const savedCells = cellModules.filter((cellModule) => cellModule.modules.length !== 1);
   const savedModules = cellModules.filter((cellModule) => cellModule.modules.length === 1);
@@ -260,10 +270,15 @@ export function BuilderSectionCard({
   }
 
   return (
-    <article className="builder-section-card" style={getSectionStyle()}>
+    <article className={`builder-section-card${isCanonical ? " builder-section-card-canonical" : ""}`} style={getSectionStyle()}>
       <div aria-expanded={!isCollapsed} className="builder-section-header">
         <div className="builder-section-title">
-          {isEditingTitle ? (
+          {isCanonical ? (
+            <span className="builder-section-title-label">
+              <strong>{displayTitle}</strong>
+              <span className="builder-canonical-badge" title={canonicalSourceName ? `Canonical — linked to "${canonicalSourceName}"` : "Canonical"}>Canonical</span>
+            </span>
+          ) : isEditingTitle ? (
             <input
               ref={titleInputRef}
               className="builder-section-title-input"
@@ -285,7 +300,11 @@ export function BuilderSectionCard({
               type="button"
             >
               <strong>{displayTitle}</strong>
-              <span className="builder-section-title-edit-hint">✎</span>
+              {hasCanonicalSource ? (
+                <span className="builder-canonical-badge builder-canonical-badge-unlinked" title="Unlinked from canonical — click Relink to reconnect">Unlinked</span>
+              ) : (
+                <span className="builder-section-title-edit-hint">✎</span>
+              )}
             </button>
           )}
         </div>
@@ -293,13 +312,51 @@ export function BuilderSectionCard({
           <button aria-label={isCollapsed ? "Expand section" : "Collapse section"} className="builder-icon-button" onClick={onToggleCollapsed} title={isCollapsed ? "Expand section" : "Collapse section"} type="button"><BuilderCollapseIcon expanded={!isCollapsed} /></button>
           <button aria-label="Move section up" className="builder-icon-button" onClick={onMoveUp} title="Move section up" type="button">↑</button>
           <button aria-label="Move section down" className="builder-icon-button" onClick={onMoveDown} title="Move section down" type="button">↓</button>
-          <button aria-label="Clone section" className="builder-icon-button" onClick={onCloneSection} title="Clone section" type="button">⧉</button>
-          <button aria-label="Save section" className="builder-icon-button" onClick={onSaveSection} title="Save section" type="button">💾</button>
+          {isCanonical ? (
+            <button
+              aria-label="Unlock canonical section to edit locally"
+              className="builder-icon-button builder-canonical-unlock-button"
+              onClick={() => onToggleCanonical?.(false)}
+              title="Unlock — edit locally (detaches from canonical)"
+              type="button"
+            >
+              Unlock
+            </button>
+          ) : hasCanonicalSource ? (
+            <>
+              <button
+                aria-label="Relink section to canonical"
+                className="builder-icon-button builder-canonical-relink-button"
+                onClick={() => onToggleCanonical?.(true)}
+                title="Relink to canonical saved section"
+                type="button"
+              >
+                Relink
+              </button>
+              <button aria-label="Clone section" className="builder-icon-button" onClick={onCloneSection} title="Clone section" type="button">⧉</button>
+              <button aria-label="Save section" className="builder-icon-button" onClick={onSaveSection} title="Save section" type="button">💾</button>
+            </>
+          ) : (
+            <>
+              <button aria-label="Clone section" className="builder-icon-button" onClick={onCloneSection} title="Clone section" type="button">⧉</button>
+              <button aria-label="Save section" className="builder-icon-button" onClick={onSaveSection} title="Save section" type="button">💾</button>
+            </>
+          )}
           <button aria-label="Delete section" className="builder-icon-button builder-icon-button-danger" onClick={onRemove} title="Delete section" type="button">✕</button>
         </div>
       </div>
 
-      {!isCollapsed ? (
+      {!isCollapsed && isCanonical ? (
+        <div className="builder-canonical-lock-body">
+          <p className="builder-canonical-lock-notice">
+            <strong>Canonical section</strong>
+            {canonicalSourceName ? ` — linked to "${canonicalSourceName}"` : ""}
+            . Click <strong>Unlock</strong> in the header to edit this section locally.
+          </p>
+        </div>
+      ) : null}
+
+      {!isCollapsed && !isCanonical ? (
         <>
           <BuilderSectionControls
             section={section}
