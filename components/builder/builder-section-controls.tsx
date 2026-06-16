@@ -186,6 +186,16 @@ export function BuilderSectionControls({
             }
           />
         </BuilderSettingRow>
+        <label className="field builder-checkbox-field builder-section-locked-field">
+          <span>Locked</span>
+          <input
+            type="checkbox"
+            checked={section.locked === true}
+            onChange={(e) =>
+              onUpdateSection((current) => ({ ...current, locked: e.target.checked }))
+            }
+          />
+        </label>
       </div>
       <BuilderBackgroundControls
         hideModeRow
