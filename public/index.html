@@ -9835,7 +9835,7 @@
       </section>
       <section id="settingsProjectDetailPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2><a href="#" class="page-heading-back-link" data-back-click="settings.openProjectsPage">Settings: Projects</a>: Edit</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="settings.openProjectsPage">Projects</a>: Edit</h2>
         </div>
         <div class="card">
           <div id="settingsProjectDetailsEmpty" class="meta hidden">Project not found.</div>
@@ -9880,6 +9880,42 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1rem;" id="settingsProjectMembersCard">
+          <h3 style="margin-top:0;">Team Members</h3>
+          <div class="table-wrap" style="margin-bottom:1rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th class="actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="settingsProjectMembersBody"></tbody>
+            </table>
+          </div>
+          <div id="settingsProjectMembersOwnerOnly" class="hidden">
+            <h4 style="margin:0 0 0.5rem;">Add Member</h4>
+            <div class="form-row" style="align-items:flex-end;gap:0.5rem;flex-wrap:wrap;">
+              <div style="flex:1;min-width:180px;">
+                <label for="settingsProjectMemberEmail">Email Address</label>
+                <input id="settingsProjectMemberEmail" type="email" placeholder="user@example.com" />
+              </div>
+              <div style="min-width:120px;">
+                <label for="settingsProjectMemberRole">Role</label>
+                <select id="settingsProjectMemberRole">
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div style="padding-top:1.4rem;">
+                <button id="settingsProjectAddMemberBtn" type="button" class="btn btn-primary">Add Member</button>
+              </div>
+            </div>
+            <p id="settingsProjectMemberStatus" class="meta hidden" style="margin-top:0.5rem;"></p>
           </div>
         </div>
       </section>

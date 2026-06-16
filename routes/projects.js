@@ -7,8 +7,11 @@ const {
   resolveCurrentProject,
   setActiveProjectForSession,
   updateProjectForUser,
+  listProjectMembers,
+  removeMemberFromProject,
+  addMemberToProject,
 } = require('../lib/projectsStore');
-const { setSessionActiveProject } = require('../lib/authStore');
+const { setSessionActiveProject, findUserByEmail } = require('../lib/authStore');
 const { handleProjectDelete } = require('../lib/projectDeleteHandler');
 
 function safeText(value) {
@@ -118,6 +121,64 @@ async function handle(req, res, pathname, method) {
       await setActiveProjectForSession(userId, created.id, sessionToken);
     }
     return sendOk(res, 201, created, { project: created }), true;
+  }
+
+  // GET /api/projects/:id/members — list members with user info
+  const membersMatch = normalizedPath.match(/^\/api\/projects\/([^/]+)\/members\/?$/);
+  if (membersMatch && requestMethod === 'GET') {
+    const projectId = decodeURIComponent(membersMatch[1] || '').trim();
+    if (!projectId) return sendErr(res, 400, 'Valid project id is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await listProjectMembers(projectId, userId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { members: result.data }, { total: result.data.length }), true;
+  }
+
+  // POST /api/projects/:id/members — directly add a user by email (no invitation required)
+  if (membersMatch && requestMethod === 'POST') {
+    const projectId = decodeURIComponent(membersMatch[1] || '').trim();
+    if (!projectId) return sendErr(res, 400, 'Valid project id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    // Verify requesting user owns this project
+    const accessResult = await listProjectsForUser(userId);
+    if (!accessResult.ok) return sendErr(res, accessResult.status || 500, accessResult.error), true;
+    const userProject = (Array.isArray(accessResult.data) ? accessResult.data : []).find(
+      (p) => safeText(p?.id) === projectId
+    );
+    if (!userProject) return sendErr(res, 403, 'Project not found or access denied', { code: 'FORBIDDEN' }), true;
+    if (safeText(userProject?.membership?.role) !== 'owner') {
+      return sendErr(res, 403, 'Only project owners can add members', { code: 'FORBIDDEN' }), true;
+    }
+
+    const body = await parseJsonBody(req);
+    const email = safeText(body?.email);
+    const role = safeText(body?.role) || 'member';
+    if (!email) return sendErr(res, 400, 'email is required', { code: 'VALIDATION_ERROR' }), true;
+    if (email.toLowerCase() === safeText(req?.authUser?.email).toLowerCase()) {
+      return sendErr(res, 400, 'You are already a member of this project', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const targetUser = await findUserByEmail(email);
+    if (!targetUser) {
+      return sendErr(res, 404, 'No account found for that email address. They must register first.', { code: 'USER_NOT_FOUND' }), true;
+    }
+
+    const result = await addMemberToProject(projectId, targetUser.id, role);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 201, {
+      ...result.data,
+      email: safeText(targetUser.email),
+      name: safeText(targetUser.name),
+    }, { member: result.data }), true;
+  }
+
+  // DELETE /api/projects/:id/members/:uid — remove a member
+  const memberUidMatch = normalizedPath.match(/^\/api\/projects\/([^/]+)\/members\/([^/]+)\/?$/);
+  if (memberUidMatch && requestMethod === 'DELETE') {
+    const projectId = decodeURIComponent(memberUidMatch[1] || '').trim();
+    const targetUserId = decodeURIComponent(memberUidMatch[2] || '').trim();
+    const result = await removeMemberFromProject(projectId, targetUserId, userId);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   return sendErr(res, 404, `Projects route not found: ${requestMethod} ${normalizedPath}`, { code: 'NOT_FOUND' }), true;
