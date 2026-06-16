@@ -323,6 +323,7 @@
                     <label class="checkbox-row"><input name="acquire_images" type="checkbox" checked class="standard-form-checkbox" /> Images</label>
                     <label class="checkbox-row"><input name="acquire_pages" type="checkbox" checked class="standard-form-checkbox" /> Website Pages</label>
                     <label class="checkbox-row"><input name="acquire_peer_sites" type="checkbox" class="standard-form-checkbox" /> Peer Sites</label>
+                    <label class="checkbox-row"><input name="capture_platform_screenshots" type="checkbox" class="standard-form-checkbox" /> Capture Screenshots</label>
                   </div>
                   <div class="acquire-web-advanced-fields">
                     <div class="form-row">
@@ -375,6 +376,7 @@
               <div id="directAcquireProgressText" class="asset-upload-progress-text">Acquiring website...</div>
               <progress id="directAcquireProgressBar" max="100" value="5"></progress>
             </div>
+            <p id="directAcquireScreenshotStatus" class="meta" aria-live="polite"></p>
           </div>
         </form>
 
@@ -2172,6 +2174,7 @@
         <h2>Acquire: Medium</h2>
         <p>Medium acquire module placeholder.</p>
       </section>
+
       <!-- INJECTED PAGE: assets.html -->
 
       <section id="assetsPage" class="app-page hidden">
@@ -4251,7 +4254,6 @@
           <button id="devTasksToggleViewBtn" class="secondary-btn" onclick="App.devAgent.toggleTasksView()">Kanban View</button>
           <button id="devTasksNewTaskBtn" class="primary-btn" onclick="App.devAgent.openTaskEditor()">+ New Task</button>
         </div>
-        
         <div id="devTaskBrowserPanel" class="" style="flex-direction: column; width: 100%; height: 100%; padding: 2rem; background: var(--bg-card); overflow-y: auto;">
               <h2 style="margin-top: 0;">Task Directory</h2>
               <div class="filter-row" style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
@@ -4417,6 +4419,7 @@
           </div>
         </div>
       </section>
+
       <!-- INJECTED PAGE: develop.html -->
 
       <section id="developPage" class="app-page hidden">
@@ -9835,7 +9838,7 @@
       </section>
       <section id="settingsProjectDetailPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2><a href="#" class="page-heading-back-link" data-back-click="settings.openProjectsPage">Projects</a>: Edit</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-click="settings.openProjectsPage">Settings: Projects</a>: Edit</h2>
         </div>
         <div class="card">
           <div id="settingsProjectDetailsEmpty" class="meta hidden">Project not found.</div>
@@ -9880,42 +9883,6 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-        <div class="card" style="margin-top:1rem;" id="settingsProjectMembersCard">
-          <h3 style="margin-top:0;">Team Members</h3>
-          <div class="table-wrap" style="margin-bottom:1rem;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th class="actions-col">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="settingsProjectMembersBody"></tbody>
-            </table>
-          </div>
-          <div id="settingsProjectMembersOwnerOnly" class="hidden">
-            <h4 style="margin:0 0 0.5rem;">Add Member</h4>
-            <div class="form-row" style="align-items:flex-end;gap:0.5rem;flex-wrap:wrap;">
-              <div style="flex:1;min-width:180px;">
-                <label for="settingsProjectMemberEmail">Email Address</label>
-                <input id="settingsProjectMemberEmail" type="email" placeholder="user@example.com" />
-              </div>
-              <div style="min-width:120px;">
-                <label for="settingsProjectMemberRole">Role</label>
-                <select id="settingsProjectMemberRole">
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div style="padding-top:1.4rem;">
-                <button id="settingsProjectAddMemberBtn" type="button" class="btn btn-primary">Add Member</button>
-              </div>
-            </div>
-            <p id="settingsProjectMemberStatus" class="meta hidden" style="margin-top:0.5rem;"></p>
           </div>
         </div>
       </section>

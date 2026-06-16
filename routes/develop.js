@@ -16,6 +16,7 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
 }
 const { exec } = require('child_process');
 const { listDirectAcquireRuns, getDirectAcquireRun, deleteDirectAcquireRun, purgeOldAcquireRuns } = require('../lib/directAcquire');
+const { getModel: getContentDisplayModel, listModels: listContentDisplayModels } = require('../lib/contentDisplayModels');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/developFormsStore');
 const {
@@ -947,6 +948,23 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, removed.data, { extension: removed.data }), true;
   }
 
+  // GET /api/develop/acquire-runs  — list crawl runs (summaries, no page content)
+  if (pathname === '/api/develop/acquire-runs' && requestMethod === 'GET') {
+    const runs = await listDirectAcquireRuns(50, scope);
+    const summaries = runs.map((r) => ({
+      runId: r.run_id,
+      sourceUrl: r.source_url,
+      pageCount: Array.isArray(r.pages) ? r.pages.length : 0,
+      createdAt: r.created_at || '',
+    }));
+    return sendOk(res, 200, summaries, { runs: summaries }), true;
+  }
+
+  // GET /api/develop/content-display-models  — list available content extraction models
+  if (pathname === '/api/develop/content-display-models' && requestMethod === 'GET') {
+    return sendOk(res, 200, listContentDisplayModels(), { models: listContentDisplayModels() }), true;
+  }
+
   // DELETE /api/develop/acquire-runs/purge  — delete all but the most recent run
   if (pathname === '/api/develop/acquire-runs/purge' && requestMethod === 'DELETE') {
     const deleted = await purgeOldAcquireRuns(scope).catch(() => 0);
@@ -1087,6 +1105,100 @@ async function handle(req, res, pathname, method) {
 
     const result = { populated, skipped, sourceUrl: run.source_url };
     return sendOk(res, 200, result, result), true;
+  }
+
+  // POST /api/develop/landing-pages/bulk-create-with-model
+  // Creates pages from a template + nav items, then optionally applies a content
+  // display model to fill each page's sections from a matched crawled URL.
+  if (pathname === '/api/develop/landing-pages/bulk-create-with-model' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const templateId    = String(body.templateId    || '').trim();
+    const contentModelId= String(body.contentModelId|| '').trim();
+    const runId         = String(body.runId         || '').trim();
+    const items         = Array.isArray(body.items) ? body.items : [];
+
+    if (!templateId) return sendErr(res, 400, 'templateId is required'), true;
+    if (!items.length) return sendErr(res, 400, 'items array is required'), true;
+
+    // Load template record to get its layoutSections, background, and theme
+    const tplResult = await listPageTemplates(undefined, scope)
+      .then((all) => (Array.isArray(all.data) ? all.data.find((t) => t.id === templateId) : null))
+      .catch(() => null);
+
+    const templateLayoutSections = Array.isArray(tplResult?.layoutSections) ? tplResult.layoutSections : [];
+    const templateBackground     = tplResult?.pageBackground || {};
+    const templateTheme          = tplResult?.theme || {};
+
+    // Load crawl run (optional)
+    let crawlPages = [];
+    if (contentModelId && runId) {
+      const run = await getDirectAcquireRun(runId, scope).catch(() => null);
+      crawlPages = Array.isArray(run?.pages) ? run.pages : [];
+    }
+
+    // Grab the content model (may be null — pages will be created without extraction)
+    const model = contentModelId ? getContentDisplayModel(contentModelId) : null;
+
+    // Helper: find best-matching crawled page for a builder page name
+    const findCrawledPage = (name) => {
+      if (!crawlPages.length) return null;
+      const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const target = norm(name);
+      let best = null;
+      let bestScore = 0;
+      for (const cp of crawlPages) {
+        const t = norm(cp.title || '');
+        const u = norm(cp.url  || '');
+        if (t === target || u.endsWith(target)) { best = cp; break; }
+        if (t.includes(target) || target.includes(t)) {
+          const score = Math.min(t.length, target.length) / Math.max(t.length, target.length) || 0;
+          if (score > bestScore) { bestScore = score; best = cp; }
+        }
+      }
+      return best;
+    };
+
+    const results = await Promise.all(
+      items.map(async (item) => {
+        const name = String(item.name || '').trim();
+        const slug = String(item.slug || '').trim();
+        if (!name) return { name, slug, error: 'name is required' };
+
+        // Resolve layout sections: start from template, then apply model extraction
+        let layoutSections = JSON.parse(JSON.stringify(templateLayoutSections));
+
+        if (model) {
+          const crawled = findCrawledPage(name);
+          const rawHtml = String(crawled?.body_raw || '');
+          if (rawHtml && model.detect(rawHtml)) {
+            const blocks = model.extract(rawHtml);
+            if (blocks.length) {
+              layoutSections = model.applyToSections(layoutSections, blocks);
+            }
+          }
+        }
+
+        // Derive a templateId from the slug/name (stable, no time suffix for create)
+        const derivedTemplateId = templateId;
+        const pageResult = await createLandingPage({
+          name,
+          slug,
+          templateId: derivedTemplateId,
+          templateKind: 'modular',
+          isPublished: false,
+          pageBackground: templateBackground,
+          theme: templateTheme,
+          layoutSections,
+        }, scope);
+
+        if (!pageResult.ok) {
+          return { name, slug, error: pageResult.error || 'Could not create page' };
+        }
+        return { name, slug, page: pageResult.data };
+      })
+    );
+
+    return sendOk(res, 200, results, { results }), true;
   }
 
   const landingPageIdMatch = String(pathname || '').match(/^\/api\/develop\/landing-pages\/([^/]+)\/?$/);

@@ -855,10 +855,12 @@ function TableCellInlinePalette({
 function TableCellModules({
   cellKey,
   modules,
+  pages = [],
   onUpdate
 }: {
   cellKey: string;
   modules: BuilderTemplateModule[];
+  pages?: BuilderPageRecord[];
   onUpdate: (cellKey: string, modules: BuilderTemplateModule[]) => void;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1079,9 +1081,11 @@ function TableCellModules({
 
 function TableModuleEditor({
   module,
+  pages = [],
   onUpdateModule
 }: {
   module: BuilderTemplateModule;
+  pages?: BuilderPageRecord[];
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 }) {
   const td = parseTableData(module.settings);
@@ -1225,7 +1229,7 @@ function TableModuleEditor({
                 </td>
                 {td.headers.map((_, ci) => (
                   <td key={ci} className="builder-table-editor-cell">
-                    <TableCellModules cellKey={`${ri}-${ci}`} modules={td.cells[`${ri}-${ci}`] || []} onUpdate={updateCellModules} />
+                    <TableCellModules cellKey={`${ri}-${ci}`} modules={td.cells[`${ri}-${ci}`] || []} pages={pages} onUpdate={updateCellModules} />
                   </td>
                 ))}
               </tr>
@@ -2486,7 +2490,7 @@ export function BuilderModuleCard({
             <BuilderHeadingModuleSettings module={module} onUpdateModule={onUpdateModule} />
           ) : null}
 
-          {module.type === "table" && <TableModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "table" && <TableModuleEditor module={module} pages={pages} onUpdateModule={onUpdateModule} />}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "navigation" && <NavModuleEditor module={module} onUpdateModule={onUpdateModule} onUpdateModuleBackground={onUpdateModuleBackground} />}
           {module.type === "headline-rotator" && <HeadlineRotatorModuleEditor module={module} onUpdateModule={onUpdateModule} />}
