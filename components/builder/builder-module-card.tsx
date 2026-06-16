@@ -7,6 +7,7 @@ import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import type {
   BackgroundSettings,
+  BuilderPageRecord,
   BuilderProductRecord,
   BuilderTemplateModule,
   BuilderTemplateModuleType
@@ -97,6 +98,7 @@ import {
 
 type BuilderModuleCardProps = {
   module: BuilderTemplateModule;
+  pages?: BuilderPageRecord[];
   products?: BuilderProductRecord[];
   sectionId: string;
   editorDevice: "browser" | "mobile";
@@ -1006,12 +1008,27 @@ function TableCellModules({
                   </BuilderSettingRow>
                   <label className="field">
                     <span>Link</span>
-                    <input
-                      type="text"
-                      value={mod.settings.linkUrl ?? ""}
-                      onChange={(e) => updateModuleSettings(mod.id, { linkUrl: normalizeBuilderAssetUrl(e.target.value) })}
-                      placeholder="/path-or-url"
-                    />
+                    <div className="builder-image-link-row">
+                      {pages.length > 0 && (
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) updateModuleSettings(mod.id, { linkUrl: e.target.value });
+                          }}
+                        >
+                          <option value="">— Page —</option>
+                          {pages.map((p) => (
+                            <option key={p.id} value={`/${p.slug}`}>{p.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      <input
+                        type="text"
+                        value={mod.settings.linkUrl ?? ""}
+                        onChange={(e) => updateModuleSettings(mod.id, { linkUrl: normalizeBuilderAssetUrl(e.target.value) })}
+                        placeholder="/path-or-url"
+                      />
+                    </div>
                   </label>
                   <label className="field builder-checkbox-field">
                     <span>New Tab</span>
@@ -2013,6 +2030,7 @@ export function BuilderModuleCard({
   onUploadButtonBackgroundMedia,
   onClone,
   onSaveModule,
+  pages = [],
   products = [],
   hideHeaderActions = false,
   isEmailTemplate = false,

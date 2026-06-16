@@ -35,15 +35,51 @@ const VIEWPORT_EDGE_PADDING_PX = 16;
 const MODULE_PALETTE_WIDTH_PX = 1200;
 const MODULE_PALETTE_HEIGHT_PX = 800;
 const MODULE_PALETTE_AZ_SORT_STORAGE_KEY = "normie-module-palette-sort-az";
+const MODULE_PALETTE_POP_SORT_STORAGE_KEY = "normie-module-palette-sort-pop";
+
+const GROUP_POPULARITY_ORDER: ModulePaletteGroup[] = [
+  "heading",
+  "text",
+  "image",
+  "button",
+  "code",
+  "navigation",
+  "video",
+  "quote",
+  "social",
+  "contact-form",
+  "social-share",
+  "slider",
+  "speech-bubble",
+  "headline-rotator",
+  "reminder",
+  "table",
+  "merch",
+  "poll-category-list",
+  "previous-results",
+  "current-poll",
+  "floating-image",
+  "special-effects"
+];
 
 type ModulePaletteGroupEntry = (typeof modulePaletteGroups)[number];
 
-function sortModulePaletteGroups(groups: ModulePaletteGroupEntry[], sortAz: boolean): ModulePaletteGroupEntry[] {
-  if (!sortAz) {
-    return groups;
+function sortModulePaletteGroups(
+  groups: ModulePaletteGroupEntry[],
+  sortAz: boolean,
+  sortPopularity: boolean
+): ModulePaletteGroupEntry[] {
+  if (sortAz) {
+    return [...groups].sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
   }
-
-  return [...groups].sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
+  if (sortPopularity) {
+    return [...groups].sort((left, right) => {
+      const li = GROUP_POPULARITY_ORDER.indexOf(left.value as ModulePaletteGroup);
+      const ri = GROUP_POPULARITY_ORDER.indexOf(right.value as ModulePaletteGroup);
+      return (li === -1 ? 999 : li) - (ri === -1 ? 999 : ri);
+    });
+  }
+  return groups;
 }
 
 function readAzSortPreference(): boolean {
@@ -53,6 +89,18 @@ function readAzSortPreference(): boolean {
 
   try {
     return window.sessionStorage.getItem(MODULE_PALETTE_AZ_SORT_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function readPopularitySortPreference(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.sessionStorage.getItem(MODULE_PALETTE_POP_SORT_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
@@ -94,9 +142,10 @@ export function BuilderModulePaletteModal({
 }: BuilderModulePaletteModalProps) {
   const [mounted, setMounted] = useState(false);
   const [sortCategoriesAz, setSortCategoriesAz] = useState(false);
+  const [sortCategoriesPopularity, setSortCategoriesPopularity] = useState(false);
   const displayGroups = useMemo(
-    () => sortModulePaletteGroups(modulePaletteGroups, sortCategoriesAz),
-    [sortCategoriesAz]
+    () => sortModulePaletteGroups(modulePaletteGroups, sortCategoriesAz, sortCategoriesPopularity),
+    [sortCategoriesAz, sortCategoriesPopularity]
   );
   const starterModules = activeGroup ? getStarterModulesForPaletteGroup(activeGroup) : [];
   const savedModulesForGroup = activeGroup ? getSavedModulesForPaletteGroup(cellModules, activeGroup) : [];
@@ -110,18 +159,33 @@ export function BuilderModulePaletteModal({
 
   useEffect(() => {
     setSortCategoriesAz(readAzSortPreference());
+    setSortCategoriesPopularity(readPopularitySortPreference());
   }, []);
 
   function toggleSortCategoriesAz() {
     setSortCategoriesAz((current) => {
       const next = !current;
-
+      if (next) setSortCategoriesPopularity(false);
       try {
         window.sessionStorage.setItem(MODULE_PALETTE_AZ_SORT_STORAGE_KEY, next ? "1" : "0");
+        if (next) window.sessionStorage.setItem(MODULE_PALETTE_POP_SORT_STORAGE_KEY, "0");
       } catch {
         // Ignore private browsing storage errors.
       }
+      return next;
+    });
+  }
 
+  function toggleSortCategoriesPopularity() {
+    setSortCategoriesPopularity((current) => {
+      const next = !current;
+      if (next) setSortCategoriesAz(false);
+      try {
+        window.sessionStorage.setItem(MODULE_PALETTE_POP_SORT_STORAGE_KEY, next ? "1" : "0");
+        if (next) window.sessionStorage.setItem(MODULE_PALETTE_AZ_SORT_STORAGE_KEY, "0");
+      } catch {
+        // Ignore private browsing storage errors.
+      }
       return next;
     });
   }
@@ -166,11 +230,24 @@ export function BuilderModulePaletteModal({
           </div>
           <div className="builder-gallery-header-actions">
             <button
+              aria-label={sortCategoriesPopularity ? "Use default category order" : "Sort by popularity"}
+              aria-pressed={sortCategoriesPopularity}
+              className={`builder-icon-button builder-module-palette-sort-icon${sortCategoriesPopularity ? " builder-icon-button-active" : ""}`}
+              onClick={toggleSortCategoriesPopularity}
+              title={sortCategoriesPopularity ? "Default order" : "Sort by popularity"}
+              type="button"
+            >
+              <span className="builder-palette-sort-stars" aria-hidden="true">
+                <span className="builder-palette-sort-star-big">★</span>
+                <span className="builder-palette-sort-star-small">★</span>
+              </span>
+            </button>
+            <button
               aria-label={sortCategoriesAz ? "Use default category order" : "Sort categories A to Z"}
               aria-pressed={sortCategoriesAz}
-              className={`secondary-button builder-module-palette-az-sort${sortCategoriesAz ? " is-active" : ""}`}
+              className={`builder-icon-button builder-module-palette-sort-icon${sortCategoriesAz ? " builder-icon-button-active" : ""}`}
               onClick={toggleSortCategoriesAz}
-              title={sortCategoriesAz ? "Default Order" : "Sort A–Z"}
+              title={sortCategoriesAz ? "Default order" : "Sort A–Z"}
               type="button"
             >
               A–Z
