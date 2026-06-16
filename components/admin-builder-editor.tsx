@@ -1220,6 +1220,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     setPageTemplateId(templateId);
     const template = pageLayoutTemplates.find((t) => t.id === templateId) ?? null;
     if (!template) { setDraft(createDraftFromPage(null)); return; }
+    // Stub templates (empty layoutSections) only tag the page; they don't clear the layout.
+    if (!template.layoutSections.length) return;
     setDraft((c) => ({ id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
   }
 

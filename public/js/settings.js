@@ -102,6 +102,12 @@ App.settings = (function () {
   function openProjectsPage() {
     projectCtx()?.clearViewContext?.();
     setProjectsCreateVisible(false);
+    // Render from the already-auth-filtered state.projects before the page is
+    // visible so stale DOM from a previous user's session never flashes.
+    renderProjectSelector();
+    renderProjectLists();
+    renderProjectsTable();
+    renderProjectDetails();
     App.setActivePage('settingsProjectsPage');
     refreshProjectContext().catch((err) => notify(err.message || 'Could not load projects', true));
   }
@@ -544,6 +550,94 @@ App.settings = (function () {
     return raw;
   }
 
+  async function renderProjectMembers(projectId, isOwner) {
+    const tbody = document.getElementById('settingsProjectMembersBody');
+    const ownerZone = document.getElementById('settingsProjectMembersOwnerOnly');
+    const statusEl = document.getElementById('settingsProjectMemberStatus');
+    const card = document.getElementById('settingsProjectMembersCard');
+    if (!tbody || !card) return;
+
+    if (ownerZone) ownerZone.classList.toggle('hidden', !isOwner);
+    card.classList.remove('hidden');
+    tbody.innerHTML = '<tr><td colspan="4" class="meta">Loading…</td></tr>';
+
+    try {
+      const res = await api(`/api/projects/${encodeURIComponent(projectId)}/members`);
+      const members = Array.isArray(res.members) ? res.members : (Array.isArray(res.data) ? res.data : []);
+      tbody.innerHTML = '';
+      if (!members.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.className = 'meta';
+        td.textContent = 'No members yet.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+      members.forEach((member) => {
+        const tr = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = String(member.name || '');
+        const emailCell = document.createElement('td');
+        emailCell.textContent = String(member.email || member.userId || '');
+        const roleCell = document.createElement('td');
+        roleCell.textContent = String(member.role || 'member');
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'actions-col';
+        if (isOwner && String(member.userId || '') !== String(App.auth?.user?.id || '')) {
+          const removeBtn = App.makeIconButton('delete', 'Remove', async () => {
+            if (!confirm(`Remove ${member.email || member.userId} from this project?`)) return;
+            try {
+              await api(`/api/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(member.userId)}`, { method: 'DELETE' });
+              notify('Member removed');
+              renderProjectMembers(projectId, isOwner).catch(() => {});
+            } catch (err) {
+              notify(err.message || 'Could not remove member', true);
+            }
+          }, { danger: true });
+          actionsCell.appendChild(removeBtn);
+        }
+        tr.appendChild(nameCell);
+        tr.appendChild(emailCell);
+        tr.appendChild(roleCell);
+        tr.appendChild(actionsCell);
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" class="meta" style="color:var(--color-error,#c00);">${String(err.message || 'Could not load members')}</td></tr>`;
+    }
+
+    if (isOwner) {
+      const addBtn = document.getElementById('settingsProjectAddMemberBtn');
+      const emailInput = document.getElementById('settingsProjectMemberEmail');
+      const roleSelect = document.getElementById('settingsProjectMemberRole');
+      if (addBtn && emailInput) {
+        const newBtn = addBtn.cloneNode(true);
+        addBtn.replaceWith(newBtn);
+        newBtn.addEventListener('click', async () => {
+          const email = String(emailInput.value || '').trim();
+          const role = String(roleSelect?.value || 'member');
+          if (!email) { notify('Enter an email address', true); return; }
+          if (statusEl) { statusEl.textContent = 'Adding…'; statusEl.classList.remove('hidden'); }
+          try {
+            await api(`/api/projects/${encodeURIComponent(projectId)}/members`, {
+              method: 'POST',
+              body: JSON.stringify({ email, role }),
+            });
+            emailInput.value = '';
+            if (statusEl) statusEl.classList.add('hidden');
+            notify(`${email} added to project`);
+            renderProjectMembers(projectId, isOwner).catch(() => {});
+          } catch (err) {
+            if (statusEl) { statusEl.textContent = err.message || 'Could not add member'; statusEl.classList.remove('hidden'); }
+            notify(err.message || 'Could not add member', true);
+          }
+        });
+      }
+    }
+  }
+
   function renderProjectDetails() {
     const projects = Array.isArray(state.projects) ? state.projects : [];
     const detailProjectId = getSettingsDetailProjectId();
@@ -555,6 +649,8 @@ App.settings = (function () {
     els.settingsProjectDetailsPanel.classList.toggle('hidden', !showPanel);
     els.settingsProjectDetailsEmpty.classList.toggle('hidden', showPanel || !onDetailPage);
     if (!showPanel) {
+      const card = document.getElementById('settingsProjectMembersCard');
+      if (card) card.classList.add('hidden');
       if (onDetailPage) openProjectsPage();
       return;
     }
@@ -586,6 +682,8 @@ App.settings = (function () {
       els.settingsProjectLogoPlaceholder.classList.toggle('hidden', Boolean(logoDataUrl));
     }
     projectCtx()?.applyDetailContextNotice?.();
+    const isOwner = String(active?.membership?.role || '').toLowerCase() === 'owner';
+    renderProjectMembers(String(active?.id || ''), isOwner).catch(() => {});
   }
 
   function getAccountIdentity(profile) {
