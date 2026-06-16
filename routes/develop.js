@@ -25,6 +25,7 @@ const {
   createLandingPage,
   updateLandingPage,
   deleteLandingPage,
+  propagateCanonicalSection,
 } = require('../lib/developLandingPagesStore');
 const {
   listPageTemplates,
@@ -1539,6 +1540,8 @@ async function handle(req, res, pathname, method) {
       section: body.section,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update saved section'), true;
+    // Propagate updated content to all canonical page instances (fire-and-forget).
+    propagateCanonicalSection(savedSectionMatch[1], result.data.section, scope).catch(() => {});
     return sendOk(res, 200, result.data, { savedSection: result.data }), true;
   }
   if (savedSectionMatch && requestMethod === 'DELETE') {
