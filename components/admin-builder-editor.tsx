@@ -41,7 +41,7 @@ import {
 } from "./builder/builder-utils";
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList } from "./builder/builder-page-list";
-import { BuilderBulkCreate, type BulkCreateResult } from "./builder/builder-bulk-create";
+import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
   type BuilderModuleEditorFocus,
@@ -96,6 +96,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">(initialMode ?? "templates");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
+  const [acquireRuns, setAcquireRuns] = useState<AcquireRunSummary[]>([]);
   const [pages, setPages] = useState<BuilderPageRecord[]>([]);
   const [cellModules, setCellModules] = useState<BuilderCellModuleRecord[]>([]);
   const [savedSections, setSavedSections] = useState<BuilderSavedSectionRecord[]>([]);
@@ -168,6 +169,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     }
   }
 
+  async function loadAcquireRuns() {
+    try {
+      const response = await builderAdminFetch("/api/admin/acquire-runs", { cache: "no-store" });
+      const data = await readAdminJson<{ runs?: AcquireRunSummary[]; error?: string }>(response, "Failed to load crawl runs.");
+      setAcquireRuns(data.runs ?? []);
+    } catch {
+      setAcquireRuns([]);
+    }
+  }
+
   async function loadPages() {
     try {
       const response = await builderAdminFetch("/api/admin/pages", { cache: "no-store" });
@@ -223,7 +234,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     }
   }
 
-  useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); }, []);
+  useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); void loadAcquireRuns(); }, []);
 
   useEffect(() => {
     const handler = () => setShowBulkCreate(true);
@@ -1550,6 +1561,28 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     return results;
   }
 
+  async function bulkCreateWithModel(
+    templateId: string,
+    items: Array<{ name: string; slug: string }>,
+    contentModelId: string,
+    runId: string,
+  ): Promise<BulkCreateResult[]> {
+    const response = await builderAdminFetch("/api/admin/pages/bulk-create-with-model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ templateId, items, contentModelId, runId }),
+    });
+    const data = await readAdminJson<{ results?: BulkCreateResult[]; error?: string }>(response, "Failed to bulk create pages with content model.");
+    const results: BulkCreateResult[] = (data.results ?? []).map((r: BulkCreateResult) => ({
+      name: r.name,
+      slug: r.slug,
+      page: r.page,
+      error: r.error,
+    }));
+    await loadPages();
+    return results;
+  }
+
   async function deleteTemplateById(templateId: string, templateName: string) {
     if (!templateId) { setDraft(createDraftFromTemplate(null)); return; }
     if (!window.confirm(`Delete template "${templateName}"? This cannot be undone.`)) return;
@@ -1908,8 +1941,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
         <BuilderBulkCreate
           templates={pageLayoutTemplates}
           savedSections={savedSections}
+          acquireRuns={acquireRuns}
           onBack={() => setShowBulkCreate(false)}
           onBulkCreatePages={(templateId, items) => bulkCreatePages(templateId, items)}
+          onBulkCreateWithModel={(templateId, items, modelId, runId) => bulkCreateWithModel(templateId, items, modelId, runId)}
           onEditPage={(pageId) => { setShowBulkCreate(false); setSelectedPageId(pageId); }}
         />
       ) : (
