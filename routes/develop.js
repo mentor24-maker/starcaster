@@ -333,7 +333,12 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/develop/page-templates' && requestMethod === 'GET') {
     const result = await listPageTemplates(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load page templates'), true;
-    const pageTemplates = Array.isArray(result.data) ? result.data : [];
+    const dbTemplates = Array.isArray(result.data) ? result.data : [];
+    // Inject built-in stub templates that aren't already saved as custom records.
+    const BUILT_IN_PAGE_TEMPLATES = [
+      { id: 'standard-right-form', name: 'Standard Right-Form', templateKind: 'modular', emailFunction: '', pageBackground: { type: 'color', value: '' }, theme: {}, layoutSections: [], createdAt: '', updatedAt: '' },
+    ];
+    const pageTemplates = [...BUILT_IN_PAGE_TEMPLATES.filter((b) => !dbTemplates.some((t) => t.id === b.id)), ...dbTemplates];
     return sendOk(res, 200, pageTemplates, { pageTemplates }, { total: pageTemplates.length }), true;
   }
 
