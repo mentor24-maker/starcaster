@@ -155,6 +155,10 @@ export type BuilderTemplateSection = {
   id: string;
   title: string;
   locked: boolean;
+  /** ID of the saved section this was instantiated from, if any. */
+  savedSectionId?: string;
+  /** When true, this instance stays in sync with the master saved section. */
+  canonical?: boolean;
   layout: BuilderTemplateLayout;
   alignment: "left" | "center" | "right";
   marginTop: string;

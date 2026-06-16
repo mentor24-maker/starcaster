@@ -135,6 +135,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   });
   const appliedInitialSelectionRef = useRef(false);
   const [savedSectionSelectKey, setSavedSectionSelectKey] = useState(0);
+  const [insertCanonical, setInsertCanonical] = useState(true);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -523,10 +524,24 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     const savedSection = savedSections.find((candidate) => candidate.id === savedSectionId);
     if (!savedSection) return;
 
-    const section = cloneSavedSection(savedSection.section);
+    let section: BuilderTemplateSection;
+    if (insertCanonical) {
+      // Keep master's module IDs so we can detect local drift later.
+      section = {
+        ...savedSection.section,
+        id: crypto.randomUUID(),
+        savedSectionId: savedSection.id,
+        canonical: true,
+        background: { ...savedSection.section.background },
+        modules: savedSection.section.modules.map((m) => ({ ...m, settings: { ...m.settings } }))
+      };
+    } else {
+      section = { ...cloneSavedSection(savedSection.section), savedSectionId: savedSection.id, canonical: false };
+    }
+
     setDraft((current) => ({ ...current, layoutSections: [...current.layoutSections, section] }));
     setCollapsedSectionIds((current) => [...current, section.id]);
-    setMessage(`Inserted saved section "${savedSection.name}".`);
+    setMessage(`Inserted saved section "${savedSection.name}"${insertCanonical ? " (canonical)" : ""}.`);
     setError(null);
     setSavedSectionSelectKey((current) => current + 1);
   }
@@ -570,6 +585,75 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save section.");
     }
+  }
+
+  function getSectionContent(section: BuilderTemplateSection) {
+    const { id, savedSectionId, canonical, ...content } = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
+    return content;
+  }
+
+  async function handleToggleSectionCanonical(sectionId: string, checked: boolean) {
+    const section = draft.layoutSections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    if (!checked) {
+      updateSection(sectionId, (s) => ({ ...s, canonical: false }));
+      return;
+    }
+
+    const savedSectionId = (section as BuilderTemplateSection & { savedSectionId?: string }).savedSectionId;
+    if (!savedSectionId) return;
+
+    const master = savedSections.find((ss) => ss.id === savedSectionId);
+    if (!master) {
+      alert("The original saved section was deleted. Cannot relink.");
+      updateSection(sectionId, (s) => ({ ...s, canonical: false, savedSectionId: undefined } as BuilderTemplateSection));
+      return;
+    }
+
+    const localJson = JSON.stringify(getSectionContent(section));
+    const masterJson = JSON.stringify(getSectionContent(master.section));
+
+    if (localJson === masterJson) {
+      updateSection(sectionId, (s) => ({ ...s, canonical: true }));
+      return;
+    }
+
+    const saveAsNew = window.confirm(
+      `This section has local changes.\n\nClick OK to save your local changes as a new saved section, then revert to canonical.\nClick Cancel to discard local changes and revert to canonical.`
+    );
+
+    if (saveAsNew) {
+      const name = window.prompt("Name for the new saved section:", section.title || `${master.name} (copy)`)?.trim();
+      if (!name) return;
+
+      try {
+        const response = await builderAdminFetch("/api/admin/saved-sections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, section: getSectionContent(section) })
+        });
+        const data = await readAdminJson<{ savedSection?: BuilderSavedSectionRecord; error?: string }>(response, "Failed to save section.");
+        if (data.savedSection) {
+          setSavedSections((current) => [data.savedSection!, ...current]);
+        }
+      } catch {
+        setError("Could not save local changes as new section.");
+        return;
+      }
+    }
+
+    // Revert this instance to the master and mark canonical.
+    const reverted = {
+      ...master.section,
+      id: section.id,
+      savedSectionId,
+      canonical: true,
+      background: { ...master.section.background },
+      modules: master.section.modules.map((m) => ({ ...m, settings: { ...m.settings } }))
+    };
+    updateSection(sectionId, () => reverted);
+    setMessage(saveAsNew ? `Saved local changes and relinked to canonical.` : `Local changes discarded. Relinked to canonical.`);
   }
 
   function moveSection(sectionId: string, direction: -1 | 1) {
@@ -2013,6 +2097,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                           ))}
                         </select>
                       </label>
+                      <label className="builder-canonical-insert-label">
+                        <input
+                          type="checkbox"
+                          checked={insertCanonical}
+                          onChange={(e) => setInsertCanonical(e.target.checked)}
+                        />
+                        <span>Canonical</span>
+                      </label>
                     </div>
                     <div
                       className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}`}
@@ -2029,7 +2121,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                       </div>
                     ) : (
                       <div className="builder-sections">
-                        {draft.layoutSections.map((section, sectionIndex) => (
+                        {draft.layoutSections.map((section, sectionIndex) => {
+                          const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
+                          const canonicalSourceName = sectionAny.savedSectionId
+                            ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
+                            : undefined;
+                          return (
                           <BuilderSectionCard
                             isEmailTemplate
                             key={section.id}
@@ -2038,6 +2135,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                             editorDevice="browser"
                             isCollapsed={collapsedSectionIds.includes(section.id)}
                             expandedModuleIds={expandedModuleIds}
+                            canonicalSourceName={canonicalSourceName}
+                            onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                             onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
                             onMoveUp={() => moveSection(section.id, -1)}
                             onMoveDown={() => moveSection(section.id, 1)}
@@ -2079,7 +2178,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                             onUploadSectionBackgroundMedia={(file) => uploadMediaForSectionBackground(section.id, file)}
                             onOpenModulePalette={(col, anchor) => openModulePalette(section.id, col, anchor)}
                           />
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2090,7 +2190,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                   </div>
                 ) : (
                   <div className="builder-sections">
-                    {draft.layoutSections.map((section, sectionIndex) => (
+                    {draft.layoutSections.map((section, sectionIndex) => {
+                      const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
+                      const canonicalSourceName = sectionAny.savedSectionId
+                        ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
+                        : undefined;
+                      return (
                       <BuilderSectionCard
                         isEmailTemplate={isEmailTemplateDraft}
                         key={section.id}
@@ -2099,6 +2204,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                         editorDevice={previewDevice === "mobile" ? "mobile" : "browser"}
                         isCollapsed={collapsedSectionIds.includes(section.id)}
                         expandedModuleIds={expandedModuleIds}
+                        canonicalSourceName={canonicalSourceName}
+                        onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                         onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
                         onMoveUp={() => moveSection(section.id, -1)}
                         onMoveDown={() => moveSection(section.id, 1)}
@@ -2140,7 +2247,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                         onUploadSectionBackgroundMedia={(file) => uploadMediaForSectionBackground(section.id, file)}
                         onOpenModulePalette={(col, anchor) => openModulePalette(section.id, col, anchor)}
                       />
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                     </div>
