@@ -47,6 +47,7 @@ const roger       = require('./devAgent');
 const personas    = require('./personas');
 const tasks       = require('./tasks');
 const polls       = require('./polls');
+const platformScreenshots = require('./platformScreenshots');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -66,6 +67,7 @@ const ROUTE_MODULES = [
   observe,
   config,
   roger,
+  platformScreenshots,
   personas,
   tasks,
   polls,

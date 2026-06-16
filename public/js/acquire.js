@@ -1304,6 +1304,26 @@ App.acquire = (function () {
     directAcquireProgressController = null;
   }
 
+  function setDirectAcquireScreenshotStatus(message, isError) {
+    const el = document.getElementById('directAcquireScreenshotStatus');
+    if (!el) return;
+    el.textContent = String(message || '');
+    el.style.color = isError ? '#b91c1c' : '';
+  }
+
+  async function runDirectAcquirePlatformScreenshots() {
+    setDirectAcquireScreenshotStatus('Capturing screenshots for presentation page...');
+    const res = await api('/api/platform-screenshots/run', {
+      method: 'POST',
+      body: JSON.stringify({ width: 1440, height: 1000 }),
+    });
+    const payload = res.screenshots || res.data || res;
+    const manifestPath = String(payload.manifestPath || '/_temp/manifest.json');
+    const outputDir = String(payload.outputDir || '/_temp');
+    setDirectAcquireScreenshotStatus(`Screenshots captured in ${outputDir}. Manifest: ${manifestPath}`);
+    return payload;
+  }
+
   function renderSectionSettingsNav(activePageId) {
     const wrap = document.getElementById('sectionSettingsNavList');
     if (!wrap) return;
@@ -5040,8 +5060,10 @@ App.acquire = (function () {
         try {
           startDirectAcquireProgress();
           const formData = new FormData(els.directAcquireForm);
+          setDirectAcquireScreenshotStatus('');
           const acquireUrl = String(formData.get('source_url') || directAcquireProjectSourceUrl || '').trim()
             || String(await fetchProjectWebsiteUrl()).trim();
+          const shouldCaptureScreenshots = formData.get('capture_platform_screenshots') === 'on';
           if (!acquireUrl) throw new Error('Project website URL is required.');
           directAcquireProjectSourceUrl = acquireUrl;
           const payload = {
@@ -5090,8 +5112,18 @@ App.acquire = (function () {
           const peerSaveText = peerSaveCount ? ` and saved ${peerSaveCount} website peer record${peerSaveCount === 1 ? '' : 's'}` : '';
           notify(`Direct ingest completed (${res.run?.pages_succeeded || 0} pages parsed)${peerSaveText}`);
           if (peerSaveError) notify(peerSaveError, true);
+          if (shouldCaptureScreenshots) {
+            try {
+              const screenshotResult = await runDirectAcquirePlatformScreenshots();
+              notify(`Screenshots captured: ${screenshotResult.outputDir || '/_temp'}`);
+            } catch (screenshotErr) {
+              setDirectAcquireScreenshotStatus(screenshotErr.message || 'Screenshot capture failed.', true);
+              notify(screenshotErr.message || 'Screenshot capture failed.', true);
+            }
+          }
         } catch (err) {
           finishDirectAcquireProgress(false, err.message || 'Acquire failed.');
+          setDirectAcquireScreenshotStatus('');
           notify(err.message, true);
         }
       });

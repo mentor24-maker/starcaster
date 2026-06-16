@@ -8,7 +8,7 @@ const DEFAULT_URL = 'http://127.0.0.1:3000';
 const ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = process.env.STARCASTER_SCREENSHOT_DIR
   ? path.resolve(process.env.STARCASTER_SCREENSHOT_DIR)
-  : path.join(ROOT, 'public', 'images', 'platform');
+  : path.join(ROOT, 'public', '_temp');
 const USER_DATA_DIR = process.env.STARCASTER_SCREENSHOT_PROFILE
   ? path.resolve(process.env.STARCASTER_SCREENSHOT_PROFILE)
   : path.join(ROOT, '.playwright', 'starcaster-screenshot-profile');
@@ -42,6 +42,20 @@ function selectedSections() {
 }
 
 async function maybeLogin(page, baseUrl) {
+  const sessionToken = String(process.env.STARCASTER_SESSION_TOKEN || '').trim();
+  if (sessionToken) {
+    const parsed = new URL(baseUrl);
+    await page.context().addCookies([{
+      name: 'app_session',
+      value: sessionToken,
+      domain: parsed.hostname,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: parsed.protocol === 'https:',
+    }]);
+  }
+
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle').catch(() => {});
 
@@ -93,7 +107,7 @@ async function captureSection(page, section) {
   return {
     ...section,
     file: filepath,
-    publicPath: `/images/platform/${filename}`,
+    publicPath: `/_temp/${filename}`,
   };
 }
 

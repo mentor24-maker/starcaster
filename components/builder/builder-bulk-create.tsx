@@ -1,5 +1,6 @@
 import type { BuilderPageRecord, BuilderSavedSectionRecord, BuilderTemplateRecord } from "@/lib/builder-template";
 import { useMemo, useState } from "react";
+import { CONTENT_DISPLAY_MODELS } from "./builder-content-models";
 import type { BuilderMenuItem } from "./builder-menu";
 
 type BulkCreateItem = {
@@ -14,6 +15,13 @@ export type BulkCreateResult = {
   error?: string;
 };
 
+export type AcquireRunSummary = {
+  runId: string;
+  sourceUrl: string;
+  pageCount: number;
+  createdAt: string;
+};
+
 type MenuOption = {
   id: string;
   label: string;
@@ -23,20 +31,31 @@ type MenuOption = {
 type BuilderBulkCreateProps = {
   templates: BuilderTemplateRecord[];
   savedSections: BuilderSavedSectionRecord[];
+  acquireRuns: AcquireRunSummary[];
   onBack: () => void;
   onBulkCreatePages: (templateId: string, items: BulkCreateItem[]) => Promise<BulkCreateResult[]>;
+  onBulkCreateWithModel: (
+    templateId: string,
+    items: BulkCreateItem[],
+    contentModelId: string,
+    runId: string,
+  ) => Promise<BulkCreateResult[]>;
   onEditPage: (pageId: string) => void;
 };
 
 export function BuilderBulkCreate({
   templates,
   savedSections,
+  acquireRuns,
   onBack,
   onBulkCreatePages,
+  onBulkCreateWithModel,
   onEditPage,
 }: BuilderBulkCreateProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [selectedMenuId, setSelectedMenuId] = useState("");
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const [selectedRunId, setSelectedRunId] = useState("");
   const [results, setResults] = useState<BulkCreateResult[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,9 +111,18 @@ export function BuilderBulkCreate({
   const menuItems = selectedMenu?.items ?? [];
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const selectedTemplateSectionCount = selectedTemplate?.layoutSections.length ?? 0;
+  const useContentModel = Boolean(selectedModelId);
 
   function handleMenuChange(menuId: string) {
     setSelectedMenuId(menuId);
+    setGenerated(false);
+    setResults([]);
+    setError(null);
+  }
+
+  function handleModelChange(modelId: string) {
+    setSelectedModelId(modelId);
+    if (!modelId) setSelectedRunId("");
     setGenerated(false);
     setResults([]);
     setError(null);
@@ -104,6 +132,7 @@ export function BuilderBulkCreate({
     if (!selectedTemplateId) { setError("Select a template."); return; }
     if (!selectedMenuId) { setError("Select a menu."); return; }
     if (menuItems.length === 0) { setError("The selected menu has no items."); return; }
+    if (useContentModel && !selectedRunId) { setError("Select a crawl run to use with this content model."); return; }
 
     const items: BulkCreateItem[] = menuItems.map((item) => {
       const pathSlug = item.href.startsWith("/")
@@ -116,7 +145,9 @@ export function BuilderBulkCreate({
     setIsGenerating(true);
     setError(null);
     try {
-      const res = await onBulkCreatePages(selectedTemplateId, items);
+      const res = useContentModel
+        ? await onBulkCreateWithModel(selectedTemplateId, items, selectedModelId, selectedRunId)
+        : await onBulkCreatePages(selectedTemplateId, items);
       setResults(res);
       setGenerated(true);
     } catch (e) {
@@ -170,12 +201,49 @@ export function BuilderBulkCreate({
               ))}
             </select>
           </label>
+
+          {/* ── Content Display Model (optional) ── */}
+          <label className="field">
+            <span>Content Model <span className="builder-bulk-create-optional">(optional)</span></span>
+            <select value={selectedModelId} onChange={(e) => handleModelChange(e.target.value)}>
+              <option value="">None — create pages with template layout only</option>
+              {CONTENT_DISPLAY_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+            {selectedModelId ? (
+              <span className="builder-bulk-create-model-hint">
+                {CONTENT_DISPLAY_MODELS.find((m) => m.id === selectedModelId)?.description}
+              </span>
+            ) : null}
+          </label>
+
+          {useContentModel ? (
+            <label className="field">
+              <span>Crawl Run</span>
+              <select value={selectedRunId} onChange={(e) => setSelectedRunId(e.target.value)}>
+                <option value="">Select a crawl run</option>
+                {acquireRuns.map((run) => (
+                  <option key={run.runId} value={run.runId}>
+                    {run.sourceUrl} — {run.pageCount} page{run.pageCount !== 1 ? "s" : ""}
+                    {run.createdAt ? ` (${run.createdAt.slice(0, 10)})` : ""}
+                  </option>
+                ))}
+              </select>
+              {acquireRuns.length === 0 ? (
+                <span className="builder-bulk-create-template-warning">
+                  No crawl runs found. Run a web crawl from the Populate from Web page first.
+                </span>
+              ) : null}
+            </label>
+          ) : null}
         </div>
 
         {menuItems.length > 0 && !generated ? (
           <div className="builder-bulk-create-preview">
             <div className="builder-bulk-create-preview-label">
               {menuItems.length} page{menuItems.length !== 1 ? "s" : ""} will be created
+              {useContentModel && selectedRunId ? " with content extracted from crawl" : ""}
             </div>
             <ul className="builder-bulk-create-item-list">
               {menuItems.map((item) => (
@@ -188,7 +256,7 @@ export function BuilderBulkCreate({
             <div className="builder-bulk-create-actions">
               <button
                 className="submit-button"
-                disabled={isGenerating || !selectedTemplateId}
+                disabled={isGenerating || !selectedTemplateId || (useContentModel && !selectedRunId)}
                 onClick={() => void handleGenerate()}
                 type="button"
               >
