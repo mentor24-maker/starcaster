@@ -951,12 +951,21 @@ async function handle(req, res, pathname, method) {
   // GET /api/develop/acquire-runs  — list crawl runs (summaries, no page content)
   if (pathname === '/api/develop/acquire-runs' && requestMethod === 'GET') {
     const runs = await listDirectAcquireRuns(50, scope);
-    const summaries = runs.map((r) => ({
-      runId: r.run_id,
-      sourceUrl: r.source_url,
-      pageCount: Array.isArray(r.pages) ? r.pages.length : 0,
-      createdAt: r.created_at || '',
-    }));
+    // Deduplicate by source URL — keep only the first (most recent) per site.
+    const seenUrls = new Set();
+    const summaries = runs
+      .filter((r) => {
+        const key = String(r.source_url || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '');
+        if (seenUrls.has(key)) return false;
+        seenUrls.add(key);
+        return true;
+      })
+      .map((r) => ({
+        runId: r.run_id,
+        sourceUrl: r.source_url,
+        pageCount: Number(r.pages_succeeded || 0),
+        createdAt: r.created_at || '',
+      }));
     return sendOk(res, 200, summaries, { runs: summaries }), true;
   }
 
@@ -1166,14 +1175,28 @@ async function handle(req, res, pathname, method) {
 
         // Resolve layout sections: start from template, then apply model extraction
         let layoutSections = JSON.parse(JSON.stringify(templateLayoutSections));
+        let contentExtracted = false;
+        let contentNote = '';
 
         if (model) {
           const crawled = findCrawledPage(name);
-          const rawHtml = String(crawled?.body_raw || '');
-          if (rawHtml && model.detect(rawHtml)) {
-            const blocks = model.extract(rawHtml);
-            if (blocks.length) {
-              layoutSections = model.applyToSections(layoutSections, blocks);
+          if (!crawled) {
+            contentNote = 'No matching crawled page found';
+          } else {
+            const rawHtml = String(crawled?.body_raw || '');
+            if (!rawHtml) {
+              contentNote = 'Crawled page has no body_raw — re-crawl the site to enable extraction';
+            } else if (!model.detect(rawHtml)) {
+              contentNote = 'Content model pattern not detected in crawled page';
+            } else {
+              const blocks = model.extract(rawHtml);
+              if (!blocks.length) {
+                contentNote = 'Content model detected but extracted 0 blocks';
+              } else {
+                layoutSections = model.applyToSections(layoutSections, blocks);
+                contentExtracted = true;
+                contentNote = `Extracted ${blocks.length} block(s)`;
+              }
             }
           }
         }
@@ -1192,9 +1215,9 @@ async function handle(req, res, pathname, method) {
         }, scope);
 
         if (!pageResult.ok) {
-          return { name, slug, error: pageResult.error || 'Could not create page' };
+          return { name, slug, error: pageResult.error || 'Could not create page', contentExtracted, contentNote };
         }
-        return { name, slug, page: pageResult.data };
+        return { name, slug, page: pageResult.data, contentExtracted, contentNote };
       })
     );
 

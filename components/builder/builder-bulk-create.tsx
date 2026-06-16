@@ -13,6 +13,8 @@ export type BulkCreateResult = {
   slug: string;
   page?: BuilderPageRecord;
   error?: string;
+  contentExtracted?: boolean;
+  contentNote?: string;
 };
 
 export type AcquireRunSummary = {
@@ -286,6 +288,7 @@ export function BuilderBulkCreate({
                 <col className="builder-bulk-create-col-title" />
                 <col className="builder-bulk-create-col-slug" />
                 <col className="builder-bulk-create-col-status" />
+                {useContentModel ? <col className="builder-bulk-create-col-content" /> : null}
                 <col className="builder-bulk-create-col-actions" />
               </colgroup>
               <thead>
@@ -293,6 +296,7 @@ export function BuilderBulkCreate({
                   <th>Title</th>
                   <th>Slug</th>
                   <th>Status</th>
+                  {useContentModel ? <th>Content</th> : null}
                   <th className="crud-actions-cell">Actions</th>
                 </tr>
               </thead>
@@ -310,6 +314,15 @@ export function BuilderBulkCreate({
                         </span>
                       )}
                     </td>
+                    {useContentModel ? (
+                      <td title={result.contentNote}>
+                        {result.contentExtracted ? (
+                          <span className="builder-bulk-create-status-ok">✓ Extracted</span>
+                        ) : (
+                          <span className="builder-bulk-create-status-warn">{result.contentNote ?? "Template only"}</span>
+                        )}
+                      </td>
+                    ) : null}
                     <td className="crud-actions-cell">
                       <div className="builder-template-actions">
                         {result.page ? (
