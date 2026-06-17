@@ -983,9 +983,10 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
   const borderC = module.settings.borderColor || "#cccccc";
   const cellPad = Number.parseInt(module.settings.cellPadding || "8", 10);
   const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? { background: "transparent" };
+  const tableMaxWidth = module.settings.tableMaxWidth ? Math.min(2000, Math.max(0, Number.parseInt(module.settings.tableMaxWidth, 10) || 0)) : undefined;
 
   return (
-    <div className="builder-preview-table-wrap">
+    <div className="builder-preview-table-wrap" style={tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}}>
       <table
         className="builder-preview-table"
         style={{ borderCollapse: "collapse", width: "100%", border: `${borderW}px solid ${borderC}`, ...tableBgStyle }}
