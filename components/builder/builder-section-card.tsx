@@ -334,7 +334,13 @@ export function BuilderSectionCard({
                 title="Relink to canonical saved section"
                 type="button"
               >
-                Relink
+                <svg aria-hidden="true" fill="none" focusable="false" height="1em" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" viewBox="0 0 24 24" width="1em">
+                  <rect height="10" rx="2" width="14" x="1" y="11" />
+                  <path d="M5 11V7a3.5 3.5 0 0 1 7 0v4" />
+                  <path d="M16 4 L21 2" />
+                  <path d="M17 9 L22 9" />
+                  <path d="M16 14 L21 16" />
+                </svg>
               </button>
               <button aria-label="Clone section" className="builder-icon-button" onClick={onCloneSection} title="Clone section" type="button">⧉</button>
               <button aria-label="Save section" className="builder-icon-button" onClick={onSaveSection} title="Save section" type="button">💾</button>
