@@ -499,7 +499,14 @@ App.acquire = (function () {
 
   function scrollAcquireWebPanelIntoView(panelId) {
     const panel = document.getElementById(panelId);
-    if (panel && typeof panel.scrollIntoView === 'function') {
+    if (!panel) return;
+    if (panel.tagName === 'DETAILS') panel.open = true;
+    let el = panel.parentElement;
+    while (el) {
+      if (el.tagName === 'DETAILS') el.open = true;
+      el = el.parentElement;
+    }
+    if (typeof panel.scrollIntoView === 'function') {
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
@@ -571,7 +578,10 @@ App.acquire = (function () {
 
   function setDirectAcquirePeerDiscoveryPanelVisible(visible) {
     const panel = document.getElementById('directAcquirePeerDiscoveryPanel');
-    if (panel) panel.classList.toggle('hidden', !visible);
+    if (panel) {
+      panel.classList.toggle('hidden', !visible);
+      if (visible && panel.tagName === 'DETAILS') panel.open = true;
+    }
   }
 
   function createPeerDiscoveryReferenceRoleSelect(currentRole) {

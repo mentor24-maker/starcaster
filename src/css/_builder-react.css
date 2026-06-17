@@ -4534,7 +4534,7 @@
 .builder-react-root .builder-module-card {
   border: 1px solid rgba(9, 16, 24, 0.08);
   border-radius: 24px;
-  padding: 18px;
+  padding: 10px;
 }
 
 .builder-react-root .builder-section-card {
@@ -4745,6 +4745,10 @@
   align-content: start;
 }
 
+.builder-react-root .builder-module-card {
+  gap: 10px;
+}
+
 .builder-react-root .builder-column-card,
 .builder-react-root .builder-preview-column {
   position: relative;
@@ -4798,6 +4802,36 @@
 .builder-react-root .builder-module-card .builder-module-editor .builder-setting-label,
 .builder-react-root .builder-module-card .builder-module-editor .field > span {
   color: var(--builder-label-on-module);
+}
+
+/* Compact inline editor: fixed label column, auto-width controls */
+.builder-react-root .builder-module-card .builder-module-editor .builder-setting-row {
+  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
+  gap: 6px;
+}
+
+.builder-react-root .builder-module-card .builder-module-editor .builder-setting-row-full {
+  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
+}
+
+.builder-react-root .builder-module-card .builder-module-editor .builder-setting-label {
+  font-size: 0.8rem;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.builder-react-root .builder-module-card .builder-module-editor .builder-setting-value select {
+  width: auto;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-card .builder-module-editor .builder-setting-value input[type="number"] {
+  width: 5rem;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-card .builder-module-editor .builder-setting-value input[type="text"] {
+  min-width: 0;
 }
 
 .builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-shell,
@@ -7154,7 +7188,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .builder-react-root .builder-setting-row-full {
@@ -7162,12 +7196,12 @@
 }
 
 .builder-react-root .builder-setting-label {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--muted);
   text-align: left;
   white-space: nowrap;
-  padding: 4px 12px;
+  padding: 2px 6px;
 }
 
 .builder-react-root .builder-setting-value {
@@ -7184,8 +7218,8 @@
   width: 100%;
   min-width: 0;
   max-width: none;
-  padding: 8px 10px;
-  border-radius: 14px;
+  padding: 4px 6px;
+  border-radius: 10px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
   font: inherit;
@@ -11482,5 +11516,208 @@
   .builder-react-root .admin-blog-settings-metrics,
 .builder-react-root .admin-blog-pod-settings-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ─── Builder: Forms page (BuilderFormsPage) ─────────────────────────────── */
+
+.builder-react-root .builder-forms-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.builder-react-root .builder-forms-page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--builder-inner-border);
+  flex-wrap: wrap;
+}
+
+.builder-react-root .builder-forms-page-title {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.builder-react-root .builder-forms-editor {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 24px;
+  align-items: start;
+}
+
+.builder-react-root .builder-forms-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.builder-react-root .builder-forms-editor-preview {
+  position: sticky;
+  top: 16px;
+}
+
+.builder-react-root .builder-forms-section {
+  padding: 14px 16px;
+  border: 1px solid var(--builder-inner-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.builder-react-root .builder-forms-section-heading {
+  margin: 0 0 2px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--builder-text-muted);
+}
+
+.builder-react-root .builder-forms-section-note {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--builder-text-muted);
+}
+
+.builder-react-root .builder-forms-field-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--builder-inner-border);
+}
+
+.builder-react-root .builder-forms-field-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.builder-react-root .builder-forms-field-label {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-forms-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+/* live preview card */
+.builder-react-root .builder-forms-preview-card {
+  padding: 22px 20px;
+  border: 2px solid #0b82d4;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #fff;
+}
+
+.builder-react-root .builder-forms-preview-heading {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.builder-react-root .builder-forms-preview-input {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #cdd5de;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.92rem;
+  background: #f8fafc;
+  color: #6b7a8d;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.builder-react-root .builder-forms-preview-btn {
+  align-self: stretch;
+  padding: 11px 20px;
+  border: 2px solid currentColor;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: default;
+  text-align: center;
+}
+
+/* saved forms list table */
+.builder-react-root .builder-forms-list {
+  margin-top: 4px;
+}
+
+.builder-react-root .builder-forms-empty {
+  color: var(--builder-text-muted);
+  font-style: italic;
+  padding: 12px 0;
+}
+
+.builder-react-root .builder-forms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.builder-react-root .builder-forms-table th,
+.builder-react-root .builder-forms-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--builder-inner-border);
+}
+
+.builder-react-root .builder-forms-table th {
+  font-weight: 700;
+  font-size: 0.77rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--builder-text-muted);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-forms-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.builder-react-root .builder-forms-table tbody tr:hover td {
+  background: rgba(11, 130, 212, 0.04);
+}
+
+.builder-react-root .builder-forms-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* contact-form module settings panel inside module card */
+.builder-react-root .builder-contact-form-settings {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .builder-react-root .builder-forms-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .builder-react-root .builder-forms-editor-preview {
+    position: static;
   }
 }

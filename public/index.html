@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Builder heading fonts (keep in sync with BUILDER_GOOGLE_FONTS_HREF in components/builder/builder-utils.ts) -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@400;700;900&family=Lora:wght@400;500;600;700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=3" />
+  <link rel="stylesheet" href="/styles.css?v=4" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -672,126 +672,130 @@
             </div>
           </div>
         </details>
-        </section>
 
-        <section id="directAcquirePeerDiscoveryPanel" class="card hidden" style="margin-top: 1rem;">
-          <div class="page-heading-row" style="margin-bottom: 0.5rem;">
-            <h3 style="margin:0;">Discovered Peers</h3>
-            <div class="page-heading-actions">
+        <details id="directAcquirePeerDiscoveryPanel" class="card acquire-web-expandable-card acquire-web-result-section hidden" style="margin-top: 1rem;">
+          <summary class="acquire-web-expandable-summary">
+            <span>Discovered Peers</span>
+            <span class="page-heading-actions" style="padding: 0;">
               <span id="directAcquirePeerDiscoveryMeta" class="meta">No peer discovery run yet.</span>
               <button id="directAcquirePeerDiscoverySaveBtn" type="button" class="btn btn-primary" disabled>Add to Other Websites</button>
+            </span>
+          </summary>
+          <div class="acquire-web-expandable-body">
+            <div id="directAcquirePeerDiscoveryKeywords" class="meta" style="margin-bottom: 0.75rem;"></div>
+            <div class="table-wrap">
+              <table class="direct-acquire-peer-discovery-table">
+                <thead>
+                  <tr class="table-filter-row">
+                    <th style="width: 44px;"></th>
+                    <th><input id="directAcquirePeerDiscoveryFilterScore" type="search" placeholder="Filter score" autocomplete="off" /></th>
+                    <th class="direct-acquire-peer-discovery-type-col">
+                      <select id="directAcquirePeerDiscoveryFilterType" aria-label="Filter type">
+                        <option value="">All Types</option>
+                        <option value="project">Project</option>
+                        <option value="peer">Peer</option>
+                        <option value="model">Model</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </th>
+                    <th class="direct-acquire-peer-discovery-category-col">
+                      <select id="directAcquirePeerDiscoveryFilterCategory" aria-label="Filter category">
+                        <option value="">All Categories</option>
+                      </select>
+                    </th>
+                    <th><input id="directAcquirePeerDiscoveryFilterDomain" type="search" placeholder="Filter domain" autocomplete="off" /></th>
+                    <th><input id="directAcquirePeerDiscoveryFilterSite" type="search" placeholder="Filter site" autocomplete="off" /></th>
+                    <th><input id="directAcquirePeerDiscoveryFilterKeywords" type="search" placeholder="Filter keywords" autocomplete="off" /></th>
+                    <th class="actions-col contacts-go-cell">
+                      <button id="directAcquirePeerDiscoveryFilterGoBtn" type="button" class="btn">Filter</button>
+                    </th>
+                  </tr>
+                  <tr>
+                    <th style="width: 44px;"><input id="directAcquirePeerDiscoverySelectAll" type="checkbox" aria-label="Select All" /></th>
+                    <th>Score</th>
+                    <th class="direct-acquire-peer-discovery-type-col">Type</th>
+                    <th class="direct-acquire-peer-discovery-category-col">Category</th>
+                    <th>Domain</th>
+                    <th>Site</th>
+                    <th>Matched Keywords</th>
+                    <th class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquirePeerDiscoveryTable"></tbody>
+              </table>
             </div>
           </div>
-          <div id="directAcquirePeerDiscoveryKeywords" class="meta" style="margin-bottom: 0.75rem;"></div>
-          <div class="table-wrap">
-            <table class="direct-acquire-peer-discovery-table">
-              <thead>
-                <tr class="table-filter-row">
-                  <th style="width: 44px;"></th>
-                  <th><input id="directAcquirePeerDiscoveryFilterScore" type="search" placeholder="Filter score" autocomplete="off" /></th>
-                  <th class="direct-acquire-peer-discovery-type-col">
-                    <select id="directAcquirePeerDiscoveryFilterType" aria-label="Filter type">
-                      <option value="">All Types</option>
-                      <option value="project">Project</option>
-                      <option value="peer">Peer</option>
-                      <option value="model">Model</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </th>
-                  <th class="direct-acquire-peer-discovery-category-col">
-                    <select id="directAcquirePeerDiscoveryFilterCategory" aria-label="Filter category">
-                      <option value="">All Categories</option>
-                    </select>
-                  </th>
-                  <th><input id="directAcquirePeerDiscoveryFilterDomain" type="search" placeholder="Filter domain" autocomplete="off" /></th>
-                  <th><input id="directAcquirePeerDiscoveryFilterSite" type="search" placeholder="Filter site" autocomplete="off" /></th>
-                  <th><input id="directAcquirePeerDiscoveryFilterKeywords" type="search" placeholder="Filter keywords" autocomplete="off" /></th>
-                  <th class="actions-col contacts-go-cell">
-                    <button id="directAcquirePeerDiscoveryFilterGoBtn" type="button" class="btn">Filter</button>
-                  </th>
-                </tr>
-                <tr>
-                  <th style="width: 44px;"><input id="directAcquirePeerDiscoverySelectAll" type="checkbox" aria-label="Select All" /></th>
-                  <th>Score</th>
-                  <th class="direct-acquire-peer-discovery-type-col">Type</th>
-                  <th class="direct-acquire-peer-discovery-category-col">Category</th>
-                  <th>Domain</th>
-                  <th>Site</th>
-                  <th>Matched Keywords</th>
-                  <th class="actions-col">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="directAcquirePeerDiscoveryTable"></tbody>
-            </table>
-          </div>
-        </section>
+        </details>
 
-        <section id="directAcquireOtherWebsitesPanel" class="card" style="margin-top: 1rem;">
-          <div id="directAcquireOtherWebsitesSection" class="page-heading-row" style="margin-bottom: 0.5rem;">
-            <h3 style="margin:0;">Other Websites</h3>
-            <div class="page-heading-actions">
+        <details id="directAcquireOtherWebsitesPanel" class="card acquire-web-expandable-card acquire-web-result-section" style="margin-top: 1rem;">
+          <summary class="acquire-web-expandable-summary">
+            <span>Other Websites</span>
+            <span class="page-heading-actions" style="padding: 0;">
               <span id="directAcquireOtherWebsitesCount" class="meta">0 saved</span>
-            </div>
-          </div>
-          <div id="directAcquireWebsitePeersMeta" class="meta" style="margin-bottom: 0.75rem;">Peer and model websites for this project.</div>
-          <form id="directAcquireWebsitePeerForm" class="standard-form-grid" style="margin-bottom: 1rem;">
-            <input type="hidden" id="directAcquireWebsitePeerId" name="id" />
+            </span>
+          </summary>
+          <div id="directAcquireOtherWebsitesSection" class="acquire-web-expandable-body">
+            <div id="directAcquireWebsitePeersMeta" class="meta" style="margin-bottom: 0.75rem;">Peer and model websites for this project.</div>
+            <form id="directAcquireWebsitePeerForm" class="standard-form-grid" style="margin-bottom: 1rem;">
+              <input type="hidden" id="directAcquireWebsitePeerId" name="id" />
 
-            <label for="directAcquireWebsitePeerReferenceRole">Website Type</label>
-            <select id="directAcquireWebsitePeerReferenceRole" name="reference_role">
-              <option value="peer">Peer</option>
-              <option value="model">Model</option>
-              <option value="other">Other</option>
-            </select>
+              <label for="directAcquireWebsitePeerReferenceRole">Website Type</label>
+              <select id="directAcquireWebsitePeerReferenceRole" name="reference_role">
+                <option value="peer">Peer</option>
+                <option value="model">Model</option>
+                <option value="other">Other</option>
+              </select>
 
-            <label for="directAcquireWebsitePeerType">Category</label>
-            <select id="directAcquireWebsitePeerType" name="website_model"></select>
+              <label for="directAcquireWebsitePeerType">Category</label>
+              <select id="directAcquireWebsitePeerType" name="website_model"></select>
 
-            <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
-            <input id="directAcquireWebsitePeerSourceUrl" name="source_url" type="url" />
+              <label for="directAcquireWebsitePeerSourceUrl">Source Website</label>
+              <input id="directAcquireWebsitePeerSourceUrl" name="source_url" type="url" />
 
-            <label for="directAcquireWebsitePeerSiteUrl">Website URL</label>
-            <input id="directAcquireWebsitePeerSiteUrl" name="site_url" type="url" required />
+              <label for="directAcquireWebsitePeerSiteUrl">Website URL</label>
+              <input id="directAcquireWebsitePeerSiteUrl" name="site_url" type="url" required />
 
-            <label for="directAcquireWebsitePeerTitle">Site Title</label>
-            <input id="directAcquireWebsitePeerTitle" name="title" type="text" />
+              <label for="directAcquireWebsitePeerTitle">Site Title</label>
+              <input id="directAcquireWebsitePeerTitle" name="title" type="text" />
 
-            <label for="directAcquireWebsitePeerModel">Scope</label>
-            <input id="directAcquireWebsitePeerModel" name="site_scope_display" type="text" value="Reference website" readonly />
+              <label for="directAcquireWebsitePeerModel">Scope</label>
+              <input id="directAcquireWebsitePeerModel" name="site_scope_display" type="text" value="Reference website" readonly />
 
-            <label for="directAcquireWebsitePeerKeywords">Matched Keywords</label>
-            <textarea id="directAcquireWebsitePeerKeywords" name="matched_keywords" rows="2"></textarea>
+              <label for="directAcquireWebsitePeerKeywords">Matched Keywords</label>
+              <textarea id="directAcquireWebsitePeerKeywords" name="matched_keywords" rows="2"></textarea>
 
-            <label for="directAcquireWebsitePeerSnippet">Snippet</label>
-            <textarea id="directAcquireWebsitePeerSnippet" name="snippet" rows="3"></textarea>
+              <label for="directAcquireWebsitePeerSnippet">Snippet</label>
+              <textarea id="directAcquireWebsitePeerSnippet" name="snippet" rows="3"></textarea>
 
-            <label for="directAcquireWebsitePeerNotes">Notes</label>
-            <textarea id="directAcquireWebsitePeerNotes" name="notes" rows="3"></textarea>
+              <label for="directAcquireWebsitePeerNotes">Notes</label>
+              <textarea id="directAcquireWebsitePeerNotes" name="notes" rows="3"></textarea>
 
-            <div></div>
-            <div class="page-heading-actions standard-form-grid-full" style="justify-content: center; margin-top: 0.75rem;">
               <div></div>
-              <button id="directAcquireWebsitePeerSaveBtn" type="submit" class="btn btn-primary">Save Website</button>
-              <button id="directAcquireWebsitePeerCancelBtn" type="button" class="btn">Cancel</button>
+              <div class="page-heading-actions standard-form-grid-full" style="justify-content: center; margin-top: 0.75rem;">
+                <div></div>
+                <button id="directAcquireWebsitePeerSaveBtn" type="submit" class="btn btn-primary">Save Website</button>
+                <button id="directAcquireWebsitePeerCancelBtn" type="button" class="btn">Cancel</button>
+              </div>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Website Type</th>
+                    <th>Category</th>
+                    <th>Domain</th>
+                    <th>Site</th>
+                    <th>Matched Keywords</th>
+                    <th>Source Website</th>
+                    <th>Updated</th>
+                    <th class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="directAcquireWebsitePeersTable"></tbody>
+              </table>
             </div>
-          </form>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Website Type</th>
-                  <th>Category</th>
-                  <th>Domain</th>
-                  <th>Site</th>
-                  <th>Matched Keywords</th>
-                  <th>Source Website</th>
-                  <th>Updated</th>
-                  <th class="actions-col">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="directAcquireWebsitePeersTable"></tbody>
-            </table>
           </div>
+        </details>
         </section>
 
         <h3>Direct Ingest Runs</h3>
