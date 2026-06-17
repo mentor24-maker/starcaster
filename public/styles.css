@@ -5465,16 +5465,32 @@ body.asset-associations-modal-open {
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 12px;
 }
-.builder-react-root .builder-cell-repository-select {
+.builder-react-root .builder-saved-section-group {
   grid-column: 1 / -1;
-  justify-self: center;
-  width: max-content;
-  max-width: 100%;
-  min-width: 16rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(11, 143, 196, 0.07);
+  border: 1px solid rgba(11, 143, 196, 0.18);
+  border-radius: 12px;
+  padding: 8px 16px;
+}
+.builder-react-root .builder-cell-repository-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
 }
 .builder-react-root .builder-cell-repository-select select {
-  width: 100%;
-  min-width: 16rem;
+  min-width: 14rem;
+}
+.builder-react-root .builder-canonical-insert-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
 }
 .builder-react-root .builder-layout-tile {
   border: 1px solid rgba(9, 16, 24, 0.08);

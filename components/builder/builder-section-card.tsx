@@ -153,7 +153,10 @@ export function BuilderSectionCard({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
 
-  const displayTitle = section.title?.trim() || `Section ${sectionIndex + 1}`;
+  const rawTitle = section.title?.trim() || `Section ${sectionIndex + 1}`;
+  const displayTitle = isCanonical && rawTitle.endsWith("Canonical")
+    ? rawTitle.slice(0, -"Canonical".length).trim()
+    : rawTitle;
 
   function handleTitleClick() {
     setIsEditingTitle(true);
@@ -276,7 +279,7 @@ export function BuilderSectionCard({
           {isCanonical ? (
             <span className="builder-section-title-label">
               <strong>{displayTitle}</strong>
-              <span className="builder-canonical-badge" title={canonicalSourceName ? `Canonical — linked to "${canonicalSourceName}"` : "Canonical"}>Canonical</span>
+              <span className="builder-canonical-badge" title={canonicalSourceName ? `Canonical — linked to "${canonicalSourceName}"` : "Canonical"}>(canonical)</span>
             </span>
           ) : isEditingTitle ? (
             <input

@@ -2083,13 +2083,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                       {layoutOptions.map((layout) => renderLayoutTile(layout))}
                       <div className="builder-saved-section-group">
                         <label className="field builder-cell-repository-select">
+                          <strong>Saved Section</strong>
                           <select
                             key={savedSectionSelectKey}
                             defaultValue=""
                             onChange={handleSavedSectionSelect}
                           >
                             <option disabled value="">
-                              Saved Section
+                              — select —
                             </option>
                             {savedSections.map((savedSection) => (
                               <option key={savedSection.id} value={savedSection.id}>
@@ -2104,7 +2105,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                             checked={insertCanonical}
                             onChange={(e) => setInsertCanonical(e.target.checked)}
                           />
-                          <span>Canonical</span>
+                          <strong>Canonical</strong>
                         </label>
                       </div>
                     </div>
