@@ -5465,9 +5465,14 @@ body.asset-associations-modal-open {
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 12px;
 }
-.builder-react-root .builder-cell-repository-select {
+.builder-react-root .builder-saved-section-group {
   grid-column: 1 / -1;
-  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.builder-react-root .builder-cell-repository-select {
   width: max-content;
   max-width: 100%;
   min-width: 16rem;
