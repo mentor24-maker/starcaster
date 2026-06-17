@@ -944,6 +944,15 @@ function TableCellModules({
                 />
               ) : null}
 
+              {(mod.type === "text" || mod.type === "heading") && (
+                <BuilderSettingRow label="Alignment" fullWidth>
+                  <BuilderAlignmentIconGroup
+                    value={getModuleAlignment(mod.settings)}
+                    onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
+                  />
+                </BuilderSettingRow>
+              )}
+
               {mod.type === "text" && (
                 <label className="field">
                   <span>Content</span>

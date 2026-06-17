@@ -8842,39 +8842,27 @@
 }
 
 /* Inside table cells, cell-level alignment overrides the outer table module alignment.
-   First, reset inherited text-align from the outer module wrapper on the cell module div.
-   Then re-apply based on the cell module's own alignment class (higher specificity wins). */
-.builder-react-root .builder-preview-table-wrap .builder-preview-module {
-  text-align: left;
-}
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center {
-  text-align: center;
-}
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right {
-  text-align: right;
-}
-
-/* Also override the descendant selectors (.is-align-center .builder-preview-text etc.)
-   that come from the outer module. Same specificity as those rules, but placed AFTER,
-   so this reset wins by source order. Then cell-level re-apply uses +1 class = always wins. */
-.builder-react-root .builder-preview-table-wrap .builder-preview-text,
-.builder-react-root .builder-preview-table-wrap .builder-preview-heading,
-.builder-react-root .builder-preview-table-wrap .builder-preview-image,
-.builder-react-root .builder-preview-table-wrap .builder-preview-button {
+   The outer table module no longer carries an alignment class (stripped in the renderer),
+   so these rules handle cell-level alignment using 4-class specificity (0,4,0) to beat
+   any remaining cascade from outer context rules at (0,3,0). */
+.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-text,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-heading,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-image,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-button {
   justify-self: start;
   text-align: left;
 }
-.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-text,
-.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-heading,
-.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-image,
-.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-button {
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-text,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-heading,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-image,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-button {
   justify-self: center;
   text-align: center;
 }
-.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-text,
-.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-heading,
-.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-image,
-.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-button {
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-text,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-heading,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-image,
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-button {
   justify-self: end;
   text-align: right;
 }

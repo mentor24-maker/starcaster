@@ -382,7 +382,7 @@ function BuilderSectionPreview({
               return (
                 <div
                   key={module.id}
-                  className={`builder-preview-module ${getAlignmentClass(getModuleAlignment(module.settings))} ${
+                  className={`builder-preview-module ${module.type !== "table" ? getAlignmentClass(getModuleAlignment(module.settings)) : ""} ${
                     module.settings.mobileHidden === "true" ? "builder-preview-module-mobile-hidden" : ""
                   } ${
                     module.settings.mobileAlignment ? `builder-preview-module-mobile-align-${module.settings.mobileAlignment}` : ""
