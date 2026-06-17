@@ -221,13 +221,6 @@ export function BuilderPageList({
           <div className="builder-pages-list-heading-actions">
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
-              onClick={handleNewPage}
-              type="button"
-            >
-              New Page
-            </button>
-            <button
-              className="submit-button admin-blog-add-button builder-panel-heading-button"
               onClick={onBulkCreate}
               type="button"
             >
@@ -240,6 +233,13 @@ export function BuilderPageList({
               type="button"
             >
               Populate from Builder
+            </button>
+            <button
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
+              onClick={handleNewPage}
+              type="button"
+            >
+              New Page
             </button>
           </div>
         </div>
@@ -427,14 +427,6 @@ export function BuilderPageList({
           <div className="builder-pages-crud-heading-actions">
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
-              disabled={isSaving}
-              onClick={onSavePage}
-              type="button"
-            >
-              {isSaving ? "Saving..." : "Save Page"}
-            </button>
-            <button
-              className="submit-button admin-blog-add-button builder-panel-heading-button"
               onClick={onPreviewDraft}
               type="button"
             >
@@ -447,6 +439,14 @@ export function BuilderPageList({
               type="button"
             >
               Save as Template
+            </button>
+            <button
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
+              disabled={isSaving}
+              onClick={onSavePage}
+              type="button"
+            >
+              {isSaving ? "Saving..." : "Save Page"}
             </button>
           </div>
         </div>
