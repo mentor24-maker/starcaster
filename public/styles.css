@@ -9320,6 +9320,36 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-preview-module.is-align-right {
   text-align: right;
 }
+.builder-react-root .builder-preview-table-wrap .builder-preview-module {
+  text-align: left;
+}
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center {
+  text-align: center;
+}
+.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right {
+  text-align: right;
+}
+.builder-react-root .builder-preview-table-wrap .builder-preview-text,
+.builder-react-root .builder-preview-table-wrap .builder-preview-heading,
+.builder-react-root .builder-preview-table-wrap .builder-preview-image,
+.builder-react-root .builder-preview-table-wrap .builder-preview-button {
+  justify-self: start;
+  text-align: left;
+}
+.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-text,
+.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-heading,
+.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-image,
+.builder-react-root .builder-preview-table-wrap .is-align-center .builder-preview-button {
+  justify-self: center;
+  text-align: center;
+}
+.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-text,
+.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-heading,
+.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-image,
+.builder-react-root .builder-preview-table-wrap .is-align-right .builder-preview-button {
+  justify-self: end;
+  text-align: right;
+}
 .builder-react-root .builder-module-card.is-align-center .builder-module-preview-copy .builder-preview-button {
   justify-self: center;
 }
