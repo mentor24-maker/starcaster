@@ -4575,7 +4575,12 @@ App.develop = (function () {
             })
             .filter(Boolean)
         : [];
-      return { id, layout, title, collapsed, rowSettings, containerSettings, modules };
+      return {
+        id, layout, title, collapsed, rowSettings, containerSettings, modules,
+        ...(section.locked === true ? { locked: true } : {}),
+        ...(section.savedSectionId ? { savedSectionId: safeText(section.savedSectionId, 120) } : {}),
+        ...(section.canonical === true ? { canonical: true } : {}),
+      };
     })
     .filter(Boolean);
   }
@@ -4856,6 +4861,9 @@ App.develop = (function () {
       rowSettings,
       containerSettings,
       modules,
+      ...(section.locked === true ? { locked: true } : {}),
+      ...(section.savedSectionId ? { savedSectionId: safeText(section.savedSectionId, 120) } : {}),
+      ...(section.canonical === true ? { canonical: true } : {}),
     };
   }
 

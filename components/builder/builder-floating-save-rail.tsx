@@ -36,7 +36,13 @@ function readShellAnchorPosition(): CSSProperties {
   const rect = shell.getBoundingClientRect();
   const gap = 20;
   const buttonReserve = 200;
-  const anchorMid = rect.top + rect.height / 2;
+  // Use the visible portion of the shell to compute mid — avoids clamping to
+  // 96px (top of screen) when the page is scrolled and rect.top is negative.
+  const clampedTop = Math.max(rect.top, 0);
+  const clampedBottom = Math.min(rect.bottom, window.innerHeight);
+  const anchorMid = clampedBottom > clampedTop
+    ? (clampedTop + clampedBottom) / 2
+    : window.innerHeight / 2;
   const top = Math.min(Math.max(anchorMid, 96), window.innerHeight - 96);
   const preferredLeft = rect.right + gap;
   const maxLeft = window.innerWidth - buttonReserve;
