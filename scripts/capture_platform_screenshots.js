@@ -6,9 +6,12 @@ const { chromium } = require('playwright');
 
 const DEFAULT_URL = 'http://127.0.0.1:3000';
 const ROOT = path.resolve(__dirname, '..');
+const DEFAULT_OUT_DIR = path.join(ROOT, 'public', '_temp');
 const OUT_DIR = process.env.STARCASTER_SCREENSHOT_DIR
   ? path.resolve(process.env.STARCASTER_SCREENSHOT_DIR)
-  : path.join(ROOT, 'public', '_temp');
+  : DEFAULT_OUT_DIR;
+// Public URL prefix — only meaningful when OUT_DIR is inside public/
+const PUBLIC_PREFIX = OUT_DIR === DEFAULT_OUT_DIR ? '/_temp' : null;
 const USER_DATA_DIR = process.env.STARCASTER_SCREENSHOT_PROFILE
   ? path.resolve(process.env.STARCASTER_SCREENSHOT_PROFILE)
   : path.join(ROOT, '.playwright', 'starcaster-screenshot-profile');
@@ -107,7 +110,7 @@ async function captureSection(page, section) {
   return {
     ...section,
     file: filepath,
-    publicPath: `/_temp/${filename}`,
+    publicPath: PUBLIC_PREFIX ? `${PUBLIC_PREFIX}/${filename}` : null,
   };
 }
 
