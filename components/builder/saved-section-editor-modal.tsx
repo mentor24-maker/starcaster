@@ -47,13 +47,20 @@ export function SavedSectionEditorModal({
   const [modulePaletteAnchor, setModulePaletteAnchor] = useState<{ x: number; y: number } | null>(null);
   const [activeModuleGroup, setActiveModuleGroup] = useState<ModulePaletteGroup | null>(null);
 
+  const [localName, setLocalName] = useState(savedSectionName);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // --- Section updaters ---
 
   function updateSection(updater: (s: BuilderTemplateSection) => BuilderTemplateSection) {
-    setDraft((s) => updater(s));
+    setDraft((s) => {
+      const updated = updater(s);
+      if (updated.title !== s.title) {
+        setLocalName(updated.title ?? "");
+      }
+      return updated;
+    });
   }
 
   function updateCellBackground(column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) {
@@ -300,7 +307,7 @@ export function SavedSectionEditorModal({
       await appApi(`/api/develop/saved-sections/${savedSectionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: savedSectionName, section: draft }),
+        body: JSON.stringify({ name: localName || savedSectionName, section: draft }),
       });
       onSaved();
       onClose();
@@ -316,7 +323,7 @@ export function SavedSectionEditorModal({
       <div className="saved-section-editor-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="saved-section-editor-dialog">
           <div className="saved-section-editor-header">
-            <h2 className="saved-section-editor-title">Edit: {savedSectionName}</h2>
+            <h2 className="saved-section-editor-title">Edit: {localName || savedSectionName}</h2>
             <div className="saved-section-editor-actions">
               {error && <span className="saved-section-editor-error">{error}</span>}
               <button className="btn" disabled={isSaving} onClick={onClose} type="button">
