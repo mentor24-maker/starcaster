@@ -12069,9 +12069,9 @@ App.develop = (function () {
 
     bindCollapsibleSection('developTemplateEditorToggle', 'developTemplateEditorBody', { defaultExpanded: false });
     bindCollapsibleSection('developPageTemplateEditorToggle', 'developPageTemplateEditorBody', { defaultExpanded: true });
-    bindCollapsibleSection('developModulesLibraryToggle', 'developModulesLibraryBody', { defaultExpanded: true });
-    bindCollapsibleSection('developSavedCellsToggle', 'developSavedCellsBody', { defaultExpanded: true });
-    bindCollapsibleSection('developSavedSectionsLibraryToggle', 'developSavedSectionsLibraryBody', { defaultExpanded: true });
+    bindCollapsibleSection('developModulesLibraryToggle', 'developModulesLibraryBody', { defaultExpanded: false });
+    bindCollapsibleSection('developSavedCellsToggle', 'developSavedCellsBody', { defaultExpanded: false });
+    bindCollapsibleSection('developSavedSectionsLibraryToggle', 'developSavedSectionsLibraryBody', { defaultExpanded: false });
     bindCollapsibleSection('developFormsSectionToggle', 'developFormsSectionBody', { defaultExpanded: false });
     bindCollapsibleSection('developEmailSectionToggle', 'developEmailSectionBody', { defaultExpanded: false });
 
