@@ -408,9 +408,10 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const borderC = module.settings.borderColor || "#cccccc";
     const cellPad = Number.parseInt(module.settings.cellPadding || "8", 10);
     const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? { background: "transparent" };
+    const tableMaxWidth = module.settings.tableMaxWidth ? Math.min(2000, Math.max(0, Number.parseInt(module.settings.tableMaxWidth, 10) || 0)) : undefined;
 
     return (
-      <div className="builder-module-preview-table-wrap">
+      <div className="builder-module-preview-table-wrap" style={tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}}>
         <table
           className="builder-module-preview-table"
           style={{
@@ -1203,6 +1204,21 @@ function TableModuleEditor({
             onChange={(e) => updateSetting("showColumnHeads", e.target.checked ? "true" : "false")}
           />
         </label>
+        <BuilderSettingRow label="Max Width (px)" fullWidth>
+          <input
+            type="number"
+            min={0}
+            max={2000}
+            value={module.settings.tableMaxWidth ?? ""}
+            placeholder="Full width"
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") { updateSetting("tableMaxWidth", ""); return; }
+              const n = Math.min(2000, Math.max(0, Number.parseInt(raw, 10) || 0));
+              updateSetting("tableMaxWidth", String(n));
+            }}
+          />
+        </BuilderSettingRow>
       </div>
       <div className="builder-table-structure-actions">
         <div className="builder-table-structure-row">
