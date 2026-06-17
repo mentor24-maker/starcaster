@@ -4551,6 +4551,10 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-pages-list-shell {
   --builder-pages-actions-width: 280px;
 }
+.builder-react-root .builder-pages-list-shell,
+.builder-react-root .builder-pages-details-shell {
+  padding-right: 10px;
+}
 .builder-react-root .builder-pages-list-table {
   table-layout: fixed;
   width: 100%;
