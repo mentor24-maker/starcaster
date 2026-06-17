@@ -234,12 +234,12 @@ export function BuilderPageList({
               Bulk Create
             </button>
             <button
-              className="secondary-button builder-panel-heading-button"
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
               disabled={isSaving}
               onClick={onPopulateFromWeb}
               type="button"
             >
-              Populate from Web
+              Populate from Builder
             </button>
           </div>
         </div>
@@ -427,6 +427,14 @@ export function BuilderPageList({
           <div className="builder-pages-crud-heading-actions">
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
+              disabled={isSaving}
+              onClick={onSavePage}
+              type="button"
+            >
+              {isSaving ? "Saving..." : "Save Page"}
+            </button>
+            <button
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
               onClick={onPreviewDraft}
               type="button"
             >
@@ -435,10 +443,10 @@ export function BuilderPageList({
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
               disabled={isSaving}
-              onClick={onSavePage}
+              onClick={onMakeTemplate}
               type="button"
             >
-              {isSaving ? "Saving..." : "Save Page"}
+              Save as Template
             </button>
           </div>
         </div>
@@ -496,18 +504,6 @@ export function BuilderPageList({
                 showColorFieldLabel={false}
                 onChange={onUpdatePageBackground}
               />
-            </div>
-            <div className="builder-meta-grid-pages-actions">
-              <button
-                aria-label="Make Template"
-                className="builder-icon-button"
-                disabled={isSaving}
-                onClick={onMakeTemplate}
-                title="Make Template"
-                type="button"
-              >
-                💾
-              </button>
             </div>
           </div>
         ) : null}
