@@ -647,9 +647,9 @@ App.api = async function api(path, options = {}) {
   }
 
   const res = await fetch(path, {
+    ...options,
     headers: { ...baseHeaders, ...(options.headers || {}) },
     credentials: 'include',
-    ...options
   });
 
   const contentType = String(res.headers.get('content-type') || '').toLowerCase();
