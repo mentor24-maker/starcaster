@@ -2005,7 +2005,14 @@ export function BuilderModuleRepositoryList({
   }
 
   function updateEditingSection(updater: (section: BuilderTemplateSection) => BuilderTemplateSection) {
-    setEditingSection((current) => (current ? updater(current) : current));
+    setEditingSection((current) => {
+      if (!current) return current;
+      const updated = updater(current);
+      if (updated.title !== current.title) {
+        setEditingSectionName(updated.title ?? "");
+      }
+      return updated;
+    });
   }
 
   function updateEditingSectionModule(
