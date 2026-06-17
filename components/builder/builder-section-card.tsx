@@ -320,7 +320,10 @@ export function BuilderSectionCard({
               title="Unlock — edit locally (detaches from canonical)"
               type="button"
             >
-              Unlock
+              <svg aria-hidden="true" fill="none" focusable="false" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" viewBox="0 0 24 24" width="1em" height="1em">
+                <rect height="11" rx="2" width="18" x="3" y="11" />
+                <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+              </svg>
             </button>
           ) : hasCanonicalSource ? (
             <>
