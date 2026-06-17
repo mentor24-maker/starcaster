@@ -3238,7 +3238,7 @@
 }
 
 .builder-react-root .builder-pages-list-shell {
-  --builder-pages-actions-width: 280px;
+  --builder-pages-actions-width: 480px;
 }
 
 .builder-react-root .builder-pages-list-shell,
@@ -3294,7 +3294,7 @@
 .builder-react-root .builder-pages-list-heading-actions {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 10px;
   width: var(--builder-pages-actions-width);
   min-width: var(--builder-pages-actions-width);
   max-width: var(--builder-pages-actions-width);
@@ -3373,7 +3373,7 @@
 }
 
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-layout {
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 480px;
 }
 
 .builder-react-root .builder-pages-crud-heading-primary {
@@ -3399,10 +3399,10 @@
 }
 
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions {
-  width: 280px;
-  min-width: 280px;
-  max-width: 280px;
-  gap: 20px;
+  width: 480px;
+  min-width: 480px;
+  max-width: 480px;
+  gap: 10px;
   padding: 0;
   justify-content: flex-start;
 }

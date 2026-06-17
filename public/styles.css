@@ -4549,7 +4549,7 @@ body.asset-associations-modal-open {
   min-width: 100%;
 }
 .builder-react-root .builder-pages-list-shell {
-  --builder-pages-actions-width: 280px;
+  --builder-pages-actions-width: 480px;
 }
 .builder-react-root .builder-pages-list-shell,
 .builder-react-root .builder-pages-details-shell {
@@ -4593,7 +4593,7 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-pages-list-heading-actions {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 10px;
   width: var(--builder-pages-actions-width);
   min-width: var(--builder-pages-actions-width);
   max-width: var(--builder-pages-actions-width);
@@ -4660,7 +4660,7 @@ body.asset-associations-modal-open {
   gap: 20px;
 }
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-layout {
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 480px;
 }
 .builder-react-root .builder-pages-crud-heading-primary {
   min-width: 0;
@@ -4682,10 +4682,10 @@ body.asset-associations-modal-open {
   box-sizing: border-box;
 }
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions {
-  width: 280px;
-  min-width: 280px;
-  max-width: 280px;
-  gap: 20px;
+  width: 480px;
+  min-width: 480px;
+  max-width: 480px;
+  gap: 10px;
   padding: 0;
   justify-content: flex-start;
 }
@@ -12058,6 +12058,114 @@ body.asset-associations-modal-open {
   font-size: 0.74rem;
   line-height: 1.4;
   color: #8aa0b4;
+}
+.builder-react-root .builder-themes-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.builder-react-root .builder-themes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.builder-react-root .builder-themes-selector {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.builder-react-root .builder-themes-name-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.builder-react-root .builder-themes-status {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.builder-react-root .builder-themes-status.builder-themes-status-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+.builder-react-root .builder-themes-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.builder-react-root .builder-themes-col {
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 1.25rem;
+  min-width: 0;
+}
+.builder-react-root .builder-themes-col-heading {
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-primary);
+}
+.builder-react-root .builder-themes-sub-heading {
+  margin: 14px 0 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.builder-react-root .builder-themes-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.builder-react-root .builder-themes-slider-row input[type=range] {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.builder-react-root .builder-themes-slider-value {
+  min-width: 2.5ch;
+  text-align: right;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-secondary);
+}
+.builder-react-root .builder-themes-asset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 1.25rem;
+}
+.builder-react-root .builder-themes-asset-group:last-child {
+  margin-bottom: 0;
+}
+.builder-react-root .builder-themes-asset-label {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.builder-react-root .builder-themes-asset-group input[type=text] {
+  width: 100%;
+}
+.builder-react-root .builder-themes-asset-group .builder-image-picker-field-button {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+@media (max-width: 960px) {
+  .builder-react-root .builder-themes-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* src/css/_builder-theme.css */
