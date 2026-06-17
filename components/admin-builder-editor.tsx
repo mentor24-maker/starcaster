@@ -2081,30 +2081,32 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
               <div className="builder-workspace-pods">
                     <div className="builder-layout-toolbar">
                       {layoutOptions.map((layout) => renderLayoutTile(layout))}
-                      <label className="field builder-cell-repository-select">
-                        <select
-                          key={savedSectionSelectKey}
-                          defaultValue=""
-                          onChange={handleSavedSectionSelect}
-                        >
-                          <option disabled value="">
-                            Saved Section
-                          </option>
-                          {savedSections.map((savedSection) => (
-                            <option key={savedSection.id} value={savedSection.id}>
-                              {savedSection.name}
+                      <div className="builder-saved-section-group">
+                        <label className="field builder-cell-repository-select">
+                          <select
+                            key={savedSectionSelectKey}
+                            defaultValue=""
+                            onChange={handleSavedSectionSelect}
+                          >
+                            <option disabled value="">
+                              Saved Section
                             </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="builder-canonical-insert-label">
-                        <input
-                          type="checkbox"
-                          checked={insertCanonical}
-                          onChange={(e) => setInsertCanonical(e.target.checked)}
-                        />
-                        <span>Canonical</span>
-                      </label>
+                            {savedSections.map((savedSection) => (
+                              <option key={savedSection.id} value={savedSection.id}>
+                                {savedSection.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="builder-canonical-insert-label">
+                          <input
+                            type="checkbox"
+                            checked={insertCanonical}
+                            onChange={(e) => setInsertCanonical(e.target.checked)}
+                          />
+                          <span>Canonical</span>
+                        </label>
+                      </div>
                     </div>
                     <div
                       className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}`}
