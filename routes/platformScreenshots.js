@@ -35,11 +35,18 @@ async function handle(req, res, pathname, requestMethod) {
   if (!sessionToken) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
 
   const sections = normalizeSections(body?.sections);
+
+  // On Lambda/serverless the app root (/var/task) is read-only; only /tmp is writable.
+  // Playwright also cannot run in those environments, so redirect output there.
+  const isServerless = Boolean(process.env.LAMBDA_TASK_ROOT || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+  const outDir = isServerless ? '/tmp/_temp' : path.join(ROOT, 'public', '_temp');
+
   const env = {
     ...process.env,
     STARCASTER_URL: String(body?.url || requestOrigin(req)).replace(/\/$/, ''),
     STARCASTER_SESSION_TOKEN: sessionToken,
     HEADLESS: body?.headless === false ? 'false' : 'true',
+    STARCASTER_SCREENSHOT_DIR: outDir,
   };
   if (sections) env.STARCASTER_SCREENSHOTS = sections;
   if (body?.width) env.SCREENSHOT_WIDTH = String(body.width);
@@ -61,13 +68,15 @@ async function handle(req, res, pathname, requestMethod) {
     child.on('close', (code) => resolve({ ok: code === 0, code }));
   });
 
-  const manifestPath = '/_temp/manifest.json';
+  const publicOutputDir = isServerless ? null : '/_temp';
+  const manifestPath = publicOutputDir ? `${publicOutputDir}/manifest.json` : null;
   const payload = {
     exitCode: result.code,
     stdout: stdout.trim(),
     stderr: stderr.trim(),
     manifestPath,
-    outputDir: '/_temp',
+    outputDir: publicOutputDir,
+    screenshotDir: outDir,
   };
 
   if (!result.ok) {
