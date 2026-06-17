@@ -6,6 +6,7 @@ import { BuilderFormsPage } from './components/builder/builder-forms-page';
 import { BuilderModuleClassesPanel } from './components/builder/builder-module-classes-panel';
 import { BuilderExtensionsPage } from './components/builder/builder-extensions-page';
 import { BuilderAgentsPage } from './components/builder/builder-agents-page';
+import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -169,6 +170,48 @@ export function unmountAgentsReact() {
   agentsSetViewFn = null;
 }
 
+// --- Saved Section Editor ---
+
+let savedSectionEditorRoot: Root | null = null;
+let savedSectionEditorHost: HTMLElement | null = null;
+
+export function mountSavedSectionEditor(
+  host: HTMLElement | null,
+  props: {
+    savedSectionId: string;
+    savedSectionName: string;
+    initialSection: unknown;
+    cellModules: unknown[];
+    onClose: () => void;
+    onSaved: () => void;
+  }
+) {
+  if (!host) return;
+  if (savedSectionEditorRoot) {
+    savedSectionEditorRoot.unmount();
+  }
+  savedSectionEditorHost = host;
+  savedSectionEditorRoot = createRoot(host);
+  savedSectionEditorRoot.render(
+    <SavedSectionEditorModal
+      savedSectionId={props.savedSectionId}
+      savedSectionName={props.savedSectionName}
+      initialSection={props.initialSection as Parameters<typeof SavedSectionEditorModal>[0]["initialSection"]}
+      cellModules={props.cellModules as Parameters<typeof SavedSectionEditorModal>[0]["cellModules"]}
+      onClose={props.onClose}
+      onSaved={props.onSaved}
+    />
+  );
+}
+
+export function unmountSavedSectionEditor() {
+  if (savedSectionEditorRoot) {
+    savedSectionEditorRoot.unmount();
+    savedSectionEditorRoot = null;
+  }
+  savedSectionEditorHost = null;
+}
+
 declare global {
   interface Window {
     BuilderReact: {
@@ -196,6 +239,10 @@ declare global {
     AgentsReact: {
       mount: typeof mountAgentsReact;
       unmount: typeof unmountAgentsReact;
+    };
+    SavedSectionEditorReact: {
+      mount: typeof mountSavedSectionEditor;
+      unmount: typeof unmountSavedSectionEditor;
     };
   }
 }
@@ -230,4 +277,9 @@ window.ExtensionsReact = {
 window.AgentsReact = {
   mount: mountAgentsReact,
   unmount: unmountAgentsReact,
+};
+
+window.SavedSectionEditorReact = {
+  mount: mountSavedSectionEditor,
+  unmount: unmountSavedSectionEditor,
 };
