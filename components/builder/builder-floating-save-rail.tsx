@@ -48,9 +48,10 @@ function readShellAnchorPosition(): CSSProperties {
   const maxLeft = window.innerWidth - buttonReserve;
 
   if (preferredLeft > maxLeft || rect.width >= window.innerWidth - 48) {
+    const rightOffset = Math.round(window.innerWidth - rect.right) + 10;
     return {
       top: `${top}px`,
-      right: "60px",
+      right: `${rightOffset}px`,
       left: "auto",
       transform: "translateY(-50%)",
       visibility: "visible"
