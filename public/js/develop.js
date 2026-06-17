@@ -3336,6 +3336,32 @@ App.develop = (function () {
   let standalonePageSavedCells = [];
   let standalonePageSavedSections = [];
 
+  // Single persistent mount point for the saved section editor modal.
+  let savedSectionEditorMountPoint = null;
+  function getSavedSectionEditorMount() {
+    if (!savedSectionEditorMountPoint) {
+      savedSectionEditorMountPoint = document.createElement('div');
+      savedSectionEditorMountPoint.id = 'saved-section-editor-react-root';
+      document.body.appendChild(savedSectionEditorMountPoint);
+    }
+    return savedSectionEditorMountPoint;
+  }
+  function openSavedSectionEditor(row) {
+    const host = getSavedSectionEditorMount();
+    window.SavedSectionEditorReact?.mount(host, {
+      savedSectionId: row.id,
+      savedSectionName: safeText(row.name) || 'Untitled Section',
+      initialSection: row.section,
+      cellModules: [],
+      onClose: () => window.SavedSectionEditorReact?.unmount(),
+      onSaved: async () => {
+        await loadStandalonePageSections();
+        setupSavedSectionsLibraryGrid();
+        notify('Section saved');
+      },
+    });
+  }
+
   function setupSavedModulesGrid() {
     const mountPoint = byId('developModulesGridMountPoint');
     if (!mountPoint) return;
@@ -3547,18 +3573,8 @@ App.develop = (function () {
             sortable: false,
             render: (val, row) => {
               const div = document.createElement('div');
-              const editBtn = App.makeIconButton('edit', 'Rename Section', async () => {
-                const newName = window.prompt('New name for section:', safeText(row.name))?.trim();
-                if (!newName) return;
-                try {
-                  await api(`/api/develop/saved-sections/${encodeURIComponent(row.id)}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ name: newName, section: row.section }),
-                  });
-                  await loadStandalonePageSections();
-                  setupSavedSectionsLibraryGrid();
-                  notify('Section renamed');
-                } catch (err) { notify(err.message, true); }
+              const editBtn = App.makeIconButton('edit', 'Edit Section', () => {
+                openSavedSectionEditor(row);
               });
               const cloneBtn = App.makeIconButton('clone', 'Clone Section', async () => {
                 try {
