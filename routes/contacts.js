@@ -448,6 +448,56 @@ function cleanSegmentRules(rules) {
 async function handleContacts(req, res, pathname, method) {
   const urlObj = getUrlObj(req);
 
+  // POST /api/contact — public landing-page form submission (no auth required)
+  if (pathname === '/api/contact' && method === 'POST') {
+    const body = await parseJsonBody(req);
+
+    // Honeypot: reject bots that fill the hidden companyWebsite field
+    if (String(body.companyWebsite || '').trim()) {
+      return sendOk(res, 200, {}, { message: 'Thanks. Your information has been saved.' }), true;
+    }
+
+    const email = normalizeEmail(body.email || '');
+    if (!email) {
+      return sendErr(res, 400, 'Email is required.', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const firstName = String(body.firstName || '').trim().slice(0, 100);
+    const lastName  = String(body.lastName  || '').trim().slice(0, 100);
+    const phone     = String(body.phone     || '').trim().slice(0, 50);
+    const formMode  = String(body.formMode  || '').trim().slice(0, 50);
+    const projectId = String(body.projectId || '').trim();
+    const scope = { projectId, userId: '' };
+
+    const result = await createContact({
+      id: nextId('contact'),
+      email,
+      first_name: firstName,
+      last_name: lastName,
+      phone,
+      contact_type: 'lead',
+      source: formMode ? `form:${formMode}` : 'form',
+    }, scope);
+
+    if (!result.ok) {
+      const isDupe = result.status === 409 || String(result.error).toLowerCase().includes('unique') || String(result.error).toLowerCase().includes('already');
+      if (isDupe) {
+        return sendOk(res, 200, {}, { message: 'Thanks. Your information has been saved.' }), true;
+      }
+      return sendErr(res, result.status || 500, result.error || 'Failed to save your information.'), true;
+    }
+
+    logActivity({
+      action: 'contact.created',
+      entityType: 'contact',
+      entityId: nextId('ev'),
+      summary: `Form lead captured: ${email}`,
+      meta: { formMode, projectId },
+    });
+
+    return sendOk(res, 200, {}, { message: 'Thanks. Your information has been saved.' }), true;
+  }
+
   if (pathname === '/api/contact-personas' && method === 'GET') {
     const typeObj = {};
     const typeParam = urlObj.searchParams.get('type');

@@ -196,6 +196,7 @@ async function handleRequest(req, res) {
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
   const isWebhookRoute = pathname === '/api/develop/devAgent/worker' || pathname.startsWith('/api/tasks');
+  const isPublicContactSubmit = pathname === '/api/contact' && method === 'POST';
   const isFacebookOAuthCallback =
     pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
   const isImportDriveFolderHealth =
@@ -215,7 +216,7 @@ async function handleRequest(req, res) {
     if (handled) return;
   }
 
-  if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !authUser) {
+  if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !authUser) {
 
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
