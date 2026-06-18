@@ -204,6 +204,19 @@
   color: #8aa0b4;
 }
 
+.builder-react-root .builder-theme-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+/* Hide the floating save rail when the Themes page is active */
+body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
+  display: none !important;
+}
+
 /* ============================================================== */
 /* THEMES PAGE — three-column pod layout                          */
 /* ============================================================== */

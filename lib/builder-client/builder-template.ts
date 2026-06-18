@@ -133,6 +133,8 @@ export type BuilderThemeTypography = {
     baseSize: number;
     ratio: number;
     baseLineHeight: number;
+    /** Per-heading overrides in px (0 = derive from scale). */
+    h1?: number; h2?: number; h3?: number; h4?: number; h5?: number; h6?: number;
   };
   /** Semantic color roles wired to the palette, not raw hex at call sites. */
   colors: {
@@ -142,6 +144,9 @@ export type BuilderThemeTypography = {
     link: string;
     linkHover: string;
     selection: string;
+    /** Whether links render with an underline (default: true). */
+    linkUnderline?: boolean;
+    linkHoverUnderline?: boolean;
   };
   /** Sparse map — only elements the user has customized are present. */
   elements: Partial<Record<BuilderThemeElement, BuilderThemeElementStyle>>;
