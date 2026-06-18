@@ -24,7 +24,8 @@ import {
   type BuilderTemplateModule,
   type BuilderTemplateRecord,
   type BuilderTemplateSection,
-  type BuilderTheme
+  type BuilderTheme,
+  type DevelopThemeSummary
 } from "@/lib/builder-template";
 import { getDefaultEmailTemplateName, type BuilderEmailFunction } from "@/lib/builder-email-template";
 import { inferModuleClassFromBuilderModules, resolveModuleClassForBuilderModule } from "@/lib/module-class-triggers";
@@ -37,7 +38,8 @@ import {
   buildClonedPageCreatePayload,
   createDraftFromTemplate,
   createDraftFromPage,
-  getModuleBackgroundSettings
+  getModuleBackgroundSettings,
+  getThemeRootVars
 } from "./builder/builder-utils";
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList } from "./builder/builder-page-list";
@@ -97,6 +99,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
   const [acquireRuns, setAcquireRuns] = useState<AcquireRunSummary[]>([]);
+  const [developThemes, setDevelopThemes] = useState<DevelopThemeSummary[]>([]);
+  const [pageThemeId, setPageThemeId] = useState("");
   const [pages, setPages] = useState<BuilderPageRecord[]>([]);
   const [cellModules, setCellModules] = useState<BuilderCellModuleRecord[]>([]);
   const [savedSections, setSavedSections] = useState<BuilderSavedSectionRecord[]>([]);
@@ -180,6 +184,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     }
   }
 
+  async function loadDevelopThemes() {
+    try {
+      const response = await builderAdminFetch("/api/admin/themes", { cache: "no-store" });
+      const data = await readAdminJson<{ themes?: DevelopThemeSummary[]; error?: string }>(response, "Failed to load themes.");
+      setDevelopThemes(data.themes ?? []);
+    } catch {
+      setDevelopThemes([]);
+    }
+  }
+
   async function loadPages() {
     try {
       const response = await builderAdminFetch("/api/admin/pages", { cache: "no-store" });
@@ -235,7 +249,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     }
   }
 
-  useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); void loadAcquireRuns(); }, []);
+  useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); void loadAcquireRuns(); void loadDevelopThemes(); }, []);
 
   useEffect(() => {
     const handler = () => setShowBulkCreate(true);
@@ -300,6 +314,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     setDraft(createDraftFromPage(page));
     setPageSlug(page?.slug ?? "");
     setPageTemplateId(page?.templateId ?? "");
+    setPageThemeId(page?.themeId ?? "");
     setIsPublishedPage(page?.isPublished ?? true);
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
@@ -1305,10 +1320,20 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     setSelectedPageId("");
     setPageSlug("");
     setPageTemplateId("");
+    setPageThemeId("");
     setIsPublishedPage(true);
     setDraft(createDraftFromPage(null));
     setMessage(null);
     setError(null);
+  }
+
+  function applyThemeToPage(themeId: string) {
+    setPageThemeId(themeId);
+    if (!themeId) return;
+    const found = developThemes.find((t) => t.id === themeId);
+    if (found?.typography) {
+      setDraft((c) => ({ ...c, theme: { ...c.theme, typography: found.typography! } }));
+    }
   }
 
   function applyTemplateToPage(templateId: string) {
@@ -1601,7 +1626,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, isPublished: isPublishedPage, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
+        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, themeId: pageThemeId || undefined, isPublished: isPublishedPage, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
       });
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       setMessage(selectedPageId ? "Page updated." : "Page created.");
@@ -1614,9 +1639,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
 
   async function bulkCreatePages(
     templateId: string,
-    items: Array<{ name: string; slug: string }>
+    items: Array<{ name: string; slug: string }>,
+    themeId?: string,
   ): Promise<BulkCreateResult[]> {
     const template = pageLayoutTemplates.find((t) => t.id === templateId) ?? null;
+    const selectedTheme = themeId ? developThemes.find((t) => t.id === themeId) : null;
+    const effectiveTheme = selectedTheme?.typography
+      ? { ...(template?.theme ?? createDefaultTheme()), typography: selectedTheme.typography }
+      : (template?.theme ?? createDefaultTheme());
     const results = await Promise.all(
       items.map(async (item): Promise<BulkCreateResult> => {
         try {
@@ -1627,10 +1657,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
               name: item.name,
               slug: item.slug,
               templateId,
+              themeId: themeId || undefined,
               templateKind: "modular",
               isPublished: false,
               pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
-              theme: template?.theme ?? createDefaultTheme(),
+              theme: effectiveTheme,
               layoutSections: template?.layoutSections ?? []
             })
           });
@@ -1650,11 +1681,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     items: Array<{ name: string; slug: string }>,
     contentModelId: string,
     runId: string,
+    themeId?: string,
   ): Promise<BulkCreateResult[]> {
     const response = await builderAdminFetch("/api/admin/pages/bulk-create-with-model", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ templateId, items, contentModelId, runId }),
+      body: JSON.stringify({ templateId, items, contentModelId, runId, themeId: themeId || undefined }),
     });
     const data = await readAdminJson<{ results?: BulkCreateResult[]; error?: string }>(response, "Failed to bulk create pages with content model.");
     const results: BulkCreateResult[] = (data.results ?? []).map((r: BulkCreateResult) => ({
@@ -2017,22 +2049,25 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           templates={pageLayoutTemplates}
           savedSections={savedSections}
           acquireRuns={acquireRuns}
+          themes={developThemes}
           onBack={() => setShowBulkCreate(false)}
           onRefreshRuns={() => void loadAcquireRuns()}
-          onBulkCreatePages={(templateId, items) => bulkCreatePages(templateId, items)}
-          onBulkCreateWithModel={(templateId, items, modelId, runId) => bulkCreateWithModel(templateId, items, modelId, runId)}
+          onBulkCreatePages={(templateId, items, themeId) => bulkCreatePages(templateId, items, themeId)}
+          onBulkCreateWithModel={(templateId, items, modelId, runId, themeId) => bulkCreateWithModel(templateId, items, modelId, runId, themeId)}
           onEditPage={(pageId) => { setShowBulkCreate(false); setSelectedPageId(pageId); }}
         />
       ) : (
         <BuilderPageList
           pages={pages}
           templates={pageLayoutTemplates}
+          themes={developThemes}
           selectedPageId={selectedPageId}
           draftName={draft.name}
           pageBackground={draft.pageBackground}
           theme={draft.theme}
           pageSlug={pageSlug}
           pageTemplateId={pageTemplateId}
+          pageThemeId={pageThemeId}
           isPublishedPage={isPublishedPage}
           isSaving={isSaving}
           onSelectPage={setSelectedPageId}
@@ -2045,6 +2080,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onUpdateTheme={updateTheme}
           onSetPageSlug={setPageSlug}
           onApplyTemplate={applyTemplateToPage}
+          onApplyTheme={applyThemeToPage}
           onSetIsPublished={setIsPublishedPage}
           onNewPage={startNewPage}
           onBulkCreate={() => setShowBulkCreate(true)}
@@ -2130,6 +2166,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                             isCollapsed={collapsedSectionIds.includes(section.id)}
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
+                            themeColors={[
+                              { label: "Body text", hex: draft.theme.typography.colors.text },
+                              { label: "Headings", hex: draft.theme.typography.colors.heading },
+                              { label: "Link", hex: draft.theme.typography.colors.link },
+                              { label: "Link hover", hex: draft.theme.typography.colors.linkHover },
+                            ].filter((c) => Boolean(c.hex))}
+                            themeStyle={getThemeRootVars(draft.theme)}
                             onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                             onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
                             onMoveUp={() => moveSection(section.id, -1)}
@@ -2199,6 +2242,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                         isCollapsed={collapsedSectionIds.includes(section.id)}
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
+                        themeColors={[
+                          { label: "Body text", hex: draft.theme.typography.colors.text },
+                          { label: "Headings", hex: draft.theme.typography.colors.heading },
+                          { label: "Link", hex: draft.theme.typography.colors.link },
+                          { label: "Link hover", hex: draft.theme.typography.colors.linkHover },
+                        ].filter((c) => Boolean(c.hex))}
+                        themeStyle={getThemeRootVars(draft.theme)}
                         onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                         onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
                         onMoveUp={() => moveSection(section.id, -1)}

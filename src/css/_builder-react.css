@@ -9131,6 +9131,34 @@
   align-items: center;
 }
 
+.builder-react-root .builder-gallery-source-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(9, 16, 24, 0.14);
+  border-radius: 8px;
+  background: #f5f7fa;
+}
+
+.builder-react-root .builder-gallery-source-toggle button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #415265;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-gallery-source-toggle button.is-active {
+  background: #101820;
+  color: #ffffff;
+}
+
 .builder-react-root .builder-module-palette-az-sort {
   min-width: 3.25rem;
   padding-inline: 0.85rem;

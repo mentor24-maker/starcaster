@@ -17,6 +17,8 @@ import { registerGalleryMediaThumbnail } from './gallery-media-thumbnail';
 
 const PAGE_SIZE = 60;
 
+export type GalleryMediaSource = 'project' | 'community';
+
 type StarcasterAsset = {
   id?: number;
   assetName?: string;
@@ -123,8 +125,10 @@ export function useGalleryMediaLibrary(options?: {
   enabled?: boolean;
   syncOnFirstLoad?: boolean;
   listQueryFilters?: GalleryMediaFilters | null;
+  source?: GalleryMediaSource;
 }) {
   const enabled = options?.enabled ?? true;
+  const source = options?.source ?? 'project';
   const [media, setMedia] = useState<AdminMediaItem[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -145,7 +149,7 @@ export function useGalleryMediaLibrary(options?: {
 
       try {
         if (!allItemsRef.current || loadOptions?.sync) {
-          const body = await appApi('/api/assets');
+          const body = await appApi(source === 'community' ? '/api/community-assets' : '/api/assets');
           const assets = unwrapEnvelope<StarcasterAsset[]>(body, 'assets') ?? [];
           allItemsRef.current = assets
             .map(assetToAdminMediaItem)
@@ -173,8 +177,14 @@ export function useGalleryMediaLibrary(options?: {
         setIsLoading(false);
       }
     },
-    [debouncedFilename, enabled, filters, options?.listQueryFilters]
+    [debouncedFilename, enabled, filters, options?.listQueryFilters, source]
   );
+
+  useEffect(() => {
+    allItemsRef.current = null;
+    setMedia([]);
+    setTotal(0);
+  }, [source]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
