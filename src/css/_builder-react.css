@@ -5241,6 +5241,16 @@
   border-color: rgba(9, 16, 24, 0.55);
 }
 
+.builder-react-root .builder-theme-color-popup .builder-theme-swatches {
+  justify-content: center;
+  padding: 4px 0 2px;
+}
+
+.builder-react-root .builder-theme-color-popup .builder-theme-swatch {
+  width: 28px;
+  height: 28px;
+}
+
 .builder-react-root .builder-social-module-items {
   display: grid;
   gap: 12px;

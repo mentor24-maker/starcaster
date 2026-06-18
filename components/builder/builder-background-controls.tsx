@@ -7,6 +7,7 @@ import {
 } from "@/lib/builder-template";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderBackgroundControlsProps = {
   label: string;
@@ -23,6 +24,7 @@ type BuilderBackgroundControlsProps = {
   /** Theme palette — used to seed defaults when the user first picks a mode. */
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
+  themeColors?: Array<{ label: string; hex: string }>;
 };
 
 export function BuilderBackgroundControls({
@@ -37,7 +39,8 @@ export function BuilderBackgroundControls({
   hideClear = false,
   showColorFieldLabel = true,
   themeBackgroundColor,
-  themePrimaryColor
+  themePrimaryColor,
+  themeColors = []
 }: BuilderBackgroundControlsProps) {
   const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
 
@@ -108,13 +111,14 @@ export function BuilderBackgroundControls({
 
         {background.mode === "color" || background.mode === "gradient" ? (
           <BuilderSettingRow label="Primary color" fullWidth>
-            <input
-              type="color"
+            <BuilderThemeColorField
+              fallback="#ffffff"
+              themeColors={themeColors}
               value={background.color}
-              onChange={(event) =>
+              onChange={(color) =>
                 onChange((current) => ({
                   ...current,
-                  color: event.target.value
+                  color
                 }))
               }
             />
@@ -123,13 +127,14 @@ export function BuilderBackgroundControls({
 
         {background.mode === "gradient" ? (
           <BuilderSettingRow label="Secondary color" fullWidth>
-            <input
-              type="color"
+            <BuilderThemeColorField
+              fallback="#eaf4ff"
+              themeColors={themeColors}
               value={background.color2}
-              onChange={(event) =>
+              onChange={(color2) =>
                 onChange((current) => ({
                   ...current,
-                  color2: event.target.value
+                  color2
                 }))
               }
             />
@@ -233,14 +238,14 @@ export function BuilderBackgroundControls({
         {background.mode === "color" || background.mode === "gradient" ? (
           <label className="field builder-background-inline-color-field">
             {showColorFieldLabel ? <span>Primary color</span> : null}
-            <input
-              type="color"
-              aria-label={showColorFieldLabel ? undefined : label}
+            <BuilderThemeColorField
+              fallback="#ffffff"
+              themeColors={themeColors}
               value={background.color}
-              onChange={(event) =>
+              onChange={(color) =>
                 onChange((current) => ({
                   ...current,
-                  color: event.target.value
+                  color
                 }))
               }
             />
@@ -250,13 +255,14 @@ export function BuilderBackgroundControls({
         {background.mode === "gradient" ? (
           <label className="field builder-background-inline-color-field">
             <span>Secondary color</span>
-            <input
-              type="color"
+            <BuilderThemeColorField
+              fallback="#eaf4ff"
+              themeColors={themeColors}
               value={background.color2}
-              onChange={(event) =>
+              onChange={(color2) =>
                 onChange((current) => ({
                   ...current,
-                  color2: event.target.value
+                  color2
                 }))
               }
             />
