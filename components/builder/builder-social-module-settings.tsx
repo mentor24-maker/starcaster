@@ -224,6 +224,22 @@ export function BuilderSocialModuleSettings({
         />
       </BuilderSettingRow>
 
+      <BuilderSettingRow label="Padding">
+        <BuilderNumberSelectControl
+          value={module.settings.socialPadding ?? "0"}
+          min={0}
+          max={80}
+          step={4}
+          fallback="0"
+          onChange={(value) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialPadding: value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
       <BuilderSettingRow label="Show Labels">
         <input
           type="checkbox"

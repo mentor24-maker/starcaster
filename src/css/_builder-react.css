@@ -5205,6 +5205,14 @@
   gap: 12px;
 }
 
+.builder-react-root .builder-social-module-settings > .builder-setting-row {
+  grid-template-columns: 8rem minmax(0, 1fr);
+}
+
+.builder-react-root .builder-social-module-settings > .builder-setting-row .builder-setting-label {
+  white-space: nowrap;
+}
+
 .builder-react-root .builder-social-module-items {
   display: grid;
   gap: 12px;
