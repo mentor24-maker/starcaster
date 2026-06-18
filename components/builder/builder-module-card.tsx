@@ -2286,6 +2286,7 @@ export function BuilderModuleCard({
                 onUpdateModule={onUpdateModule}
                 onUpdateModuleBackground={onUpdateModuleBackground}
                 onOpenGallery={onOpenSocialIconGallery}
+                themeColors={themeColors}
               />
             ) : module.type === "heading" ? (
               <div className="builder-heading-module-chrome">
