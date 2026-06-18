@@ -1,4 +1,4 @@
-import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, BuilderTheme } from "@/lib/builder-template";
+import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, BuilderTheme, DevelopThemeSummary } from "@/lib/builder-template";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -27,7 +27,10 @@ type BuilderPageListProps = {
   onUpdatePageBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onUpdateTheme: (updater: (theme: BuilderTheme) => BuilderTheme) => void;
   onSetPageSlug: (slug: string) => void;
+  themes: DevelopThemeSummary[];
+  pageThemeId: string;
   onApplyTemplate: (templateId: string) => void;
+  onApplyTheme: (themeId: string) => void;
   onSetIsPublished: (isPublished: boolean) => void;
   onNewPage: () => void;
   onBulkCreate: () => void;
@@ -41,11 +44,13 @@ type BuilderPageListProps = {
 export function BuilderPageList({
   pages,
   templates,
+  themes,
   selectedPageId,
   draftName,
   pageBackground,
   pageSlug,
   pageTemplateId,
+  pageThemeId,
   isPublishedPage,
   isSaving,
   onSelectPage,
@@ -57,6 +62,7 @@ export function BuilderPageList({
   onUpdatePageBackground,
   onSetPageSlug,
   onApplyTemplate,
+  onApplyTheme,
   onSetIsPublished,
   onNewPage,
   onBulkCreate,
@@ -482,6 +488,18 @@ export function BuilderPageList({
                   <option key={template.id} value={template.id}>
                     {template.name}
                   </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Theme</span>
+              <select
+                value={pageThemeId}
+                onChange={(event) => onApplyTheme(event.target.value)}
+              >
+                <option value="">None (use template default)</option>
+                {themes.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
             </label>

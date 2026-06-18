@@ -42,6 +42,7 @@ const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
 const develop     = require('./develop');
+const communityAssets = require('./communityAssets');
 const observe     = require('./observe');
 const roger       = require('./devAgent');
 const personas    = require('./personas');
@@ -62,6 +63,7 @@ const ROUTE_MODULES = [
   contacts,
   engage,
   develop,
+  communityAssets,
   messaging,
   activityLog,
   observe,

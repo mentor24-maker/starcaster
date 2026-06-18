@@ -321,6 +321,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      themeId: String(body.themeId || '').trim(),
       pageBackground: body.pageBackground || body.page_background,
       theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
@@ -1125,6 +1126,7 @@ async function handle(req, res, pathname, method) {
     const templateId    = String(body.templateId    || '').trim();
     const contentModelId= String(body.contentModelId|| '').trim();
     const runId         = String(body.runId         || '').trim();
+    const themeId       = String(body.themeId       || '').trim();
     const items         = Array.isArray(body.items) ? body.items : [];
 
     if (!templateId) return sendErr(res, 400, 'templateId is required'), true;
@@ -1138,6 +1140,17 @@ async function handle(req, res, pathname, method) {
     const templateLayoutSections = Array.isArray(tplResult?.layoutSections) ? tplResult.layoutSections : [];
     const templateBackground     = tplResult?.pageBackground || {};
     const templateTheme          = tplResult?.theme || {};
+
+    // If a saved theme was selected, load it and use its typography instead of the template default.
+    let effectiveTheme = templateTheme;
+    if (themeId) {
+      const themeListRes = await listThemes(undefined, scope).catch(() => null);
+      const themeList = Array.isArray(themeListRes?.data) ? themeListRes.data : [];
+      const savedTheme = themeList.find((t) => t.id === themeId) || null;
+      if (savedTheme?.typography) {
+        effectiveTheme = { ...templateTheme, typography: savedTheme.typography };
+      }
+    }
 
     // Load crawl run (optional)
     let crawlPages = [];
@@ -1208,10 +1221,11 @@ async function handle(req, res, pathname, method) {
           name,
           slug,
           templateId: derivedTemplateId,
+          themeId,
           templateKind: 'modular',
           isPublished: false,
           pageBackground: templateBackground,
-          theme: templateTheme,
+          theme: effectiveTheme,
           layoutSections,
         }, scope);
 
@@ -1336,6 +1350,7 @@ async function handle(req, res, pathname, method) {
       bodyPitchId: String(body.bodyPitchId || '').trim(),
       logoWideId: String(body.logoWideId || '').trim(),
       logoSquareId: String(body.logoSquareId || '').trim(),
+      themeId: String(body.themeId || '').trim(),
       theme: body.theme,
       layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
         ? (body.layoutSections || body.layout_sections)

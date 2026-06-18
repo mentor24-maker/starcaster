@@ -50,10 +50,12 @@
 /* Links inside body content. */
 .builder-react-root .builder-preview-shell .builder-preview-text a {
   color: var(--bx-link, inherit);
+  text-decoration: var(--bx-link-decoration, underline);
 }
 
 .builder-react-root .builder-preview-shell .builder-preview-text a:hover {
   color: var(--bx-link-hover, var(--bx-link, inherit));
+  text-decoration: var(--bx-link-hover-decoration, underline);
 }
 
 /* Heading font role.
@@ -80,7 +82,22 @@
   color: var(--bx-heading, inherit);
 }
 
-/* Type scale — H1 step. Fallback matches _builder-react.css:2111. */
+/* Type scale — explicit steps. H1 fallback matches _builder-react.css:2111. */
 .builder-react-root .builder-preview-shell .builder-preview-text h1 {
   font-size: var(--bx-size-h1, clamp(2.25rem, 4.2vw, 4rem));
+}
+.builder-react-root .builder-preview-shell .builder-preview-text h2 {
+  font-size: var(--bx-size-h2, clamp(1.75rem, 3.2vw, 3rem));
+}
+.builder-react-root .builder-preview-shell .builder-preview-text h3 {
+  font-size: var(--bx-size-h3, clamp(1.4rem, 2.4vw, 2.25rem));
+}
+.builder-react-root .builder-preview-shell .builder-preview-text h4 {
+  font-size: var(--bx-size-h4, clamp(1.15rem, 1.9vw, 1.7rem));
+}
+.builder-react-root .builder-preview-shell .builder-preview-text h5 {
+  font-size: var(--bx-size-h5, clamp(1rem, 1.5vw, 1.25rem));
+}
+.builder-react-root .builder-preview-shell .builder-preview-text h6 {
+  font-size: var(--bx-size-h6, 1rem);
 }

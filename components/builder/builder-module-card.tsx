@@ -122,6 +122,8 @@ type BuilderModuleCardProps = {
   isEmailTemplate?: boolean;
   moduleClassOverride?: string;
   onModuleDragStart?: (event: DragEvent<HTMLDivElement>) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
+  themeStyle?: CSSProperties;
 };
 
 type ContactFormField = {
@@ -2064,7 +2066,9 @@ export function BuilderModuleCard({
   hideHeaderActions = false,
   isEmailTemplate = false,
   moduleClassOverride,
-  onModuleDragStart
+  onModuleDragStart,
+  themeColors,
+  themeStyle
 }: BuilderModuleCardProps) {
     const [isPopped, setIsPopped] = useState(false);
     const richTextGalleryProps: RichTextGalleryBinding = {
@@ -2643,6 +2647,8 @@ export function BuilderModuleCard({
                 <BuilderRichTextEditor
                   value={module.text}
                   onChange={(value) => onUpdateModule((current) => ({ ...current, text: value }))}
+                  themeColors={themeColors}
+                  themeStyle={themeStyle}
                   {...richTextGalleryProps}
                 />
               ) : (

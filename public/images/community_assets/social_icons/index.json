@@ -1,0 +1,205 @@
+[
+  {
+    "slug": "behance",
+    "title": "Behance",
+    "color": "#1769FF",
+    "file": "behance.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "bluesky",
+    "title": "Bluesky",
+    "color": "#1185FE",
+    "file": "bluesky.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "buffer",
+    "title": "Buffer",
+    "color": "#231F20",
+    "file": "buffer.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "discord",
+    "title": "Discord",
+    "color": "#5865F2",
+    "file": "discord.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "dribbble",
+    "title": "Dribbble",
+    "color": "#EA4C89",
+    "file": "dribbble.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "facebook",
+    "title": "Facebook",
+    "color": "#0866FF",
+    "file": "facebook.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "github",
+    "title": "GitHub",
+    "color": "#181717",
+    "file": "github.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "instagram",
+    "title": "Instagram",
+    "color": "#FF0069",
+    "file": "instagram.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "linkedin",
+    "title": "LinkedIn",
+    "color": "#0A66C2",
+    "file": "linkedin.svg",
+    "source": "starcaster"
+  },
+  {
+    "slug": "mastodon",
+    "title": "Mastodon",
+    "color": "#6364FF",
+    "file": "mastodon.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "medium",
+    "title": "Medium",
+    "color": "#000000",
+    "file": "medium.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "messenger",
+    "title": "Messenger",
+    "color": "#0866FF",
+    "file": "messenger.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "pinterest",
+    "title": "Pinterest",
+    "color": "#BD081C",
+    "file": "pinterest.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "quora",
+    "title": "Quora",
+    "color": "#B92B27",
+    "file": "quora.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "reddit",
+    "title": "Reddit",
+    "color": "#FF4500",
+    "file": "reddit.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "rss",
+    "title": "RSS",
+    "color": "#FFA500",
+    "file": "rss.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "signal",
+    "title": "Signal",
+    "color": "#3B45FD",
+    "file": "signal.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "slack",
+    "title": "Slack",
+    "color": "#4A154B",
+    "file": "slack.svg",
+    "source": "starcaster"
+  },
+  {
+    "slug": "snapchat",
+    "title": "Snapchat",
+    "color": "#FFFC00",
+    "file": "snapchat.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "substack",
+    "title": "Substack",
+    "color": "#FF6719",
+    "file": "substack.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "telegram",
+    "title": "Telegram",
+    "color": "#26A5E4",
+    "file": "telegram.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "threads",
+    "title": "Threads",
+    "color": "#000000",
+    "file": "threads.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "tiktok",
+    "title": "TikTok",
+    "color": "#000000",
+    "file": "tiktok.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "tumblr",
+    "title": "Tumblr",
+    "color": "#36465D",
+    "file": "tumblr.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "twitch",
+    "title": "Twitch",
+    "color": "#9146FF",
+    "file": "twitch.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "web",
+    "title": "Web",
+    "color": "#111827",
+    "file": "web.svg",
+    "source": "starcaster"
+  },
+  {
+    "slug": "whatsapp",
+    "title": "WhatsApp",
+    "color": "#25D366",
+    "file": "whatsapp.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "x",
+    "title": "X",
+    "color": "#000000",
+    "file": "x.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "youtube",
+    "title": "YouTube",
+    "color": "#FF0000",
+    "file": "youtube.svg",
+    "source": "simple-icons"
+  }
+]

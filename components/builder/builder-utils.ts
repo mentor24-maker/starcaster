@@ -814,6 +814,15 @@ export function getThemeRootVars(theme: BuilderTheme | undefined): CSSProperties
       vars[`--bx-size-h${level}`] = `${Math.round(size * 100) / 100}px`;
     }
   }
+  // Per-heading explicit overrides take precedence over the modular scale above.
+  for (let level = 1; level <= 6; level += 1) {
+    const key = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+    const explicit = (scale as Record<string, number | undefined>)[key];
+    if (explicit) vars[`--bx-size-h${level}`] = `${explicit}px`;
+  }
+
+  vars["--bx-link-decoration"] = colors.linkUnderline !== false ? "underline" : "none";
+  vars["--bx-link-hover-decoration"] = colors.linkHoverUnderline !== false ? "underline" : "none";
 
   return vars as CSSProperties;
 }

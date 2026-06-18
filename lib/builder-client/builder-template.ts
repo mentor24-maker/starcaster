@@ -156,6 +156,13 @@ export type BuilderTheme = {
   typography: BuilderThemeTypography;
 };
 
+/** Lightweight reference to a saved theme in the develop_themes table. */
+export type DevelopThemeSummary = {
+  id: string;
+  name: string;
+  typography?: BuilderThemeTypography;
+};
+
 export type BuilderTemplateSection = {
   id: string;
   title: string;
@@ -212,6 +219,7 @@ export type BuilderPageRecord = {
   name: string;
   slug: string;
   templateId: string;
+  themeId?: string;
   pageBackground: BackgroundSettings;
   theme: BuilderTheme;
   layoutSections: BuilderTemplateSection[];
