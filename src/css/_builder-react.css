@@ -9359,6 +9359,26 @@
   gap: 16px;
 }
 
+.builder-react-root .builder-gallery-grid.community-asset-grid {
+  grid-template-columns: repeat(20, 1fr);
+  gap: 4px;
+}
+
+.builder-react-root .community-asset-grid .builder-gallery-card {
+  padding: 3px;
+  border-radius: 5px;
+  gap: 0;
+}
+
+.builder-react-root .community-asset-grid .builder-gallery-thumb {
+  border-radius: 3px;
+}
+
+.builder-react-root .community-asset-grid .builder-gallery-card > span,
+.builder-react-root .community-asset-grid .builder-gallery-card > small {
+  display: none;
+}
+
 .builder-react-root .admin-gallery-media-grid {
   position: relative;
   grid-template-columns: repeat(4, minmax(0, 1fr));

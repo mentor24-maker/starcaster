@@ -194,11 +194,12 @@ export function BuilderGalleryModal({
               onClear={clearFilters}
             />
           )}
-          <div className="builder-gallery-grid">
+          <div className={`builder-gallery-grid${mediaSource === "community" ? " community-asset-grid" : ""}`}>
             {displayMedia.map((image) => (
               <button
                 className="builder-gallery-card"
                 key={image.path}
+                title={mediaSource === "community" ? image.name : undefined}
                 onClick={() => onSelectImage(image.path)}
                 type="button"
               >
