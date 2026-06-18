@@ -153,9 +153,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   );
   const isEmailTemplateDraft = builderMode === "templates" && draft.templateKind === "email";
 
-  // Palette swatches for the RTE toolbar: use the 4 palette colors from the active
-  // develop_theme (looked up by pageThemeId), falling back to non-empty typography colors.
-  const activeTheme = pageThemeId ? developThemes.find((t) => t.id === pageThemeId) : null;
+  // Palette swatches for the RTE toolbar: use the active theme's palette colors.
+  // Falls back to the first available theme so swatches always appear when a single theme
+  // is loaded (theme_id column may not be persisted yet if migration hasn't run).
+  const activeTheme = pageThemeId
+    ? developThemes.find((t) => t.id === pageThemeId) ?? developThemes[0] ?? null
+    : developThemes[0] ?? null;
   const rteThemeColors = [
     { label: "Primary", hex: activeTheme?.primaryColor ?? "" },
     { label: "Secondary", hex: activeTheme?.secondaryColor ?? "" },
