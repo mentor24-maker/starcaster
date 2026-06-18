@@ -17,6 +17,8 @@ type BuilderCellStyleSettingsProps = {
   onUpdateCellBorderRadius: (column: string, value: string) => void;
   onSetCellExtra: (column: string, key: string, value: string) => void;
   getCellExtra: (column: string, key: string, fallback?: string) => string;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 function opacityPercentValue(value: string, fallback = "1") {
@@ -37,7 +39,9 @@ export function BuilderCellStyleSettings({
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
   onSetCellExtra,
-  getCellExtra
+  getCellExtra,
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderCellStyleSettingsProps) {
   if (editorDevice === "mobile") {
     return (
@@ -125,6 +129,8 @@ export function BuilderCellStyleSettings({
           background={section.cellBackgrounds[column] ?? createDefaultBackgroundSettings()}
           horizontal
           onChange={(updater) => onUpdateCellBackground(column, updater)}
+          themeBackgroundColor={themeBackgroundColor}
+          themePrimaryColor={themePrimaryColor}
         />
         <BuilderSettingRow label="Opacity" fullWidth>
           <BuilderNumberSelectControl

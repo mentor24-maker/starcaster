@@ -2195,6 +2195,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                             canonicalSourceName={canonicalSourceName}
                             themeColors={rteThemeColors}
                             themeStyle={getThemeRootVars(draft.theme)}
+                            themeBackgroundColor={activeTheme?.backgroundColor}
+                            themePrimaryColor={activeTheme?.primaryColor}
                             onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                             onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
                             onMoveUp={() => moveSection(section.id, -1)}
@@ -2266,6 +2268,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                         canonicalSourceName={canonicalSourceName}
                         themeColors={rteThemeColors}
                         themeStyle={getThemeRootVars(draft.theme)}
+                        themeBackgroundColor={activeTheme?.backgroundColor}
+                        themePrimaryColor={activeTheme?.primaryColor}
                         onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                         onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
                         onMoveUp={() => moveSection(section.id, -1)}
