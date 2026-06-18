@@ -18,6 +18,10 @@
       "destination": "/public/data-deletion.html"
     },
     {
+      "source": "/about",
+      "destination": "/public/about.html"
+    },
+    {
       "source": "/",
       "destination": "/public/index.html"
     },
