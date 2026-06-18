@@ -79,6 +79,8 @@ type BuilderSectionCardProps = {
   onOpenModulePalette: (column: string, anchor?: { x: number; y: number }) => void;
   themeColors?: Array<{ label: string; hex: string }>;
   themeStyle?: CSSProperties;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 function getModulePaletteAnchorFromButton(button: HTMLButtonElement) {
@@ -136,7 +138,9 @@ export function BuilderSectionCard({
   onUploadSectionBackgroundMedia,
   onOpenModulePalette,
   themeColors,
-  themeStyle
+  themeStyle,
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderSectionCardProps) {
   const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
   const isCanonical = sectionAny.canonical === true;
@@ -381,6 +385,8 @@ export function BuilderSectionCard({
             onUpdateSection={onUpdateSection}
             onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
             onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}
+            themeBackgroundColor={themeBackgroundColor}
+            themePrimaryColor={themePrimaryColor}
           />
 
           <div
@@ -424,6 +430,8 @@ export function BuilderSectionCard({
                         onUpdateCellBorderRadius={onUpdateCellBorderRadius}
                         onSetCellExtra={setCellExtra}
                         getCellExtra={getCellExtra}
+                        themeBackgroundColor={themeBackgroundColor}
+                        themePrimaryColor={themePrimaryColor}
                       />
                     ) : null}
                   </div>
