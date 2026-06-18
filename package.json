@@ -49,6 +49,7 @@
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.0",
+    "flag-icons": "^7.5.0",
     "heroicons": "^2.2.0",
     "typescript": "^5.9.3",
     "undraw-svg": "^1.0.0",

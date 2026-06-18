@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
+import { CommunityAssetNav } from "@/components/builder/community-asset-nav";
 import { GalleryMediaFilterBar } from "@/components/gallery-media-filter-bar";
 import { getRichTextGalleryModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { buildGalleryMediaCategoryOptions } from "@/lib/gallery-media-category";
@@ -17,6 +18,11 @@ type BuilderGalleryModalProps = {
   onUploadImage?: (file: File | null) => void | Promise<void>;
 };
 
+function parseMediaCategory(mediaCategory: string | undefined): [string, string] {
+  const parts = (mediaCategory ?? "").split(" / ").map((s) => s.trim());
+  return [parts[0] ?? "", parts[1] ?? ""];
+}
+
 export function BuilderGalleryModal({
   anchor = null,
   isUploading,
@@ -26,6 +32,8 @@ export function BuilderGalleryModal({
 }: BuilderGalleryModalProps) {
   const [mounted, setMounted] = useState(false);
   const [mediaSource, setMediaSource] = useState<GalleryMediaSource>("project");
+  const [communityTopCat, setCommunityTopCat] = useState("");
+  const [communitySubCat, setCommunitySubCat] = useState("");
   const isAnchored = anchor != null;
   const anchoredModalStyle = isAnchored && mounted ? getRichTextGalleryModalStyle() : undefined;
 
@@ -47,9 +55,35 @@ export function BuilderGalleryModal({
     [media]
   );
 
+  // Reset community nav when switching sources
+  useEffect(() => {
+    setCommunityTopCat("");
+    setCommunitySubCat("");
+  }, [mediaSource]);
+
+  // Filter community media by selected category/subcategory
+  const displayMedia = useMemo(() => {
+    if (mediaSource !== "community" || !communityTopCat) return media;
+    return media.filter((item) => {
+      const [top, sub] = parseMediaCategory(item.mediaCategory);
+      if (top !== communityTopCat) return false;
+      if (communitySubCat && sub !== communitySubCat) return false;
+      return true;
+    });
+  }, [media, mediaSource, communityTopCat, communitySubCat]);
+
+  const displayTotal = mediaSource === "community" ? displayMedia.length : total;
+  const displayRangeStart = displayTotal === 0 ? 0 : 1;
+  const displayRangeEnd = mediaSource === "community" ? displayMedia.length : rangeEnd;
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  function handleCommunityTopCat(slug: string) {
+    setCommunityTopCat(slug);
+    setCommunitySubCat("");
+  }
 
   async function handleUpload(file: File | null) {
     if (!file || !onUploadImage) {
@@ -86,9 +120,9 @@ export function BuilderGalleryModal({
             <p className="page-copy admin-copy builder-gallery-modal-summary">
               {isLoading && media.length === 0
                 ? "Loading media..."
-                : total === 0
+                : displayTotal === 0
                   ? "No files match the current filters."
-                  : `Showing ${rangeStart}–${rangeEnd} of ${total} file${total === 1 ? "" : "s"}`}
+                  : `Showing ${displayRangeStart}–${displayRangeEnd} of ${displayTotal} file${displayTotal === 1 ? "" : "s"}`}
             </p>
           </div>
           <div className="builder-gallery-header-actions">
@@ -142,14 +176,26 @@ export function BuilderGalleryModal({
           </div>
         </div>
         <div className="builder-gallery-body">
-          <GalleryMediaFilterBar
-            categoryOptions={categoryOptions}
-            filters={filters}
-            onChange={setFilters}
-            onClear={clearFilters}
-          />
+          {mediaSource === "community" ? (
+            <CommunityAssetNav
+              allMedia={media}
+              selectedTop={communityTopCat}
+              selectedSub={communitySubCat}
+              onSelectTop={handleCommunityTopCat}
+              onSelectSub={setCommunitySubCat}
+              searchValue={filters.filename}
+              onSearchChange={(value) => setFilters((current) => ({ ...current, filename: value }))}
+            />
+          ) : (
+            <GalleryMediaFilterBar
+              categoryOptions={categoryOptions}
+              filters={filters}
+              onChange={setFilters}
+              onClear={clearFilters}
+            />
+          )}
           <div className="builder-gallery-grid">
-            {media.map((image) => (
+            {displayMedia.map((image) => (
               <button
                 className="builder-gallery-card"
                 key={image.path}
@@ -174,7 +220,7 @@ export function BuilderGalleryModal({
                 </small>
               </button>
             ))}
-            {!isLoading && media.length === 0 ? (
+            {!isLoading && displayMedia.length === 0 ? (
               <div className="builder-gallery-empty">
                 {isUploading ? "Uploading..." : "No media found in the gallery."}
               </div>
