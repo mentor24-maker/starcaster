@@ -12281,6 +12281,11 @@ body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: 8px;
   flex-wrap: wrap;
 }
+.builder-react-root .builder-themes-btn {
+  flex: 0 0 auto;
+  width: auto !important;
+  white-space: nowrap;
+}
 .builder-react-root .builder-themes-selector {
   flex: 1 1 180px;
   min-width: 0;

@@ -238,12 +238,12 @@ export function BuilderThemesPage() {
           value={draft.name}
           onChange={(e) => updateDraft({ name: e.target.value })}
         />
-        <button type="button" className="builder-icon-button" onClick={handleNew}>
+        <button type="button" className="secondary-button builder-themes-btn" onClick={handleNew}>
           New
         </button>
         <button
           type="button"
-          className="builder-icon-button builder-icon-button-active"
+          className="submit-button builder-themes-btn"
           onClick={handleSave}
           disabled={isSaving}
         >
@@ -252,7 +252,7 @@ export function BuilderThemesPage() {
         {isEditing && (
           <button
             type="button"
-            className="builder-icon-button"
+            className="danger-button builder-themes-btn"
             onClick={handleDelete}
             disabled={isSaving}
           >
