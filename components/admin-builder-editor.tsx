@@ -1925,15 +1925,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           <button className={builderMode === "templates" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("templates")} type="button">Templates</button>
           <button className={builderMode === "modules" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("modules")} type="button">Modules</button>
           <button className={builderMode === "pages" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("pages")} type="button">Pages</button>
-          {builderMode === "pages" ? (
-            <button
-              className="submit-button admin-blog-add-button builder-header-bulk-create"
-              onClick={() => setShowBulkCreate(true)}
-              type="button"
-            >
-              Bulk Create
-            </button>
-          ) : null}
         </div>
       </div>
 
