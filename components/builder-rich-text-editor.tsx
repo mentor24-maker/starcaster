@@ -10,7 +10,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import { prepareRichTextHtmlForEditor, prepareRichTextHtmlForStorage } from "@/lib/builder-template";
@@ -36,11 +36,15 @@ import {
   RichTextShadowIcon
 } from "@/components/builder/rich-text-toolbar-icons";
 
+type ThemeColorSwatch = { label: string; hex: string };
+
 type BuilderRichTextEditorProps = RichTextGalleryBinding & {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   enableEmojiPicker?: boolean;
+  themeColors?: ThemeColorSwatch[];
+  themeStyle?: CSSProperties;
 };
 
 const FontSizeStyle = Extension.create({
@@ -163,7 +167,9 @@ export function BuilderRichTextEditor({
   onOpenGallery,
   galleryImagePath,
   onGalleryImageConsumed,
-  onUploadGalleryImage
+  onUploadGalleryImage,
+  themeColors,
+  themeStyle
 }: BuilderRichTextEditorProps) {
   const fontSizeOptions = [
     "14",
@@ -556,14 +562,14 @@ export function BuilderRichTextEditor({
 
   if (!editor) {
     return (
-      <div className="builder-rich-text-shell">
+      <div className="builder-rich-text-shell" style={themeStyle}>
         <div className="builder-rich-text-loading">{placeholder}</div>
       </div>
     );
   }
 
   return (
-    <div className="builder-rich-text-shell" ref={shellRef}>
+    <div className="builder-rich-text-shell" ref={shellRef} style={themeStyle}>
       <div className="builder-rich-text-toolbar">
         <button
           className={!editor.isActive("heading") ? "is-active" : undefined}
@@ -742,6 +748,16 @@ export function BuilderRichTextEditor({
             value={String(editor.getAttributes("textStyle").color || "#18324a")}
           />
         </label>
+        {themeColors && themeColors.length > 0 && themeColors.map(({ label, hex }) => (
+          <button
+            key={label}
+            className="builder-rich-text-theme-swatch"
+            style={{ background: hex }}
+            title={label}
+            type="button"
+            onClick={() => editor.chain().focus().setColor(hex).run()}
+          />
+        ))}
         <button
           className={editor.isActive("bulletList") ? "is-active" : undefined}
           onClick={() => editor.chain().focus().toggleBulletList().run()}

@@ -218,6 +218,34 @@ body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ============================================================== */
+/* RICH TEXT EDITOR — theme color swatches + heading size vars     */
+/* ============================================================== */
+
+/* Small circular swatch buttons in the RTE toolbar */
+.builder-react-root .builder-rich-text-theme-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* RTE content headings pick up --bx-size-h* vars set on the shell */
+.builder-react-root .builder-rich-text-content h1 {
+  font-size: var(--bx-size-h1, inherit);
+}
+.builder-react-root .builder-rich-text-content h2 {
+  font-size: var(--bx-size-h2, inherit);
+}
+.builder-react-root .builder-rich-text-content h3 {
+  font-size: var(--bx-size-h3, inherit);
+}
+
+/* ============================================================== */
 /* THEMES PAGE — three-column pod layout                          */
 /* ============================================================== */
 

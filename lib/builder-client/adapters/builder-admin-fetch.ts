@@ -35,6 +35,7 @@ const PATH_REWRITES: Array<[RegExp, string, string]> = [
   [/^\/api\/admin\/cell-modules(\/|$)/, '/api/develop/modules$1', 'cell-modules'],
   [/^\/api\/admin\/saved-sections(\/|$)/, '/api/develop/saved-sections$1', 'saved-sections'],
   [/^\/api\/admin\/products(\/|$)/, '/api/develop/products$1', 'products'],
+  [/^\/api\/admin\/themes(\/|$)/, '/api/develop/themes$1', 'themes'],
   [/^\/api\/admin\/polls(\/|$)/, '/api/polls$1', 'polls']
 ];
 

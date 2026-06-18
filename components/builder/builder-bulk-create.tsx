@@ -1,4 +1,4 @@
-import type { BuilderPageRecord, BuilderSavedSectionRecord, BuilderTemplateRecord } from "@/lib/builder-template";
+import type { BuilderPageRecord, BuilderSavedSectionRecord, BuilderTemplateRecord, DevelopThemeSummary } from "@/lib/builder-template";
 import { useEffect, useMemo, useState } from "react";
 import { CONTENT_DISPLAY_MODELS } from "./builder-content-models";
 import type { BuilderMenuItem } from "./builder-menu";
@@ -34,14 +34,16 @@ type BuilderBulkCreateProps = {
   templates: BuilderTemplateRecord[];
   savedSections: BuilderSavedSectionRecord[];
   acquireRuns: AcquireRunSummary[];
+  themes: DevelopThemeSummary[];
   onBack: () => void;
   onRefreshRuns?: () => void;
-  onBulkCreatePages: (templateId: string, items: BulkCreateItem[]) => Promise<BulkCreateResult[]>;
+  onBulkCreatePages: (templateId: string, items: BulkCreateItem[], themeId?: string) => Promise<BulkCreateResult[]>;
   onBulkCreateWithModel: (
     templateId: string,
     items: BulkCreateItem[],
     contentModelId: string,
     runId: string,
+    themeId?: string,
   ) => Promise<BulkCreateResult[]>;
   onEditPage: (pageId: string) => void;
 };
@@ -50,6 +52,7 @@ export function BuilderBulkCreate({
   templates,
   savedSections,
   acquireRuns,
+  themes,
   onBack,
   onRefreshRuns,
   onBulkCreatePages,
@@ -57,6 +60,7 @@ export function BuilderBulkCreate({
   onEditPage,
 }: BuilderBulkCreateProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [selectedThemeId, setSelectedThemeId] = useState("");
   const [selectedMenuId, setSelectedMenuId] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
@@ -158,9 +162,10 @@ export function BuilderBulkCreate({
     setIsGenerating(true);
     setError(null);
     try {
+      const themeArg = selectedThemeId || undefined;
       const res = useContentModel
-        ? await onBulkCreateWithModel(selectedTemplateId, items, selectedModelId, selectedRunId)
-        : await onBulkCreatePages(selectedTemplateId, items);
+        ? await onBulkCreateWithModel(selectedTemplateId, items, selectedModelId, selectedRunId, themeArg)
+        : await onBulkCreatePages(selectedTemplateId, items, themeArg);
       setResults(res);
       setGenerated(true);
     } catch (e) {
@@ -194,6 +199,16 @@ export function BuilderBulkCreate({
                 <option key={template.id} value={template.id}>
                   {template.name} ({template.layoutSections.length} section{template.layoutSections.length !== 1 ? "s" : ""})
                 </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Theme <span className="builder-bulk-create-optional">(optional)</span></span>
+            <select value={selectedThemeId} onChange={(e) => setSelectedThemeId(e.target.value)}>
+              <option value="">Use template default</option>
+              {themes.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
           </label>

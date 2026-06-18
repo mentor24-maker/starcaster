@@ -77,6 +77,8 @@ type BuilderSectionCardProps = {
   onOpenSectionBackgroundGallery: () => void;
   onUploadSectionBackgroundMedia: (file: File | null) => void;
   onOpenModulePalette: (column: string, anchor?: { x: number; y: number }) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
+  themeStyle?: CSSProperties;
 };
 
 function getModulePaletteAnchorFromButton(button: HTMLButtonElement) {
@@ -132,7 +134,9 @@ export function BuilderSectionCard({
   onUploadButtonBackgroundMedia,
   onOpenSectionBackgroundGallery,
   onUploadSectionBackgroundMedia,
-  onOpenModulePalette
+  onOpenModulePalette,
+  themeColors,
+  themeStyle
 }: BuilderSectionCardProps) {
   const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
   const isCanonical = sectionAny.canonical === true;
@@ -529,6 +533,8 @@ export function BuilderSectionCard({
                                   onOpenSocialIconGallery={(itemId) => onOpenSocialIconGallery(module.id, itemId)}
                                   onUploadMedia={(file) => onUploadMediaForModule(module.id, file)}
                                   onUploadButtonBackgroundMedia={(file) => onUploadButtonBackgroundMedia(module.id, file)}
+                                  themeColors={themeColors}
+                                  themeStyle={themeStyle}
                                   onModuleDragStart={(event) => {
                                     if (cancelBuilderDragIfFormField(event)) {
                                       return;

@@ -7,7 +7,7 @@ import { GalleryMediaFilterBar } from "@/components/gallery-media-filter-bar";
 import { getRichTextGalleryModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { buildGalleryMediaCategoryOptions } from "@/lib/gallery-media-category";
 import { getGalleryMediaThumbnailUrl } from "@/lib/gallery-media-thumbnail";
-import { useGalleryMediaLibrary } from "@/lib/use-gallery-media-library";
+import { useGalleryMediaLibrary, type GalleryMediaSource } from "@/lib/use-gallery-media-library";
 
 type BuilderGalleryModalProps = {
   anchor?: BuilderModalAnchor | null;
@@ -25,6 +25,7 @@ export function BuilderGalleryModal({
   onUploadImage
 }: BuilderGalleryModalProps) {
   const [mounted, setMounted] = useState(false);
+  const [mediaSource, setMediaSource] = useState<GalleryMediaSource>("project");
   const isAnchored = anchor != null;
   const anchoredModalStyle = isAnchored && mounted ? getRichTextGalleryModalStyle() : undefined;
 
@@ -39,7 +40,7 @@ export function BuilderGalleryModal({
     rangeStart,
     rangeEnd,
     canLoadMore
-  } = useGalleryMediaLibrary({ syncOnFirstLoad: false });
+  } = useGalleryMediaLibrary({ source: mediaSource, syncOnFirstLoad: false });
 
   const categoryOptions = useMemo(
     () => buildGalleryMediaCategoryOptions(media.map((item) => item.mediaCategory ?? "")),
@@ -91,7 +92,25 @@ export function BuilderGalleryModal({
             </p>
           </div>
           <div className="builder-gallery-header-actions">
-            {onUploadImage ? (
+            <div className="builder-gallery-source-toggle" role="group" aria-label="Media source">
+              <button
+                aria-pressed={mediaSource === "project"}
+                className={mediaSource === "project" ? "is-active" : ""}
+                onClick={() => setMediaSource("project")}
+                type="button"
+              >
+                Project Assets
+              </button>
+              <button
+                aria-pressed={mediaSource === "community"}
+                className={mediaSource === "community" ? "is-active" : ""}
+                onClick={() => setMediaSource("community")}
+                type="button"
+              >
+                Community Assets
+              </button>
+            </div>
+            {onUploadImage && mediaSource === "project" ? (
               <label className="secondary-button builder-gallery-button builder-upload-button">
                 <span>{isUploading ? "Uploading..." : "Add to Gallery"}</span>
                 <input
