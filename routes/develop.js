@@ -414,6 +414,7 @@ async function handle(req, res, pathname, method) {
     const result = await createTheme({
       name,
       primaryColor: String(body.primaryColor || '').trim(),
+      secondaryColor: String(body.secondaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
       accentColor: String(body.accentColor || '').trim(),
       borderThickness: body.borderThickness,
@@ -498,6 +499,7 @@ async function handle(req, res, pathname, method) {
     const result = await updateTheme(themeMatch[1], {
       name: String(body.name || '').trim(),
       primaryColor: String(body.primaryColor || '').trim(),
+      secondaryColor: String(body.secondaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
       accentColor: String(body.accentColor || '').trim(),
       borderThickness: body.borderThickness,
