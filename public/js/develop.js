@@ -13443,7 +13443,11 @@ App.develop = (function () {
     manifest: { id: 'develop', label: 'Develop', pageId: 'developPage', pagePrefixes: ['develop'] },
     init,
     refresh,
-    onPageActivated: refresh,
+    onPageActivated: async function onPageActivated(pageId) {
+      await refresh();
+      if (pageId === 'developThemesPage') mountThemesReact();
+      else if (pageId === 'developFormsPage') mountFormsReact();
+    },
     openThemesPage,
     openThemesBuilder,
     openFormsPage,
