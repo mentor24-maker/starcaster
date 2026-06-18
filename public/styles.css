@@ -9965,6 +9965,38 @@ body.asset-associations-modal-open {
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
 }
+.builder-react-root .builder-gallery-grid.community-asset-grid {
+  grid-template-columns: repeat(20, 1fr);
+  gap: 4px;
+}
+.builder-react-root .community-asset-grid .builder-gallery-card {
+  padding: 3px;
+  border-radius: 5px;
+  gap: 0;
+}
+.builder-react-root .community-asset-grid .builder-gallery-thumb {
+  border-radius: 3px;
+}
+.builder-react-root .community-asset-grid .builder-gallery-card > span,
+.builder-react-root .community-asset-grid .builder-gallery-card > small {
+  display: none;
+}
+.builder-react-root .builder-gallery-grid.community-asset-grid {
+  grid-template-columns: repeat(20, 1fr);
+  gap: 4px;
+}
+.builder-react-root .community-asset-grid .builder-gallery-card {
+  padding: 3px;
+  border-radius: 5px;
+  gap: 0;
+}
+.builder-react-root .community-asset-grid .builder-gallery-thumb {
+  border-radius: 3px;
+}
+.builder-react-root .community-asset-grid .builder-gallery-card > span,
+.builder-react-root .community-asset-grid .builder-gallery-card > small {
+  display: none;
+}
 .builder-react-root .admin-gallery-media-grid {
   position: relative;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -12424,6 +12456,14 @@ body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-size: var(--bx-size-h3, 1.35rem);
   color: var(--bx-heading, inherit);
   font-family: var(--bx-font-heading, inherit);
+}
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a,
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a:link,
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a:visited {
+  text-decoration: var(--bx-link-decoration, underline);
+}
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a:hover {
+  text-decoration: var(--bx-link-hover-decoration, underline);
 }
 .builder-react-root .builder-themes-page {
   display: flex;
