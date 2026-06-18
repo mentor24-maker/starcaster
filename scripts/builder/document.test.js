@@ -309,6 +309,54 @@ test('serializeBuilderDocument preserves section row border settings', () => {
   assert.equal(restored.background.color, '#eef6ff');
 });
 
+test('serializeBuilderDocument preserves cell border settings', () => {
+  const input = {
+    layoutSections: [{
+      id: 'section-1',
+      layout: 'single',
+      title: '',
+      alignment: 'left',
+      marginTop: '0',
+      marginBottom: '0',
+      rowBorderWidth: '0',
+      rowBorderColor: '#000000',
+      rowBorderStyle: 'solid',
+      rowBorderRadius: '0',
+      mobileHidden: 'false',
+      desktopHidden: 'false',
+      mobileLayout: 'stack',
+      background: { mode: 'none', color: '#ffffff', color2: '#eaf4ff', imageUrl: '', styleKey: '' },
+      cellBackgrounds: { main: { mode: 'none', color: '#ffffff', color2: '#eaf4ff', imageUrl: '', styleKey: '' } },
+      cellPadding: { main: '18' },
+      cellVerticalMargin: { main: '0' },
+      cellMobileHidden: { main: 'false' },
+      cellDesktopHidden: { main: 'false' },
+      cellBorderWidth: { main: '4' },
+      cellBorderColor: { main: '#336699' },
+      cellBorderRadius: { main: '16' },
+      cellBorderStyle: { main: 'dashed' },
+      cellShadow: { main: 'none' },
+      cellOpacity: { main: '1' },
+      cellHAlign: { main: 'left' },
+      cellVAlign: { main: 'top' },
+      modules: [],
+    }],
+  };
+
+  const stored = serializeBuilderDocument(input);
+  const section = stored.sections[0];
+  assert.equal(section.cellBorderWidth.main, '4');
+  assert.equal(section.cellBorderColor.main, '#336699');
+  assert.equal(section.cellBorderRadius.main, '16');
+  assert.equal(section.cellBorderStyle.main, 'dashed');
+
+  const loaded = normalizeBuilderDocument(stored);
+  const restored = loaded.layoutSections[0];
+  assert.equal(restored.cellBorderWidth.main, '4');
+  assert.equal(restored.cellBorderColor.main, '#336699');
+  assert.equal(restored.cellBorderRadius.main, '16');
+});
+
 test('serializeBuilderDocument wraps bare arrays', () => {
   const serialized = serializeBuilderDocument({
     layoutSections: [{

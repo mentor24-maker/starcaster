@@ -6,6 +6,7 @@ import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { layoutOptions } from "./builder-types";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderSectionControlsProps = {
   section: BuilderTemplateSection;
@@ -15,6 +16,7 @@ type BuilderSectionControlsProps = {
   onUploadSectionBackgroundMedia?: (file: File | null) => void;
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
+  themeColors?: Array<{ label: string; hex: string }>;
 };
 
 function updateSectionBackground(
@@ -31,7 +33,8 @@ export function BuilderSectionControls({
   onOpenSectionBackgroundGallery,
   onUploadSectionBackgroundMedia,
   themeBackgroundColor,
-  themePrimaryColor
+  themePrimaryColor,
+  themeColors = []
 }: BuilderSectionControlsProps) {
   if (editorDevice === "mobile") {
     return (
@@ -169,12 +172,13 @@ export function BuilderSectionControls({
           </select>
         </BuilderSettingRow>
         <BuilderSettingRow label="Border Color">
-          <input
-            type="color"
+          <BuilderThemeColorField
             disabled={Number(section.rowBorderWidth ?? "0") === 0}
-            value={/^#[0-9a-f]{6}$/i.test(section.rowBorderColor ?? "") ? section.rowBorderColor : "#000000"}
-            onChange={(event) =>
-              onUpdateSection((current) => ({ ...current, rowBorderColor: event.target.value }))
+            fallback="#000000"
+            themeColors={themeColors}
+            value={section.rowBorderColor ?? ""}
+            onChange={(rowBorderColor) =>
+              onUpdateSection((current) => ({ ...current, rowBorderColor }))
             }
           />
         </BuilderSettingRow>
@@ -209,6 +213,7 @@ export function BuilderSectionControls({
         onChooseImage={onOpenSectionBackgroundGallery}
         onUploadImage={onUploadSectionBackgroundMedia}
         themeBackgroundColor={themeBackgroundColor}
+        themeColors={themeColors}
         themePrimaryColor={themePrimaryColor}
       />
     </div>
