@@ -1,9 +1,37 @@
 [
   {
+    "slug": "apple",
+    "title": "Apple",
+    "color": "#000000",
+    "file": "apple.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "applepodcasts",
+    "title": "Apple Podcasts",
+    "color": "#9933CC",
+    "file": "applepodcasts.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "bandcamp",
+    "title": "Bandcamp",
+    "color": "#408294",
+    "file": "bandcamp.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "behance",
     "title": "Behance",
     "color": "#1769FF",
     "file": "behance.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "bitbucket",
+    "title": "Bitbucket",
+    "color": "#0052CC",
+    "file": "bitbucket.svg",
     "source": "simple-icons"
   },
   {
@@ -21,6 +49,34 @@
     "source": "simple-icons"
   },
   {
+    "slug": "buymeacoffee",
+    "title": "Buy Me A Coffee",
+    "color": "#FFDD00",
+    "file": "buymeacoffee.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "clubhouse",
+    "title": "Clubhouse",
+    "color": "#FFE450",
+    "file": "clubhouse.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "crunchbase",
+    "title": "Crunchbase",
+    "color": "#0288D1",
+    "file": "crunchbase.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "devto",
+    "title": "dev.to",
+    "color": "#0A0A0A",
+    "file": "devto.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "discord",
     "title": "Discord",
     "color": "#5865F2",
@@ -35,10 +91,38 @@
     "source": "simple-icons"
   },
   {
+    "slug": "etsy",
+    "title": "Etsy",
+    "color": "#F16521",
+    "file": "etsy.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "facebook",
     "title": "Facebook",
     "color": "#0866FF",
     "file": "facebook.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "figma",
+    "title": "Figma",
+    "color": "#F24E1E",
+    "file": "figma.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "flipboard",
+    "title": "Flipboard",
+    "color": "#E12828",
+    "file": "flipboard.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "ghost",
+    "title": "Ghost",
+    "color": "#15171A",
+    "file": "ghost.svg",
     "source": "simple-icons"
   },
   {
@@ -49,10 +133,80 @@
     "source": "simple-icons"
   },
   {
+    "slug": "gitlab",
+    "title": "GitLab",
+    "color": "#FC6D26",
+    "file": "gitlab.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "gmail",
+    "title": "Gmail",
+    "color": "#EA4335",
+    "file": "gmail.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "goodreads",
+    "title": "Goodreads",
+    "color": "#1E1914",
+    "file": "goodreads.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "google",
+    "title": "Google",
+    "color": "#4285F4",
+    "file": "google.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "hashnode",
+    "title": "Hashnode",
+    "color": "#2962FF",
+    "file": "hashnode.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "instagram",
     "title": "Instagram",
     "color": "#FF0069",
     "file": "instagram.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "kick",
+    "title": "Kick",
+    "color": "#53FC19",
+    "file": "kick.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "kickstarter",
+    "title": "Kickstarter",
+    "color": "#05CE78",
+    "file": "kickstarter.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "kofi",
+    "title": "Ko-fi",
+    "color": "#FF6433",
+    "file": "kofi.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "letterboxd",
+    "title": "Letterboxd",
+    "color": "#202830",
+    "file": "letterboxd.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "line",
+    "title": "LINE",
+    "color": "#00C300",
+    "file": "line.svg",
     "source": "simple-icons"
   },
   {
@@ -61,6 +215,13 @@
     "color": "#0A66C2",
     "file": "linkedin.svg",
     "source": "starcaster"
+  },
+  {
+    "slug": "linktree",
+    "title": "Linktree",
+    "color": "#43E55E",
+    "file": "linktree.svg",
+    "source": "simple-icons"
   },
   {
     "slug": "mastodon",
@@ -84,10 +245,59 @@
     "source": "simple-icons"
   },
   {
+    "slug": "miro",
+    "title": "Miro",
+    "color": "#050038",
+    "file": "miro.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "mixcloud",
+    "title": "Mixcloud",
+    "color": "#5000FF",
+    "file": "mixcloud.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "notion",
+    "title": "Notion",
+    "color": "#000000",
+    "file": "notion.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "patreon",
+    "title": "Patreon",
+    "color": "#000000",
+    "file": "patreon.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "paypal",
+    "title": "PayPal",
+    "color": "#002991",
+    "file": "paypal.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "pinterest",
     "title": "Pinterest",
     "color": "#BD081C",
     "file": "pinterest.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "podcastindex",
+    "title": "Podcast Index",
+    "color": "#F90000",
+    "file": "podcastindex.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "producthunt",
+    "title": "Product Hunt",
+    "color": "#DA552F",
+    "file": "producthunt.svg",
     "source": "simple-icons"
   },
   {
@@ -105,10 +315,31 @@
     "source": "simple-icons"
   },
   {
+    "slug": "replit",
+    "title": "Replit",
+    "color": "#F26207",
+    "file": "replit.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "rss",
     "title": "RSS",
     "color": "#FFA500",
     "file": "rss.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "rumble",
+    "title": "Rumble",
+    "color": "#85C742",
+    "file": "rumble.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "shopify",
+    "title": "Shopify",
+    "color": "#7AB55C",
+    "file": "shopify.svg",
     "source": "simple-icons"
   },
   {
@@ -130,6 +361,34 @@
     "title": "Snapchat",
     "color": "#FFFC00",
     "file": "snapchat.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "soundcloud",
+    "title": "SoundCloud",
+    "color": "#FF5500",
+    "file": "soundcloud.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "spotify",
+    "title": "Spotify",
+    "color": "#1ED760",
+    "file": "spotify.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "stackoverflow",
+    "title": "Stack Overflow",
+    "color": "#F58025",
+    "file": "stackoverflow.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "strava",
+    "title": "Strava",
+    "color": "#FC4C02",
+    "file": "strava.svg",
     "source": "simple-icons"
   },
   {
@@ -175,11 +434,39 @@
     "source": "simple-icons"
   },
   {
+    "slug": "vimeo",
+    "title": "Vimeo",
+    "color": "#1AB7EA",
+    "file": "vimeo.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "vk",
+    "title": "VK",
+    "color": "#0077FF",
+    "file": "vk.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "web",
     "title": "Web",
     "color": "#111827",
     "file": "web.svg",
     "source": "starcaster"
+  },
+  {
+    "slug": "wechat",
+    "title": "WeChat",
+    "color": "#07C160",
+    "file": "wechat.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "wellfound",
+    "title": "Wellfound",
+    "color": "#000000",
+    "file": "wellfound.svg",
+    "source": "simple-icons"
   },
   {
     "slug": "whatsapp",
@@ -189,10 +476,24 @@
     "source": "simple-icons"
   },
   {
+    "slug": "wordpress",
+    "title": "WordPress",
+    "color": "#21759B",
+    "file": "wordpress.svg",
+    "source": "simple-icons"
+  },
+  {
     "slug": "x",
     "title": "X",
     "color": "#000000",
     "file": "x.svg",
+    "source": "simple-icons"
+  },
+  {
+    "slug": "xing",
+    "title": "Xing",
+    "color": "#006567",
+    "file": "xing.svg",
     "source": "simple-icons"
   },
   {

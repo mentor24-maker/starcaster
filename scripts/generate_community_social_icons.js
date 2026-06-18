@@ -1,38 +1,97 @@
+'use strict';
+
 const fs = require('fs');
 const path = require('path');
 const icons = require('simple-icons');
 
 const OUT_DIR = path.join(__dirname, '..', 'public', 'images', 'community_assets', 'social_icons');
 
+// All icons sourced from simple-icons (simpleicons.org) — CC0 licensed.
+// Add entries here; re-run this script to regenerate SVGs + index.json.
 const SOCIAL_ICONS = [
-  { slug: 'behance', icon: icons.siBehance },
-  { slug: 'bluesky', icon: icons.siBluesky },
-  { slug: 'buffer', icon: icons.siBuffer },
-  { slug: 'discord', icon: icons.siDiscord },
-  { slug: 'dribbble', icon: icons.siDribbble },
-  { slug: 'facebook', icon: icons.siFacebook },
-  { slug: 'github', icon: icons.siGithub },
-  { slug: 'instagram', icon: icons.siInstagram },
-  { slug: 'mastodon', icon: icons.siMastodon },
-  { slug: 'medium', icon: icons.siMedium },
-  { slug: 'messenger', icon: icons.siMessenger },
-  { slug: 'pinterest', icon: icons.siPinterest },
-  { slug: 'quora', icon: icons.siQuora },
-  { slug: 'reddit', icon: icons.siReddit },
-  { slug: 'rss', icon: icons.siRss },
-  { slug: 'signal', icon: icons.siSignal },
-  { slug: 'snapchat', icon: icons.siSnapchat },
-  { slug: 'substack', icon: icons.siSubstack },
-  { slug: 'telegram', icon: icons.siTelegram },
-  { slug: 'threads', icon: icons.siThreads },
-  { slug: 'tiktok', icon: icons.siTiktok },
-  { slug: 'tumblr', icon: icons.siTumblr },
-  { slug: 'twitch', icon: icons.siTwitch },
-  { slug: 'whatsapp', icon: icons.siWhatsapp },
-  { slug: 'x', icon: icons.siX },
-  { slug: 'youtube', icon: icons.siYoutube }
+  // ── Social networks ──────────────────────────────────────────────────────
+  { slug: 'facebook',    icon: icons.siFacebook },
+  { slug: 'instagram',   icon: icons.siInstagram },
+  { slug: 'threads',     icon: icons.siThreads },
+  { slug: 'x',           icon: icons.siX },
+  { slug: 'bluesky',     icon: icons.siBluesky },
+  { slug: 'mastodon',    icon: icons.siMastodon },
+  { slug: 'pinterest',   icon: icons.siPinterest },
+  { slug: 'tumblr',      icon: icons.siTumblr },
+  { slug: 'snapchat',    icon: icons.siSnapchat },
+  { slug: 'tiktok',      icon: icons.siTiktok },
+  { slug: 'reddit',      icon: icons.siReddit },
+  { slug: 'quora',       icon: icons.siQuora },
+  { slug: 'vk',          icon: icons.siVk },
+  { slug: 'wechat',      icon: icons.siWechat },
+  { slug: 'line',        icon: icons.siLine },
+  { slug: 'flipboard',   icon: icons.siFlipboard },
+  // ── Messaging / communities ───────────────────────────────────────────────
+  { slug: 'messenger',   icon: icons.siMessenger },
+  { slug: 'whatsapp',    icon: icons.siWhatsapp },
+  { slug: 'telegram',    icon: icons.siTelegram },
+  { slug: 'signal',      icon: icons.siSignal },
+  { slug: 'discord',     icon: icons.siDiscord },
+  // ── Video platforms ───────────────────────────────────────────────────────
+  { slug: 'youtube',     icon: icons.siYoutube },
+  { slug: 'twitch',      icon: icons.siTwitch },
+  { slug: 'kick',        icon: icons.siKick },
+  { slug: 'vimeo',       icon: icons.siVimeo },
+  { slug: 'rumble',      icon: icons.siRumble },
+  // ── Audio / music / podcasts ──────────────────────────────────────────────
+  { slug: 'spotify',     icon: icons.siSpotify },
+  { slug: 'soundcloud',  icon: icons.siSoundcloud },
+  { slug: 'bandcamp',    icon: icons.siBandcamp },
+  { slug: 'mixcloud',    icon: icons.siMixcloud },
+  { slug: 'applepodcasts', icon: icons.siApplepodcasts },
+  { slug: 'podcastindex', icon: icons.siPodcastindex },
+  // ── Creator / monetization ────────────────────────────────────────────────
+  { slug: 'patreon',     icon: icons.siPatreon },
+  { slug: 'kofi',        icon: icons.siKofi },
+  { slug: 'buymeacoffee', icon: icons.siBuymeacoffee },
+  { slug: 'substack',    icon: icons.siSubstack },
+  { slug: 'medium',      icon: icons.siMedium },
+  { slug: 'ghost',       icon: icons.siGhost },
+  { slug: 'wordpress',   icon: icons.siWordpress },
+  { slug: 'hashnode',    icon: icons.siHashnode },
+  { slug: 'devto',       icon: icons.siDevdotto },
+  { slug: 'kickstarter', icon: icons.siKickstarter },
+  // ── Design / portfolio ────────────────────────────────────────────────────
+  { slug: 'behance',     icon: icons.siBehance },
+  { slug: 'dribbble',    icon: icons.siDribbble },
+  { slug: 'figma',       icon: icons.siFigma },
+  { slug: 'notion',      icon: icons.siNotion },
+  { slug: 'miro',        icon: icons.siMiro },
+  // ── Developer / code ─────────────────────────────────────────────────────
+  { slug: 'github',      icon: icons.siGithub },
+  { slug: 'gitlab',      icon: icons.siGitlab },
+  { slug: 'bitbucket',   icon: icons.siBitbucket },
+  { slug: 'stackoverflow', icon: icons.siStackoverflow },
+  { slug: 'replit',      icon: icons.siReplit },
+  // ── Professional ─────────────────────────────────────────────────────────
+  { slug: 'xing',        icon: icons.siXing },
+  { slug: 'wellfound',   icon: icons.siWellfound },
+  { slug: 'crunchbase',  icon: icons.siCrunchbase },
+  { slug: 'producthunt', icon: icons.siProducthunt },
+  { slug: 'goodreads',   icon: icons.siGoodreads },
+  { slug: 'letterboxd',  icon: icons.siLetterboxd },
+  { slug: 'strava',      icon: icons.siStrava },
+  // ── Commerce / platforms ──────────────────────────────────────────────────
+  { slug: 'etsy',        icon: icons.siEtsy },
+  { slug: 'shopify',     icon: icons.siShopify },
+  { slug: 'paypal',      icon: icons.siPaypal },
+  // ── Big tech (commonly linked) ────────────────────────────────────────────
+  { slug: 'apple',       icon: icons.siApple },
+  { slug: 'google',      icon: icons.siGoogle },
+  { slug: 'gmail',       icon: icons.siGmail },
+  // ── Discovery / curation ─────────────────────────────────────────────────
+  { slug: 'linktree',    icon: icons.siLinktree },
+  { slug: 'buffer',      icon: icons.siBuffer },
+  { slug: 'rss',         icon: icons.siRss },
+  { slug: 'clubhouse',   icon: icons.siClubhouse },
 ];
 
+// Icons that need a hand-crafted SVG (no simple-icons entry, or color variant).
 const CUSTOM_ICONS = [
   {
     slug: 'linkedin',
@@ -51,7 +110,7 @@ const CUSTOM_ICONS = [
     title: 'Web',
     hex: '111827',
     svg: `<svg fill="none" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Web</title><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke="#111827" stroke-width="2"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3c2.25 2.45 3.38 5.45 3.38 9S14.25 18.55 12 21c-2.25-2.45-3.38-5.45-3.38-9S9.75 5.45 12 3Z" stroke="#111827" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>`
-  }
+  },
 ];
 
 function formatSimpleIcon(entry) {
@@ -66,10 +125,13 @@ function writeFile(filePath, content) {
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 const manifest = [];
+const missingIcons = [];
 
 for (const entry of SOCIAL_ICONS) {
   if (!entry.icon) {
-    throw new Error(`Missing simple-icons entry for ${entry.slug}`);
+    missingIcons.push(entry.slug);
+    console.warn(`  ⚠  Missing simple-icons entry for "${entry.slug}" — skipped`);
+    continue;
   }
 
   const fileName = `${entry.slug}.svg`;
@@ -104,12 +166,17 @@ writeFile(
   [
     '# Community Social Icons',
     '',
-    'Shared Starcaster social SVG assets. Reference these from any project with `/images/community_assets/social_icons/<slug>.svg`.',
+    'Shared Starcaster social SVG assets. Reference from any project with `/images/community_assets/social_icons/<slug>.svg`.',
     '',
-    'Most brand marks are generated from `simple-icons`; Starcaster-owned fallbacks are marked in `index.json`.',
+    'Most brand marks are generated from `simple-icons` (simpleicons.org, CC0); Starcaster-owned fallbacks are marked in `index.json`.',
     '',
-    `Generated icons: ${manifest.map((item) => item.slug).join(', ')}.`
+    '## Icons',
+    '',
+    manifest.map((item) => `- **${item.slug}** — ${item.title}`).join('\n'),
   ].join('\n')
 );
 
-console.log(`Generated ${manifest.length} social icons in ${path.relative(process.cwd(), OUT_DIR)}`);
+if (missingIcons.length > 0) {
+  console.log(`\nSkipped (not found in simple-icons): ${missingIcons.join(', ')}`);
+}
+console.log(`\nGenerated ${manifest.length} social icons in ${path.relative(process.cwd(), OUT_DIR)}`);
