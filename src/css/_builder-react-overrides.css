@@ -234,15 +234,32 @@ body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
   vertical-align: middle;
 }
 
-/* RTE content headings pick up --bx-size-h* vars set on the shell */
-.builder-react-root .builder-rich-text-content h1 {
-  font-size: var(--bx-size-h1, inherit);
+/* RTE body — apply theme text color and font.
+   Uses .ProseMirror to override Normie's hardcoded color: #18324a at same specificity,
+   winning on source order (this file loads after _builder-react.css). */
+.builder-react-root .builder-rich-text-content .ProseMirror {
+  color: var(--bx-text, #18324a);
+  font-family: var(--bx-font-body, inherit);
+  line-height: var(--bx-line-base, 1.65);
 }
-.builder-react-root .builder-rich-text-content h2 {
-  font-size: var(--bx-size-h2, inherit);
+
+/* RTE headings — size, color, font from theme.
+   Selectors match Normie's .ProseMirror h* specificity so source-order wins.
+   Fallbacks provide visual hierarchy even when no theme scale is configured. */
+.builder-react-root .builder-rich-text-content .ProseMirror h1 {
+  font-size: var(--bx-size-h1, clamp(2.25rem, 4.2vw, 4rem));
+  color: var(--bx-heading, inherit);
+  font-family: var(--bx-font-heading, inherit);
 }
-.builder-react-root .builder-rich-text-content h3 {
-  font-size: var(--bx-size-h3, inherit);
+.builder-react-root .builder-rich-text-content .ProseMirror h2 {
+  font-size: var(--bx-size-h2, 1.75rem);
+  color: var(--bx-heading, inherit);
+  font-family: var(--bx-font-heading, inherit);
+}
+.builder-react-root .builder-rich-text-content .ProseMirror h3 {
+  font-size: var(--bx-size-h3, 1.35rem);
+  color: var(--bx-heading, inherit);
+  font-family: var(--bx-font-heading, inherit);
 }
 
 /* ============================================================== */
