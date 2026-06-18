@@ -229,6 +229,7 @@ export function BuilderSectionCard({
 
   function getSectionStyle(): CSSProperties {
     return {
+      ...themeStyle,
       ...getSectionMarginStyle(section)
     };
   }

@@ -267,6 +267,17 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
 
   useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); void loadAcquireRuns(); void loadDevelopThemes(); }, []);
 
+  // When the linked theme finishes loading, refresh the page's typography from the latest
+  // theme data so changes made in the Themes editor (link underline, fonts, etc.) are
+  // reflected without the user having to manually re-apply the theme.
+  useEffect(() => {
+    if (!pageThemeId || developThemes.length === 0) return;
+    const found = developThemes.find((t) => t.id === pageThemeId);
+    if (found?.typography) {
+      setDraft((c) => ({ ...c, theme: { ...c.theme, typography: found.typography! } }));
+    }
+  }, [pageThemeId, developThemes]);
+
   useEffect(() => {
     const handler = () => setShowBulkCreate(true);
     window.addEventListener("builder:openBulkCreate", handler);
