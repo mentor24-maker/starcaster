@@ -12260,6 +12260,16 @@ body.asset-associations-modal-open {
   line-height: 1.4;
   color: #8aa0b4;
 }
+.builder-react-root .builder-theme-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
+  display: none !important;
+}
 .builder-react-root .builder-themes-page {
   display: flex;
   flex-direction: column;

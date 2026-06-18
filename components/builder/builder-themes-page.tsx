@@ -9,6 +9,7 @@ type DevelopThemeRecord = {
   id: string;
   name: string;
   primaryColor: string;
+  secondaryColor: string;
   backgroundColor: string;
   accentColor: string;
   borderThickness: number;
@@ -27,7 +28,7 @@ type DevelopThemeRecord = {
 const DEFAULT_TYPOGRAPHY: BuilderThemeTypography = {
   fonts: { heading: "", body: "", mono: "" },
   scale: { baseSize: 0, ratio: 0, baseLineHeight: 0 },
-  colors: { text: "", heading: "", muted: "", link: "", linkHover: "", selection: "" },
+  colors: { text: "", heading: "", muted: "", link: "", linkHover: "", selection: "", linkUnderline: true, linkHoverUnderline: true },
   elements: {},
 };
 
@@ -36,6 +37,7 @@ function defaultDraft(): DevelopThemeRecord {
     id: "",
     name: "",
     primaryColor: "#0b82d4",
+    secondaryColor: "#6c757d",
     backgroundColor: "#f5fbff",
     accentColor: "#1a4f81",
     borderThickness: 1,
@@ -60,6 +62,7 @@ function buildPayload(draft: DevelopThemeRecord) {
   return {
     name: draft.name.trim(),
     primaryColor: draft.primaryColor,
+    secondaryColor: draft.secondaryColor,
     backgroundColor: draft.backgroundColor,
     accentColor: draft.accentColor,
     borderThickness: draft.borderThickness,
@@ -274,6 +277,11 @@ export function BuilderThemesPage() {
             label="Primary"
             value={draft.primaryColor}
             onChange={(v) => updateDraft({ primaryColor: v })}
+          />
+          <ColorRow
+            label="Secondary"
+            value={draft.secondaryColor}
+            onChange={(v) => updateDraft({ secondaryColor: v })}
           />
           <ColorRow
             label="Background"

@@ -49,6 +49,16 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
     }));
   }
 
+  function updateColorFlag(flag: "linkUnderline" | "linkHoverUnderline", value: boolean) {
+    onChange((current) => ({
+      ...current,
+      typography: {
+        ...current.typography,
+        colors: { ...current.typography.colors, [flag]: value }
+      }
+    }));
+  }
+
   function updateScale(key: "baseSize" | "ratio" | "baseLineHeight", value: number) {
     onChange((current) => ({
       ...current,
@@ -114,6 +124,26 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             </span>
           </BuilderSettingRow>
         ))}
+        <BuilderSettingRow label="Link underline">
+          <label className="builder-theme-checkbox-label">
+            <input
+              type="checkbox"
+              checked={colors.linkUnderline !== false}
+              onChange={(event) => updateColorFlag("linkUnderline", event.target.checked)}
+            />
+            <span>Underline links</span>
+          </label>
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Hover underline">
+          <label className="builder-theme-checkbox-label">
+            <input
+              type="checkbox"
+              checked={colors.linkHoverUnderline !== false}
+              onChange={(event) => updateColorFlag("linkHoverUnderline", event.target.checked)}
+            />
+            <span>Underline on hover</span>
+          </label>
+        </BuilderSettingRow>
       </div>
 
       <div className="builder-theme-typography-group">
@@ -152,6 +182,28 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             onChange={(event) => updateScale("baseLineHeight", Number.parseFloat(event.target.value) || 0)}
           />
         </BuilderSettingRow>
+        {(["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((h) => (
+          <BuilderSettingRow key={h} label={`${h.toUpperCase()} size (px)`}>
+            <input
+              type="number"
+              min={8}
+              max={200}
+              step={1}
+              value={scale[h] || ""}
+              placeholder="Auto"
+              onChange={(event) => {
+                const val = Number.parseInt(event.target.value, 10) || 0;
+                onChange((current) => ({
+                  ...current,
+                  typography: {
+                    ...current.typography,
+                    scale: { ...current.typography.scale, [h]: val }
+                  }
+                }));
+              }}
+            />
+          </BuilderSettingRow>
+        ))}
       </div>
 
       <p className="builder-theme-typography-note">
