@@ -13,6 +13,8 @@ type BuilderSectionControlsProps = {
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onOpenSectionBackgroundGallery?: () => void;
   onUploadSectionBackgroundMedia?: (file: File | null) => void;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 function updateSectionBackground(
@@ -27,7 +29,9 @@ export function BuilderSectionControls({
   editorDevice,
   onUpdateSection,
   onOpenSectionBackgroundGallery,
-  onUploadSectionBackgroundMedia
+  onUploadSectionBackgroundMedia,
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderSectionControlsProps) {
   if (editorDevice === "mobile") {
     return (
@@ -204,6 +208,8 @@ export function BuilderSectionControls({
         onChange={(updater) => updateSectionBackground(onUpdateSection, updater)}
         onChooseImage={onOpenSectionBackgroundGallery}
         onUploadImage={onUploadSectionBackgroundMedia}
+        themeBackgroundColor={themeBackgroundColor}
+        themePrimaryColor={themePrimaryColor}
       />
     </div>
   );

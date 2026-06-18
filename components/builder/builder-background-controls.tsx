@@ -20,6 +20,9 @@ type BuilderBackgroundControlsProps = {
   hideClear?: boolean;
   /** When false, compact row uses the outer `label` on the mode field only (e.g. Page Details). */
   showColorFieldLabel?: boolean;
+  /** Theme palette — used to seed defaults when the user first picks a mode. */
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 export function BuilderBackgroundControls({
@@ -32,9 +35,24 @@ export function BuilderBackgroundControls({
   horizontal = false,
   hideModeRow = false,
   hideClear = false,
-  showColorFieldLabel = true
+  showColorFieldLabel = true,
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderBackgroundControlsProps) {
   const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
+
+  function handleModeChange(newMode: BackgroundSettings["mode"]) {
+    onChange((current) => {
+      const next = { ...current, mode: newMode };
+      if (newMode === "color" && themeBackgroundColor) {
+        next.color = themeBackgroundColor;
+      } else if (newMode === "gradient") {
+        if (themePrimaryColor) next.color = themePrimaryColor;
+        next.color2 = "#ffffff";
+      }
+      return next;
+    });
+  }
 
   // When no external gallery callback is wired (e.g. cell/page/poll
   // backgrounds), fall back to the standard self-contained gallery picker so
@@ -77,12 +95,7 @@ export function BuilderBackgroundControls({
           <BuilderSettingRow label={label} fullWidth>
             <select
               value={background.mode}
-              onChange={(event) =>
-                onChange((current) => ({
-                  ...current,
-                  mode: event.target.value as BackgroundSettings["mode"]
-                }))
-              }
+              onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
             >
               <option value="none">None</option>
               <option value="color">Color</option>
