@@ -160,6 +160,10 @@ export type BuilderTheme = {
 export type DevelopThemeSummary = {
   id: string;
   name: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  accentColor?: string;
   typography?: BuilderThemeTypography;
 };
 

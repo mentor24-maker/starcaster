@@ -153,6 +153,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   );
   const isEmailTemplateDraft = builderMode === "templates" && draft.templateKind === "email";
 
+  // Palette swatches for the RTE toolbar: use the 4 palette colors from the active
+  // develop_theme (looked up by pageThemeId), falling back to non-empty typography colors.
+  const activeTheme = pageThemeId ? developThemes.find((t) => t.id === pageThemeId) : null;
+  const rteThemeColors = [
+    { label: "Primary", hex: activeTheme?.primaryColor ?? "" },
+    { label: "Secondary", hex: activeTheme?.secondaryColor ?? "" },
+    { label: "Background", hex: activeTheme?.backgroundColor ?? "" },
+    { label: "Accent", hex: activeTheme?.accentColor ?? "" },
+    { label: "Body text", hex: draft.theme.typography.colors.text },
+    { label: "Headings", hex: draft.theme.typography.colors.heading },
+    { label: "Link", hex: draft.theme.typography.colors.link },
+  ].filter((c) => Boolean(c.hex));
+
   // --- Data loading ---
 
   async function loadPageTemplates() {
@@ -2166,12 +2179,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                             isCollapsed={collapsedSectionIds.includes(section.id)}
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
-                            themeColors={[
-                              { label: "Body text", hex: draft.theme.typography.colors.text },
-                              { label: "Headings", hex: draft.theme.typography.colors.heading },
-                              { label: "Link", hex: draft.theme.typography.colors.link },
-                              { label: "Link hover", hex: draft.theme.typography.colors.linkHover },
-                            ].filter((c) => Boolean(c.hex))}
+                            themeColors={rteThemeColors}
                             themeStyle={getThemeRootVars(draft.theme)}
                             onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                             onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
@@ -2242,12 +2250,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                         isCollapsed={collapsedSectionIds.includes(section.id)}
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
-                        themeColors={[
-                          { label: "Body text", hex: draft.theme.typography.colors.text },
-                          { label: "Headings", hex: draft.theme.typography.colors.heading },
-                          { label: "Link", hex: draft.theme.typography.colors.link },
-                          { label: "Link hover", hex: draft.theme.typography.colors.linkHover },
-                        ].filter((c) => Boolean(c.hex))}
+                        themeColors={rteThemeColors}
                         themeStyle={getThemeRootVars(draft.theme)}
                         onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
                         onToggleCollapsed={() => toggleSectionCollapsed(section.id)}
