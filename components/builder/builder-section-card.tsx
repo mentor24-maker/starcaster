@@ -386,6 +386,7 @@ export function BuilderSectionCard({
             onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
             onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}
             themeBackgroundColor={themeBackgroundColor}
+            themeColors={themeColors}
             themePrimaryColor={themePrimaryColor}
           />
 
@@ -431,6 +432,7 @@ export function BuilderSectionCard({
                         onSetCellExtra={setCellExtra}
                         getCellExtra={getCellExtra}
                         themeBackgroundColor={themeBackgroundColor}
+                        themeColors={themeColors}
                         themePrimaryColor={themePrimaryColor}
                       />
                     ) : null}

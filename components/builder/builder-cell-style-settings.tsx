@@ -5,6 +5,7 @@ import { createDefaultBackgroundSettings } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderCellStyleSettingsProps = {
   column: string;
@@ -19,6 +20,7 @@ type BuilderCellStyleSettingsProps = {
   getCellExtra: (column: string, key: string, fallback?: string) => string;
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
+  themeColors?: Array<{ label: string; hex: string }>;
 };
 
 function opacityPercentValue(value: string, fallback = "1") {
@@ -41,7 +43,8 @@ export function BuilderCellStyleSettings({
   onSetCellExtra,
   getCellExtra,
   themeBackgroundColor,
-  themePrimaryColor
+  themePrimaryColor,
+  themeColors = []
 }: BuilderCellStyleSettingsProps) {
   if (editorDevice === "mobile") {
     return (
@@ -92,15 +95,12 @@ export function BuilderCellStyleSettings({
           />
         </BuilderSettingRow>
         <BuilderSettingRow label="Color" fullWidth>
-          <input
-            type="color"
+          <BuilderThemeColorField
             disabled={borderDisabled}
-            value={
-              /^#[0-9a-f]{6}$/i.test(section.cellBorderColor[column] ?? "")
-                ? section.cellBorderColor[column]
-                : "#d9e4ef"
-            }
-            onChange={(event) => onUpdateCellBorderColor(column, event.target.value)}
+            fallback="#d9e4ef"
+            themeColors={themeColors}
+            value={section.cellBorderColor[column] ?? ""}
+            onChange={(hex) => onUpdateCellBorderColor(column, hex)}
           />
         </BuilderSettingRow>
         <BuilderSettingRow label="Radius" fullWidth>
@@ -130,6 +130,7 @@ export function BuilderCellStyleSettings({
           horizontal
           onChange={(updater) => onUpdateCellBackground(column, updater)}
           themeBackgroundColor={themeBackgroundColor}
+          themeColors={themeColors}
           themePrimaryColor={themePrimaryColor}
         />
         <BuilderSettingRow label="Opacity" fullWidth>
