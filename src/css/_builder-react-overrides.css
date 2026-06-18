@@ -262,6 +262,17 @@ body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-family: var(--bx-font-heading, inherit);
 }
 
+/* Editor canvas: link decoration from theme (--bx-link-decoration is set on
+   .builder-section-card via getSectionStyle → themeStyle merge). */
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a,
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a:link,
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a:visited {
+  text-decoration: var(--bx-link-decoration, underline);
+}
+.builder-react-root .builder-section-card .builder-module-preview-paragraph a:hover {
+  text-decoration: var(--bx-link-hover-decoration, underline);
+}
+
 /* ============================================================== */
 /* THEMES PAGE — three-column pod layout                          */
 /* ============================================================== */
