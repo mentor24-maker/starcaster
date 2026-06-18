@@ -1,0 +1,5186 @@
+[
+  {
+    "slug": "academic-cap",
+    "title": "Academic Cap",
+    "variant": "outline",
+    "file": "ui_icons/outline/academic-cap.svg",
+    "location": "/images/community_assets/ui_icons/outline/academic-cap.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "academic-cap",
+    "title": "Academic Cap",
+    "variant": "solid",
+    "file": "ui_icons/solid/academic-cap.svg",
+    "location": "/images/community_assets/ui_icons/solid/academic-cap.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "adjustments-horizontal",
+    "title": "Adjustments Horizontal",
+    "variant": "outline",
+    "file": "ui_icons/outline/adjustments-horizontal.svg",
+    "location": "/images/community_assets/ui_icons/outline/adjustments-horizontal.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "adjustments-horizontal",
+    "title": "Adjustments Horizontal",
+    "variant": "solid",
+    "file": "ui_icons/solid/adjustments-horizontal.svg",
+    "location": "/images/community_assets/ui_icons/solid/adjustments-horizontal.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "adjustments-vertical",
+    "title": "Adjustments Vertical",
+    "variant": "outline",
+    "file": "ui_icons/outline/adjustments-vertical.svg",
+    "location": "/images/community_assets/ui_icons/outline/adjustments-vertical.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "adjustments-vertical",
+    "title": "Adjustments Vertical",
+    "variant": "solid",
+    "file": "ui_icons/solid/adjustments-vertical.svg",
+    "location": "/images/community_assets/ui_icons/solid/adjustments-vertical.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "archive-box",
+    "title": "Archive Box",
+    "variant": "outline",
+    "file": "ui_icons/outline/archive-box.svg",
+    "location": "/images/community_assets/ui_icons/outline/archive-box.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "archive-box",
+    "title": "Archive Box",
+    "variant": "solid",
+    "file": "ui_icons/solid/archive-box.svg",
+    "location": "/images/community_assets/ui_icons/solid/archive-box.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "archive-box-arrow-down",
+    "title": "Archive Box Arrow Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/archive-box-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/archive-box-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "archive-box-arrow-down",
+    "title": "Archive Box Arrow Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/archive-box-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/archive-box-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "archive-box-x-mark",
+    "title": "Archive Box X Mark",
+    "variant": "outline",
+    "file": "ui_icons/outline/archive-box-x-mark.svg",
+    "location": "/images/community_assets/ui_icons/outline/archive-box-x-mark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "archive-box-x-mark",
+    "title": "Archive Box X Mark",
+    "variant": "solid",
+    "file": "ui_icons/solid/archive-box-x-mark.svg",
+    "location": "/images/community_assets/ui_icons/solid/archive-box-x-mark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down",
+    "title": "Arrow Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down",
+    "title": "Arrow Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-circle",
+    "title": "Arrow Down Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-down-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-down-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-circle",
+    "title": "Arrow Down Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-down-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-down-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-left",
+    "title": "Arrow Down Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-down-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-down-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-left",
+    "title": "Arrow Down Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-down-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-down-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-on-square",
+    "title": "Arrow Down On Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-down-on-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-down-on-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-on-square",
+    "title": "Arrow Down On Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-down-on-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-down-on-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-on-square-stack",
+    "title": "Arrow Down On Square Stack",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-down-on-square-stack.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-down-on-square-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-on-square-stack",
+    "title": "Arrow Down On Square Stack",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-down-on-square-stack.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-down-on-square-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-right",
+    "title": "Arrow Down Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-down-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-down-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-right",
+    "title": "Arrow Down Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-down-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-down-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-tray",
+    "title": "Arrow Down Tray",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-down-tray.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-down-tray.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-down-tray",
+    "title": "Arrow Down Tray",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-down-tray.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-down-tray.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left",
+    "title": "Arrow Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left",
+    "title": "Arrow Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-circle",
+    "title": "Arrow Left Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-left-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-left-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-circle",
+    "title": "Arrow Left Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-left-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-left-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-end-on-rectangle",
+    "title": "Arrow Left End On Rectangle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-left-end-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-left-end-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-end-on-rectangle",
+    "title": "Arrow Left End On Rectangle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-left-end-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-left-end-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-on-rectangle",
+    "title": "Arrow Left On Rectangle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-left-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-left-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-on-rectangle",
+    "title": "Arrow Left On Rectangle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-left-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-left-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-start-on-rectangle",
+    "title": "Arrow Left Start On Rectangle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-left-start-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-left-start-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-left-start-on-rectangle",
+    "title": "Arrow Left Start On Rectangle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-left-start-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-left-start-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-down",
+    "title": "Arrow Long Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-long-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-long-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-down",
+    "title": "Arrow Long Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-long-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-long-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-left",
+    "title": "Arrow Long Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-long-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-long-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-left",
+    "title": "Arrow Long Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-long-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-long-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-right",
+    "title": "Arrow Long Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-long-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-long-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-right",
+    "title": "Arrow Long Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-long-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-long-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-up",
+    "title": "Arrow Long Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-long-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-long-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-long-up",
+    "title": "Arrow Long Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-long-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-long-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-path",
+    "title": "Arrow Path",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-path.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-path.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-path",
+    "title": "Arrow Path",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-path.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-path.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-path-rounded-square",
+    "title": "Arrow Path Rounded Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-path-rounded-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-path-rounded-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-path-rounded-square",
+    "title": "Arrow Path Rounded Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-path-rounded-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-path-rounded-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right",
+    "title": "Arrow Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right",
+    "title": "Arrow Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-circle",
+    "title": "Arrow Right Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-right-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-right-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-circle",
+    "title": "Arrow Right Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-right-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-right-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-end-on-rectangle",
+    "title": "Arrow Right End On Rectangle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-right-end-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-right-end-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-end-on-rectangle",
+    "title": "Arrow Right End On Rectangle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-right-end-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-right-end-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-on-rectangle",
+    "title": "Arrow Right On Rectangle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-right-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-right-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-on-rectangle",
+    "title": "Arrow Right On Rectangle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-right-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-right-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-start-on-rectangle",
+    "title": "Arrow Right Start On Rectangle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-right-start-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-right-start-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-right-start-on-rectangle",
+    "title": "Arrow Right Start On Rectangle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-right-start-on-rectangle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-right-start-on-rectangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-down",
+    "title": "Arrow Small Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-small-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-small-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-down",
+    "title": "Arrow Small Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-small-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-small-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-left",
+    "title": "Arrow Small Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-small-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-small-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-left",
+    "title": "Arrow Small Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-small-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-small-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-right",
+    "title": "Arrow Small Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-small-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-small-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-right",
+    "title": "Arrow Small Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-small-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-small-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-up",
+    "title": "Arrow Small Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-small-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-small-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-small-up",
+    "title": "Arrow Small Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-small-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-small-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-top-right-on-square",
+    "title": "Arrow Top Right On Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-top-right-on-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-top-right-on-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-top-right-on-square",
+    "title": "Arrow Top Right On Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-top-right-on-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-top-right-on-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-trending-down",
+    "title": "Arrow Trending Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-trending-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-trending-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-trending-down",
+    "title": "Arrow Trending Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-trending-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-trending-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-trending-up",
+    "title": "Arrow Trending Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-trending-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-trending-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-trending-up",
+    "title": "Arrow Trending Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-trending-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-trending-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-down-left",
+    "title": "Arrow Turn Down Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-down-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-down-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-down-left",
+    "title": "Arrow Turn Down Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-down-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-down-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-down-right",
+    "title": "Arrow Turn Down Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-down-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-down-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-down-right",
+    "title": "Arrow Turn Down Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-down-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-down-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-left-down",
+    "title": "Arrow Turn Left Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-left-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-left-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-left-down",
+    "title": "Arrow Turn Left Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-left-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-left-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-left-up",
+    "title": "Arrow Turn Left Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-left-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-left-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-left-up",
+    "title": "Arrow Turn Left Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-left-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-left-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-right-down",
+    "title": "Arrow Turn Right Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-right-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-right-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-right-down",
+    "title": "Arrow Turn Right Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-right-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-right-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-right-up",
+    "title": "Arrow Turn Right Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-right-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-right-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-right-up",
+    "title": "Arrow Turn Right Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-right-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-right-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-up-left",
+    "title": "Arrow Turn Up Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-up-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-up-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-up-left",
+    "title": "Arrow Turn Up Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-up-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-up-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-up-right",
+    "title": "Arrow Turn Up Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-turn-up-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-turn-up-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-turn-up-right",
+    "title": "Arrow Turn Up Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-turn-up-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-turn-up-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up",
+    "title": "Arrow Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up",
+    "title": "Arrow Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-circle",
+    "title": "Arrow Up Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-up-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-up-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-circle",
+    "title": "Arrow Up Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-up-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-up-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-left",
+    "title": "Arrow Up Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-up-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-up-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-left",
+    "title": "Arrow Up Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-up-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-up-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-on-square",
+    "title": "Arrow Up On Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-up-on-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-up-on-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-on-square",
+    "title": "Arrow Up On Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-up-on-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-up-on-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-on-square-stack",
+    "title": "Arrow Up On Square Stack",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-up-on-square-stack.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-up-on-square-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-on-square-stack",
+    "title": "Arrow Up On Square Stack",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-up-on-square-stack.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-up-on-square-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-right",
+    "title": "Arrow Up Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-up-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-up-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-right",
+    "title": "Arrow Up Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-up-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-up-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-tray",
+    "title": "Arrow Up Tray",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-up-tray.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-up-tray.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-up-tray",
+    "title": "Arrow Up Tray",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-up-tray.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-up-tray.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-down",
+    "title": "Arrow Uturn Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-uturn-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-uturn-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-down",
+    "title": "Arrow Uturn Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-uturn-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-uturn-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-left",
+    "title": "Arrow Uturn Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-uturn-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-uturn-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-left",
+    "title": "Arrow Uturn Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-uturn-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-uturn-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-right",
+    "title": "Arrow Uturn Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-uturn-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-uturn-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-right",
+    "title": "Arrow Uturn Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-uturn-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-uturn-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-up",
+    "title": "Arrow Uturn Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrow-uturn-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrow-uturn-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrow-uturn-up",
+    "title": "Arrow Uturn Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrow-uturn-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrow-uturn-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-pointing-in",
+    "title": "Arrows Pointing In",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrows-pointing-in.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrows-pointing-in.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-pointing-in",
+    "title": "Arrows Pointing In",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrows-pointing-in.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrows-pointing-in.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-pointing-out",
+    "title": "Arrows Pointing Out",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrows-pointing-out.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrows-pointing-out.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-pointing-out",
+    "title": "Arrows Pointing Out",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrows-pointing-out.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrows-pointing-out.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-right-left",
+    "title": "Arrows Right Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrows-right-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrows-right-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-right-left",
+    "title": "Arrows Right Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrows-right-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrows-right-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-up-down",
+    "title": "Arrows Up Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/arrows-up-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/arrows-up-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "arrows-up-down",
+    "title": "Arrows Up Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/arrows-up-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/arrows-up-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "at-symbol",
+    "title": "At Symbol",
+    "variant": "outline",
+    "file": "ui_icons/outline/at-symbol.svg",
+    "location": "/images/community_assets/ui_icons/outline/at-symbol.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "at-symbol",
+    "title": "At Symbol",
+    "variant": "solid",
+    "file": "ui_icons/solid/at-symbol.svg",
+    "location": "/images/community_assets/ui_icons/solid/at-symbol.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "backspace",
+    "title": "Backspace",
+    "variant": "outline",
+    "file": "ui_icons/outline/backspace.svg",
+    "location": "/images/community_assets/ui_icons/outline/backspace.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "backspace",
+    "title": "Backspace",
+    "variant": "solid",
+    "file": "ui_icons/solid/backspace.svg",
+    "location": "/images/community_assets/ui_icons/solid/backspace.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "backward",
+    "title": "Backward",
+    "variant": "outline",
+    "file": "ui_icons/outline/backward.svg",
+    "location": "/images/community_assets/ui_icons/outline/backward.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "backward",
+    "title": "Backward",
+    "variant": "solid",
+    "file": "ui_icons/solid/backward.svg",
+    "location": "/images/community_assets/ui_icons/solid/backward.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "banknotes",
+    "title": "Banknotes",
+    "variant": "outline",
+    "file": "ui_icons/outline/banknotes.svg",
+    "location": "/images/community_assets/ui_icons/outline/banknotes.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "banknotes",
+    "title": "Banknotes",
+    "variant": "solid",
+    "file": "ui_icons/solid/banknotes.svg",
+    "location": "/images/community_assets/ui_icons/solid/banknotes.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-2",
+    "title": "Bars 2",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-2.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-2",
+    "title": "Bars 2",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-2.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3",
+    "title": "Bars 3",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-3.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-3.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3",
+    "title": "Bars 3",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-3.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-3.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3-bottom-left",
+    "title": "Bars 3 Bottom Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-3-bottom-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-3-bottom-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3-bottom-left",
+    "title": "Bars 3 Bottom Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-3-bottom-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-3-bottom-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3-bottom-right",
+    "title": "Bars 3 Bottom Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-3-bottom-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-3-bottom-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3-bottom-right",
+    "title": "Bars 3 Bottom Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-3-bottom-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-3-bottom-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3-center-left",
+    "title": "Bars 3 Center Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-3-center-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-3-center-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-3-center-left",
+    "title": "Bars 3 Center Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-3-center-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-3-center-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-4",
+    "title": "Bars 4",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-4.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-4.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-4",
+    "title": "Bars 4",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-4.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-4.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-arrow-down",
+    "title": "Bars Arrow Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-arrow-down",
+    "title": "Bars Arrow Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-arrow-up",
+    "title": "Bars Arrow Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/bars-arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/bars-arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bars-arrow-up",
+    "title": "Bars Arrow Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/bars-arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/bars-arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "battery-0",
+    "title": "Battery 0",
+    "variant": "outline",
+    "file": "ui_icons/outline/battery-0.svg",
+    "location": "/images/community_assets/ui_icons/outline/battery-0.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "battery-0",
+    "title": "Battery 0",
+    "variant": "solid",
+    "file": "ui_icons/solid/battery-0.svg",
+    "location": "/images/community_assets/ui_icons/solid/battery-0.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "battery-100",
+    "title": "Battery 100",
+    "variant": "outline",
+    "file": "ui_icons/outline/battery-100.svg",
+    "location": "/images/community_assets/ui_icons/outline/battery-100.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "battery-100",
+    "title": "Battery 100",
+    "variant": "solid",
+    "file": "ui_icons/solid/battery-100.svg",
+    "location": "/images/community_assets/ui_icons/solid/battery-100.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "battery-50",
+    "title": "Battery 50",
+    "variant": "outline",
+    "file": "ui_icons/outline/battery-50.svg",
+    "location": "/images/community_assets/ui_icons/outline/battery-50.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "battery-50",
+    "title": "Battery 50",
+    "variant": "solid",
+    "file": "ui_icons/solid/battery-50.svg",
+    "location": "/images/community_assets/ui_icons/solid/battery-50.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "beaker",
+    "title": "Beaker",
+    "variant": "outline",
+    "file": "ui_icons/outline/beaker.svg",
+    "location": "/images/community_assets/ui_icons/outline/beaker.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "beaker",
+    "title": "Beaker",
+    "variant": "solid",
+    "file": "ui_icons/solid/beaker.svg",
+    "location": "/images/community_assets/ui_icons/solid/beaker.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell",
+    "title": "Bell",
+    "variant": "outline",
+    "file": "ui_icons/outline/bell.svg",
+    "location": "/images/community_assets/ui_icons/outline/bell.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell",
+    "title": "Bell",
+    "variant": "solid",
+    "file": "ui_icons/solid/bell.svg",
+    "location": "/images/community_assets/ui_icons/solid/bell.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell-alert",
+    "title": "Bell Alert",
+    "variant": "outline",
+    "file": "ui_icons/outline/bell-alert.svg",
+    "location": "/images/community_assets/ui_icons/outline/bell-alert.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell-alert",
+    "title": "Bell Alert",
+    "variant": "solid",
+    "file": "ui_icons/solid/bell-alert.svg",
+    "location": "/images/community_assets/ui_icons/solid/bell-alert.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell-slash",
+    "title": "Bell Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/bell-slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/bell-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell-slash",
+    "title": "Bell Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/bell-slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/bell-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell-snooze",
+    "title": "Bell Snooze",
+    "variant": "outline",
+    "file": "ui_icons/outline/bell-snooze.svg",
+    "location": "/images/community_assets/ui_icons/outline/bell-snooze.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bell-snooze",
+    "title": "Bell Snooze",
+    "variant": "solid",
+    "file": "ui_icons/solid/bell-snooze.svg",
+    "location": "/images/community_assets/ui_icons/solid/bell-snooze.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bold",
+    "title": "Bold",
+    "variant": "outline",
+    "file": "ui_icons/outline/bold.svg",
+    "location": "/images/community_assets/ui_icons/outline/bold.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bold",
+    "title": "Bold",
+    "variant": "solid",
+    "file": "ui_icons/solid/bold.svg",
+    "location": "/images/community_assets/ui_icons/solid/bold.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bolt",
+    "title": "Bolt",
+    "variant": "outline",
+    "file": "ui_icons/outline/bolt.svg",
+    "location": "/images/community_assets/ui_icons/outline/bolt.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bolt",
+    "title": "Bolt",
+    "variant": "solid",
+    "file": "ui_icons/solid/bolt.svg",
+    "location": "/images/community_assets/ui_icons/solid/bolt.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bolt-slash",
+    "title": "Bolt Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/bolt-slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/bolt-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bolt-slash",
+    "title": "Bolt Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/bolt-slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/bolt-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "book-open",
+    "title": "Book Open",
+    "variant": "outline",
+    "file": "ui_icons/outline/book-open.svg",
+    "location": "/images/community_assets/ui_icons/outline/book-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "book-open",
+    "title": "Book Open",
+    "variant": "solid",
+    "file": "ui_icons/solid/book-open.svg",
+    "location": "/images/community_assets/ui_icons/solid/book-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bookmark",
+    "title": "Bookmark",
+    "variant": "outline",
+    "file": "ui_icons/outline/bookmark.svg",
+    "location": "/images/community_assets/ui_icons/outline/bookmark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bookmark",
+    "title": "Bookmark",
+    "variant": "solid",
+    "file": "ui_icons/solid/bookmark.svg",
+    "location": "/images/community_assets/ui_icons/solid/bookmark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bookmark-slash",
+    "title": "Bookmark Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/bookmark-slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/bookmark-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bookmark-slash",
+    "title": "Bookmark Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/bookmark-slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/bookmark-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bookmark-square",
+    "title": "Bookmark Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/bookmark-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/bookmark-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bookmark-square",
+    "title": "Bookmark Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/bookmark-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/bookmark-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "briefcase",
+    "title": "Briefcase",
+    "variant": "outline",
+    "file": "ui_icons/outline/briefcase.svg",
+    "location": "/images/community_assets/ui_icons/outline/briefcase.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "briefcase",
+    "title": "Briefcase",
+    "variant": "solid",
+    "file": "ui_icons/solid/briefcase.svg",
+    "location": "/images/community_assets/ui_icons/solid/briefcase.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bug-ant",
+    "title": "Bug Ant",
+    "variant": "outline",
+    "file": "ui_icons/outline/bug-ant.svg",
+    "location": "/images/community_assets/ui_icons/outline/bug-ant.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "bug-ant",
+    "title": "Bug Ant",
+    "variant": "solid",
+    "file": "ui_icons/solid/bug-ant.svg",
+    "location": "/images/community_assets/ui_icons/solid/bug-ant.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-library",
+    "title": "Building Library",
+    "variant": "outline",
+    "file": "ui_icons/outline/building-library.svg",
+    "location": "/images/community_assets/ui_icons/outline/building-library.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-library",
+    "title": "Building Library",
+    "variant": "solid",
+    "file": "ui_icons/solid/building-library.svg",
+    "location": "/images/community_assets/ui_icons/solid/building-library.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-office",
+    "title": "Building Office",
+    "variant": "outline",
+    "file": "ui_icons/outline/building-office.svg",
+    "location": "/images/community_assets/ui_icons/outline/building-office.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-office",
+    "title": "Building Office",
+    "variant": "solid",
+    "file": "ui_icons/solid/building-office.svg",
+    "location": "/images/community_assets/ui_icons/solid/building-office.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-office-2",
+    "title": "Building Office 2",
+    "variant": "outline",
+    "file": "ui_icons/outline/building-office-2.svg",
+    "location": "/images/community_assets/ui_icons/outline/building-office-2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-office-2",
+    "title": "Building Office 2",
+    "variant": "solid",
+    "file": "ui_icons/solid/building-office-2.svg",
+    "location": "/images/community_assets/ui_icons/solid/building-office-2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-storefront",
+    "title": "Building Storefront",
+    "variant": "outline",
+    "file": "ui_icons/outline/building-storefront.svg",
+    "location": "/images/community_assets/ui_icons/outline/building-storefront.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "building-storefront",
+    "title": "Building Storefront",
+    "variant": "solid",
+    "file": "ui_icons/solid/building-storefront.svg",
+    "location": "/images/community_assets/ui_icons/solid/building-storefront.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cake",
+    "title": "Cake",
+    "variant": "outline",
+    "file": "ui_icons/outline/cake.svg",
+    "location": "/images/community_assets/ui_icons/outline/cake.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cake",
+    "title": "Cake",
+    "variant": "solid",
+    "file": "ui_icons/solid/cake.svg",
+    "location": "/images/community_assets/ui_icons/solid/cake.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calculator",
+    "title": "Calculator",
+    "variant": "outline",
+    "file": "ui_icons/outline/calculator.svg",
+    "location": "/images/community_assets/ui_icons/outline/calculator.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calculator",
+    "title": "Calculator",
+    "variant": "solid",
+    "file": "ui_icons/solid/calculator.svg",
+    "location": "/images/community_assets/ui_icons/solid/calculator.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calendar",
+    "title": "Calendar",
+    "variant": "outline",
+    "file": "ui_icons/outline/calendar.svg",
+    "location": "/images/community_assets/ui_icons/outline/calendar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calendar",
+    "title": "Calendar",
+    "variant": "solid",
+    "file": "ui_icons/solid/calendar.svg",
+    "location": "/images/community_assets/ui_icons/solid/calendar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calendar-date-range",
+    "title": "Calendar Date Range",
+    "variant": "outline",
+    "file": "ui_icons/outline/calendar-date-range.svg",
+    "location": "/images/community_assets/ui_icons/outline/calendar-date-range.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calendar-date-range",
+    "title": "Calendar Date Range",
+    "variant": "solid",
+    "file": "ui_icons/solid/calendar-date-range.svg",
+    "location": "/images/community_assets/ui_icons/solid/calendar-date-range.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calendar-days",
+    "title": "Calendar Days",
+    "variant": "outline",
+    "file": "ui_icons/outline/calendar-days.svg",
+    "location": "/images/community_assets/ui_icons/outline/calendar-days.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "calendar-days",
+    "title": "Calendar Days",
+    "variant": "solid",
+    "file": "ui_icons/solid/calendar-days.svg",
+    "location": "/images/community_assets/ui_icons/solid/calendar-days.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "camera",
+    "title": "Camera",
+    "variant": "outline",
+    "file": "ui_icons/outline/camera.svg",
+    "location": "/images/community_assets/ui_icons/outline/camera.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "camera",
+    "title": "Camera",
+    "variant": "solid",
+    "file": "ui_icons/solid/camera.svg",
+    "location": "/images/community_assets/ui_icons/solid/camera.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chart-bar",
+    "title": "Chart Bar",
+    "variant": "outline",
+    "file": "ui_icons/outline/chart-bar.svg",
+    "location": "/images/community_assets/ui_icons/outline/chart-bar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chart-bar",
+    "title": "Chart Bar",
+    "variant": "solid",
+    "file": "ui_icons/solid/chart-bar.svg",
+    "location": "/images/community_assets/ui_icons/solid/chart-bar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chart-bar-square",
+    "title": "Chart Bar Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/chart-bar-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/chart-bar-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chart-bar-square",
+    "title": "Chart Bar Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/chart-bar-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/chart-bar-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chart-pie",
+    "title": "Chart Pie",
+    "variant": "outline",
+    "file": "ui_icons/outline/chart-pie.svg",
+    "location": "/images/community_assets/ui_icons/outline/chart-pie.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chart-pie",
+    "title": "Chart Pie",
+    "variant": "solid",
+    "file": "ui_icons/solid/chart-pie.svg",
+    "location": "/images/community_assets/ui_icons/solid/chart-pie.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-bottom-center",
+    "title": "Chat Bubble Bottom Center",
+    "variant": "outline",
+    "file": "ui_icons/outline/chat-bubble-bottom-center.svg",
+    "location": "/images/community_assets/ui_icons/outline/chat-bubble-bottom-center.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-bottom-center",
+    "title": "Chat Bubble Bottom Center",
+    "variant": "solid",
+    "file": "ui_icons/solid/chat-bubble-bottom-center.svg",
+    "location": "/images/community_assets/ui_icons/solid/chat-bubble-bottom-center.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-bottom-center-text",
+    "title": "Chat Bubble Bottom Center Text",
+    "variant": "outline",
+    "file": "ui_icons/outline/chat-bubble-bottom-center-text.svg",
+    "location": "/images/community_assets/ui_icons/outline/chat-bubble-bottom-center-text.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-bottom-center-text",
+    "title": "Chat Bubble Bottom Center Text",
+    "variant": "solid",
+    "file": "ui_icons/solid/chat-bubble-bottom-center-text.svg",
+    "location": "/images/community_assets/ui_icons/solid/chat-bubble-bottom-center-text.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-left",
+    "title": "Chat Bubble Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/chat-bubble-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/chat-bubble-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-left",
+    "title": "Chat Bubble Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/chat-bubble-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/chat-bubble-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-left-ellipsis",
+    "title": "Chat Bubble Left Ellipsis",
+    "variant": "outline",
+    "file": "ui_icons/outline/chat-bubble-left-ellipsis.svg",
+    "location": "/images/community_assets/ui_icons/outline/chat-bubble-left-ellipsis.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-left-ellipsis",
+    "title": "Chat Bubble Left Ellipsis",
+    "variant": "solid",
+    "file": "ui_icons/solid/chat-bubble-left-ellipsis.svg",
+    "location": "/images/community_assets/ui_icons/solid/chat-bubble-left-ellipsis.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-left-right",
+    "title": "Chat Bubble Left Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/chat-bubble-left-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/chat-bubble-left-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-left-right",
+    "title": "Chat Bubble Left Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/chat-bubble-left-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/chat-bubble-left-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-oval-left",
+    "title": "Chat Bubble Oval Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/chat-bubble-oval-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/chat-bubble-oval-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-oval-left",
+    "title": "Chat Bubble Oval Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/chat-bubble-oval-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/chat-bubble-oval-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-oval-left-ellipsis",
+    "title": "Chat Bubble Oval Left Ellipsis",
+    "variant": "outline",
+    "file": "ui_icons/outline/chat-bubble-oval-left-ellipsis.svg",
+    "location": "/images/community_assets/ui_icons/outline/chat-bubble-oval-left-ellipsis.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chat-bubble-oval-left-ellipsis",
+    "title": "Chat Bubble Oval Left Ellipsis",
+    "variant": "solid",
+    "file": "ui_icons/solid/chat-bubble-oval-left-ellipsis.svg",
+    "location": "/images/community_assets/ui_icons/solid/chat-bubble-oval-left-ellipsis.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "check",
+    "title": "Check",
+    "variant": "outline",
+    "file": "ui_icons/outline/check.svg",
+    "location": "/images/community_assets/ui_icons/outline/check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "check",
+    "title": "Check",
+    "variant": "solid",
+    "file": "ui_icons/solid/check.svg",
+    "location": "/images/community_assets/ui_icons/solid/check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "check-badge",
+    "title": "Check Badge",
+    "variant": "outline",
+    "file": "ui_icons/outline/check-badge.svg",
+    "location": "/images/community_assets/ui_icons/outline/check-badge.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "check-badge",
+    "title": "Check Badge",
+    "variant": "solid",
+    "file": "ui_icons/solid/check-badge.svg",
+    "location": "/images/community_assets/ui_icons/solid/check-badge.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "check-circle",
+    "title": "Check Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/check-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/check-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "check-circle",
+    "title": "Check Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/check-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/check-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-down",
+    "title": "Chevron Double Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-double-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-double-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-down",
+    "title": "Chevron Double Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-double-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-double-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-left",
+    "title": "Chevron Double Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-double-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-double-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-left",
+    "title": "Chevron Double Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-double-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-double-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-right",
+    "title": "Chevron Double Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-double-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-double-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-right",
+    "title": "Chevron Double Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-double-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-double-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-up",
+    "title": "Chevron Double Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-double-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-double-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-double-up",
+    "title": "Chevron Double Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-double-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-double-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-down",
+    "title": "Chevron Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-down",
+    "title": "Chevron Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-left",
+    "title": "Chevron Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-left",
+    "title": "Chevron Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-right",
+    "title": "Chevron Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-right",
+    "title": "Chevron Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-up",
+    "title": "Chevron Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-up",
+    "title": "Chevron Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-up-down",
+    "title": "Chevron Up Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/chevron-up-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/chevron-up-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "chevron-up-down",
+    "title": "Chevron Up Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/chevron-up-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/chevron-up-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "circle-stack",
+    "title": "Circle Stack",
+    "variant": "outline",
+    "file": "ui_icons/outline/circle-stack.svg",
+    "location": "/images/community_assets/ui_icons/outline/circle-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "circle-stack",
+    "title": "Circle Stack",
+    "variant": "solid",
+    "file": "ui_icons/solid/circle-stack.svg",
+    "location": "/images/community_assets/ui_icons/solid/circle-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard",
+    "title": "Clipboard",
+    "variant": "outline",
+    "file": "ui_icons/outline/clipboard.svg",
+    "location": "/images/community_assets/ui_icons/outline/clipboard.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard",
+    "title": "Clipboard",
+    "variant": "solid",
+    "file": "ui_icons/solid/clipboard.svg",
+    "location": "/images/community_assets/ui_icons/solid/clipboard.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard-document",
+    "title": "Clipboard Document",
+    "variant": "outline",
+    "file": "ui_icons/outline/clipboard-document.svg",
+    "location": "/images/community_assets/ui_icons/outline/clipboard-document.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard-document",
+    "title": "Clipboard Document",
+    "variant": "solid",
+    "file": "ui_icons/solid/clipboard-document.svg",
+    "location": "/images/community_assets/ui_icons/solid/clipboard-document.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard-document-check",
+    "title": "Clipboard Document Check",
+    "variant": "outline",
+    "file": "ui_icons/outline/clipboard-document-check.svg",
+    "location": "/images/community_assets/ui_icons/outline/clipboard-document-check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard-document-check",
+    "title": "Clipboard Document Check",
+    "variant": "solid",
+    "file": "ui_icons/solid/clipboard-document-check.svg",
+    "location": "/images/community_assets/ui_icons/solid/clipboard-document-check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard-document-list",
+    "title": "Clipboard Document List",
+    "variant": "outline",
+    "file": "ui_icons/outline/clipboard-document-list.svg",
+    "location": "/images/community_assets/ui_icons/outline/clipboard-document-list.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clipboard-document-list",
+    "title": "Clipboard Document List",
+    "variant": "solid",
+    "file": "ui_icons/solid/clipboard-document-list.svg",
+    "location": "/images/community_assets/ui_icons/solid/clipboard-document-list.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clock",
+    "title": "Clock",
+    "variant": "outline",
+    "file": "ui_icons/outline/clock.svg",
+    "location": "/images/community_assets/ui_icons/outline/clock.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "clock",
+    "title": "Clock",
+    "variant": "solid",
+    "file": "ui_icons/solid/clock.svg",
+    "location": "/images/community_assets/ui_icons/solid/clock.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cloud",
+    "title": "Cloud",
+    "variant": "outline",
+    "file": "ui_icons/outline/cloud.svg",
+    "location": "/images/community_assets/ui_icons/outline/cloud.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cloud",
+    "title": "Cloud",
+    "variant": "solid",
+    "file": "ui_icons/solid/cloud.svg",
+    "location": "/images/community_assets/ui_icons/solid/cloud.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cloud-arrow-down",
+    "title": "Cloud Arrow Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/cloud-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/cloud-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cloud-arrow-down",
+    "title": "Cloud Arrow Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/cloud-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/cloud-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cloud-arrow-up",
+    "title": "Cloud Arrow Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/cloud-arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/cloud-arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cloud-arrow-up",
+    "title": "Cloud Arrow Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/cloud-arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/cloud-arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "code-bracket",
+    "title": "Code Bracket",
+    "variant": "outline",
+    "file": "ui_icons/outline/code-bracket.svg",
+    "location": "/images/community_assets/ui_icons/outline/code-bracket.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "code-bracket",
+    "title": "Code Bracket",
+    "variant": "solid",
+    "file": "ui_icons/solid/code-bracket.svg",
+    "location": "/images/community_assets/ui_icons/solid/code-bracket.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "code-bracket-square",
+    "title": "Code Bracket Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/code-bracket-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/code-bracket-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "code-bracket-square",
+    "title": "Code Bracket Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/code-bracket-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/code-bracket-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cog",
+    "title": "Cog",
+    "variant": "outline",
+    "file": "ui_icons/outline/cog.svg",
+    "location": "/images/community_assets/ui_icons/outline/cog.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cog",
+    "title": "Cog",
+    "variant": "solid",
+    "file": "ui_icons/solid/cog.svg",
+    "location": "/images/community_assets/ui_icons/solid/cog.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cog-6-tooth",
+    "title": "Cog 6 Tooth",
+    "variant": "outline",
+    "file": "ui_icons/outline/cog-6-tooth.svg",
+    "location": "/images/community_assets/ui_icons/outline/cog-6-tooth.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cog-6-tooth",
+    "title": "Cog 6 Tooth",
+    "variant": "solid",
+    "file": "ui_icons/solid/cog-6-tooth.svg",
+    "location": "/images/community_assets/ui_icons/solid/cog-6-tooth.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cog-8-tooth",
+    "title": "Cog 8 Tooth",
+    "variant": "outline",
+    "file": "ui_icons/outline/cog-8-tooth.svg",
+    "location": "/images/community_assets/ui_icons/outline/cog-8-tooth.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cog-8-tooth",
+    "title": "Cog 8 Tooth",
+    "variant": "solid",
+    "file": "ui_icons/solid/cog-8-tooth.svg",
+    "location": "/images/community_assets/ui_icons/solid/cog-8-tooth.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "command-line",
+    "title": "Command Line",
+    "variant": "outline",
+    "file": "ui_icons/outline/command-line.svg",
+    "location": "/images/community_assets/ui_icons/outline/command-line.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "command-line",
+    "title": "Command Line",
+    "variant": "solid",
+    "file": "ui_icons/solid/command-line.svg",
+    "location": "/images/community_assets/ui_icons/solid/command-line.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "computer-desktop",
+    "title": "Computer Desktop",
+    "variant": "outline",
+    "file": "ui_icons/outline/computer-desktop.svg",
+    "location": "/images/community_assets/ui_icons/outline/computer-desktop.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "computer-desktop",
+    "title": "Computer Desktop",
+    "variant": "solid",
+    "file": "ui_icons/solid/computer-desktop.svg",
+    "location": "/images/community_assets/ui_icons/solid/computer-desktop.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cpu-chip",
+    "title": "Cpu Chip",
+    "variant": "outline",
+    "file": "ui_icons/outline/cpu-chip.svg",
+    "location": "/images/community_assets/ui_icons/outline/cpu-chip.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cpu-chip",
+    "title": "Cpu Chip",
+    "variant": "solid",
+    "file": "ui_icons/solid/cpu-chip.svg",
+    "location": "/images/community_assets/ui_icons/solid/cpu-chip.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "credit-card",
+    "title": "Credit Card",
+    "variant": "outline",
+    "file": "ui_icons/outline/credit-card.svg",
+    "location": "/images/community_assets/ui_icons/outline/credit-card.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "credit-card",
+    "title": "Credit Card",
+    "variant": "solid",
+    "file": "ui_icons/solid/credit-card.svg",
+    "location": "/images/community_assets/ui_icons/solid/credit-card.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cube",
+    "title": "Cube",
+    "variant": "outline",
+    "file": "ui_icons/outline/cube.svg",
+    "location": "/images/community_assets/ui_icons/outline/cube.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cube",
+    "title": "Cube",
+    "variant": "solid",
+    "file": "ui_icons/solid/cube.svg",
+    "location": "/images/community_assets/ui_icons/solid/cube.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cube-transparent",
+    "title": "Cube Transparent",
+    "variant": "outline",
+    "file": "ui_icons/outline/cube-transparent.svg",
+    "location": "/images/community_assets/ui_icons/outline/cube-transparent.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cube-transparent",
+    "title": "Cube Transparent",
+    "variant": "solid",
+    "file": "ui_icons/solid/cube-transparent.svg",
+    "location": "/images/community_assets/ui_icons/solid/cube-transparent.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-bangladeshi",
+    "title": "Currency Bangladeshi",
+    "variant": "outline",
+    "file": "ui_icons/outline/currency-bangladeshi.svg",
+    "location": "/images/community_assets/ui_icons/outline/currency-bangladeshi.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-bangladeshi",
+    "title": "Currency Bangladeshi",
+    "variant": "solid",
+    "file": "ui_icons/solid/currency-bangladeshi.svg",
+    "location": "/images/community_assets/ui_icons/solid/currency-bangladeshi.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-dollar",
+    "title": "Currency Dollar",
+    "variant": "outline",
+    "file": "ui_icons/outline/currency-dollar.svg",
+    "location": "/images/community_assets/ui_icons/outline/currency-dollar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-dollar",
+    "title": "Currency Dollar",
+    "variant": "solid",
+    "file": "ui_icons/solid/currency-dollar.svg",
+    "location": "/images/community_assets/ui_icons/solid/currency-dollar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-euro",
+    "title": "Currency Euro",
+    "variant": "outline",
+    "file": "ui_icons/outline/currency-euro.svg",
+    "location": "/images/community_assets/ui_icons/outline/currency-euro.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-euro",
+    "title": "Currency Euro",
+    "variant": "solid",
+    "file": "ui_icons/solid/currency-euro.svg",
+    "location": "/images/community_assets/ui_icons/solid/currency-euro.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-pound",
+    "title": "Currency Pound",
+    "variant": "outline",
+    "file": "ui_icons/outline/currency-pound.svg",
+    "location": "/images/community_assets/ui_icons/outline/currency-pound.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-pound",
+    "title": "Currency Pound",
+    "variant": "solid",
+    "file": "ui_icons/solid/currency-pound.svg",
+    "location": "/images/community_assets/ui_icons/solid/currency-pound.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-rupee",
+    "title": "Currency Rupee",
+    "variant": "outline",
+    "file": "ui_icons/outline/currency-rupee.svg",
+    "location": "/images/community_assets/ui_icons/outline/currency-rupee.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-rupee",
+    "title": "Currency Rupee",
+    "variant": "solid",
+    "file": "ui_icons/solid/currency-rupee.svg",
+    "location": "/images/community_assets/ui_icons/solid/currency-rupee.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-yen",
+    "title": "Currency Yen",
+    "variant": "outline",
+    "file": "ui_icons/outline/currency-yen.svg",
+    "location": "/images/community_assets/ui_icons/outline/currency-yen.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "currency-yen",
+    "title": "Currency Yen",
+    "variant": "solid",
+    "file": "ui_icons/solid/currency-yen.svg",
+    "location": "/images/community_assets/ui_icons/solid/currency-yen.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cursor-arrow-rays",
+    "title": "Cursor Arrow Rays",
+    "variant": "outline",
+    "file": "ui_icons/outline/cursor-arrow-rays.svg",
+    "location": "/images/community_assets/ui_icons/outline/cursor-arrow-rays.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cursor-arrow-rays",
+    "title": "Cursor Arrow Rays",
+    "variant": "solid",
+    "file": "ui_icons/solid/cursor-arrow-rays.svg",
+    "location": "/images/community_assets/ui_icons/solid/cursor-arrow-rays.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cursor-arrow-ripple",
+    "title": "Cursor Arrow Ripple",
+    "variant": "outline",
+    "file": "ui_icons/outline/cursor-arrow-ripple.svg",
+    "location": "/images/community_assets/ui_icons/outline/cursor-arrow-ripple.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "cursor-arrow-ripple",
+    "title": "Cursor Arrow Ripple",
+    "variant": "solid",
+    "file": "ui_icons/solid/cursor-arrow-ripple.svg",
+    "location": "/images/community_assets/ui_icons/solid/cursor-arrow-ripple.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "device-phone-mobile",
+    "title": "Device Phone Mobile",
+    "variant": "outline",
+    "file": "ui_icons/outline/device-phone-mobile.svg",
+    "location": "/images/community_assets/ui_icons/outline/device-phone-mobile.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "device-phone-mobile",
+    "title": "Device Phone Mobile",
+    "variant": "solid",
+    "file": "ui_icons/solid/device-phone-mobile.svg",
+    "location": "/images/community_assets/ui_icons/solid/device-phone-mobile.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "device-tablet",
+    "title": "Device Tablet",
+    "variant": "outline",
+    "file": "ui_icons/outline/device-tablet.svg",
+    "location": "/images/community_assets/ui_icons/outline/device-tablet.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "device-tablet",
+    "title": "Device Tablet",
+    "variant": "solid",
+    "file": "ui_icons/solid/device-tablet.svg",
+    "location": "/images/community_assets/ui_icons/solid/device-tablet.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "divide",
+    "title": "Divide",
+    "variant": "outline",
+    "file": "ui_icons/outline/divide.svg",
+    "location": "/images/community_assets/ui_icons/outline/divide.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "divide",
+    "title": "Divide",
+    "variant": "solid",
+    "file": "ui_icons/solid/divide.svg",
+    "location": "/images/community_assets/ui_icons/solid/divide.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document",
+    "title": "Document",
+    "variant": "outline",
+    "file": "ui_icons/outline/document.svg",
+    "location": "/images/community_assets/ui_icons/outline/document.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document",
+    "title": "Document",
+    "variant": "solid",
+    "file": "ui_icons/solid/document.svg",
+    "location": "/images/community_assets/ui_icons/solid/document.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-arrow-down",
+    "title": "Document Arrow Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-arrow-down",
+    "title": "Document Arrow Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-arrow-up",
+    "title": "Document Arrow Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-arrow-up",
+    "title": "Document Arrow Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-arrow-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-arrow-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-chart-bar",
+    "title": "Document Chart Bar",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-chart-bar.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-chart-bar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-chart-bar",
+    "title": "Document Chart Bar",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-chart-bar.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-chart-bar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-check",
+    "title": "Document Check",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-check.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-check",
+    "title": "Document Check",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-check.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-bangladeshi",
+    "title": "Document Currency Bangladeshi",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-currency-bangladeshi.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-currency-bangladeshi.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-bangladeshi",
+    "title": "Document Currency Bangladeshi",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-currency-bangladeshi.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-currency-bangladeshi.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-dollar",
+    "title": "Document Currency Dollar",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-currency-dollar.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-currency-dollar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-dollar",
+    "title": "Document Currency Dollar",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-currency-dollar.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-currency-dollar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-euro",
+    "title": "Document Currency Euro",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-currency-euro.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-currency-euro.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-euro",
+    "title": "Document Currency Euro",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-currency-euro.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-currency-euro.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-pound",
+    "title": "Document Currency Pound",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-currency-pound.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-currency-pound.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-pound",
+    "title": "Document Currency Pound",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-currency-pound.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-currency-pound.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-rupee",
+    "title": "Document Currency Rupee",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-currency-rupee.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-currency-rupee.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-rupee",
+    "title": "Document Currency Rupee",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-currency-rupee.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-currency-rupee.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-yen",
+    "title": "Document Currency Yen",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-currency-yen.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-currency-yen.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-currency-yen",
+    "title": "Document Currency Yen",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-currency-yen.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-currency-yen.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-duplicate",
+    "title": "Document Duplicate",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-duplicate.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-duplicate.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-duplicate",
+    "title": "Document Duplicate",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-duplicate.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-duplicate.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-magnifying-glass",
+    "title": "Document Magnifying Glass",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-magnifying-glass.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-magnifying-glass.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-magnifying-glass",
+    "title": "Document Magnifying Glass",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-magnifying-glass.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-magnifying-glass.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-minus",
+    "title": "Document Minus",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-minus.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-minus",
+    "title": "Document Minus",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-minus.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-plus",
+    "title": "Document Plus",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-plus.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-plus",
+    "title": "Document Plus",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-plus.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-text",
+    "title": "Document Text",
+    "variant": "outline",
+    "file": "ui_icons/outline/document-text.svg",
+    "location": "/images/community_assets/ui_icons/outline/document-text.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "document-text",
+    "title": "Document Text",
+    "variant": "solid",
+    "file": "ui_icons/solid/document-text.svg",
+    "location": "/images/community_assets/ui_icons/solid/document-text.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ellipsis-horizontal",
+    "title": "Ellipsis Horizontal",
+    "variant": "outline",
+    "file": "ui_icons/outline/ellipsis-horizontal.svg",
+    "location": "/images/community_assets/ui_icons/outline/ellipsis-horizontal.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ellipsis-horizontal",
+    "title": "Ellipsis Horizontal",
+    "variant": "solid",
+    "file": "ui_icons/solid/ellipsis-horizontal.svg",
+    "location": "/images/community_assets/ui_icons/solid/ellipsis-horizontal.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ellipsis-horizontal-circle",
+    "title": "Ellipsis Horizontal Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/ellipsis-horizontal-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/ellipsis-horizontal-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ellipsis-horizontal-circle",
+    "title": "Ellipsis Horizontal Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/ellipsis-horizontal-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/ellipsis-horizontal-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ellipsis-vertical",
+    "title": "Ellipsis Vertical",
+    "variant": "outline",
+    "file": "ui_icons/outline/ellipsis-vertical.svg",
+    "location": "/images/community_assets/ui_icons/outline/ellipsis-vertical.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ellipsis-vertical",
+    "title": "Ellipsis Vertical",
+    "variant": "solid",
+    "file": "ui_icons/solid/ellipsis-vertical.svg",
+    "location": "/images/community_assets/ui_icons/solid/ellipsis-vertical.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "envelope",
+    "title": "Envelope",
+    "variant": "outline",
+    "file": "ui_icons/outline/envelope.svg",
+    "location": "/images/community_assets/ui_icons/outline/envelope.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "envelope",
+    "title": "Envelope",
+    "variant": "solid",
+    "file": "ui_icons/solid/envelope.svg",
+    "location": "/images/community_assets/ui_icons/solid/envelope.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "envelope-open",
+    "title": "Envelope Open",
+    "variant": "outline",
+    "file": "ui_icons/outline/envelope-open.svg",
+    "location": "/images/community_assets/ui_icons/outline/envelope-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "envelope-open",
+    "title": "Envelope Open",
+    "variant": "solid",
+    "file": "ui_icons/solid/envelope-open.svg",
+    "location": "/images/community_assets/ui_icons/solid/envelope-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "equals",
+    "title": "Equals",
+    "variant": "outline",
+    "file": "ui_icons/outline/equals.svg",
+    "location": "/images/community_assets/ui_icons/outline/equals.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "equals",
+    "title": "Equals",
+    "variant": "solid",
+    "file": "ui_icons/solid/equals.svg",
+    "location": "/images/community_assets/ui_icons/solid/equals.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "exclamation-circle",
+    "title": "Exclamation Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/exclamation-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/exclamation-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "exclamation-circle",
+    "title": "Exclamation Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/exclamation-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/exclamation-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "exclamation-triangle",
+    "title": "Exclamation Triangle",
+    "variant": "outline",
+    "file": "ui_icons/outline/exclamation-triangle.svg",
+    "location": "/images/community_assets/ui_icons/outline/exclamation-triangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "exclamation-triangle",
+    "title": "Exclamation Triangle",
+    "variant": "solid",
+    "file": "ui_icons/solid/exclamation-triangle.svg",
+    "location": "/images/community_assets/ui_icons/solid/exclamation-triangle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "eye",
+    "title": "Eye",
+    "variant": "outline",
+    "file": "ui_icons/outline/eye.svg",
+    "location": "/images/community_assets/ui_icons/outline/eye.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "eye",
+    "title": "Eye",
+    "variant": "solid",
+    "file": "ui_icons/solid/eye.svg",
+    "location": "/images/community_assets/ui_icons/solid/eye.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "eye-dropper",
+    "title": "Eye Dropper",
+    "variant": "outline",
+    "file": "ui_icons/outline/eye-dropper.svg",
+    "location": "/images/community_assets/ui_icons/outline/eye-dropper.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "eye-dropper",
+    "title": "Eye Dropper",
+    "variant": "solid",
+    "file": "ui_icons/solid/eye-dropper.svg",
+    "location": "/images/community_assets/ui_icons/solid/eye-dropper.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "eye-slash",
+    "title": "Eye Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/eye-slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/eye-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "eye-slash",
+    "title": "Eye Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/eye-slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/eye-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "face-frown",
+    "title": "Face Frown",
+    "variant": "outline",
+    "file": "ui_icons/outline/face-frown.svg",
+    "location": "/images/community_assets/ui_icons/outline/face-frown.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "face-frown",
+    "title": "Face Frown",
+    "variant": "solid",
+    "file": "ui_icons/solid/face-frown.svg",
+    "location": "/images/community_assets/ui_icons/solid/face-frown.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "face-smile",
+    "title": "Face Smile",
+    "variant": "outline",
+    "file": "ui_icons/outline/face-smile.svg",
+    "location": "/images/community_assets/ui_icons/outline/face-smile.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "face-smile",
+    "title": "Face Smile",
+    "variant": "solid",
+    "file": "ui_icons/solid/face-smile.svg",
+    "location": "/images/community_assets/ui_icons/solid/face-smile.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "film",
+    "title": "Film",
+    "variant": "outline",
+    "file": "ui_icons/outline/film.svg",
+    "location": "/images/community_assets/ui_icons/outline/film.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "film",
+    "title": "Film",
+    "variant": "solid",
+    "file": "ui_icons/solid/film.svg",
+    "location": "/images/community_assets/ui_icons/solid/film.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "finger-print",
+    "title": "Finger Print",
+    "variant": "outline",
+    "file": "ui_icons/outline/finger-print.svg",
+    "location": "/images/community_assets/ui_icons/outline/finger-print.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "finger-print",
+    "title": "Finger Print",
+    "variant": "solid",
+    "file": "ui_icons/solid/finger-print.svg",
+    "location": "/images/community_assets/ui_icons/solid/finger-print.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "fire",
+    "title": "Fire",
+    "variant": "outline",
+    "file": "ui_icons/outline/fire.svg",
+    "location": "/images/community_assets/ui_icons/outline/fire.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "fire",
+    "title": "Fire",
+    "variant": "solid",
+    "file": "ui_icons/solid/fire.svg",
+    "location": "/images/community_assets/ui_icons/solid/fire.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "flag",
+    "title": "Flag",
+    "variant": "outline",
+    "file": "ui_icons/outline/flag.svg",
+    "location": "/images/community_assets/ui_icons/outline/flag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "flag",
+    "title": "Flag",
+    "variant": "solid",
+    "file": "ui_icons/solid/flag.svg",
+    "location": "/images/community_assets/ui_icons/solid/flag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder",
+    "title": "Folder",
+    "variant": "outline",
+    "file": "ui_icons/outline/folder.svg",
+    "location": "/images/community_assets/ui_icons/outline/folder.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder",
+    "title": "Folder",
+    "variant": "solid",
+    "file": "ui_icons/solid/folder.svg",
+    "location": "/images/community_assets/ui_icons/solid/folder.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-arrow-down",
+    "title": "Folder Arrow Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/folder-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/folder-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-arrow-down",
+    "title": "Folder Arrow Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/folder-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/folder-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-minus",
+    "title": "Folder Minus",
+    "variant": "outline",
+    "file": "ui_icons/outline/folder-minus.svg",
+    "location": "/images/community_assets/ui_icons/outline/folder-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-minus",
+    "title": "Folder Minus",
+    "variant": "solid",
+    "file": "ui_icons/solid/folder-minus.svg",
+    "location": "/images/community_assets/ui_icons/solid/folder-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-open",
+    "title": "Folder Open",
+    "variant": "outline",
+    "file": "ui_icons/outline/folder-open.svg",
+    "location": "/images/community_assets/ui_icons/outline/folder-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-open",
+    "title": "Folder Open",
+    "variant": "solid",
+    "file": "ui_icons/solid/folder-open.svg",
+    "location": "/images/community_assets/ui_icons/solid/folder-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-plus",
+    "title": "Folder Plus",
+    "variant": "outline",
+    "file": "ui_icons/outline/folder-plus.svg",
+    "location": "/images/community_assets/ui_icons/outline/folder-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "folder-plus",
+    "title": "Folder Plus",
+    "variant": "solid",
+    "file": "ui_icons/solid/folder-plus.svg",
+    "location": "/images/community_assets/ui_icons/solid/folder-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "forward",
+    "title": "Forward",
+    "variant": "outline",
+    "file": "ui_icons/outline/forward.svg",
+    "location": "/images/community_assets/ui_icons/outline/forward.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "forward",
+    "title": "Forward",
+    "variant": "solid",
+    "file": "ui_icons/solid/forward.svg",
+    "location": "/images/community_assets/ui_icons/solid/forward.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "funnel",
+    "title": "Funnel",
+    "variant": "outline",
+    "file": "ui_icons/outline/funnel.svg",
+    "location": "/images/community_assets/ui_icons/outline/funnel.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "funnel",
+    "title": "Funnel",
+    "variant": "solid",
+    "file": "ui_icons/solid/funnel.svg",
+    "location": "/images/community_assets/ui_icons/solid/funnel.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "gif",
+    "title": "Gif",
+    "variant": "outline",
+    "file": "ui_icons/outline/gif.svg",
+    "location": "/images/community_assets/ui_icons/outline/gif.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "gif",
+    "title": "Gif",
+    "variant": "solid",
+    "file": "ui_icons/solid/gif.svg",
+    "location": "/images/community_assets/ui_icons/solid/gif.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "gift",
+    "title": "Gift",
+    "variant": "outline",
+    "file": "ui_icons/outline/gift.svg",
+    "location": "/images/community_assets/ui_icons/outline/gift.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "gift",
+    "title": "Gift",
+    "variant": "solid",
+    "file": "ui_icons/solid/gift.svg",
+    "location": "/images/community_assets/ui_icons/solid/gift.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "gift-top",
+    "title": "Gift Top",
+    "variant": "outline",
+    "file": "ui_icons/outline/gift-top.svg",
+    "location": "/images/community_assets/ui_icons/outline/gift-top.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "gift-top",
+    "title": "Gift Top",
+    "variant": "solid",
+    "file": "ui_icons/solid/gift-top.svg",
+    "location": "/images/community_assets/ui_icons/solid/gift-top.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-alt",
+    "title": "Globe Alt",
+    "variant": "outline",
+    "file": "ui_icons/outline/globe-alt.svg",
+    "location": "/images/community_assets/ui_icons/outline/globe-alt.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-alt",
+    "title": "Globe Alt",
+    "variant": "solid",
+    "file": "ui_icons/solid/globe-alt.svg",
+    "location": "/images/community_assets/ui_icons/solid/globe-alt.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-americas",
+    "title": "Globe Americas",
+    "variant": "outline",
+    "file": "ui_icons/outline/globe-americas.svg",
+    "location": "/images/community_assets/ui_icons/outline/globe-americas.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-americas",
+    "title": "Globe Americas",
+    "variant": "solid",
+    "file": "ui_icons/solid/globe-americas.svg",
+    "location": "/images/community_assets/ui_icons/solid/globe-americas.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-asia-australia",
+    "title": "Globe Asia Australia",
+    "variant": "outline",
+    "file": "ui_icons/outline/globe-asia-australia.svg",
+    "location": "/images/community_assets/ui_icons/outline/globe-asia-australia.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-asia-australia",
+    "title": "Globe Asia Australia",
+    "variant": "solid",
+    "file": "ui_icons/solid/globe-asia-australia.svg",
+    "location": "/images/community_assets/ui_icons/solid/globe-asia-australia.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-europe-africa",
+    "title": "Globe Europe Africa",
+    "variant": "outline",
+    "file": "ui_icons/outline/globe-europe-africa.svg",
+    "location": "/images/community_assets/ui_icons/outline/globe-europe-africa.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "globe-europe-africa",
+    "title": "Globe Europe Africa",
+    "variant": "solid",
+    "file": "ui_icons/solid/globe-europe-africa.svg",
+    "location": "/images/community_assets/ui_icons/solid/globe-europe-africa.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "h1",
+    "title": "H1",
+    "variant": "outline",
+    "file": "ui_icons/outline/h1.svg",
+    "location": "/images/community_assets/ui_icons/outline/h1.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "h1",
+    "title": "H1",
+    "variant": "solid",
+    "file": "ui_icons/solid/h1.svg",
+    "location": "/images/community_assets/ui_icons/solid/h1.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "h2",
+    "title": "H2",
+    "variant": "outline",
+    "file": "ui_icons/outline/h2.svg",
+    "location": "/images/community_assets/ui_icons/outline/h2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "h2",
+    "title": "H2",
+    "variant": "solid",
+    "file": "ui_icons/solid/h2.svg",
+    "location": "/images/community_assets/ui_icons/solid/h2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "h3",
+    "title": "H3",
+    "variant": "outline",
+    "file": "ui_icons/outline/h3.svg",
+    "location": "/images/community_assets/ui_icons/outline/h3.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "h3",
+    "title": "H3",
+    "variant": "solid",
+    "file": "ui_icons/solid/h3.svg",
+    "location": "/images/community_assets/ui_icons/solid/h3.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hand-raised",
+    "title": "Hand Raised",
+    "variant": "outline",
+    "file": "ui_icons/outline/hand-raised.svg",
+    "location": "/images/community_assets/ui_icons/outline/hand-raised.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hand-raised",
+    "title": "Hand Raised",
+    "variant": "solid",
+    "file": "ui_icons/solid/hand-raised.svg",
+    "location": "/images/community_assets/ui_icons/solid/hand-raised.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hand-thumb-down",
+    "title": "Hand Thumb Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/hand-thumb-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/hand-thumb-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hand-thumb-down",
+    "title": "Hand Thumb Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/hand-thumb-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/hand-thumb-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hand-thumb-up",
+    "title": "Hand Thumb Up",
+    "variant": "outline",
+    "file": "ui_icons/outline/hand-thumb-up.svg",
+    "location": "/images/community_assets/ui_icons/outline/hand-thumb-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hand-thumb-up",
+    "title": "Hand Thumb Up",
+    "variant": "solid",
+    "file": "ui_icons/solid/hand-thumb-up.svg",
+    "location": "/images/community_assets/ui_icons/solid/hand-thumb-up.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hashtag",
+    "title": "Hashtag",
+    "variant": "outline",
+    "file": "ui_icons/outline/hashtag.svg",
+    "location": "/images/community_assets/ui_icons/outline/hashtag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "hashtag",
+    "title": "Hashtag",
+    "variant": "solid",
+    "file": "ui_icons/solid/hashtag.svg",
+    "location": "/images/community_assets/ui_icons/solid/hashtag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "heart",
+    "title": "Heart",
+    "variant": "outline",
+    "file": "ui_icons/outline/heart.svg",
+    "location": "/images/community_assets/ui_icons/outline/heart.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "heart",
+    "title": "Heart",
+    "variant": "solid",
+    "file": "ui_icons/solid/heart.svg",
+    "location": "/images/community_assets/ui_icons/solid/heart.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "home",
+    "title": "Home",
+    "variant": "outline",
+    "file": "ui_icons/outline/home.svg",
+    "location": "/images/community_assets/ui_icons/outline/home.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "home",
+    "title": "Home",
+    "variant": "solid",
+    "file": "ui_icons/solid/home.svg",
+    "location": "/images/community_assets/ui_icons/solid/home.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "home-modern",
+    "title": "Home Modern",
+    "variant": "outline",
+    "file": "ui_icons/outline/home-modern.svg",
+    "location": "/images/community_assets/ui_icons/outline/home-modern.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "home-modern",
+    "title": "Home Modern",
+    "variant": "solid",
+    "file": "ui_icons/solid/home-modern.svg",
+    "location": "/images/community_assets/ui_icons/solid/home-modern.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "identification",
+    "title": "Identification",
+    "variant": "outline",
+    "file": "ui_icons/outline/identification.svg",
+    "location": "/images/community_assets/ui_icons/outline/identification.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "identification",
+    "title": "Identification",
+    "variant": "solid",
+    "file": "ui_icons/solid/identification.svg",
+    "location": "/images/community_assets/ui_icons/solid/identification.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "inbox",
+    "title": "Inbox",
+    "variant": "outline",
+    "file": "ui_icons/outline/inbox.svg",
+    "location": "/images/community_assets/ui_icons/outline/inbox.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "inbox",
+    "title": "Inbox",
+    "variant": "solid",
+    "file": "ui_icons/solid/inbox.svg",
+    "location": "/images/community_assets/ui_icons/solid/inbox.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "inbox-arrow-down",
+    "title": "Inbox Arrow Down",
+    "variant": "outline",
+    "file": "ui_icons/outline/inbox-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/outline/inbox-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "inbox-arrow-down",
+    "title": "Inbox Arrow Down",
+    "variant": "solid",
+    "file": "ui_icons/solid/inbox-arrow-down.svg",
+    "location": "/images/community_assets/ui_icons/solid/inbox-arrow-down.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "inbox-stack",
+    "title": "Inbox Stack",
+    "variant": "outline",
+    "file": "ui_icons/outline/inbox-stack.svg",
+    "location": "/images/community_assets/ui_icons/outline/inbox-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "inbox-stack",
+    "title": "Inbox Stack",
+    "variant": "solid",
+    "file": "ui_icons/solid/inbox-stack.svg",
+    "location": "/images/community_assets/ui_icons/solid/inbox-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "information-circle",
+    "title": "Information Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/information-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/information-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "information-circle",
+    "title": "Information Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/information-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/information-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "italic",
+    "title": "Italic",
+    "variant": "outline",
+    "file": "ui_icons/outline/italic.svg",
+    "location": "/images/community_assets/ui_icons/outline/italic.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "italic",
+    "title": "Italic",
+    "variant": "solid",
+    "file": "ui_icons/solid/italic.svg",
+    "location": "/images/community_assets/ui_icons/solid/italic.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "key",
+    "title": "Key",
+    "variant": "outline",
+    "file": "ui_icons/outline/key.svg",
+    "location": "/images/community_assets/ui_icons/outline/key.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "key",
+    "title": "Key",
+    "variant": "solid",
+    "file": "ui_icons/solid/key.svg",
+    "location": "/images/community_assets/ui_icons/solid/key.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "language",
+    "title": "Language",
+    "variant": "outline",
+    "file": "ui_icons/outline/language.svg",
+    "location": "/images/community_assets/ui_icons/outline/language.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "language",
+    "title": "Language",
+    "variant": "solid",
+    "file": "ui_icons/solid/language.svg",
+    "location": "/images/community_assets/ui_icons/solid/language.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "lifebuoy",
+    "title": "Lifebuoy",
+    "variant": "outline",
+    "file": "ui_icons/outline/lifebuoy.svg",
+    "location": "/images/community_assets/ui_icons/outline/lifebuoy.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "lifebuoy",
+    "title": "Lifebuoy",
+    "variant": "solid",
+    "file": "ui_icons/solid/lifebuoy.svg",
+    "location": "/images/community_assets/ui_icons/solid/lifebuoy.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "light-bulb",
+    "title": "Light Bulb",
+    "variant": "outline",
+    "file": "ui_icons/outline/light-bulb.svg",
+    "location": "/images/community_assets/ui_icons/outline/light-bulb.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "light-bulb",
+    "title": "Light Bulb",
+    "variant": "solid",
+    "file": "ui_icons/solid/light-bulb.svg",
+    "location": "/images/community_assets/ui_icons/solid/light-bulb.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "link",
+    "title": "Link",
+    "variant": "outline",
+    "file": "ui_icons/outline/link.svg",
+    "location": "/images/community_assets/ui_icons/outline/link.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "link",
+    "title": "Link",
+    "variant": "solid",
+    "file": "ui_icons/solid/link.svg",
+    "location": "/images/community_assets/ui_icons/solid/link.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "link-slash",
+    "title": "Link Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/link-slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/link-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "link-slash",
+    "title": "Link Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/link-slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/link-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "list-bullet",
+    "title": "List Bullet",
+    "variant": "outline",
+    "file": "ui_icons/outline/list-bullet.svg",
+    "location": "/images/community_assets/ui_icons/outline/list-bullet.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "list-bullet",
+    "title": "List Bullet",
+    "variant": "solid",
+    "file": "ui_icons/solid/list-bullet.svg",
+    "location": "/images/community_assets/ui_icons/solid/list-bullet.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "lock-closed",
+    "title": "Lock Closed",
+    "variant": "outline",
+    "file": "ui_icons/outline/lock-closed.svg",
+    "location": "/images/community_assets/ui_icons/outline/lock-closed.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "lock-closed",
+    "title": "Lock Closed",
+    "variant": "solid",
+    "file": "ui_icons/solid/lock-closed.svg",
+    "location": "/images/community_assets/ui_icons/solid/lock-closed.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "lock-open",
+    "title": "Lock Open",
+    "variant": "outline",
+    "file": "ui_icons/outline/lock-open.svg",
+    "location": "/images/community_assets/ui_icons/outline/lock-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "lock-open",
+    "title": "Lock Open",
+    "variant": "solid",
+    "file": "ui_icons/solid/lock-open.svg",
+    "location": "/images/community_assets/ui_icons/solid/lock-open.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass",
+    "title": "Magnifying Glass",
+    "variant": "outline",
+    "file": "ui_icons/outline/magnifying-glass.svg",
+    "location": "/images/community_assets/ui_icons/outline/magnifying-glass.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass",
+    "title": "Magnifying Glass",
+    "variant": "solid",
+    "file": "ui_icons/solid/magnifying-glass.svg",
+    "location": "/images/community_assets/ui_icons/solid/magnifying-glass.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass-circle",
+    "title": "Magnifying Glass Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/magnifying-glass-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/magnifying-glass-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass-circle",
+    "title": "Magnifying Glass Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/magnifying-glass-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/magnifying-glass-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass-minus",
+    "title": "Magnifying Glass Minus",
+    "variant": "outline",
+    "file": "ui_icons/outline/magnifying-glass-minus.svg",
+    "location": "/images/community_assets/ui_icons/outline/magnifying-glass-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass-minus",
+    "title": "Magnifying Glass Minus",
+    "variant": "solid",
+    "file": "ui_icons/solid/magnifying-glass-minus.svg",
+    "location": "/images/community_assets/ui_icons/solid/magnifying-glass-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass-plus",
+    "title": "Magnifying Glass Plus",
+    "variant": "outline",
+    "file": "ui_icons/outline/magnifying-glass-plus.svg",
+    "location": "/images/community_assets/ui_icons/outline/magnifying-glass-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "magnifying-glass-plus",
+    "title": "Magnifying Glass Plus",
+    "variant": "solid",
+    "file": "ui_icons/solid/magnifying-glass-plus.svg",
+    "location": "/images/community_assets/ui_icons/solid/magnifying-glass-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "map",
+    "title": "Map",
+    "variant": "outline",
+    "file": "ui_icons/outline/map.svg",
+    "location": "/images/community_assets/ui_icons/outline/map.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "map",
+    "title": "Map",
+    "variant": "solid",
+    "file": "ui_icons/solid/map.svg",
+    "location": "/images/community_assets/ui_icons/solid/map.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "map-pin",
+    "title": "Map Pin",
+    "variant": "outline",
+    "file": "ui_icons/outline/map-pin.svg",
+    "location": "/images/community_assets/ui_icons/outline/map-pin.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "map-pin",
+    "title": "Map Pin",
+    "variant": "solid",
+    "file": "ui_icons/solid/map-pin.svg",
+    "location": "/images/community_assets/ui_icons/solid/map-pin.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "megaphone",
+    "title": "Megaphone",
+    "variant": "outline",
+    "file": "ui_icons/outline/megaphone.svg",
+    "location": "/images/community_assets/ui_icons/outline/megaphone.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "megaphone",
+    "title": "Megaphone",
+    "variant": "solid",
+    "file": "ui_icons/solid/megaphone.svg",
+    "location": "/images/community_assets/ui_icons/solid/megaphone.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "microphone",
+    "title": "Microphone",
+    "variant": "outline",
+    "file": "ui_icons/outline/microphone.svg",
+    "location": "/images/community_assets/ui_icons/outline/microphone.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "microphone",
+    "title": "Microphone",
+    "variant": "solid",
+    "file": "ui_icons/solid/microphone.svg",
+    "location": "/images/community_assets/ui_icons/solid/microphone.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "minus",
+    "title": "Minus",
+    "variant": "outline",
+    "file": "ui_icons/outline/minus.svg",
+    "location": "/images/community_assets/ui_icons/outline/minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "minus",
+    "title": "Minus",
+    "variant": "solid",
+    "file": "ui_icons/solid/minus.svg",
+    "location": "/images/community_assets/ui_icons/solid/minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "minus-circle",
+    "title": "Minus Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/minus-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/minus-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "minus-circle",
+    "title": "Minus Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/minus-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/minus-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "minus-small",
+    "title": "Minus Small",
+    "variant": "outline",
+    "file": "ui_icons/outline/minus-small.svg",
+    "location": "/images/community_assets/ui_icons/outline/minus-small.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "minus-small",
+    "title": "Minus Small",
+    "variant": "solid",
+    "file": "ui_icons/solid/minus-small.svg",
+    "location": "/images/community_assets/ui_icons/solid/minus-small.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "moon",
+    "title": "Moon",
+    "variant": "outline",
+    "file": "ui_icons/outline/moon.svg",
+    "location": "/images/community_assets/ui_icons/outline/moon.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "moon",
+    "title": "Moon",
+    "variant": "solid",
+    "file": "ui_icons/solid/moon.svg",
+    "location": "/images/community_assets/ui_icons/solid/moon.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "musical-note",
+    "title": "Musical Note",
+    "variant": "outline",
+    "file": "ui_icons/outline/musical-note.svg",
+    "location": "/images/community_assets/ui_icons/outline/musical-note.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "musical-note",
+    "title": "Musical Note",
+    "variant": "solid",
+    "file": "ui_icons/solid/musical-note.svg",
+    "location": "/images/community_assets/ui_icons/solid/musical-note.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "newspaper",
+    "title": "Newspaper",
+    "variant": "outline",
+    "file": "ui_icons/outline/newspaper.svg",
+    "location": "/images/community_assets/ui_icons/outline/newspaper.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "newspaper",
+    "title": "Newspaper",
+    "variant": "solid",
+    "file": "ui_icons/solid/newspaper.svg",
+    "location": "/images/community_assets/ui_icons/solid/newspaper.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "no-symbol",
+    "title": "No Symbol",
+    "variant": "outline",
+    "file": "ui_icons/outline/no-symbol.svg",
+    "location": "/images/community_assets/ui_icons/outline/no-symbol.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "no-symbol",
+    "title": "No Symbol",
+    "variant": "solid",
+    "file": "ui_icons/solid/no-symbol.svg",
+    "location": "/images/community_assets/ui_icons/solid/no-symbol.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "numbered-list",
+    "title": "Numbered List",
+    "variant": "outline",
+    "file": "ui_icons/outline/numbered-list.svg",
+    "location": "/images/community_assets/ui_icons/outline/numbered-list.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "numbered-list",
+    "title": "Numbered List",
+    "variant": "solid",
+    "file": "ui_icons/solid/numbered-list.svg",
+    "location": "/images/community_assets/ui_icons/solid/numbered-list.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "paint-brush",
+    "title": "Paint Brush",
+    "variant": "outline",
+    "file": "ui_icons/outline/paint-brush.svg",
+    "location": "/images/community_assets/ui_icons/outline/paint-brush.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "paint-brush",
+    "title": "Paint Brush",
+    "variant": "solid",
+    "file": "ui_icons/solid/paint-brush.svg",
+    "location": "/images/community_assets/ui_icons/solid/paint-brush.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "paper-airplane",
+    "title": "Paper Airplane",
+    "variant": "outline",
+    "file": "ui_icons/outline/paper-airplane.svg",
+    "location": "/images/community_assets/ui_icons/outline/paper-airplane.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "paper-airplane",
+    "title": "Paper Airplane",
+    "variant": "solid",
+    "file": "ui_icons/solid/paper-airplane.svg",
+    "location": "/images/community_assets/ui_icons/solid/paper-airplane.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "paper-clip",
+    "title": "Paper Clip",
+    "variant": "outline",
+    "file": "ui_icons/outline/paper-clip.svg",
+    "location": "/images/community_assets/ui_icons/outline/paper-clip.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "paper-clip",
+    "title": "Paper Clip",
+    "variant": "solid",
+    "file": "ui_icons/solid/paper-clip.svg",
+    "location": "/images/community_assets/ui_icons/solid/paper-clip.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pause",
+    "title": "Pause",
+    "variant": "outline",
+    "file": "ui_icons/outline/pause.svg",
+    "location": "/images/community_assets/ui_icons/outline/pause.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pause",
+    "title": "Pause",
+    "variant": "solid",
+    "file": "ui_icons/solid/pause.svg",
+    "location": "/images/community_assets/ui_icons/solid/pause.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pause-circle",
+    "title": "Pause Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/pause-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/pause-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pause-circle",
+    "title": "Pause Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/pause-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/pause-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pencil",
+    "title": "Pencil",
+    "variant": "outline",
+    "file": "ui_icons/outline/pencil.svg",
+    "location": "/images/community_assets/ui_icons/outline/pencil.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pencil",
+    "title": "Pencil",
+    "variant": "solid",
+    "file": "ui_icons/solid/pencil.svg",
+    "location": "/images/community_assets/ui_icons/solid/pencil.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pencil-square",
+    "title": "Pencil Square",
+    "variant": "outline",
+    "file": "ui_icons/outline/pencil-square.svg",
+    "location": "/images/community_assets/ui_icons/outline/pencil-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "pencil-square",
+    "title": "Pencil Square",
+    "variant": "solid",
+    "file": "ui_icons/solid/pencil-square.svg",
+    "location": "/images/community_assets/ui_icons/solid/pencil-square.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "percent-badge",
+    "title": "Percent Badge",
+    "variant": "outline",
+    "file": "ui_icons/outline/percent-badge.svg",
+    "location": "/images/community_assets/ui_icons/outline/percent-badge.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "percent-badge",
+    "title": "Percent Badge",
+    "variant": "solid",
+    "file": "ui_icons/solid/percent-badge.svg",
+    "location": "/images/community_assets/ui_icons/solid/percent-badge.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone",
+    "title": "Phone",
+    "variant": "outline",
+    "file": "ui_icons/outline/phone.svg",
+    "location": "/images/community_assets/ui_icons/outline/phone.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone",
+    "title": "Phone",
+    "variant": "solid",
+    "file": "ui_icons/solid/phone.svg",
+    "location": "/images/community_assets/ui_icons/solid/phone.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone-arrow-down-left",
+    "title": "Phone Arrow Down Left",
+    "variant": "outline",
+    "file": "ui_icons/outline/phone-arrow-down-left.svg",
+    "location": "/images/community_assets/ui_icons/outline/phone-arrow-down-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone-arrow-down-left",
+    "title": "Phone Arrow Down Left",
+    "variant": "solid",
+    "file": "ui_icons/solid/phone-arrow-down-left.svg",
+    "location": "/images/community_assets/ui_icons/solid/phone-arrow-down-left.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone-arrow-up-right",
+    "title": "Phone Arrow Up Right",
+    "variant": "outline",
+    "file": "ui_icons/outline/phone-arrow-up-right.svg",
+    "location": "/images/community_assets/ui_icons/outline/phone-arrow-up-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone-arrow-up-right",
+    "title": "Phone Arrow Up Right",
+    "variant": "solid",
+    "file": "ui_icons/solid/phone-arrow-up-right.svg",
+    "location": "/images/community_assets/ui_icons/solid/phone-arrow-up-right.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone-x-mark",
+    "title": "Phone X Mark",
+    "variant": "outline",
+    "file": "ui_icons/outline/phone-x-mark.svg",
+    "location": "/images/community_assets/ui_icons/outline/phone-x-mark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "phone-x-mark",
+    "title": "Phone X Mark",
+    "variant": "solid",
+    "file": "ui_icons/solid/phone-x-mark.svg",
+    "location": "/images/community_assets/ui_icons/solid/phone-x-mark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "photo",
+    "title": "Photo",
+    "variant": "outline",
+    "file": "ui_icons/outline/photo.svg",
+    "location": "/images/community_assets/ui_icons/outline/photo.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "photo",
+    "title": "Photo",
+    "variant": "solid",
+    "file": "ui_icons/solid/photo.svg",
+    "location": "/images/community_assets/ui_icons/solid/photo.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "play",
+    "title": "Play",
+    "variant": "outline",
+    "file": "ui_icons/outline/play.svg",
+    "location": "/images/community_assets/ui_icons/outline/play.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "play",
+    "title": "Play",
+    "variant": "solid",
+    "file": "ui_icons/solid/play.svg",
+    "location": "/images/community_assets/ui_icons/solid/play.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "play-circle",
+    "title": "Play Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/play-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/play-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "play-circle",
+    "title": "Play Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/play-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/play-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "play-pause",
+    "title": "Play Pause",
+    "variant": "outline",
+    "file": "ui_icons/outline/play-pause.svg",
+    "location": "/images/community_assets/ui_icons/outline/play-pause.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "play-pause",
+    "title": "Play Pause",
+    "variant": "solid",
+    "file": "ui_icons/solid/play-pause.svg",
+    "location": "/images/community_assets/ui_icons/solid/play-pause.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "plus",
+    "title": "Plus",
+    "variant": "outline",
+    "file": "ui_icons/outline/plus.svg",
+    "location": "/images/community_assets/ui_icons/outline/plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "plus",
+    "title": "Plus",
+    "variant": "solid",
+    "file": "ui_icons/solid/plus.svg",
+    "location": "/images/community_assets/ui_icons/solid/plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "plus-circle",
+    "title": "Plus Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/plus-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/plus-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "plus-circle",
+    "title": "Plus Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/plus-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/plus-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "plus-small",
+    "title": "Plus Small",
+    "variant": "outline",
+    "file": "ui_icons/outline/plus-small.svg",
+    "location": "/images/community_assets/ui_icons/outline/plus-small.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "plus-small",
+    "title": "Plus Small",
+    "variant": "solid",
+    "file": "ui_icons/solid/plus-small.svg",
+    "location": "/images/community_assets/ui_icons/solid/plus-small.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "power",
+    "title": "Power",
+    "variant": "outline",
+    "file": "ui_icons/outline/power.svg",
+    "location": "/images/community_assets/ui_icons/outline/power.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "power",
+    "title": "Power",
+    "variant": "solid",
+    "file": "ui_icons/solid/power.svg",
+    "location": "/images/community_assets/ui_icons/solid/power.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "presentation-chart-bar",
+    "title": "Presentation Chart Bar",
+    "variant": "outline",
+    "file": "ui_icons/outline/presentation-chart-bar.svg",
+    "location": "/images/community_assets/ui_icons/outline/presentation-chart-bar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "presentation-chart-bar",
+    "title": "Presentation Chart Bar",
+    "variant": "solid",
+    "file": "ui_icons/solid/presentation-chart-bar.svg",
+    "location": "/images/community_assets/ui_icons/solid/presentation-chart-bar.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "presentation-chart-line",
+    "title": "Presentation Chart Line",
+    "variant": "outline",
+    "file": "ui_icons/outline/presentation-chart-line.svg",
+    "location": "/images/community_assets/ui_icons/outline/presentation-chart-line.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "presentation-chart-line",
+    "title": "Presentation Chart Line",
+    "variant": "solid",
+    "file": "ui_icons/solid/presentation-chart-line.svg",
+    "location": "/images/community_assets/ui_icons/solid/presentation-chart-line.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "printer",
+    "title": "Printer",
+    "variant": "outline",
+    "file": "ui_icons/outline/printer.svg",
+    "location": "/images/community_assets/ui_icons/outline/printer.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "printer",
+    "title": "Printer",
+    "variant": "solid",
+    "file": "ui_icons/solid/printer.svg",
+    "location": "/images/community_assets/ui_icons/solid/printer.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "puzzle-piece",
+    "title": "Puzzle Piece",
+    "variant": "outline",
+    "file": "ui_icons/outline/puzzle-piece.svg",
+    "location": "/images/community_assets/ui_icons/outline/puzzle-piece.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "puzzle-piece",
+    "title": "Puzzle Piece",
+    "variant": "solid",
+    "file": "ui_icons/solid/puzzle-piece.svg",
+    "location": "/images/community_assets/ui_icons/solid/puzzle-piece.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "qr-code",
+    "title": "Qr Code",
+    "variant": "outline",
+    "file": "ui_icons/outline/qr-code.svg",
+    "location": "/images/community_assets/ui_icons/outline/qr-code.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "qr-code",
+    "title": "Qr Code",
+    "variant": "solid",
+    "file": "ui_icons/solid/qr-code.svg",
+    "location": "/images/community_assets/ui_icons/solid/qr-code.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "question-mark-circle",
+    "title": "Question Mark Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/question-mark-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/question-mark-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "question-mark-circle",
+    "title": "Question Mark Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/question-mark-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/question-mark-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "queue-list",
+    "title": "Queue List",
+    "variant": "outline",
+    "file": "ui_icons/outline/queue-list.svg",
+    "location": "/images/community_assets/ui_icons/outline/queue-list.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "queue-list",
+    "title": "Queue List",
+    "variant": "solid",
+    "file": "ui_icons/solid/queue-list.svg",
+    "location": "/images/community_assets/ui_icons/solid/queue-list.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "radio",
+    "title": "Radio",
+    "variant": "outline",
+    "file": "ui_icons/outline/radio.svg",
+    "location": "/images/community_assets/ui_icons/outline/radio.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "radio",
+    "title": "Radio",
+    "variant": "solid",
+    "file": "ui_icons/solid/radio.svg",
+    "location": "/images/community_assets/ui_icons/solid/radio.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "receipt-percent",
+    "title": "Receipt Percent",
+    "variant": "outline",
+    "file": "ui_icons/outline/receipt-percent.svg",
+    "location": "/images/community_assets/ui_icons/outline/receipt-percent.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "receipt-percent",
+    "title": "Receipt Percent",
+    "variant": "solid",
+    "file": "ui_icons/solid/receipt-percent.svg",
+    "location": "/images/community_assets/ui_icons/solid/receipt-percent.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "receipt-refund",
+    "title": "Receipt Refund",
+    "variant": "outline",
+    "file": "ui_icons/outline/receipt-refund.svg",
+    "location": "/images/community_assets/ui_icons/outline/receipt-refund.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "receipt-refund",
+    "title": "Receipt Refund",
+    "variant": "solid",
+    "file": "ui_icons/solid/receipt-refund.svg",
+    "location": "/images/community_assets/ui_icons/solid/receipt-refund.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rectangle-group",
+    "title": "Rectangle Group",
+    "variant": "outline",
+    "file": "ui_icons/outline/rectangle-group.svg",
+    "location": "/images/community_assets/ui_icons/outline/rectangle-group.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rectangle-group",
+    "title": "Rectangle Group",
+    "variant": "solid",
+    "file": "ui_icons/solid/rectangle-group.svg",
+    "location": "/images/community_assets/ui_icons/solid/rectangle-group.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rectangle-stack",
+    "title": "Rectangle Stack",
+    "variant": "outline",
+    "file": "ui_icons/outline/rectangle-stack.svg",
+    "location": "/images/community_assets/ui_icons/outline/rectangle-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rectangle-stack",
+    "title": "Rectangle Stack",
+    "variant": "solid",
+    "file": "ui_icons/solid/rectangle-stack.svg",
+    "location": "/images/community_assets/ui_icons/solid/rectangle-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rocket-launch",
+    "title": "Rocket Launch",
+    "variant": "outline",
+    "file": "ui_icons/outline/rocket-launch.svg",
+    "location": "/images/community_assets/ui_icons/outline/rocket-launch.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rocket-launch",
+    "title": "Rocket Launch",
+    "variant": "solid",
+    "file": "ui_icons/solid/rocket-launch.svg",
+    "location": "/images/community_assets/ui_icons/solid/rocket-launch.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rss",
+    "title": "Rss",
+    "variant": "outline",
+    "file": "ui_icons/outline/rss.svg",
+    "location": "/images/community_assets/ui_icons/outline/rss.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "rss",
+    "title": "Rss",
+    "variant": "solid",
+    "file": "ui_icons/solid/rss.svg",
+    "location": "/images/community_assets/ui_icons/solid/rss.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "scale",
+    "title": "Scale",
+    "variant": "outline",
+    "file": "ui_icons/outline/scale.svg",
+    "location": "/images/community_assets/ui_icons/outline/scale.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "scale",
+    "title": "Scale",
+    "variant": "solid",
+    "file": "ui_icons/solid/scale.svg",
+    "location": "/images/community_assets/ui_icons/solid/scale.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "scissors",
+    "title": "Scissors",
+    "variant": "outline",
+    "file": "ui_icons/outline/scissors.svg",
+    "location": "/images/community_assets/ui_icons/outline/scissors.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "scissors",
+    "title": "Scissors",
+    "variant": "solid",
+    "file": "ui_icons/solid/scissors.svg",
+    "location": "/images/community_assets/ui_icons/solid/scissors.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "server",
+    "title": "Server",
+    "variant": "outline",
+    "file": "ui_icons/outline/server.svg",
+    "location": "/images/community_assets/ui_icons/outline/server.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "server",
+    "title": "Server",
+    "variant": "solid",
+    "file": "ui_icons/solid/server.svg",
+    "location": "/images/community_assets/ui_icons/solid/server.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "server-stack",
+    "title": "Server Stack",
+    "variant": "outline",
+    "file": "ui_icons/outline/server-stack.svg",
+    "location": "/images/community_assets/ui_icons/outline/server-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "server-stack",
+    "title": "Server Stack",
+    "variant": "solid",
+    "file": "ui_icons/solid/server-stack.svg",
+    "location": "/images/community_assets/ui_icons/solid/server-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "share",
+    "title": "Share",
+    "variant": "outline",
+    "file": "ui_icons/outline/share.svg",
+    "location": "/images/community_assets/ui_icons/outline/share.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "share",
+    "title": "Share",
+    "variant": "solid",
+    "file": "ui_icons/solid/share.svg",
+    "location": "/images/community_assets/ui_icons/solid/share.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shield-check",
+    "title": "Shield Check",
+    "variant": "outline",
+    "file": "ui_icons/outline/shield-check.svg",
+    "location": "/images/community_assets/ui_icons/outline/shield-check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shield-check",
+    "title": "Shield Check",
+    "variant": "solid",
+    "file": "ui_icons/solid/shield-check.svg",
+    "location": "/images/community_assets/ui_icons/solid/shield-check.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shield-exclamation",
+    "title": "Shield Exclamation",
+    "variant": "outline",
+    "file": "ui_icons/outline/shield-exclamation.svg",
+    "location": "/images/community_assets/ui_icons/outline/shield-exclamation.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shield-exclamation",
+    "title": "Shield Exclamation",
+    "variant": "solid",
+    "file": "ui_icons/solid/shield-exclamation.svg",
+    "location": "/images/community_assets/ui_icons/solid/shield-exclamation.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shopping-bag",
+    "title": "Shopping Bag",
+    "variant": "outline",
+    "file": "ui_icons/outline/shopping-bag.svg",
+    "location": "/images/community_assets/ui_icons/outline/shopping-bag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shopping-bag",
+    "title": "Shopping Bag",
+    "variant": "solid",
+    "file": "ui_icons/solid/shopping-bag.svg",
+    "location": "/images/community_assets/ui_icons/solid/shopping-bag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shopping-cart",
+    "title": "Shopping Cart",
+    "variant": "outline",
+    "file": "ui_icons/outline/shopping-cart.svg",
+    "location": "/images/community_assets/ui_icons/outline/shopping-cart.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "shopping-cart",
+    "title": "Shopping Cart",
+    "variant": "solid",
+    "file": "ui_icons/solid/shopping-cart.svg",
+    "location": "/images/community_assets/ui_icons/solid/shopping-cart.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "signal",
+    "title": "Signal",
+    "variant": "outline",
+    "file": "ui_icons/outline/signal.svg",
+    "location": "/images/community_assets/ui_icons/outline/signal.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "signal",
+    "title": "Signal",
+    "variant": "solid",
+    "file": "ui_icons/solid/signal.svg",
+    "location": "/images/community_assets/ui_icons/solid/signal.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "signal-slash",
+    "title": "Signal Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/signal-slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/signal-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "signal-slash",
+    "title": "Signal Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/signal-slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/signal-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "slash",
+    "title": "Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "slash",
+    "title": "Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "sparkles",
+    "title": "Sparkles",
+    "variant": "outline",
+    "file": "ui_icons/outline/sparkles.svg",
+    "location": "/images/community_assets/ui_icons/outline/sparkles.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "sparkles",
+    "title": "Sparkles",
+    "variant": "solid",
+    "file": "ui_icons/solid/sparkles.svg",
+    "location": "/images/community_assets/ui_icons/solid/sparkles.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "speaker-wave",
+    "title": "Speaker Wave",
+    "variant": "outline",
+    "file": "ui_icons/outline/speaker-wave.svg",
+    "location": "/images/community_assets/ui_icons/outline/speaker-wave.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "speaker-wave",
+    "title": "Speaker Wave",
+    "variant": "solid",
+    "file": "ui_icons/solid/speaker-wave.svg",
+    "location": "/images/community_assets/ui_icons/solid/speaker-wave.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "speaker-x-mark",
+    "title": "Speaker X Mark",
+    "variant": "outline",
+    "file": "ui_icons/outline/speaker-x-mark.svg",
+    "location": "/images/community_assets/ui_icons/outline/speaker-x-mark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "speaker-x-mark",
+    "title": "Speaker X Mark",
+    "variant": "solid",
+    "file": "ui_icons/solid/speaker-x-mark.svg",
+    "location": "/images/community_assets/ui_icons/solid/speaker-x-mark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "square-2-stack",
+    "title": "Square 2 Stack",
+    "variant": "outline",
+    "file": "ui_icons/outline/square-2-stack.svg",
+    "location": "/images/community_assets/ui_icons/outline/square-2-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "square-2-stack",
+    "title": "Square 2 Stack",
+    "variant": "solid",
+    "file": "ui_icons/solid/square-2-stack.svg",
+    "location": "/images/community_assets/ui_icons/solid/square-2-stack.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "square-3-stack-3d",
+    "title": "Square 3 Stack 3d",
+    "variant": "outline",
+    "file": "ui_icons/outline/square-3-stack-3d.svg",
+    "location": "/images/community_assets/ui_icons/outline/square-3-stack-3d.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "square-3-stack-3d",
+    "title": "Square 3 Stack 3d",
+    "variant": "solid",
+    "file": "ui_icons/solid/square-3-stack-3d.svg",
+    "location": "/images/community_assets/ui_icons/solid/square-3-stack-3d.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "squares-2x2",
+    "title": "Squares 2x2",
+    "variant": "outline",
+    "file": "ui_icons/outline/squares-2x2.svg",
+    "location": "/images/community_assets/ui_icons/outline/squares-2x2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "squares-2x2",
+    "title": "Squares 2x2",
+    "variant": "solid",
+    "file": "ui_icons/solid/squares-2x2.svg",
+    "location": "/images/community_assets/ui_icons/solid/squares-2x2.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "squares-plus",
+    "title": "Squares Plus",
+    "variant": "outline",
+    "file": "ui_icons/outline/squares-plus.svg",
+    "location": "/images/community_assets/ui_icons/outline/squares-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "squares-plus",
+    "title": "Squares Plus",
+    "variant": "solid",
+    "file": "ui_icons/solid/squares-plus.svg",
+    "location": "/images/community_assets/ui_icons/solid/squares-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "star",
+    "title": "Star",
+    "variant": "outline",
+    "file": "ui_icons/outline/star.svg",
+    "location": "/images/community_assets/ui_icons/outline/star.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "star",
+    "title": "Star",
+    "variant": "solid",
+    "file": "ui_icons/solid/star.svg",
+    "location": "/images/community_assets/ui_icons/solid/star.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "stop",
+    "title": "Stop",
+    "variant": "outline",
+    "file": "ui_icons/outline/stop.svg",
+    "location": "/images/community_assets/ui_icons/outline/stop.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "stop",
+    "title": "Stop",
+    "variant": "solid",
+    "file": "ui_icons/solid/stop.svg",
+    "location": "/images/community_assets/ui_icons/solid/stop.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "stop-circle",
+    "title": "Stop Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/stop-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/stop-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "stop-circle",
+    "title": "Stop Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/stop-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/stop-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "strikethrough",
+    "title": "Strikethrough",
+    "variant": "outline",
+    "file": "ui_icons/outline/strikethrough.svg",
+    "location": "/images/community_assets/ui_icons/outline/strikethrough.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "strikethrough",
+    "title": "Strikethrough",
+    "variant": "solid",
+    "file": "ui_icons/solid/strikethrough.svg",
+    "location": "/images/community_assets/ui_icons/solid/strikethrough.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "sun",
+    "title": "Sun",
+    "variant": "outline",
+    "file": "ui_icons/outline/sun.svg",
+    "location": "/images/community_assets/ui_icons/outline/sun.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "sun",
+    "title": "Sun",
+    "variant": "solid",
+    "file": "ui_icons/solid/sun.svg",
+    "location": "/images/community_assets/ui_icons/solid/sun.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "swatch",
+    "title": "Swatch",
+    "variant": "outline",
+    "file": "ui_icons/outline/swatch.svg",
+    "location": "/images/community_assets/ui_icons/outline/swatch.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "swatch",
+    "title": "Swatch",
+    "variant": "solid",
+    "file": "ui_icons/solid/swatch.svg",
+    "location": "/images/community_assets/ui_icons/solid/swatch.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "table-cells",
+    "title": "Table Cells",
+    "variant": "outline",
+    "file": "ui_icons/outline/table-cells.svg",
+    "location": "/images/community_assets/ui_icons/outline/table-cells.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "table-cells",
+    "title": "Table Cells",
+    "variant": "solid",
+    "file": "ui_icons/solid/table-cells.svg",
+    "location": "/images/community_assets/ui_icons/solid/table-cells.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "tag",
+    "title": "Tag",
+    "variant": "outline",
+    "file": "ui_icons/outline/tag.svg",
+    "location": "/images/community_assets/ui_icons/outline/tag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "tag",
+    "title": "Tag",
+    "variant": "solid",
+    "file": "ui_icons/solid/tag.svg",
+    "location": "/images/community_assets/ui_icons/solid/tag.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ticket",
+    "title": "Ticket",
+    "variant": "outline",
+    "file": "ui_icons/outline/ticket.svg",
+    "location": "/images/community_assets/ui_icons/outline/ticket.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "ticket",
+    "title": "Ticket",
+    "variant": "solid",
+    "file": "ui_icons/solid/ticket.svg",
+    "location": "/images/community_assets/ui_icons/solid/ticket.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "trash",
+    "title": "Trash",
+    "variant": "outline",
+    "file": "ui_icons/outline/trash.svg",
+    "location": "/images/community_assets/ui_icons/outline/trash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "trash",
+    "title": "Trash",
+    "variant": "solid",
+    "file": "ui_icons/solid/trash.svg",
+    "location": "/images/community_assets/ui_icons/solid/trash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "trophy",
+    "title": "Trophy",
+    "variant": "outline",
+    "file": "ui_icons/outline/trophy.svg",
+    "location": "/images/community_assets/ui_icons/outline/trophy.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "trophy",
+    "title": "Trophy",
+    "variant": "solid",
+    "file": "ui_icons/solid/trophy.svg",
+    "location": "/images/community_assets/ui_icons/solid/trophy.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "truck",
+    "title": "Truck",
+    "variant": "outline",
+    "file": "ui_icons/outline/truck.svg",
+    "location": "/images/community_assets/ui_icons/outline/truck.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "truck",
+    "title": "Truck",
+    "variant": "solid",
+    "file": "ui_icons/solid/truck.svg",
+    "location": "/images/community_assets/ui_icons/solid/truck.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "tv",
+    "title": "Tv",
+    "variant": "outline",
+    "file": "ui_icons/outline/tv.svg",
+    "location": "/images/community_assets/ui_icons/outline/tv.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "tv",
+    "title": "Tv",
+    "variant": "solid",
+    "file": "ui_icons/solid/tv.svg",
+    "location": "/images/community_assets/ui_icons/solid/tv.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "underline",
+    "title": "Underline",
+    "variant": "outline",
+    "file": "ui_icons/outline/underline.svg",
+    "location": "/images/community_assets/ui_icons/outline/underline.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "underline",
+    "title": "Underline",
+    "variant": "solid",
+    "file": "ui_icons/solid/underline.svg",
+    "location": "/images/community_assets/ui_icons/solid/underline.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user",
+    "title": "User",
+    "variant": "outline",
+    "file": "ui_icons/outline/user.svg",
+    "location": "/images/community_assets/ui_icons/outline/user.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user",
+    "title": "User",
+    "variant": "solid",
+    "file": "ui_icons/solid/user.svg",
+    "location": "/images/community_assets/ui_icons/solid/user.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-circle",
+    "title": "User Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/user-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/user-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-circle",
+    "title": "User Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/user-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/user-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-group",
+    "title": "User Group",
+    "variant": "outline",
+    "file": "ui_icons/outline/user-group.svg",
+    "location": "/images/community_assets/ui_icons/outline/user-group.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-group",
+    "title": "User Group",
+    "variant": "solid",
+    "file": "ui_icons/solid/user-group.svg",
+    "location": "/images/community_assets/ui_icons/solid/user-group.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-minus",
+    "title": "User Minus",
+    "variant": "outline",
+    "file": "ui_icons/outline/user-minus.svg",
+    "location": "/images/community_assets/ui_icons/outline/user-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-minus",
+    "title": "User Minus",
+    "variant": "solid",
+    "file": "ui_icons/solid/user-minus.svg",
+    "location": "/images/community_assets/ui_icons/solid/user-minus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-plus",
+    "title": "User Plus",
+    "variant": "outline",
+    "file": "ui_icons/outline/user-plus.svg",
+    "location": "/images/community_assets/ui_icons/outline/user-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "user-plus",
+    "title": "User Plus",
+    "variant": "solid",
+    "file": "ui_icons/solid/user-plus.svg",
+    "location": "/images/community_assets/ui_icons/solid/user-plus.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "users",
+    "title": "Users",
+    "variant": "outline",
+    "file": "ui_icons/outline/users.svg",
+    "location": "/images/community_assets/ui_icons/outline/users.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "users",
+    "title": "Users",
+    "variant": "solid",
+    "file": "ui_icons/solid/users.svg",
+    "location": "/images/community_assets/ui_icons/solid/users.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "variable",
+    "title": "Variable",
+    "variant": "outline",
+    "file": "ui_icons/outline/variable.svg",
+    "location": "/images/community_assets/ui_icons/outline/variable.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "variable",
+    "title": "Variable",
+    "variant": "solid",
+    "file": "ui_icons/solid/variable.svg",
+    "location": "/images/community_assets/ui_icons/solid/variable.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "video-camera",
+    "title": "Video Camera",
+    "variant": "outline",
+    "file": "ui_icons/outline/video-camera.svg",
+    "location": "/images/community_assets/ui_icons/outline/video-camera.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "video-camera",
+    "title": "Video Camera",
+    "variant": "solid",
+    "file": "ui_icons/solid/video-camera.svg",
+    "location": "/images/community_assets/ui_icons/solid/video-camera.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "video-camera-slash",
+    "title": "Video Camera Slash",
+    "variant": "outline",
+    "file": "ui_icons/outline/video-camera-slash.svg",
+    "location": "/images/community_assets/ui_icons/outline/video-camera-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "video-camera-slash",
+    "title": "Video Camera Slash",
+    "variant": "solid",
+    "file": "ui_icons/solid/video-camera-slash.svg",
+    "location": "/images/community_assets/ui_icons/solid/video-camera-slash.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "view-columns",
+    "title": "View Columns",
+    "variant": "outline",
+    "file": "ui_icons/outline/view-columns.svg",
+    "location": "/images/community_assets/ui_icons/outline/view-columns.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "view-columns",
+    "title": "View Columns",
+    "variant": "solid",
+    "file": "ui_icons/solid/view-columns.svg",
+    "location": "/images/community_assets/ui_icons/solid/view-columns.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "viewfinder-circle",
+    "title": "Viewfinder Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/viewfinder-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/viewfinder-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "viewfinder-circle",
+    "title": "Viewfinder Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/viewfinder-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/viewfinder-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wallet",
+    "title": "Wallet",
+    "variant": "outline",
+    "file": "ui_icons/outline/wallet.svg",
+    "location": "/images/community_assets/ui_icons/outline/wallet.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wallet",
+    "title": "Wallet",
+    "variant": "solid",
+    "file": "ui_icons/solid/wallet.svg",
+    "location": "/images/community_assets/ui_icons/solid/wallet.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wifi",
+    "title": "Wifi",
+    "variant": "outline",
+    "file": "ui_icons/outline/wifi.svg",
+    "location": "/images/community_assets/ui_icons/outline/wifi.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wifi",
+    "title": "Wifi",
+    "variant": "solid",
+    "file": "ui_icons/solid/wifi.svg",
+    "location": "/images/community_assets/ui_icons/solid/wifi.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "window",
+    "title": "Window",
+    "variant": "outline",
+    "file": "ui_icons/outline/window.svg",
+    "location": "/images/community_assets/ui_icons/outline/window.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "window",
+    "title": "Window",
+    "variant": "solid",
+    "file": "ui_icons/solid/window.svg",
+    "location": "/images/community_assets/ui_icons/solid/window.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wrench",
+    "title": "Wrench",
+    "variant": "outline",
+    "file": "ui_icons/outline/wrench.svg",
+    "location": "/images/community_assets/ui_icons/outline/wrench.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wrench",
+    "title": "Wrench",
+    "variant": "solid",
+    "file": "ui_icons/solid/wrench.svg",
+    "location": "/images/community_assets/ui_icons/solid/wrench.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wrench-screwdriver",
+    "title": "Wrench Screwdriver",
+    "variant": "outline",
+    "file": "ui_icons/outline/wrench-screwdriver.svg",
+    "location": "/images/community_assets/ui_icons/outline/wrench-screwdriver.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "wrench-screwdriver",
+    "title": "Wrench Screwdriver",
+    "variant": "solid",
+    "file": "ui_icons/solid/wrench-screwdriver.svg",
+    "location": "/images/community_assets/ui_icons/solid/wrench-screwdriver.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "x-circle",
+    "title": "X Circle",
+    "variant": "outline",
+    "file": "ui_icons/outline/x-circle.svg",
+    "location": "/images/community_assets/ui_icons/outline/x-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "x-circle",
+    "title": "X Circle",
+    "variant": "solid",
+    "file": "ui_icons/solid/x-circle.svg",
+    "location": "/images/community_assets/ui_icons/solid/x-circle.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "x-mark",
+    "title": "X Mark",
+    "variant": "outline",
+    "file": "ui_icons/outline/x-mark.svg",
+    "location": "/images/community_assets/ui_icons/outline/x-mark.svg",
+    "source": "heroicons"
+  },
+  {
+    "slug": "x-mark",
+    "title": "X Mark",
+    "variant": "solid",
+    "file": "ui_icons/solid/x-mark.svg",
+    "location": "/images/community_assets/ui_icons/solid/x-mark.svg",
+    "source": "heroicons"
+  }
+]
