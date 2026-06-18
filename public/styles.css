@@ -9819,6 +9819,75 @@ body.asset-associations-modal-open {
   background: #101820;
   color: #ffffff;
 }
+.builder-react-root .community-asset-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.builder-react-root .community-asset-nav-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.builder-react-root .community-asset-nav-row-sub {
+  padding-left: 10px;
+  border-left: 3px solid rgba(9, 16, 24, 0.08);
+}
+.builder-react-root .community-asset-nav-pill {
+  padding: 5px 13px;
+  border-radius: 20px;
+  border: 1px solid rgba(9, 16, 24, 0.14);
+  background: transparent;
+  color: #415265;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.1s,
+    color 0.1s,
+    border-color 0.1s;
+}
+.builder-react-root .community-asset-nav-pill:hover {
+  background: #e8f4fc;
+  border-color: #1799cb;
+  color: #0a6fa8;
+}
+.builder-react-root .community-asset-nav-pill.is-active {
+  background: #101820;
+  border-color: #101820;
+  color: #ffffff;
+}
+.builder-react-root .community-asset-nav-pill-sub {
+  font-size: 12px;
+  padding: 3px 11px;
+}
+.builder-react-root .community-asset-nav-pill-sub.is-active {
+  background: #0a6fa8;
+  border-color: #0a6fa8;
+  color: #ffffff;
+}
+.builder-react-root .community-asset-nav-search-row {
+  margin-top: 2px;
+}
+.builder-react-root .community-asset-nav-search {
+  width: 100%;
+  max-width: 320px;
+  padding: 7px 12px;
+  border: 1px solid rgba(9, 16, 24, 0.18);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: #101820;
+  background: #ffffff;
+}
+.builder-react-root .community-asset-nav-search:focus {
+  outline: none;
+  border-color: #1799cb;
+  box-shadow: 0 0 0 3px rgba(23, 153, 203, 0.15);
+}
 .builder-react-root .builder-module-palette-az-sort {
   min-width: 3.25rem;
   padding-inline: 0.85rem;

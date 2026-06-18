@@ -164,7 +164,7 @@ export function useGalleryMediaLibrary(options?: {
         );
 
         const offset = loadOptions?.append ? mediaRef.current.length : 0;
-        const page = matching.slice(0, offset + PAGE_SIZE);
+        const page = source === 'community' ? matching : matching.slice(0, offset + PAGE_SIZE);
         setMedia(page);
         setTotal(matching.length);
       } catch (error) {
