@@ -257,6 +257,58 @@ test('migrateLegacyLayoutSections preserves row overlay screen settings', () => 
   assert.equal(roundTrip.layoutSections[0].overlayScreen.background.color, '#071a33');
 });
 
+test('serializeBuilderDocument preserves section row border settings', () => {
+  const input = {
+    layoutSections: [{
+      id: 'section-1',
+      layout: 'single',
+      title: '',
+      alignment: 'center',
+      marginTop: '0',
+      marginBottom: '0',
+      rowBorderWidth: '3',
+      rowBorderColor: '#ff5500',
+      rowBorderStyle: 'dashed',
+      rowBorderRadius: '12',
+      mobileHidden: 'false',
+      desktopHidden: 'false',
+      mobileLayout: 'stack',
+      background: { mode: 'color', color: '#eef6ff', color2: '#eaf4ff', imageUrl: '', styleKey: '' },
+      cellBackgrounds: { main: { mode: 'none', color: '#ffffff', color2: '#eaf4ff', imageUrl: '', styleKey: '' } },
+      cellPadding: { main: '18' },
+      cellVerticalMargin: { main: '0' },
+      cellMobileHidden: { main: 'false' },
+      cellDesktopHidden: { main: 'false' },
+      cellBorderWidth: { main: '0' },
+      cellBorderColor: { main: 'transparent' },
+      cellBorderRadius: { main: '24' },
+      cellBorderStyle: { main: 'solid' },
+      cellShadow: { main: 'none' },
+      cellOpacity: { main: '1' },
+      cellHAlign: { main: 'left' },
+      cellVAlign: { main: 'top' },
+      modules: [],
+    }],
+  };
+
+  const serialized = serializeBuilderDocument(input);
+  const section = serialized.sections[0];
+  assert.equal(section.rowBorderWidth, '3');
+  assert.equal(section.rowBorderColor, '#ff5500');
+  assert.equal(section.rowBorderStyle, 'dashed');
+  assert.equal(section.rowBorderRadius, '12');
+
+  const roundTrip = normalizeBuilderDocument(serialized);
+  const restored = roundTrip.layoutSections[0];
+  assert.equal(restored.rowBorderWidth, '3');
+  assert.equal(restored.rowBorderColor, '#ff5500');
+  assert.equal(restored.rowBorderStyle, 'dashed');
+  assert.equal(restored.rowBorderRadius, '12');
+  assert.equal(restored.alignment, 'center');
+  assert.equal(restored.background.mode, 'color');
+  assert.equal(restored.background.color, '#eef6ff');
+});
+
 test('serializeBuilderDocument wraps bare arrays', () => {
   const serialized = serializeBuilderDocument({
     layoutSections: [{
