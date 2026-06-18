@@ -517,9 +517,29 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const gap = Number.parseInt(module.settings.socialGap || "14", 10);
     const iconSize = Number.parseInt(module.settings.socialIconSize || "44", 10);
     const showLabels = module.settings.socialShowLabels !== "false";
+    const padding = Number.parseInt(module.settings.socialPadding || "0", 10);
+    const globalBg = module.settings.socialIconBgColor || "";
+    const borderWidth = Number.parseInt(module.settings.socialBorderWidth || "0", 10);
+    const borderColor = module.settings.socialBorderColor || "#000000";
+    const borderRadius = Number.parseInt(module.settings.socialBorderRadius || "0", 10);
+    const shadowX = Number.parseInt(module.settings.socialShadowX || "0", 10);
+    const shadowY = Number.parseInt(module.settings.socialShadowY || "0", 10);
+    const shadowBlur = Number.parseInt(module.settings.socialShadowBlur || "0", 10);
+    const shadowSpread = Number.parseInt(module.settings.socialShadowSpread || "0", 10);
+    const shadowColor = module.settings.socialShadowColor || "#000000";
+    const hasShadow = shadowX !== 0 || shadowY !== 0 || shadowBlur !== 0 || shadowSpread !== 0;
+
+    const iconStyle = {
+      borderRadius: `${borderRadius}%`,
+      ...(borderWidth > 0 ? { border: `${borderWidth}px solid ${borderColor}` } : {}),
+      ...(hasShadow ? { boxShadow: `${shadowX}px ${shadowY}px ${shadowBlur}px ${shadowSpread}px ${shadowColor}` } : {})
+    };
 
     return (
-      <div className="builder-module-preview-social" style={{ gap: `${gap}px` }}>
+      <div
+        className="builder-module-preview-social"
+        style={{ gap: `${gap}px`, ...(padding > 0 ? { padding: `${padding}px` } : {}) }}
+      >
         {items.length > 0 ? (
           items.map((item) => (
             <div key={item.id} className="builder-module-preview-social-entry">
@@ -532,7 +552,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
                 style={{
                   width: `${iconSize}px`,
                   height: `${iconSize}px`,
-                  background: item.backgroundColor
+                  background: globalBg || item.backgroundColor,
+                  ...iconStyle
                 }}
               >
                 {item.iconUrl ? (
