@@ -5206,7 +5206,7 @@
 }
 
 .builder-react-root .builder-social-module-settings > .builder-setting-row {
-  grid-template-columns: 8rem minmax(0, 1fr);
+  grid-template-columns: 9rem minmax(0, 1fr);
 }
 
 .builder-react-root .builder-social-module-settings > .builder-setting-row .builder-setting-label {

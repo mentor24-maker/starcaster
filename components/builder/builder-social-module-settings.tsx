@@ -253,6 +253,137 @@ export function BuilderSocialModuleSettings({
         />
       </BuilderSettingRow>
 
+      <BuilderSettingRow label="Icon BG Color">
+        <input
+          type="color"
+          value={module.settings.socialIconBgColor || "#ffffff"}
+          onChange={(event) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialIconBgColor: event.target.value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Border Color">
+        <input
+          type="color"
+          value={module.settings.socialBorderColor || "#000000"}
+          onChange={(event) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialBorderColor: event.target.value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Border Width">
+        <BuilderNumberSelectControl
+          value={module.settings.socialBorderWidth ?? "0"}
+          min={0}
+          max={8}
+          fallback="0"
+          onChange={(value) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialBorderWidth: value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Border Shape">
+        <BuilderNumberSelectControl
+          value={module.settings.socialBorderRadius ?? "0"}
+          min={0}
+          max={50}
+          step={5}
+          fallback="0"
+          onChange={(value) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialBorderRadius: value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Shadow Color">
+        <input
+          type="color"
+          value={module.settings.socialShadowColor || "#000000"}
+          onChange={(event) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialShadowColor: event.target.value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Shadow X">
+        <BuilderNumberSelectControl
+          value={module.settings.socialShadowX ?? "0"}
+          min={-20}
+          max={20}
+          fallback="0"
+          onChange={(value) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialShadowX: value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Shadow Y">
+        <BuilderNumberSelectControl
+          value={module.settings.socialShadowY ?? "0"}
+          min={-20}
+          max={20}
+          fallback="0"
+          onChange={(value) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialShadowY: value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Shadow Blur">
+        <BuilderNumberSelectControl
+          value={module.settings.socialShadowBlur ?? "0"}
+          min={0}
+          max={40}
+          step={2}
+          fallback="0"
+          onChange={(value) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialShadowBlur: value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Shadow Spread">
+        <BuilderNumberSelectControl
+          value={module.settings.socialShadowSpread ?? "0"}
+          min={-10}
+          max={20}
+          fallback="0"
+          onChange={(value) =>
+            onUpdateModule((current) => ({
+              ...current,
+              settings: { ...current.settings, socialShadowSpread: value }
+            }))
+          }
+        />
+      </BuilderSettingRow>
+
       <div
         className="builder-social-module-items"
         onDragOver={(event) => {
