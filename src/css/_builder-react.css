@@ -5213,6 +5213,34 @@
   white-space: nowrap;
 }
 
+.builder-react-root .builder-color-with-swatches {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.builder-react-root .builder-theme-swatches {
+  display: flex;
+  gap: 5px;
+}
+
+.builder-react-root .builder-theme-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(9, 16, 24, 0.25);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.builder-react-root .builder-theme-swatch:hover {
+  transform: scale(1.25);
+  border-color: rgba(9, 16, 24, 0.55);
+}
+
 .builder-react-root .builder-social-module-items {
   display: grid;
   gap: 12px;
