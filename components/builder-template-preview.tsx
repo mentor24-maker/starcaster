@@ -76,6 +76,8 @@ type BuilderTemplatePreviewProps = {
   emailPreview?: boolean;
   /** When true (Builder /preview), speech bubbles with game/on-load triggers do not auto-fire. */
   previewMode?: boolean;
+  /** Project ID for contact form submissions on live landing pages. */
+  projectId?: string;
 };
 
 type ContactFormField = {
@@ -112,7 +114,7 @@ function getContactFormFields(mode: "squeeze" | "standard" | "custom"): ContactF
   return standardFields;
 }
 
-function ContactFormPreview({ settings }: { settings: Record<string, string> }) {
+function ContactFormPreview({ settings, projectId = "" }: { settings: Record<string, string>; projectId?: string }) {
   const mode = getContactFormMode(settings);
   const fields = getContactFormFields(mode);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -139,6 +141,7 @@ function ContactFormPreview({ settings }: { settings: Record<string, string> }) 
           lastName: values.lastName ?? "",
           email: values.email ?? "",
           phone: values.phone ?? "",
+          projectId,
           companyWebsite: honeypot
         })
       });
@@ -221,7 +224,8 @@ export function BuilderTemplatePreview({
   theme,
   showShell = true,
   emailPreview = false,
-  previewMode = false
+  previewMode = false,
+  projectId = ""
 }: BuilderTemplatePreviewProps) {
   const pageStyle = getBuilderBackgroundStyle(pageBackground);
   // Theme tokens go first so the page background (and any per-module inline
@@ -251,6 +255,7 @@ export function BuilderTemplatePreview({
               emailPreview={emailPreview}
               key={section.id}
               previewMode={previewMode}
+              projectId={projectId}
               section={section}
               sitePlayerRegistered={sitePlayerRegistered}
             />
@@ -278,11 +283,13 @@ function BuilderSectionPreview({
   section,
   emailPreview = false,
   previewMode = false,
+  projectId = "",
   sitePlayerRegistered = false
 }: {
   section: BuilderTemplateSection;
   emailPreview?: boolean;
   previewMode?: boolean;
+  projectId?: string;
   sitePlayerRegistered?: boolean;
 }) {
   const sectionStyle = getBuilderBackgroundStyle(section.background);
@@ -422,6 +429,7 @@ function BuilderSectionPreview({
                     module={module}
                     overlayFlowDecor={isPageOverlayFlowModule || isSectionOverlayModule}
                     previewMode={previewMode}
+                    projectId={projectId}
                     sitePlayerRegistered={sitePlayerRegistered}
                   />
                 </div>
@@ -439,6 +447,7 @@ function BuilderModulePreview({
   emailPreview = false,
   overlayFlowDecor = false,
   previewMode = false,
+  projectId = "",
   sitePlayerRegistered = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
@@ -446,6 +455,7 @@ function BuilderModulePreview({
   /** Floating image in a full-page overlay row — always visible on the live site. */
   overlayFlowDecor?: boolean;
   previewMode?: boolean;
+  projectId?: string;
   sitePlayerRegistered?: boolean;
 }) {
   const variant = module.settings.variant ?? "";
@@ -540,7 +550,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "contact-form") {
-    return <ContactFormPreview settings={module.settings} />;
+    return <ContactFormPreview projectId={projectId} settings={module.settings} />;
   }
 
   if (module.type === "player-portal") {

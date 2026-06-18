@@ -203,3 +203,143 @@
   line-height: 1.4;
   color: #8aa0b4;
 }
+
+/* ============================================================== */
+/* THEMES PAGE — three-column pod layout                          */
+/* ============================================================== */
+
+.builder-react-root .builder-themes-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Header: selector + name input + action buttons in one flex row */
+.builder-react-root .builder-themes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.builder-react-root .builder-themes-selector {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.builder-react-root .builder-themes-name-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+/* Status bar — success/error notice beneath the header */
+.builder-react-root .builder-themes-status {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.builder-react-root .builder-themes-status.builder-themes-status-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+/* Three equal-width columns */
+.builder-react-root .builder-themes-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* Each column is a pod card */
+.builder-react-root .builder-themes-col {
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 1.25rem;
+  min-width: 0;
+}
+
+/* Pod section heading (h3) */
+.builder-react-root .builder-themes-col-heading {
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-primary);
+}
+
+/* Sub-heading (h4) for groups within a column */
+.builder-react-root .builder-themes-sub-heading {
+  margin: 14px 0 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+/* Slider rows: range + numeric value side by side */
+.builder-react-root .builder-themes-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.builder-react-root .builder-themes-slider-row input[type="range"] {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.builder-react-root .builder-themes-slider-value {
+  min-width: 2.5ch;
+  text-align: right;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-secondary);
+}
+
+/* Asset groups: label stacked above input + button */
+.builder-react-root .builder-themes-asset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 1.25rem;
+}
+
+.builder-react-root .builder-themes-asset-group:last-child {
+  margin-bottom: 0;
+}
+
+.builder-react-root .builder-themes-asset-label {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-themes-asset-group input[type="text"] {
+  width: 100%;
+}
+
+.builder-react-root .builder-themes-asset-group .builder-image-picker-field-button {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+/* Responsive: collapse to single column on narrow viewports */
+@media (max-width: 960px) {
+  .builder-react-root .builder-themes-columns {
+    grid-template-columns: 1fr;
+  }
+}
