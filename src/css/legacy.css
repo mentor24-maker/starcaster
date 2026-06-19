@@ -160,6 +160,36 @@
   object-fit: contain;
 }
 
+.settings-media-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-media-actions .btn {
+  white-space: nowrap;
+  width: fit-content;
+}
+
+.settings-upload-button {
+  position: relative;
+  overflow: hidden;
+  margin: 0;
+}
+
+.settings-upload-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.project-details-media .settings-upload-button:focus-within {
+  outline: 2px solid var(--accent, #0b82d4);
+  outline-offset: 2px;
+}
+
 .labeled-form .project-details-field-hint {
   margin: -0.25rem 0 0.5rem calc(var(--label-col-width, 180px) + var(--label-col-gap, 0.6rem));
 }
@@ -3893,8 +3923,9 @@ button[type="submit"] {
 
 .develop-module-picker-panel {
   position: fixed;
-  right: 1.2rem;
+  left: 50%;
   bottom: 1.2rem;
+  transform: translateX(-50%);
   z-index: 10001;
   width: min(760px, calc(100vw - 2.4rem));
   max-height: min(72vh, 760px);

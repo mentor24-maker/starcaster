@@ -454,6 +454,7 @@ async function handle(req, res, pathname, method) {
       classId: body.classId || body.class_id,
       settings: body && typeof body.settings === 'object' ? body.settings : {},
     }, scope);
+    if (!module) return sendErr(res, 500, 'Could not create module'), true;
     return sendOk(res, 201, module, { module }), true;
   }
 

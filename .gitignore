@@ -14,3 +14,4 @@ files/google_console_oauth_client_secret_*.json
 .claude/
 starcaster-cookies.txt
 *.pxz
+.env*
