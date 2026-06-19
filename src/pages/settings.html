@@ -196,8 +196,15 @@
               </div>
               <div class="project-details-media">
                 <div class="form-row">
-                  <label for="settingsProjectLogoFile">Project Logo</label>
-                  <input id="settingsProjectLogoFile" type="file" accept="image/*" />
+                  <label>Project Logo</label>
+                  <div class="settings-media-actions">
+                    <button id="settingsProjectLogoChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
+                    <label class="btn btn-ghost settings-upload-button">
+                      <span>Upload To Gallery</span>
+                      <input id="settingsProjectLogoUploadFile" type="file" accept="image/*" class="settings-upload-input" />
+                    </label>
+                    <button id="settingsProjectLogoClearBtn" type="button" class="btn btn-ghost">Clear</button>
+                  </div>
                 </div>
                 <div class="project-logo-preview-wrap">
                   <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
