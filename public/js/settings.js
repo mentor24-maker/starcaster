@@ -146,18 +146,21 @@ App.settings = (function () {
   function removeProjectLogoFromStorage(projectId) {
     const id = String(projectId || '').trim();
     if (!id) return;
-    if (projectCtx()?.setProjectLogoDataUrl) {
+    if (projectCtx()?.clearLegacyProjectLogoFromStorage) {
+      projectCtx().clearLegacyProjectLogoFromStorage(id);
+    } else if (projectCtx()?.setProjectLogoDataUrl) {
       projectCtx().setProjectLogoDataUrl(id, '');
       return;
+    } else {
+      try {
+        const raw = String(window.localStorage.getItem(PROJECT_LOGO_STORAGE_KEY) || '').trim();
+        if (!raw) return;
+        const map = JSON.parse(raw);
+        if (!map || typeof map !== 'object') return;
+        delete map[id];
+        window.localStorage.setItem(PROJECT_LOGO_STORAGE_KEY, JSON.stringify(map));
+      } catch (_) {}
     }
-    try {
-      const raw = String(window.localStorage.getItem(PROJECT_LOGO_STORAGE_KEY) || '').trim();
-      if (!raw) return;
-      const map = JSON.parse(raw);
-      if (!map || typeof map !== 'object') return;
-      delete map[id];
-      window.localStorage.setItem(PROJECT_LOGO_STORAGE_KEY, JSON.stringify(map));
-    } catch (_) {}
   }
 
   async function performDeleteProject(projectId, options = {}) {
@@ -291,6 +294,95 @@ App.settings = (function () {
     }
   }
 
+  async function ensureProjectAssetsLoaded() {
+    if (Array.isArray(state.assets) && state.assets.length) return;
+    const res = await api('/api/assets');
+    state.assets = res.assets || res.data || [];
+  }
+
+  async function persistProjectLogo(projectId, logoUrl) {
+    const id = String(projectId || '').trim();
+    const url = String(logoUrl || '').trim();
+    if (!id) throw new Error('Select a project first');
+    await api(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ logoDataUrl: url }),
+    });
+    setProjectLogoDataUrl(id, url);
+  }
+
+  async function applyProjectLogoSelection(logoUrl) {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) throw new Error('Select a project first');
+    await persistProjectLogo(activeId, logoUrl);
+    renderProjectDetails();
+    applyProjectToHeader();
+    notify('Project logo updated');
+  }
+
+  async function openProjectLogoGalleryPicker() {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) return notify('Select a project first', true);
+    if (!App.assetPicker || typeof App.assetPicker.openImageGalleryPicker !== 'function') {
+      return notify('Image gallery is unavailable', true);
+    }
+    try {
+      await ensureProjectAssetsLoaded();
+    } catch (err) {
+      return notify(err?.message || 'Could not load project assets', true);
+    }
+    const active = (Array.isArray(state.projects) ? state.projects : []).find(
+      (project) => String(project?.id || '') === activeId
+    );
+    App.assetPicker.openImageGalleryPicker({
+      title: 'Project Logo',
+      currentUrl: getProjectLogoDataUrl(active),
+      getAssets: () => state.assets,
+      allAssets: state.assets,
+      onSelect: (logoUrl) => {
+        applyProjectLogoSelection(logoUrl).catch((err) => {
+          notify(err?.message || 'Could not update project logo', true);
+        });
+      },
+      onClear: () => {
+        clearProjectLogo().catch((err) => {
+          notify(err?.message || 'Could not clear project logo', true);
+        });
+      },
+    });
+  }
+
+  async function uploadProjectLogoToGallery(file) {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) throw new Error('Select a project first');
+    if (!App.assetPicker || typeof App.assetPicker.uploadImageToGallery !== 'function') {
+      throw new Error('Image upload is unavailable');
+    }
+    await ensureProjectAssetsLoaded();
+    notify('Uploading image...', false);
+    const asset = await App.assetPicker.uploadImageToGallery(file, {
+      api,
+      state,
+      category: 'Logo',
+      tags: ['project-logo', 'gallery'],
+    });
+    const logoUrl = App.assetPicker.logoUrlFromAsset(asset);
+    if (!logoUrl) throw new Error('Uploaded image did not return a usable URL');
+    await persistProjectLogo(activeId, logoUrl);
+    renderProjectDetails();
+    applyProjectToHeader();
+    notify('Project logo updated');
+  }
+
+  async function clearProjectLogo() {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) throw new Error('Select a project first');
+    await persistProjectLogo(activeId, '');
+    renderProjectDetails();
+    applyProjectToHeader();
+    notify('Project logo cleared');
+  }
+
   async function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -337,10 +429,10 @@ App.settings = (function () {
     }
     const id = String(project?.id || '').trim();
     if (!id) return '';
+    const fromProject = String(project?.logoDataUrl || project?.logo_data_url || '').trim();
+    if (fromProject) return fromProject;
     const map = readProjectLogoMap();
-    const mapped = String(map[id] || '').trim();
-    if (mapped) return mapped;
-    return String(project?.logoDataUrl || project?.logo_data_url || '').trim();
+    return String(map[id] || '').trim();
   }
 
   function setProjectLogoDataUrl(projectIdInput, dataUrlInput) {
@@ -2091,23 +2183,31 @@ App.settings = (function () {
       });
     }
 
-    if (els.settingsProjectLogoFile) {
-      els.settingsProjectLogoFile.addEventListener('change', async () => {
-        const file = els.settingsProjectLogoFile.files?.[0];
+    if (els.settingsProjectLogoChooseBtn) {
+      els.settingsProjectLogoChooseBtn.addEventListener('click', () => {
+        openProjectLogoGalleryPicker();
+      });
+    }
+
+    if (els.settingsProjectLogoUploadFile) {
+      els.settingsProjectLogoUploadFile.addEventListener('change', async () => {
+        const file = els.settingsProjectLogoUploadFile.files?.[0];
         if (!file) return;
-        const activeId = getSettingsDetailProjectId();
-        if (!activeId) return notify('Select a project first', true);
         try {
-          const dataUrl = await readFileAsDataUrl(file);
-          setProjectLogoDataUrl(activeId, dataUrl);
-          renderProjectDetails();
-          applyProjectToHeader();
-          notify('Project logo updated');
+          await uploadProjectLogoToGallery(file);
         } catch (err) {
-          notify(err.message, true);
+          notify(err?.message || 'Could not upload project logo', true);
         } finally {
-          els.settingsProjectLogoFile.value = '';
+          els.settingsProjectLogoUploadFile.value = '';
         }
+      });
+    }
+
+    if (els.settingsProjectLogoClearBtn) {
+      els.settingsProjectLogoClearBtn.addEventListener('click', () => {
+        clearProjectLogo().catch((err) => {
+          notify(err?.message || 'Could not clear project logo', true);
+        });
       });
     }
 

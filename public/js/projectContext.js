@@ -94,26 +94,78 @@ App.projectContext = (function projectContextModule() {
   function getProjectLogoDataUrl(project, options = {}) {
     const id = String(project?.id || '').trim();
     if (!id) return '';
+    const fromProject = String(project?.logoDataUrl || project?.logo_data_url || '').trim();
+    if (fromProject) return fromProject;
     const map = readProjectLogoMap();
     const mapped = String(map[id] || '').trim();
     if (mapped) return mapped;
-    const fromProject = String(project?.logoDataUrl || project?.logo_data_url || '').trim();
-    if (fromProject) return fromProject;
     if (options.allowProfileFallback) {
       return String(state().profile?.logoDataUrl || '').trim();
     }
     return '';
   }
 
+  function syncProjectLogoInState(projectIdInput, dataUrlInput) {
+    const projectId = String(projectIdInput || '').trim();
+    const dataUrl = String(dataUrlInput || '').trim();
+    if (!projectId) return;
+    const project = findProject(projectId);
+    if (project) {
+      project.logoDataUrl = dataUrl;
+      project.logo_data_url = dataUrl;
+    }
+    if (String(state().currentProjectId || '') === projectId && state().currentProject) {
+      state().currentProject.logoDataUrl = dataUrl;
+      state().currentProject.logo_data_url = dataUrl;
+    }
+  }
+
+  function clearLegacyProjectLogoFromStorage(projectIdInput) {
+    const projectId = String(projectIdInput || '').trim();
+    if (!projectId) return;
+    const map = readProjectLogoMap();
+    if (!map[projectId]) return;
+    delete map[projectId];
+    writeProjectLogoMap(map);
+  }
+
   function setProjectLogoDataUrl(projectIdInput, dataUrlInput) {
     const projectId = String(projectIdInput || '').trim();
     const dataUrl = String(dataUrlInput || '').trim();
     if (!projectId) return;
-    const map = readProjectLogoMap();
-    if (!dataUrl) delete map[projectId];
-    else map[projectId] = dataUrl;
-    writeProjectLogoMap(map);
+    syncProjectLogoInState(projectId, dataUrl);
+    clearLegacyProjectLogoFromStorage(projectId);
     applyBanner();
+  }
+
+  async function migrateLegacyLocalLogosToServer() {
+    const map = readProjectLogoMap();
+    const ids = Object.keys(map || {});
+    if (!ids.length) return;
+    let changed = false;
+    for (const project of projectsList()) {
+      const id = String(project?.id || '').trim();
+      if (!id) continue;
+      const localLogo = String(map[id] || '').trim();
+      const serverLogo = String(project?.logoDataUrl || project?.logo_data_url || '').trim();
+      if (!localLogo || serverLogo) {
+        if (serverLogo && localLogo) {
+          delete map[id];
+          changed = true;
+        }
+        continue;
+      }
+      try {
+        await App.api(`/api/projects/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ logoDataUrl: localLogo }),
+        });
+        syncProjectLogoInState(id, localLogo);
+        delete map[id];
+        changed = true;
+      } catch (_) {}
+    }
+    if (changed) writeProjectLogoMap(map);
   }
 
   function applyBanner() {
@@ -302,6 +354,7 @@ App.projectContext = (function projectContextModule() {
         clearViewContext({ silent: true });
       }
 
+      await migrateLegacyLocalLogosToServer();
       applyBanner();
       applyDetailContextNotice();
       return { stale: false, projects: state().projects };
@@ -333,6 +386,9 @@ App.projectContext = (function projectContextModule() {
     applyDetailContextNotice,
     getProjectLogoDataUrl,
     setProjectLogoDataUrl,
+    syncProjectLogoInState,
+    clearLegacyProjectLogoFromStorage,
+    migrateLegacyLocalLogosToServer,
     readProjectLogoMap,
     isSwitching: () => switching,
     getRevision: () => syncSeq,
