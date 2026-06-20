@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   createDefaultBackgroundSettings,
   createEmptyModule,
@@ -50,6 +50,33 @@ export function SavedSectionEditorModal({
   const [localName, setLocalName] = useState(savedSectionName);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // --- Floating save button position ---
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [saveBtnStyle, setSaveBtnStyle] = useState<CSSProperties>({ visibility: "hidden" });
+
+  useLayoutEffect(() => {
+    function updatePos() {
+      const header = workspaceRef.current?.querySelector<HTMLElement>(".builder-section-header");
+      if (!header) return;
+      const rect = header.getBoundingClientRect();
+      setSaveBtnStyle({
+        position: "fixed",
+        right: "1.2rem",
+        top: `${rect.top - 8}px`,
+        transform: "translateY(-100%)",
+        visibility: "visible",
+        zIndex: 10200,
+      });
+    }
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
+  }, []);
 
   // --- Section updaters ---
 
@@ -324,18 +351,10 @@ export function SavedSectionEditorModal({
         <div className="saved-section-editor-dialog">
           <div className="saved-section-editor-header">
             <h2 className="saved-section-editor-title">Edit: {localName || savedSectionName}</h2>
-            <div className="saved-section-editor-actions">
-              {error && <span className="saved-section-editor-error">{error}</span>}
-              <button className="btn" disabled={isSaving} onClick={onClose} type="button">
-                Cancel
-              </button>
-              <button className="btn btn-primary" disabled={isSaving} onClick={() => void handleSave()} type="button">
-                {isSaving ? "Saving…" : "Save Section"}
-              </button>
-            </div>
+            {error && <span className="saved-section-editor-error">{error}</span>}
           </div>
           <div className="saved-section-editor-body">
-            <div className="builder-workspace">
+            <div className="builder-workspace" ref={workspaceRef}>
               <BuilderSectionCard
                 section={draft}
                 sectionIndex={0}
@@ -386,6 +405,16 @@ export function SavedSectionEditorModal({
           </div>
         </div>
       </div>
+
+      <button
+        className="submit-button admin-save-button"
+        disabled={isSaving}
+        onClick={() => void handleSave()}
+        style={saveBtnStyle}
+        type="button"
+      >
+        {isSaving ? "Saving…" : "Save Section"}
+      </button>
 
       {isGalleryOpen && (
         <BuilderGalleryModal
