@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createDefaultBackgroundSettings,
   createEmptyModule,
@@ -51,6 +51,15 @@ export function SavedSectionEditorModal({
   const [localName, setLocalName] = useState(savedSectionName);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Close when the user navigates to a different page in the SPA.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    function handleHashChange() { onCloseRef.current(); }
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
 
   // --- Section updaters ---
 
