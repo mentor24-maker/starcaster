@@ -744,7 +744,9 @@ export function normalizeTheme(value: unknown): BuilderTheme {
         muted: normalizeThemeColor(colors.muted),
         link: normalizeThemeColor(colors.link),
         linkHover: normalizeThemeColor(colors.linkHover),
-        selection: normalizeThemeColor(colors.selection)
+        selection: normalizeThemeColor(colors.selection),
+        linkUnderline: colors.linkUnderline === false ? false : undefined,
+        linkHoverUnderline: colors.linkHoverUnderline === false ? false : undefined
       },
       elements
     }
