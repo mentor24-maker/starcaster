@@ -41,7 +41,7 @@ const activityLog = require('./activityLog');
 const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
-const develop     = require('./develop');
+const builder     = require('./builder');
 const communityAssets = require('./communityAssets');
 const observe     = require('./observe');
 const roger       = require('./devAgent');
@@ -62,7 +62,7 @@ const ROUTE_MODULES = [
   channels,
   contacts,
   engage,
-  develop,
+  builder,
   communityAssets,
   messaging,
   activityLog,
@@ -197,7 +197,7 @@ async function handleRequest(req, res) {
   const method   = req.method;
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
   const isDebugRoute = pathname === '/api/debug-routes';
-  const isWebhookRoute = pathname === '/api/develop/devAgent/worker' || pathname.startsWith('/api/tasks');
+  const isWebhookRoute = pathname === '/api/builder/devAgent/worker' || pathname.startsWith('/api/tasks');
   const isPublicContactSubmit = pathname === '/api/contact' && method === 'POST';
   const isFacebookOAuthCallback =
     pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
@@ -308,9 +308,9 @@ async function handleRequest(req, res) {
         'POST /api/acquire/youtube-comment',
       ],
       expectedDevAgentTeamRoutes: [
-        'GET /api/develop/devAgent/team',
-        'POST /api/develop/devAgent/team',
-        'DELETE /api/develop/devAgent/team/:id',
+        'GET /api/builder/devAgent/team',
+        'POST /api/builder/devAgent/team',
+        'DELETE /api/builder/devAgent/team/:id',
       ],
       assetFeatures: {
         importDriveFolder: typeof assets.handleImportDriveFolder === 'function',

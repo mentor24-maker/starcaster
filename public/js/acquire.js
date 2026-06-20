@@ -4393,7 +4393,7 @@ App.acquire = (function () {
     setDirectAcquireResultsVisible(false);
     
     // Begin: Theme Builder DOM Projection Pattern
-    if (App.develop && typeof App.develop.buildModularPageTemplatePreviewMarkup === 'function') {
+    if (App.builder && typeof App.builder.buildModularPageTemplatePreviewMarkup === 'function') {
       const STORAGE_KEY = 'alphire:acquire-hub:layout';
       let payload;
       try {
@@ -4455,7 +4455,7 @@ App.acquire = (function () {
         
         targetWrap.textContent = '';
         const parser = new DOMParser();
-        const doc = parser.parseFromString(App.develop.buildModularPageTemplatePreviewMarkup(payload), 'text/html');
+        const doc = parser.parseFromString(App.builder.buildModularPageTemplatePreviewMarkup(payload), 'text/html');
         Array.from(doc.body.childNodes).forEach(node => targetWrap.appendChild(node.cloneNode(true)));
         
         if (heading) {
@@ -4475,7 +4475,7 @@ App.acquire = (function () {
       acquirePageActions.dataset.bound = 'true';
       acquirePageActions.innerHTML = '';
       
-      if (App.develop && typeof App.develop.openModularPageTemplateEditor === 'function') {
+      if (App.builder && typeof App.builder.openModularPageTemplateEditor === 'function') {
         const editBtn = App.makeIconButton('edit', 'Edit Hub UI', function () {
           const STORAGE_KEY = 'alphire:acquire-hub:layout';
           let payload;
@@ -4525,9 +4525,9 @@ App.acquire = (function () {
             };
           }
 
-          App.develop.openModularPageTemplateEditor(payload, {
+          App.builder.openModularPageTemplateEditor(payload, {
             mode: 'template',
-            targetPage: 'developTemplatesPage',
+            targetPage: 'builderTemplatesPage',
             onClose: () => { App.setActivePage('acquirePage'); },
             onSave: (newPayload) => {
               try {

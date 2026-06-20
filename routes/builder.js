@@ -18,7 +18,7 @@ const { exec } = require('child_process');
 const { listDirectAcquireRuns, getDirectAcquireRun, deleteDirectAcquireRun, purgeOldAcquireRuns } = require('../lib/directAcquire');
 const { getModel: getContentDisplayModel, listModels: listContentDisplayModels } = require('../lib/contentDisplayModels');
 const { requestProjectScope } = require('../lib/requestProjectScope');
-const { listForms, createForm, updateForm, deleteForm } = require('../lib/developFormsStore');
+const { listForms, createForm, updateForm, deleteForm } = require('../lib/builderFormsStore');
 const {
   listLandingPages,
   getLandingPage,
@@ -26,38 +26,38 @@ const {
   updateLandingPage,
   deleteLandingPage,
   propagateCanonicalSection,
-} = require('../lib/developLandingPagesStore');
+} = require('../lib/builderLandingPagesStore');
 const {
   listPageTemplates,
   createPageTemplate,
   updatePageTemplate,
   deletePageTemplate,
-} = require('../lib/developPageTemplatesStore');
+} = require('../lib/builderPageTemplatesStore');
 const {
   listEmailTemplates,
   createEmailTemplate,
   updateEmailTemplate,
   deleteEmailTemplate,
-} = require('../lib/developEmailTemplatesStore');
+} = require('../lib/builderEmailTemplatesStore');
 const {
   listThemes,
   createTheme,
   updateTheme,
   deleteTheme,
-} = require('../lib/developThemesStore');
+} = require('../lib/builderThemesStore');
 const {
   listModules,
   createModule,
   updateModule,
   deleteModule,
-} = require('../lib/developModulesStore');
+} = require('../lib/builderModulesStore');
 const {
-  listDevelopModuleClasses,
-  createDevelopModuleClass,
-  updateDevelopModuleClass,
-  deleteDevelopModuleClass,
-} = require('../lib/developModuleClassesStore');
-const { createIcon } = require('../lib/developIconStore');
+  listBuilderModuleClasses,
+  createBuilderModuleClass,
+  updateBuilderModuleClass,
+  deleteBuilderModuleClass,
+} = require('../lib/builderModuleClassesStore');
+const { createIcon } = require('../lib/builderIconStore');
 const { createAsset, rowToAsset } = require('../lib/assetsStore');
 const { isConfigured: isAssetStorageConfigured, uploadAssetFile } = require('../lib/assetStorage');
 const {
@@ -71,11 +71,11 @@ const {
   updateExtension,
   deleteExtension,
   trackExtensionUse,
-} = require('../lib/developExtensionsStore');
+} = require('../lib/builderExtensionsStore');
 const {
   getManagerConfig,
   saveManagerConfig,
-} = require('../lib/developExtensionsManagerStore');
+} = require('../lib/builderExtensionsManagerStore');
 const { listContacts, createContact, updateContact, rowToContact } = require('../lib/ContactsStore');
 const { savePollSubmission, getPollResults } = require('../lib/pollSubmissionsStore');
 const {
@@ -83,13 +83,13 @@ const {
   createSavedSection,
   updateSavedSection,
   deleteSavedSection,
-} = require('../lib/developSavedSectionsStore');
+} = require('../lib/builderSavedSectionsStore');
 const {
   listProducts,
   createProduct,
   updateProduct,
   deleteProduct,
-} = require('../lib/developProductsStore');
+} = require('../lib/builderProductsStore');
 const {
   listLevelEvents,
   createLevelEvent,
@@ -178,12 +178,12 @@ async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
 
-  if (pathname === '/api/develop/forms' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/forms' && requestMethod === 'GET') {
     const forms = await listForms(scope);
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
   }
 
-  if (pathname === '/api/develop/forms' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/forms' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     const formType = String(body.formType || '').trim();
@@ -226,14 +226,14 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, form, { form }), true;
   }
 
-  if (pathname === '/api/develop/extensions' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/extensions' && requestMethod === 'GET') {
     const result = await listExtensions(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load extensions'), true;
     const extensions = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, extensions, { extensions }, { total: extensions.length }), true;
   }
 
-  if (pathname === '/api/develop/extensions' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/extensions' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     const extensionType = String(body.extensionType || body.extension_type || '').trim();
@@ -259,13 +259,13 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, extensionRes.data, { extension: extensionRes.data }), true;
   }
 
-  if (pathname === '/api/develop/extensions-manager' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/extensions-manager' && requestMethod === 'GET') {
     const result = await getManagerConfig(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load extension manager config'), true;
     return sendOk(res, 200, result.data, { manager: result.data }), true;
   }
 
-  if (pathname === '/api/develop/extensions-manager' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/extensions-manager' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const result = await saveManagerConfig({
       defaultFilters: body && typeof body.defaultFilters === 'object' ? body.defaultFilters : {},
@@ -276,14 +276,14 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { manager: result.data }), true;
   }
 
-  if (pathname === '/api/develop/landing-pages' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/landing-pages' && requestMethod === 'GET') {
     const result = await listLandingPages(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load landing pages'), true;
     const landingPages = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, landingPages, { landingPages }, { total: landingPages.length }), true;
   }
 
-  if (pathname === '/api/develop/landing-pages' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/landing-pages' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
 
@@ -333,7 +333,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { landingPage: result.data }), true;
   }
 
-  if (pathname === '/api/develop/page-templates' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/page-templates' && requestMethod === 'GET') {
     const result = await listPageTemplates(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load page templates'), true;
     const dbTemplates = Array.isArray(result.data) ? result.data : [];
@@ -345,7 +345,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, pageTemplates, { pageTemplates }, { total: pageTemplates.length }), true;
   }
 
-  if (pathname === '/api/develop/page-templates' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/page-templates' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
 
@@ -392,21 +392,21 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { pageTemplate: result.data }), true;
   }
 
-  if (pathname === '/api/develop/email-templates' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/email-templates' && requestMethod === 'GET') {
     const result = await listEmailTemplates(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load email templates'), true;
     const emailTemplates = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, emailTemplates, { emailTemplates }, { total: emailTemplates.length }), true;
   }
 
-  if (pathname === '/api/develop/themes' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/themes' && requestMethod === 'GET') {
     const result = await listThemes(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load themes'), true;
     const themes = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, themes, { themes }, { total: themes.length }), true;
   }
 
-  if (pathname === '/api/develop/themes' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/themes' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
@@ -432,12 +432,12 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { theme: result.data }), true;
   }
 
-  if (pathname === '/api/develop/modules' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/modules' && requestMethod === 'GET') {
     const modules = await listModules(scope);
     return sendOk(res, 200, modules, { modules }, { total: modules.length }), true;
   }
 
-  if (pathname === '/api/develop/modules' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/modules' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     // The React builder saves cell-module groups without an explicit type;
@@ -458,23 +458,23 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, module, { module }), true;
   }
 
-  if (pathname === '/api/develop/module-classes' && requestMethod === 'GET') {
-    const result = await listDevelopModuleClasses(5000, scope);
+  if (pathname === '/api/builder/module-classes' && requestMethod === 'GET') {
+    const result = await listBuilderModuleClasses(5000, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load module classes'), true;
     const classes = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, classes, { classes }, { total: classes.length }), true;
   }
 
-  if (pathname === '/api/develop/module-classes' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/module-classes' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createDevelopModuleClass({ name }, scope);
+    const result = await createBuilderModuleClass({ name }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create module class'), true;
     return sendOk(res, 201, result.data, { class: result.data }), true;
   }
 
-  if (pathname === '/api/develop/email-templates' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/email-templates' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
@@ -493,7 +493,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { emailTemplate: result.data }), true;
   }
 
-  const themeMatch = pathname.match(/^\/api\/develop\/themes\/([^/]+)$/);
+  const themeMatch = pathname.match(/^/api/builder/themes\/([^/]+)$/);
   if (themeMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const typography = body.typography && typeof body.typography === 'object' ? body.typography : null;
@@ -524,7 +524,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
 
-  const moduleMatch = pathname.match(/^\/api\/develop\/modules\/([^/]+)$/);
+  const moduleMatch = pathname.match(/^/api/builder/modules\/([^/]+)$/);
   if (moduleMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     // Only forward provided fields; updateModule merges over the existing record.
@@ -552,21 +552,21 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { id: moduleMatch[1] }, { module: { id: moduleMatch[1] } }), true;
   }
 
-  const classMatch = pathname.match(/^\/api\/develop\/module-classes\/([^/]+)$/);
+  const classMatch = pathname.match(/^/api/builder/module-classes\/([^/]+)$/);
   if (classMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
-    const result = await updateDevelopModuleClass(classMatch[1], { name: String(body.name || '').trim() }, scope);
+    const result = await updateBuilderModuleClass(classMatch[1], { name: String(body.name || '').trim() }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update module class'), true;
     return sendOk(res, 200, result.data, { class: result.data }), true;
   }
 
   if (classMatch && requestMethod === 'DELETE') {
-    const result = await deleteDevelopModuleClass(classMatch[1], scope);
+    const result = await deleteBuilderModuleClass(classMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete module class'), true;
     return sendOk(res, 200, result.data, { class: result.data }), true;
   }
 
-  if (pathname === '/api/develop/icon-builder' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/icon-builder' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const objectType = String(body.object_type || body.objectType || '').trim();
     const objectName = String(body.object_name || body.objectName || '').trim();
@@ -594,7 +594,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, icon, { icon }), true;
   }
 
-  if (pathname === '/api/develop/extensions/screenshot-capture' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/extensions/screenshot-capture' && requestMethod === 'POST') {
     if (!isAssetStorageConfigured()) {
       return sendErr(
         res,
@@ -685,7 +685,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
   }
 
-  if (pathname === '/api/develop/extensions/thumbnail-capture' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/extensions/thumbnail-capture' && requestMethod === 'POST') {
     if (!isAssetStorageConfigured()) {
       return sendErr(
         res,
@@ -788,9 +788,9 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
   }
 
-  const formIdMatch = String(pathname || '').match(/^\/api\/develop\/forms\/([^/]+)\/?$/);
-  const emailTemplateIdMatch = String(pathname || '').match(/^\/api\/develop\/email-templates\/([^/]+)\/?$/);
-  const emailTemplateRenderMatch = String(pathname || '').match(/^\/api\/develop\/email-templates\/([^/]+)\/render\/?$/);
+  const formIdMatch = String(pathname || '').match(/^/api/builder/forms\/([^/]+)\/?$/);
+  const emailTemplateIdMatch = String(pathname || '').match(/^/api/builder/email-templates\/([^/]+)\/?$/);
+  const emailTemplateRenderMatch = String(pathname || '').match(/^/api/builder/email-templates\/([^/]+)\/render\/?$/);
 
   if (emailTemplateRenderMatch && requestMethod === 'POST') {
     const templateId = decodeURIComponent(emailTemplateRenderMatch[1] || '').trim();
@@ -818,8 +818,8 @@ async function handle(req, res, pathname, method) {
     );
     return sendOk(res, 200, { html }, { html }), true;
   }
-  const extensionIdMatch = String(pathname || '').match(/^\/api\/develop\/extensions\/([^/]+)\/?$/);
-  const extensionUseMatch = String(pathname || '').match(/^\/api\/develop\/extensions\/([^/]+)\/use\/?$/);
+  const extensionIdMatch = String(pathname || '').match(/^/api/builder/extensions\/([^/]+)\/?$/);
+  const extensionUseMatch = String(pathname || '').match(/^/api/builder/extensions\/([^/]+)\/use\/?$/);
   if (formIdMatch && requestMethod === 'PATCH') {
     const formId = decodeURIComponent(formIdMatch[1] || '').trim();
     if (!formId) return sendErr(res, 400, 'form id is required', { code: 'VALIDATION_ERROR' }), true;
@@ -953,8 +953,8 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, removed.data, { extension: removed.data }), true;
   }
 
-  // GET /api/develop/acquire-runs  — list crawl runs (summaries, no page content)
-  if (pathname === '/api/develop/acquire-runs' && requestMethod === 'GET') {
+  // GET /api/builder/acquire-runs  — list crawl runs (summaries, no page content)
+  if (pathname === '/api/builder/acquire-runs' && requestMethod === 'GET') {
     const runs = await listDirectAcquireRuns(50, scope);
     // Deduplicate by source URL — keep only the first (most recent) per site.
     const seenUrls = new Set();
@@ -974,26 +974,26 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, summaries, { runs: summaries }), true;
   }
 
-  // GET /api/develop/content-display-models  — list available content extraction models
-  if (pathname === '/api/develop/content-display-models' && requestMethod === 'GET') {
+  // GET /api/builder/content-display-models  — list available content extraction models
+  if (pathname === '/api/builder/content-display-models' && requestMethod === 'GET') {
     return sendOk(res, 200, listContentDisplayModels(), { models: listContentDisplayModels() }), true;
   }
 
-  // DELETE /api/develop/acquire-runs/purge  — delete all but the most recent run
-  if (pathname === '/api/develop/acquire-runs/purge' && requestMethod === 'DELETE') {
+  // DELETE /api/builder/acquire-runs/purge  — delete all but the most recent run
+  if (pathname === '/api/builder/acquire-runs/purge' && requestMethod === 'DELETE') {
     const deleted = await purgeOldAcquireRuns(scope).catch(() => 0);
     return sendOk(res, 200, { deleted }), true;
   }
 
-  // DELETE /api/develop/acquire-runs/:runId  — delete a specific run
-  const acquireRunMatch = pathname.match(/^\/api\/develop\/acquire-runs\/([^/]+)$/);
+  // DELETE /api/builder/acquire-runs/:runId  — delete a specific run
+  const acquireRunMatch = pathname.match(/^/api/builder/acquire-runs\/([^/]+)$/);
   if (acquireRunMatch && requestMethod === 'DELETE') {
     await deleteDirectAcquireRun(decodeURIComponent(acquireRunMatch[1]), scope).catch(() => {});
     return sendOk(res, 200, { ok: true }), true;
   }
 
-  // GET /api/develop/landing-pages/populate-diagnostics
-  if (pathname === '/api/develop/landing-pages/populate-diagnostics' && requestMethod === 'GET') {
+  // GET /api/builder/landing-pages/populate-diagnostics
+  if (pathname === '/api/builder/landing-pages/populate-diagnostics' && requestMethod === 'GET') {
     const qs = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
     const runs = await listDirectAcquireRuns(50, scope);
 
@@ -1052,8 +1052,8 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result, result), true;
   }
 
-  // POST /api/develop/landing-pages/populate-from-acquire
-  if (pathname === '/api/develop/landing-pages/populate-from-acquire' && requestMethod === 'POST') {
+  // POST /api/builder/landing-pages/populate-from-acquire
+  if (pathname === '/api/builder/landing-pages/populate-from-acquire' && requestMethod === 'POST') {
     const body = await parseJsonBody(req).catch(() => ({}));
 
     let run = null;
@@ -1121,10 +1121,10 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result, result), true;
   }
 
-  // POST /api/develop/landing-pages/bulk-create-with-model
+  // POST /api/builder/landing-pages/bulk-create-with-model
   // Creates pages from a template + nav items, then optionally applies a content
   // display model to fill each page's sections from a matched crawled URL.
-  if (pathname === '/api/develop/landing-pages/bulk-create-with-model' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/landing-pages/bulk-create-with-model' && requestMethod === 'POST') {
     const body = await parseJsonBody(req).catch(() => ({}));
     const templateId    = String(body.templateId    || '').trim();
     const contentModelId= String(body.contentModelId|| '').trim();
@@ -1242,9 +1242,9 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, results, { results }), true;
   }
 
-  const landingPageIdMatch = String(pathname || '').match(/^\/api\/develop\/landing-pages\/([^/]+)\/?$/);
-  const landingPageSubmitMatch = String(pathname || '').match(/^\/api\/develop\/landing-pages\/([^/]+)\/submit\/?$/);
-  const pageTemplateIdMatch = String(pathname || '').match(/^\/api\/develop\/page-templates\/([^/]+)\/?$/);
+  const landingPageIdMatch = String(pathname || '').match(/^/api/builder/landing-pages\/([^/]+)\/?$/);
+  const landingPageSubmitMatch = String(pathname || '').match(/^/api/builder/landing-pages\/([^/]+)\/submit\/?$/);
+  const pageTemplateIdMatch = String(pathname || '').match(/^/api/builder/page-templates\/([^/]+)\/?$/);
 
   if (landingPageSubmitMatch && requestMethod === 'POST') {
     const landingPageId = decodeURIComponent(landingPageSubmitMatch[1] || '').trim();
@@ -1459,7 +1459,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { pageTemplate: result.data }), true;
   }
 
-  if (pathname === '/api/develop/training/acquire' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/training/acquire' && requestMethod === 'POST') {
     // Run the extraction and acquire scripts in the background
     exec('npm run sync:dev-logs && npm run import:training-context:apply', (error, stdout, stderr) => {
       if (error) {
@@ -1476,7 +1476,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 202, { message: 'Training acquire initiated in background.' }), true;
   }
 
-  const pollSubmitMatch = String(pathname || '').match(/^\/api\/develop\/modules\/([^/]+)\/poll-submit\/?$/);
+  const pollSubmitMatch = String(pathname || '').match(/^/api/builder/modules\/([^/]+)\/poll-submit\/?$/);
   if (pollSubmitMatch && requestMethod === 'POST') {
     const pollId = decodeURIComponent(pollSubmitMatch[1] || '').trim();
     if (!pollId) return sendErr(res, 400, 'poll id is required', { code: 'VALIDATION_ERROR' }), true;
@@ -1493,7 +1493,7 @@ async function handle(req, res, pathname, method) {
     }
   }
 
-  const pollResultsMatch = String(pathname || '').match(/^\/api\/develop\/modules\/([^/]+)\/poll-results\/?$/);
+  const pollResultsMatch = String(pathname || '').match(/^/api/builder/modules\/([^/]+)\/poll-results\/?$/);
   if (pollResultsMatch && requestMethod === 'GET') {
     const pollId = decodeURIComponent(pollResultsMatch[1] || '').trim();
     if (!pollId) return sendErr(res, 400, 'poll id is required', { code: 'VALIDATION_ERROR' }), true;
@@ -1522,7 +1522,7 @@ async function handle(req, res, pathname, method) {
     }
   }
 
-  if (pathname === '/api/develop/layout/normalize' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/layout/normalize' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const document = normalizeBuilderDocument({
       pageBackground: body?.pageBackground || body?.page_background,
@@ -1534,14 +1534,14 @@ async function handle(req, res, pathname, method) {
     }), true;
   }
 
-  if (pathname === '/api/develop/saved-sections' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/saved-sections' && requestMethod === 'GET') {
     const result = await listSavedSections(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load saved sections'), true;
     const savedSections = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, savedSections, { savedSections }, { total: savedSections.length }), true;
   }
 
-  if (pathname === '/api/develop/saved-sections' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/saved-sections' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
@@ -1550,7 +1550,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { savedSection: result.data }), true;
   }
 
-  const savedSectionMatch = pathname.match(/^\/api\/develop\/saved-sections\/([^/]+)$/);
+  const savedSectionMatch = pathname.match(/^/api/builder/saved-sections\/([^/]+)$/);
   if (savedSectionMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateSavedSection(savedSectionMatch[1], {
@@ -1568,14 +1568,14 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { savedSection: result.data }), true;
   }
 
-  if (pathname === '/api/develop/products' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/products' && requestMethod === 'GET') {
     const result = await listProducts(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load products'), true;
     const products = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, products, { products }, { total: products.length }), true;
   }
 
-  if (pathname === '/api/develop/products' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/products' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
@@ -1584,7 +1584,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { product: result.data }), true;
   }
 
-  const productMatch = pathname.match(/^\/api\/develop\/products\/([^/]+)$/);
+  const productMatch = pathname.match(/^/api/builder/products\/([^/]+)$/);
   if (productMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateProduct(productMatch[1], body, scope);
@@ -1597,21 +1597,21 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { product: result.data }), true;
   }
 
-  if (pathname === '/api/develop/game/events' && requestMethod === 'GET') {
+  if (pathname === '/api/builder/game/events' && requestMethod === 'GET') {
     const result = await listLevelEvents(undefined, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load game events'), true;
     const levelEvents = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, levelEvents, { levelEvents }, { total: levelEvents.length }), true;
   }
 
-  if (pathname === '/api/develop/game/events' && requestMethod === 'POST') {
+  if (pathname === '/api/builder/game/events' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const result = await createLevelEvent(body, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create game event'), true;
     return sendOk(res, 201, result.data, { levelEvent: result.data }), true;
   }
 
-  const gameEventMatch = pathname.match(/^\/api\/develop\/game\/events\/([^/]+)$/);
+  const gameEventMatch = pathname.match(/^/api/builder/game\/events\/([^/]+)$/);
   if (gameEventMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateLevelEvent(gameEventMatch[1], body, scope);
@@ -1628,9 +1628,9 @@ async function handle(req, res, pathname, method) {
 }
 
 const manifest = {
-  id: 'develop',
-  label: 'Develop',
-  prefixes: ['/api/develop'],
+  id: 'builder',
+  label: 'Builder',
+  prefixes: ['/api/builder'],
 };
 
 module.exports = { handle, manifest };

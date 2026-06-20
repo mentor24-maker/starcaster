@@ -3501,7 +3501,7 @@ App.contacts = (function () {
   async function loadExploreReferenceOptions() {
     try {
       const [formsRes, campRes, topicRes, statusesRes, typesRes, sourcesRes] = await Promise.all([
-        api('/api/develop/forms').catch(() => ({ forms: [] })),
+        api('/api/builder/forms').catch(() => ({ forms: [] })),
         api('/api/campaigns').catch(() => ({ campaigns: [] })),
         api('/api/acquire/youtube-topics').catch(() => ({ topics: [] })),
         api('/api/settings/contacts/statuses?active=true').catch(() => ({ options: [] })),

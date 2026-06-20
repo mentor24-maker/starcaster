@@ -383,10 +383,10 @@ App.els = {
   brandProfileLogo: document.getElementById('brandProfileLogo'),
   brandProfileLabel: document.getElementById('brandProfileLabel'),
   brandFallback: document.getElementById('brandFallback'),
-  developLandingPagesForm: document.getElementById('developLandingPagesForm'),
-  developAgentsForm: document.getElementById('developAgentsForm'),
+  builderLandingPagesForm: document.getElementById('builderLandingPagesForm'),
+  builderAgentsForm: document.getElementById('builderAgentsForm'),
   iconBuilderForm: document.getElementById('iconBuilderForm'),
-  developToolsForm: document.getElementById('developToolsForm'),
+  builderToolsForm: document.getElementById('builderToolsForm'),
   agentsRequestPreview: document.getElementById('agentsRequestPreview'),
   agentsResponsePreview: document.getElementById('agentsResponsePreview'),
   iconBuilderRequestPreview: document.getElementById('iconBuilderRequestPreview'),
@@ -472,7 +472,7 @@ function readPageFromHash() {
 function normalizeInitialPageId(pageId) {
   const id = String(pageId || '').trim();
   if (!id) return '';
-  if (id === 'developLandingPagesPage') return 'developManageLandingPagesPage';
+  if (id === 'builderLandingPagesPage') return 'builderManageLandingPagesPage';
   if (id === 'engageSocialPage') return 'promoteSocialPage';
   if (id === 'engageSocialResponsesPage') return 'promoteSocialResponsesPage';
   return id;

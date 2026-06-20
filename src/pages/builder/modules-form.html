@@ -1,0 +1,26 @@
+<form id="builderModulesForm" class="standard-form-grid">
+  <input id="builderModulesIdInput" type="hidden" />
+  
+  <label for="builderModulesNameInput">Module Name</label>
+  <input id="builderModulesNameInput" type="text" />
+  
+  <label for="builderModulesTypeSelect">Module Type</label>
+  <div class="form-row-flex">
+    <select id="builderModulesTypeSelect" style="flex:1;"></select>
+    <button id="builderManageClassesBtn" type="button" class="btn">Manage Classes</button>
+  </div>
+
+  <label for="builderModulesClassSelect">Module Class (Optional)</label>
+  <select id="builderModulesClassSelect">
+    <option value="">None</option>
+  </select>
+  
+  <div class="standard-form-grid-full">
+    <div id="builderModulesTypeHelp" class="meta"></div>
+  </div>
+  
+  <div id="builderModulesSettingsFields" class="standard-form-grid-full grid-form"></div>
+  
+  <div></div>
+  <button type="submit" class="btn btn-primary">Save Module</button>
+</form>

@@ -86,7 +86,7 @@ App.training = {
         const originalText = btn.textContent;
         btn.textContent = "Starting Acquire...";
         try {
-          const res = await fetch('/api/develop/training/acquire', { method: 'POST' });
+          const res = await fetch('/api/builder/training/acquire', { method: 'POST' });
           if (!res.ok) {
             const err = await res.json();
             throw new Error(err.error || 'Failed to start acquire');

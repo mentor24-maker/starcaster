@@ -178,9 +178,9 @@ App.assetPicker = (function () {
     }
 
     const body = document.createElement('div');
-    body.className = 'develop-theme-picker-body';
+    body.className = 'builder-theme-picker-body';
     const toolbar = document.createElement('div');
-    toolbar.className = 'develop-theme-picker-toolbar';
+    toolbar.className = 'builder-theme-picker-toolbar';
 
     const filterInput = document.createElement('input');
     filterInput.placeholder = 'Search images by name, category, or tag';
@@ -189,7 +189,7 @@ App.assetPicker = (function () {
     const tagFilter = document.createElement('select');
 
     const resultCount = document.createElement('div');
-    resultCount.className = 'develop-theme-picker-result-count';
+    resultCount.className = 'builder-theme-picker-result-count';
     resultCount.textContent = '0 images';
 
     const clearBtn = document.createElement('button');
@@ -204,7 +204,7 @@ App.assetPicker = (function () {
     toolbar.appendChild(clearBtn);
 
     const grid = document.createElement('div');
-    grid.className = 'develop-theme-picker-groups';
+    grid.className = 'builder-theme-picker-groups';
     body.appendChild(toolbar);
     body.appendChild(grid);
 
@@ -249,12 +249,12 @@ App.assetPicker = (function () {
       const imageUrl = logoUrlFromAsset(asset);
       if (!imageUrl || !App.components || typeof App.components.Modal !== 'function') return;
       const previewBody = document.createElement('div');
-      previewBody.className = 'develop-theme-image-preview-modal-body';
+      previewBody.className = 'builder-theme-image-preview-modal-body';
       const img = document.createElement('img');
       img.src = imageUrl;
       img.alt = assetLabel(asset, title);
       const meta = document.createElement('div');
-      meta.className = 'develop-theme-image-preview-meta';
+      meta.className = 'builder-theme-image-preview-meta';
       const strong = document.createElement('strong');
       strong.textContent = assetLabel(asset, title);
       const span = document.createElement('span');
@@ -262,14 +262,14 @@ App.assetPicker = (function () {
       meta.appendChild(strong);
       meta.appendChild(span);
       const stage = document.createElement('div');
-      stage.className = 'develop-theme-image-preview-stage';
+      stage.className = 'builder-theme-image-preview-stage';
       stage.appendChild(img);
       previewBody.appendChild(stage);
       previewBody.appendChild(meta);
       previewModal = App.components.Modal({
         title: assetLabel(asset, title),
         body: previewBody,
-        dialogClass: 'develop-theme-image-preview-modal',
+        dialogClass: 'builder-theme-image-preview-modal',
       });
       previewModal.open();
     }
@@ -323,7 +323,7 @@ App.assetPicker = (function () {
     modal = App.components.Modal({
       title: `Choose ${title}`,
       body,
-      dialogClass: safeText(options.dialogClass) || 'develop-theme-picker-modal',
+      dialogClass: safeText(options.dialogClass) || 'builder-theme-picker-modal',
     });
     renderGrid();
     modal.open();
@@ -351,23 +351,23 @@ App.assetPicker = (function () {
       renderedSections += 1;
 
       const section = document.createElement('section');
-      section.className = 'develop-theme-picker-group';
+      section.className = 'builder-theme-picker-group';
       section.dataset.aspect = aspectKey;
 
       const heading = document.createElement('button');
       heading.type = 'button';
-      heading.className = 'develop-theme-picker-group-heading';
+      heading.className = 'builder-theme-picker-group-heading';
       heading.setAttribute('aria-expanded', 'true');
 
       const headingText = document.createElement('strong');
       headingText.textContent = Aspect.ASPECT_LABELS[aspectKey] || aspectKey;
 
       const count = document.createElement('span');
-      count.className = 'develop-theme-picker-group-count';
+      count.className = 'builder-theme-picker-group-count';
       count.textContent = String(rows.length);
 
       const toggle = document.createElement('span');
-      toggle.className = 'develop-theme-picker-group-toggle';
+      toggle.className = 'builder-theme-picker-group-toggle';
       toggle.setAttribute('aria-hidden', 'true');
 
       heading.appendChild(headingText);
@@ -375,18 +375,18 @@ App.assetPicker = (function () {
       heading.appendChild(toggle);
 
       const sectionGrid = document.createElement('div');
-      sectionGrid.className = `develop-theme-picker-grid develop-theme-picker-grid--${aspectKey}`;
+      sectionGrid.className = `builder-theme-picker-grid builder-theme-picker-grid--${aspectKey}`;
 
       rows.forEach((asset) => {
         const selectedId = String(getSelectedId() || '');
         const card = document.createElement('div');
-        card.className = `develop-theme-picker-card develop-theme-picker-card--${aspectKey}${
+        card.className = `builder-theme-picker-card builder-theme-picker-card--${aspectKey}${
           String(asset.id) === selectedId ? ' is-selected' : ''
         }`;
 
         const imageBtn = document.createElement('button');
         imageBtn.type = 'button';
-        imageBtn.className = 'develop-theme-picker-card-image-btn';
+        imageBtn.className = 'builder-theme-picker-card-image-btn';
         const imageUrl = previewUrlFromAsset(asset, toDirectAssetUrl);
         if (imageUrl) {
           const img = document.createElement('img');
@@ -396,31 +396,31 @@ App.assetPicker = (function () {
           imageBtn.appendChild(img);
         } else {
           const empty = document.createElement('div');
-          empty.className = 'develop-theme-table-thumb-empty';
+          empty.className = 'builder-theme-table-thumb-empty';
           empty.textContent = 'No Image';
           imageBtn.appendChild(empty);
         }
 
         const titleDiv = document.createElement('div');
-        titleDiv.className = 'develop-theme-picker-card-title';
+        titleDiv.className = 'builder-theme-picker-card-title';
         titleDiv.textContent = String(assetLabel(asset) || '');
 
         const dims = dimensionLabel(asset);
         const metaDiv = document.createElement('div');
-        metaDiv.className = 'develop-theme-picker-card-meta';
+        metaDiv.className = 'builder-theme-picker-card-meta';
         metaDiv.textContent = `${String(asset?.category || 'Image')}${dims ? ` • ${dims}` : ''}`;
 
         const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'develop-theme-picker-card-actions';
+        actionsDiv.className = 'builder-theme-picker-card-actions';
 
         const previewBtn = document.createElement('button');
         previewBtn.type = 'button';
-        previewBtn.className = 'tiny-btn develop-theme-picker-preview-btn';
+        previewBtn.className = 'tiny-btn builder-theme-picker-preview-btn';
         previewBtn.textContent = 'Preview';
 
         const selectBtn = document.createElement('button');
         selectBtn.type = 'button';
-        selectBtn.className = 'tiny-btn develop-theme-picker-select-btn';
+        selectBtn.className = 'tiny-btn builder-theme-picker-select-btn';
         selectBtn.textContent = 'Use Image';
 
         const choose = () => {

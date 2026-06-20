@@ -869,7 +869,7 @@ App.messaging = (function () {
       preview.appendChild(img);
     }
     const text = document.createElement('div');
-    text.className = 'develop-theme-asset-preview-text';
+    text.className = 'builder-theme-asset-preview-text';
     const strong = document.createElement('strong');
     strong.textContent = thumbnailOptionLabel(asset);
     const span = document.createElement('span');
@@ -894,15 +894,15 @@ App.messaging = (function () {
     }
 
     const body = document.createElement('div');
-    body.className = 'develop-theme-picker-body';
+    body.className = 'builder-theme-picker-body';
     const toolbar = document.createElement('div');
-    toolbar.className = 'develop-theme-picker-toolbar';
+    toolbar.className = 'builder-theme-picker-toolbar';
 
     const filterInput = document.createElement('input');
     filterInput.placeholder = 'Search images by name, category, or tag';
     const categoryFilter = document.createElement('select');
     const resultCount = document.createElement('div');
-    resultCount.className = 'develop-theme-picker-result-count';
+    resultCount.className = 'builder-theme-picker-result-count';
     const clearBtn = document.createElement('button');
     clearBtn.type = 'button';
     clearBtn.textContent = 'Clear Selection';
@@ -913,7 +913,7 @@ App.messaging = (function () {
     toolbar.appendChild(clearBtn);
 
     const grid = document.createElement('div');
-    grid.className = 'develop-theme-picker-groups';
+    grid.className = 'builder-theme-picker-groups';
     body.appendChild(toolbar);
     body.appendChild(grid);
 
@@ -975,7 +975,7 @@ App.messaging = (function () {
     modal = App.components.Modal({
       title: config.title,
       body,
-      dialogClass: 'develop-theme-picker-modal',
+      dialogClass: 'builder-theme-picker-modal',
     });
     renderGrid();
     modal.open();
@@ -7297,7 +7297,7 @@ App.messaging = (function () {
         String(s.name || s.topic || '').toLowerCase().includes(topicLower)
       ).length;
 
-      const pagesCount = (countsRef.developLandingPages || []).filter(p =>
+      const pagesCount = (countsRef.builderLandingPages || []).filter(p =>
         String(p.name || p.topic || '').toLowerCase().includes(topicLower)
       ).length;
 
@@ -7358,7 +7358,7 @@ App.messaging = (function () {
       tr.appendChild(drawStat(assetsCount, 'assetsPage', null));
       tr.appendChild(drawStat(campaignsCount, 'campaignsPage', null));
       tr.appendChild(drawStat(segmentsCount, 'segmentsPage', null));
-      tr.appendChild(drawStat(pagesCount, 'developLandingPagesPage', 'developLandingPagesNameFilter'));
+      tr.appendChild(drawStat(pagesCount, 'builderLandingPagesPage', 'builderLandingPagesNameFilter'));
       tr.appendChild(drawStat(reportsCount, 'messagingReportsPage', null));
 
       const actionsTd = document.createElement('td');
