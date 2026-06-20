@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useState } from "react";
 import {
   createDefaultBackgroundSettings,
   createEmptyModule,
@@ -13,6 +13,7 @@ import { appApi } from "@/lib/adapters/starcaster-app";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
 import { BuilderBodyPortal } from "./builder-body-portal";
+import { BuilderFloatingSaveRail } from "./builder-floating-save-rail";
 import { BuilderSectionCard } from "./builder-section-card";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { BuilderModulePaletteModal } from "./builder-module-palette-modal";
@@ -50,33 +51,6 @@ export function SavedSectionEditorModal({
   const [localName, setLocalName] = useState(savedSectionName);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // --- Floating save button position ---
-  const workspaceRef = useRef<HTMLDivElement>(null);
-  const [saveBtnStyle, setSaveBtnStyle] = useState<CSSProperties>({ visibility: "hidden" });
-
-  useLayoutEffect(() => {
-    function updatePos() {
-      const header = workspaceRef.current?.querySelector<HTMLElement>(".builder-section-header");
-      if (!header) return;
-      const rect = header.getBoundingClientRect();
-      setSaveBtnStyle({
-        position: "fixed",
-        right: "1.2rem",
-        top: `${rect.top - 8}px`,
-        transform: "translateY(-100%)",
-        visibility: "visible",
-        zIndex: 10200,
-      });
-    }
-    updatePos();
-    window.addEventListener("resize", updatePos);
-    window.addEventListener("scroll", updatePos, true);
-    return () => {
-      window.removeEventListener("resize", updatePos);
-      window.removeEventListener("scroll", updatePos, true);
-    };
-  }, []);
 
   // --- Section updaters ---
 
@@ -354,7 +328,7 @@ export function SavedSectionEditorModal({
             {error && <span className="saved-section-editor-error">{error}</span>}
           </div>
           <div className="saved-section-editor-body">
-            <div className="builder-workspace" ref={workspaceRef}>
+            <div className="builder-workspace">
               <BuilderSectionCard
                 section={draft}
                 sectionIndex={0}
@@ -406,15 +380,10 @@ export function SavedSectionEditorModal({
         </div>
       </div>
 
-      <button
-        className="submit-button admin-save-button"
-        disabled={isSaving}
-        onClick={() => void handleSave()}
-        style={saveBtnStyle}
-        type="button"
-      >
-        {isSaving ? "Saving…" : "Save Section"}
-      </button>
+      <BuilderFloatingSaveRail
+        actions={[{ label: "Save Section", savingLabel: "Saving…", onSave: () => void handleSave() }]}
+        isSaving={isSaving}
+      />
 
       {isGalleryOpen && (
         <BuilderGalleryModal
