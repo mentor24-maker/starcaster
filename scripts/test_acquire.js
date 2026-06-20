@@ -21,7 +21,7 @@ window.App = {
 };
 
 // Load scripts
-const legacyJs = fs.readFileSync('public/js/develop.js', 'utf8');
+const legacyJs = fs.readFileSync('public/js/builder.js', 'utf8');
 const acquireJs = fs.readFileSync('public/js/acquire.js', 'utf8');
 
 try {
@@ -29,7 +29,7 @@ try {
   eval(acquireJs);
   
   // Call acquire init
-  window.App.develop.init();
+  window.App.builder.init();
   window.App.acquire.init();
 
   console.log("Acquire Page HTML after init:");

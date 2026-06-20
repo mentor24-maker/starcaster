@@ -61,7 +61,7 @@ const groups = {
     'messaging': ['messaging', 'createMessaging', 'editMessaging'],
     'assets': ['assets', 'addAsset', 'assetCategories', 'manageAssetCategories', 'createAssetCategory', 'editAssetCategory'],
     'channels': ['channels', 'addChannel', 'editChannel'],
-    'develop': ['develop'],
+    'builder': ['builder'],
     'observe': ['observe', 'activityLog'],
     'docs': ['docs'],
     'settings': ['settings', 'envConfig'],
