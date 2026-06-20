@@ -547,8 +547,8 @@ async function handle(req, res, pathname, method) {
   }
 
   if (moduleMatch && requestMethod === 'DELETE') {
-    const ok = await deleteModule(moduleMatch[1], scope);
-    if (!ok) return sendErr(res, 500, 'Could not delete module'), true;
+    const del = await deleteModule(moduleMatch[1], scope);
+    if (!del.ok) return sendErr(res, 500, del.error || 'Could not delete module'), true;
     return sendOk(res, 200, { id: moduleMatch[1] }, { module: { id: moduleMatch[1] } }), true;
   }
 
