@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 
-const STORAGE_KEY = "develop_saved_agents_v1";
+const STORAGE_KEY = "builder_saved_agents_v1";
 
 const AGENT_ACTIONS = [
   "agent_api_setup_orchestrator",
@@ -260,7 +260,7 @@ export function BuilderAgentsPage({ initialView, onRegisterSetView }: Props) {
                   <th>Workspace</th>
                   <th>Type</th>
                   <th>Updated</th>
-                  <th className="develop-agents-actions-heading">Actions</th>
+                  <th className="builder-agents-actions-heading">Actions</th>
                 </tr>
               </thead>
               <tbody>

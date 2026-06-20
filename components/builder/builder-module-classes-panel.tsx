@@ -12,7 +12,7 @@ function formatDate(iso: string) {
 }
 
 async function syncLegacy() {
-  const api = (window as unknown as { App?: { develop?: { refreshModuleClasses?: () => Promise<void> } } }).App?.develop;
+  const api = (window as unknown as { App?: { builder?: { refreshModuleClasses?: () => Promise<void> } } }).App?.builder;
   if (api?.refreshModuleClasses) await api.refreshModuleClasses();
 }
 
@@ -26,7 +26,7 @@ export function BuilderModuleClassesPanel() {
 
   async function load() {
     try {
-      const res = await appApi("/api/develop/module-classes");
+      const res = await appApi("/api/builder/module-classes");
       const list = unwrapEnvelope<ModuleClass[]>(res, "classes");
       setClasses(Array.isArray(list) ? list : []);
     } catch {
@@ -43,7 +43,7 @@ export function BuilderModuleClassesPanel() {
     const name = newName.trim();
     if (!name) return;
     try {
-      await appApi("/api/develop/module-classes", {
+      await appApi("/api/builder/module-classes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -71,7 +71,7 @@ export function BuilderModuleClassesPanel() {
     const name = editName.trim();
     if (!name) return;
     try {
-      await appApi(`/api/develop/module-classes/${encodeURIComponent(id)}`, {
+      await appApi(`/api/builder/module-classes/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -88,7 +88,7 @@ export function BuilderModuleClassesPanel() {
   async function handleDelete(id: number, name: string) {
     if (!window.confirm(`Delete module class "${name}"?`)) return;
     try {
-      await appApi(`/api/develop/module-classes/${encodeURIComponent(id)}`, {
+      await appApi(`/api/builder/module-classes/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       setStatus("Class deleted");

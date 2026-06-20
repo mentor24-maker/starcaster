@@ -128,7 +128,7 @@ export function BuilderExtensionsPage({ onRegisterOpenItem }: Props) {
 
   async function load() {
     try {
-      const res = await appApi("/api/develop/extensions");
+      const res = await appApi("/api/builder/extensions");
       const list = unwrapEnvelope<ExtensionRecord[]>(res, "extensions");
       setExtensions(Array.isArray(list) ? list : []);
     } catch {
@@ -140,7 +140,7 @@ export function BuilderExtensionsPage({ onRegisterOpenItem }: Props) {
 
   async function loadConfig() {
     try {
-      const res = await appApi("/api/develop/extensions-manager");
+      const res = await appApi("/api/builder/extensions-manager");
       const manager = unwrapEnvelope<{ defaultFilters?: Partial<Filters>; defaultSortKey?: string; defaultSortDir?: string }>(res, "manager");
       if (manager?.defaultFilters) {
         setFilters((prev) => ({ ...prev, ...manager.defaultFilters }));
@@ -156,7 +156,7 @@ export function BuilderExtensionsPage({ onRegisterOpenItem }: Props) {
 
   async function saveConfig(f: Filters, s: Sort) {
     try {
-      await appApi("/api/develop/extensions-manager", {
+      await appApi("/api/builder/extensions-manager", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ defaultFilters: f, defaultSortKey: s.key, defaultSortDir: s.dir }),
@@ -271,7 +271,7 @@ export function BuilderExtensionsPage({ onRegisterOpenItem }: Props) {
       lastUsedAt: existing?.lastUsedAt || "",
     };
     try {
-      const url = isNew ? "/api/develop/extensions" : `/api/develop/extensions/${encodeURIComponent(draft.id)}`;
+      const url = isNew ? "/api/builder/extensions" : `/api/builder/extensions/${encodeURIComponent(draft.id)}`;
       await appApi(url, {
         method: isNew ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -290,7 +290,7 @@ export function BuilderExtensionsPage({ onRegisterOpenItem }: Props) {
   async function handleDelete(item: ExtensionRecord) {
     if (!window.confirm(`Delete extension "${item.name || item.id}"?`)) return;
     try {
-      await appApi(`/api/develop/extensions/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+      await appApi(`/api/builder/extensions/${encodeURIComponent(item.id)}`, { method: "DELETE" });
       setStatus({ message: "Extension deleted", isError: false });
       if (draft.id === item.id) setDraft(emptyDraft());
       await load();

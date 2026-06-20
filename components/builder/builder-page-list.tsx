@@ -1,4 +1,4 @@
-import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, BuilderTheme, DevelopThemeSummary } from "@/lib/builder-template";
+import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, BuilderTheme, BuilderThemeSummary } from "@/lib/builder-template";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -27,7 +27,7 @@ type BuilderPageListProps = {
   onUpdatePageBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onUpdateTheme: (updater: (theme: BuilderTheme) => BuilderTheme) => void;
   onSetPageSlug: (slug: string) => void;
-  themes: DevelopThemeSummary[];
+  themes: BuilderThemeSummary[];
   pageThemeId: string;
   onApplyTemplate: (templateId: string) => void;
   onApplyTheme: (themeId: string) => void;
