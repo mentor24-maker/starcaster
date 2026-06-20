@@ -128,6 +128,96 @@ async function propagateTypographyToAllPages(typography, scope) {
   }));
 }
 
+// Push a canonical saved module's content to every page/template instance that
+// was stamped with savedModuleId === canonicalId and has not been locked.
+// Single-module records: update content fields in place.
+// Multi-module records: replace each consecutive group (same savedModuleId+column)
+//   with fresh copies of the canonical modules.
+async function pushCanonicalModuleToPages(canonicalId, canonicalModules, scope) {
+  let updatedPages = 0;
+  let updatedTemplates = 0;
+  let updatedInstances = 0;
+  let lockedInstances = 0;
+
+  function applyPushToSections(layoutSections) {
+    let changed = false;
+    const updated = layoutSections.map((section) => {
+      const modules = Array.isArray(section.modules) ? section.modules : [];
+      const isSingle = canonicalModules.length === 1;
+
+      if (isSingle) {
+        // In-place content replacement — preserves position and id.
+        const canonical = canonicalModules[0];
+        let sectionChanged = false;
+        const next = modules.map((m) => {
+          if (m.savedModuleId !== canonicalId) return m;
+          if (m.canonicalLocked) { lockedInstances++; return m; }
+          sectionChanged = true;
+          updatedInstances++;
+          return { ...m, type: canonical.type, name: canonical.name, text: canonical.text, settings: { ...canonical.settings } };
+        });
+        if (sectionChanged) changed = true;
+        return sectionChanged ? { ...section, modules: next } : section;
+      }
+
+      // Multi-module cell: replace each consecutive run of same savedModuleId+column.
+      const processed = new Set();
+      const result = [];
+      let sectionChanged = false;
+      for (let i = 0; i < modules.length; i++) {
+        if (processed.has(i)) continue;
+        const m = modules[i];
+        if (m.savedModuleId !== canonicalId) { result.push(m); continue; }
+        if (m.canonicalLocked) { lockedInstances++; result.push(m); continue; }
+        // Collect consecutive run in same column.
+        const col = m.column;
+        const run = [i];
+        for (let j = i + 1; j < modules.length && modules[j].savedModuleId === canonicalId && modules[j].column === col; j++) {
+          run.push(j);
+        }
+        run.forEach((idx) => processed.add(idx));
+        const replacements = canonicalModules.map((cm, idx) => ({
+          ...cm,
+          id: `${cm.type}-${Date.now()}-push-${idx}`,
+          column: col,
+          savedModuleId: canonicalId,
+          settings: { ...cm.settings }
+        }));
+        result.push(...replacements);
+        updatedInstances++;
+        sectionChanged = true;
+      }
+      if (sectionChanged) changed = true;
+      return sectionChanged ? { ...section, modules: result } : section;
+    });
+    return { sections: updated, changed };
+  }
+
+  const pagesResult = await listLandingPages(undefined, scope);
+  if (pagesResult.ok) {
+    const pages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
+    await Promise.allSettled(pages.map(async (page) => {
+      const { sections, changed } = applyPushToSections(page.layoutSections || []);
+      if (!changed) return;
+      await updateLandingPage(String(page.id), { layoutSections: sections, pageBackground: page.pageBackground, theme: page.theme }, scope);
+      updatedPages++;
+    }));
+  }
+
+  const templatesResult = await listPageTemplates(undefined, scope);
+  if (templatesResult && templatesResult.ok) {
+    const templates = Array.isArray(templatesResult.data) ? templatesResult.data : [];
+    await Promise.allSettled(templates.map(async (template) => {
+      const { sections, changed } = applyPushToSections(template.layoutSections || []);
+      if (!changed) return;
+      await updatePageTemplate(template.id, { layoutSections: sections }, scope);
+      updatedTemplates++;
+    }));
+  }
+
+  return { updatedPages, updatedTemplates, updatedInstances, lockedInstances };
+}
+
 // Normalize a string for fuzzy page matching: lowercase, strip site-name suffix after pipe/dash,
 // replace hyphens/underscores with spaces, collapse whitespace.
 function normForMatch(s) {
@@ -550,6 +640,18 @@ async function handle(req, res, pathname, method) {
     const del = await deleteModule(moduleMatch[1], scope);
     if (!del.ok) return sendErr(res, 500, del.error || 'Could not delete module'), true;
     return sendOk(res, 200, { id: moduleMatch[1] }, { module: { id: moduleMatch[1] } }), true;
+  }
+
+  const modulePushMatch = pathname.match(/^\/api\/builder\/modules\/([^/]+)\/push$/);
+  if (modulePushMatch && requestMethod === 'POST') {
+    const canonicalId = modulePushMatch[1];
+    const allModules = await listModules(scope);
+    const canonical = allModules.find((m) => m.id === canonicalId);
+    if (!canonical) return sendErr(res, 404, 'Module not found'), true;
+    const canonicalModules = Array.isArray(canonical.modules) ? canonical.modules : [];
+    if (canonicalModules.length === 0) return sendErr(res, 400, 'Canonical module has no content to push'), true;
+    const result = await pushCanonicalModuleToPages(canonicalId, canonicalModules, scope);
+    return sendOk(res, 200, result, { push: result }), true;
   }
 
   const classMatch = pathname.match(/^\/api\/builder\/module-classes\/([^/]+)$/);

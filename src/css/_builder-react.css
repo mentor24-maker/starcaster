@@ -5012,6 +5012,25 @@
   white-space: nowrap;
 }
 
+.builder-react-root .builder-canonical-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 18px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  background: #d1fae5;
+  color: #065f46;
+  flex-shrink: 0;
+}
+
+.builder-react-root .builder-canonical-badge-locked {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .builder-react-root .builder-module-header .builder-section-actions {
   display: inline-flex;
   flex-wrap: nowrap;
