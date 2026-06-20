@@ -1801,74 +1801,74 @@ body.asset-associations-modal-open {
   justify-content: center;
   flex-shrink: 0;
 }
-.nav-probe-ring-110 {
-  width: 110px;
-  height: 110px;
+.nav-probe-ring-1000 {
+  width: 1000px;
+  height: 1000px;
+}
+.nav-probe-ring-900 {
+  width: 900px;
+  height: 900px;
+}
+.nav-probe-ring-800 {
+  width: 800px;
+  height: 800px;
+}
+.nav-probe-ring-700 {
+  width: 700px;
+  height: 700px;
+}
+.nav-probe-ring-600 {
+  width: 600px;
+  height: 600px;
+}
+.nav-probe-ring-500 {
+  width: 500px;
+  height: 500px;
+}
+.nav-probe-ring-400 {
+  width: 400px;
+  height: 400px;
+}
+.nav-probe-ring-300 {
+  width: 300px;
+  height: 300px;
+}
+.nav-probe-ring-200 {
+  width: 200px;
+  height: 200px;
 }
 .nav-probe-ring-100 {
   width: 100px;
   height: 100px;
 }
-.nav-probe-ring-90 {
-  width: 90px;
-  height: 90px;
-}
-.nav-probe-ring-80 {
-  width: 80px;
-  height: 80px;
-}
-.nav-probe-ring-70 {
-  width: 70px;
-  height: 70px;
-}
-.nav-probe-ring-60 {
-  width: 60px;
-  height: 60px;
-}
-.nav-probe-ring-50 {
-  width: 50px;
-  height: 50px;
-}
-.nav-probe-ring-40 {
-  width: 40px;
-  height: 40px;
-}
-.nav-probe-ring-30 {
-  width: 30px;
-  height: 30px;
-}
-.nav-probe-ring-20 {
-  width: 20px;
-  height: 20px;
-}
-.nav-probe-ring-110:hover {
+.nav-probe-ring-1000:hover {
   background: rgba(0, 0, 255, 0.10);
 }
-.nav-probe-ring-100:hover {
+.nav-probe-ring-900:hover {
   background: rgba(0, 0, 255, 0.10);
 }
-.nav-probe-ring-90:hover {
+.nav-probe-ring-800:hover {
   background: rgba(0, 0, 255, 0.20);
 }
-.nav-probe-ring-80:hover {
+.nav-probe-ring-700:hover {
   background: rgba(0, 0, 255, 0.30);
 }
-.nav-probe-ring-70:hover {
+.nav-probe-ring-600:hover {
   background: rgba(0, 0, 255, 0.40);
 }
-.nav-probe-ring-60:hover {
+.nav-probe-ring-500:hover {
   background: rgba(0, 0, 255, 0.50);
 }
-.nav-probe-ring-50:hover {
+.nav-probe-ring-400:hover {
   background: rgba(0, 0, 255, 0.60);
 }
-.nav-probe-ring-40:hover {
+.nav-probe-ring-300:hover {
   background: rgba(0, 0, 255, 0.70);
 }
-.nav-probe-ring-30:hover {
+.nav-probe-ring-200:hover {
   background: rgba(0, 0, 255, 0.80);
 }
-.nav-probe-ring-20:hover {
+.nav-probe-ring-100:hover {
   background: rgba(0, 0, 255, 0.90);
 }
 .nav-probe-dot {
