@@ -493,7 +493,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { emailTemplate: result.data }), true;
   }
 
-  const themeMatch = pathname.match(/^/api/builder/themes\/([^/]+)$/);
+  const themeMatch = pathname.match(/^\/api\/builder\/themes\/([^/]+)$/);
   if (themeMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const typography = body.typography && typeof body.typography === 'object' ? body.typography : null;
@@ -524,7 +524,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
 
-  const moduleMatch = pathname.match(/^/api/builder/modules\/([^/]+)$/);
+  const moduleMatch = pathname.match(/^\/api\/builder\/modules\/([^/]+)$/);
   if (moduleMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     // Only forward provided fields; updateModule merges over the existing record.
@@ -552,7 +552,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { id: moduleMatch[1] }, { module: { id: moduleMatch[1] } }), true;
   }
 
-  const classMatch = pathname.match(/^/api/builder/module-classes\/([^/]+)$/);
+  const classMatch = pathname.match(/^\/api\/builder\/module-classes\/([^/]+)$/);
   if (classMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateBuilderModuleClass(classMatch[1], { name: String(body.name || '').trim() }, scope);
@@ -788,9 +788,9 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
   }
 
-  const formIdMatch = String(pathname || '').match(/^/api/builder/forms\/([^/]+)\/?$/);
-  const emailTemplateIdMatch = String(pathname || '').match(/^/api/builder/email-templates\/([^/]+)\/?$/);
-  const emailTemplateRenderMatch = String(pathname || '').match(/^/api/builder/email-templates\/([^/]+)\/render\/?$/);
+  const formIdMatch = String(pathname || '').match(/^\/api\/builder\/forms\/([^/]+)\/?$/);
+  const emailTemplateIdMatch = String(pathname || '').match(/^\/api\/builder\/email-templates\/([^/]+)\/?$/);
+  const emailTemplateRenderMatch = String(pathname || '').match(/^\/api\/builder\/email-templates\/([^/]+)\/render\/?$/);
 
   if (emailTemplateRenderMatch && requestMethod === 'POST') {
     const templateId = decodeURIComponent(emailTemplateRenderMatch[1] || '').trim();
@@ -818,8 +818,8 @@ async function handle(req, res, pathname, method) {
     );
     return sendOk(res, 200, { html }, { html }), true;
   }
-  const extensionIdMatch = String(pathname || '').match(/^/api/builder/extensions\/([^/]+)\/?$/);
-  const extensionUseMatch = String(pathname || '').match(/^/api/builder/extensions\/([^/]+)\/use\/?$/);
+  const extensionIdMatch = String(pathname || '').match(/^\/api\/builder\/extensions\/([^/]+)\/?$/);
+  const extensionUseMatch = String(pathname || '').match(/^\/api\/builder\/extensions\/([^/]+)\/use\/?$/);
   if (formIdMatch && requestMethod === 'PATCH') {
     const formId = decodeURIComponent(formIdMatch[1] || '').trim();
     if (!formId) return sendErr(res, 400, 'form id is required', { code: 'VALIDATION_ERROR' }), true;
@@ -986,7 +986,7 @@ async function handle(req, res, pathname, method) {
   }
 
   // DELETE /api/builder/acquire-runs/:runId  — delete a specific run
-  const acquireRunMatch = pathname.match(/^/api/builder/acquire-runs\/([^/]+)$/);
+  const acquireRunMatch = pathname.match(/^\/api\/builder\/acquire-runs\/([^/]+)$/);
   if (acquireRunMatch && requestMethod === 'DELETE') {
     await deleteDirectAcquireRun(decodeURIComponent(acquireRunMatch[1]), scope).catch(() => {});
     return sendOk(res, 200, { ok: true }), true;
@@ -1242,9 +1242,9 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, results, { results }), true;
   }
 
-  const landingPageIdMatch = String(pathname || '').match(/^/api/builder/landing-pages\/([^/]+)\/?$/);
-  const landingPageSubmitMatch = String(pathname || '').match(/^/api/builder/landing-pages\/([^/]+)\/submit\/?$/);
-  const pageTemplateIdMatch = String(pathname || '').match(/^/api/builder/page-templates\/([^/]+)\/?$/);
+  const landingPageIdMatch = String(pathname || '').match(/^\/api\/builder\/landing-pages\/([^/]+)\/?$/);
+  const landingPageSubmitMatch = String(pathname || '').match(/^\/api\/builder\/landing-pages\/([^/]+)\/submit\/?$/);
+  const pageTemplateIdMatch = String(pathname || '').match(/^\/api\/builder\/page-templates\/([^/]+)\/?$/);
 
   if (landingPageSubmitMatch && requestMethod === 'POST') {
     const landingPageId = decodeURIComponent(landingPageSubmitMatch[1] || '').trim();
@@ -1476,7 +1476,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 202, { message: 'Training acquire initiated in background.' }), true;
   }
 
-  const pollSubmitMatch = String(pathname || '').match(/^/api/builder/modules\/([^/]+)\/poll-submit\/?$/);
+  const pollSubmitMatch = String(pathname || '').match(/^\/api\/builder\/modules\/([^/]+)\/poll-submit\/?$/);
   if (pollSubmitMatch && requestMethod === 'POST') {
     const pollId = decodeURIComponent(pollSubmitMatch[1] || '').trim();
     if (!pollId) return sendErr(res, 400, 'poll id is required', { code: 'VALIDATION_ERROR' }), true;
@@ -1493,7 +1493,7 @@ async function handle(req, res, pathname, method) {
     }
   }
 
-  const pollResultsMatch = String(pathname || '').match(/^/api/builder/modules\/([^/]+)\/poll-results\/?$/);
+  const pollResultsMatch = String(pathname || '').match(/^\/api\/builder\/modules\/([^/]+)\/poll-results\/?$/);
   if (pollResultsMatch && requestMethod === 'GET') {
     const pollId = decodeURIComponent(pollResultsMatch[1] || '').trim();
     if (!pollId) return sendErr(res, 400, 'poll id is required', { code: 'VALIDATION_ERROR' }), true;
@@ -1550,7 +1550,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { savedSection: result.data }), true;
   }
 
-  const savedSectionMatch = pathname.match(/^/api/builder/saved-sections\/([^/]+)$/);
+  const savedSectionMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)$/);
   if (savedSectionMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateSavedSection(savedSectionMatch[1], {
@@ -1584,7 +1584,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { product: result.data }), true;
   }
 
-  const productMatch = pathname.match(/^/api/builder/products\/([^/]+)$/);
+  const productMatch = pathname.match(/^\/api\/builder\/products\/([^/]+)$/);
   if (productMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateProduct(productMatch[1], body, scope);
@@ -1611,7 +1611,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, result.data, { levelEvent: result.data }), true;
   }
 
-  const gameEventMatch = pathname.match(/^/api/builder/game\/events\/([^/]+)$/);
+  const gameEventMatch = pathname.match(/^\/api\/builder\/game\/events\/([^/]+)$/);
   if (gameEventMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const result = await updateLevelEvent(gameEventMatch[1], body, scope);
