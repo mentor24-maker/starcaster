@@ -1786,6 +1786,98 @@ body.asset-associations-modal-open {
     order: 3;
   }
 }
+.nav-probe-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px;
+  margin-top: 2rem;
+}
+.nav-probe-ring {
+  border-radius: 50%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.nav-probe-ring-110 {
+  width: 110px;
+  height: 110px;
+}
+.nav-probe-ring-100 {
+  width: 100px;
+  height: 100px;
+}
+.nav-probe-ring-90 {
+  width: 90px;
+  height: 90px;
+}
+.nav-probe-ring-80 {
+  width: 80px;
+  height: 80px;
+}
+.nav-probe-ring-70 {
+  width: 70px;
+  height: 70px;
+}
+.nav-probe-ring-60 {
+  width: 60px;
+  height: 60px;
+}
+.nav-probe-ring-50 {
+  width: 50px;
+  height: 50px;
+}
+.nav-probe-ring-40 {
+  width: 40px;
+  height: 40px;
+}
+.nav-probe-ring-30 {
+  width: 30px;
+  height: 30px;
+}
+.nav-probe-ring-20 {
+  width: 20px;
+  height: 20px;
+}
+.nav-probe-ring-110:hover {
+  background: rgba(0, 0, 255, 0.10);
+}
+.nav-probe-ring-100:hover {
+  background: rgba(0, 0, 255, 0.10);
+}
+.nav-probe-ring-90:hover {
+  background: rgba(0, 0, 255, 0.20);
+}
+.nav-probe-ring-80:hover {
+  background: rgba(0, 0, 255, 0.30);
+}
+.nav-probe-ring-70:hover {
+  background: rgba(0, 0, 255, 0.40);
+}
+.nav-probe-ring-60:hover {
+  background: rgba(0, 0, 255, 0.50);
+}
+.nav-probe-ring-50:hover {
+  background: rgba(0, 0, 255, 0.60);
+}
+.nav-probe-ring-40:hover {
+  background: rgba(0, 0, 255, 0.70);
+}
+.nav-probe-ring-30:hover {
+  background: rgba(0, 0, 255, 0.80);
+}
+.nav-probe-ring-20:hover {
+  background: rgba(0, 0, 255, 0.90);
+}
+.nav-probe-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(0, 0, 255, 1.0);
+  flex-shrink: 0;
+}
 
 /* src/css/_builder-react.css */
 .builder-react-root {
@@ -6254,6 +6346,23 @@ body.asset-associations-modal-open {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.builder-react-root .builder-canonical-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 18px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  background: #d1fae5;
+  color: #065f46;
+  flex-shrink: 0;
+}
+.builder-react-root .builder-canonical-badge-locked {
+  background: #fef3c7;
+  color: #92400e;
 }
 .builder-react-root .builder-module-header .builder-section-actions {
   display: inline-flex;
