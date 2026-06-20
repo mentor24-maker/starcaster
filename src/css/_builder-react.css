@@ -4419,6 +4419,7 @@
 .builder-react-root .builder-layout-bar {
   border-radius: 8px;
   background: linear-gradient(135deg, #15b7ef 0%, #79dcff 100%);
+  min-height: 30px;
 }
 
 .builder-react-root .builder-layout-label {
