@@ -603,21 +603,12 @@ App.builder = (function () {
     if (pageHeader) pageHeader.classList.add('hidden');
   }
 
-  function showVanillaBuilderPanels(editorMode, templateKind) {
-    const kind = safeText(templateKind).toLowerCase();
-    const modularPanel = byId('builderPageTemplateEditorPanel');
-    const emailPanel = byId('builderTemplateEditorPanel');
-    if (kind === 'email') {
-      if (emailPanel) emailPanel.classList.remove('hidden');
-      if (modularPanel) modularPanel.classList.add('hidden');
-    } else {
-      if (modularPanel) modularPanel.classList.remove('hidden');
-      if (emailPanel) emailPanel.classList.add('hidden');
+  function showVanillaBuilderPanels(_editorMode, _templateKind) {
+    // Legacy vanilla JS editor panels are sequestered — the React builder is
+    // the only editor. Surface a diagnostic notification instead.
+    if (typeof App.notify === 'function') {
+      App.notify('Builder could not be loaded. Please refresh the page. If the problem persists, open the browser console for details.', true);
     }
-    const landingForm = byId('builderLandingPagesForm');
-    if (landingForm && editorMode !== 'page') landingForm.classList.remove('hidden');
-    const pageHeader = byId('builderLandingPagesHeader');
-    if (pageHeader && editorMode !== 'page') pageHeader.classList.remove('hidden');
   }
 
   function unmount() {
@@ -647,7 +638,6 @@ App.builder = (function () {
       options: config?.options || null,
       onClose: () => {
         unmount();
-        showVanillaBuilderPanels(editorMode, config?.record?.templateKind);
         if (typeof config?.onClose === 'function') config.onClose();
       },
       onSaved: (record) => {
@@ -656,8 +646,7 @@ App.builder = (function () {
     };
     const mounted = window.BuilderReact.mount(host, props);
     if (!mounted) {
-      if (typeof App.notify === 'function') App.notify('Builder UI failed to mount', true);
-      showVanillaBuilderPanels(editorMode, config?.record?.templateKind);
+      if (typeof App.notify === 'function') App.notify('Builder could not be loaded. Please refresh the page. If the problem persists, check the browser console for details.', true);
       return false;
     }
     builderActiveMount = { surface, editorMode, host, templateKind: safeText(config?.record?.templateKind) };
@@ -8695,13 +8684,10 @@ App.builder = (function () {
     }
   }
 
-  function setPageTemplateEditorVisible(visible) {
+  function setPageTemplateEditorVisible(_visible) {
+    // Legacy panel is sequestered — always keep it hidden.
     const panel = byId('builderPageTemplateEditorPanel');
-    if (!panel) return;
-    panel.classList.toggle('hidden', !visible);
-    if (visible) {
-      setCollapsibleSectionExpanded('builderPageTemplateEditorToggle', 'builderPageTemplateEditorBody', true);
-    }
+    if (panel) panel.classList.add('hidden');
   }
 
   function syncModularPageEditorPlacement() {
@@ -9106,53 +9092,46 @@ App.builder = (function () {
       App.builder.unmount();
     }
 
-    const useReactBuilder = App.builder
-      && typeof App.builder.useReactIsland === 'function'
-      && App.builder.useReactIsland();
-
-    if (useReactBuilder) {
-      syncModularPageEditorPlacement();
-      const mounted = App.builder.mount({
-        surface: 'editor',
-        editorMode: modularPageEditorMode,
-        record: {
-          ...source,
-          id: safeText(source.id),
-          name: safeText(source.name, 255) || (modularPageEditorMode === 'page' ? 'Modular Page' : 'Modular Page Template'),
-          templateKind: safeText(source.templateKind) || 'modular',
-          templateId: safeText(options.templateId || source.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id,
-          pageBackground: source.pageBackground || null,
-          layoutSections: source.layoutSections || [],
-          contentOverrides: normalizeLandingPageContentOverrides(source.contentOverrides),
-        },
-        sourceTemplateId: modularPageEditorSourceTemplateId,
-        options: modularPageEditorOptions,
-        onClose: () => {
-          closeModularPageTemplateEditor();
-          if (modularPageEditorMode === 'page') {
-            App.setActivePage('builderManageLandingPagesPage');
-          }
-        },
-        onSaved: async () => {
-          await refresh();
-        },
-      });
-      if (mounted) {
-        setPageTemplateEditorVisible(false);
-        if (safeText(options.targetPage)) {
-          App.setActivePage(safeText(options.targetPage), { skipNormalize: true });
-        }
-        return;
+    if (!App.builder || typeof App.builder.useReactIsland !== 'function' || !App.builder.useReactIsland()) {
+      if (typeof App.notify === 'function') {
+        App.notify('Builder bundle not loaded — please refresh the page.', true);
       }
+      return;
     }
 
     syncModularPageEditorPlacement();
-    syncPageTemplateEditorInputs();
-    renderModularPageTemplateEditor();
-    if (safeText(options.targetPage)) {
-      App.setActivePage(safeText(options.targetPage), { skipNormalize: true });
+    const mounted = App.builder.mount({
+      surface: 'editor',
+      editorMode: modularPageEditorMode,
+      record: {
+        ...source,
+        id: safeText(source.id),
+        name: safeText(source.name, 255) || (modularPageEditorMode === 'page' ? 'Modular Page' : 'Modular Page Template'),
+        templateKind: safeText(source.templateKind) || 'modular',
+        templateId: safeText(options.templateId || source.templateId) || selectedTemplateId || LANDING_TEMPLATES[0].id,
+        pageBackground: source.pageBackground || null,
+        layoutSections: source.layoutSections || [],
+        contentOverrides: normalizeLandingPageContentOverrides(source.contentOverrides),
+      },
+      sourceTemplateId: modularPageEditorSourceTemplateId,
+      options: modularPageEditorOptions,
+      onClose: () => {
+        closeModularPageTemplateEditor();
+        if (modularPageEditorMode === 'page') {
+          App.setActivePage('builderManageLandingPagesPage');
+        }
+      },
+      onSaved: async () => {
+        await refresh();
+      },
+    });
+    if (mounted) {
+      setPageTemplateEditorVisible(false);
+      if (safeText(options.targetPage)) {
+        App.setActivePage(safeText(options.targetPage), { skipNormalize: true });
+      }
     }
-    setPageTemplateEditorVisible(true);
+    // If !mounted, App.builder.mount() already surfaced a diagnostic notification.
   }
 
   function ensureModularPageTemplateDraft() {
@@ -11899,21 +11878,11 @@ App.builder = (function () {
     renderEmailTemplateTables();
     renderPageTemplateRecordsTable();
     const reactBuilderActive = App.builder && typeof App.builder.isActive === 'function' && App.builder.isActive();
-    if (!reactBuilderActive) {
-      ensureModularPageTemplateDraft();
-      syncPageTemplateEditorInputs();
-      renderModularPageTemplateEditor();
-      setPageTemplateEditorVisible(true);
-    } else {
-      setPageTemplateEditorVisible(false);
-    }
+    setPageTemplateEditorVisible(false);
     setEmailTemplateEditorVisible(false);
     setCollapsibleSectionExpanded('builderTemplateEditorToggle', 'builderTemplateEditorBody', false);
     setCollapsibleSectionExpanded('builderFormsSectionToggle', 'builderFormsSectionBody', false);
     setCollapsibleSectionExpanded('builderEmailSectionToggle', 'builderEmailSectionBody', false);
-    if (!reactBuilderActive) {
-      setCollapsibleSectionExpanded('builderPageTemplateEditorToggle', 'builderPageTemplateEditorBody', true);
-    }
     renderLandingPageThankYouPage();
     renderThumbnailSourceAssetOptions();
     renderFormTemplateLibrary();
