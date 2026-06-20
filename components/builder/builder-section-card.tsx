@@ -7,7 +7,7 @@ import type {
   BuilderTemplateModule,
   BuilderTemplateSection
 } from "@/lib/builder-template";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import { getLayoutColumns, getLayoutGridTemplate } from "@/lib/builder-template";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
@@ -160,6 +160,18 @@ export function BuilderSectionCard({
   const [collapsedCellPanels, setCollapsedCellPanels] = useState<Record<string, { styles: boolean; content: boolean }>>({});
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
+  const sectionMountedRef = useRef(false);
+
+  useEffect(() => {
+    if (!sectionMountedRef.current) { sectionMountedRef.current = true; return; }
+    if (isCollapsed || !sectionHeaderRef.current) return;
+    const el = sectionHeaderRef.current;
+    document.querySelectorAll("[data-builder-focus]").forEach((n) => n.removeAttribute("data-builder-focus"));
+    el.setAttribute("data-builder-focus", "true");
+    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return () => { el.removeAttribute("data-builder-focus"); };
+  }, [isCollapsed]);
 
   const rawTitle = section.title?.trim() || `Section ${sectionIndex + 1}`;
   const displayTitle = isCanonical && rawTitle.endsWith("Canonical")
@@ -283,7 +295,7 @@ export function BuilderSectionCard({
 
   return (
     <article className={`builder-section-card${isCanonical ? " builder-section-card-canonical" : ""}`} style={getSectionStyle()}>
-      <div aria-expanded={!isCollapsed} className="builder-section-header">
+      <div aria-expanded={!isCollapsed} className="builder-section-header" ref={sectionHeaderRef}>
         <div className="builder-section-title">
           {isCanonical ? (
             <span className="builder-section-title-label">
