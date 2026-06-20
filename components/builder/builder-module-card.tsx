@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { type CSSProperties, type DragEvent, type ReactNode, useRef, useState } from "react";
+import { type CSSProperties, type DragEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
@@ -2092,6 +2092,19 @@ export function BuilderModuleCard({
   themeStyle
 }: BuilderModuleCardProps) {
     const [isPopped, setIsPopped] = useState(false);
+    const moduleHeaderRef = useRef<HTMLDivElement | null>(null);
+    const moduleMountedRef = useRef(false);
+
+    useEffect(() => {
+      if (!moduleMountedRef.current) { moduleMountedRef.current = true; return; }
+      if (!isExpanded || !moduleHeaderRef.current) return;
+      const el = moduleHeaderRef.current;
+      document.querySelectorAll("[data-builder-focus]").forEach((n) => n.removeAttribute("data-builder-focus"));
+      el.setAttribute("data-builder-focus", "true");
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return () => { el.removeAttribute("data-builder-focus"); };
+    }, [isExpanded]);
+
     const richTextGalleryProps: RichTextGalleryBinding = {
       onOpenGallery: onOpenRichTextGallery,
       onUploadGalleryImage: onUploadRichTextGalleryImage
@@ -2136,7 +2149,7 @@ export function BuilderModuleCard({
           ⋮⋮
         </div>
       ) : null}
-      <div aria-expanded={isExpanded} className="builder-module-header">
+      <div aria-expanded={isExpanded} className="builder-module-header" ref={moduleHeaderRef}>
         <div className="builder-module-title">
           <div className="builder-module-title-text">
             <strong>{module.name || module.type}</strong>
