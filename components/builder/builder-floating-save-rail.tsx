@@ -23,6 +23,22 @@ const FALLBACK_POSITION: CSSProperties = {
 };
 
 function readShellAnchorPosition(): CSSProperties {
+  // If an edit panel was just opened, anchor the button at that header's level.
+  const focused = document.querySelector<HTMLElement>("[data-builder-focus]");
+  if (focused) {
+    const fr = focused.getBoundingClientRect();
+    const mid = (fr.top + fr.bottom) / 2;
+    if (mid > 40 && mid < window.innerHeight - 40) {
+      return {
+        top: `${Math.min(Math.max(mid, 96), window.innerHeight - 96)}px`,
+        right: "60px",
+        left: "auto",
+        transform: "translateY(-50%)",
+        visibility: "visible",
+      };
+    }
+  }
+
   const shell =
     document.querySelector<HTMLElement>(".builder-pages-details-shell") ??
     document.querySelector<HTMLElement>(".builder-editor-layout-main") ??
