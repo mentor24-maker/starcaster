@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import type { BuilderCellModuleRecord } from "@/lib/builder-template";
 import {
@@ -29,11 +28,6 @@ type BuilderModulePaletteModalProps = {
   onClose: () => void;
 };
 
-const ANCHOR_GAP_PX = 8;
-const VIEWPORT_EDGE_PADDING_PX = 16;
-
-const MODULE_PALETTE_WIDTH_PX = 1200;
-const MODULE_PALETTE_HEIGHT_PX = 800;
 const MODULE_PALETTE_AZ_SORT_STORAGE_KEY = "normie-module-palette-sort-az";
 const MODULE_PALETTE_POP_SORT_STORAGE_KEY = "normie-module-palette-sort-pop";
 
@@ -106,34 +100,8 @@ function readPopularitySortPreference(): boolean {
   }
 }
 
-function getAnchoredModulePaletteStyle(anchor: ModulePaletteAnchor): CSSProperties {
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const modalWidth = Math.min(MODULE_PALETTE_WIDTH_PX, viewportWidth - VIEWPORT_EDGE_PADDING_PX * 2);
-  const halfWidth = modalWidth / 2;
-  const left = Math.min(
-    Math.max(anchor.x, VIEWPORT_EDGE_PADDING_PX + halfWidth),
-    viewportWidth - VIEWPORT_EDGE_PADDING_PX - halfWidth
-  );
-  const modalHeight = Math.floor(Math.min(MODULE_PALETTE_HEIGHT_PX, viewportHeight * 0.8));
-  const idealBottom = viewportHeight - anchor.y + ANCHOR_GAP_PX;
-  const maxBottom = viewportHeight - modalHeight - VIEWPORT_EDGE_PADDING_PX;
-  const bottom = Math.max(VIEWPORT_EDGE_PADDING_PX, Math.min(idealBottom, maxBottom));
-
-  return {
-    position: "fixed",
-    left,
-    bottom,
-    transform: "translateX(-50%)",
-    width: modalWidth,
-    height: modalHeight,
-    maxHeight: modalHeight
-  };
-}
-
 export function BuilderModulePaletteModal({
   activeGroup,
-  anchor = null,
   cellModules = [],
   onSelectGroup,
   onSelectItem,
@@ -150,8 +118,6 @@ export function BuilderModulePaletteModal({
   const starterModules = activeGroup ? getStarterModulesForPaletteGroup(activeGroup) : [];
   const savedModulesForGroup = activeGroup ? getSavedModulesForPaletteGroup(cellModules, activeGroup) : [];
   const classOnlyGroup = activeGroup ? isSavedModuleOnlyPaletteGroup(activeGroup) : false;
-  const isAnchored = anchor != null;
-  const anchoredModalStyle = isAnchored && mounted ? getAnchoredModulePaletteStyle(anchor) : undefined;
 
   useEffect(() => {
     setMounted(true);
@@ -197,17 +163,16 @@ export function BuilderModulePaletteModal({
   return (
     <BuilderBodyPortal>
     <div
-      className={`builder-gallery-overlay${isAnchored ? " builder-gallery-overlay-anchored" : ""}`}
+      className="builder-gallery-overlay"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className={`builder-gallery-modal builder-module-palette-modal${isAnchored ? " is-anchored" : ""}`}
+        className="builder-gallery-modal builder-module-palette-modal"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Module library"
-        style={anchoredModalStyle}
       >
         <div className="builder-gallery-header">
           <div>
