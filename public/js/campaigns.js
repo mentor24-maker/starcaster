@@ -1757,7 +1757,7 @@ App.campaigns = (function () {
       api('/api/messaging/tweets?limit=5000'),
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/emails?limit=5000'),
-      api('/api/develop/email-templates'),
+      api('/api/builder/email-templates'),
       api('/api/messaging/topics?limit=5000'),
       api('/api/messaging/headlines?limit=5000'),
       api('/api/messaging/subheadings?limit=5000'),
@@ -1772,8 +1772,8 @@ App.campaigns = (function () {
       api('/api/messaging/transcripts?limit=5000'),
       api('/api/messaging/comments?limit=5000'),
       api('/api/messaging/ctas?limit=5000'),
-      api('/api/develop/landing-pages'),
-      api('/api/develop/forms'),
+      api('/api/builder/landing-pages'),
+      api('/api/builder/forms'),
     ]);
 
     if (channelsRes.status === 'fulfilled' && Array.isArray(channelsRes.value.channels)) {

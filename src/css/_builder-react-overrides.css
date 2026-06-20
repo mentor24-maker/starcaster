@@ -213,7 +213,7 @@
 }
 
 /* Hide the floating save rail when the Themes page is active */
-body:has(#developThemesPage:not(.hidden)) .builder-floating-save-rail {
+body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: none !important;
 }
 

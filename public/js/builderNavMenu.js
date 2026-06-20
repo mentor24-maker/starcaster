@@ -4,7 +4,7 @@ window.App = window.App || {};
  * WordPress-style website navigation menus for Builder / Module Studio.
  * Items: label, url, parentId (submenus), target (_self | _blank).
  */
-App.developNavMenu = (function () {
+App.builderNavMenu = (function () {
   const MENU_LOCATIONS = [
     { value: 'primary', label: 'Primary Menu (Header)' },
     { value: 'footer', label: 'Footer Menu' },
@@ -167,18 +167,18 @@ App.developNavMenu = (function () {
     if (!modal?.el) return modal;
     const anchor = safeText(options.anchor) || 'upper-right';
     const transparentBackdrop = options.transparentBackdrop !== false;
-    modal.el.classList.add('develop-nested-modal-backdrop');
+    modal.el.classList.add('builder-nested-modal-backdrop');
     if (transparentBackdrop) {
-      modal.el.classList.add('develop-nested-modal-backdrop--transparent');
+      modal.el.classList.add('builder-nested-modal-backdrop--transparent');
     }
     if (anchor === 'upper-right') {
-      modal.el.classList.add('develop-nested-modal-backdrop--upper-right');
+      modal.el.classList.add('builder-nested-modal-backdrop--upper-right');
     }
     const dialog = modal.el.querySelector('.c-modal__dialog');
     if (dialog) {
-      dialog.classList.add('develop-nested-modal-dialog');
+      dialog.classList.add('builder-nested-modal-dialog');
       if (anchor === 'upper-right') {
-        dialog.classList.add('develop-nested-modal-dialog--upper-right');
+        dialog.classList.add('builder-nested-modal-dialog--upper-right');
       }
     }
     return modal;
@@ -186,7 +186,7 @@ App.developNavMenu = (function () {
 
   function mountModalAboveOpenDialog(modal) {
     if (!modal?.el) return;
-    const openDialog = document.querySelector('dialog[open], .develop-module-editor-modal');
+    const openDialog = document.querySelector('dialog[open], .builder-module-editor-modal');
     if (openDialog && modal.el.parentNode !== openDialog) {
       openDialog.appendChild(modal.el);
     }
@@ -202,19 +202,19 @@ App.developNavMenu = (function () {
 
     let items = parseNavMenuItems(getValue());
     const body = document.createElement('div');
-    body.className = 'develop-nav-menu-editor';
+    body.className = 'builder-nav-menu-editor';
 
     const intro = document.createElement('p');
-    intro.className = 'meta develop-nav-menu-editor-intro';
+    intro.className = 'meta builder-nav-menu-editor-intro';
     intro.textContent = 'Add links, set parents for submenus, and reorder items. Modeled after WordPress menus.';
     body.appendChild(intro);
 
     const list = document.createElement('div');
-    list.className = 'develop-nav-menu-editor-list';
+    list.className = 'builder-nav-menu-editor-list';
     body.appendChild(list);
 
     const addRow = document.createElement('div');
-    addRow.className = 'develop-nav-menu-editor-actions';
+    addRow.className = 'builder-nav-menu-editor-actions';
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn-ghost';
@@ -260,14 +260,14 @@ App.developNavMenu = (function () {
 
       items.forEach((item, index) => {
         const card = document.createElement('div');
-        card.className = 'develop-nav-menu-item-card';
+        card.className = 'builder-nav-menu-item-card';
 
         const header = document.createElement('div');
-        header.className = 'develop-nav-menu-item-header';
+        header.className = 'builder-nav-menu-item-header';
         const titleEl = document.createElement('strong');
         titleEl.textContent = item.label || `Menu Item ${index + 1}`;
         const actions = document.createElement('div');
-        actions.className = 'develop-nav-menu-item-actions';
+        actions.className = 'builder-nav-menu-item-actions';
 
         const upBtn = document.createElement('button');
         upBtn.type = 'button';
@@ -303,11 +303,11 @@ App.developNavMenu = (function () {
         card.appendChild(header);
 
         const grid = document.createElement('div');
-        grid.className = 'develop-nav-menu-item-grid standard-form-grid';
+        grid.className = 'builder-nav-menu-item-grid standard-form-grid';
 
         const makeField = (labelText, control) => {
           const label = document.createElement('label');
-          label.className = 'stack-form develop-nav-menu-field';
+          label.className = 'stack-form builder-nav-menu-field';
           const span = document.createElement('span');
           span.textContent = labelText;
           label.appendChild(span);
@@ -351,7 +351,7 @@ App.developNavMenu = (function () {
         makeField('Parent Item', parentSelect);
 
         const targetLabel = document.createElement('label');
-        targetLabel.className = 'checkbox-row develop-nav-menu-target-row';
+        targetLabel.className = 'checkbox-row builder-nav-menu-target-row';
         const targetInput = document.createElement('input');
         targetInput.type = 'checkbox';
         targetInput.checked = item.target === '_blank';
@@ -388,7 +388,7 @@ App.developNavMenu = (function () {
     const modal = new App.components.Modal({
       title,
       body,
-      dialogClass: 'develop-nav-menu-editor-modal',
+      dialogClass: 'builder-nav-menu-editor-modal',
       actions: [
         {
           label: 'Done',

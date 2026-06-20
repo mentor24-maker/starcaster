@@ -22,7 +22,7 @@ const SECTIONS = [
   { name: 'channels', label: 'Channels', pageId: 'channelsPage' },
   { name: 'messaging', label: 'Messaging', pageId: 'messagingContentPage' },
   { name: 'assets', label: 'Assets', pageId: 'assetsPage' },
-  { name: 'builder', label: 'Builder', pageId: 'developPage' },
+  { name: 'builder', label: 'Builder', pageId: 'builderPage' },
   { name: 'campaigns', label: 'Campaigns', pageId: 'campaignsPage' },
   { name: 'promote', label: 'Promote', pageId: 'promoteSocialPage' },
   { name: 'observe', label: 'Observe', pageId: 'observePage' },

@@ -301,7 +301,7 @@ App.polls = (function() {
         if (typeof originalSetActivePage === 'function') {
           originalSetActivePage.apply(this, arguments);
         }
-        if (pageId === 'pollsPage' || pageId === 'developModulesPage') {
+        if (pageId === 'pollsPage' || pageId === 'builderModulesPage') {
           loadPolls();
         }
       };

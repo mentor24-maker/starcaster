@@ -16,7 +16,7 @@ App.richText = (function () {
   function makeToolbarButton(label, title, command) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'develop-richtext-tool';
+    button.className = 'builder-richtext-tool';
     button.textContent = label;
     button.title = title;
     button.setAttribute('data-richtext-command', command);
@@ -145,7 +145,7 @@ App.richText = (function () {
       ],
       editorProps: {
         attributes: {
-          class: 'develop-richtext-editor ProseMirror',
+          class: 'builder-richtext-editor ProseMirror',
         },
       },
     });

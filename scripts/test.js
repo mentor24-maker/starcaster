@@ -1,5 +1,5 @@
 const fs = require('fs');
-const developJs = fs.readFileSync('public/js/develop.js', 'utf8');
+const builderJs = fs.readFileSync('public/js/builder.js', 'utf8');
 
 global.window = { App: {} };
 global.App = global.window.App;
@@ -8,7 +8,7 @@ global.document = {
   getElementById: () => null
 };
 
-eval(developJs);
+eval(builderJs);
 
 const payload = {
   layoutSections: [
@@ -21,4 +21,4 @@ const payload = {
   ]
 };
 
-console.log(window.App.develop.buildModularPageTemplatePreviewMarkup(payload));
+console.log(window.App.builder.buildModularPageTemplatePreviewMarkup(payload));
