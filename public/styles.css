@@ -9784,7 +9784,7 @@ body.asset-associations-modal-open {
   place-items: center;
   padding: 24px;
   overflow: hidden;
-  z-index: 1000;
+  z-index: 10200;
 }
 .builder-react-root .builder-gallery-modal {
   width: min(1040px, 100%);
@@ -9820,9 +9820,11 @@ body.asset-associations-modal-open {
   border-radius: 999px;
 }
 .builder-react-root .builder-gallery-modal.builder-module-palette-modal {
-  width: min(1200px, calc(100vw - 32px));
+  width: min(1200px, calc(100vw - 48px));
   height: min(800px, 80dvh);
   max-height: min(800px, 80dvh);
+  max-width: min(1200px, calc(100vw - 48px));
+  margin: 0 auto;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -9865,19 +9867,6 @@ body.asset-associations-modal-open {
   height: calc(100dvh - 200px) !important;
   max-height: calc(100dvh - 200px);
   overflow: hidden;
-  overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  border-radius: 20px;
-}
-.builder-react-root .builder-gallery-modal.builder-module-palette-modal.is-anchored {
-  position: fixed;
-  margin: 0;
-  width: calc(100vw - 200px) !important;
-  max-width: calc(100vw - 200px);
-  overflow-x: hidden;
-  overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
