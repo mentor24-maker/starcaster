@@ -22,7 +22,7 @@ describe('builderAdminFetch', () => {
     const response = await builderAdminFetch('/api/admin/pages');
     const body = await response.json();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/develop/landing-pages', expect.objectContaining({ credentials: 'include' }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/builder/landing-pages', expect.objectContaining({ credentials: 'include' }));
     expect(body.pages).toEqual([{ id: 7, name: 'Home' }]);
   });
 
@@ -38,7 +38,7 @@ describe('builderAdminFetch', () => {
     });
     const body = await response.json();
 
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/develop/modules');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/builder/modules');
     expect(response.status).toBe(201);
     expect(body.cellModule).toEqual({ id: 'm1', name: 'Saved' });
   });

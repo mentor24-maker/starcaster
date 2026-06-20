@@ -2241,7 +2241,8 @@ body.asset-associations-modal-open {
   flex-direction: column;
   gap: 2px;
 }
-.builder-react-root .site-nav-dropdown:hover .site-nav-dropdown-menu {
+.builder-react-root .site-nav-dropdown:hover .site-nav-dropdown-menu,
+.builder-react-root .site-nav-dropdown:focus-within .site-nav-dropdown-menu {
   display: flex;
 }
 .builder-react-root .site-nav-dropdown-item {
@@ -23494,6 +23495,70 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   padding: 0.75rem 1rem;
   color: #587592;
   font-size: 0.9rem;
+}
+.site-nav-dropdown {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.site-nav-dropdown-trigger {
+  gap: 4px;
+}
+.site-nav-dropdown-arrow {
+  font-size: 0.7em;
+  line-height: 1;
+  opacity: 0.6;
+}
+.site-nav-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 160px;
+  background: var(--site-nav-bg, rgba(255, 255, 255, 0.94));
+  border: 1px solid rgba(9, 16, 24, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(9, 16, 24, 0.12);
+  backdrop-filter: blur(12px);
+  z-index: 200;
+  padding: 10px 6px 6px;
+  flex-direction: column;
+  gap: 2px;
+}
+.site-nav-dropdown:hover .site-nav-dropdown-menu,
+.site-nav-dropdown:focus-within .site-nav-dropdown-menu {
+  display: flex;
+}
+.site-nav-dropdown-item {
+  flex: unset;
+  min-height: 36px;
+  border-radius: 10px;
+  justify-content: flex-start;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+.site-nav--vertical .site-nav-link {
+  justify-content: flex-start;
+}
+.site-nav--vertical .site-nav-dropdown {
+  flex-direction: column;
+  align-items: stretch;
+}
+.site-nav--vertical .site-nav-dropdown-menu {
+  position: static;
+  display: flex;
+  transform: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 0 4px 16px;
+  background: transparent;
+  backdrop-filter: none;
+  z-index: auto;
+  min-width: 0;
+}
+.site-nav--vertical .site-nav-dropdown-item {
+  white-space: normal;
 }
 .builder-nav-menu-inline-preview {
   margin-top: 0.65rem;
