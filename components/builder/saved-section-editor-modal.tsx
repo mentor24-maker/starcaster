@@ -314,7 +314,7 @@ export function SavedSectionEditorModal({
     setIsSaving(true);
     setError(null);
     try {
-      await appApi(`/api/develop/saved-sections/${savedSectionId}`, {
+      await appApi(`/api/builder/saved-sections/${savedSectionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: localName || savedSectionName, section: draft }),

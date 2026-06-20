@@ -736,7 +736,7 @@ export type HeadingVariantPresetKey = keyof typeof HEADING_VARIANT_PRESETS;
 /**
  * Curated Google Fonts subset offered for heading-style modules. Keep this list
  * in sync with BUILDER_GOOGLE_FONTS_HREF (the stylesheet that actually loads the
- * families) and with the <link> tags in src/layout.html / public/develop-preview.html.
+ * families) and with the <link> tags in src/layout.html / public/builder-preview.html.
  */
 export const BUILDER_HEADING_FONTS = [
   { key: "", label: "Default (theme)", stack: "" },

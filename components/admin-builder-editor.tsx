@@ -25,7 +25,7 @@ import {
   type BuilderTemplateRecord,
   type BuilderTemplateSection,
   type BuilderTheme,
-  type DevelopThemeSummary
+  type BuilderThemeSummary
 } from "@/lib/builder-template";
 import { getDefaultEmailTemplateName, type BuilderEmailFunction } from "@/lib/builder-email-template";
 import { inferModuleClassFromBuilderModules, resolveModuleClassForBuilderModule } from "@/lib/module-class-triggers";
@@ -99,7 +99,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
   const [acquireRuns, setAcquireRuns] = useState<AcquireRunSummary[]>([]);
-  const [developThemes, setDevelopThemes] = useState<DevelopThemeSummary[]>([]);
+  const [builderThemes, setBuilderThemes] = useState<BuilderThemeSummary[]>([]);
   const [pageThemeId, setPageThemeId] = useState("");
   const [pages, setPages] = useState<BuilderPageRecord[]>([]);
   const [cellModules, setCellModules] = useState<BuilderCellModuleRecord[]>([]);
@@ -157,8 +157,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   // Falls back to the first available theme so swatches always appear when a single theme
   // is loaded (theme_id column may not be persisted yet if migration hasn't run).
   const activeTheme = pageThemeId
-    ? developThemes.find((t) => t.id === pageThemeId) ?? developThemes[0] ?? null
-    : developThemes[0] ?? null;
+    ? builderThemes.find((t) => t.id === pageThemeId) ?? builderThemes[0] ?? null
+    : builderThemes[0] ?? null;
   const rteThemeColors = [
     { label: "Primary", hex: activeTheme?.primaryColor ?? "" },
     { label: "Secondary", hex: activeTheme?.secondaryColor ?? "" },
@@ -203,10 +203,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   async function loadDevelopThemes() {
     try {
       const response = await builderAdminFetch("/api/admin/themes", { cache: "no-store" });
-      const data = await readAdminJson<{ themes?: DevelopThemeSummary[]; error?: string }>(response, "Failed to load themes.");
-      setDevelopThemes(data.themes ?? []);
+      const data = await readAdminJson<{ themes?: BuilderThemeSummary[]; error?: string }>(response, "Failed to load themes.");
+      setBuilderThemes(data.themes ?? []);
     } catch {
-      setDevelopThemes([]);
+      setBuilderThemes([]);
     }
   }
 
@@ -271,12 +271,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   // theme data so changes made in the Themes editor (link underline, fonts, etc.) are
   // reflected without the user having to manually re-apply the theme.
   useEffect(() => {
-    if (!pageThemeId || developThemes.length === 0) return;
-    const found = developThemes.find((t) => t.id === pageThemeId);
+    if (!pageThemeId || builderThemes.length === 0) return;
+    const found = builderThemes.find((t) => t.id === pageThemeId);
     if (found?.typography) {
       setDraft((c) => ({ ...c, theme: { ...c.theme, typography: found.typography! } }));
     }
-  }, [pageThemeId, developThemes]);
+  }, [pageThemeId, builderThemes]);
 
   useEffect(() => {
     const handler = () => setShowBulkCreate(true);
@@ -1357,7 +1357,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   function applyThemeToPage(themeId: string) {
     setPageThemeId(themeId);
     if (!themeId) return;
-    const found = developThemes.find((t) => t.id === themeId);
+    const found = builderThemes.find((t) => t.id === themeId);
     if (found?.typography) {
       setDraft((c) => ({ ...c, theme: { ...c.theme, typography: found.typography! } }));
     }
@@ -1670,7 +1670,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     themeId?: string,
   ): Promise<BulkCreateResult[]> {
     const template = pageLayoutTemplates.find((t) => t.id === templateId) ?? null;
-    const selectedTheme = themeId ? developThemes.find((t) => t.id === themeId) : null;
+    const selectedTheme = themeId ? builderThemes.find((t) => t.id === themeId) : null;
     const effectiveTheme = selectedTheme?.typography
       ? { ...(template?.theme ?? createDefaultTheme()), typography: selectedTheme.typography }
       : (template?.theme ?? createDefaultTheme());
@@ -1830,7 +1830,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
       isEmailTemplateDraft ? "email" : previewDevice
     );
-    window.open(`${window.location.origin}/develop-preview.html`, "_blank");
+    window.open(`${window.location.origin}/builder-preview.html`, "_blank");
   }
 
   function openTemplatePreview(template: BuilderTemplateRecord) {
@@ -1839,7 +1839,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
       template.templateKind === "email" ? "email" : previewDevice
     );
-    window.open(`${window.location.origin}/develop-preview.html`, "_blank");
+    window.open(`${window.location.origin}/builder-preview.html`, "_blank");
   }
 
   function openPagePreview(slug: string) {
@@ -1851,7 +1851,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
       JSON.stringify({ name: page.name, pageBackground: page.pageBackground, theme: page.theme, layoutSections: page.layoutSections })
     );
     window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, previewDevice);
-    window.open(`${window.location.origin}/develop-preview.html`, "_blank");
+    window.open(`${window.location.origin}/builder-preview.html`, "_blank");
   }
 
   // --- Drag & drop ---
@@ -2076,7 +2076,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           templates={pageLayoutTemplates}
           savedSections={savedSections}
           acquireRuns={acquireRuns}
-          themes={developThemes}
+          themes={builderThemes}
           onBack={() => setShowBulkCreate(false)}
           onRefreshRuns={() => void loadAcquireRuns()}
           onBulkCreatePages={(templateId, items, themeId) => bulkCreatePages(templateId, items, themeId)}
@@ -2087,7 +2087,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
         <BuilderPageList
           pages={pages}
           templates={pageLayoutTemplates}
-          themes={developThemes}
+          themes={builderThemes}
           selectedPageId={selectedPageId}
           draftName={draft.name}
           pageBackground={draft.pageBackground}

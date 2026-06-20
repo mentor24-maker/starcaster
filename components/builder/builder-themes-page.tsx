@@ -127,7 +127,7 @@ export function BuilderThemesPage() {
 
   const loadThemes = useCallback(async () => {
     try {
-      const res = await appApi("/api/develop/themes");
+      const res = await appApi("/api/builder/themes");
       const list: DevelopThemeRecord[] = unwrapEnvelope(res, "themes") ?? [];
       setThemes(list);
     } catch {
@@ -161,8 +161,8 @@ export function BuilderThemesPage() {
     setStatus(null);
     const isNew = !draft.id;
     const url = isNew
-      ? "/api/develop/themes"
-      : `/api/develop/themes/${encodeURIComponent(draft.id)}`;
+      ? "/api/builder/themes"
+      : `/api/builder/themes/${encodeURIComponent(draft.id)}`;
     const method = isNew ? "POST" : "PATCH";
     try {
       const res = await appApi(url, {
@@ -190,7 +190,7 @@ export function BuilderThemesPage() {
     if (!window.confirm(`Delete theme "${draft.name || draft.id}"?`)) return;
     setIsSaving(true);
     try {
-      await appApi(`/api/develop/themes/${encodeURIComponent(draft.id)}`, { method: "DELETE" });
+      await appApi(`/api/builder/themes/${encodeURIComponent(draft.id)}`, { method: "DELETE" });
       await loadThemes();
       handleNew();
       setStatus({ message: "Theme deleted", isError: false });

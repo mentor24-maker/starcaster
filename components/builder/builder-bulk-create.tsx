@@ -1,4 +1,4 @@
-import type { BuilderPageRecord, BuilderSavedSectionRecord, BuilderTemplateRecord, DevelopThemeSummary } from "@/lib/builder-template";
+import type { BuilderPageRecord, BuilderSavedSectionRecord, BuilderTemplateRecord, BuilderThemeSummary } from "@/lib/builder-template";
 import { useEffect, useMemo, useState } from "react";
 import { CONTENT_DISPLAY_MODELS } from "./builder-content-models";
 import type { BuilderMenuItem } from "./builder-menu";
@@ -34,7 +34,7 @@ type BuilderBulkCreateProps = {
   templates: BuilderTemplateRecord[];
   savedSections: BuilderSavedSectionRecord[];
   acquireRuns: AcquireRunSummary[];
-  themes: DevelopThemeSummary[];
+  themes: BuilderThemeSummary[];
   onBack: () => void;
   onRefreshRuns?: () => void;
   onBulkCreatePages: (templateId: string, items: BulkCreateItem[], themeId?: string) => Promise<BulkCreateResult[]>;

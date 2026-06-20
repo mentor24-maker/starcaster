@@ -201,7 +201,7 @@ export function BuilderFormsPage() {
   const loadAll = useCallback(async () => {
     try {
       const [formsRes, ctasRes, assetsRes] = await Promise.allSettled([
-        appApi("/api/develop/forms"),
+        appApi("/api/builder/forms"),
         appApi("/api/messaging/ctas?limit=200"),
         appApi("/api/assets"),
       ]);
@@ -269,7 +269,7 @@ export function BuilderFormsPage() {
     setIsSaving(true);
     setStatus(null);
     const isNew = !draft.id;
-    const url = isNew ? "/api/develop/forms" : `/api/develop/forms/${encodeURIComponent(draft.id)}`;
+    const url = isNew ? "/api/builder/forms" : `/api/builder/forms/${encodeURIComponent(draft.id)}`;
     const resolvedSubmitLabel = ctaLabel || draft.submitLabel || getTemplate(draft.formType).defaultSubmitLabel;
     const payload = {
       name: draft.name.trim(),
@@ -308,7 +308,7 @@ export function BuilderFormsPage() {
   async function handleDelete(form: DevelopFormRecord) {
     if (!window.confirm(`Delete form "${form.name || form.id}"?`)) return;
     try {
-      await appApi(`/api/develop/forms/${encodeURIComponent(form.id)}`, { method: "DELETE" });
+      await appApi(`/api/builder/forms/${encodeURIComponent(form.id)}`, { method: "DELETE" });
       if (draft?.id === form.id) setDraft(null);
       await loadAll();
       setStatus({ message: "Form deleted", isError: false });
@@ -320,7 +320,7 @@ export function BuilderFormsPage() {
   async function handleClone(form: DevelopFormRecord) {
     try {
       const payload = { ...form, id: undefined, name: form.name };
-      await appApi("/api/develop/forms", {
+      await appApi("/api/builder/forms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
