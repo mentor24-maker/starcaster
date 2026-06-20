@@ -13516,7 +13516,7 @@ App.builder = (function () {
     init,
     refresh,
     onPageActivated: async function onPageActivated(pageId) {
-      await refresh();
+      try { await refresh(); } catch (_) {}
       if (pageId === 'builderThemesPage') mountThemesReact();
       else if (pageId === 'builderFormsPage') mountFormsReact();
       else if (pageId === 'builderBuilderWorkspacePage') {

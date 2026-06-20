@@ -383,7 +383,8 @@
   gap: 2px;
 }
 
-.builder-react-root .site-nav-dropdown:hover .site-nav-dropdown-menu {
+.builder-react-root .site-nav-dropdown:hover .site-nav-dropdown-menu,
+.builder-react-root .site-nav-dropdown:focus-within .site-nav-dropdown-menu {
   display: flex;
 }
 
