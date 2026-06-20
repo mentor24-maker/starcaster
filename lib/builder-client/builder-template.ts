@@ -64,6 +64,10 @@ export type BuilderTemplateModule = {
   name: string;
   text: string;
   settings: Record<string, string>;
+  /** ID of the BuilderCellModuleRecord this was inserted from, if any. */
+  savedModuleId?: string;
+  /** When true, push operations from the canonical source skip this instance. */
+  canonicalLocked?: boolean;
 };
 
 export type BackgroundSettings = {

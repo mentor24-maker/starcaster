@@ -2155,6 +2155,20 @@ export function BuilderModuleCard({
             <strong>{module.name || module.type}</strong>
             <span>{module.type}</span>
           </div>
+          {module.savedModuleId ? (
+            <button
+              aria-label={module.canonicalLocked ? "Unlock: allow push updates from canonical" : "Lock: block push updates from canonical"}
+              className={`builder-canonical-badge${module.canonicalLocked ? " builder-canonical-badge-locked" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdateModule((m) => ({ ...m, canonicalLocked: !m.canonicalLocked }));
+              }}
+              title={module.canonicalLocked ? "Custom (push updates blocked) — click to re-link" : "Linked to canonical — click to lock"}
+              type="button"
+            >
+              {module.canonicalLocked ? "Custom" : "Linked"}
+            </button>
+          ) : null}
         </div>
         {hideHeaderActions ? (
           <div className="builder-section-actions">
