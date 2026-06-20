@@ -22,6 +22,55 @@ const FALLBACK_POSITION: CSSProperties = {
   visibility: "visible"
 };
 
+// After computing an ideal vertical center for the floating button, nudge it
+// to avoid landing directly over a section-header action-icon bar.
+function avoidSectionBars(idealTop: number, buttonHeight = 50): number {
+  const halfH = buttonHeight / 2;
+
+  const barRects = Array.from(
+    document.querySelectorAll<HTMLElement>(".builder-section-header")
+  )
+    .map(el => el.getBoundingClientRect())
+    .filter(r => r.height > 0 && r.bottom > 0 && r.top < window.innerHeight);
+
+  if (barRects.length === 0) return idealTop;
+
+  function overlapsAny(top: number): boolean {
+    const bTop = top - halfH;
+    const bBot = top + halfH;
+    return barRects.some(br => bBot > br.top + 4 && bTop < br.bottom - 4);
+  }
+
+  if (!overlapsAny(idealTop)) return idealTop;
+
+  const overlapping = barRects.filter(br => {
+    const bTop = idealTop - halfH;
+    const bBot = idealTop + halfH;
+    return bBot > br.top + 4 && bTop < br.bottom - 4;
+  });
+
+  const groupTop = Math.min(...overlapping.map(br => br.top));
+  const groupBottom = Math.max(...overlapping.map(br => br.bottom));
+
+  const MARGIN = 8;
+  const above = groupTop - halfH - MARGIN;
+  const below = groupBottom + halfH + MARGIN;
+
+  const clamp = (t: number) => Math.min(Math.max(t, 96), window.innerHeight - 96);
+  const aboveClamped = clamp(above);
+  const belowClamped = clamp(below);
+
+  const useAbove = Math.abs(above - idealTop) <= Math.abs(below - idealTop);
+  const candidate = useAbove ? aboveClamped : belowClamped;
+
+  if (overlapsAny(candidate)) {
+    const other = useAbove ? belowClamped : aboveClamped;
+    return overlapsAny(other) ? idealTop : other;
+  }
+
+  return candidate;
+}
+
 function readShellAnchorPosition(): CSSProperties {
   // If an edit panel was just opened, anchor the button at that header's level.
   const focused = document.querySelector<HTMLElement>("[data-builder-focus]");
@@ -29,8 +78,9 @@ function readShellAnchorPosition(): CSSProperties {
     const fr = focused.getBoundingClientRect();
     const mid = (fr.top + fr.bottom) / 2;
     if (mid > 40 && mid < window.innerHeight - 40) {
+      const top = avoidSectionBars(Math.min(Math.max(mid, 96), window.innerHeight - 96));
       return {
-        top: `${Math.min(Math.max(mid, 96), window.innerHeight - 96)}px`,
+        top: `${top}px`,
         right: "60px",
         left: "auto",
         transform: "translateY(-50%)",
@@ -59,7 +109,7 @@ function readShellAnchorPosition(): CSSProperties {
   const anchorMid = clampedBottom > clampedTop
     ? (clampedTop + clampedBottom) / 2
     : window.innerHeight / 2;
-  const top = Math.min(Math.max(anchorMid, 96), window.innerHeight - 96);
+  const top = avoidSectionBars(Math.min(Math.max(anchorMid, 96), window.innerHeight - 96));
   const preferredLeft = rect.right + gap;
   const maxLeft = window.innerWidth - buttonReserve;
 
