@@ -268,6 +268,12 @@ async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
 
+  // Legacy /api/develop/* paths (pre-migration) — alias to /api/builder/*
+  // Excludes /api/develop/devAgent which has its own route module.
+  if (pathname.startsWith('/api/develop/') && !pathname.startsWith('/api/develop/devAgent')) {
+    pathname = pathname.replace('/api/develop/', '/api/builder/');
+  }
+
   if (pathname === '/api/builder/forms' && requestMethod === 'GET') {
     const forms = await listForms(scope);
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
@@ -633,6 +639,10 @@ async function handle(req, res, pathname, method) {
     if (body.settings && typeof body.settings === 'object') input.settings = body.settings;
     const module = await updateModule(moduleMatch[1], input, scope);
     if (!module) return sendErr(res, 500, 'Could not update module'), true;
+    const canonicalModules = Array.isArray(module.modules) ? module.modules : [];
+    if (canonicalModules.length > 0) {
+      pushCanonicalModuleToPages(moduleMatch[1], canonicalModules, scope).catch(() => {});
+    }
     return sendOk(res, 200, module, { module }), true;
   }
 
@@ -640,18 +650,6 @@ async function handle(req, res, pathname, method) {
     const del = await deleteModule(moduleMatch[1], scope);
     if (!del.ok) return sendErr(res, 500, del.error || 'Could not delete module'), true;
     return sendOk(res, 200, { id: moduleMatch[1] }, { module: { id: moduleMatch[1] } }), true;
-  }
-
-  const modulePushMatch = pathname.match(/^\/api\/builder\/modules\/([^/]+)\/push$/);
-  if (modulePushMatch && requestMethod === 'POST') {
-    const canonicalId = modulePushMatch[1];
-    const allModules = await listModules(scope);
-    const canonical = allModules.find((m) => m.id === canonicalId);
-    if (!canonical) return sendErr(res, 404, 'Module not found'), true;
-    const canonicalModules = Array.isArray(canonical.modules) ? canonical.modules : [];
-    if (canonicalModules.length === 0) return sendErr(res, 400, 'Canonical module has no content to push'), true;
-    const result = await pushCanonicalModuleToPages(canonicalId, canonicalModules, scope);
-    return sendOk(res, 200, result, { push: result }), true;
   }
 
   const classMatch = pathname.match(/^\/api\/builder\/module-classes\/([^/]+)$/);
@@ -1732,7 +1730,7 @@ async function handle(req, res, pathname, method) {
 const manifest = {
   id: 'builder',
   label: 'Builder',
-  prefixes: ['/api/builder'],
+  prefixes: ['/api/builder', '/api/develop'],
 };
 
 module.exports = { handle, manifest };

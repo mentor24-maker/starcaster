@@ -52,7 +52,6 @@ type BuilderModuleRepositoryListProps = {
   onDeleteSavedModule: (cellModuleId: string, currentName: string) => void;
   onSaveSavedSection: (sectionId: string, name: string, section: BuilderTemplateSection) => void;
   onDeleteSavedSection: (sectionId: string, currentName: string) => void;
-  onPushSavedModule: (cellModuleId: string) => void;
   onModuleEditorFocusChange: (focus: BuilderModuleEditorFocus | null, syncOnly?: boolean) => void;
   onRepositoryEditingActiveChange: (active: boolean) => void;
 };
@@ -923,8 +922,7 @@ function RepositoryTable({
   onOpenEditingSocialIconGallery,
   onSaveSavedModule,
   onCloneSavedModule,
-  onDeleteSavedModule,
-  onPushSavedModule
+  onDeleteSavedModule
 }: {
   emptyLabel: string;
   items: BuilderCellModuleRecord[];
@@ -951,7 +949,6 @@ function RepositoryTable({
   onSaveSavedModule: BuilderModuleRepositoryListProps["onSaveSavedModule"];
   onCloneSavedModule: BuilderModuleRepositoryListProps["onCloneSavedModule"];
   onDeleteSavedModule: BuilderModuleRepositoryListProps["onDeleteSavedModule"];
-  onPushSavedModule: BuilderModuleRepositoryListProps["onPushSavedModule"];
 }) {
   const [filters, setFilters] = useState<RepositoryFilters>(EMPTY_REPOSITORY_FILTERS);
   const [sortKey, setSortKey] = useState<RepositorySortKey>("name");
@@ -1149,16 +1146,6 @@ function RepositoryTable({
                           type="button"
                         >
                           ⧉
-                        </button>
-                        <button
-                          aria-label="Push to all linked pages"
-                          className="polls-icon-button"
-                          disabled={isSaving}
-                          onClick={() => onPushSavedModule(item.id)}
-                          title="Push canonical to all linked pages"
-                          type="button"
-                        >
-                          ↑
                         </button>
                         <button
                           aria-label="Delete saved module"
@@ -1554,7 +1541,6 @@ export function BuilderModuleRepositoryList({
   onDeleteSavedModule,
   onSaveSavedSection,
   onDeleteSavedSection,
-  onPushSavedModule,
   onModuleEditorFocusChange,
   onRepositoryEditingActiveChange
 }: BuilderModuleRepositoryListProps) {
@@ -2348,7 +2334,6 @@ export function BuilderModuleRepositoryList({
         editingModules={editingModules}
         onDeleteSavedModule={onDeleteSavedModule}
         onCloneSavedModule={onCloneSavedModule}
-        onPushSavedModule={onPushSavedModule}
         onCancelEditing={cancelEditing}
         onSaveSavedModule={onSaveSavedModule}
         onSetEditingName={setEditingName}
@@ -2381,7 +2366,6 @@ export function BuilderModuleRepositoryList({
         editingModules={editingModules}
         onDeleteSavedModule={onDeleteSavedModule}
         onCloneSavedModule={onCloneSavedModule}
-        onPushSavedModule={onPushSavedModule}
         onCancelEditing={cancelEditing}
         onSaveSavedModule={onSaveSavedModule}
         onSetEditingName={setEditingName}
