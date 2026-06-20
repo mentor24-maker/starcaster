@@ -724,12 +724,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     }));
   }
 
-  function cloneModulesForColumn(modules: BuilderTemplateModule[], column: string) {
+  function cloneModulesForColumn(modules: BuilderTemplateModule[], column: string, savedModuleId?: string) {
     return modules.map((module, index) => ({
       ...module,
       id: `${module.type}-${Date.now()}-${index}`,
       column,
-      settings: { ...module.settings }
+      settings: { ...module.settings },
+      ...(savedModuleId ? { savedModuleId } : {})
     }));
   }
 
@@ -798,7 +799,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
 
     updateSection(sectionId, (section) => ({
       ...section,
-      modules: [...section.modules, ...cloneModulesForColumn(saved.modules, column)]
+      modules: [...section.modules, ...cloneModulesForColumn(saved.modules, column, saved.id)]
     }));
     setMessage(`Inserted "${saved.name}" into the ${column} cell.`);
     setError(null);
@@ -817,7 +818,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
 
     updateSection(sectionId, (section) => ({
       ...section,
-      modules: [...section.modules, ...cloneModulesForColumn(saved.modules, column)]
+      modules: [...section.modules, ...cloneModulesForColumn(saved.modules, column, saved.id)]
     }));
     setMessage(`Inserted module "${saved.name}" into the ${column} cell.`);
     setError(null);
@@ -1050,6 +1051,28 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
       setMessage(`Deleted saved module "${currentName}".`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete saved module.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function pushSavedModule(cellModuleId: string) {
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await builderAdminFetch(`/api/admin/cell-modules/${cellModuleId}/push`, { method: "POST" });
+      const data = await readAdminJson<{ error?: string; push?: { updatedPages: number; updatedTemplates: number; updatedInstances: number; lockedInstances: number } }>(response, "Failed to push module.");
+      const r = data.push ?? { updatedPages: 0, updatedTemplates: 0, updatedInstances: 0, lockedInstances: 0 };
+      const parts: string[] = [];
+      if (r.updatedPages > 0) parts.push(`${r.updatedPages} page${r.updatedPages !== 1 ? "s" : ""}`);
+      if (r.updatedTemplates > 0) parts.push(`${r.updatedTemplates} template${r.updatedTemplates !== 1 ? "s" : ""}`);
+      const summary = parts.length > 0 ? `Updated ${parts.join(" and ")}.` : "No linked instances found.";
+      const locked = r.lockedInstances > 0 ? ` (${r.lockedInstances} locked instance${r.lockedInstances !== 1 ? "s" : ""} skipped)` : "";
+      setMessage(`Push complete. ${summary}${locked}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to push module.");
     } finally {
       setIsSaving(false);
     }
@@ -2068,6 +2091,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onSaveCreatedModule={(source, module) => void saveCreatedModule(source, module)}
           onSaveSavedModule={(id, name, moduleClass, modules) => void saveSavedModule(id, name, moduleClass, modules)}
           onSaveSavedSection={(id, name, section) => void saveSavedSection(id, name, section)}
+          onPushSavedModule={(id) => void pushSavedModule(id)}
           onModuleEditorFocusChange={handleModuleEditorFocusChange}
           onRepositoryEditingActiveChange={handleRepositoryEditingActiveChange}
         />
