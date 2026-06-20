@@ -2936,6 +2936,1109 @@
         <p>Audio module placeholder.</p>
       </section>
 
+      <!-- INJECTED PAGE: builder.html -->
+
+      <section id="builderPage" class="app-page hidden">
+        <h2>Builder</h2>
+        <p>Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
+        <div class="builder-flow-map">
+          <button class="btn builder-flow-node builder-flow-node-top" type="button" onclick="App.setActivePage('builderTemplatesPage')">
+            <span class="builder-flow-node-kicker">Structure</span>
+            <span class="builder-flow-node-title">Templates</span>
+          </button>
+          <button class="btn builder-flow-node builder-flow-node-upper-right" type="button" onclick="App.builder.openFormsPage()">
+            <span class="builder-flow-node-kicker">Capture</span>
+            <span class="builder-flow-node-title">Forms</span>
+          </button>
+          <button class="btn builder-flow-node builder-flow-node-lower-right" type="button" onclick="App.setActivePage('builderManageLandingPagesPage')">
+            <span class="builder-flow-node-kicker">Publish</span>
+            <span class="builder-flow-node-title">Pages</span>
+          </button>
+          <button class="btn builder-flow-node builder-flow-node-lower-left" type="button" onclick="App.setActivePage('builderToolsPage')">
+            <span class="builder-flow-node-kicker">Extend</span>
+            <span class="builder-flow-node-title">Extensions</span>
+          </button>
+          <button class="btn builder-flow-node builder-flow-node-upper-left" type="button" onclick="App.builder.openAgentsPage()">
+            <span class="builder-flow-node-kicker">Automate</span>
+            <span class="builder-flow-node-title">Agents</span>
+          </button>
+        </div>
+        <div class="page-heading-actions" style="justify-content:center; margin-top:1rem;">
+          <button type="button" onclick="App.setActivePage('builderBuilderWorkspacePage')" class="btn btn-primary">Open Builder Workspace</button>
+          <button type="button" onclick="App.setActivePage('builderModulesPage')" class="btn">Open Modules Library</button>
+        </div>
+      </section>
+      <section id="builderBuilderWorkspacePage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Workspace</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <div id="builderReactRootHub" class="builder-react-root hidden" aria-hidden="true"></div>
+      </section>
+      <section id="builderModulesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Modules</h2>
+          <div class="page-heading-actions">
+            <button id="builderModulesCreateBtn" type="button" class="btn">Create Module</button>
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <p>Build reusable content modules for modular page layouts. The saved library is the important part; this studio is where we configure each module type as we develop it.</p>
+        <section class="builder-template-section">
+          <div class="builder-template-section-header-row">
+            <button
+              id="builderModulesLibraryToggle"
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="true"
+              aria-controls="builderModulesLibraryBody"
+            >
+              <span class="accordion-title">Saved Modules</span>
+            </button>
+          </div>
+          <div id="builderModulesLibraryBody" class="builder-template-section-body">
+            <!-- START INCLUDED: builder/modules-list.html -->
+<div id="builderModulesGridMountPoint"></div>
+
+<!-- END INCLUDED: builder/modules-list.html -->
+          </div>
+        </section>
+
+        <section class="builder-template-section">
+          <div class="builder-template-section-header-row">
+            <button
+              id="builderSavedCellsToggle"
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="true"
+              aria-controls="builderSavedCellsBody"
+            >
+              <span class="accordion-title">Saved Cells</span>
+            </button>
+          </div>
+          <div id="builderSavedCellsBody" class="builder-template-section-body">
+            <div id="builderSavedCellsGridMountPoint"></div>
+          </div>
+        </section>
+
+        <section class="builder-template-section">
+          <div class="builder-template-section-header-row">
+            <button
+              id="builderSavedSectionsLibraryToggle"
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="true"
+              aria-controls="builderSavedSectionsLibraryBody"
+            >
+              <span class="accordion-title">Saved Sections</span>
+            </button>
+          </div>
+          <div id="builderSavedSectionsLibraryBody" class="builder-template-section-body">
+            <div id="builderSavedSectionsGridMountPoint"></div>
+          </div>
+        </section>
+
+        <section id="builderPollsSection" class="builder-template-section hidden">
+          <div class="builder-template-section-header-row" style="display:flex; justify-content:space-between; align-items:center;">
+            <button
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="true"
+            >
+              <span class="accordion-title">Uploaded Polls</span>
+            </button>
+            <button id="openCreatePollBtn" type="button" class="btn" style="margin-right: 1rem;">Create Poll</button>
+          </div>
+          <div class="builder-template-section-body">
+            <!-- START INCLUDED: builder/polls-list.html -->
+<div class="data-table-container">
+  <div class="table-actions-row">
+    <div class="table-filters"></div>
+    <div class="table-actions">
+      <button type="button" class="btn" id="openImportPollsBtn" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">Import CSV</button>
+    </div>
+  </div>
+  
+  <div id="pollsGridMountPoint"></div>
+</div>
+
+<!-- END INCLUDED: builder/polls-list.html -->
+          </div>
+        </section>
+
+        <dialog id="builderModulesModal" class="builder-nested-modal-dialog">
+          <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:800px;width:90vw;">
+            <div class="page-heading-row" style="margin-bottom:1rem;">
+              <h3 style="margin:0;">Module Studio</h3>
+              <button type="button" class="btn" onclick="document.getElementById('builderModulesModal').close()">Close</button>
+            </div>
+            <!-- START INCLUDED: builder/modules-form.html -->
+<form id="builderModulesForm" class="standard-form-grid">
+  <input id="builderModulesIdInput" type="hidden" />
+  
+  <label for="builderModulesNameInput">Module Name</label>
+  <input id="builderModulesNameInput" type="text" />
+  
+  <label for="builderModulesTypeSelect">Module Type</label>
+  <div class="form-row-flex">
+    <select id="builderModulesTypeSelect" style="flex:1;"></select>
+    <button id="builderManageClassesBtn" type="button" class="btn">Manage Classes</button>
+  </div>
+
+  <label for="builderModulesClassSelect">Module Class (Optional)</label>
+  <select id="builderModulesClassSelect">
+    <option value="">None</option>
+  </select>
+  
+  <div class="standard-form-grid-full">
+    <div id="builderModulesTypeHelp" class="meta"></div>
+  </div>
+  
+  <div id="builderModulesSettingsFields" class="standard-form-grid-full grid-form"></div>
+  
+  <div></div>
+  <button type="submit" class="btn btn-primary">Save Module</button>
+</form>
+
+<!-- END INCLUDED: builder/modules-form.html -->
+          </div>
+        </dialog>
+
+        <dialog id="pollFormModal" class="builder-nested-modal-dialog">
+          <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:800px;width:90vw;">
+            <div class="page-heading-row" style="margin-bottom:1rem;">
+              <h3 style="margin:0;">Poll Editor</h3>
+              <button type="button" id="closePollFormBtn" class="btn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <!-- START INCLUDED: builder/polls-form.html -->
+<form id="pollForm" class="standard-form-grid">
+  <input type="hidden" id="pollEditId" name="id" />
+  
+  <label>Question *</label>
+  <input type="text" id="pollQuestion" name="question" required placeholder="What is your favorite color?" />
+  
+  <label>Category</label>
+  <input type="text" id="pollCategory" name="category" placeholder="General" />
+  
+  <div style="grid-column: 1 / -1; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Options</h3>
+    <div id="pollOptionsContainer" style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <!-- Options injected here -->
+    </div>
+    <button type="button" id="addPollOptionBtn" class="btn" style="margin-top: 1rem; font-size: 0.85rem;">+ Add Option</button>
+  </div>
+  
+  <div></div>
+  <button type="submit" class="btn btn-primary" id="savePollBtn" style="margin-top: 1.5rem;">Save Poll</button>
+</form>
+
+<!-- Import Polls CSV Modal is placed right here as a nested dialog, or it can be a separate include -->
+<dialog id="importPollsModal" class="builder-nested-modal-dialog">
+  <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:600px;width:90vw;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
+      <h2 style="margin: 0;">Import Polls from CSV</h2>
+      <button type="button" id="closeImportPollsBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+    </div>
+    
+    <div style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--muted);">
+      Upload a CSV file to bulk import polls. The CSV should contain headers like <strong>ID, Category, Question, Option A, Option B</strong>.
+    </div>
+    
+    <form id="importPollsForm" class="standard-form-grid">
+      <label>CSV File *</label>
+      <input type="file" id="pollsCsvFile" accept=".csv" required />
+      
+      <div id="pollsCsvPreview" style="grid-column: 1/-1; font-size: 0.85rem; background: var(--bg-alt); padding: 1rem; border-radius: 6px; display: none;"></div>
+      
+      <div></div>
+      <button type="submit" class="btn btn-primary" id="uploadPollsCsvBtn">Import</button>
+    </form>
+  </div>
+</dialog>
+
+<!-- END INCLUDED: builder/polls-form.html -->
+          </div>
+        </dialog>
+
+        <dialog id="builderManageClassesModal" class="builder-nested-modal-dialog">
+          <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:520px;">
+            <div class="page-heading-row" style="margin-bottom:1rem;">
+              <h3 style="margin:0;">Manage Module Classes</h3>
+              <button id="builderManageClassesCloseBtn" type="button" class="btn">Close</button>
+            </div>
+            <div id="builderReactRootModuleClasses" class="builder-react-root"></div>
+          </div>
+        </dialog>
+
+      </section>
+      <section id="builderThemesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Themes</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <div id="builderReactRootThemes" class="builder-react-root"></div>
+      </section>
+      <section id="builderManageLandingPagesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Pages</h2>
+          <div class="page-heading-actions">
+            <button id="builderOpenCreateLandingPageBtn" type="button" class="btn">Create Page</button>
+            <button type="button" onclick="App.builder.openBulkCreateFromManagePage();" class="btn">Bulk Create</button>
+            <button type="button" onclick="App.builder.openPopulateFromWebPage();" class="btn">Populate from Web</button>
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="table-filter-row">
+                <th><input id="builderLandingPagesSelectAllVisible" type="checkbox" aria-label="Select all visible pages" /></th>
+                <th><input id="builderLandingPagesNameFilter" placeholder="Page Name" /></th>
+                <th>
+                  <select id="builderLandingPagesTemplateFilter">
+                    <option value="">All Templates</option>
+                  </select>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th class="builder-pages-bulk-delete-cell"><button id="builderLandingPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button></th>
+              </tr>
+              <tr>
+                <th></th>
+                <th id="builderLandingPagesSortNameBtn">Name</th>
+                <th id="builderLandingPagesSortTemplateBtn">Template</th>
+                <th id="builderLandingPagesSortHeadlineBtn">Headline</th>
+                <th id="builderLandingPagesSortFormBtn">Form</th>
+                <th id="builderLandingPagesSortUpdatedBtn">Updated</th>
+                <th class="builder-pages-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="builderLandingPagesTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="builderPopulateFromWebPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManageLandingPagesPage">Builder: Pages</a> &rsaquo; Populate from Web</h2>
+          <div class="page-heading-actions">
+            <button id="builderPopulateRunBtn" type="button" class="btn" disabled>Run Populate</button>
+          </div>
+        </div>
+        <p>Match crawled pages to Builder pages by title, then inject each page's content as a Paragraph section. Use the diagnostics below to verify matches before running.</p>
+
+        <div class="standard-form-grid builder-populate-run-row" style="margin-bottom:1.5rem;">
+          <label for="builderPopulateRunSelect">Crawl Run</label>
+          <div class="builder-populate-run-controls">
+            <select id="builderPopulateRunSelect">
+              <option value="">Loading&hellip;</option>
+            </select>
+            <button id="builderPopulateDeleteRunBtn" type="button" class="btn btn-danger" disabled title="Delete this crawl run">Delete Run</button>
+            <button id="builderPopulatePurgeRunsBtn" type="button" class="btn" title="Delete all runs except the most recent">Purge Old</button>
+          </div>
+        </div>
+
+        <div id="builderPopulateDiagnostics" style="display:none;">
+
+          <div class="page-heading-row" style="margin-bottom:0.5rem;">
+            <h3 style="margin:0;">Exact Matches <span id="builderPopulateExactCount" class="badge"></span></h3>
+          </div>
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">Builder page name matches crawled URL slug or stripped title exactly. These will be populated when you click Run Populate.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Builder Page</th><th>Crawled Title</th><th>URL Slug</th><th>Matched By</th><th>Content</th></tr></thead>
+              <tbody id="builderPopulateExactBody"></tbody>
+            </table>
+          </div>
+
+          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
+            <h3 style="margin:0;">Partial Matches <span id="builderPopulatePartialCount" class="badge"></span></h3>
+          </div>
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">Builder page name is a substring match with a crawled page. Pages with exactly one candidate will also be populated; pages with multiple candidates need manual review.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Builder Page</th><th>Candidates</th><th>Matched By</th><th>Content</th></tr></thead>
+              <tbody id="builderPopulatePartialBody"></tbody>
+            </table>
+          </div>
+
+          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
+            <h3 style="margin:0;">Unmatched Builder Pages <span id="builderPopulateUnmatchedBuilderCount" class="badge"></span></h3>
+          </div>
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">No crawled page title or URL slug matched these Builder page names at all.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Builder Page Name</th><th>Slug</th></tr></thead>
+              <tbody id="builderPopulateUnmatchedBuilderBody"></tbody>
+            </table>
+          </div>
+
+          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
+            <h3 style="margin:0;">Unmatched Crawled Pages <span id="builderPopulateUnmatchedAcquiredCount" class="badge"></span></h3>
+          </div>
+          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These crawled pages were not used in any exact match.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Crawled Title</th><th>URL Slug</th><th>URL</th><th>Content</th></tr></thead>
+              <tbody id="builderPopulateUnmatchedAcquiredBody"></tbody>
+            </table>
+          </div>
+
+        </div>
+        <div id="builderPopulateDiagnosticsMsg" style="padding:1rem 0; color:#666;"></div>
+      </section>
+
+      <section id="builderLandingPagesBulkEditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManageLandingPagesPage">Builder: Pages</a></h2>
+        </div>
+        <p id="builderLandingPagesBulkEditSummary">No pages selected.</p>
+        <form id="builderLandingPagesBulkEditForm" class="standard-form-grid">
+          
+            <label for="builderLandingPagesBulkTemplateSelect">Template</label>
+            <select id="builderLandingPagesBulkTemplateSelect" name="template_id">
+              <option value="">Leave Unchanged</option>
+            </select>
+          
+          <div class="standard-form-grid-full builder-color-control">
+            <label for="builderLandingPagesBulkPrimaryColorInput" class="builder-color-control-label">
+              <span class="builder-color-control-icon" aria-hidden="true"></span>
+              Primary Color
+            </label>
+            <label class="checkbox-row">
+              <input id="builderLandingPagesBulkApplyPrimaryColor" name="apply_primary_color" type="checkbox" />
+              Apply Primary Color
+            </label>
+            <input id="builderLandingPagesBulkPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
+          </div>
+          <div class="standard-form-grid-full builder-color-control">
+            <label for="builderLandingPagesBulkBackgroundColorInput" class="builder-color-control-label">
+              <span class="builder-color-control-icon" aria-hidden="true"></span>
+              Background Color
+            </label>
+            <label class="checkbox-row">
+              <input id="builderLandingPagesBulkApplyBackgroundColor" name="apply_background_color" type="checkbox" />
+              Apply Background Color
+            </label>
+            <input id="builderLandingPagesBulkBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
+          </div>
+          <div class="standard-form-grid-full builder-color-control">
+            <label for="builderLandingPagesBulkAccentColorInput" class="builder-color-control-label">
+              <span class="builder-color-control-icon" aria-hidden="true"></span>
+              Accent Color
+            </label>
+            <label class="checkbox-row">
+              <input id="builderLandingPagesBulkApplyAccentColor" name="apply_accent_color" type="checkbox" />
+              Apply Accent Color
+            </label>
+            <input id="builderLandingPagesBulkAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
+          </div>
+          <div></div>
+              <button type="submit" class="btn btn-primary">Apply To Selected Pages</button>
+        </form>
+      </section>
+      <section id="builderLandingPagesPage" class="app-page hidden">
+        <div id="builderLandingPagesHeader" class="page-heading-row">
+          <h2 id="builderLandingPagesFormTitle">Builder: Create Page</h2>
+          <div class="page-heading-actions">
+            <button id="builderLandingPageHeaderPreviewBtn" type="button" class="btn">Preview</button>
+            <button id="builderLandingPageHeaderSaveBtn" type="button" class="btn btn-primary">Save Page</button>
+            
+          </div>
+        </div>
+        <div id="builderLandingPagesModularHost">
+          <div id="builderReactRootPage" class="builder-react-root hidden" aria-hidden="true"></div>
+        </div>
+        <form id="builderLandingPagesForm" class="standard-form-grid">
+          <input id="builderLandingPageIdInput" name="page_id" type="hidden" />
+          <div class="builder-landing-pages-grid">
+            <div class="builder-landing-pages-column">
+              <label for="builderLandingPageNameInput">Page Name</label>
+              <input id="builderLandingPageNameInput" name="page_name" required />
+              
+              <label for="builderLandingTemplateSelect">Template</label>
+              <select id="builderLandingTemplateSelect" name="template_id">
+                <option value="">Template</option>
+              </select>
+              
+              <div class="builder-color-control">
+                <label for="builderLandingPrimaryColorInput" class="builder-color-control-label">
+                  <span class="builder-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Primary Color
+                </label>
+                <input id="builderLandingPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
+              </div>
+              <div class="builder-color-control">
+                <label for="builderLandingBackgroundColorInput" class="builder-color-control-label">
+                  <span class="builder-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Background Color
+                </label>
+                <input id="builderLandingBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
+              </div>
+              <div class="builder-color-control">
+                <label for="builderLandingAccentColorInput" class="builder-color-control-label">
+                  <span class="builder-color-control-icon" aria-hidden="true"></span>
+                  Color Scheme: Accent Color
+                </label>
+                <input id="builderLandingAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
+              </div>
+              
+              <label for="builderLandingFormSelect">Form</label>
+              <select id="builderLandingFormSelect" name="form_id">
+                <option value="">Form</option>
+              </select>
+              
+              <label for="builderLandingLeadMagnetSelect">Lead Magnet</label>
+              <select id="builderLandingLeadMagnetSelect" name="lead_magnet_id">
+                <option value="">PDF</option>
+              </select>
+              
+              <label for="builderLandingCtaSelect">Call To Action</label>
+              <select id="builderLandingCtaSelect" name="cta_id">
+                <option value="">CTA</option>
+              </select>
+            </div>
+            
+            <div class="builder-landing-pages-column">
+              <label for="builderLandingHeadlineSelect">Headline</label>
+              <select id="builderLandingHeadlineSelect" name="headline_id">
+                <option value="">Headline</option>
+              </select>
+              
+              <label for="builderLandingPitchSelect">Pitch</label>
+              <select id="builderLandingPitchSelect" name="pitch_id">
+                <option value="">Pitch</option>
+              </select>
+              
+              <label for="builderLandingFeatureHeadlineSelect">Feature One Headline</label>
+              <select id="builderLandingFeatureHeadlineSelect" name="feature_headline_id">
+                <option value="">Feature One Headline</option>
+              </select>
+              
+              <label for="builderLandingFeatureSubheadingSelect">Feature One Sub-heading</label>
+              <select id="builderLandingFeatureSubheadingSelect" name="feature_subheading_id">
+                <option value="">Feature One Sub-heading</option>
+              </select>
+              
+              <label for="builderLandingHighlightHeadlineSelect">Feature Two Headline</label>
+              <select id="builderLandingHighlightHeadlineSelect" name="highlight_headline_id">
+                <option value="">Feature Two Headline</option>
+              </select>
+              
+              <label for="builderLandingHighlightPitchSelect">Feature Two Pitch</label>
+              <select id="builderLandingHighlightPitchSelect" name="highlight_pitch_id">
+                <option value="">Feature Two Pitch</option>
+              </select>
+              
+              <label for="builderLandingBodyHeadlineSelect">Body Headline</label>
+              <select id="builderLandingBodyHeadlineSelect" name="body_headline_id">
+                <option value="">Body Headline</option>
+              </select>
+              
+              <label for="builderLandingBodySubheadingSelect">Body Sub-heading</label>
+              <select id="builderLandingBodySubheadingSelect" name="body_subheading_id">
+                <option value="">Body Sub-heading</option>
+              </select>
+              
+              <label for="builderLandingBodyPitchSelect">Body Pitch</label>
+              <select id="builderLandingBodyPitchSelect" name="body_pitch_id">
+                <option value="">Body Pitch</option>
+              </select>
+            </div>
+            
+            <div class="builder-landing-pages-column">
+              <div class="builder-theme-asset-field">
+                <label for="builderLandingBannerImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Website Banner Image</label>
+                <select id="builderLandingBannerImageSelect" name="website_banner_image_id" class="hidden">
+                  <option value="">Website Banner Image</option>
+                </select>
+                <button id="builderLandingBannerImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Website Banner Image</button>
+                <div id="builderLandingBannerImagePreview" class="builder-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="builder-theme-asset-field">
+                <label for="builderLandingBackgroundImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Background Image</label>
+                <select id="builderLandingBackgroundImageSelect" name="background_image_id" class="hidden">
+                  <option value="">Background Image</option>
+                </select>
+                <button id="builderLandingBackgroundImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Background Image</button>
+                <div id="builderLandingBackgroundImagePreview" class="builder-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="builder-theme-asset-field">
+                <label for="builderLandingFeatureImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Feature Image</label>
+                <select id="builderLandingFeatureImageSelect" name="feature_image_id" class="hidden">
+                  <option value="">Feature Image</option>
+                </select>
+                <button id="builderLandingFeatureImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Feature Image</button>
+                <div id="builderLandingFeatureImagePreview" class="builder-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="builder-theme-asset-field">
+                <label for="builderLandingHighlightImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Highlight Image</label>
+                <select id="builderLandingHighlightImageSelect" name="highlight_image_id" class="hidden">
+                  <option value="">Highlight Image</option>
+                </select>
+                <button id="builderLandingHighlightImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Highlight Image</button>
+                <div id="builderLandingHighlightImagePreview" class="builder-theme-asset-preview">No image selected</div>
+              </div>
+              <div class="builder-theme-asset-field">
+                <label for="builderLandingLogoSquareSelect" style="display:block;margin-bottom:4px;font-weight:600;">Logo - Square</label>
+                <select id="builderLandingLogoSquareSelect" name="logo_square_id" class="hidden">
+                  <option value="">Logo - Square</option>
+                </select>
+                <button id="builderLandingLogoSquarePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Logo - Square</button>
+                <div id="builderLandingLogoSquarePreview" class="builder-theme-asset-preview">No image selected</div>
+              </div>
+            </div>
+          </div>
+          <div></div>
+              <button id="builderLandingPagesSubmitBtn" type="submit" class="btn btn-primary">Save Page</button>
+        </form>
+      </section>
+      <section id="builderLandingPagePreviewPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="builderLandingPagePreviewTitle">Page Preview</h2>
+          <div class="page-heading-actions">
+            <button id="builderLandingPagePreviewModeBtn" type="button" class="btn">Edit Mode</button>
+            <button id="builderLandingPagePreviewBackBtn" type="button" class="btn">Back To Pages</button>
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <div id="builderLandingPagePreviewHost"></div>
+      </section>
+      <section id="builderLandingPageVisualEditorPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="builderLandingPageVisualEditorTitle">Visual Page Editor</h2>
+          <div class="page-heading-actions">
+            <button id="builderLandingPageVisualModeBtn" type="button" class="btn">Preview Mode</button>
+            <button id="builderLandingPageVisualSaveBtn" type="button" class="btn">Save All Changes</button>
+            <button id="builderLandingPageVisualBackBtn" type="button" class="btn">Back To Pages</button>
+          </div>
+        </div>
+        <div class="builder-visual-toolbar">
+          <label for="builderLandingVisualThemeSelect">Theme</label>
+          <select id="builderLandingVisualThemeSelect">
+            <option value="">Custom</option>
+          </select>
+          <label for="builderLandingVisualTemplateSelect">Template</label>
+          <select id="builderLandingVisualTemplateSelect">
+            <option value="">Template</option>
+          </select>
+        </div>
+        <div id="builderLandingVisualSaveNotice" class="builder-save-notice hidden" role="status" aria-live="polite"></div>
+        <div id="builderLandingPageVisualEditorHost"></div>
+      </section>
+      <section id="builderLandingPageThankYouPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Thank You</h2>
+          <div class="page-heading-actions">
+            <button id="builderLandingThankYouBackBtn" type="button" class="btn">Back To Preview</button>
+            <button type="button" onclick="App.setActivePage('builderManageLandingPagesPage')" class="btn">Back To Pages</button>
+          </div>
+        </div>
+        <div id="builderLandingThankYouHost"></div>
+      </section>
+      <section id="builderFormsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Forms</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <div id="builderReactRootForms" class="builder-react-root"></div>
+      </section>
+      <section id="builderAgentsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Agents</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.builder.openAgentsPage(); return false;" class="btn">Back To Agents</button>
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
+        <div id="builderReactRootAgents" class="builder-react-root"></div>
+
+        <section class="docs-panel" style="margin-top: 1.25rem;">
+          <h3>Agent: API Setup Orchestrator</h3>
+          <p class="docs-intro">Run the orchestrator from Builder and track setup progress across all Promote channels.</p>
+          <div class="page-heading-actions" style="justify-content: flex-start; margin: 0 0 0.85rem 0;">
+            <button id="docsOrchestratorRunBtn" type="button" class="btn">Run Orchestrator</button>
+            <button type="button" onclick="App.docsApiSetup.runOrchestrator()" class="btn">Open Builder Form</button>
+            <button type="button" onclick="App.setActivePage('settingsApisPage')" class="btn">Open Settings &gt; APIs</button>
+            <label class="checkbox-row" style="width:auto; margin-left: 0.65rem;">
+              <input id="docsOrchestratorIncompleteOnly" type="checkbox" />
+              Only incomplete steps
+            </label>
+            <button id="docsOrchestratorDownloadJsonBtn" type="button" class="btn">Download JSON</button>
+            <button id="docsOrchestratorDownloadMdBtn" type="button" class="btn">Download Markdown</button>
+          </div>
+          <p id="docsOrchestratorStatus" class="meta">No orchestrator run loaded.</p>
+          <div class="docs-panel" style="margin-bottom: 0.9rem;">
+            <h4 style="margin: 0 0 0.45rem;">Latest Run Summary</h4>
+            <div id="docsOrchestratorSummary" class="docs-kv-grid"></div>
+          </div>
+          <div class="table-wrap" style="margin-bottom: 0.9rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Provider</th>
+                  <th>Configured</th>
+                  <th>Manual Steps</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="docsOrchestratorChannelsBody"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Phase</th>
+                  <th>Agent-Owned Work</th>
+                  <th>Human-Minimum Work</th>
+                  <th>Output</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Inventory</td>
+                  <td>Scan provider schemas, current config completeness, and channel readiness.</td>
+                  <td>None</td>
+                  <td>Channel readiness matrix with missing fields.</td>
+                </tr>
+                <tr>
+                  <td>Preflight</td>
+                  <td>Generate exact per-provider forms/checklists and validation tests.</td>
+                  <td>None</td>
+                  <td>Actionable setup packet per channel.</td>
+                </tr>
+                <tr>
+                  <td>Credential Capture</td>
+                  <td>Validate formatting, normalize endpoints, and stage secure storage plan.</td>
+                  <td>Obtain external credentials/tokens where provider requires human login/2FA/captcha.</td>
+                  <td>Credential intake checklist and status.</td>
+                </tr>
+                <tr>
+                  <td>Verification</td>
+                  <td>Run status and smoke checks, classify failures, propose remediation.</td>
+                  <td>Approve/retry when provider-side approval gates are present.</td>
+                  <td>Pass/fail diagnostics + next actions.</td>
+                </tr>
+                <tr>
+                  <td>Handoff</td>
+                  <td>Emit final report: ready channels, blocked channels, required human follow-ups.</td>
+                  <td>Execute only unresolved external confirmation steps.</td>
+                  <td>Go-live readiness report.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </section>
+      <section id="builderTemplatesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Templates</h2>
+          <div class="page-heading-actions">
+            <button id="builderCreateModularPageTemplateBtn" type="button" class="btn">Create Modular Template</button>
+            <button id="builderCreatePageTemplateBtn" type="button" class="btn">Create Template</button>
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <div id="builderEmailTemplatesPrimaryTableHost" class="builder-template-records-host"></div>
+        <div id="builderTemplatesModularHost">
+        <div id="builderReactRootTemplate" class="builder-react-root hidden" aria-hidden="true"></div>
+        <section id="builderPageTemplateEditorPanel" class="builder-template-section builder-template-editor">
+          <div class="builder-template-section-header-row">
+            <button
+              id="builderPageTemplateEditorToggle"
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="builderPageTemplateEditorBody"
+            >
+              <span id="builderPageTemplateEditorTitle" class="accordion-title">Page: Modular</span>
+              <span class="accordion-toggle">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
+              </span>
+            </button>
+          </div>
+          <div id="builderPageTemplateEditorBody" class="builder-template-section-body">
+            <p id="builderPageTemplateEditorMeta" class="meta">Build landing-page templates as ordered sections with configurable layouts and module slots.</p>
+            <input id="builderPageTemplateEditorIdInput" type="hidden" />
+            <div class="grid-form" style="margin-bottom:0.75rem;">
+              <input id="builderPageTemplateEditorNameInput" type="text" placeholder="Template name" />
+              <div id="builderPageTemplateEditorBaseTemplateWrap">
+                <select id="builderPageTemplateEditorBaseTemplateSelect"></select>
+              </div>
+            </div>
+            <div id="builderPageTemplateEditorTopActions" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button id="builderPageTemplateEditorSaveBtnTop" type="button" class="btn">Save Modular Template</button>
+              <button id="builderPageTemplateEditorPreviewBtnTop" type="button" class="btn">Preview Template</button>
+              <button id="builderPageTemplateEditorCloseBtnTop" type="button" class="btn">Close</button>
+            </div>
+            <div id="builderPageTemplateEditorToolbar" class="builder-layout-toolbar" style="margin:0 0 0.9rem;">
+              <div class="builder-layout-toolbar-heading">Row Layouts</div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="1-5" title="Add 1-5 Row" aria-label="Add 1-5 Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--1-5"><span></span><span></span></span>
+              </div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="2-4" title="Add 2-4 Row" aria-label="Add 2-4 Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--2-4"><span></span><span></span></span>
+              </div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="2-2-2" title="Add 2-2-2 Row" aria-label="Add 2-2-2 Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--2-2-2"><span></span><span></span><span></span></span>
+              </div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="3-3" title="Add 3-3 Row" aria-label="Add 3-3 Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--3-3"><span></span><span></span></span>
+              </div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="4-2" title="Add 4-2 Row" aria-label="Add 4-2 Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--4-2"><span></span><span></span></span>
+              </div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="5-1" title="Add 5-1 Row" aria-label="Add 5-1 Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--5-1"><span></span><span></span></span>
+              </div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="1-4-1" title="Add 1-4-1 Row" aria-label="Add 1-4-1 Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--1-4-1"><span></span><span></span><span></span></span>
+              </div>
+              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="6" title="Add Full Width Row" aria-label="Add Full Width Row">
+                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--6"><span></span></span>
+              </div>
+            </div>
+            <div class="builder-page-template-workspace-heading">Workspace</div>
+            <div id="builderPageTemplateEditorSections" class="builder-template-module-list"></div>
+            <div id="builderPageTemplateEditorBottomActions" class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
+              <button id="builderPageTemplateEditorSaveBtnBottom" type="button" class="btn">Save Modular Template</button>
+              <button id="builderPageTemplateEditorPreviewBtn" type="button" class="btn">Preview Template</button>
+            </div>
+          </div>
+        </section>
+        </div>
+        <section id="builderTemplateEditorPanel" class="builder-template-section builder-template-editor hidden">
+          <div class="builder-template-section-header-row">
+            <button
+              id="builderTemplateEditorToggle"
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="builderTemplateEditorBody"
+            >
+              <span id="builderTemplateEditorTitle" class="accordion-title">Email: Modular</span>
+              <span class="accordion-toggle">
+                <span class="accordion-arrow" aria-hidden="true">▾</span>
+              </span>
+            </button>
+          </div>
+          <div id="builderTemplateEditorBody" class="builder-template-section-body">
+            <p id="builderTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
+            <input id="builderTemplateEditorIdInput" type="hidden" />
+            <div class="grid-form" style="margin-bottom:0.75rem;">
+              <input id="builderTemplateEditorNameInput" type="text" placeholder="Template name" />
+              <input id="builderTemplateEditorSlugInput" type="text" placeholder="Slug (optional)" />
+              <input id="builderTemplateEditorCtaInput" type="text" placeholder="CTA label" />
+            </div>
+            <input id="builderTemplateEditorSummaryInput" type="text" placeholder="Summary: when to use this template." style="margin-bottom:0.75rem;" />
+            <input id="builderTemplateEditorSubjectInput" type="text" placeholder="Default subject line" style="margin-bottom:0.75rem;" />
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button id="builderTemplateEditorSaveBtnTop" type="button" class="btn">Save Template</button>
+            </div>
+            <div id="builderTemplateEditorToolbar" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+              <button type="button" data-block-type="eyebrow" class="btn">Add Eyebrow</button>
+              <button type="button" data-block-type="heading" class="btn">Add Heading</button>
+              <button type="button" data-block-type="paragraph" class="btn">Add Paragraph</button>
+              <button type="button" data-block-type="image" class="btn">Add Image</button>
+              <button type="button" data-block-type="button" class="btn">Add Button</button>
+              <button type="button" data-block-type="divider" class="btn">Add Divider</button>
+              <button type="button" data-block-type="spacer" class="btn">Add Spacer</button>
+            </div>
+            <div id="builderTemplateEditorModules" class="builder-template-module-list"></div>
+            <div class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
+              <button id="builderTemplateEditorSaveBtnBottom" type="button" class="btn">Save Template</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="builder-template-section hidden">
+          <div class="builder-template-section-header-row">
+            <button
+              id="builderFormsSectionToggle"
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="builderFormsSectionBody"
+            >
+  <span class="accordion-title">Forms</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
+  </span>
+</button>
+          </div>
+          <div id="builderFormsSectionBody" class="builder-template-section-body">
+            <p>These are the reusable form templates used as the foundation for saved forms.</p>
+            <div id="builderFormTemplatesTableHost" class="builder-template-records-host"></div>
+            <div id="builderFormTemplatesLibrary" class="builder-template-library"></div>
+            <div id="builderFormTemplatesPreviewHost"></div>
+          </div>
+        </section>
+
+        <section class="builder-template-section hidden">
+          <div class="builder-template-section-header-row">
+            <button
+              id="builderEmailSectionToggle"
+              class="btn accordion-header"
+              type="button"
+              aria-expanded="false"
+              aria-controls="builderEmailSectionBody"
+            >
+  <span class="accordion-title">Email: Text</span>
+  <span class="accordion-toggle">
+    <span class="accordion-arrow" aria-hidden="true">▾</span>
+  </span>
+</button>
+          </div>
+          <div id="builderEmailSectionBody" class="builder-template-section-body">
+            <p>Choose an email template type to pair with a theme and campaign delivery.</p>
+            <form id="builderEmailTemplateForm" class="standard-form-grid" style="margin-bottom: 1.5rem;">
+              <input id="builderEmailTemplateIdInput" name="template_id" type="hidden" />
+              <div class="standard-form-grid-full page-heading-actions" style="justify-content:flex-start;">
+                <button id="builderEmailTemplateSubmitBtnTop" type="submit" class="btn btn-primary">Save Template</button>
+                <button id="builderEmailTemplateResetBtnTop" type="button" class="btn">Reset</button>
+              </div>
+              
+              <label for="builderEmailTemplateNameInput">Template Name</label>
+              <input id="builderEmailTemplateNameInput" name="name" />
+              
+              <label for="builderEmailTemplateSlugInput">Slug</label>
+              <input id="builderEmailTemplateSlugInput" name="slug" />
+              
+              <label for="builderEmailTemplateCtaInput">CTA Label</label>
+              <input id="builderEmailTemplateCtaInput" name="cta" />
+              
+              <label for="builderEmailTemplateSummaryInput">Summary</label>
+              <input id="builderEmailTemplateSummaryInput" name="summary" />
+              
+              <label for="builderEmailTemplateSubjectInput">Default Subject Line</label>
+              <input id="builderEmailTemplateSubjectInput" name="subject" />
+              
+              <label for="builderEmailTemplateHeadingInput">Template Heading</label>
+              <input id="builderEmailTemplateHeadingInput" name="heading" />
+              
+              <label for="builderEmailTemplateBodyInput">Body Structure</label>
+              <textarea id="builderEmailTemplateBodyInput" name="body" rows="4"></textarea>
+              
+              <div></div>
+              <div class="page-heading-actions">
+                <button id="builderEmailTemplateSubmitBtn" type="submit" class="btn btn-primary">Save Template</button>
+                <button id="builderEmailTemplateResetBtn" type="button" class="btn">Reset</button>
+              </div>
+            </form>
+            <div id="builderEmailTemplatesLibrary" class="builder-template-library"></div>
+            <div id="builderEmailTemplatesPreviewHost"></div>
+          </div>
+        </section>
+
+      </section>
+      <section id="builderToolsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Extensions</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <p>Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
+        <div id="builderExtensionsFeaturedGrid" class="builder-extensions-tree"></div>
+      </section>
+      <section id="builderExtensionsManagerPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-page="builderToolsPage">Builder: Extensions</a>: Manager</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <p>Maintain a searchable extension repository with recursive parent-child taxonomy, definitions, and descriptive metadata.</p>
+        <div id="builderReactRootExtensions" class="builder-react-root"></div>
+      </section>
+      <section id="builderExtensionIconBuilderPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Extension: Icon Builder</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
+          </div>
+        </div>
+        <h3>Icon Builder</h3>
+        <p>Generate a compact icon immediately for a message, asset, campaign, or other system object.</p>
+        <form id="iconBuilderForm" class="standard-form-grid">
+          <label for="iconBuilderObjectTypeSelect">Object Type</label>
+          <select id="iconBuilderObjectTypeSelect" name="object_type">
+            <option value="message">Message</option>
+            <option value="asset">Asset</option>
+            <option value="campaign">Campaign</option>
+            <option value="channel">Channel</option>
+            <option value="contact_segment">Contact Segment</option>
+            <option value="custom">Custom</option>
+          </select>
+          
+          <label for="iconBuilderObjectNameInput">Object Name</label>
+          <input id="iconBuilderObjectNameInput" name="object_name" />
+          
+          <label for="iconBuilderCategoryInput">Category</label>
+          <input id="iconBuilderCategoryInput" name="category" />
+          
+          <label for="iconBuilderWorkspaceIdInput">Workspace ID</label>
+          <input id="iconBuilderWorkspaceIdInput" name="workspace_id" value="alphire-main" />
+          
+          <label for="iconBuilderObjectSummaryInput">Object Summary</label>
+          <textarea id="iconBuilderObjectSummaryInput" name="object_summary" rows="5"></textarea>
+          
+          <label for="iconBuilderVisualStyleSelect">Visual Style</label>
+          <select id="iconBuilderVisualStyleSelect" name="visual_style">
+            <option value="clean-flat">Clean Flat</option>
+            <option value="outlined-bold">Outlined Bold</option>
+            <option value="badge-minimal">Badge Minimal</option>
+            <option value="editorial-mark">Editorial Mark</option>
+          </select>
+          
+          <label for="iconBuilderPaletteInput">Preferred Colors</label>
+          <input id="iconBuilderPaletteInput" name="palette" />
+          
+          <label for="iconBuilderDestinationSelect">Destination</label>
+          <select id="iconBuilderDestinationSelect" name="destination">
+            <option value="menu-bar">Menu Bar</option>
+            <option value="table-list">Table List</option>
+            <option value="card-badge">Card Badge</option>
+          </select>
+          
+          <label for="iconBuilderSizeInput">Output Size</label>
+          <input id="iconBuilderSizeInput" name="size" value="64x64" />
+          
+          <div class="standard-form-grid-full">
+            <label class="checkbox-row">
+              <input name="manual_confirmed" type="checkbox" />
+              I manually confirm this API action.
+            </label>
+          </div>
+          
+          <div></div>
+          <button type="submit" class="btn btn-primary">Create Icon Job</button>
+        </form>
+        <h3>Icon Request Preview</h3>
+        <pre id="iconBuilderRequestPreview" class="code-box">{}</pre>
+        <h3>Icon Response</h3>
+        <pre id="iconBuilderResponsePreview" class="code-box">{}</pre>
+        <div id="iconBuilderResultCard" class="icon-builder-result hidden">
+          <img id="iconBuilderResultImage" alt="Generated icon preview" />
+          <div class="icon-builder-result-meta">
+            <strong id="iconBuilderResultTitle">Generated Icon</strong>
+            <span id="iconBuilderResultCaption"></span>
+          </div>
+        </div>
+        <h3>General Tool Job</h3>
+        <form id="builderToolsForm" class="standard-form-grid">
+          <label for="builderToolsNameSelect">Tool Name</label>
+          <select id="builderToolsNameSelect" name="tool_name">
+            <option value="segmentation.build">segmentation.build</option>
+            <option value="buffer.queue">buffer.queue</option>
+            <option value="email.template.builder">email.template.builder</option>
+          </select>
+          
+          <label for="builderToolsWorkspaceIdInput">Workspace ID</label>
+          <input id="builderToolsWorkspaceIdInput" name="workspace_id" value="alphire-main" />
+          
+          <label for="builderToolsInputJson">Tool Input JSON</label>
+          <textarea id="builderToolsInputJson" name="input_json" rows="6">{"segment_name":"","rules":[]}</textarea>
+          
+          <div class="standard-form-grid-full">
+            <label class="checkbox-row">
+              <input name="manual_confirmed" type="checkbox" />
+              I manually confirm this API action.
+            </label>
+          </div>
+          
+          <div></div>
+          <button type="submit" class="btn btn-primary">Create Tool Job</button>
+        </form>
+        <h3>Advanced Tool Runner</h3>
+        <p>Run generic internal tool jobs for extension-level operations that do not yet have dedicated UIs.</p>
+        <h3>Request Preview</h3>
+        <pre id="toolsRequestPreview" class="code-box">{}</pre>
+        <h3>Response</h3>
+        <pre id="toolsResponsePreview" class="code-box">{}</pre>
+      </section>
+      <section id="builderExtensionScreenshotPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Extension: Screenshot</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
+          </div>
+        </div>
+        <p>Paste a website URL to create a `640x360` screenshot, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Screenshot`.</p>
+        <form id="builderScreenshotForm" class="standard-form-grid">
+          <label for="builderScreenshotUrlInput">URL</label>
+          <input id="builderScreenshotUrlInput" name="url" />
+          
+          <label for="builderScreenshotAssetNameInput">Asset Name (optional)</label>
+          <input id="builderScreenshotAssetNameInput" name="asset_name" />
+          
+          <label for="builderScreenshotTagsInput">Tags (comma-separated)</label>
+          <input id="builderScreenshotTagsInput" name="tags" />
+          
+          <div></div>
+          <button type="submit" class="btn btn-primary">Capture Screenshot</button>
+        </form>
+        <h3>Screenshot Response</h3>
+        <pre id="builderScreenshotResponsePreview" class="code-box">{}</pre>
+        <div id="builderScreenshotResultCard" class="icon-builder-result hidden">
+          <img id="builderScreenshotResultImage" alt="Captured screenshot preview" />
+          <div class="icon-builder-result-meta">
+            <strong id="builderScreenshotResultTitle">Captured Screenshot</strong>
+            <span id="builderScreenshotResultCaption"></span>
+          </div>
+        </div>
+      </section>
+      <section id="builderExtensionThumbnailPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Extension: Thumbnail</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
+          </div>
+        </div>
+        <p>Generate an image thumbnail from the first page of a PDF file location, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Thumbnail`.</p>
+        <form id="builderThumbnailForm" class="standard-form-grid">
+          <label for="builderThumbnailLocationInput">PDF File Location</label>
+          <input id="builderThumbnailLocationInput" name="file_location" />
+          
+          <label for="builderThumbnailSourceAssetSelect">Source Asset</label>
+          <select id="builderThumbnailSourceAssetSelect" name="source_asset_id">
+            <option value="">Source Asset (Optional)</option>
+          </select>
+          
+          <label for="builderThumbnailAssetNameInput">Thumbnail Asset Name (optional)</label>
+          <input id="builderThumbnailAssetNameInput" name="asset_name" />
+          
+          <label for="builderThumbnailTagsInput">Tags (comma-separated)</label>
+          <input id="builderThumbnailTagsInput" name="tags" />
+          
+          <div></div>
+          <button type="submit" class="btn btn-primary">Generate Thumbnail</button>
+        </form>
+        <h3>Thumbnail Response</h3>
+        <pre id="builderThumbnailResponsePreview" class="code-box">{}</pre>
+        <div id="builderThumbnailResultCard" class="icon-builder-result hidden">
+          <img id="builderThumbnailResultImage" alt="Generated PDF thumbnail preview" />
+          <div class="icon-builder-result-meta">
+            <strong id="builderThumbnailResultTitle">Generated Thumbnail</strong>
+            <span id="builderThumbnailResultCaption"></span>
+          </div>
+        </div>
+      </section>
       <!-- INJECTED PAGE: campaigns.html -->
 
       <section id="campaignsPage" class="app-page hidden">
@@ -4424,1109 +5527,6 @@
         </div>
       </section>
 
-      <!-- INJECTED PAGE: builder.html -->
-
-      <section id="builderPage" class="app-page hidden">
-        <h2>Builder</h2>
-        <p>Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
-        <div class="builder-flow-map">
-          <button class="btn builder-flow-node builder-flow-node-top" type="button" onclick="App.setActivePage('builderTemplatesPage')">
-            <span class="builder-flow-node-kicker">Structure</span>
-            <span class="builder-flow-node-title">Templates</span>
-          </button>
-          <button class="btn builder-flow-node builder-flow-node-upper-right" type="button" onclick="App.builder.openFormsPage()">
-            <span class="builder-flow-node-kicker">Capture</span>
-            <span class="builder-flow-node-title">Forms</span>
-          </button>
-          <button class="btn builder-flow-node builder-flow-node-lower-right" type="button" onclick="App.setActivePage('builderManageLandingPagesPage')">
-            <span class="builder-flow-node-kicker">Publish</span>
-            <span class="builder-flow-node-title">Pages</span>
-          </button>
-          <button class="btn builder-flow-node builder-flow-node-lower-left" type="button" onclick="App.setActivePage('builderToolsPage')">
-            <span class="builder-flow-node-kicker">Extend</span>
-            <span class="builder-flow-node-title">Extensions</span>
-          </button>
-          <button class="btn builder-flow-node builder-flow-node-upper-left" type="button" onclick="App.builder.openAgentsPage()">
-            <span class="builder-flow-node-kicker">Automate</span>
-            <span class="builder-flow-node-title">Agents</span>
-          </button>
-        </div>
-        <div class="page-heading-actions" style="justify-content:center; margin-top:1rem;">
-          <button type="button" onclick="App.setActivePage('builderBuilderWorkspacePage')" class="btn btn-primary">Open Builder Workspace</button>
-          <button type="button" onclick="App.setActivePage('builderModulesPage')" class="btn">Open Modules Library</button>
-        </div>
-      </section>
-      <section id="builderBuilderWorkspacePage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Workspace</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <div id="builderReactRootHub" class="builder-react-root hidden" aria-hidden="true"></div>
-      </section>
-      <section id="builderModulesPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Modules</h2>
-          <div class="page-heading-actions">
-            <button id="builderModulesCreateBtn" type="button" class="btn">Create Module</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <p>Build reusable content modules for modular page layouts. The saved library is the important part; this studio is where we configure each module type as we develop it.</p>
-        <section class="builder-template-section">
-          <div class="builder-template-section-header-row">
-            <button
-              id="builderModulesLibraryToggle"
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="true"
-              aria-controls="builderModulesLibraryBody"
-            >
-              <span class="accordion-title">Saved Modules</span>
-            </button>
-          </div>
-          <div id="builderModulesLibraryBody" class="builder-template-section-body">
-            <!-- START INCLUDED: builder/modules-list.html -->
-<div id="builderModulesGridMountPoint"></div>
-
-<!-- END INCLUDED: builder/modules-list.html -->
-          </div>
-        </section>
-
-        <section class="builder-template-section">
-          <div class="builder-template-section-header-row">
-            <button
-              id="builderSavedCellsToggle"
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="true"
-              aria-controls="builderSavedCellsBody"
-            >
-              <span class="accordion-title">Saved Cells</span>
-            </button>
-          </div>
-          <div id="builderSavedCellsBody" class="builder-template-section-body">
-            <div id="builderSavedCellsGridMountPoint"></div>
-          </div>
-        </section>
-
-        <section class="builder-template-section">
-          <div class="builder-template-section-header-row">
-            <button
-              id="builderSavedSectionsLibraryToggle"
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="true"
-              aria-controls="builderSavedSectionsLibraryBody"
-            >
-              <span class="accordion-title">Saved Sections</span>
-            </button>
-          </div>
-          <div id="builderSavedSectionsLibraryBody" class="builder-template-section-body">
-            <div id="builderSavedSectionsGridMountPoint"></div>
-          </div>
-        </section>
-
-        <section id="builderPollsSection" class="builder-template-section hidden">
-          <div class="builder-template-section-header-row" style="display:flex; justify-content:space-between; align-items:center;">
-            <button
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="true"
-            >
-              <span class="accordion-title">Uploaded Polls</span>
-            </button>
-            <button id="openCreatePollBtn" type="button" class="btn" style="margin-right: 1rem;">Create Poll</button>
-          </div>
-          <div class="builder-template-section-body">
-            <!-- START INCLUDED: builder/polls-list.html -->
-<div class="data-table-container">
-  <div class="table-actions-row">
-    <div class="table-filters"></div>
-    <div class="table-actions">
-      <button type="button" class="btn" id="openImportPollsBtn" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">Import CSV</button>
-    </div>
-  </div>
-  
-  <div id="pollsGridMountPoint"></div>
-</div>
-
-<!-- END INCLUDED: builder/polls-list.html -->
-          </div>
-        </section>
-
-        <dialog id="builderModulesModal" class="builder-nested-modal-dialog">
-          <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:800px;width:90vw;">
-            <div class="page-heading-row" style="margin-bottom:1rem;">
-              <h3 style="margin:0;">Module Studio</h3>
-              <button type="button" class="btn" onclick="document.getElementById('builderModulesModal').close()">Close</button>
-            </div>
-            <!-- START INCLUDED: builder/modules-form.html -->
-<form id="builderModulesForm" class="standard-form-grid">
-  <input id="builderModulesIdInput" type="hidden" />
-  
-  <label for="builderModulesNameInput">Module Name</label>
-  <input id="builderModulesNameInput" type="text" />
-  
-  <label for="builderModulesTypeSelect">Module Type</label>
-  <div class="form-row-flex">
-    <select id="builderModulesTypeSelect" style="flex:1;"></select>
-    <button id="builderManageClassesBtn" type="button" class="btn">Manage Classes</button>
-  </div>
-
-  <label for="builderModulesClassSelect">Module Class (Optional)</label>
-  <select id="builderModulesClassSelect">
-    <option value="">None</option>
-  </select>
-  
-  <div class="standard-form-grid-full">
-    <div id="builderModulesTypeHelp" class="meta"></div>
-  </div>
-  
-  <div id="builderModulesSettingsFields" class="standard-form-grid-full grid-form"></div>
-  
-  <div></div>
-  <button type="submit" class="btn btn-primary">Save Module</button>
-</form>
-
-<!-- END INCLUDED: builder/modules-form.html -->
-          </div>
-        </dialog>
-
-        <dialog id="pollFormModal" class="builder-nested-modal-dialog">
-          <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:800px;width:90vw;">
-            <div class="page-heading-row" style="margin-bottom:1rem;">
-              <h3 style="margin:0;">Poll Editor</h3>
-              <button type="button" id="closePollFormBtn" class="btn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
-            </div>
-            <!-- START INCLUDED: builder/polls-form.html -->
-<form id="pollForm" class="standard-form-grid">
-  <input type="hidden" id="pollEditId" name="id" />
-  
-  <label>Question *</label>
-  <input type="text" id="pollQuestion" name="question" required placeholder="What is your favorite color?" />
-  
-  <label>Category</label>
-  <input type="text" id="pollCategory" name="category" placeholder="General" />
-  
-  <div style="grid-column: 1 / -1; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
-    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Options</h3>
-    <div id="pollOptionsContainer" style="display: flex; flex-direction: column; gap: 0.5rem;">
-      <!-- Options injected here -->
-    </div>
-    <button type="button" id="addPollOptionBtn" class="btn" style="margin-top: 1rem; font-size: 0.85rem;">+ Add Option</button>
-  </div>
-  
-  <div></div>
-  <button type="submit" class="btn btn-primary" id="savePollBtn" style="margin-top: 1.5rem;">Save Poll</button>
-</form>
-
-<!-- Import Polls CSV Modal is placed right here as a nested dialog, or it can be a separate include -->
-<dialog id="importPollsModal" class="builder-nested-modal-dialog">
-  <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:600px;width:90vw;">
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
-      <h2 style="margin: 0;">Import Polls from CSV</h2>
-      <button type="button" id="closeImportPollsBtn" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
-    </div>
-    
-    <div style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--muted);">
-      Upload a CSV file to bulk import polls. The CSV should contain headers like <strong>ID, Category, Question, Option A, Option B</strong>.
-    </div>
-    
-    <form id="importPollsForm" class="standard-form-grid">
-      <label>CSV File *</label>
-      <input type="file" id="pollsCsvFile" accept=".csv" required />
-      
-      <div id="pollsCsvPreview" style="grid-column: 1/-1; font-size: 0.85rem; background: var(--bg-alt); padding: 1rem; border-radius: 6px; display: none;"></div>
-      
-      <div></div>
-      <button type="submit" class="btn btn-primary" id="uploadPollsCsvBtn">Import</button>
-    </form>
-  </div>
-</dialog>
-
-<!-- END INCLUDED: builder/polls-form.html -->
-          </div>
-        </dialog>
-
-        <dialog id="builderManageClassesModal" class="builder-nested-modal-dialog">
-          <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:520px;">
-            <div class="page-heading-row" style="margin-bottom:1rem;">
-              <h3 style="margin:0;">Manage Module Classes</h3>
-              <button id="builderManageClassesCloseBtn" type="button" class="btn">Close</button>
-            </div>
-            <div id="builderReactRootModuleClasses" class="builder-react-root"></div>
-          </div>
-        </dialog>
-
-      </section>
-      <section id="builderThemesPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Themes</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <div id="builderReactRootThemes" class="builder-react-root"></div>
-      </section>
-      <section id="builderManageLandingPagesPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Pages</h2>
-          <div class="page-heading-actions">
-            <button id="builderOpenCreateLandingPageBtn" type="button" class="btn">Create Page</button>
-            <button type="button" onclick="App.builder.openBulkCreateFromManagePage();" class="btn">Bulk Create</button>
-            <button type="button" onclick="App.builder.openPopulateFromWebPage();" class="btn">Populate from Web</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr class="table-filter-row">
-                <th><input id="builderLandingPagesSelectAllVisible" type="checkbox" aria-label="Select all visible pages" /></th>
-                <th><input id="builderLandingPagesNameFilter" placeholder="Page Name" /></th>
-                <th>
-                  <select id="builderLandingPagesTemplateFilter">
-                    <option value="">All Templates</option>
-                  </select>
-                </th>
-                <th></th>
-                <th></th>
-                <th></th>
-                <th class="builder-pages-bulk-delete-cell"><button id="builderLandingPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button></th>
-              </tr>
-              <tr>
-                <th></th>
-                <th id="builderLandingPagesSortNameBtn">Name</th>
-                <th id="builderLandingPagesSortTemplateBtn">Template</th>
-                <th id="builderLandingPagesSortHeadlineBtn">Headline</th>
-                <th id="builderLandingPagesSortFormBtn">Form</th>
-                <th id="builderLandingPagesSortUpdatedBtn">Updated</th>
-                <th class="builder-pages-actions-heading">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="builderLandingPagesTableBody"></tbody>
-          </table>
-        </div>
-      </section>
-      <section id="builderPopulateFromWebPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManageLandingPagesPage">Builder: Pages</a> &rsaquo; Populate from Web</h2>
-          <div class="page-heading-actions">
-            <button id="builderPopulateRunBtn" type="button" class="btn" disabled>Run Populate</button>
-          </div>
-        </div>
-        <p>Match crawled pages to Builder pages by title, then inject each page's content as a Paragraph section. Use the diagnostics below to verify matches before running.</p>
-
-        <div class="standard-form-grid builder-populate-run-row" style="margin-bottom:1.5rem;">
-          <label for="builderPopulateRunSelect">Crawl Run</label>
-          <div class="builder-populate-run-controls">
-            <select id="builderPopulateRunSelect">
-              <option value="">Loading&hellip;</option>
-            </select>
-            <button id="builderPopulateDeleteRunBtn" type="button" class="btn btn-danger" disabled title="Delete this crawl run">Delete Run</button>
-            <button id="builderPopulatePurgeRunsBtn" type="button" class="btn" title="Delete all runs except the most recent">Purge Old</button>
-          </div>
-        </div>
-
-        <div id="builderPopulateDiagnostics" style="display:none;">
-
-          <div class="page-heading-row" style="margin-bottom:0.5rem;">
-            <h3 style="margin:0;">Exact Matches <span id="builderPopulateExactCount" class="badge"></span></h3>
-          </div>
-          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">Builder page name matches crawled URL slug or stripped title exactly. These will be populated when you click Run Populate.</p>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Builder Page</th><th>Crawled Title</th><th>URL Slug</th><th>Matched By</th><th>Content</th></tr></thead>
-              <tbody id="builderPopulateExactBody"></tbody>
-            </table>
-          </div>
-
-          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
-            <h3 style="margin:0;">Partial Matches <span id="builderPopulatePartialCount" class="badge"></span></h3>
-          </div>
-          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">Builder page name is a substring match with a crawled page. Pages with exactly one candidate will also be populated; pages with multiple candidates need manual review.</p>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Builder Page</th><th>Candidates</th><th>Matched By</th><th>Content</th></tr></thead>
-              <tbody id="builderPopulatePartialBody"></tbody>
-            </table>
-          </div>
-
-          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
-            <h3 style="margin:0;">Unmatched Builder Pages <span id="builderPopulateUnmatchedBuilderCount" class="badge"></span></h3>
-          </div>
-          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">No crawled page title or URL slug matched these Builder page names at all.</p>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Builder Page Name</th><th>Slug</th></tr></thead>
-              <tbody id="builderPopulateUnmatchedBuilderBody"></tbody>
-            </table>
-          </div>
-
-          <div class="page-heading-row" style="margin:1.5rem 0 0.5rem;">
-            <h3 style="margin:0;">Unmatched Crawled Pages <span id="builderPopulateUnmatchedAcquiredCount" class="badge"></span></h3>
-          </div>
-          <p style="color:#666; font-size:0.9em; margin-bottom:0.75rem;">These crawled pages were not used in any exact match.</p>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Crawled Title</th><th>URL Slug</th><th>URL</th><th>Content</th></tr></thead>
-              <tbody id="builderPopulateUnmatchedAcquiredBody"></tbody>
-            </table>
-          </div>
-
-        </div>
-        <div id="builderPopulateDiagnosticsMsg" style="padding:1rem 0; color:#666;"></div>
-      </section>
-
-      <section id="builderLandingPagesBulkEditPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManageLandingPagesPage">Builder: Pages</a></h2>
-        </div>
-        <p id="builderLandingPagesBulkEditSummary">No pages selected.</p>
-        <form id="builderLandingPagesBulkEditForm" class="standard-form-grid">
-          
-            <label for="builderLandingPagesBulkTemplateSelect">Template</label>
-            <select id="builderLandingPagesBulkTemplateSelect" name="template_id">
-              <option value="">Leave Unchanged</option>
-            </select>
-          
-          <div class="standard-form-grid-full builder-color-control">
-            <label for="builderLandingPagesBulkPrimaryColorInput" class="builder-color-control-label">
-              <span class="builder-color-control-icon" aria-hidden="true"></span>
-              Primary Color
-            </label>
-            <label class="checkbox-row">
-              <input id="builderLandingPagesBulkApplyPrimaryColor" name="apply_primary_color" type="checkbox" />
-              Apply Primary Color
-            </label>
-            <input id="builderLandingPagesBulkPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
-          </div>
-          <div class="standard-form-grid-full builder-color-control">
-            <label for="builderLandingPagesBulkBackgroundColorInput" class="builder-color-control-label">
-              <span class="builder-color-control-icon" aria-hidden="true"></span>
-              Background Color
-            </label>
-            <label class="checkbox-row">
-              <input id="builderLandingPagesBulkApplyBackgroundColor" name="apply_background_color" type="checkbox" />
-              Apply Background Color
-            </label>
-            <input id="builderLandingPagesBulkBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
-          </div>
-          <div class="standard-form-grid-full builder-color-control">
-            <label for="builderLandingPagesBulkAccentColorInput" class="builder-color-control-label">
-              <span class="builder-color-control-icon" aria-hidden="true"></span>
-              Accent Color
-            </label>
-            <label class="checkbox-row">
-              <input id="builderLandingPagesBulkApplyAccentColor" name="apply_accent_color" type="checkbox" />
-              Apply Accent Color
-            </label>
-            <input id="builderLandingPagesBulkAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
-          </div>
-          <div></div>
-              <button type="submit" class="btn btn-primary">Apply To Selected Pages</button>
-        </form>
-      </section>
-      <section id="builderLandingPagesPage" class="app-page hidden">
-        <div id="builderLandingPagesHeader" class="page-heading-row">
-          <h2 id="builderLandingPagesFormTitle">Builder: Create Page</h2>
-          <div class="page-heading-actions">
-            <button id="builderLandingPageHeaderPreviewBtn" type="button" class="btn">Preview</button>
-            <button id="builderLandingPageHeaderSaveBtn" type="button" class="btn btn-primary">Save Page</button>
-            
-          </div>
-        </div>
-        <div id="builderLandingPagesModularHost">
-          <div id="builderReactRootPage" class="builder-react-root hidden" aria-hidden="true"></div>
-        </div>
-        <form id="builderLandingPagesForm" class="standard-form-grid">
-          <input id="builderLandingPageIdInput" name="page_id" type="hidden" />
-          <div class="builder-landing-pages-grid">
-            <div class="builder-landing-pages-column">
-              <label for="builderLandingPageNameInput">Page Name</label>
-              <input id="builderLandingPageNameInput" name="page_name" required />
-              
-              <label for="builderLandingTemplateSelect">Template</label>
-              <select id="builderLandingTemplateSelect" name="template_id">
-                <option value="">Template</option>
-              </select>
-              
-              <div class="builder-color-control">
-                <label for="builderLandingPrimaryColorInput" class="builder-color-control-label">
-                  <span class="builder-color-control-icon" aria-hidden="true"></span>
-                  Color Scheme: Primary Color
-                </label>
-                <input id="builderLandingPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
-              </div>
-              <div class="builder-color-control">
-                <label for="builderLandingBackgroundColorInput" class="builder-color-control-label">
-                  <span class="builder-color-control-icon" aria-hidden="true"></span>
-                  Color Scheme: Background Color
-                </label>
-                <input id="builderLandingBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
-              </div>
-              <div class="builder-color-control">
-                <label for="builderLandingAccentColorInput" class="builder-color-control-label">
-                  <span class="builder-color-control-icon" aria-hidden="true"></span>
-                  Color Scheme: Accent Color
-                </label>
-                <input id="builderLandingAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
-              </div>
-              
-              <label for="builderLandingFormSelect">Form</label>
-              <select id="builderLandingFormSelect" name="form_id">
-                <option value="">Form</option>
-              </select>
-              
-              <label for="builderLandingLeadMagnetSelect">Lead Magnet</label>
-              <select id="builderLandingLeadMagnetSelect" name="lead_magnet_id">
-                <option value="">PDF</option>
-              </select>
-              
-              <label for="builderLandingCtaSelect">Call To Action</label>
-              <select id="builderLandingCtaSelect" name="cta_id">
-                <option value="">CTA</option>
-              </select>
-            </div>
-            
-            <div class="builder-landing-pages-column">
-              <label for="builderLandingHeadlineSelect">Headline</label>
-              <select id="builderLandingHeadlineSelect" name="headline_id">
-                <option value="">Headline</option>
-              </select>
-              
-              <label for="builderLandingPitchSelect">Pitch</label>
-              <select id="builderLandingPitchSelect" name="pitch_id">
-                <option value="">Pitch</option>
-              </select>
-              
-              <label for="builderLandingFeatureHeadlineSelect">Feature One Headline</label>
-              <select id="builderLandingFeatureHeadlineSelect" name="feature_headline_id">
-                <option value="">Feature One Headline</option>
-              </select>
-              
-              <label for="builderLandingFeatureSubheadingSelect">Feature One Sub-heading</label>
-              <select id="builderLandingFeatureSubheadingSelect" name="feature_subheading_id">
-                <option value="">Feature One Sub-heading</option>
-              </select>
-              
-              <label for="builderLandingHighlightHeadlineSelect">Feature Two Headline</label>
-              <select id="builderLandingHighlightHeadlineSelect" name="highlight_headline_id">
-                <option value="">Feature Two Headline</option>
-              </select>
-              
-              <label for="builderLandingHighlightPitchSelect">Feature Two Pitch</label>
-              <select id="builderLandingHighlightPitchSelect" name="highlight_pitch_id">
-                <option value="">Feature Two Pitch</option>
-              </select>
-              
-              <label for="builderLandingBodyHeadlineSelect">Body Headline</label>
-              <select id="builderLandingBodyHeadlineSelect" name="body_headline_id">
-                <option value="">Body Headline</option>
-              </select>
-              
-              <label for="builderLandingBodySubheadingSelect">Body Sub-heading</label>
-              <select id="builderLandingBodySubheadingSelect" name="body_subheading_id">
-                <option value="">Body Sub-heading</option>
-              </select>
-              
-              <label for="builderLandingBodyPitchSelect">Body Pitch</label>
-              <select id="builderLandingBodyPitchSelect" name="body_pitch_id">
-                <option value="">Body Pitch</option>
-              </select>
-            </div>
-            
-            <div class="builder-landing-pages-column">
-              <div class="builder-theme-asset-field">
-                <label for="builderLandingBannerImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Website Banner Image</label>
-                <select id="builderLandingBannerImageSelect" name="website_banner_image_id" class="hidden">
-                  <option value="">Website Banner Image</option>
-                </select>
-                <button id="builderLandingBannerImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Website Banner Image</button>
-                <div id="builderLandingBannerImagePreview" class="builder-theme-asset-preview">No image selected</div>
-              </div>
-              <div class="builder-theme-asset-field">
-                <label for="builderLandingBackgroundImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Background Image</label>
-                <select id="builderLandingBackgroundImageSelect" name="background_image_id" class="hidden">
-                  <option value="">Background Image</option>
-                </select>
-                <button id="builderLandingBackgroundImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Background Image</button>
-                <div id="builderLandingBackgroundImagePreview" class="builder-theme-asset-preview">No image selected</div>
-              </div>
-              <div class="builder-theme-asset-field">
-                <label for="builderLandingFeatureImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Feature Image</label>
-                <select id="builderLandingFeatureImageSelect" name="feature_image_id" class="hidden">
-                  <option value="">Feature Image</option>
-                </select>
-                <button id="builderLandingFeatureImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Feature Image</button>
-                <div id="builderLandingFeatureImagePreview" class="builder-theme-asset-preview">No image selected</div>
-              </div>
-              <div class="builder-theme-asset-field">
-                <label for="builderLandingHighlightImageSelect" style="display:block;margin-bottom:4px;font-weight:600;">Highlight Image</label>
-                <select id="builderLandingHighlightImageSelect" name="highlight_image_id" class="hidden">
-                  <option value="">Highlight Image</option>
-                </select>
-                <button id="builderLandingHighlightImagePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Highlight Image</button>
-                <div id="builderLandingHighlightImagePreview" class="builder-theme-asset-preview">No image selected</div>
-              </div>
-              <div class="builder-theme-asset-field">
-                <label for="builderLandingLogoSquareSelect" style="display:block;margin-bottom:4px;font-weight:600;">Logo - Square</label>
-                <select id="builderLandingLogoSquareSelect" name="logo_square_id" class="hidden">
-                  <option value="">Logo - Square</option>
-                </select>
-                <button id="builderLandingLogoSquarePickerBtn" type="button" class="builder-theme-asset-picker-btn">Choose Logo - Square</button>
-                <div id="builderLandingLogoSquarePreview" class="builder-theme-asset-preview">No image selected</div>
-              </div>
-            </div>
-          </div>
-          <div></div>
-              <button id="builderLandingPagesSubmitBtn" type="submit" class="btn btn-primary">Save Page</button>
-        </form>
-      </section>
-      <section id="builderLandingPagePreviewPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2 id="builderLandingPagePreviewTitle">Page Preview</h2>
-          <div class="page-heading-actions">
-            <button id="builderLandingPagePreviewModeBtn" type="button" class="btn">Edit Mode</button>
-            <button id="builderLandingPagePreviewBackBtn" type="button" class="btn">Back To Pages</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <div id="builderLandingPagePreviewHost"></div>
-      </section>
-      <section id="builderLandingPageVisualEditorPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2 id="builderLandingPageVisualEditorTitle">Visual Page Editor</h2>
-          <div class="page-heading-actions">
-            <button id="builderLandingPageVisualModeBtn" type="button" class="btn">Preview Mode</button>
-            <button id="builderLandingPageVisualSaveBtn" type="button" class="btn">Save All Changes</button>
-            <button id="builderLandingPageVisualBackBtn" type="button" class="btn">Back To Pages</button>
-          </div>
-        </div>
-        <div class="builder-visual-toolbar">
-          <label for="builderLandingVisualThemeSelect">Theme</label>
-          <select id="builderLandingVisualThemeSelect">
-            <option value="">Custom</option>
-          </select>
-          <label for="builderLandingVisualTemplateSelect">Template</label>
-          <select id="builderLandingVisualTemplateSelect">
-            <option value="">Template</option>
-          </select>
-        </div>
-        <div id="builderLandingVisualSaveNotice" class="builder-save-notice hidden" role="status" aria-live="polite"></div>
-        <div id="builderLandingPageVisualEditorHost"></div>
-      </section>
-      <section id="builderLandingPageThankYouPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Thank You</h2>
-          <div class="page-heading-actions">
-            <button id="builderLandingThankYouBackBtn" type="button" class="btn">Back To Preview</button>
-            <button type="button" onclick="App.setActivePage('builderManageLandingPagesPage')" class="btn">Back To Pages</button>
-          </div>
-        </div>
-        <div id="builderLandingThankYouHost"></div>
-      </section>
-      <section id="builderFormsPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Forms</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <div id="builderReactRootForms" class="builder-react-root"></div>
-      </section>
-      <section id="builderAgentsPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Agents</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.builder.openAgentsPage(); return false;" class="btn">Back To Agents</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
-        <div id="builderReactRootAgents" class="builder-react-root"></div>
-
-        <section class="docs-panel" style="margin-top: 1.25rem;">
-          <h3>Agent: API Setup Orchestrator</h3>
-          <p class="docs-intro">Run the orchestrator from Builder and track setup progress across all Promote channels.</p>
-          <div class="page-heading-actions" style="justify-content: flex-start; margin: 0 0 0.85rem 0;">
-            <button id="docsOrchestratorRunBtn" type="button" class="btn">Run Orchestrator</button>
-            <button type="button" onclick="App.docsApiSetup.runOrchestrator()" class="btn">Open Builder Form</button>
-            <button type="button" onclick="App.setActivePage('settingsApisPage')" class="btn">Open Settings &gt; APIs</button>
-            <label class="checkbox-row" style="width:auto; margin-left: 0.65rem;">
-              <input id="docsOrchestratorIncompleteOnly" type="checkbox" />
-              Only incomplete steps
-            </label>
-            <button id="docsOrchestratorDownloadJsonBtn" type="button" class="btn">Download JSON</button>
-            <button id="docsOrchestratorDownloadMdBtn" type="button" class="btn">Download Markdown</button>
-          </div>
-          <p id="docsOrchestratorStatus" class="meta">No orchestrator run loaded.</p>
-          <div class="docs-panel" style="margin-bottom: 0.9rem;">
-            <h4 style="margin: 0 0 0.45rem;">Latest Run Summary</h4>
-            <div id="docsOrchestratorSummary" class="docs-kv-grid"></div>
-          </div>
-          <div class="table-wrap" style="margin-bottom: 0.9rem;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Channel</th>
-                  <th>Provider</th>
-                  <th>Configured</th>
-                  <th>Manual Steps</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="docsOrchestratorChannelsBody"></tbody>
-            </table>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Phase</th>
-                  <th>Agent-Owned Work</th>
-                  <th>Human-Minimum Work</th>
-                  <th>Output</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Inventory</td>
-                  <td>Scan provider schemas, current config completeness, and channel readiness.</td>
-                  <td>None</td>
-                  <td>Channel readiness matrix with missing fields.</td>
-                </tr>
-                <tr>
-                  <td>Preflight</td>
-                  <td>Generate exact per-provider forms/checklists and validation tests.</td>
-                  <td>None</td>
-                  <td>Actionable setup packet per channel.</td>
-                </tr>
-                <tr>
-                  <td>Credential Capture</td>
-                  <td>Validate formatting, normalize endpoints, and stage secure storage plan.</td>
-                  <td>Obtain external credentials/tokens where provider requires human login/2FA/captcha.</td>
-                  <td>Credential intake checklist and status.</td>
-                </tr>
-                <tr>
-                  <td>Verification</td>
-                  <td>Run status and smoke checks, classify failures, propose remediation.</td>
-                  <td>Approve/retry when provider-side approval gates are present.</td>
-                  <td>Pass/fail diagnostics + next actions.</td>
-                </tr>
-                <tr>
-                  <td>Handoff</td>
-                  <td>Emit final report: ready channels, blocked channels, required human follow-ups.</td>
-                  <td>Execute only unresolved external confirmation steps.</td>
-                  <td>Go-live readiness report.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-      </section>
-      <section id="builderTemplatesPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Templates</h2>
-          <div class="page-heading-actions">
-            <button id="builderCreateModularPageTemplateBtn" type="button" class="btn">Create Modular Template</button>
-            <button id="builderCreatePageTemplateBtn" type="button" class="btn">Create Template</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <div id="builderEmailTemplatesPrimaryTableHost" class="builder-template-records-host"></div>
-        <div id="builderTemplatesModularHost">
-        <div id="builderReactRootTemplate" class="builder-react-root hidden" aria-hidden="true"></div>
-        <section id="builderPageTemplateEditorPanel" class="builder-template-section builder-template-editor">
-          <div class="builder-template-section-header-row">
-            <button
-              id="builderPageTemplateEditorToggle"
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="false"
-              aria-controls="builderPageTemplateEditorBody"
-            >
-              <span id="builderPageTemplateEditorTitle" class="accordion-title">Page: Modular</span>
-              <span class="accordion-toggle">
-                <span class="accordion-arrow" aria-hidden="true">▾</span>
-              </span>
-            </button>
-          </div>
-          <div id="builderPageTemplateEditorBody" class="builder-template-section-body">
-            <p id="builderPageTemplateEditorMeta" class="meta">Build landing-page templates as ordered sections with configurable layouts and module slots.</p>
-            <input id="builderPageTemplateEditorIdInput" type="hidden" />
-            <div class="grid-form" style="margin-bottom:0.75rem;">
-              <input id="builderPageTemplateEditorNameInput" type="text" placeholder="Template name" />
-              <div id="builderPageTemplateEditorBaseTemplateWrap">
-                <select id="builderPageTemplateEditorBaseTemplateSelect"></select>
-              </div>
-            </div>
-            <div id="builderPageTemplateEditorTopActions" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-              <button id="builderPageTemplateEditorSaveBtnTop" type="button" class="btn">Save Modular Template</button>
-              <button id="builderPageTemplateEditorPreviewBtnTop" type="button" class="btn">Preview Template</button>
-              <button id="builderPageTemplateEditorCloseBtnTop" type="button" class="btn">Close</button>
-            </div>
-            <div id="builderPageTemplateEditorToolbar" class="builder-layout-toolbar" style="margin:0 0 0.9rem;">
-              <div class="builder-layout-toolbar-heading">Row Layouts</div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="1-5" title="Add 1-5 Row" aria-label="Add 1-5 Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--1-5"><span></span><span></span></span>
-              </div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="2-4" title="Add 2-4 Row" aria-label="Add 2-4 Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--2-4"><span></span><span></span></span>
-              </div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="2-2-2" title="Add 2-2-2 Row" aria-label="Add 2-2-2 Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--2-2-2"><span></span><span></span><span></span></span>
-              </div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="3-3" title="Add 3-3 Row" aria-label="Add 3-3 Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--3-3"><span></span><span></span></span>
-              </div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="4-2" title="Add 4-2 Row" aria-label="Add 4-2 Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--4-2"><span></span><span></span></span>
-              </div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="5-1" title="Add 5-1 Row" aria-label="Add 5-1 Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--5-1"><span></span><span></span></span>
-              </div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="1-4-1" title="Add 1-4-1 Row" aria-label="Add 1-4-1 Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--1-4-1"><span></span><span></span><span></span></span>
-              </div>
-              <div class="builder-layout-tile" role="button" tabindex="0" data-section-layout="6" title="Add Full Width Row" aria-label="Add Full Width Row">
-                <span class="builder-layout-toolbar-icon builder-layout-toolbar-icon--6"><span></span></span>
-              </div>
-            </div>
-            <div class="builder-page-template-workspace-heading">Workspace</div>
-            <div id="builderPageTemplateEditorSections" class="builder-template-module-list"></div>
-            <div id="builderPageTemplateEditorBottomActions" class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
-              <button id="builderPageTemplateEditorSaveBtnBottom" type="button" class="btn">Save Modular Template</button>
-              <button id="builderPageTemplateEditorPreviewBtn" type="button" class="btn">Preview Template</button>
-            </div>
-          </div>
-        </section>
-        </div>
-        <section id="builderTemplateEditorPanel" class="builder-template-section builder-template-editor hidden">
-          <div class="builder-template-section-header-row">
-            <button
-              id="builderTemplateEditorToggle"
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="false"
-              aria-controls="builderTemplateEditorBody"
-            >
-              <span id="builderTemplateEditorTitle" class="accordion-title">Email: Modular</span>
-              <span class="accordion-toggle">
-                <span class="accordion-arrow" aria-hidden="true">▾</span>
-              </span>
-            </button>
-          </div>
-          <div id="builderTemplateEditorBody" class="builder-template-section-body">
-            <p id="builderTemplateEditorMeta" class="meta">Drag modules to reorder, then select content for each block.</p>
-            <input id="builderTemplateEditorIdInput" type="hidden" />
-            <div class="grid-form" style="margin-bottom:0.75rem;">
-              <input id="builderTemplateEditorNameInput" type="text" placeholder="Template name" />
-              <input id="builderTemplateEditorSlugInput" type="text" placeholder="Slug (optional)" />
-              <input id="builderTemplateEditorCtaInput" type="text" placeholder="CTA label" />
-            </div>
-            <input id="builderTemplateEditorSummaryInput" type="text" placeholder="Summary: when to use this template." style="margin-bottom:0.75rem;" />
-            <input id="builderTemplateEditorSubjectInput" type="text" placeholder="Default subject line" style="margin-bottom:0.75rem;" />
-            <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-              <button id="builderTemplateEditorSaveBtnTop" type="button" class="btn">Save Template</button>
-            </div>
-            <div id="builderTemplateEditorToolbar" class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-              <button type="button" data-block-type="eyebrow" class="btn">Add Eyebrow</button>
-              <button type="button" data-block-type="heading" class="btn">Add Heading</button>
-              <button type="button" data-block-type="paragraph" class="btn">Add Paragraph</button>
-              <button type="button" data-block-type="image" class="btn">Add Image</button>
-              <button type="button" data-block-type="button" class="btn">Add Button</button>
-              <button type="button" data-block-type="divider" class="btn">Add Divider</button>
-              <button type="button" data-block-type="spacer" class="btn">Add Spacer</button>
-            </div>
-            <div id="builderTemplateEditorModules" class="builder-template-module-list"></div>
-            <div class="page-heading-actions" style="justify-content:flex-start; margin-top:0.9rem;">
-              <button id="builderTemplateEditorSaveBtnBottom" type="button" class="btn">Save Template</button>
-            </div>
-          </div>
-        </section>
-
-        <section class="builder-template-section hidden">
-          <div class="builder-template-section-header-row">
-            <button
-              id="builderFormsSectionToggle"
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="false"
-              aria-controls="builderFormsSectionBody"
-            >
-  <span class="accordion-title">Forms</span>
-  <span class="accordion-toggle">
-    <span class="accordion-arrow" aria-hidden="true">▾</span>
-  </span>
-</button>
-          </div>
-          <div id="builderFormsSectionBody" class="builder-template-section-body">
-            <p>These are the reusable form templates used as the foundation for saved forms.</p>
-            <div id="builderFormTemplatesTableHost" class="builder-template-records-host"></div>
-            <div id="builderFormTemplatesLibrary" class="builder-template-library"></div>
-            <div id="builderFormTemplatesPreviewHost"></div>
-          </div>
-        </section>
-
-        <section class="builder-template-section hidden">
-          <div class="builder-template-section-header-row">
-            <button
-              id="builderEmailSectionToggle"
-              class="btn accordion-header"
-              type="button"
-              aria-expanded="false"
-              aria-controls="builderEmailSectionBody"
-            >
-  <span class="accordion-title">Email: Text</span>
-  <span class="accordion-toggle">
-    <span class="accordion-arrow" aria-hidden="true">▾</span>
-  </span>
-</button>
-          </div>
-          <div id="builderEmailSectionBody" class="builder-template-section-body">
-            <p>Choose an email template type to pair with a theme and campaign delivery.</p>
-            <form id="builderEmailTemplateForm" class="standard-form-grid" style="margin-bottom: 1.5rem;">
-              <input id="builderEmailTemplateIdInput" name="template_id" type="hidden" />
-              <div class="standard-form-grid-full page-heading-actions" style="justify-content:flex-start;">
-                <button id="builderEmailTemplateSubmitBtnTop" type="submit" class="btn btn-primary">Save Template</button>
-                <button id="builderEmailTemplateResetBtnTop" type="button" class="btn">Reset</button>
-              </div>
-              
-              <label for="builderEmailTemplateNameInput">Template Name</label>
-              <input id="builderEmailTemplateNameInput" name="name" />
-              
-              <label for="builderEmailTemplateSlugInput">Slug</label>
-              <input id="builderEmailTemplateSlugInput" name="slug" />
-              
-              <label for="builderEmailTemplateCtaInput">CTA Label</label>
-              <input id="builderEmailTemplateCtaInput" name="cta" />
-              
-              <label for="builderEmailTemplateSummaryInput">Summary</label>
-              <input id="builderEmailTemplateSummaryInput" name="summary" />
-              
-              <label for="builderEmailTemplateSubjectInput">Default Subject Line</label>
-              <input id="builderEmailTemplateSubjectInput" name="subject" />
-              
-              <label for="builderEmailTemplateHeadingInput">Template Heading</label>
-              <input id="builderEmailTemplateHeadingInput" name="heading" />
-              
-              <label for="builderEmailTemplateBodyInput">Body Structure</label>
-              <textarea id="builderEmailTemplateBodyInput" name="body" rows="4"></textarea>
-              
-              <div></div>
-              <div class="page-heading-actions">
-                <button id="builderEmailTemplateSubmitBtn" type="submit" class="btn btn-primary">Save Template</button>
-                <button id="builderEmailTemplateResetBtn" type="button" class="btn">Reset</button>
-              </div>
-            </form>
-            <div id="builderEmailTemplatesLibrary" class="builder-template-library"></div>
-            <div id="builderEmailTemplatesPreviewHost"></div>
-          </div>
-        </section>
-
-      </section>
-      <section id="builderToolsPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Extensions</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <p>Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
-        <div id="builderExtensionsFeaturedGrid" class="builder-extensions-tree"></div>
-      </section>
-      <section id="builderExtensionsManagerPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2><a href="#" class="page-heading-back-link" data-back-page="builderToolsPage">Builder: Extensions</a>: Manager</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
-        <p>Maintain a searchable extension repository with recursive parent-child taxonomy, definitions, and descriptive metadata.</p>
-        <div id="builderReactRootExtensions" class="builder-react-root"></div>
-      </section>
-      <section id="builderExtensionIconBuilderPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Extension: Icon Builder</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderToolsPage')" class="btn">Back To Extensions</button>
-            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
-          </div>
-        </div>
-        <h3>Icon Builder</h3>
-        <p>Generate a compact icon immediately for a message, asset, campaign, or other system object.</p>
-        <form id="iconBuilderForm" class="standard-form-grid">
-          <label for="iconBuilderObjectTypeSelect">Object Type</label>
-          <select id="iconBuilderObjectTypeSelect" name="object_type">
-            <option value="message">Message</option>
-            <option value="asset">Asset</option>
-            <option value="campaign">Campaign</option>
-            <option value="channel">Channel</option>
-            <option value="contact_segment">Contact Segment</option>
-            <option value="custom">Custom</option>
-          </select>
-          
-          <label for="iconBuilderObjectNameInput">Object Name</label>
-          <input id="iconBuilderObjectNameInput" name="object_name" />
-          
-          <label for="iconBuilderCategoryInput">Category</label>
-          <input id="iconBuilderCategoryInput" name="category" />
-          
-          <label for="iconBuilderWorkspaceIdInput">Workspace ID</label>
-          <input id="iconBuilderWorkspaceIdInput" name="workspace_id" value="alphire-main" />
-          
-          <label for="iconBuilderObjectSummaryInput">Object Summary</label>
-          <textarea id="iconBuilderObjectSummaryInput" name="object_summary" rows="5"></textarea>
-          
-          <label for="iconBuilderVisualStyleSelect">Visual Style</label>
-          <select id="iconBuilderVisualStyleSelect" name="visual_style">
-            <option value="clean-flat">Clean Flat</option>
-            <option value="outlined-bold">Outlined Bold</option>
-            <option value="badge-minimal">Badge Minimal</option>
-            <option value="editorial-mark">Editorial Mark</option>
-          </select>
-          
-          <label for="iconBuilderPaletteInput">Preferred Colors</label>
-          <input id="iconBuilderPaletteInput" name="palette" />
-          
-          <label for="iconBuilderDestinationSelect">Destination</label>
-          <select id="iconBuilderDestinationSelect" name="destination">
-            <option value="menu-bar">Menu Bar</option>
-            <option value="table-list">Table List</option>
-            <option value="card-badge">Card Badge</option>
-          </select>
-          
-          <label for="iconBuilderSizeInput">Output Size</label>
-          <input id="iconBuilderSizeInput" name="size" value="64x64" />
-          
-          <div class="standard-form-grid-full">
-            <label class="checkbox-row">
-              <input name="manual_confirmed" type="checkbox" />
-              I manually confirm this API action.
-            </label>
-          </div>
-          
-          <div></div>
-          <button type="submit" class="btn btn-primary">Create Icon Job</button>
-        </form>
-        <h3>Icon Request Preview</h3>
-        <pre id="iconBuilderRequestPreview" class="code-box">{}</pre>
-        <h3>Icon Response</h3>
-        <pre id="iconBuilderResponsePreview" class="code-box">{}</pre>
-        <div id="iconBuilderResultCard" class="icon-builder-result hidden">
-          <img id="iconBuilderResultImage" alt="Generated icon preview" />
-          <div class="icon-builder-result-meta">
-            <strong id="iconBuilderResultTitle">Generated Icon</strong>
-            <span id="iconBuilderResultCaption"></span>
-          </div>
-        </div>
-        <h3>General Tool Job</h3>
-        <form id="builderToolsForm" class="standard-form-grid">
-          <label for="builderToolsNameSelect">Tool Name</label>
-          <select id="builderToolsNameSelect" name="tool_name">
-            <option value="segmentation.build">segmentation.build</option>
-            <option value="buffer.queue">buffer.queue</option>
-            <option value="email.template.builder">email.template.builder</option>
-          </select>
-          
-          <label for="builderToolsWorkspaceIdInput">Workspace ID</label>
-          <input id="builderToolsWorkspaceIdInput" name="workspace_id" value="alphire-main" />
-          
-          <label for="builderToolsInputJson">Tool Input JSON</label>
-          <textarea id="builderToolsInputJson" name="input_json" rows="6">{"segment_name":"","rules":[]}</textarea>
-          
-          <div class="standard-form-grid-full">
-            <label class="checkbox-row">
-              <input name="manual_confirmed" type="checkbox" />
-              I manually confirm this API action.
-            </label>
-          </div>
-          
-          <div></div>
-          <button type="submit" class="btn btn-primary">Create Tool Job</button>
-        </form>
-        <h3>Advanced Tool Runner</h3>
-        <p>Run generic internal tool jobs for extension-level operations that do not yet have dedicated UIs.</p>
-        <h3>Request Preview</h3>
-        <pre id="toolsRequestPreview" class="code-box">{}</pre>
-        <h3>Response</h3>
-        <pre id="toolsResponsePreview" class="code-box">{}</pre>
-      </section>
-      <section id="builderExtensionScreenshotPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Extension: Screenshot</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderToolsPage')" class="btn">Back To Extensions</button>
-            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
-          </div>
-        </div>
-        <p>Paste a website URL to create a `640x360` screenshot, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Screenshot`.</p>
-        <form id="builderScreenshotForm" class="standard-form-grid">
-          <label for="builderScreenshotUrlInput">URL</label>
-          <input id="builderScreenshotUrlInput" name="url" />
-          
-          <label for="builderScreenshotAssetNameInput">Asset Name (optional)</label>
-          <input id="builderScreenshotAssetNameInput" name="asset_name" />
-          
-          <label for="builderScreenshotTagsInput">Tags (comma-separated)</label>
-          <input id="builderScreenshotTagsInput" name="tags" />
-          
-          <div></div>
-          <button type="submit" class="btn btn-primary">Capture Screenshot</button>
-        </form>
-        <h3>Screenshot Response</h3>
-        <pre id="builderScreenshotResponsePreview" class="code-box">{}</pre>
-        <div id="builderScreenshotResultCard" class="icon-builder-result hidden">
-          <img id="builderScreenshotResultImage" alt="Captured screenshot preview" />
-          <div class="icon-builder-result-meta">
-            <strong id="builderScreenshotResultTitle">Captured Screenshot</strong>
-            <span id="builderScreenshotResultCaption"></span>
-          </div>
-        </div>
-      </section>
-      <section id="builderExtensionThumbnailPage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Extension: Thumbnail</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderToolsPage')" class="btn">Back To Extensions</button>
-            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
-          </div>
-        </div>
-        <p>Generate an image thumbnail from the first page of a PDF file location, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Thumbnail`.</p>
-        <form id="builderThumbnailForm" class="standard-form-grid">
-          <label for="builderThumbnailLocationInput">PDF File Location</label>
-          <input id="builderThumbnailLocationInput" name="file_location" />
-          
-          <label for="builderThumbnailSourceAssetSelect">Source Asset</label>
-          <select id="builderThumbnailSourceAssetSelect" name="source_asset_id">
-            <option value="">Source Asset (Optional)</option>
-          </select>
-          
-          <label for="builderThumbnailAssetNameInput">Thumbnail Asset Name (optional)</label>
-          <input id="builderThumbnailAssetNameInput" name="asset_name" />
-          
-          <label for="builderThumbnailTagsInput">Tags (comma-separated)</label>
-          <input id="builderThumbnailTagsInput" name="tags" />
-          
-          <div></div>
-          <button type="submit" class="btn btn-primary">Generate Thumbnail</button>
-        </form>
-        <h3>Thumbnail Response</h3>
-        <pre id="builderThumbnailResponsePreview" class="code-box">{}</pre>
-        <div id="builderThumbnailResultCard" class="icon-builder-result hidden">
-          <img id="builderThumbnailResultImage" alt="Generated PDF thumbnail preview" />
-          <div class="icon-builder-result-meta">
-            <strong id="builderThumbnailResultTitle">Generated Thumbnail</strong>
-            <span id="builderThumbnailResultCaption"></span>
-          </div>
-        </div>
-      </section>
       <!-- INJECTED PAGE: docs.html -->
 
       <section id="docsPage" class="app-page hidden docs-page">
@@ -10082,9 +10082,8 @@
   <script src="/js/richtext-vendor.js"></script>
   <script src="/js/richtext.js"></script>
   <script src="/builder-bundle.js"></script>
-  <script src="/js/builder.js"></script>
   <script src="/js/builderNavMenu.js?v=2"></script>
-  <script src="/js/builder.js?v=15"></script>
+  <script src="/js/builder.js?v=16"></script>
   <script src="/js/polls.js"></script>
   <script src="/js/activityLog.js"></script>
   <script src="/js/observe.js"></script>

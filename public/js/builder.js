@@ -570,6 +570,109 @@ App.builder = (function () {
     return document.getElementById(id);
   }
 
+  // ── React island bridge (restored from original builder.js) ──────────────
+  const BUILDER_HOST_IDS = {
+    hub: 'builderReactRootHub',
+    template: 'builderReactRootTemplate',
+    page: 'builderReactRootPage',
+  };
+  let builderActiveMount = null;
+
+  function useReactIsland() {
+    try {
+      const flag = window.localStorage.getItem('builder_v2');
+      if (flag === '0') return false;
+    } catch (_) {}
+    return typeof window.BuilderReact?.mount === 'function';
+  }
+
+  function resolveBuilderHost(surface, editorMode) {
+    if (surface === 'hub') return document.getElementById(BUILDER_HOST_IDS.hub);
+    if (editorMode === 'page') return document.getElementById(BUILDER_HOST_IDS.page);
+    return document.getElementById(BUILDER_HOST_IDS.template);
+  }
+
+  function hideVanillaBuilderPanels() {
+    const modularPanel = byId('builderPageTemplateEditorPanel');
+    if (modularPanel) modularPanel.classList.add('hidden');
+    const emailPanel = byId('builderTemplateEditorPanel');
+    if (emailPanel) emailPanel.classList.add('hidden');
+    const landingForm = byId('builderLandingPagesForm');
+    if (landingForm) landingForm.classList.add('hidden');
+    const pageHeader = byId('builderLandingPagesHeader');
+    if (pageHeader) pageHeader.classList.add('hidden');
+  }
+
+  function showVanillaBuilderPanels(editorMode, templateKind) {
+    const kind = safeText(templateKind).toLowerCase();
+    const modularPanel = byId('builderPageTemplateEditorPanel');
+    const emailPanel = byId('builderTemplateEditorPanel');
+    if (kind === 'email') {
+      if (emailPanel) emailPanel.classList.remove('hidden');
+      if (modularPanel) modularPanel.classList.add('hidden');
+    } else {
+      if (modularPanel) modularPanel.classList.remove('hidden');
+      if (emailPanel) emailPanel.classList.add('hidden');
+    }
+    const landingForm = byId('builderLandingPagesForm');
+    if (landingForm && editorMode !== 'page') landingForm.classList.remove('hidden');
+    const pageHeader = byId('builderLandingPagesHeader');
+    if (pageHeader && editorMode !== 'page') pageHeader.classList.remove('hidden');
+  }
+
+  function unmount() {
+    if (typeof window.BuilderReact?.unmount === 'function') {
+      window.BuilderReact.unmount();
+    }
+    builderActiveMount = null;
+  }
+
+  function mount(config) {
+    if (!useReactIsland()) return false;
+    const surface = safeText(config?.surface) || 'editor';
+    const editorMode = safeText(config?.editorMode) === 'page' ? 'page' : 'template';
+    const host = resolveBuilderHost(surface, editorMode);
+    if (!host) {
+      if (typeof App.notify === 'function') App.notify('Builder mount point is missing from the page markup', true);
+      return false;
+    }
+    unmount();
+    hideVanillaBuilderPanels();
+    const props = {
+      surface,
+      editorMode,
+      menuMode: config?.menuMode,
+      record: config?.record || null,
+      sourceTemplateId: safeText(config?.sourceTemplateId),
+      options: config?.options || null,
+      onClose: () => {
+        unmount();
+        showVanillaBuilderPanels(editorMode, config?.record?.templateKind);
+        if (typeof config?.onClose === 'function') config.onClose();
+      },
+      onSaved: (record) => {
+        if (typeof config?.onSaved === 'function') config.onSaved(record);
+      },
+    };
+    const mounted = window.BuilderReact.mount(host, props);
+    if (!mounted) {
+      if (typeof App.notify === 'function') App.notify('Builder UI failed to mount', true);
+      showVanillaBuilderPanels(editorMode, config?.record?.templateKind);
+      return false;
+    }
+    builderActiveMount = { surface, editorMode, host, templateKind: safeText(config?.record?.templateKind) };
+    return true;
+  }
+
+  function openHub() {
+    return mount({ surface: 'hub', editorMode: 'template', onClose: () => {} });
+  }
+
+  function isActive() {
+    return Boolean(builderActiveMount);
+  }
+  // ── End React island bridge ───────────────────────────────────────────────
+
   function mountThemesReact() {
     const host = byId('builderReactRootThemes');
     if (host && window.ThemesReact?.mount) {
@@ -13447,7 +13550,20 @@ App.builder = (function () {
       await refresh();
       if (pageId === 'builderThemesPage') mountThemesReact();
       else if (pageId === 'builderFormsPage') mountFormsReact();
+      else if (pageId === 'builderBuilderWorkspacePage') {
+        if (!builderActiveMount || builderActiveMount.surface !== 'hub') {
+          mount({ surface: 'hub', editorMode: 'template', onClose: () => {} });
+        }
+      } else if (builderActiveMount) {
+        const allowed = ['builderBuilderWorkspacePage', 'builderTemplatesPage', 'builderLandingPagesPage'];
+        if (!allowed.includes(pageId)) unmount();
+      }
     },
+    mount,
+    unmount,
+    openHub,
+    isActive,
+    useReactIsland,
     openThemesPage,
     openThemesBuilder,
     openFormsPage,
