@@ -156,7 +156,7 @@ export type BuilderTheme = {
   typography: BuilderThemeTypography;
 };
 
-/** Lightweight reference to a saved theme in the develop_themes table. */
+/** Lightweight reference to a saved theme in the builder_themes table. */
 export type BuilderThemeSummary = {
   id: string;
   name: string;
