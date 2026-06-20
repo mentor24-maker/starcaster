@@ -36,7 +36,6 @@ App.manifests = [
   App.engageComments,
   App.docsApiSetup,
   App.builder,
-  App.builder,
   App.activityLog,
   App.observe,          // Integrates observe.js page views and API quotas
   App.envConfig,        // #7 — Env Configuration
