@@ -26,16 +26,16 @@ const RESPONSE_KEY_MAPS: Record<string, Array<[string, string]>> = {
 };
 
 const PATH_REWRITES: Array<[RegExp, string, string]> = [
-  [/^\/api\/admin\/page-templates(\/|$)/, '/api/develop/page-templates$1', 'page-templates'],
+  [/^\/api\/admin\/page-templates(\/|$)/, '/api/builder/page-templates$1', 'page-templates'],
   // Specific landing-pages sub-routes must come before the general pages rewrite.
-  [/^\/api\/admin\/pages\/bulk-create-with-model$/, '/api/develop/landing-pages/bulk-create-with-model', 'pages'],
-  [/^\/api\/admin\/pages\/populate-from-acquire$/, '/api/develop/landing-pages/populate-from-acquire', 'pages'],
-  [/^\/api\/admin\/pages(\/|$)/, '/api/develop/landing-pages$1', 'pages'],
-  [/^\/api\/admin\/acquire-runs(\/|$)/, '/api/develop/acquire-runs$1', 'acquire-runs'],
-  [/^\/api\/admin\/cell-modules(\/|$)/, '/api/develop/modules$1', 'cell-modules'],
-  [/^\/api\/admin\/saved-sections(\/|$)/, '/api/develop/saved-sections$1', 'saved-sections'],
-  [/^\/api\/admin\/products(\/|$)/, '/api/develop/products$1', 'products'],
-  [/^\/api\/admin\/themes(\/|$)/, '/api/develop/themes$1', 'themes'],
+  [/^\/api\/admin\/pages\/bulk-create-with-model$/, '/api/builder/landing-pages/bulk-create-with-model', 'pages'],
+  [/^\/api\/admin\/pages\/populate-from-acquire$/, '/api/builder/landing-pages/populate-from-acquire', 'pages'],
+  [/^\/api\/admin\/pages(\/|$)/, '/api/builder/landing-pages$1', 'pages'],
+  [/^\/api\/admin\/acquire-runs(\/|$)/, '/api/builder/acquire-runs$1', 'acquire-runs'],
+  [/^\/api\/admin\/cell-modules(\/|$)/, '/api/builder/modules$1', 'cell-modules'],
+  [/^\/api\/admin\/saved-sections(\/|$)/, '/api/builder/saved-sections$1', 'saved-sections'],
+  [/^\/api\/admin\/products(\/|$)/, '/api/builder/products$1', 'products'],
+  [/^\/api\/admin\/themes(\/|$)/, '/api/builder/themes$1', 'themes'],
   [/^\/api\/admin\/polls(\/|$)/, '/api/polls$1', 'polls']
 ];
 
