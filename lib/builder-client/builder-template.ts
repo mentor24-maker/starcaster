@@ -157,7 +157,7 @@ export type BuilderTheme = {
 };
 
 /** Lightweight reference to a saved theme in the develop_themes table. */
-export type DevelopThemeSummary = {
+export type BuilderThemeSummary = {
   id: string;
   name: string;
   primaryColor?: string;
