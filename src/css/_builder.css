@@ -258,11 +258,9 @@
 /* ── Nav Probe extension ────────────────────────────────────── */
 
 .nav-probe-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 80px;
-  margin-top: 2rem;
+  display: block;
+  padding: 0;
+  margin: 0;
 }
 
 .nav-probe-ring {
@@ -286,21 +284,21 @@
 .nav-probe-ring-200  { width: 200px;  height: 200px;  }
 .nav-probe-ring-100  { width: 100px;  height: 100px;  }
 
-.nav-probe-ring-1000:hover { background: rgba(0, 0, 255, 0.00); }
-.nav-probe-ring-900:hover  { background: rgba(0, 0, 255, 0.02); }
-.nav-probe-ring-800:hover  { background: rgba(0, 0, 255, 0.05); }
-.nav-probe-ring-700:hover  { background: rgba(0, 0, 255, 0.09); }
-.nav-probe-ring-600:hover  { background: rgba(0, 0, 255, 0.14); }
-.nav-probe-ring-500:hover  { background: rgba(0, 0, 255, 0.20); }
-.nav-probe-ring-400:hover  { background: rgba(0, 0, 255, 0.30); }
-.nav-probe-ring-300:hover  { background: rgba(0, 0, 255, 0.45); }
-.nav-probe-ring-200:hover  { background: rgba(0, 0, 255, 0.65); }
-.nav-probe-ring-100:hover  { background: rgba(0, 0, 255, 0.90); }
+.nav-probe-ring-1000:hover { background: rgba(  0,   0, 255, 0.00); }
+.nav-probe-ring-900:hover  { background: rgba(  0,   0, 255, 0.02); }
+.nav-probe-ring-800:hover  { background: rgba(  0,   0, 255, 0.05); }
+.nav-probe-ring-700:hover  { background: rgba(  0,   0, 255, 0.09); }
+.nav-probe-ring-600:hover  { background: rgba(  0,   0, 255, 0.14); }
+.nav-probe-ring-500:hover  { background: rgba(  0,   0, 255, 0.20); }
+.nav-probe-ring-400:hover  { background: rgba(  0,   0, 204, 0.30); }
+.nav-probe-ring-300:hover  { background: rgba(  0,   0, 170, 0.45); }
+.nav-probe-ring-200:hover  { background: rgba(  0,   0, 153, 0.65); }
+.nav-probe-ring-100:hover  { background: rgba(  0,   0, 102, 0.90); }
 
 .nav-probe-dot {
-  width: 10px;
-  height: 10px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: rgba(0, 0, 255, 1.0);
+  background: #666;
   flex-shrink: 0;
 }
