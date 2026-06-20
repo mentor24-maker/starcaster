@@ -1800,6 +1800,7 @@ body.asset-associations-modal-open {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 .nav-probe-ring-1000 {
   width: 1000px;
@@ -1842,31 +1843,31 @@ body.asset-associations-modal-open {
   height: 100px;
 }
 .nav-probe-ring-1000:hover {
-  background: rgba(0, 0, 255, 0.10);
+  background: rgba(0, 0, 255, 0.00);
 }
 .nav-probe-ring-900:hover {
-  background: rgba(0, 0, 255, 0.10);
+  background: rgba(0, 0, 255, 0.02);
 }
 .nav-probe-ring-800:hover {
-  background: rgba(0, 0, 255, 0.20);
+  background: rgba(0, 0, 255, 0.05);
 }
 .nav-probe-ring-700:hover {
-  background: rgba(0, 0, 255, 0.30);
+  background: rgba(0, 0, 255, 0.09);
 }
 .nav-probe-ring-600:hover {
-  background: rgba(0, 0, 255, 0.40);
+  background: rgba(0, 0, 255, 0.14);
 }
 .nav-probe-ring-500:hover {
-  background: rgba(0, 0, 255, 0.50);
+  background: rgba(0, 0, 255, 0.20);
 }
 .nav-probe-ring-400:hover {
-  background: rgba(0, 0, 255, 0.60);
+  background: rgba(0, 0, 255, 0.30);
 }
 .nav-probe-ring-300:hover {
-  background: rgba(0, 0, 255, 0.70);
+  background: rgba(0, 0, 255, 0.45);
 }
 .nav-probe-ring-200:hover {
-  background: rgba(0, 0, 255, 0.80);
+  background: rgba(0, 0, 255, 0.65);
 }
 .nav-probe-ring-100:hover {
   background: rgba(0, 0, 255, 0.90);
