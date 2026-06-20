@@ -5749,6 +5749,7 @@ body.asset-associations-modal-open {
       135deg,
       #15b7ef 0%,
       #79dcff 100%);
+  min-height: 30px;
 }
 .builder-react-root .builder-layout-label {
   font-size: 0.82rem;
