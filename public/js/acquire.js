@@ -2354,7 +2354,7 @@ App.acquire = (function () {
       });
     }
     if (els.directAcquireErrorsPreview) {
-      const errors = Array.isArray(run?.errors) ? run.errors : [];
+      const errors = Array.isArray(state.directAcquireCurrentRun?.errors) ? state.directAcquireCurrentRun.errors : [];
       els.directAcquireErrorsPreview.textContent = errors.length ? prettyJson({ errors }) : '{}';
       els.directAcquireErrorsPreview.classList.toggle('hidden', !errors.length);
     }
