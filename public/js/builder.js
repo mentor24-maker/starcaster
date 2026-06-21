@@ -7362,19 +7362,6 @@ App.builder = (function () {
       });
   }
 
-  async function openCreateLandingTemplate() {
-    try {
-      await loadLandingPageBuilderOptions();
-    } catch (_) {
-      // We can still open the editor with whatever builder data is currently available.
-    }
-    const baseTemplate = getTemplateById(selectedTemplateId);
-    const suggestedName = `${safeText(baseTemplate?.name) || 'Page'} Template`;
-    const name = safeText(window.prompt('Template name', suggestedName), 255) || suggestedName;
-    const record = buildEmptyLandingRecord(name, safeText(baseTemplate?.id) || selectedTemplateId);
-    openLandingPageVisualEditor(record, { mode: 'template' });
-  }
-
   async function openCreateModularLandingTemplate() {
     try {
       await loadLandingPageBuilderOptions();
@@ -7384,7 +7371,7 @@ App.builder = (function () {
     const baseTemplate = getTemplateById(selectedTemplateId);
     openModularPageTemplateEditor({
       id: '',
-      name: `${safeText(baseTemplate?.name) || 'Page'} Modular Template`,
+      name: `${safeText(baseTemplate?.name) || 'Page'} Template`,
       templateKind: 'modular',
       templateId: safeText(baseTemplate?.id) || selectedTemplateId,
       layoutSections: createDefaultModularPageSections(),
@@ -12508,13 +12495,6 @@ App.builder = (function () {
     const createPageTemplateBtn = byId('builderCreatePageTemplateBtn');
     if (createPageTemplateBtn) {
       createPageTemplateBtn.addEventListener('click', () => {
-        openCreateLandingTemplate();
-      });
-    }
-
-    const createModularPageTemplateBtn = byId('builderCreateModularPageTemplateBtn');
-    if (createModularPageTemplateBtn) {
-      createModularPageTemplateBtn.addEventListener('click', () => {
         openCreateModularLandingTemplate();
       });
     }
