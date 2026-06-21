@@ -2304,9 +2304,11 @@ App.acquire = (function () {
         const tr = document.createElement('tr');
         [page.url||'-', page.title||'-',
          Array.isArray(page.emails)?page.emails.join(', ')||'-':'-',
-         Array.isArray(page.phones)?page.phones.join(', ')||'-':'-',
          page.body_snippet||'-'
         ].forEach((text) => { const td = document.createElement('td'); td.textContent = text; tr.appendChild(td); });
+        const actionTd = document.createElement('td');
+        App.finishTableActionsCell(actionTd, App.makeIconButton('plus', 'Create Builder page', () => openAcquirePageCreateModal(page), { primary: true }));
+        tr.appendChild(actionTd);
         els.directAcquirePagesTable.appendChild(tr);
       });
     }
@@ -5522,6 +5524,200 @@ App.acquire = (function () {
     renderBlueskyReplyCandidates(null);
     setBlueskyReplyStatus('BlueSky reply generation is idle.', false);
     setBlueskyPostingStatus('BlueSky posting operator is idle.', false);
+  }
+
+  // ── Create-page-from-crawled-page modal ──────────────────────────────────
+  const ACQUIRE_PAGE_CREATE_CONTENT_MODELS = [
+    { id: 'duda-alternating-2col', name: 'Alternating Two-Column Blocks' },
+  ];
+  let _acquirePageCreateThemesCache = null;
+  let _acquirePageCreateTemplatesCache = null;
+  let _acquirePageCreateAbortCtrl = null;
+
+  function deriveAcquirePageSlug(url) {
+    try {
+      const u = new URL(url);
+      const parts = u.pathname.split('/').filter(Boolean);
+      const raw = parts[parts.length - 1] || parts[0] || u.hostname.split('.')[0] || 'page';
+      return raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'page';
+    } catch (_) { return 'page'; }
+  }
+
+  async function loadAcquirePageCreateData() {
+    const [themesResult, templatesResult] = await Promise.all([
+      _acquirePageCreateThemesCache
+        ? Promise.resolve(_acquirePageCreateThemesCache)
+        : api('/api/builder/themes').then((r) => { _acquirePageCreateThemesCache = r; return r; }),
+      _acquirePageCreateTemplatesCache
+        ? Promise.resolve(_acquirePageCreateTemplatesCache)
+        : api('/api/builder/page-templates').then((r) => { _acquirePageCreateTemplatesCache = r; return r; }),
+    ]);
+    return {
+      themes: Array.isArray(themesResult.themes) ? themesResult.themes : [],
+      templates: Array.isArray(templatesResult.pageTemplates) ? templatesResult.pageTemplates : [],
+    };
+  }
+
+  function buildAcquireMenuOptions(templates) {
+    const options = [];
+    for (const template of (templates || [])) {
+      for (const section of (template.layoutSections || [])) {
+        for (const mod of (section.modules || [])) {
+          if (mod.type === 'navigation') {
+            try {
+              const items = JSON.parse((mod.settings && mod.settings.navItems) || '[]');
+              if (items.length > 0) {
+                options.push({
+                  id: 'template:' + template.id + ':module:' + mod.id,
+                  label: template.name + ' / ' + (mod.name || 'Navigation'),
+                });
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    }
+    return options;
+  }
+
+  function openAcquirePageCreateModal(page) {
+    if (_acquirePageCreateAbortCtrl) _acquirePageCreateAbortCtrl.abort();
+    _acquirePageCreateAbortCtrl = new AbortController();
+    const signal = _acquirePageCreateAbortCtrl.signal;
+
+    let modal = document.getElementById('acquirePageCreateModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'acquirePageCreateModal';
+      modal.className = 'builder-content-modal-backdrop';
+      modal.innerHTML = [
+        '<div class="builder-content-modal" style="max-width:480px;">',
+        '  <div class="builder-content-modal-header">',
+        '    <div>',
+        '      <strong id="acquirePageCreateTitle"></strong>',
+        '      <span id="acquirePageCreateUrl" class="builder-content-modal-url"></span>',
+        '    </div>',
+        '    <button type="button" id="acquirePageCreateClose" class="btn" aria-label="Close">&times;</button>',
+        '  </div>',
+        '  <div class="builder-content-modal-body">',
+        '    <div id="acquirePageCreateError" class="notice error" style="display:none;margin-bottom:0.75rem;"></div>',
+        '    <form id="acquirePageCreateForm" class="standard-form-grid">',
+        '      <label for="acquirePageCreateThemeSelect">Theme</label>',
+        '      <select id="acquirePageCreateThemeSelect" name="theme_id"></select>',
+        '      <label for="acquirePageCreateTemplateSelect">Template</label>',
+        '      <select id="acquirePageCreateTemplateSelect" name="template_id"></select>',
+        '      <label for="acquirePageCreateMenuSelect">Menu</label>',
+        '      <select id="acquirePageCreateMenuSelect" name="menu_id"></select>',
+        '      <label for="acquirePageCreateModelSelect">Content Model</label>',
+        '      <select id="acquirePageCreateModelSelect" name="content_model_id"></select>',
+        '      <div></div>',
+        '      <button type="submit" id="acquirePageCreateSubmitBtn" class="btn btn-primary">Create Page</button>',
+        '    </form>',
+        '  </div>',
+        '</div>',
+      ].join('');
+      document.body.appendChild(modal);
+    }
+
+    const titleEl = document.getElementById('acquirePageCreateTitle');
+    const urlEl = document.getElementById('acquirePageCreateUrl');
+    const errorEl = document.getElementById('acquirePageCreateError');
+    const themeSel = document.getElementById('acquirePageCreateThemeSelect');
+    const templateSel = document.getElementById('acquirePageCreateTemplateSelect');
+    const menuSel = document.getElementById('acquirePageCreateMenuSelect');
+    const modelSel = document.getElementById('acquirePageCreateModelSelect');
+    const submitBtn = document.getElementById('acquirePageCreateSubmitBtn');
+    const closeBtn = document.getElementById('acquirePageCreateClose');
+    const form = document.getElementById('acquirePageCreateForm');
+
+    titleEl.textContent = page.title || page.url || 'Create Page';
+    urlEl.textContent = page.url || '';
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Create Page';
+
+    modelSel.innerHTML = '<option value="">(None)</option>';
+    ACQUIRE_PAGE_CREATE_CONTENT_MODELS.forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m.id; opt.textContent = m.name;
+      modelSel.appendChild(opt);
+    });
+
+    themeSel.innerHTML = '<option value="">…Loading</option>';
+    templateSel.innerHTML = '<option value="">…Loading</option>';
+    menuSel.innerHTML = '<option value="">…Loading</option>';
+
+    loadAcquirePageCreateData().then(({ themes, templates }) => {
+      if (signal.aborted) return;
+      themeSel.innerHTML = '';
+      const noTheme = document.createElement('option'); noTheme.value = ''; noTheme.textContent = '(No theme)'; themeSel.appendChild(noTheme);
+      themes.forEach((t) => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name || t.id; themeSel.appendChild(o); });
+
+      templateSel.innerHTML = '';
+      const noTpl = document.createElement('option'); noTpl.value = ''; noTpl.textContent = 'Select a template'; templateSel.appendChild(noTpl);
+      templates.filter((t) => Array.isArray(t.layoutSections) && t.layoutSections.length > 0).forEach((t) => {
+        const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; templateSel.appendChild(o);
+      });
+
+      const menus = buildAcquireMenuOptions(templates);
+      menuSel.innerHTML = '';
+      const noMenu = document.createElement('option'); noMenu.value = ''; noMenu.textContent = '(No menu)'; menuSel.appendChild(noMenu);
+      menus.forEach((m) => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.label; menuSel.appendChild(o); });
+    }).catch((err) => {
+      if (signal.aborted) return;
+      themeSel.innerHTML = '<option value="">(Error loading)</option>';
+      templateSel.innerHTML = '<option value="">(Error loading)</option>';
+      menuSel.innerHTML = '<option value="">(No menu)</option>';
+      errorEl.textContent = err.message || 'Could not load Builder data.';
+      errorEl.style.display = '';
+    });
+
+    const closeModal = () => { modal.classList.remove('is-open'); };
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); }, { signal });
+    closeBtn.addEventListener('click', closeModal, { signal });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const templateId = templateSel.value.trim();
+      const themeId = themeSel.value.trim();
+      const contentModelId = modelSel.value.trim();
+      const pageTitle = String(page.title || page.url || '').trim();
+      const pageSlug = deriveAcquirePageSlug(page.url || '');
+      const runId = String(state.directAcquireCurrentRun?.run_id || '').trim();
+
+      errorEl.style.display = 'none';
+      if (!templateId) {
+        errorEl.textContent = 'Select a template.';
+        errorEl.style.display = '';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating…';
+      try {
+        if (contentModelId && runId) {
+          await api('/api/builder/landing-pages/bulk-create-with-model', {
+            method: 'POST',
+            body: JSON.stringify({ templateId, themeId: themeId || undefined, contentModelId, runId, items: [{ name: pageTitle || pageSlug, slug: pageSlug }] }),
+          });
+        } else {
+          await api('/api/builder/landing-pages', {
+            method: 'POST',
+            body: JSON.stringify({ name: pageTitle || pageSlug, slug: pageSlug, templateId, themeId: themeId || undefined, templateKind: 'modular' }),
+          });
+        }
+        closeModal();
+        notify('Page created');
+      } catch (err) {
+        errorEl.textContent = err.message || 'Could not create page.';
+        errorEl.style.display = '';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Page';
+      }
+    }, { signal });
+
+    modal.classList.add('is-open');
   }
 
   return {
