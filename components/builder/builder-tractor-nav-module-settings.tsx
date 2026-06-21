@@ -15,7 +15,7 @@ function update(
   onUpdateModule((m) => ({ ...m, settings: { ...m.settings, ...patch } }));
 }
 
-export function BuilderZoomNavModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderTractorNavModuleSettings({ module, onUpdateModule }: Props) {
   const s = module.settings;
   const sizingMode = s.sizingMode || "linear";
 
@@ -24,7 +24,7 @@ export function BuilderZoomNavModuleSettings({ module, onUpdateModule }: Props) 
   }
 
   return (
-    <div className="builder-zoom-nav-module-settings">
+    <div className="builder-tractor-nav-module-settings">
 
       <BuilderSettingRow label="Color" fullWidth>
         <input type="color" value={s.color || "#0000ff"}
