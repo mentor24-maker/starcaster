@@ -56,7 +56,7 @@ export type BuilderTemplateModuleType =
   | "current-poll"
   | "poll-category-list"
   | "confetti"
-  | "zoom-nav";
+  | "tractor-nav";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -972,7 +972,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "current-poll" ||
     type === "poll-category-list" ||
     type === "confetti" ||
-    type === "zoom-nav"
+    type === "tractor-nav"
   ) {
     return type;
   }
@@ -1056,7 +1056,7 @@ export function normalizeBuilderModuleSettingsForType(
 ) {
   const settings = normalizeModuleSettings(value);
 
-  if (type === "zoom-nav") {
+  if (type === "tractor-nav") {
     if (!settings.color)        settings.color        = "#0000ff";
     if (!settings.dotSize)      settings.dotSize      = "10";
     if (!settings.dotHoverColor) settings.dotHoverColor = "#ffffff";

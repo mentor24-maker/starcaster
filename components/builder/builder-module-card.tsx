@@ -55,8 +55,8 @@ import {
 } from "@/lib/module-class-triggers";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { BuilderConfettiModuleSettings } from "./builder-confetti-module-settings";
-import { ZoomNavCardPreview, ZoomNavRuntime } from "@/components/builder-zoom-nav-module";
-import { BuilderZoomNavModuleSettings } from "./builder-zoom-nav-module-settings";
+import { TractorNavCardPreview, TractorNavRuntime } from "@/components/builder-tractor-nav-module";
+import { BuilderTractorNavModuleSettings } from "./builder-tractor-nav-module-settings";
 import { BuilderModuleTriggerSettings } from "./builder-module-trigger-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
@@ -637,8 +637,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
     return <BuilderConfettiRuntime preview settings={module.settings} />;
   }
 
-  if (module.type === "zoom-nav") {
-    return <ZoomNavCardPreview settings={module.settings} />;
+  if (module.type === "tractor-nav") {
+    return <TractorNavCardPreview settings={module.settings} />;
   }
 
   return (
@@ -2124,7 +2124,7 @@ export function BuilderModuleCard({
     const isHeadingModule = module.type === "heading";
     const isCurrentPollModule = module.type === "current-poll";
     const isConfettiModule = module.type === "confetti";
-    const isZoomNavModule  = module.type === "zoom-nav";
+    const isTractorNavModule  = module.type === "tractor-nav";
     const isSocialModule = module.type === "social";
     const isPollCategoryListModule = module.type === "poll-category-list";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
@@ -2314,8 +2314,8 @@ export function BuilderModuleCard({
               />
             ) : isConfettiModule ? (
               <BuilderConfettiModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isZoomNavModule ? (
-              <BuilderZoomNavModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isTractorNavModule ? (
+              <BuilderTractorNavModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}

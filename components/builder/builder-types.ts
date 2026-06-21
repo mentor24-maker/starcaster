@@ -123,10 +123,10 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { variant: "site-nav" }
   },
   {
-    id: "navigation-zoom-nav",
-    type: "zoom-nav",
+    id: "navigation-tractor-nav",
+    type: "tractor-nav",
     group: "navigation",
-    label: "ZoomNav",
+    label: "TractorNav",
     icon: "⊙",
     description: "Proximity-aware overlay: concentric hover rings that pulse as the cursor approaches a center link.",
     name: "",

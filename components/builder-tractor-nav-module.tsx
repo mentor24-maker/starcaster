@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-export type ZoomNavSettings = Record<string, string>;
+export type TractorNavSettings = Record<string, string>;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const clean = hex.replace("#", "");
@@ -40,7 +40,7 @@ function computeRingSizes(s: {
 
 // ── Card preview: static, not position:fixed ─────────────────
 
-export function ZoomNavCardPreview({ settings }: { settings: ZoomNavSettings }) {
+export function TractorNavCardPreview({ settings }: { settings: TractorNavSettings }) {
   const color = settings.color || "#0000ff";
   const dotSize = clamp(parseInt(settings.dotSize || "10"), 2, 100);
   const ringCount = clamp(parseInt(settings.ringCount || "10"), 1, 30);
@@ -107,7 +107,7 @@ export function ZoomNavCardPreview({ settings }: { settings: ZoomNavSettings }) 
 
 // ── Full runtime: position:fixed, interactive ─────────────────
 
-export function ZoomNavRuntime({ settings }: { settings: ZoomNavSettings }) {
+export function TractorNavRuntime({ settings }: { settings: TractorNavSettings }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   const color        = settings.color        || "#0000ff";
