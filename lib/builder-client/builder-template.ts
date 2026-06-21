@@ -55,7 +55,8 @@ export type BuilderTemplateModuleType =
   | "previous-results"
   | "current-poll"
   | "poll-category-list"
-  | "confetti";
+  | "confetti"
+  | "zoom-nav";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -137,8 +138,10 @@ export type BuilderThemeTypography = {
     baseSize: number;
     ratio: number;
     baseLineHeight: number;
-    /** Per-heading overrides in px (0 = derive from scale). */
+    /** Per-heading size overrides in px (0 = derive from scale). */
     h1?: number; h2?: number; h3?: number; h4?: number; h5?: number; h6?: number;
+    /** Per-heading line-height overrides (0 = inherit baseLineHeight). */
+    h1Lh?: number; h2Lh?: number; h3Lh?: number; h4Lh?: number; h5Lh?: number; h6Lh?: number;
   };
   /** Semantic color roles wired to the palette, not raw hex at call sites. */
   colors: {
@@ -736,7 +739,19 @@ export function normalizeTheme(value: unknown): BuilderTheme {
       scale: {
         baseSize: normalizeThemeNumber(scale.baseSize, 10, 100),
         ratio: normalizeThemeNumber(scale.ratio, 1, 2.5),
-        baseLineHeight: normalizeThemeNumber(scale.baseLineHeight, 0.8, 3)
+        baseLineHeight: normalizeThemeNumber(scale.baseLineHeight, 0.8, 3),
+        ...(normalizeThemeNumber(scale.h1, 8, 200) ? { h1: normalizeThemeNumber(scale.h1, 8, 200) } : {}),
+        ...(normalizeThemeNumber(scale.h2, 8, 200) ? { h2: normalizeThemeNumber(scale.h2, 8, 200) } : {}),
+        ...(normalizeThemeNumber(scale.h3, 8, 200) ? { h3: normalizeThemeNumber(scale.h3, 8, 200) } : {}),
+        ...(normalizeThemeNumber(scale.h4, 8, 200) ? { h4: normalizeThemeNumber(scale.h4, 8, 200) } : {}),
+        ...(normalizeThemeNumber(scale.h5, 8, 200) ? { h5: normalizeThemeNumber(scale.h5, 8, 200) } : {}),
+        ...(normalizeThemeNumber(scale.h6, 8, 200) ? { h6: normalizeThemeNumber(scale.h6, 8, 200) } : {}),
+        ...(normalizeThemeNumber(scale.h1Lh, 0.8, 3) ? { h1Lh: normalizeThemeNumber(scale.h1Lh, 0.8, 3) } : {}),
+        ...(normalizeThemeNumber(scale.h2Lh, 0.8, 3) ? { h2Lh: normalizeThemeNumber(scale.h2Lh, 0.8, 3) } : {}),
+        ...(normalizeThemeNumber(scale.h3Lh, 0.8, 3) ? { h3Lh: normalizeThemeNumber(scale.h3Lh, 0.8, 3) } : {}),
+        ...(normalizeThemeNumber(scale.h4Lh, 0.8, 3) ? { h4Lh: normalizeThemeNumber(scale.h4Lh, 0.8, 3) } : {}),
+        ...(normalizeThemeNumber(scale.h5Lh, 0.8, 3) ? { h5Lh: normalizeThemeNumber(scale.h5Lh, 0.8, 3) } : {}),
+        ...(normalizeThemeNumber(scale.h6Lh, 0.8, 3) ? { h6Lh: normalizeThemeNumber(scale.h6Lh, 0.8, 3) } : {})
       },
       colors: {
         text: normalizeThemeColor(colors.text),
@@ -956,7 +971,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "previous-results" ||
     type === "current-poll" ||
     type === "poll-category-list" ||
-    type === "confetti"
+    type === "confetti" ||
+    type === "zoom-nav"
   ) {
     return type;
   }
@@ -1039,6 +1055,23 @@ export function normalizeBuilderModuleSettingsForType(
   moduleContext?: Pick<BuilderTemplateModule, "id" | "name" | "text">
 ) {
   const settings = normalizeModuleSettings(value);
+
+  if (type === "zoom-nav") {
+    if (!settings.color)        settings.color        = "#0000ff";
+    if (!settings.dotSize)      settings.dotSize      = "10";
+    if (!settings.dotHoverColor) settings.dotHoverColor = "#ffffff";
+    if (!settings.ringCount)    settings.ringCount    = "10";
+    if (!settings.sizingMode)   settings.sizingMode   = "linear";
+    if (!settings.ringStep)     settings.ringStep     = "10";
+    if (!settings.outerSize)    settings.outerSize    = "600";
+    if (!settings.curve)        settings.curve        = "2";
+    if (!settings.innerOpacity) settings.innerOpacity = "90";
+    if (!settings.opacityStep)  settings.opacityStep  = "10";
+    if (!settings.transition)   settings.transition   = "0";
+    if (!settings.posX)         settings.posX         = "0";
+    if (!settings.posY)         settings.posY         = "0";
+    if (!settings.zIndex)       settings.zIndex       = "-9999";
+  }
 
   if (type === "navigation") {
     delete settings.navBackground;
