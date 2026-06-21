@@ -59,7 +59,7 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
     }));
   }
 
-  function updateScale(key: "baseSize" | "ratio" | "baseLineHeight", value: number) {
+  function updateScale(key: string, value: number) {
     onChange((current) => ({
       ...current,
       typography: {
@@ -182,8 +182,14 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             onChange={(event) => updateScale("baseLineHeight", Number.parseFloat(event.target.value) || 0)}
           />
         </BuilderSettingRow>
+        <div className="builder-theme-scale-col-headers">
+          <span className="builder-setting-label" />
+          <span className="builder-theme-scale-col-label">Size (px)</span>
+          <span className="builder-theme-scale-col-label">Line height</span>
+        </div>
         {(["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((h) => (
-          <BuilderSettingRow key={h} label={`${h.toUpperCase()} size (px)`}>
+          <div key={h} className="builder-theme-scale-dual-row">
+            <span className="builder-setting-label">{h.toUpperCase()}</span>
             <input
               type="number"
               min={8}
@@ -191,18 +197,18 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
               step={1}
               value={scale[h] || ""}
               placeholder="Auto"
-              onChange={(event) => {
-                const val = Number.parseInt(event.target.value, 10) || 0;
-                onChange((current) => ({
-                  ...current,
-                  typography: {
-                    ...current.typography,
-                    scale: { ...current.typography.scale, [h]: val }
-                  }
-                }));
-              }}
+              onChange={(event) => updateScale(h, Number.parseInt(event.target.value, 10) || 0)}
             />
-          </BuilderSettingRow>
+            <input
+              type="number"
+              min={0.8}
+              max={3}
+              step={0.05}
+              value={(scale as Record<string, number | undefined>)[`${h}Lh`] || ""}
+              placeholder="Auto"
+              onChange={(event) => updateScale(`${h}Lh`, Number.parseFloat(event.target.value) || 0)}
+            />
+          </div>
         ))}
       </div>
 
