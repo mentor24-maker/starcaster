@@ -816,13 +816,16 @@ export function getThemeRootVars(theme: BuilderTheme | undefined): CSSProperties
   }
   // Per-heading explicit overrides take precedence over the modular scale above.
   for (let level = 1; level <= 6; level += 1) {
-    const key = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
-    const explicit = (scale as Record<string, number | undefined>)[key];
+    const explicit = (scale as Record<string, number | undefined>)[`h${level}`];
     if (explicit) vars[`--bx-size-h${level}`] = `${explicit}px`;
+    const lh = (scale as Record<string, number | undefined>)[`h${level}Lh`];
+    if (lh) vars[`--bx-line-h${level}`] = String(lh);
   }
 
-  vars["--bx-link-decoration"] = colors.linkUnderline !== false ? "underline" : "none";
-  vars["--bx-link-hover-decoration"] = colors.linkHoverUnderline !== false ? "underline" : "none";
+  if (colors.linkUnderline === true) vars["--bx-link-decoration"] = "underline";
+  else if (colors.linkUnderline === false) vars["--bx-link-decoration"] = "none";
+  if (colors.linkHoverUnderline === true) vars["--bx-link-hover-decoration"] = "underline";
+  else if (colors.linkHoverUnderline === false) vars["--bx-link-hover-decoration"] = "none";
 
   return vars as CSSProperties;
 }
