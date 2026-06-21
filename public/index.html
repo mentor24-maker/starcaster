@@ -659,12 +659,19 @@
             <div class="table-wrap">
               <table>
                 <thead>
+                  <tr class="table-filter-row">
+                    <th><input id="directAcquirePagesFilterUrl" type="search" placeholder="Filter URL" autocomplete="off" /></th>
+                    <th><input id="directAcquirePagesFilterTitle" type="search" placeholder="Filter title" autocomplete="off" /></th>
+                    <th><input id="directAcquirePagesFilterEmails" type="search" placeholder="Filter emails" autocomplete="off" /></th>
+                    <th></th>
+                    <th></th>
+                  </tr>
                   <tr>
-                    <th>URL</th>
-                    <th>Title</th>
-                    <th>Emails</th>
-                    <th>Phones</th>
-                    <th>Snippet</th>
+                    <th id="directAcquirePagesSortUrl">URL</th>
+                    <th id="directAcquirePagesSortTitle">Title</th>
+                    <th id="directAcquirePagesSortEmails">Emails</th>
+                    <th id="directAcquirePagesSortSnippet">Snippet</th>
+                    <th class="actions-col">Action</th>
                   </tr>
                 </thead>
                 <tbody id="directAcquirePagesTable"></tbody>
@@ -3645,7 +3652,6 @@
         <div class="page-heading-row">
           <h2>Builder: Templates</h2>
           <div class="page-heading-actions">
-            <button id="builderCreateModularPageTemplateBtn" type="button" class="btn">Create Modular Template</button>
             <button id="builderCreatePageTemplateBtn" type="button" class="btn">Create Template</button>
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
