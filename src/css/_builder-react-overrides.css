@@ -204,6 +204,41 @@
   color: #8aa0b4;
 }
 
+.builder-react-root .builder-theme-scale-col-headers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 2px 6px;
+}
+
+.builder-react-root .builder-theme-scale-col-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #8aa0b4;
+  text-align: left;
+}
+
+.builder-react-root .builder-theme-scale-dual-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.builder-react-root .builder-theme-scale-dual-row .builder-setting-label {
+  padding: 2px 6px;
+}
+
+.builder-react-root .builder-theme-scale-dual-row input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+}
+
 .builder-react-root .builder-theme-checkbox-label {
   display: inline-flex;
   align-items: center;
@@ -267,10 +302,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-section-card .builder-module-preview-paragraph a,
 .builder-react-root .builder-section-card .builder-module-preview-paragraph a:link,
 .builder-react-root .builder-section-card .builder-module-preview-paragraph a:visited {
-  text-decoration: var(--bx-link-decoration, underline);
+  text-decoration: var(--bx-link-decoration, none);
 }
 .builder-react-root .builder-section-card .builder-module-preview-paragraph a:hover {
-  text-decoration: var(--bx-link-hover-decoration, underline);
+  text-decoration: var(--bx-link-hover-decoration, none);
 }
 
 /* ============================================================== */
