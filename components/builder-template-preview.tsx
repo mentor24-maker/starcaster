@@ -15,6 +15,7 @@ import {
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
+import { ZoomNavRuntime } from "@/components/builder-zoom-nav-module";
 import { BuilderPollModuleRuntime, BuilderSocialShareRuntime } from "@/components/builder-poll-runtime";
 import { PollCategoryListPreview } from "@/components/builder/poll-category-list-preview";
 import {
@@ -673,6 +674,10 @@ function BuilderModulePreview({
 
   if (module.type === "confetti") {
     return <BuilderConfettiRuntime preview settings={module.settings} />;
+  }
+
+  if (module.type === "zoom-nav") {
+    return <ZoomNavRuntime settings={module.settings} />;
   }
 
   return null;
