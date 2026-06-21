@@ -15,8 +15,10 @@
 // ── Load .env FIRST — must be before any lib that reads process.env ─────────
 // dotenv is a dev dependency; it's a no-op if the package is absent (Vercel).
 try {
-  require('dotenv').config();
-  console.log('[server] Loaded .env');
+  const dotenv = require('dotenv');
+  dotenv.config();                          // .env (legacy)
+  dotenv.config({ path: '.env.local', override: false }); // .env.local (Vercel CLI default)
+  console.log('[server] Loaded env files');
 } catch (_) {
   // dotenv not installed — fine for production/Vercel
 }
