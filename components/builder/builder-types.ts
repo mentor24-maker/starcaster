@@ -123,6 +123,32 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { variant: "site-nav" }
   },
   {
+    id: "navigation-zoom-nav",
+    type: "zoom-nav",
+    group: "navigation",
+    label: "ZoomNav",
+    icon: "⊙",
+    description: "Proximity-aware overlay: concentric hover rings that pulse as the cursor approaches a center link.",
+    name: "",
+    text: "",
+    settings: {
+      color: "#0000ff",
+      dotSize: "10",
+      dotHoverColor: "#ffffff",
+      ringCount: "10",
+      sizingMode: "linear",
+      ringStep: "10",
+      outerSize: "600",
+      curve: "2",
+      innerOpacity: "90",
+      opacityStep: "10",
+      transition: "0",
+      posX: "0",
+      posY: "0",
+      zIndex: "-9999"
+    }
+  },
+  {
     id: "heading-eyebrow",
     type: "heading",
     group: "heading",
