@@ -92,6 +92,10 @@ App.acquire = (function () {
     site: '',
     keywords: '',
   };
+  const directAcquirePagesTableState = {
+    filters: { url: '', title: '', emails: '' },
+    sort: { key: '', dir: 'asc' },
+  };
   const directAcquirePeerDiscoveryBulkDraft = {
     type: '',
     category: '',
@@ -2290,11 +2294,48 @@ App.acquire = (function () {
     });
   }
 
+  function getFilteredSortedAcquirePages() {
+    const run = state.directAcquireCurrentRun;
+    let pages = Array.isArray(run?.pages) ? run.pages.slice() : [];
+    const { url: urlF, title: titleF, emails: emailsF } = directAcquirePagesTableState.filters;
+    if (urlF) pages = pages.filter((p) => String(p.url || '').toLowerCase().includes(urlF));
+    if (titleF) pages = pages.filter((p) => String(p.title || '').toLowerCase().includes(titleF));
+    if (emailsF) pages = pages.filter((p) => (Array.isArray(p.emails) ? p.emails.join(' ') : '').toLowerCase().includes(emailsF));
+    const { key, dir } = directAcquirePagesTableState.sort;
+    if (key) {
+      pages.sort((a, b) => {
+        let left = '', right = '';
+        if (key === 'url') { left = String(a.url || '').toLowerCase(); right = String(b.url || '').toLowerCase(); }
+        else if (key === 'title') { left = String(a.title || '').toLowerCase(); right = String(b.title || '').toLowerCase(); }
+        else if (key === 'emails') { left = (Array.isArray(a.emails) ? a.emails.join('') : '').toLowerCase(); right = (Array.isArray(b.emails) ? b.emails.join('') : '').toLowerCase(); }
+        else if (key === 'snippet') { left = String(a.body_snippet || '').toLowerCase(); right = String(b.body_snippet || '').toLowerCase(); }
+        if (left === right) return 0;
+        return (left < right ? -1 : 1) * (dir === 'asc' ? 1 : -1);
+      });
+    }
+    return pages;
+  }
+
   function renderDirectAcquirePagesTable() {
     if (!els.directAcquirePagesTable) return;
     els.directAcquirePagesTable.innerHTML = '';
-    const run = state.directAcquireCurrentRun;
-    const pages = Array.isArray(run?.pages) ? run.pages : [];
+
+    const sortDefs = [
+      ['directAcquirePagesSortUrl', 'url', 'URL'],
+      ['directAcquirePagesSortTitle', 'title', 'Title'],
+      ['directAcquirePagesSortEmails', 'emails', 'Emails'],
+      ['directAcquirePagesSortSnippet', 'snippet', 'Snippet'],
+    ];
+    sortDefs.forEach(([id, key, label]) => {
+      const th = document.getElementById(id);
+      if (!th) return;
+      const marker = directAcquirePagesTableState.sort.key === key
+        ? (directAcquirePagesTableState.sort.dir === 'asc' ? ' ▲' : ' ▼')
+        : '';
+      th.textContent = label + marker;
+    });
+
+    const pages = getFilteredSortedAcquirePages();
     if (!pages.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td'); td.colSpan = 5; td.textContent = 'No website pages loaded yet.';
@@ -5524,6 +5565,41 @@ App.acquire = (function () {
     renderBlueskyReplyCandidates(null);
     setBlueskyReplyStatus('BlueSky reply generation is idle.', false);
     setBlueskyPostingStatus('BlueSky posting operator is idle.', false);
+
+    [
+      ['directAcquirePagesSortUrl', 'url', 'asc'],
+      ['directAcquirePagesSortTitle', 'title', 'asc'],
+      ['directAcquirePagesSortEmails', 'emails', 'asc'],
+      ['directAcquirePagesSortSnippet', 'snippet', 'asc'],
+    ].forEach(([id, key, defaultDir]) => {
+      const th = document.getElementById(id);
+      if (!th || th.dataset.bound) return;
+      th.dataset.bound = '1';
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => {
+        if (directAcquirePagesTableState.sort.key === key) {
+          directAcquirePagesTableState.sort.dir = directAcquirePagesTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          directAcquirePagesTableState.sort.key = key;
+          directAcquirePagesTableState.sort.dir = defaultDir;
+        }
+        renderDirectAcquirePagesTable();
+      });
+    });
+
+    [
+      ['directAcquirePagesFilterUrl', 'url'],
+      ['directAcquirePagesFilterTitle', 'title'],
+      ['directAcquirePagesFilterEmails', 'emails'],
+    ].forEach(([id, key]) => {
+      const input = document.getElementById(id);
+      if (!input || input.dataset.bound) return;
+      input.dataset.bound = '1';
+      input.addEventListener('input', () => {
+        directAcquirePagesTableState.filters[key] = String(input.value || '').trim().toLowerCase();
+        renderDirectAcquirePagesTable();
+      });
+    });
   }
 
   // ── Create-page-from-crawled-page modal ──────────────────────────────────
