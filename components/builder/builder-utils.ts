@@ -387,8 +387,11 @@ export function buildClonedPageCreatePayload(source: BuilderPageRecord, existing
     name: `${source.name.trim() || "Untitled page"} Copy`,
     slug: buildUniquePageSlug(source.slug, existingPages.map((page) => page.slug)),
     templateId: source.templateId,
+    templateKind: "modular" as const,
+    themeId: source.themeId ?? undefined,
     isPublished: false,
     pageBackground: { ...source.pageBackground },
+    theme: source.theme ? JSON.parse(JSON.stringify(source.theme)) : undefined,
     layoutSections: cloneBuilderLayoutSections(source.layoutSections)
   };
 }
