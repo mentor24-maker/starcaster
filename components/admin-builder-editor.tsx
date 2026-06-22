@@ -43,7 +43,7 @@ import {
 } from "./builder/builder-utils";
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList } from "./builder/builder-page-list";
-import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary } from "./builder/builder-bulk-create";
+import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
   type BuilderModuleEditorFocus,
@@ -109,7 +109,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
   const [selectedPageId, setSelectedPageId] = useState("");
   const [pageSlug, setPageSlug] = useState("");
   const [pageTemplateId, setPageTemplateId] = useState("");
-  const [isPublishedPage, setIsPublishedPage] = useState(true);
   const [draft, setDraft] = useState(createDraftFromTemplate(null));
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
   const [expandedModuleIds, setExpandedModuleIds] = useState<string[]>([]);
@@ -342,7 +341,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     setPageSlug(page?.slug ?? "");
     setPageTemplateId(page?.templateId ?? "");
     setPageThemeId(page?.themeId ?? "");
-    setIsPublishedPage(page?.isPublished ?? true);
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
 
@@ -1654,7 +1652,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, themeId: pageThemeId || undefined, isPublished: isPublishedPage, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
+        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, themeId: pageThemeId || undefined, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
       });
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       setMessage(selectedPageId ? "Page updated." : "Page created.");
@@ -1687,7 +1685,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
               templateId,
               themeId: themeId || undefined,
               templateKind: "modular",
-              isPublished: false,
               pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
               theme: effectiveTheme,
               layoutSections: template?.layoutSections ?? []
@@ -1725,6 +1722,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     }));
     await loadPages();
     return results;
+  }
+
+  async function previewExtraction(
+    contentModelId: string,
+    runId: string,
+    items: Array<{ name: string; slug: string }>,
+  ): Promise<ExtractionPreviewItem[]> {
+    const response = await builderAdminFetch(
+      `/api/admin/acquire-runs/${runId}/extraction-preview`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentModelId, items }) },
+    );
+    const data = await readAdminJson<{ preview?: ExtractionPreviewItem[]; error?: string }>(response, "Failed to preview extraction.");
+    return data.preview ?? [];
   }
 
   async function deleteTemplateById(templateId: string, templateName: string) {
@@ -2016,7 +2026,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
                 layoutSections: page.layoutSections
               }));
               setPageSlug(page.slug);
-              setIsPublishedPage(page.isPublished);
               setPageTemplateId(page.templateId ?? "");
             }
 
@@ -2082,6 +2091,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onRefreshRuns={() => void loadAcquireRuns()}
           onBulkCreatePages={(templateId, items, themeId) => bulkCreatePages(templateId, items, themeId)}
           onBulkCreateWithModel={(templateId, items, modelId, runId, themeId) => bulkCreateWithModel(templateId, items, modelId, runId, themeId)}
+          onPreviewExtraction={(modelId, runId, items) => previewExtraction(modelId, runId, items)}
           onEditPage={(pageId) => { setShowBulkCreate(false); setSelectedPageId(pageId); }}
         />
       ) : (
@@ -2096,7 +2106,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           pageSlug={pageSlug}
           pageTemplateId={pageTemplateId}
           pageThemeId={pageThemeId}
-          isPublishedPage={isPublishedPage}
           isSaving={isSaving}
           onSelectPage={setSelectedPageId}
           onPreviewPage={openPagePreview}
@@ -2109,7 +2118,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onSetPageSlug={setPageSlug}
           onApplyTemplate={applyTemplateToPage}
           onApplyTheme={applyThemeToPage}
-          onSetIsPublished={setIsPublishedPage}
           onNewPage={startNewPage}
           onBulkCreate={() => setShowBulkCreate(true)}
           onPopulateFromWeb={() => void populateFromAcquire()}

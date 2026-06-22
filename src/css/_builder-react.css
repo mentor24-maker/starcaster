@@ -3590,6 +3590,84 @@
   font-size: 12px;
 }
 
+.builder-react-root .builder-bulk-create-status-warn {
+  color: #856404;
+  font-size: 12px;
+}
+
+.builder-react-root .builder-bulk-create-row-warn td {
+  background: #fffbea;
+}
+
+.builder-react-root .builder-bulk-create-preview-shell {
+  margin-top: 12px;
+}
+
+.builder-react-root .builder-bulk-create-preview-table {
+  min-width: 560px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.builder-react-root .builder-bulk-create-preview-table col.builder-bulk-create-col-title {
+  width: 40%;
+}
+
+.builder-react-root .builder-bulk-create-preview-table col.builder-bulk-create-col-status {
+  width: 20%;
+}
+
+.builder-react-root .builder-bulk-create-preview-table col.builder-bulk-create-col-content {
+  width: 40%;
+}
+
+.builder-react-root .builder-bulk-create-preview-blocks summary {
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+
+.builder-react-root .builder-bulk-create-preview-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.builder-react-root .builder-bulk-create-preview-block {
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.builder-react-root .builder-bulk-create-preview-block-layout {
+  background: #eef2ff;
+  border-radius: 3px;
+  color: #3730a3;
+  display: inline-block;
+  font-size: 11px;
+  margin-bottom: 4px;
+  padding: 1px 5px;
+}
+
+.builder-react-root .builder-bulk-create-preview-block-img {
+  border-radius: 3px;
+  display: block;
+  height: auto;
+  margin-bottom: 4px;
+  max-width: 120px;
+}
+
+.builder-react-root .builder-bulk-create-preview-block-html {
+  color: #4a5568;
+  font-size: 11px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .builder-react-root .builder-modules-crud-shell {
   max-width: 100%;
 }

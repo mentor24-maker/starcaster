@@ -302,3 +302,112 @@
   background: #666;
   flex-shrink: 0;
 }
+
+/* ─── Source Inspector modal (Acquire: Web page table) ─────────────────────── */
+
+.source-inspector-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+}
+
+.source-inspector-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #718096;
+  cursor: pointer;
+  font-size: 13px;
+  margin-bottom: -1px;
+  padding: 6px 12px;
+}
+
+.source-inspector-tab.active {
+  border-bottom-color: #4a6cf7;
+  color: #2d3748;
+  font-weight: 500;
+}
+
+.source-inspector-pre {
+  background: #f7f9fb;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.source-inspector-patterns {
+  font-size: 13px;
+}
+
+.source-inspector-status {
+  color: #718096;
+  font-style: italic;
+}
+
+.source-inspector-model-badge {
+  background: #ebf8ff;
+  border: 1px solid #bee3f8;
+  border-radius: 4px;
+  color: #2b6cb0;
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 10px;
+  padding: 3px 10px;
+}
+
+.source-inspector-model-none {
+  color: #718096;
+  font-style: italic;
+}
+
+.source-inspector-blocks-heading {
+  color: #2d3748;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.source-inspector-block {
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+}
+
+.source-inspector-block-meta {
+  margin-bottom: 6px;
+}
+
+.source-inspector-block-layout {
+  background: #eef2ff;
+  border-radius: 3px;
+  color: #3730a3;
+  font-size: 11px;
+  padding: 1px 6px;
+}
+
+.source-inspector-block-img {
+  color: #718096;
+  font-size: 12px;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.source-inspector-block-html {
+  background: #f7f9fb;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  font-size: 11px;
+  max-height: 120px;
+  overflow: auto;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

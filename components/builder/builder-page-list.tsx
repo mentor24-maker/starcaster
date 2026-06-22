@@ -16,7 +16,6 @@ type BuilderPageListProps = {
   theme: BuilderTheme;
   pageSlug: string;
   pageTemplateId: string;
-  isPublishedPage: boolean;
   isSaving: boolean;
   onSelectPage: (pageId: string) => void;
   onPreviewPage: (slug: string) => void;
@@ -31,7 +30,6 @@ type BuilderPageListProps = {
   pageThemeId: string;
   onApplyTemplate: (templateId: string) => void;
   onApplyTheme: (themeId: string) => void;
-  onSetIsPublished: (isPublished: boolean) => void;
   onNewPage: () => void;
   onBulkCreate: () => void;
   onPopulateFromWeb: () => void;
@@ -51,7 +49,6 @@ export function BuilderPageList({
   pageSlug,
   pageTemplateId,
   pageThemeId,
-  isPublishedPage,
   isSaving,
   onSelectPage,
   onPreviewPage,
@@ -63,7 +60,6 @@ export function BuilderPageList({
   onSetPageSlug,
   onApplyTemplate,
   onApplyTheme,
-  onSetIsPublished,
   onNewPage,
   onBulkCreate,
   onPopulateFromWeb,
@@ -501,16 +497,6 @@ export function BuilderPageList({
                 {themes.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
-              </select>
-            </label>
-            <label className="field builder-meta-field-status">
-              <span>Status</span>
-              <select
-                value={isPublishedPage ? "published" : "draft"}
-                onChange={(event) => onSetIsPublished(event.target.value === "published")}
-              >
-                <option value="published">Published</option>
-                <option value="draft">Draft</option>
               </select>
             </label>
             <div className="builder-meta-grid-pages-background">
