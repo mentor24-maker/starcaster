@@ -4,13 +4,11 @@
           <div class="page-heading-actions" id="crmActiveActions"></div>
         </div>
 
-        <!-- Empty state — toggled by crm.js via classList add/remove 'hidden' -->
         <div id="crmEmptyState" class="hidden">
           <p class="page-copy">No CRM configured for this project yet. Set up a CRM to capture and manage contacts with a dedicated field schema and forms.</p>
-          <button type="button" class="btn btn-primary" onclick="App.crm.openSetupPage()">Set Up CRM</button>
+          <button type="button" id="crmOpenSetupBtn" class="btn btn-primary" onclick="App.crm.openSetupPage()">Set Up CRM</button>
         </div>
 
-        <!-- Active state -->
         <div id="crmActiveState" class="hidden">
           <div class="tab-bar" style="margin-bottom:1rem;">
             <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="contacts">Contacts</button>
@@ -18,33 +16,36 @@
             <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="fields">Field Config</button>
           </div>
 
-          <!-- Contacts panel -->
           <div id="crmContactsPanel">
             <div class="page-heading-actions" style="margin-bottom:0.75rem;">
-              <button type="button" class="btn btn-primary" onclick="App.crm.openAddEditContact(null)">+ Add Contact</button>
+              <button type="button" id="crmAddContactBtn" class="btn btn-primary">+ Add Contact</button>
             </div>
-            <div id="crmContactsTableWrap"></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead id="crmContactsTableHead"></thead>
+                <tbody id="crmContactsTableBody"></tbody>
+              </table>
+            </div>
           </div>
 
-          <!-- Forms panel -->
           <div id="crmFormsPanel" class="hidden">
             <div class="page-heading-actions" style="margin-bottom:0.75rem;">
-              <button type="button" class="btn btn-primary" onclick="App.crm.openFormEditor(null)">+ New Form</button>
+              <button type="button" id="crmCreateFormBtn" class="btn btn-primary">+ New Form</button>
             </div>
-            <div id="crmFormsListWrap"></div>
+            <div id="crmFormsList"></div>
           </div>
 
-          <!-- Fields panel -->
           <div id="crmFieldsPanel" class="hidden">
-            <p class="page-copy">Choose which standard fields to capture. Add custom fields below.</p>
-            <div id="crmStandardFieldGrid" style="margin-bottom:1rem;"></div>
-            <div class="page-heading-actions" style="margin-bottom:0.75rem;">
-              <button type="button" class="btn" onclick="App.crm.openAddCustomFieldModal()">+ Add Custom Field</button>
-            </div>
-            <div id="crmCustomFieldsList"></div>
-            <div style="margin-top:1rem;">
-              <button type="button" class="btn btn-primary" onclick="App.crm.saveFieldConfig()">Save Field Config</button>
-            </div>
+            <form id="crmFieldConfigForm">
+              <p class="page-copy">Choose which standard fields to capture. Add custom fields below.</p>
+              <div id="crmStandardFieldsGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.4rem; margin-bottom:1rem;"></div>
+              <h4>Custom Fields</h4>
+              <div id="crmCustomFieldsList" style="margin-bottom:0.5rem;"></div>
+              <div class="page-heading-actions" style="justify-content:flex-start; gap:0.5rem; margin-top:0.5rem;">
+                <button type="button" id="crmAddCustomFieldBtn" class="btn">+ Add Custom Field</button>
+                <button type="submit" class="btn btn-primary">Save Field Config</button>
+              </div>
+            </form>
           </div>
         </div>
       </section>
@@ -53,72 +54,84 @@
         <div class="page-heading-row">
           <h2>Set Up CRM</h2>
           <div class="page-heading-actions">
-            <button type="button" class="btn" onclick="App.crm.openPage()">Cancel</button>
+            <button type="button" id="crmSetupCancelBtn" class="btn">Cancel</button>
           </div>
         </div>
-        <p class="page-copy">Configure your project's dedicated contact table. Email is always captured. Select which additional standard fields to include, then add any custom fields.</p>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field">
+        <form id="crmSetupForm">
+          <p class="page-copy">Configure your project's dedicated contact table. Email is always captured. Select which additional standard fields to include, then add any custom fields.</p>
+          <label class="field" style="display:block; max-width:320px; margin-bottom:1rem;">
             <span>CRM Name</span>
-            <input type="text" id="crmSetupName" placeholder="e.g. Main Contacts" style="max-width:320px;" />
+            <input type="text" id="crmSetupName" placeholder="e.g. Main Contacts" />
           </label>
-        </div>
-        <h3>Standard Fields</h3>
-        <div id="crmSetupStandardFieldGrid" style="margin-bottom:1rem;"></div>
-        <h3>Custom Fields</h3>
-        <div id="crmSetupCustomFieldsList" style="margin-bottom:0.5rem;"></div>
-        <button type="button" class="btn" onclick="App.crm.openAddCustomFieldModal(true)">+ Add Custom Field</button>
-        <div style="margin-top:1.5rem;">
-          <button type="button" class="btn btn-primary" onclick="App.crm.generateCrm()">Generate CRM</button>
-        </div>
+          <h3>Standard Fields</h3>
+          <div id="crmSetupStandardFields" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.4rem; margin-bottom:1rem;"></div>
+          <h3>Custom Fields</h3>
+          <div id="crmSetupCustomFields" style="margin-bottom:0.5rem;"></div>
+          <div class="page-heading-actions" style="justify-content:flex-start; gap:0.5rem; margin-top:0.5rem;">
+            <button type="button" id="crmSetupAddCustomFieldBtn" class="btn">+ Add Custom Field</button>
+            <button type="submit" class="btn btn-primary">Generate CRM</button>
+          </div>
+        </form>
       </section>
 
       <section id="crmAddEditContactPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2 id="crmAddEditContactTitle">Add Contact</h2>
+          <h2 id="crmContactPageTitle">Add Contact</h2>
           <div class="page-heading-actions">
-            <button type="button" class="btn" onclick="App.crm.openContactsView()">Cancel</button>
+            <button type="button" id="crmContactCancelBtn" class="btn">Cancel</button>
           </div>
         </div>
-        <div id="crmContactFormFields" style="max-width:480px;"></div>
-        <div style="margin-top:1rem;">
-          <button type="button" class="btn btn-primary" onclick="App.crm.saveContact()">Save Contact</button>
-        </div>
+        <form id="crmContactForm" style="max-width:480px;">
+          <div id="crmContactFormFields"></div>
+          <div style="margin-top:1rem;">
+            <button type="submit" class="btn btn-primary">Save Contact</button>
+          </div>
+        </form>
       </section>
 
       <section id="crmFormEditorPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2 id="crmFormEditorTitle">CRM Form</h2>
           <div class="page-heading-actions">
-            <button type="button" class="btn" onclick="App.crm.openFormsView()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="App.crm.saveForm()">Save Form</button>
+            <button type="button" id="crmFormEditorCancelBtn" class="btn">Cancel</button>
+            <button type="button" id="crmFormCopyEmbedBtn" class="btn">Copy Embed Code</button>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start;">
-          <div>
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label class="field"><span>Form Name</span><input type="text" id="crmFormName" placeholder="e.g. Newsletter Signup" /></label>
-            </div>
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label class="field"><span>Heading</span><input type="text" id="crmFormHeading" placeholder="Optional heading shown on the form" /></label>
-            </div>
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label class="field"><span>Submit Button Label</span><input type="text" id="crmFormSubmitLabel" placeholder="Submit" /></label>
-            </div>
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label class="field"><span>Success Message</span><input type="text" id="crmFormSuccessMsg" placeholder="Thank you!" /></label>
-            </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; align-items:start;">
+          <form id="crmFormEditorForm">
+            <label class="field" style="display:block; margin-bottom:0.75rem;">
+              <span>Form Name</span>
+              <input type="text" id="crmFormEditorName" placeholder="e.g. Newsletter Signup" />
+            </label>
+            <label class="field" style="display:block; margin-bottom:0.75rem;">
+              <span>Heading <span class="meta">(optional, shown above the form)</span></span>
+              <input type="text" id="crmFormEditorHeading" placeholder="e.g. Join our list" />
+            </label>
+            <label class="field" style="display:block; margin-bottom:0.75rem;">
+              <span>Submit Button Label</span>
+              <input type="text" id="crmFormEditorSubmitLabel" placeholder="Submit" />
+            </label>
+            <label class="field" style="display:block; margin-bottom:0.75rem;">
+              <span>Success Message</span>
+              <input type="text" id="crmFormEditorSuccessMsg" placeholder="Thank you!" />
+            </label>
+            <label class="field" style="display:block; margin-bottom:0.75rem;">
+              <span>Error Message</span>
+              <input type="text" id="crmFormEditorErrorMsg" placeholder="Something went wrong. Please try again." />
+            </label>
+            <label class="field" style="display:block; margin-bottom:1rem;">
+              <span>Accent Color <span class="meta">(submit button)</span></span>
+              <input type="color" id="crmFormEditorAccentColor" value="#0b3d7a" />
+            </label>
             <h4>Fields on this form</h4>
             <p class="meta" style="margin-bottom:0.5rem;">Choose which CRM fields appear on this form.</p>
-            <div id="crmFormFieldCheckboxes"></div>
-          </div>
+            <div id="crmFormEditorFields" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:0.35rem; margin-bottom:1rem;"></div>
+            <button type="submit" class="btn btn-primary">Save Form</button>
+          </form>
           <div>
-            <h4>Form ID</h4>
-            <p class="meta" style="margin-bottom:0.5rem;">Paste this into a CRM module in the Builder to embed this form on a landing page.</p>
-            <code id="crmFormIdDisplay" style="display:block;padding:0.5rem;background:#f4f4f4;border-radius:4px;font-size:0.85rem;word-break:break-all;margin-bottom:1rem;"></code>
             <h4>Embed Code</h4>
-            <p class="meta" style="margin-bottom:0.5rem;">Drop this snippet directly into any HTML page.</p>
-            <textarea id="crmFormEmbedCode" rows="10" readonly style="width:100%;font-size:0.75rem;font-family:monospace;"></textarea>
+            <p id="crmFormEmbedNote" class="meta" style="margin-bottom:0.5rem;">Save the form first to generate the embed code.</p>
+            <textarea id="crmFormEmbedCode" rows="16" readonly style="width:100%; font-size:0.75rem; font-family:monospace; resize:vertical;"></textarea>
           </div>
         </div>
       </section>
