@@ -12373,3 +12373,28 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
 .builder-template-navigation-slot {
   width: 100%;
 }
+
+/* ── CRM tab navigation ────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid var(--border-strong, #cbd5e1);
+  margin-bottom: 1.25rem;
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 0.5rem 1.35rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink-secondary, #475569);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover { color: var(--ink-primary, #000); }
+.tab-btn.active {
+  color: var(--primary-color, #0b82d4);
+  border-bottom-color: var(--primary-color, #0b82d4);
+  font-weight: 600;
+}
