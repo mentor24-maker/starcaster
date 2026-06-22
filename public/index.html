@@ -9341,6 +9341,49 @@
   </div>
 </div>
 
+      <!-- INJECTED PAGE: projectAdmin.html -->
+
+      <section id="projectAdminPage" class="app-page hidden">
+
+        <!-- ── Login view ───────────────────────────────────────────────── -->
+        <div id="adminLoginView" class="admin-login-wrap">
+          <div class="admin-login-card">
+            <div class="admin-login-logo">
+              <img src="/images/logo_starcaster_1200x180.png" alt="StarCaster" />
+            </div>
+            <h2 class="admin-login-heading">Project Admin</h2>
+            <p id="adminLoginMessage" class="auth-message"></p>
+            <form id="adminLoginForm" class="standard-form-grid">
+              <!-- Populated from URL hash param &project=proj_xxx -->
+              <input name="projectId" type="hidden" id="adminProjectIdInput" />
+              <label for="adminEmailInput">Email</label>
+              <input id="adminEmailInput" name="email" type="email" required autocomplete="username" />
+              <label for="adminPasswordInput">Password</label>
+              <input id="adminPasswordInput" name="password" type="password" required autocomplete="current-password" />
+              <div></div>
+              <button type="submit" class="btn btn-primary">Sign In</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── App view (shown after successful admin login) ────────────── -->
+        <div id="adminAppView" class="hidden admin-app-wrap">
+          <header class="admin-shell-header">
+            <div class="admin-shell-header-left">
+              <img src="/images/logo_starcaster_1200x180.png" alt="StarCaster" class="admin-shell-logo" />
+              <span id="adminProjectName" class="admin-project-name"></span>
+            </div>
+            <div class="admin-shell-header-right">
+              <span id="adminWelcomeName" class="admin-welcome-name"></span>
+              <button id="adminLogoutBtn" type="button" class="btn">Sign Out</button>
+            </div>
+          </header>
+          <!-- Builder React mounts here (separate from #builderReactRootHub) -->
+          <div id="adminBuilderReactRoot" class="builder-react-root hidden" aria-hidden="true"></div>
+        </div>
+
+      </section>
+
       <!-- INJECTED PAGE: promote.html -->
 
       <section id="promotePage" class="app-page hidden">
@@ -10281,6 +10324,7 @@
   <script src="/js/envConfig.js"></script>
   <script src="/js/training.js"></script>
   <script src="/js/crm.js"></script>
+  <script src="/js/projectAdmin.js"></script>
   <script src="/app.js"></script>
   <script src="/bundle.js"></script>
 </body>

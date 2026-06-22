@@ -145,6 +145,18 @@ App.auth._showPublicLegal = function _showPublicLegal(pageId) {
   }
 };
 
+App.auth._showPublicAdmin = function _showPublicAdmin(pageId) {
+  const { appShell, authLanding, authLogoutButton } = App.auth._els;
+  if (authLanding) authLanding.classList.add('hidden');
+  if (appShell) appShell.classList.remove('hidden');
+  // Hide the standard platform chrome — admin page renders its own header.
+  document.body.classList.add('project-admin-view');
+  if (authLogoutButton) authLogoutButton.classList.add('hidden');
+  if (typeof App.setActivePage === 'function') {
+    App.setActivePage(pageId, { persist: true, skipTracking: true });
+  }
+};
+
 App.auth._startMainApp = function _startMainApp() {
   if (App.auth._started) return;
   if (typeof App.auth._bootMainApp === 'function') {
@@ -473,8 +485,12 @@ App.auth.init = function init(bootMainApp) {
       } catch (_) {}
       const initialPage = typeof App.getInitialPage === 'function' ? App.getInitialPage() : '';
       const publicLegal = Array.isArray(App.PUBLIC_LEGAL_PAGE_IDS) && App.PUBLIC_LEGAL_PAGE_IDS.includes(initialPage);
+      const publicAdmin = Array.isArray(App.PUBLIC_ADMIN_PAGE_IDS) && App.PUBLIC_ADMIN_PAGE_IDS.includes(initialPage);
       if (publicLegal) {
         App.auth._showPublicLegal(initialPage);
+        App.auth._startMainApp();
+      } else if (publicAdmin) {
+        App.auth._showPublicAdmin(initialPage);
         App.auth._startMainApp();
       } else {
         App.auth._showLanding('login');

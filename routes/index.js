@@ -26,10 +26,12 @@ const { handleProjectDelete } = require('../lib/projectDeleteHandler');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
 const { getUserFromSessionToken, getAuthSession } = require('../lib/authStore');
+const { getAdminSession } = require('../lib/projectAdminStore');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 const { requireProjectContext } = require('../lib/requireProjectContext');
 
 const auth        = require('./auth');
+const projectAdmin = require('./projectAdmin');
 const projects    = require('./projects');
 const settings    = require('./settings');
 const acquire     = require('./acquire');
@@ -56,6 +58,7 @@ const blog        = require('./blog');
 // Put more specific / higher-traffic modules first.
 const ROUTE_MODULES = [
   auth,
+  projectAdmin,
   projects,
   settings,
   acquire,
@@ -200,6 +203,8 @@ async function handleRequest(req, res) {
   const pathname = normalizeApiPathname(urlObj.pathname);
   const method   = req.method;
   const isAuthRoute = pathname === '/api/auth' || pathname.startsWith('/api/auth/');
+  const isAdminAuthRoute = pathname.startsWith('/api/admin/auth');
+  const isAdminRoute = pathname.startsWith('/api/admin');
   const isDebugRoute = pathname === '/api/debug-routes';
   const isWebhookRoute = pathname === '/api/builder/devAgent/worker' || pathname.startsWith('/api/tasks');
   const isPublicContactSubmit = pathname === '/api/contact' && method === 'POST';
@@ -210,24 +215,49 @@ async function handleRequest(req, res) {
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
   const sessionToken = auth.readSessionToken(req);
   const authSession = await getAuthSession(sessionToken);
-  const authUser = authSession?.user || null;
+  let authUser = authSession?.user || null;
 
   req.authSession = authSession || null;
   req.authUser = authUser || null;
   req.projectContext = null;
   req.cronPublish = isCronAuthorized;
 
+  // For builder API calls from the Project Admin interface, accept an admin
+  // session in place of a platform session. Synthesize req.authUser and
+  // req.projectContext so builder route handlers work without modification.
+  if (!authUser && pathname.startsWith('/api/builder')) {
+    const adminToken = projectAdmin.readAdminSessionToken(req);
+    if (adminToken) {
+      const adminSession = await getAdminSession(adminToken);
+      if (adminSession) {
+        authUser = {
+          id: adminSession.adminUserId,
+          email: adminSession.adminUser.email,
+          role: adminSession.adminUser.role,
+          isProjectAdmin: true,
+        };
+        req.authUser = authUser;
+        req.projectContext = {
+          project: { id: adminSession.projectId },
+          projects: [{ id: adminSession.projectId }],
+          membership: null,
+          resolvedFrom: 'admin_session',
+        };
+      }
+    }
+  }
+
   if (isImportDriveFolderHealth) {
     const handled = await assets.handleImportDriveFolder(req, res, {}, 'GET');
     if (handled) return;
   }
 
-  if (!isAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !authUser) {
+  if (!isAuthRoute && !isAdminAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !authUser) {
 
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
 
-  if (authUser && pathname.startsWith('/api/') && !isAuthRoute && !isDebugRoute) {
+  if (authUser && pathname.startsWith('/api/') && !isAuthRoute && !isAdminRoute && !isDebugRoute) {
     const requestedProjectId = String(req.headers['x-project-id'] || '').trim();
     const projectContextResult = await resolveCurrentProject({
       userId: String(authUser.id || '').trim(),
@@ -244,6 +274,7 @@ async function handleRequest(req, res) {
     authUser
     && pathname.startsWith('/api/')
     && !isAuthRoute
+    && !isAdminRoute
     && !isDebugRoute
     && !isWebhookRoute
     && !isCronAuthorized
