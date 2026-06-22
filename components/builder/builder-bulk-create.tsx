@@ -31,6 +31,7 @@ export type AcquireRunSummary = {
   sourceUrl: string;
   pageCount: number;
   createdAt: string;
+  detectedModelId?: string;
 };
 
 type MenuOption = {
@@ -89,6 +90,13 @@ export function BuilderBulkCreate({
 
   // Refresh crawl runs when this panel mounts so the list is current.
   useEffect(() => { onRefreshRuns?.(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When a run is selected and it has a detected model, auto-populate the model dropdown.
+  useEffect(() => {
+    if (!selectedRunId || selectedModelId) return;
+    const run = acquireRuns.find((r) => r.runId === selectedRunId);
+    if (run?.detectedModelId) setSelectedModelId(run.detectedModelId);
+  }, [selectedRunId, acquireRuns]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only show templates that have actual content sections (stubs with empty sections
   // are only meaningful in Page Details, not Bulk Create).
@@ -322,6 +330,9 @@ export function BuilderBulkCreate({
             <div className="builder-bulk-create-right">
               {(() => {
                 const run = acquireRuns.find((r) => r.runId === selectedRunId);
+                const detectedModel = run?.detectedModelId
+                  ? CONTENT_DISPLAY_MODELS.find((m) => m.id === run.detectedModelId)
+                  : null;
                 return run ? (
                   <div className="builder-bulk-create-run-info">
                     <div className="builder-bulk-create-run-url">{run.sourceUrl}</div>
@@ -329,6 +340,11 @@ export function BuilderBulkCreate({
                       {run.pageCount} page{run.pageCount !== 1 ? "s" : ""} crawled
                       {run.createdAt ? ` on ${run.createdAt.slice(0, 10)}` : ""}
                     </div>
+                    {detectedModel ? (
+                      <div className="builder-bulk-create-detected-model">
+                        Auto-detected: {detectedModel.name}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null;
               })()}
