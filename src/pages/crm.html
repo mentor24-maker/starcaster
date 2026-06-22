@@ -129,9 +129,17 @@
             <button type="submit" class="btn btn-primary">Save Form</button>
           </form>
           <div>
-            <h4>Embed Code</h4>
+            <div id="crmFormIdWrap" style="display:none; margin-bottom:1.25rem;">
+              <h4 style="margin-bottom:0.25rem;">Form ID</h4>
+              <p class="meta" style="margin-bottom:0.5rem;">Paste this into a <strong>CRM module</strong> in the Builder to embed this form on any landing page.</p>
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <code id="crmFormIdDisplay" style="flex:1; padding:0.4rem 0.6rem; background:var(--bg-input,#f7f9fc); border:1px solid var(--border-strong,#cbd5e1); border-radius:6px; font-size:0.85rem; word-break:break-all;"></code>
+                <button type="button" id="crmFormCopyIdBtn" class="btn" onclick="const t=document.getElementById('crmFormIdDisplay'); if(t){navigator.clipboard?.writeText(t.textContent)||document.execCommand('copy'); App.notify('Form ID copied.');}">Copy ID</button>
+              </div>
+            </div>
+            <h4 style="margin-bottom:0.25rem;">Embed Code</h4>
             <p id="crmFormEmbedNote" class="meta" style="margin-bottom:0.5rem;">Save the form first to generate the embed code.</p>
-            <textarea id="crmFormEmbedCode" rows="16" readonly style="width:100%; font-size:0.75rem; font-family:monospace; resize:vertical;"></textarea>
+            <textarea id="crmFormEmbedCode" rows="14" readonly style="width:100%; font-size:0.75rem; font-family:monospace; resize:vertical;"></textarea>
           </div>
         </div>
       </section>
