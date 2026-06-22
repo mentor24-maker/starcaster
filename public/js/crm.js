@@ -59,8 +59,6 @@ App.crm = (function () {
         (tab === 'fields'   && panelId === 'crmFieldsPanel')
       );
       btn.classList.toggle('active', isActive);
-      btn.style.color = isActive ? 'var(--accent-color)' : 'var(--text-secondary)';
-      btn.style.borderBottomColor = isActive ? 'var(--accent-color)' : 'transparent';
     });
   }
 
@@ -466,12 +464,17 @@ ${fieldHtml}
     // Embed code preview (for existing forms)
     const embedTa = el('crmFormEmbedCode');
     const embedNote = el('crmFormEmbedNote');
+    const formIdWrap = el('crmFormIdWrap');
+    const formIdDisplay = el('crmFormIdDisplay');
     if (form && embedTa) {
       embedTa.value = buildEmbedCode(form);
       if (embedNote) embedNote.style.display = 'none';
+      if (formIdWrap) formIdWrap.style.display = '';
+      if (formIdDisplay) formIdDisplay.textContent = form.id;
     } else if (embedTa) {
       embedTa.value = '';
       if (embedNote) embedNote.style.display = '';
+      if (formIdWrap) formIdWrap.style.display = 'none';
     }
 
     const cancelBtn = el('crmFormEditorCancelBtn');
@@ -532,13 +535,16 @@ ${fieldHtml}
         editingFormId = saved?.id || null;
         notify('Form created.');
       }
-      // Refresh embed code
+      // Refresh embed code + form ID display
       if (saved && el('crmFormEmbedCode')) {
-        // Update currentForms to use saved form
         const idx = currentForms.findIndex((f) => f.id === saved.id);
         if (idx >= 0) currentForms[idx] = saved; else currentForms.unshift(saved);
         el('crmFormEmbedCode').value = buildEmbedCode(saved);
         if (el('crmFormEmbedNote')) el('crmFormEmbedNote').style.display = 'none';
+        const formIdWrap = el('crmFormIdWrap');
+        const formIdDisplay = el('crmFormIdDisplay');
+        if (formIdWrap) formIdWrap.style.display = '';
+        if (formIdDisplay) formIdDisplay.textContent = saved.id;
       }
     } catch (err) {
       notify(err.message || 'Failed to save form.', true);
