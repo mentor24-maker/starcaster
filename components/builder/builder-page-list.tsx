@@ -37,6 +37,7 @@ type BuilderPageListProps = {
   onMakeTemplate: () => void;
   onPageEditorFocus: (focused: boolean) => void;
   onSavePage: () => void;
+  autoNewPage?: boolean;
 };
 
 export function BuilderPageList({
@@ -66,7 +67,8 @@ export function BuilderPageList({
   onPreviewDraft,
   onMakeTemplate,
   onPageEditorFocus,
-  onSavePage
+  onSavePage,
+  autoNewPage
 }: BuilderPageListProps) {
   const [collapsedPanels, setCollapsedPanels] = useState({
     pages: true,
@@ -79,6 +81,7 @@ export function BuilderPageList({
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const shouldFocusDetailsRef = useRef(false);
+  const didAutoNewPageRef = useRef(false);
 
   function togglePanel(panel: keyof typeof collapsedPanels) {
     setCollapsedPanels((current) => ({
@@ -86,6 +89,16 @@ export function BuilderPageList({
       [panel]: !current[panel]
     }));
   }
+
+  // When mounted to create a new page, open Page Details immediately.
+  useEffect(() => {
+    if (!autoNewPage || didAutoNewPageRef.current) return;
+    didAutoNewPageRef.current = true;
+    onNewPage();
+    onPageEditorFocus(true);
+    shouldFocusDetailsRef.current = true;
+    setCollapsedPanels((current) => ({ ...current, details: false }));
+  }, [autoNewPage, onNewPage, onPageEditorFocus]);
 
   useEffect(() => {
     onPageEditorFocus(!collapsedPanels.details || Boolean(selectedPageId));

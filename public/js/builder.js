@@ -7372,11 +7372,19 @@ App.builder = (function () {
   }
 
   function openCreateLandingPage() {
-    loadLandingPageBuilderOptions()
-      .catch(() => {})
-      .finally(() => {
-        openCreateLandingPageTemplatePicker();
-      });
+    loadLandingPageBuilderOptions().catch(() => {});
+    openModularPageTemplateEditor({
+      id: '',
+      name: '',
+      templateKind: 'modular',
+      templateId: '',
+      layoutSections: [],
+      pageBackground: null,
+    }, {
+      mode: 'page',
+      sourceTemplateId: '',
+      targetPage: 'builderPagesPage',
+    });
   }
 
   async function openCreateModularLandingTemplate() {

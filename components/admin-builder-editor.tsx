@@ -92,9 +92,11 @@ type AdminBuilderEditorProps = {
   initialMode?: "templates" | "modules" | "pages";
   /** Id of the page (initialMode "pages") or template (initialMode "templates") to preselect on mount. */
   initialRecordId?: string;
+  /** When true, open Page Details immediately (used when the editor is mounted to create a new page). */
+  autoNewPage?: boolean;
 };
 
-export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilderEditorProps = {}) {
+export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }: AdminBuilderEditorProps = {}) {
   const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">(initialMode ?? "templates");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
@@ -2124,6 +2126,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}
           onSavePage={() => void savePage()}
+          autoNewPage={autoNewPage}
         />
       )}
 
