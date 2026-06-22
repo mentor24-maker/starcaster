@@ -1347,7 +1347,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId }: AdminBuilde
     setPageSlug("");
     setPageTemplateId("");
     setPageThemeId("");
-    setIsPublishedPage(true);
     setDraft(createDraftFromPage(null));
     setMessage(null);
     setError(null);
