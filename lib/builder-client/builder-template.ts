@@ -64,7 +64,9 @@ export type BuilderTemplateModuleType =
   | "crm-form"
   | "blog-toc"
   | "blog-newsletter-subscribe"
-  | "blog-related-posts";
+  | "blog-related-posts"
+  | "blog-category-filter"
+  | "blog-post";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -996,7 +998,9 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "crm-form" ||
     type === "blog-toc" ||
     type === "blog-newsletter-subscribe" ||
-    type === "blog-related-posts"
+    type === "blog-related-posts" ||
+    type === "blog-category-filter" ||
+    type === "blog-post"
   ) {
     return type;
   }
@@ -1829,6 +1833,44 @@ export function createEmptyModule(
                             cardBorderRadius: "12",
                             cardGap: "20",
                             manualPosts: JSON.stringify([])
+                          }
+                      : type === "blog-category-filter"
+                        ? {
+                            categories: JSON.stringify([]),
+                            layout: "pills",
+                            allLabel: "All",
+                            showAll: "true",
+                            filterParam: "category",
+                            targetPageUrl: "",
+                            activeColor: "#0f4f8f",
+                            activeBg: "#e8f6fc",
+                            inactiveColor: "#587592",
+                            inactiveBg: "#f0f4f8",
+                            borderRadius: "20",
+                            fontSize: "13",
+                            gap: "8",
+                            alignment: "left"
+                          }
+                      : type === "blog-post"
+                        ? {
+                            title: "",
+                            slug: "",
+                            status: "draft",
+                            author: "",
+                            publishDate: "",
+                            featuredImageUrl: "",
+                            showFeaturedImage: "true",
+                            excerpt: "",
+                            showExcerpt: "true",
+                            body: "",
+                            categories: "",
+                            showCategories: "true",
+                            tags: "",
+                            showTags: "false",
+                            showAuthor: "true",
+                            showDate: "true",
+                            seoTitle: "",
+                            seoDescription: ""
                           }
           : {};
 

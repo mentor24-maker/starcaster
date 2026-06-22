@@ -65,6 +65,8 @@ import { BuilderBlogAuthorBioModuleSettings, parseSocialLinks } from "./builder-
 import { BuilderBlogTocModuleSettings, parseTocItems } from "./builder-blog-toc-module-settings";
 import { BuilderBlogNewsletterSubscribeModuleSettings } from "./builder-blog-newsletter-subscribe-module-settings";
 import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./builder-blog-related-posts-module-settings";
+import { BuilderBlogCategoryFilterModuleSettings, parseFilterCategories } from "./builder-blog-category-filter-module-settings";
+import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -1124,6 +1126,180 @@ function renderModulePreview(module: BuilderTemplateModule) {
             {count} posts · matched by {s.matchBy ?? "categories"}
           </div>
         ) : null}
+      </div>
+    );
+  }
+
+  if (module.type === "blog-category-filter") {
+    const s = module.settings;
+    const layout = s.layout ?? "pills";
+    const allLabel = s.allLabel || "All";
+    const showAll = s.showAll !== "false";
+    const activeColor = s.activeColor ?? "#0f4f8f";
+    const activeBg = s.activeBg ?? "#e8f6fc";
+    const inactiveColor = s.inactiveColor ?? "#587592";
+    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+    const borderRadius = parseInt(s.borderRadius ?? "20", 10) || 20;
+    const fontSize = parseInt(s.fontSize ?? "13", 10) || 13;
+    const gap = parseInt(s.gap ?? "8", 10) || 8;
+    const alignment = s.alignment ?? "left";
+    const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+    const categories = parseFilterCategories(s);
+
+    const pills = [
+      ...(showAll ? [{ id: "__all__", label: allLabel, slug: "" }] : []),
+      ...categories
+    ];
+
+    if (layout === "dropdown") {
+      return (
+        <div className="builder-module-preview-copy" style={{ textAlign: alignment as "left" | "center" | "right" }}>
+          <select
+            disabled
+            style={{
+              fontSize,
+              padding: "6px 12px",
+              borderRadius: borderRadius / 2,
+              border: "1px solid #c9d8e6",
+              color: inactiveColor,
+              background: inactiveBg,
+              minWidth: 160,
+            }}
+          >
+            {pills.map((p) => <option key={p.id}>{p.label}</option>)}
+            {pills.length === 0 ? <option>All</option> : null}
+          </select>
+        </div>
+      );
+    }
+
+    if (layout === "list") {
+      return (
+        <div className="builder-module-preview-copy">
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "inline-flex", flexDirection: "column", gap, alignItems: alignment === "center" ? "center" : alignment === "right" ? "flex-end" : "flex-start", width: "100%" }}>
+            {(pills.length > 0 ? pills : [{ id: "__all__", label: "All", slug: "" }, { id: "ph1", label: "Category", slug: "category" }]).map((p, i) => (
+              <li key={p.id} style={{ fontSize, color: i === 0 ? activeColor : inactiveColor, fontWeight: i === 0 ? 600 : 400, cursor: "default" }}>
+                {p.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    // pills (default)
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[alignment] ?? "flex-start" }}>
+          {(pills.length > 0 ? pills : [{ id: "__all__", label: "All", slug: "" }, { id: "ph1", label: "Category", slug: "category" }]).map((p, i) => (
+            <span
+              key={p.id}
+              style={{
+                fontSize,
+                padding: "4px 12px",
+                borderRadius,
+                background: i === 0 ? activeBg : inactiveBg,
+                color: i === 0 ? activeColor : inactiveColor,
+                fontWeight: i === 0 ? 600 : 400,
+                border: `1px solid ${i === 0 ? activeColor + "33" : inactiveBg}`,
+                cursor: "default",
+              }}
+            >
+              {p.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-post") {
+    const s = module.settings;
+    const title = s.title || "Untitled Post";
+    const showFeaturedImage = s.showFeaturedImage !== "false";
+    const showAuthor = s.showAuthor !== "false";
+    const showDate = s.showDate !== "false";
+    const showCategories = s.showCategories !== "false";
+    const showExcerpt = s.showExcerpt !== "false";
+    const cats = (s.categories ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+    const statusColors: Record<string, string> = { draft: "#8ba9be", published: "#1d8a4e", archived: "#a06040" };
+    const status = s.status ?? "draft";
+
+    return (
+      <div className="builder-module-preview-copy" style={{ maxWidth: 680, margin: "0 auto" }}>
+        {/* Status chip */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: statusColors[status] ?? "#8ba9be",
+            background: (statusColors[status] ?? "#8ba9be") + "18",
+            borderRadius: 4,
+            padding: "2px 7px",
+          }}>
+            {status}
+          </span>
+        </div>
+
+        {/* Featured image */}
+        {showFeaturedImage ? (
+          <div style={{ width: "100%", paddingTop: "52%", position: "relative", borderRadius: 8, overflow: "hidden", background: s.featuredImageUrl ? undefined : "#d4e3ef", marginBottom: 16 }}>
+            {s.featuredImageUrl ? (
+              <img src={s.featuredImageUrl} alt={title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 12 }}>Featured Image</span>
+            )}
+          </div>
+        ) : null}
+
+        {/* Categories */}
+        {showCategories && cats.length > 0 ? (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            {cats.map((cat) => (
+              <span key={cat} style={{ fontSize: 11, background: "#e8f6fc", color: "#0f4f8f", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }}>
+                {cat}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Title */}
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#18324a", lineHeight: 1.25, marginBottom: 10 }}>{title}</div>
+
+        {/* Byline */}
+        {showAuthor || showDate ? (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#c9d8e6", flexShrink: 0 }} />
+            <div>
+              {showAuthor && s.author ? (
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a" }}>{s.author}</div>
+              ) : null}
+              {showDate && s.publishDate ? (
+                <div style={{ fontSize: 11, color: "#8ba9be" }}>{s.publishDate}</div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Excerpt */}
+        {showExcerpt && s.excerpt ? (
+          <div style={{ fontSize: 13, color: "#587592", lineHeight: 1.5, marginBottom: 12, borderLeft: "3px solid #c9d8e6", paddingLeft: 10, fontStyle: "italic" }}>
+            {s.excerpt}
+          </div>
+        ) : null}
+
+        {/* Body preview */}
+        {s.body ? (
+          <div
+            className="builder-module-preview-paragraph"
+            style={{ fontSize: 13, lineHeight: 1.6, color: "#2c4a62", WebkitLineClamp: 6, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical" }}
+            dangerouslySetInnerHTML={{ __html: formatRichTextContent(s.body) }}
+          />
+        ) : (
+          <div style={{ color: "#aaa", fontStyle: "italic", fontSize: 12 }}>No body content yet — open the Content tab to start writing.</div>
+        )}
       </div>
     );
   }
@@ -2621,6 +2797,8 @@ export function BuilderModuleCard({
     const isBlogTocModule = module.type === "blog-toc";
     const isBlogNewsletterModule = module.type === "blog-newsletter-subscribe";
     const isBlogRelatedPostsModule = module.type === "blog-related-posts";
+    const isBlogCategoryFilterModule = module.type === "blog-category-filter";
+    const isBlogPostModule = module.type === "blog-post";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -2824,6 +3002,10 @@ export function BuilderModuleCard({
               <BuilderBlogNewsletterSubscribeModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogRelatedPostsModule ? (
               <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogCategoryFilterModule ? (
+              <BuilderBlogCategoryFilterModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostModule ? (
+              <BuilderBlogPostModuleSettings module={module} onUpdateModule={onUpdateModule} richTextGallery={richTextGalleryProps} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}

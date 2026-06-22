@@ -588,6 +588,28 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "blog-post-standard",
+    type: "blog-post",
+    group: "blog",
+    label: "Blog Post",
+    icon: "✍",
+    description: "Full blog post editor: title, featured image, rich-text body, categories, tags, and SEO fields.",
+    name: "",
+    text: "",
+    settings: { status: "draft" }
+  },
+  {
+    id: "blog-category-filter-pills",
+    type: "blog-category-filter",
+    group: "blog",
+    label: "Category Filter",
+    icon: "⊙",
+    description: "Pill, list, or dropdown filter that navigates to ?category=slug and pairs with a Post Feed.",
+    name: "",
+    text: "",
+    settings: { layout: "pills" }
+  },
+  {
     id: "blog-related-posts-standard",
     type: "blog-related-posts",
     group: "blog",
