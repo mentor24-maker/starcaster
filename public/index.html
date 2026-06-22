@@ -5395,24 +5395,22 @@
       <!-- INJECTED PAGE: crm.html -->
       <section id="crmPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>CRM</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.crm.openSetupPage()" class="btn" id="crmSetupBtn" style="display:none;">Setup CRM</button>
-          </div>
+          <h2 id="crmActiveTitle">CRM</h2>
+          <div class="page-heading-actions" id="crmActiveActions"></div>
         </div>
 
-        <!-- Empty state -->
-        <div id="crmEmptyState" style="display:none;">
+        <!-- Empty state — toggled by crm.js via classList add/remove 'hidden' -->
+        <div id="crmEmptyState" class="hidden">
           <p class="page-copy">No CRM configured for this project yet. Set up a CRM to capture and manage contacts with a dedicated field schema and forms.</p>
           <button type="button" class="btn btn-primary" onclick="App.crm.openSetupPage()">Set Up CRM</button>
         </div>
 
         <!-- Active state -->
-        <div id="crmActiveState" style="display:none;">
+        <div id="crmActiveState" class="hidden">
           <div class="tab-bar" style="margin-bottom:1rem;">
-            <button type="button" id="crmTabContacts" class="tab-btn active" onclick="App.crm.openContactsView()">Contacts</button>
-            <button type="button" id="crmTabForms" class="tab-btn" onclick="App.crm.openFormsView()">Forms</button>
-            <button type="button" id="crmTabFields" class="tab-btn" onclick="App.crm.openFieldsView()">Field Config</button>
+            <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="contacts">Contacts</button>
+            <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="forms">Forms</button>
+            <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="fields">Field Config</button>
           </div>
 
           <!-- Contacts panel -->
@@ -5424,7 +5422,7 @@
           </div>
 
           <!-- Forms panel -->
-          <div id="crmFormsPanel" style="display:none;">
+          <div id="crmFormsPanel" class="hidden">
             <div class="page-heading-actions" style="margin-bottom:0.75rem;">
               <button type="button" class="btn btn-primary" onclick="App.crm.openFormEditor(null)">+ New Form</button>
             </div>
@@ -5432,7 +5430,7 @@
           </div>
 
           <!-- Fields panel -->
-          <div id="crmFieldsPanel" style="display:none;">
+          <div id="crmFieldsPanel" class="hidden">
             <p class="page-copy">Choose which standard fields to capture. Add custom fields below.</p>
             <div id="crmStandardFieldGrid" style="margin-bottom:1rem;"></div>
             <div class="page-heading-actions" style="margin-bottom:0.75rem;">
