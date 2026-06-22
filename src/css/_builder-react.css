@@ -3590,6 +3590,17 @@
   font-size: 12px;
 }
 
+.builder-react-root .builder-bulk-create-detected-model {
+  background: #ebf8ff;
+  border: 1px solid #bee3f8;
+  border-radius: 4px;
+  color: #2b6cb0;
+  display: inline-block;
+  font-size: 12px;
+  margin-top: 6px;
+  padding: 2px 8px;
+}
+
 .builder-react-root .builder-bulk-create-status-warn {
   color: #856404;
   font-size: 12px;
