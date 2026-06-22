@@ -440,6 +440,7 @@ App.builder = (function () {
   let savedModuleClasses = [];
   let savedPages = [];
   let savedPageTemplates = [];
+  let savedThemes = [];
   let modularPageTemplateDraft = null;
   let draggedNewPageSectionLayout = '';
   let draggedNewPageSectionLayoutClearTimer = null;
@@ -3821,6 +3822,22 @@ App.builder = (function () {
     } catch (_) {
       savedPageTemplates = [];
     }
+  }
+
+  async function loadSavedThemes() {
+    try {
+      const result = await api('/api/builder/themes');
+      savedThemes = Array.isArray(result.themes) ? result.themes : [];
+    } catch (_) {
+      savedThemes = [];
+    }
+  }
+
+  function getSavedThemeName(themeId) {
+    const id = safeText(themeId);
+    if (!id) return '';
+    const found = savedThemes.find((t) => String(t?.id) === id);
+    return found ? (safeText(found.name) || id) : id;
   }
 
   async function loadSavedExtensions() {
@@ -7812,6 +7829,7 @@ App.builder = (function () {
     const sortButtons = [
       ['builderPagesSortNameBtn', 'name', 'Name'],
       ['builderPagesSortTemplateBtn', 'templateId', 'Template'],
+      ['builderPagesSortThemeBtn', 'themeId', 'Theme'],
       ['builderPagesSortHeadlineBtn', 'headlineId', 'Headline'],
       ['builderPagesSortFormBtn', 'formId', 'Form'],
       ['builderPagesSortUpdatedBtn', 'updatedAt', 'Updated'],
@@ -7840,7 +7858,7 @@ App.builder = (function () {
     if (!rows.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.colSpan = 7;
+      cell.colSpan = 8;
       cell.textContent = 'No pages yet.';
       row.appendChild(cell);
       tbody.appendChild(row);
@@ -7873,6 +7891,7 @@ App.builder = (function () {
 
       append(safeText(item.name) || '-');
       append(getLandingPageTemplateName(item.templateId) || '-');
+      append(getSavedThemeName(item.themeId) || '-');
       append(getLandingPageHeadlineLabel(item.headlineId) || '-');
       append(getSavedFormName(item.formId) || '-');
       append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-');
@@ -11848,6 +11867,7 @@ App.builder = (function () {
       loadSavedEmailTemplates(),
       loadSavedPages(),
       loadSavedPageTemplates(),
+      loadSavedThemes(),
       loadSavedExtensions(),
     ]);
     try {
