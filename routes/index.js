@@ -257,7 +257,7 @@ async function handleRequest(req, res) {
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
 
-  if (authUser && pathname.startsWith('/api/') && !isAuthRoute && !isAdminRoute && !isDebugRoute) {
+  if (authUser && !authUser.isProjectAdmin && pathname.startsWith('/api/') && !isAuthRoute && !isAdminRoute && !isDebugRoute) {
     const requestedProjectId = String(req.headers['x-project-id'] || '').trim();
     const projectContextResult = await resolveCurrentProject({
       userId: String(authUser.id || '').trim(),
