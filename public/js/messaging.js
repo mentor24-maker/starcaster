@@ -7297,7 +7297,7 @@ App.messaging = (function () {
         String(s.name || s.topic || '').toLowerCase().includes(topicLower)
       ).length;
 
-      const pagesCount = (countsRef.builderLandingPages || []).filter(p =>
+      const pagesCount = (countsRef.builderPages || []).filter(p =>
         String(p.name || p.topic || '').toLowerCase().includes(topicLower)
       ).length;
 
@@ -7358,7 +7358,7 @@ App.messaging = (function () {
       tr.appendChild(drawStat(assetsCount, 'assetsPage', null));
       tr.appendChild(drawStat(campaignsCount, 'campaignsPage', null));
       tr.appendChild(drawStat(segmentsCount, 'segmentsPage', null));
-      tr.appendChild(drawStat(pagesCount, 'builderLandingPagesPage', 'builderLandingPagesNameFilter'));
+      tr.appendChild(drawStat(pagesCount, 'builderManagePagesPage', 'builderPagesNameFilter'));
       tr.appendChild(drawStat(reportsCount, 'messagingReportsPage', null));
 
       const actionsTd = document.createElement('td');

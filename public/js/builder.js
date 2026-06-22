@@ -438,7 +438,7 @@ App.builder = (function () {
   let savedForms = [];
   let savedModules = [];
   let savedModuleClasses = [];
-  let savedLandingPages = [];
+  let savedPages = [];
   let savedPageTemplates = [];
   let modularPageTemplateDraft = null;
   let draggedNewPageSectionLayout = '';
@@ -463,7 +463,7 @@ App.builder = (function () {
   let landingPageCtas = [];
   const landingPageSelectorFilterState = {};
   let pendingLandingPageFormRecord = null;
-  let selectedLandingPageIds = new Set();
+  let selectedPageIds = new Set();
   let activeLandingPagePreviewRecord = null;
   let activeLandingPagePreviewMode = 'page';
   let activeLandingPageVisualRecord = null;
@@ -597,9 +597,9 @@ App.builder = (function () {
     if (modularPanel) modularPanel.classList.add('hidden');
     const emailPanel = byId('builderTemplateEditorPanel');
     if (emailPanel) emailPanel.classList.add('hidden');
-    const landingForm = byId('builderLandingPagesForm');
+    const landingForm = byId('builderPagesForm');
     if (landingForm) landingForm.classList.add('hidden');
-    const pageHeader = byId('builderLandingPagesHeader');
+    const pageHeader = byId('builderPagesHeader');
     if (pageHeader) pageHeader.classList.add('hidden');
   }
 
@@ -3809,9 +3809,9 @@ App.builder = (function () {
     }
   }
 
-  async function loadSavedLandingPages() {
+  async function loadSavedPages() {
     const result = await api('/api/builder/landing-pages');
-    savedLandingPages = Array.isArray(result.landingPages) ? result.landingPages : [];
+    savedPages = Array.isArray(result.pages) ? result.pages : [];
   }
 
   async function loadSavedPageTemplates() {
@@ -3986,7 +3986,7 @@ App.builder = (function () {
 
   function getLandingPageFormPayload(formData) {
     const landingPageId = safeText(formData.get('landing_page_id'));
-    const existing = savedLandingPages.find((item) => safeText(item.id) === landingPageId) || null;
+    const existing = savedPages.find((item) => safeText(item.id) === landingPageId) || null;
     const templateId = safeText(formData.get('template_id')) || selectedTemplateId;
     const selectedSavedTemplate = getSavedPageTemplateById(templateId);
     return {
@@ -4434,7 +4434,7 @@ App.builder = (function () {
   }
 
   function applyLandingPageDefaultsToForm() {
-    const form = els.builderLandingPagesForm;
+    const form = els.builderPagesForm;
     if (!form) return;
     const current = getLandingPageFormPayload(new FormData(form));
     const next = applyLandingPageDefaultSelections(current);
@@ -7210,9 +7210,9 @@ App.builder = (function () {
   }
 
   function setLandingPageFormMode(isEditing) {
-    const title = byId('builderLandingPagesFormTitle');
-    const submitBtn = byId('builderLandingPagesSubmitBtn');
-    const form = els.builderLandingPagesForm;
+    const title = byId('builderPagesFormTitle');
+    const submitBtn = byId('builderPagesSubmitBtn');
+    const form = els.builderPagesForm;
     if (title) title.textContent = isEditing ? 'Builder: Edit Page' : 'Builder: Create Page';
     if (submitBtn) submitBtn.textContent = isEditing ? 'Update Page' : 'Save Page';
     if (form) {
@@ -7222,7 +7222,7 @@ App.builder = (function () {
   }
 
   function updateLandingPageFieldOutlines() {
-    const form = els.builderLandingPagesForm;
+    const form = els.builderPagesForm;
     if (!form) return;
     const isEditing = form.classList.contains('builder-landing-page-editing');
     const fields = form.querySelectorAll('input, select, textarea');
@@ -7237,7 +7237,7 @@ App.builder = (function () {
 
   function applyLandingPageRecordToForm(record) {
     if (!record) return;
-    const form = els.builderLandingPagesForm;
+    const form = els.builderPagesForm;
     if (!form) return;
 
     const idInput = byId('builderLandingPageIdInput');
@@ -7291,7 +7291,7 @@ App.builder = (function () {
   function resetLandingPageForm() {
     pendingLandingPageFormRecord = null;
     clearLandingPageSelectorFilters();
-    const form = els.builderLandingPagesForm;
+    const form = els.builderPagesForm;
     if (form) form.reset();
     const idInput = byId('builderLandingPageIdInput');
     if (idInput) idInput.value = '';
@@ -7445,7 +7445,7 @@ App.builder = (function () {
               }, {
                 mode: 'page',
                 sourceTemplateId: safeText(template.id),
-                targetPage: 'builderLandingPagesPage',
+                targetPage: 'builderPagesPage',
               });
               modal.close();
             } catch (err) {
@@ -7478,11 +7478,11 @@ App.builder = (function () {
     loadLandingPageBuilderOptions().catch(() => {
       if (pendingLandingPageFormRecord) applyLandingPageRecordToForm(pendingLandingPageFormRecord);
     });
-    App.setActivePage('builderLandingPagesPage', { skipNormalize: true });
+    App.setActivePage('builderPagesPage', { skipNormalize: true });
   }
 
   function previewCurrentLandingPageForm() {
-    const form = els.builderLandingPagesForm;
+    const form = els.builderPagesForm;
     if (!form) return;
     const formData = new FormData(form);
     const payload = getLandingPageFormPayload(formData);
@@ -7580,7 +7580,7 @@ App.builder = (function () {
     const hasLink = Boolean(leadMagnetUrl);
     const landingPageId = safeText(state?.landingPageId);
     const leadMagnetId = safeText(state?.leadMagnetId);
-    const sourceRecord = savedLandingPages.find((item) => safeText(item.id) === landingPageId)
+    const sourceRecord = savedPages.find((item) => safeText(item.id) === landingPageId)
       || activeLandingPagePreviewRecord
       || null;
     const ctx = sourceRecord ? getLandingPagePreviewContext(sourceRecord) : null;
@@ -7748,11 +7748,11 @@ App.builder = (function () {
       });
   }
 
-  function getFilteredSortedLandingPages() {
+  function getFilteredSortedPages() {
     const nameFilter = safeText(landingPageTableState.filters.name).toLowerCase();
     const templateFilter = safeText(landingPageTableState.filters.templateId);
 
-    const rows = savedLandingPages.filter((item) => {
+    const rows = savedPages.filter((item) => {
       const name = safeText(item.name).toLowerCase();
       const templateId = safeText(item.templateId);
       if (nameFilter && !name.includes(nameFilter)) return false;
@@ -7790,31 +7790,31 @@ App.builder = (function () {
   }
 
   function syncLandingPageTableControls() {
-    const visibleIds = getFilteredSortedLandingPages().map((item) => safeText(item.id)).filter(Boolean);
-    selectedLandingPageIds = new Set(Array.from(selectedLandingPageIds).filter((id) => visibleIds.includes(id) || savedLandingPages.some((item) => safeText(item.id) === id)));
+    const visibleIds = getFilteredSortedPages().map((item) => safeText(item.id)).filter(Boolean);
+    selectedPageIds = new Set(Array.from(selectedPageIds).filter((id) => visibleIds.includes(id) || savedPages.some((item) => safeText(item.id) === id)));
 
-    const selectAll = byId('builderLandingPagesSelectAllVisible');
-    const bulkDeleteBtn = byId('builderLandingPagesBulkDeleteBtn');
+    const selectAll = byId('builderPagesSelectAllVisible');
+    const bulkDeleteBtn = byId('builderPagesBulkDeleteBtn');
     if (selectAll) {
-      const selectedVisibleCount = visibleIds.filter((id) => selectedLandingPageIds.has(id)).length;
+      const selectedVisibleCount = visibleIds.filter((id) => selectedPageIds.has(id)).length;
       selectAll.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
       selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
       selectAll.disabled = visibleIds.length === 0;
     }
-    if (bulkDeleteBtn) bulkDeleteBtn.disabled = !selectedLandingPageIds.size;
+    if (bulkDeleteBtn) bulkDeleteBtn.disabled = !selectedPageIds.size;
   }
 
-  function renderLandingPagesTable() {
-    const tbody = byId('builderLandingPagesTableBody');
+  function renderPagesTable() {
+    const tbody = byId('builderPagesTableBody');
     if (!tbody) return;
     tbody.textContent = '';
 
     const sortButtons = [
-      ['builderLandingPagesSortNameBtn', 'name', 'Name'],
-      ['builderLandingPagesSortTemplateBtn', 'templateId', 'Template'],
-      ['builderLandingPagesSortHeadlineBtn', 'headlineId', 'Headline'],
-      ['builderLandingPagesSortFormBtn', 'formId', 'Form'],
-      ['builderLandingPagesSortUpdatedBtn', 'updatedAt', 'Updated'],
+      ['builderPagesSortNameBtn', 'name', 'Name'],
+      ['builderPagesSortTemplateBtn', 'templateId', 'Template'],
+      ['builderPagesSortHeadlineBtn', 'headlineId', 'Headline'],
+      ['builderPagesSortFormBtn', 'formId', 'Form'],
+      ['builderPagesSortUpdatedBtn', 'updatedAt', 'Updated'],
     ];
     sortButtons.forEach(([id, key, label]) => {
       const button = byId(id);
@@ -7825,7 +7825,7 @@ App.builder = (function () {
       button.textContent = `${label}${marker}`;
     });
 
-    const templateFilter = byId('builderLandingPagesTemplateFilter');
+    const templateFilter = byId('builderPagesTemplateFilter');
     if (templateFilter) {
       const current = safeText(landingPageTableState.filters.templateId);
       setSelectOptions(
@@ -7836,7 +7836,7 @@ App.builder = (function () {
       );
     }
 
-    const rows = getFilteredSortedLandingPages();
+    const rows = getFilteredSortedPages();
     if (!rows.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
@@ -7855,11 +7855,11 @@ App.builder = (function () {
       const selectTd = document.createElement('td');
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
-      checkbox.checked = selectedLandingPageIds.has(id);
+      checkbox.checked = selectedPageIds.has(id);
       checkbox.setAttribute('aria-label', `Select page ${safeText(item.name) || id}`);
       checkbox.addEventListener('change', () => {
-        if (checkbox.checked) selectedLandingPageIds.add(id);
-        else selectedLandingPageIds.delete(id);
+        if (checkbox.checked) selectedPageIds.add(id);
+        else selectedPageIds.delete(id);
         syncLandingPageTableControls();
       });
       selectTd.appendChild(checkbox);
@@ -7891,7 +7891,7 @@ App.builder = (function () {
           }, {
             mode: 'page',
             sourceTemplateId: safeText(item.templateId),
-            targetPage: 'builderLandingPagesPage',
+            targetPage: 'builderPagesPage',
           });
         } else {
           openLandingPageVisualEditor(item);
@@ -7901,7 +7901,7 @@ App.builder = (function () {
         if (!window.confirm(`Delete page "${safeText(item.name) || id}"?`)) return;
         try {
           await api(`/api/builder/landing-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
-          selectedLandingPageIds.delete(id);
+          selectedPageIds.delete(id);
           await refresh();
           notify('Landing page deleted');
         } catch (err) {
@@ -8679,9 +8679,9 @@ App.builder = (function () {
 
   function syncModularPageEditorPlacement() {
     const panel = byId('builderPageTemplateEditorPanel');
-    const pagesHost = byId('builderLandingPagesModularHost');
+    const pagesHost = byId('builderPagesModularHost');
     const templatesHost = byId('builderTemplatesModularHost');
-    const landingForm = els.builderLandingPagesForm || byId('builderLandingPagesForm');
+    const landingForm = els.builderPagesForm || byId('builderPagesForm');
     if (!panel || !pagesHost || !templatesHost) return;
     if (modularPageEditorMode === 'page') {
       pagesHost.appendChild(panel);
@@ -9105,7 +9105,7 @@ App.builder = (function () {
       onClose: () => {
         closeModularPageTemplateEditor();
         if (modularPageEditorMode === 'page') {
-          App.setActivePage('builderManageLandingPagesPage');
+          App.setActivePage('builderManagePagesPage');
         }
       },
       onSaved: async () => {
@@ -10675,8 +10675,8 @@ App.builder = (function () {
 
   async function refreshAfterModularPageSave() {
     if (modularPageEditorMode === 'page') {
-      await loadSavedLandingPages();
-      renderLandingPagesTable();
+      await loadSavedPages();
+      renderPagesTable();
       return;
     }
     await loadSavedPageTemplates();
@@ -11752,7 +11752,7 @@ App.builder = (function () {
       manageBtn.type = 'button';
       manageBtn.textContent = 'Open Pages Gateway';
       manageBtn.addEventListener('click', () => {
-        App.setActivePage('builderManageLandingPagesPage');
+        App.setActivePage('builderManagePagesPage');
       });
 
       copyWrap.appendChild(title);
@@ -11846,7 +11846,7 @@ App.builder = (function () {
       loadStandalonePageCells(),
       loadStandalonePageSections(),
       loadSavedEmailTemplates(),
-      loadSavedLandingPages(),
+      loadSavedPages(),
       loadSavedPageTemplates(),
       loadSavedExtensions(),
     ]);
@@ -11860,7 +11860,7 @@ App.builder = (function () {
     setupSavedCellsGrid();
     setupSavedSectionsLibraryGrid();
     renderExtensionsLanding();
-    renderLandingPagesTable();
+    renderPagesTable();
     renderFormTemplateRecordsTable();
     renderEmailTemplateTables();
     renderPageTemplateRecordsTable();
@@ -11880,11 +11880,11 @@ App.builder = (function () {
     renderTemplateLibrary();
     renderTemplatePreview(selectedTemplateId);
     if (
-      safeText(state.activePage) === 'builderLandingPagesPage'
+      safeText(state.activePage) === 'builderPagesPage'
       && modularPageEditorMode !== 'page'
       && !reactBuilderActive
     ) {
-      App.setActivePage('builderManageLandingPagesPage');
+      App.setActivePage('builderManagePagesPage');
     }
   }
 
@@ -12473,8 +12473,8 @@ App.builder = (function () {
       });
     }
 
-    if (els.builderLandingPagesForm) {
-      els.builderLandingPagesForm.querySelectorAll('input, select, textarea').forEach((field) => {
+    if (els.builderPagesForm) {
+      els.builderPagesForm.querySelectorAll('input, select, textarea').forEach((field) => {
         if (!field || field.type === 'hidden') return;
         field.addEventListener('input', () => {
           updateLandingPageFieldOutlines();
@@ -12549,7 +12549,7 @@ App.builder = (function () {
         setPageTemplateEditorVisible(false);
         if (modularPageEditorMode === 'page') {
           syncModularPageEditorPlacement();
-          App.setActivePage('builderManageLandingPagesPage');
+          App.setActivePage('builderManagePagesPage');
         } else if (modularPageEditorOptions && typeof modularPageEditorOptions.onClose === 'function') {
           modularPageEditorOptions.onClose();
         }
@@ -12607,7 +12607,7 @@ App.builder = (function () {
       pageHeaderBackBtn.addEventListener('click', () => {
         setPageTemplateEditorVisible(false);
         syncModularPageEditorPlacement();
-        App.setActivePage('builderManageLandingPagesPage');
+        App.setActivePage('builderManagePagesPage');
       });
     }
 
@@ -12696,13 +12696,13 @@ App.builder = (function () {
 
     if (previewBackBtn) {
       previewBackBtn.addEventListener('click', () => {
-        App.setActivePage(activeLandingPagePreviewMode === 'template' ? 'builderTemplatesPage' : 'builderManageLandingPagesPage');
+        App.setActivePage(activeLandingPagePreviewMode === 'template' ? 'builderTemplatesPage' : 'builderManagePagesPage');
       });
     }
 
     if (visualBackBtn) {
       visualBackBtn.addEventListener('click', () => {
-        App.setActivePage(activeLandingPageVisualMode === 'template' ? 'builderTemplatesPage' : 'builderManageLandingPagesPage');
+        App.setActivePage(activeLandingPageVisualMode === 'template' ? 'builderTemplatesPage' : 'builderManagePagesPage');
       });
     }
 
@@ -12711,7 +12711,7 @@ App.builder = (function () {
         if (activeLandingPagePreviewRecord) {
           App.setActivePage('builderLandingPagePreviewPage');
         } else {
-          App.setActivePage('builderManageLandingPagesPage');
+          App.setActivePage('builderManagePagesPage');
         }
       });
     }
@@ -12776,35 +12776,35 @@ App.builder = (function () {
       });
     }
 
-    const landingPageNameFilter = byId('builderLandingPagesNameFilter');
-    const landingPageTemplateFilter = byId('builderLandingPagesTemplateFilter');
-    const landingPageSelectAll = byId('builderLandingPagesSelectAllVisible');
-    const landingPageBulkDeleteBtn = byId('builderLandingPagesBulkDeleteBtn');
-    const landingPageBulkEditBtn = byId('builderLandingPagesBulkEditBtn');
-    const landingPageBulkEditForm = byId('builderLandingPagesBulkEditForm');
-    const landingPageBulkEditSummary = byId('builderLandingPagesBulkEditSummary');
-    const landingPageBackFromBulkEditBtn = byId('builderLandingPagesBackFromBulkEditBtn');
+    const landingPageNameFilter = byId('builderPagesNameFilter');
+    const landingPageTemplateFilter = byId('builderPagesTemplateFilter');
+    const landingPageSelectAll = byId('builderPagesSelectAllVisible');
+    const landingPageBulkDeleteBtn = byId('builderPagesBulkDeleteBtn');
+    const landingPageBulkEditBtn = byId('builderPagesBulkEditBtn');
+    const landingPageBulkEditForm = byId('builderPagesBulkEditForm');
+    const landingPageBulkEditSummary = byId('builderPagesBulkEditSummary');
+    const landingPageBackFromBulkEditBtn = byId('builderPagesBackFromBulkEditBtn');
 
     if (landingPageNameFilter) {
       landingPageNameFilter.addEventListener('input', () => {
         landingPageTableState.filters.name = safeText(landingPageNameFilter.value);
-        renderLandingPagesTable();
+        renderPagesTable();
       });
     }
 
     if (landingPageTemplateFilter) {
       landingPageTemplateFilter.addEventListener('change', () => {
         landingPageTableState.filters.templateId = safeText(landingPageTemplateFilter.value);
-        renderLandingPagesTable();
+        renderPagesTable();
       });
     }
 
     [
-      ['builderLandingPagesSortNameBtn', 'name', 'asc'],
-      ['builderLandingPagesSortTemplateBtn', 'templateId', 'asc'],
-      ['builderLandingPagesSortHeadlineBtn', 'headlineId', 'asc'],
-      ['builderLandingPagesSortFormBtn', 'formId', 'asc'],
-      ['builderLandingPagesSortUpdatedBtn', 'updatedAt', 'desc'],
+      ['builderPagesSortNameBtn', 'name', 'asc'],
+      ['builderPagesSortTemplateBtn', 'templateId', 'asc'],
+      ['builderPagesSortHeadlineBtn', 'headlineId', 'asc'],
+      ['builderPagesSortFormBtn', 'formId', 'asc'],
+      ['builderPagesSortUpdatedBtn', 'updatedAt', 'desc'],
     ].forEach(([id, key, defaultDir]) => {
       const button = byId(id);
       if (!button) return;
@@ -12815,22 +12815,22 @@ App.builder = (function () {
           landingPageTableState.sort.key = key;
           landingPageTableState.sort.dir = defaultDir;
         }
-        renderLandingPagesTable();
+        renderPagesTable();
       });
     });
 
     if (landingPageSelectAll) {
       landingPageSelectAll.addEventListener('change', () => {
-        const visibleIds = getFilteredSortedLandingPages().map((item) => safeText(item.id)).filter(Boolean);
-        if (landingPageSelectAll.checked) visibleIds.forEach((id) => selectedLandingPageIds.add(id));
-        else visibleIds.forEach((id) => selectedLandingPageIds.delete(id));
-        renderLandingPagesTable();
+        const visibleIds = getFilteredSortedPages().map((item) => safeText(item.id)).filter(Boolean);
+        if (landingPageSelectAll.checked) visibleIds.forEach((id) => selectedPageIds.add(id));
+        else visibleIds.forEach((id) => selectedPageIds.delete(id));
+        renderPagesTable();
       });
     }
 
     if (landingPageBulkDeleteBtn) {
       landingPageBulkDeleteBtn.addEventListener('click', async () => {
-        const ids = Array.from(selectedLandingPageIds);
+        const ids = Array.from(selectedPageIds);
         if (!ids.length) {
           notify('Select at least one page first', true);
           return;
@@ -12843,7 +12843,7 @@ App.builder = (function () {
         for (const id of ids) {
           try {
             await api(`/api/builder/landing-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
-            selectedLandingPageIds.delete(id);
+            selectedPageIds.delete(id);
           } catch (_) {
             failed++;
           }
@@ -12871,8 +12871,8 @@ App.builder = (function () {
           const n = Array.isArray(result.populated) ? result.populated.length : 0;
           const s = Array.isArray(result.skipped) ? result.skipped.filter(x => x.reason === 'no_match').length : 0;
           const src = result.sourceUrl ? ` from ${result.sourceUrl}` : '';
-          await loadSavedLandingPages();
-          renderLandingPagesTable();
+          await loadSavedPages();
+          renderPagesTable();
           notify(`Populated ${n} page${n === 1 ? '' : 's'}${src}. ${s} page${s === 1 ? '' : 's'} had no matching crawled content.`);
         } catch (err) {
           notify(err.message || 'Could not populate pages', true);
@@ -12885,42 +12885,42 @@ App.builder = (function () {
 
     if (landingPageBulkEditBtn) {
       landingPageBulkEditBtn.addEventListener('click', () => {
-        const ids = Array.from(selectedLandingPageIds);
+        const ids = Array.from(selectedPageIds);
         if (!ids.length) { notify('Select at least one page first', true); return; }
         if (landingPageBulkEditSummary) {
           landingPageBulkEditSummary.textContent = `${ids.length} page${ids.length === 1 ? '' : 's'} selected.`;
         }
         setSelectOptions(
-          byId('builderLandingPagesBulkTemplateSelect'),
+          byId('builderPagesBulkTemplateSelect'),
           LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
           'Leave Unchanged'
         );
-        const applyPrimary = byId('builderLandingPagesBulkApplyPrimaryColor');
-        const applyBackground = byId('builderLandingPagesBulkApplyBackgroundColor');
-        const applyAccent = byId('builderLandingPagesBulkApplyAccentColor');
-        const bulkPrimary = byId('builderLandingPagesBulkPrimaryColorInput');
-        const bulkBackground = byId('builderLandingPagesBulkBackgroundColorInput');
-        const bulkAccent = byId('builderLandingPagesBulkAccentColorInput');
+        const applyPrimary = byId('builderPagesBulkApplyPrimaryColor');
+        const applyBackground = byId('builderPagesBulkApplyBackgroundColor');
+        const applyAccent = byId('builderPagesBulkApplyAccentColor');
+        const bulkPrimary = byId('builderPagesBulkPrimaryColorInput');
+        const bulkBackground = byId('builderPagesBulkBackgroundColorInput');
+        const bulkAccent = byId('builderPagesBulkAccentColorInput');
         if (applyPrimary) applyPrimary.checked = false;
         if (applyBackground) applyBackground.checked = false;
         if (applyAccent) applyAccent.checked = false;
         if (bulkPrimary) bulkPrimary.value = DEFAULT_LANDING_PRIMARY;
         if (bulkBackground) bulkBackground.value = DEFAULT_LANDING_BACKGROUND;
         if (bulkAccent) bulkAccent.value = DEFAULT_LANDING_ACCENT;
-        App.setActivePage('builderLandingPagesBulkEditPage');
+        App.setActivePage('builderPagesBulkEditPage');
       });
     }
 
     if (landingPageBackFromBulkEditBtn) {
       landingPageBackFromBulkEditBtn.addEventListener('click', () => {
-        App.setActivePage('builderManageLandingPagesPage');
+        App.setActivePage('builderManagePagesPage');
       });
     }
 
     if (landingPageBulkEditForm) {
       landingPageBulkEditForm.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const ids = Array.from(selectedLandingPageIds);
+        const ids = Array.from(selectedPageIds);
         if (!ids.length) {
           notify('Select at least one page first', true);
           return;
@@ -12938,7 +12938,7 @@ App.builder = (function () {
 
         try {
           for (const id of ids) {
-            const item = savedLandingPages.find((entry) => safeText(entry.id) === id);
+            const item = savedPages.find((entry) => safeText(entry.id) === id);
             if (!item) continue;
             await api(`/api/builder/landing-pages/${encodeURIComponent(id)}`, {
               method: 'PATCH',
@@ -12974,10 +12974,10 @@ App.builder = (function () {
               }),
             });
           }
-          selectedLandingPageIds = new Set();
+          selectedPageIds = new Set();
           await refresh();
           notify('Landing pages updated');
-          App.setActivePage('builderManageLandingPagesPage');
+          App.setActivePage('builderManagePagesPage');
         } catch (err) {
           notify(err.message, true);
         }
@@ -13036,11 +13036,11 @@ App.builder = (function () {
       });
     });
 
-    if (els.builderLandingPagesForm) {
-      els.builderLandingPagesForm.addEventListener('submit', async (event) => {
+    if (els.builderPagesForm) {
+      els.builderPagesForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         try {
-          const formData = new FormData(els.builderLandingPagesForm);
+          const formData = new FormData(els.builderPagesForm);
           const landingPageId = safeText(formData.get('landing_page_id'));
           const payload = getLandingPageFormPayload(formData);
           if (!payload.name) throw new Error('Landing page name is required');
@@ -13064,7 +13064,7 @@ App.builder = (function () {
 
           await refresh();
           notify(landingPageId ? 'Landing page updated' : 'Landing page saved');
-          App.setActivePage('builderManageLandingPagesPage');
+          App.setActivePage('builderManagePagesPage');
           resetLandingPageForm();
         } catch (err) {
           notify(err.message, true);
@@ -13456,8 +13456,8 @@ App.builder = (function () {
           });
           const n = Array.isArray(result.populated) ? result.populated.length : 0;
           notify(`Populated ${n} page${n === 1 ? '' : 's'} from ${result.sourceUrl || 'crawl'}.`);
-          await loadSavedLandingPages();
-          renderLandingPagesTable();
+          await loadSavedPages();
+          renderPagesTable();
           await loadDiagnostics(runSelect.value);
         } catch (err) {
           notify(err.message || 'Could not populate pages', true);
@@ -13480,11 +13480,11 @@ App.builder = (function () {
     const mounted = App.builder.mount({
       surface: 'editor',
       editorMode: 'page',
-      onClose: () => { App.setActivePage('builderManageLandingPagesPage'); },
+      onClose: () => { App.setActivePage('builderManagePagesPage'); },
       onSaved: async () => {},
     });
     if (mounted) {
-      App.setActivePage('builderLandingPagesPage', { skipNormalize: true });
+      App.setActivePage('builderPagesPage', { skipNormalize: true });
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('builder:openBulkCreate'));
       }, 150);
@@ -13504,8 +13504,11 @@ App.builder = (function () {
           mount({ surface: 'hub', editorMode: 'template', onClose: () => {} });
         }
       } else if (builderActiveMount) {
-        const allowed = ['builderBuilderWorkspacePage', 'builderTemplatesPage', 'builderLandingPagesPage'];
-        if (!allowed.includes(pageId)) unmount();
+        const allowed = ['builderBuilderWorkspacePage', 'builderTemplatesPage', 'builderPagesPage'];
+        // Guard against a race where a slow refresh() from a previous page (e.g.
+        // builderManagePagesPage) finishes after the user has already navigated to
+        // an allowed page — don't unmount if the current active page is allowed.
+        if (!allowed.includes(pageId) && !allowed.includes(safeText(state.activePage))) unmount();
       }
     },
     mount,

@@ -139,7 +139,6 @@ export function BuilderBulkCreate({
 
   function handleModelChange(modelId: string) {
     setSelectedModelId(modelId);
-    if (!modelId) setSelectedRunId("");
     setGenerated(false);
     setResults([]);
     setError(null);
@@ -147,9 +146,9 @@ export function BuilderBulkCreate({
 
   async function handleGenerate() {
     if (!selectedTemplateId) { setError("Select a template."); return; }
-    if (!selectedMenuId) { setError("Select a menu."); return; }
-    if (menuItems.length === 0) { setError("The selected menu has no items."); return; }
-    if (useContentModel && !selectedRunId) { setError("Select a crawl run to use with this content model."); return; }
+    if (!selectedMenuId) { setError("Select a pages menu."); return; }
+    if (menuItems.length === 0) { setError("The selected pages menu has no items."); return; }
+    if (useContentModel && !selectedRunId) { setError("Select a source website to use with this content model."); return; }
 
     const items: BulkCreateItem[] = menuItems.map((item) => {
       const pathSlug = item.href.startsWith("/")
@@ -191,61 +190,14 @@ export function BuilderBulkCreate({
         {error ? <div className="notice error admin-notice builder-bulk-create-notice">{error}</div> : null}
 
         <div className="builder-bulk-create-form">
-          <label className="field">
-            <span>Template</span>
-            <select value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
-              <option value="">Select a template</option>
-              {createableTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name} ({template.layoutSections.length} section{template.layoutSections.length !== 1 ? "s" : ""})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Theme <span className="builder-bulk-create-optional">(optional)</span></span>
-            <select value={selectedThemeId} onChange={(e) => setSelectedThemeId(e.target.value)}>
-              <option value="">Use template default</option>
-              {themes.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Menu</span>
-            <select value={selectedMenuId} onChange={(e) => handleMenuChange(e.target.value)}>
-              <option value="">Select a menu</option>
-              {menuOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* ── Content Display Model (optional) ── */}
-          <label className="field">
-            <span>Content Model <span className="builder-bulk-create-optional">(optional)</span></span>
-            <select value={selectedModelId} onChange={(e) => handleModelChange(e.target.value)}>
-              <option value="">None — create pages with template layout only</option>
-              {CONTENT_DISPLAY_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-            {selectedModelId ? (
-              <span className="builder-bulk-create-model-hint">
-                {CONTENT_DISPLAY_MODELS.find((m) => m.id === selectedModelId)?.description}
-              </span>
-            ) : null}
-          </label>
-
-          {useContentModel ? (
+          <div className="builder-bulk-create-fields">
             <label className="field">
-              <span>Crawl Run</span>
-              <select value={selectedRunId} onChange={(e) => setSelectedRunId(e.target.value)}>
-                <option value="">Select a crawl run</option>
+              <span>Source Website <span className="builder-bulk-create-optional">(optional)</span></span>
+              <select
+                value={selectedRunId}
+                onChange={(e) => { setSelectedRunId(e.target.value); setGenerated(false); setResults([]); setError(null); }}
+              >
+                <option value="">Select a source website</option>
                 {acquireRuns.map((run) => (
                   <option key={run.runId} value={run.runId}>
                     {run.sourceUrl} — {run.pageCount} page{run.pageCount !== 1 ? "s" : ""}
@@ -259,33 +211,104 @@ export function BuilderBulkCreate({
                 </span>
               ) : null}
             </label>
+
+            <label className="field">
+              <span>Pages Menu</span>
+              <select value={selectedMenuId} onChange={(e) => handleMenuChange(e.target.value)}>
+                <option value="">Select a menu</option>
+                {menuOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Template</span>
+              <select value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+                <option value="">Select a template</option>
+                {createableTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} ({template.layoutSections.length} section{template.layoutSections.length !== 1 ? "s" : ""})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Theme <span className="builder-bulk-create-optional">(optional)</span></span>
+              <select value={selectedThemeId} onChange={(e) => setSelectedThemeId(e.target.value)}>
+                <option value="">Use template default</option>
+                {themes.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Content Model <span className="builder-bulk-create-optional">(optional)</span></span>
+              <select value={selectedModelId} onChange={(e) => handleModelChange(e.target.value)}>
+                <option value="">None — create pages with template layout only</option>
+                {CONTENT_DISPLAY_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+              {selectedModelId ? (
+                <span className="builder-bulk-create-model-hint">
+                  {CONTENT_DISPLAY_MODELS.find((m) => m.id === selectedModelId)?.description}
+                </span>
+              ) : null}
+            </label>
+          </div>
+
+          {selectedRunId ? (
+            <div className="builder-bulk-create-right">
+              {(() => {
+                const run = acquireRuns.find((r) => r.runId === selectedRunId);
+                return run ? (
+                  <div className="builder-bulk-create-run-info">
+                    <div className="builder-bulk-create-run-url">{run.sourceUrl}</div>
+                    <div className="builder-bulk-create-run-meta">
+                      {run.pageCount} page{run.pageCount !== 1 ? "s" : ""} crawled
+                      {run.createdAt ? ` on ${run.createdAt.slice(0, 10)}` : ""}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {menuItems.length > 0 ? (
+                <>
+                  <div className="builder-bulk-create-preview-label">
+                    {menuItems.length} page{menuItems.length !== 1 ? "s" : ""} will be created
+                    {useContentModel ? " with content extracted from source" : ""}
+                  </div>
+                  <ul className="builder-bulk-create-item-list">
+                    {menuItems.map((item) => (
+                      <li key={item.id || item.href} className="builder-bulk-create-item">
+                        <span className="builder-bulk-create-item-name">{item.label}</span>
+                        <code className="builder-bulk-create-item-slug">/{item.href.replace(/^\/+/, "")}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <div className="builder-bulk-create-right-placeholder">Select a menu to see pages to be created.</div>
+              )}
+            </div>
           ) : null}
         </div>
 
         {menuItems.length > 0 && !generated ? (
-          <div className="builder-bulk-create-preview">
-            <div className="builder-bulk-create-preview-label">
-              {menuItems.length} page{menuItems.length !== 1 ? "s" : ""} will be created
-              {useContentModel && selectedRunId ? " with content extracted from crawl" : ""}
-            </div>
-            <ul className="builder-bulk-create-item-list">
-              {menuItems.map((item) => (
-                <li key={item.id || item.href} className="builder-bulk-create-item">
-                  <span className="builder-bulk-create-item-name">{item.label}</span>
-                  <code className="builder-bulk-create-item-slug">/{item.href.replace(/^\/+/, "")}</code>
-                </li>
-              ))}
-            </ul>
-            <div className="builder-bulk-create-actions">
-              <button
-                className="submit-button"
-                disabled={isGenerating || !selectedTemplateId || (useContentModel && !selectedRunId)}
-                onClick={() => void handleGenerate()}
-                type="button"
-              >
-                {isGenerating ? "Generating..." : "Generate Pages"}
-              </button>
-            </div>
+          <div className="builder-bulk-create-actions">
+            <button
+              className="submit-button"
+              disabled={isGenerating || !selectedTemplateId || (useContentModel && !selectedRunId)}
+              onClick={() => void handleGenerate()}
+              type="button"
+            >
+              {isGenerating ? "Generating..." : "Generate Pages"}
+            </button>
           </div>
         ) : null}
       </div>

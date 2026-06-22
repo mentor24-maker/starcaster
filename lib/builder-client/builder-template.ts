@@ -56,7 +56,11 @@ export type BuilderTemplateModuleType =
   | "current-poll"
   | "poll-category-list"
   | "confetti"
-  | "tractor-nav";
+  | "tractor-nav"
+  | "breadcrumb"
+  | "blog-post-list"
+  | "blog-post-card"
+  | "blog-author-bio";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -142,6 +146,8 @@ export type BuilderThemeTypography = {
     h1?: number; h2?: number; h3?: number; h4?: number; h5?: number; h6?: number;
     /** Per-heading line-height overrides (0 = inherit baseLineHeight). */
     h1Lh?: number; h2Lh?: number; h3Lh?: number; h4Lh?: number; h5Lh?: number; h6Lh?: number;
+    /** Per-heading font-weight overrides (0 = inherit; typical values 400–900). */
+    h1Fw?: number; h2Fw?: number; h3Fw?: number; h4Fw?: number; h5Fw?: number; h6Fw?: number;
   };
   /** Semantic color roles wired to the palette, not raw hex at call sites. */
   colors: {
@@ -751,7 +757,13 @@ export function normalizeTheme(value: unknown): BuilderTheme {
         ...(normalizeThemeNumber(scale.h3Lh, 0.8, 3) ? { h3Lh: normalizeThemeNumber(scale.h3Lh, 0.8, 3) } : {}),
         ...(normalizeThemeNumber(scale.h4Lh, 0.8, 3) ? { h4Lh: normalizeThemeNumber(scale.h4Lh, 0.8, 3) } : {}),
         ...(normalizeThemeNumber(scale.h5Lh, 0.8, 3) ? { h5Lh: normalizeThemeNumber(scale.h5Lh, 0.8, 3) } : {}),
-        ...(normalizeThemeNumber(scale.h6Lh, 0.8, 3) ? { h6Lh: normalizeThemeNumber(scale.h6Lh, 0.8, 3) } : {})
+        ...(normalizeThemeNumber(scale.h6Lh, 0.8, 3) ? { h6Lh: normalizeThemeNumber(scale.h6Lh, 0.8, 3) } : {}),
+        ...(normalizeThemeNumber(scale.h1Fw, 100, 900) ? { h1Fw: normalizeThemeNumber(scale.h1Fw, 100, 900) } : {}),
+        ...(normalizeThemeNumber(scale.h2Fw, 100, 900) ? { h2Fw: normalizeThemeNumber(scale.h2Fw, 100, 900) } : {}),
+        ...(normalizeThemeNumber(scale.h3Fw, 100, 900) ? { h3Fw: normalizeThemeNumber(scale.h3Fw, 100, 900) } : {}),
+        ...(normalizeThemeNumber(scale.h4Fw, 100, 900) ? { h4Fw: normalizeThemeNumber(scale.h4Fw, 100, 900) } : {}),
+        ...(normalizeThemeNumber(scale.h5Fw, 100, 900) ? { h5Fw: normalizeThemeNumber(scale.h5Fw, 100, 900) } : {}),
+        ...(normalizeThemeNumber(scale.h6Fw, 100, 900) ? { h6Fw: normalizeThemeNumber(scale.h6Fw, 100, 900) } : {})
       },
       colors: {
         text: normalizeThemeColor(colors.text),
@@ -972,7 +984,11 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "current-poll" ||
     type === "poll-category-list" ||
     type === "confetti" ||
-    type === "tractor-nav"
+    type === "tractor-nav" ||
+    type === "breadcrumb" ||
+    type === "blog-post-list" ||
+    type === "blog-post-card" ||
+    type === "blog-author-bio"
   ) {
     return type;
   }
@@ -1698,6 +1714,55 @@ export function createEmptyModule(
                         displaySpeed: "3000",
                         headlines: JSON.stringify([])
                       }
+                      : type === "breadcrumb"
+                        ? {
+                            items: JSON.stringify([{ id: "home", label: "Home", url: "/" }]),
+                            separator: "›",
+                            fontSize: "14",
+                            color: "#587592",
+                            activeColor: "#18324a",
+                            bold: "false",
+                            alignment: "left"
+                          }
+                      : type === "blog-post-list"
+                        ? {
+                            layout: "grid",
+                            columns: "3",
+                            postsPerPage: "9",
+                            showFeaturedImage: "true",
+                            imageAspectRatio: "16:9",
+                            showExcerpt: "true",
+                            showAuthor: "true",
+                            showDate: "true",
+                            showCategories: "true",
+                            showReadMore: "true",
+                            readMoreLabel: "Read More",
+                            cardStyle: "default",
+                            cardBorderRadius: "12",
+                            cardGap: "24",
+                            filterCategory: ""
+                          }
+                      : type === "blog-post-card"
+                        ? {
+                            title: "",
+                            excerpt: "",
+                            author: "",
+                            date: "",
+                            imageUrl: "",
+                            imageAspectRatio: "16:9",
+                            url: "",
+                            categories: "",
+                            cardLayout: "vertical",
+                            cardStyle: "default",
+                            cardBorderRadius: "12",
+                            showFeaturedImage: "true",
+                            showExcerpt: "true",
+                            showAuthor: "true",
+                            showDate: "true",
+                            showCategories: "true",
+                            showReadMore: "true",
+                            readMoreLabel: "Read More"
+                          }
           : {};
 
   return {

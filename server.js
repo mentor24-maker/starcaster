@@ -80,6 +80,16 @@ function serveStatic(req, res) {
     return;
   }
 
+  // When a /{slug}.html is requested and no static file exists, serve the builder
+  // preview page so nav links (which add .html) resolve to a live page preview.
+  if (filePath.endsWith('.html') && !filePath.startsWith('/builder-') && !filePath.startsWith('/index')) {
+    fs.stat(fullPath, (statErr) => {
+      if (!statErr) return sendStaticFile(res, fullPath);
+      sendStaticFile(res, path.join(__dirname, 'public', 'builder-preview.html'));
+    });
+    return;
+  }
+
   sendStaticFile(res, fullPath);
 }
 

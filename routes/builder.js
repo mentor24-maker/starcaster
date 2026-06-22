@@ -20,13 +20,13 @@ const { getModel: getContentDisplayModel, listModels: listContentDisplayModels }
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/builderFormsStore');
 const {
-  listLandingPages,
-  getLandingPage,
-  createLandingPage,
-  updateLandingPage,
-  deleteLandingPage,
+  listPages,
+  getPage,
+  createPage,
+  updatePage,
+  deletePage,
   propagateCanonicalSection,
-} = require('../lib/builderLandingPagesStore');
+} = require('../lib/builderPagesStore');
 const {
   listPageTemplates,
   createPageTemplate,
@@ -114,13 +114,13 @@ function nextId(prefix) {
 // the change takes effect site-wide without requiring each page to be re-saved.
 async function propagateTypographyToAllPages(typography, scope) {
   if (!typography || typeof typography !== 'object') return;
-  const pagesResult = await listLandingPages(undefined, scope);
+  const pagesResult = await listPages(undefined, scope);
   if (!pagesResult.ok) return;
   const pages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
   await Promise.allSettled(pages.map(async (page) => {
     const existingTheme = page.theme && typeof page.theme === 'object' ? page.theme : {};
     const mergedTheme = { ...existingTheme, typography };
-    await updateLandingPage(String(page.id), {
+    await updatePage(String(page.id), {
       layoutSections: page.layoutSections,
       pageBackground: page.pageBackground,
       theme: mergedTheme,
@@ -193,13 +193,13 @@ async function pushCanonicalModuleToPages(canonicalId, canonicalModules, scope) 
     return { sections: updated, changed };
   }
 
-  const pagesResult = await listLandingPages(undefined, scope);
+  const pagesResult = await listPages(undefined, scope);
   if (pagesResult.ok) {
     const pages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
     await Promise.allSettled(pages.map(async (page) => {
       const { sections, changed } = applyPushToSections(page.layoutSections || []);
       if (!changed) return;
-      await updateLandingPage(String(page.id), { layoutSections: sections, pageBackground: page.pageBackground, theme: page.theme }, scope);
+      await updatePage(String(page.id), { layoutSections: sections, pageBackground: page.pageBackground, theme: page.theme }, scope);
       updatedPages++;
     }));
   }
@@ -373,10 +373,10 @@ async function handle(req, res, pathname, method) {
   }
 
   if (pathname === '/api/builder/landing-pages' && requestMethod === 'GET') {
-    const result = await listLandingPages(undefined, scope);
-    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load landing pages'), true;
-    const landingPages = Array.isArray(result.data) ? result.data : [];
-    return sendOk(res, 200, landingPages, { landingPages }, { total: landingPages.length }), true;
+    const result = await listPages(undefined, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load pages'), true;
+    const pages = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, pages, { pages }, { total: pages.length }), true;
   }
 
   if (pathname === '/api/builder/landing-pages' && requestMethod === 'POST') {
@@ -386,7 +386,7 @@ async function handle(req, res, pathname, method) {
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
     const templateId = deriveTemplateId(body, name, { unique: true });
 
-    const result = await createLandingPage({
+    const result = await createPage({
       name,
       templateKind: body.templateKind || body.template_kind,
       templateId,
@@ -425,8 +425,8 @@ async function handle(req, res, pathname, method) {
         : [],
       contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
     }, scope);
-    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create landing page'), true;
-    return sendOk(res, 201, result.data, { landingPage: result.data }), true;
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create page'), true;
+    return sendOk(res, 201, result.data, { page: result.data }), true;
   }
 
   if (pathname === '/api/builder/page-templates' && requestMethod === 'GET') {
@@ -1104,7 +1104,7 @@ async function handle(req, res, pathname, method) {
       run = await getDirectAcquireRun(runs[0].run_id, scope);
     }
 
-    const pagesResult = await listLandingPages(undefined, scope);
+    const pagesResult = await listPages(undefined, scope);
     const builderPages = (pagesResult.ok ? pagesResult.data || [] : []).map((p) => ({
       id: String(p.id), name: String(p.name || ''), slug: String(p.slug || ''),
     }));
@@ -1178,7 +1178,7 @@ async function handle(req, res, pathname, method) {
 
     const runDomain = (() => { try { return new URL(run.source_url).hostname.replace(/^www\./, ''); } catch (_) { return ''; } })();
 
-    const pagesResult = await listLandingPages(undefined, scope);
+    const pagesResult = await listPages(undefined, scope);
     if (!pagesResult.ok) return sendErr(res, 500, 'Could not load Builder pages.'), true;
     const builderPages = pagesResult.data || [];
 
@@ -1204,7 +1204,7 @@ async function handle(req, res, pathname, method) {
       };
 
       const existingSections = Array.isArray(builderPage.layoutSections) ? builderPage.layoutSections : [];
-      const updateResult = await updateLandingPage(
+      const updateResult = await updatePage(
         String(builderPage.id),
         { layoutSections: [...existingSections, newSection], pageBackground: builderPage.pageBackground, theme: builderPage.theme },
         scope
@@ -1320,7 +1320,7 @@ async function handle(req, res, pathname, method) {
 
         // Derive a templateId from the slug/name (stable, no time suffix for create)
         const derivedTemplateId = templateId;
-        const pageResult = await createLandingPage({
+        const pageResult = await createPage({
           name,
           slug,
           templateId: derivedTemplateId,
@@ -1350,7 +1350,7 @@ async function handle(req, res, pathname, method) {
     const landingPageId = decodeURIComponent(landingPageSubmitMatch[1] || '').trim();
     if (!landingPageId) return sendErr(res, 400, 'landing page id is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const landingPageRes = await getLandingPage(landingPageId, scope);
+    const landingPageRes = await getPage(landingPageId, scope);
     if (!landingPageRes.ok) return sendErr(res, landingPageRes.status || 404, landingPageRes.error || 'Landing page not found'), true;
     const landingPage = landingPageRes.data;
 
@@ -1422,7 +1422,7 @@ async function handle(req, res, pathname, method) {
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
     const templateId = deriveTemplateId(body, name);
 
-    const result = await updateLandingPage(landingPageId, {
+    const result = await updatePage(landingPageId, {
       name,
       templateKind: body.templateKind || body.template_kind,
       templateId,
@@ -1464,27 +1464,27 @@ async function handle(req, res, pathname, method) {
       return sendErr(
         res,
         result.status || 500,
-        result.error || 'Could not update landing page',
+        result.error || 'Could not update page',
         { code: result.status === 404 ? 'NOT_FOUND' : null }
       ), true;
     }
-    return sendOk(res, 200, result.data, { landingPage: result.data }), true;
+    return sendOk(res, 200, result.data, { page: result.data }), true;
   }
 
   if (landingPageIdMatch && requestMethod === 'DELETE') {
     const landingPageId = decodeURIComponent(landingPageIdMatch[1] || '').trim();
     if (!landingPageId) return sendErr(res, 400, 'landing page id is required', { code: 'VALIDATION_ERROR' }), true;
 
-    const result = await deleteLandingPage(landingPageId, scope);
+    const result = await deletePage(landingPageId, scope);
     if (!result.ok) {
       return sendErr(
         res,
         result.status || 500,
-        result.error || 'Could not delete landing page',
+        result.error || 'Could not delete page',
         { code: result.status === 404 ? 'NOT_FOUND' : null }
       ), true;
     }
-    return sendOk(res, 200, result.data, { landingPage: result.data }), true;
+    return sendOk(res, 200, result.data, { page: result.data }), true;
   }
 
   if (pageTemplateIdMatch && requestMethod === 'PATCH') {

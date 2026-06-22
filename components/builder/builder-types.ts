@@ -11,7 +11,7 @@ import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BUILDER_CAPABILITIES } from "@/lib/capabilities";
 
-export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects";
+export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog";
 
 export type GalleryTarget =
   | { kind: "module"; sectionId: string; moduleId: string }
@@ -102,6 +102,8 @@ export const modulePaletteGroups: Array<{
   { value: "social", label: "Social", icon: "@", description: "Linked rows of social icons and profile badges." },
   { value: "table", label: "Tables", icon: "⊞", description: "Data tables with configurable columns and rows." },
   { value: "slider", label: "Sliders", icon: "⇆", description: "Horizontally scrollable bars of managed cards." },
+  { value: "breadcrumb", label: "Breadcrumb", icon: "›", description: "Horizontal trail showing the visitor's location in the site hierarchy." },
+  { value: "blog", label: "Blog", icon: "✍", description: "Blog content modules — post feeds, filters, author bios, and more." },
   {
     value: "special-effects",
     label: "Special Effects",
@@ -561,6 +563,61 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: { variant: "standard" }
+  },
+  {
+    id: "breadcrumb-standard",
+    type: "breadcrumb",
+    group: "breadcrumb",
+    label: "Breadcrumb",
+    icon: "›",
+    description: "A horizontal breadcrumb trail linking back through the page hierarchy.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "blog-post-card-standard",
+    type: "blog-post-card",
+    group: "blog",
+    label: "Post Card",
+    icon: "▭",
+    description: "A manually configured single-post preview card — title, image, excerpt, and meta.",
+    name: "",
+    text: "",
+    settings: { cardLayout: "vertical" }
+  },
+  {
+    id: "blog-post-card-horizontal",
+    type: "blog-post-card",
+    group: "blog",
+    label: "Post Card (Horizontal)",
+    icon: "▬",
+    description: "A side-by-side post card with image on the left and content on the right.",
+    name: "",
+    text: "",
+    settings: { cardLayout: "horizontal" }
+  },
+  {
+    id: "blog-post-list-grid",
+    type: "blog-post-list",
+    group: "blog",
+    label: "Post Feed (Grid)",
+    icon: "⊞",
+    description: "A filterable grid of blog post cards with featured image, excerpt, and meta.",
+    name: "",
+    text: "",
+    settings: { layout: "grid", columns: "3" }
+  },
+  {
+    id: "blog-post-list-list",
+    type: "blog-post-list",
+    group: "blog",
+    label: "Post Feed (List)",
+    icon: "☰",
+    description: "A filterable list of blog post summaries with image thumbnail and meta.",
+    name: "",
+    text: "",
+    settings: { layout: "list", columns: "1" }
   }
 ];
 
