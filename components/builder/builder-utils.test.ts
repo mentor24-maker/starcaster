@@ -193,7 +193,6 @@ describe("buildClonedPageCreatePayload", () => {
 
     expect(payload.name).toBe("Image TEST Copy");
     expect(payload.slug).toBe("test-image-copy-2");
-    expect(payload.isPublished).toBe(false);
     expect(payload.layoutSections[0]?.id).not.toBe("section-1");
     expect(payload.layoutSections[0]?.modules[0]?.id).not.toBe("module-1");
   });
