@@ -136,49 +136,59 @@ describe("getImageModuleShellStyle", () => {
 });
 
 describe("buildClonedPageCreatePayload", () => {
-  it("assigns a unique slug and fresh section/module ids", () => {
-    const source = {
-      id: "page-1",
-      name: "Image TEST",
-      slug: "test-image",
-      templateId: "tpl-1",
-      pageBackground: { mode: "color" as const, color: "#ffffff", color2: "#ffffff", imageUrl: "", styleKey: "" as const },
-      layoutSections: [
-        {
-          id: "section-1",
-          title: "Section",
-          layout: "single" as const,
-          alignment: "left" as const,
-          marginTop: "0",
-          marginBottom: "0",
-          mobileHidden: "",
-          desktopHidden: "",
-          mobileLayout: "stack" as const,
-          background: { mode: "none" as const, color: "#ffffff", color2: "#ffffff", imageUrl: "", styleKey: "" as const },
-          cellBackgrounds: {},
-          cellPadding: {},
-          cellVerticalMargin: {},
-          cellMobileHidden: {},
-          cellBorderWidth: {},
-          cellBorderColor: {},
-          cellBorderRadius: {},
-          modules: [
-            {
-              id: "module-1",
-              type: "heading" as const,
-              column: "main",
-              name: "Heading",
-              text: "Hello",
-              settings: {}
-            }
-          ]
-        }
-      ],
-      createdAt: "",
-      updatedAt: "",
-      isPublished: true
-    };
+  const makeSource = () => ({
+    id: "page-1",
+    name: "Image TEST",
+    slug: "test-image",
+    templateId: "tpl-1",
+    themeId: "theme-abc",
+    theme: {
+      typography: {
+        fonts: { heading: "Georgia", body: "Arial", mono: "" },
+        scale: { baseSize: 16, ratio: 1.25, baseLineHeight: 1.5 },
+        colors: { text: "#111111", heading: "#000000", muted: "#888888", link: "#0000ff", linkHover: "#0000cc", selection: "" },
+        elements: {}
+      }
+    },
+    pageBackground: { mode: "color" as const, color: "#ffffff", color2: "#ffffff", imageUrl: "", styleKey: "" as const },
+    layoutSections: [
+      {
+        id: "section-1",
+        title: "Section",
+        layout: "single" as const,
+        alignment: "left" as const,
+        marginTop: "0",
+        marginBottom: "0",
+        mobileHidden: "",
+        desktopHidden: "",
+        mobileLayout: "stack" as const,
+        background: { mode: "none" as const, color: "#ffffff", color2: "#ffffff", imageUrl: "", styleKey: "" as const },
+        cellBackgrounds: {},
+        cellPadding: {},
+        cellVerticalMargin: {},
+        cellMobileHidden: {},
+        cellBorderWidth: {},
+        cellBorderColor: {},
+        cellBorderRadius: {},
+        modules: [
+          {
+            id: "module-1",
+            type: "heading" as const,
+            column: "main",
+            name: "Heading",
+            text: "Hello",
+            settings: {}
+          }
+        ]
+      }
+    ],
+    createdAt: "",
+    updatedAt: "",
+    isPublished: true
+  });
 
+  it("assigns a unique slug and fresh section/module ids", () => {
+    const source = makeSource();
     const payload = buildClonedPageCreatePayload(source, [source, { ...source, id: "page-2", slug: "test-image-copy" }]);
 
     expect(payload.name).toBe("Image TEST Copy");
@@ -186,6 +196,23 @@ describe("buildClonedPageCreatePayload", () => {
     expect(payload.isPublished).toBe(false);
     expect(payload.layoutSections[0]?.id).not.toBe("section-1");
     expect(payload.layoutSections[0]?.modules[0]?.id).not.toBe("module-1");
+  });
+
+  it("inherits templateId, templateKind, themeId, and theme from source", () => {
+    const source = makeSource();
+    const payload = buildClonedPageCreatePayload(source, [source]);
+
+    expect(payload.templateId).toBe("tpl-1");
+    expect(payload.templateKind).toBe("modular");
+    expect(payload.themeId).toBe("theme-abc");
+    expect(payload.theme?.typography.fonts.heading).toBe("Georgia");
+    expect(payload.theme).not.toBe(source.theme);
+  });
+
+  it("omits themeId when source has none", () => {
+    const source = { ...makeSource(), themeId: undefined };
+    const payload = buildClonedPageCreatePayload(source, [source]);
+    expect(payload.themeId).toBeUndefined();
   });
 });
 
