@@ -61,6 +61,7 @@ export function mountBuilderPreview(host: HTMLElement | null) {
 }
 
 let themesRoot: Root | null = null;
+let themesHost: HTMLElement | null = null;
 let formsRoot: Root | null = null;
 let moduleClassesRoot: Root | null = null;
 let extensionsRoot: Root | null = null;
@@ -71,9 +72,9 @@ let agentsSetViewFn: ((view: "list" | "builder") => void) | null = null;
 
 export function mountThemesReact(host: HTMLElement | null) {
   if (!host) return;
-  if (themesRoot) {
-    themesRoot.unmount();
-  }
+  if (themesRoot && themesHost === host) return;
+  if (themesRoot) themesRoot.unmount();
+  themesHost = host;
   themesRoot = createRoot(host);
   themesRoot.render(<BuilderThemesPage />);
 }
@@ -82,6 +83,7 @@ export function unmountThemesReact() {
   if (themesRoot) {
     themesRoot.unmount();
     themesRoot = null;
+    themesHost = null;
   }
 }
 

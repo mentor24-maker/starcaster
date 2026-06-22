@@ -820,6 +820,8 @@ export function getThemeRootVars(theme: BuilderTheme | undefined): CSSProperties
     if (explicit) vars[`--bx-size-h${level}`] = `${explicit}px`;
     const lh = (scale as Record<string, number | undefined>)[`h${level}Lh`];
     if (lh) vars[`--bx-line-h${level}`] = String(lh);
+    const fw = (scale as Record<string, number | undefined>)[`h${level}Fw`];
+    if (fw) vars[`--bx-weight-h${level}`] = String(fw);
   }
 
   if (colors.linkUnderline === true) vars["--bx-link-decoration"] = "underline";

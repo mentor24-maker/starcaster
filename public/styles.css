@@ -5017,22 +5017,48 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-bulk-create-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  column-gap: 24px;
   margin-bottom: 20px;
 }
-.builder-react-root .builder-bulk-create-preview {
-  border-top: 1px solid rgba(9, 16, 24, 0.08);
-  padding-top: 16px;
+.builder-react-root .builder-bulk-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.builder-react-root .builder-bulk-create-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-left: 1px solid rgba(9, 16, 24, 0.08);
+  padding-left: 24px;
+}
+.builder-react-root .builder-bulk-create-run-info {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
+}
+.builder-react-root .builder-bulk-create-run-url {
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+}
+.builder-react-root .builder-bulk-create-run-meta {
+  font-size: 12px;
+  color: rgba(9, 16, 24, 0.5);
+  margin-top: 4px;
+}
+.builder-react-root .builder-bulk-create-right-placeholder {
+  font-size: 13px;
+  color: rgba(9, 16, 24, 0.4);
+  font-style: italic;
 }
 .builder-react-root .builder-bulk-create-preview-label {
   font-size: 13px;
   font-weight: 600;
   color: rgba(9, 16, 24, 0.6);
-  margin-bottom: 10px;
 }
 .builder-react-root .builder-bulk-create-item-list {
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -5056,6 +5082,8 @@ body.asset-associations-modal-open {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(9, 16, 24, 0.08);
 }
 .builder-react-root .builder-bulk-create-results-shell {
   padding: 16px 20px 20px;
@@ -12509,7 +12537,7 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-theme-scale-col-headers {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   padding: 2px 6px;
 }
@@ -12521,7 +12549,7 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-theme-scale-dual-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
@@ -12743,26 +12771,32 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-preview-shell .builder-preview-text h1 {
   font-size: var(--bx-size-h1, clamp(2.25rem, 4.2vw, 4rem));
   line-height: var(--bx-line-h1, var(--bx-line-base, 1.2));
+  font-weight: var(--bx-weight-h1, 800);
 }
 .builder-react-root .builder-preview-shell .builder-preview-text h2 {
   font-size: var(--bx-size-h2, clamp(1.75rem, 3.2vw, 3rem));
   line-height: var(--bx-line-h2, var(--bx-line-base, 1.2));
+  font-weight: var(--bx-weight-h2, 800);
 }
 .builder-react-root .builder-preview-shell .builder-preview-text h3 {
   font-size: var(--bx-size-h3, clamp(1.4rem, 2.4vw, 2.25rem));
   line-height: var(--bx-line-h3, var(--bx-line-base, 1.2));
+  font-weight: var(--bx-weight-h3, 800);
 }
 .builder-react-root .builder-preview-shell .builder-preview-text h4 {
   font-size: var(--bx-size-h4, clamp(1.15rem, 1.9vw, 1.7rem));
   line-height: var(--bx-line-h4, var(--bx-line-base, 1.2));
+  font-weight: var(--bx-weight-h4, 800);
 }
 .builder-react-root .builder-preview-shell .builder-preview-text h5 {
   font-size: var(--bx-size-h5, clamp(1rem, 1.5vw, 1.25rem));
   line-height: var(--bx-line-h5, var(--bx-line-base, 1.2));
+  font-weight: var(--bx-weight-h5, 800);
 }
 .builder-react-root .builder-preview-shell .builder-preview-text h6 {
   font-size: var(--bx-size-h6, 1rem);
   line-height: var(--bx-line-h6, var(--bx-line-base, 1.2));
+  font-weight: var(--bx-weight-h6, 800);
 }
 
 /* src/css/legacy.css */

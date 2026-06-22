@@ -462,7 +462,7 @@ function BuilderModulePreview({
   const variant = module.settings.variant ?? "";
 
   if (module.type === "navigation") {
-    return <NavigationModulePreview module={module} />;
+    return <NavigationModulePreview module={module} previewMode={previewMode} />;
   }
 
   if (module.type === "heading") {
@@ -864,10 +864,21 @@ function HeadlineRotatorPreview({
   );
 }
 
+function toPreviewHref(href: string): string {
+  const clean = href.trim();
+  if (!clean || clean.startsWith("#") || clean.startsWith("http") || clean.startsWith("mailto:") || clean.endsWith(".html")) {
+    return clean || "#";
+  }
+  const withoutTrailingSlash = clean.endsWith("/") && clean.length > 1 ? clean.slice(0, -1) : clean;
+  return `${withoutTrailingSlash}.html`;
+}
+
 function NavigationModulePreview({
-  module
+  module,
+  previewMode = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  previewMode?: boolean;
 }) {
   const variant = module.settings.variant ?? "";
   const pathname = usePathname();
@@ -920,8 +931,8 @@ function NavigationModulePreview({
       }
     >
       {topLevelItems.map((item) => {
-        const href = item.href || "#";
-        const isActive = normalizeNavPath(href) === activePath;
+        const href = previewMode ? toPreviewHref(item.href || "#") : (item.href || "#");
+        const isActive = normalizeNavPath(item.href || "#") === activePath;
         const itemId = item.id ?? `${href}-${item.label}`;
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
 
@@ -950,8 +961,8 @@ function NavigationModulePreview({
             </Link>
             <div className="site-nav-dropdown-menu">
               {children.map((child) => {
-                const childHref = child.href || "#";
-                const childActive = normalizeNavPath(childHref) === activePath;
+                const childHref = previewMode ? toPreviewHref(child.href || "#") : (child.href || "#");
+                const childActive = normalizeNavPath(child.href || "#") === activePath;
                 return (
                   <Link
                     key={child.id ?? `${childHref}-${child.label}`}

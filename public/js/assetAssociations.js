@@ -60,7 +60,7 @@ App.assetAssociations = (function assetAssociationsModule() {
       label: 'Builder Pages',
       type: 'landing_page',
       endpoint: '/api/builder/landing-pages',
-      keys: ['landingPages', 'landing_pages', 'data'],
+      keys: ['pages', 'landing_pages', 'data'],
       fields: ['name'],
     },
     {

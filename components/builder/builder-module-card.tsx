@@ -58,6 +58,9 @@ import { BuilderConfettiModuleSettings } from "./builder-confetti-module-setting
 import { TractorNavCardPreview, TractorNavRuntime } from "@/components/builder-tractor-nav-module";
 import { BuilderTractorNavModuleSettings } from "./builder-tractor-nav-module-settings";
 import { BuilderModuleTriggerSettings } from "./builder-module-trigger-settings";
+import { BuilderBreadcrumbModuleSettings, parseBreadcrumbItems } from "./builder-breadcrumb-module-settings";
+import { BuilderBlogPostListModuleSettings } from "./builder-blog-post-list-module-settings";
+import { BuilderBlogPostCardModuleSettings } from "./builder-blog-post-card-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -639,6 +642,224 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "tractor-nav") {
     return <TractorNavCardPreview settings={module.settings} />;
+  }
+
+  if (module.type === "breadcrumb") {
+    const items = parseBreadcrumbItems(module.settings);
+    const sep = module.settings.separator || "›";
+    const fontSize = parseInt(module.settings.fontSize ?? "14", 10) || 14;
+    const color = module.settings.color || "#587592";
+    const activeColor = module.settings.activeColor || "#18324a";
+    const isBold = module.settings.bold === "true";
+    const alignment = (module.settings.alignment ?? "left") as "left" | "center" | "right";
+    return (
+      <div className="builder-module-preview-copy" style={{ textAlign: alignment }}>
+        <div style={{ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize, fontWeight: isBold ? 700 : 400 }}>
+          {items.length === 0 ? (
+            <span style={{ color: "#aaa", fontStyle: "italic" }}>No items yet</span>
+          ) : items.map((item, i) => {
+            const isLast = i === items.length - 1;
+            return (
+              <span key={item.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ color: isLast ? activeColor : color, fontWeight: isLast ? 600 : undefined }}>
+                  {item.label || `Item ${i + 1}`}
+                </span>
+                {!isLast && <span style={{ color, opacity: 0.5 }}>{sep}</span>}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-post-list") {
+    const s = module.settings;
+    const isGrid = (s.layout ?? "grid") === "grid";
+    const cols = Math.min(3, Math.max(1, parseInt(s.columns ?? "3", 10) || 3));
+    const gap = parseInt(s.cardGap ?? "24", 10) || 24;
+    const radius = parseInt(s.cardBorderRadius ?? "12", 10) || 12;
+    const showImage = s.showFeaturedImage !== "false";
+    const showExcerpt = s.showExcerpt !== "false";
+    const showAuthor = s.showAuthor !== "false";
+    const showDate = s.showDate !== "false";
+    const showCategories = s.showCategories !== "false";
+    const showReadMore = s.showReadMore !== "false";
+    const readMoreLabel = s.readMoreLabel || "Read More";
+    const cardStyle = s.cardStyle ?? "default";
+    const previewCount = isGrid ? cols : 2;
+    const cardBorder = cardStyle === "bordered" ? "1px solid #d4e3ef" : "none";
+    const cardShadow = cardStyle === "shadow" ? "0 2px 12px rgba(9,16,24,0.10)" : "none";
+    const ratioMap: Record<string, number> = { "16:9": 56.25, "4:3": 75, "3:2": 66.67, "1:1": 100 };
+    const paddingTop = `${ratioMap[s.imageAspectRatio ?? "16:9"] ?? 56.25}%`;
+
+    return (
+      <div className="builder-module-preview-copy">
+        <div
+          style={{
+            display: isGrid ? "grid" : "flex",
+            gridTemplateColumns: isGrid ? `repeat(${cols}, 1fr)` : undefined,
+            flexDirection: isGrid ? undefined : "column",
+            gap,
+          }}
+        >
+          {Array.from({ length: previewCount }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                border: cardBorder,
+                borderRadius: radius,
+                boxShadow: cardShadow,
+                overflow: "hidden",
+                background: "#fff",
+                display: isGrid ? "flex" : "flex",
+                flexDirection: isGrid ? "column" : "row",
+                gap: isGrid ? 0 : 12,
+              }}
+            >
+              {showImage ? (
+                <div
+                  style={{
+                    position: "relative",
+                    flex: isGrid ? undefined : "0 0 120px",
+                    width: isGrid ? "100%" : 120,
+                    paddingTop: isGrid ? paddingTop : undefined,
+                    height: isGrid ? undefined : 80,
+                    background: "#d4e3ef",
+                    borderRadius: isGrid ? 0 : radius,
+                  }}
+                >
+                  <span style={{
+                    position: "absolute", inset: 0, display: "flex", alignItems: "center",
+                    justifyContent: "center", color: "#8ba9be", fontSize: 11
+                  }}>
+                    Image
+                  </span>
+                </div>
+              ) : null}
+              <div style={{ padding: isGrid ? "12px 14px 14px" : "4px 0", flex: 1 }}>
+                {showCategories ? (
+                  <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                    <span style={{ background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "2px 6px" }}>Category</span>
+                  </div>
+                ) : null}
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 4, lineHeight: 1.3 }}>
+                  Post title {i + 1}
+                </div>
+                {showDate || showAuthor ? (
+                  <div style={{ color: "#8ba9be", fontSize: 11, marginBottom: showExcerpt ? 6 : 8 }}>
+                    {showDate ? "Jun 20, 2026" : ""}
+                    {showDate && showAuthor ? " · " : ""}
+                    {showAuthor ? "Author Name" : ""}
+                  </div>
+                ) : null}
+                {showExcerpt ? (
+                  <div style={{ color: "#587592", fontSize: 12, lineHeight: 1.5, marginBottom: showReadMore ? 8 : 0 }}>
+                    A short excerpt from this post appears here to give readers a preview.
+                  </div>
+                ) : null}
+                {showReadMore ? (
+                  <div style={{ fontSize: 12, color: "#0f4f8f", fontWeight: 600 }}>{readMoreLabel} →</div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="builder-module-editor-copy" style={{ marginTop: 8 }}>
+          {isGrid ? `${cols}-column grid` : "List layout"} · {s.postsPerPage ?? "9"} per page
+          {s.filterCategory ? ` · Category: ${s.filterCategory}` : ""}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-post-card") {
+    const s = module.settings;
+    const isHorizontal = (s.cardLayout ?? "vertical") === "horizontal";
+    const showImage = s.showFeaturedImage !== "false";
+    const showExcerpt = s.showExcerpt !== "false";
+    const showAuthor = s.showAuthor !== "false";
+    const showDate = s.showDate !== "false";
+    const showCategories = s.showCategories !== "false";
+    const showReadMore = s.showReadMore !== "false";
+    const radius = parseInt(s.cardBorderRadius ?? "12", 10) || 12;
+    const cardStyle = s.cardStyle ?? "default";
+    const cardBorder = cardStyle === "bordered" ? "1px solid #d4e3ef" : "none";
+    const cardShadow = cardStyle === "shadow" ? "0 2px 12px rgba(9,16,24,0.10)" : "none";
+    const ratioMap: Record<string, number> = { "16:9": 56.25, "4:3": 75, "3:2": 66.67, "1:1": 100 };
+    const paddingTop = `${ratioMap[s.imageAspectRatio ?? "16:9"] ?? 56.25}%`;
+    const categories = (s.categories ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+    const title = s.title || "Post title";
+    const excerpt = s.excerpt || "A short excerpt from this post appears here to give readers a preview of what to expect.";
+    const author = s.author || "Author Name";
+    const date = s.date || "Jun 20, 2026";
+    const readMoreLabel = s.readMoreLabel || "Read More";
+
+    return (
+      <div className="builder-module-preview-copy">
+        <div
+          style={{
+            border: cardBorder,
+            borderRadius: radius,
+            boxShadow: cardShadow,
+            overflow: "hidden",
+            background: "#fff",
+            display: "flex",
+            flexDirection: isHorizontal ? "row" : "column",
+            gap: isHorizontal ? 0 : 0,
+            maxWidth: isHorizontal ? "100%" : 480,
+          }}
+        >
+          {showImage ? (
+            isHorizontal ? (
+              <div style={{ flex: "0 0 180px", position: "relative", background: s.imageUrl ? undefined : "#d4e3ef", minHeight: 120, overflow: "hidden" }}>
+                {s.imageUrl ? (
+                  <img src={s.imageUrl} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                ) : (
+                  <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }}>Image</span>
+                )}
+              </div>
+            ) : (
+              <div style={{ position: "relative", width: "100%", paddingTop, background: s.imageUrl ? undefined : "#d4e3ef", overflow: "hidden" }}>
+                {s.imageUrl ? (
+                  <img src={s.imageUrl} alt={title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }}>Image</span>
+                )}
+              </div>
+            )
+          ) : null}
+
+          <div style={{ padding: "12px 16px 14px", flex: 1 }}>
+            {showCategories && categories.length > 0 ? (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                {categories.map((cat) => (
+                  <span key={cat} style={{ background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "2px 6px" }}>{cat}</span>
+                ))}
+              </div>
+            ) : null}
+
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#18324a", marginBottom: 4, lineHeight: 1.3 }}>{title}</div>
+
+            {(showDate || showAuthor) ? (
+              <div style={{ color: "#8ba9be", fontSize: 11, marginBottom: showExcerpt ? 6 : 8 }}>
+                {showDate ? date : ""}
+                {showDate && showAuthor ? " · " : ""}
+                {showAuthor ? author : ""}
+              </div>
+            ) : null}
+
+            {showExcerpt ? (
+              <div style={{ color: "#587592", fontSize: 12, lineHeight: 1.5, marginBottom: showReadMore ? 10 : 0 }}>{excerpt}</div>
+            ) : null}
+
+            {showReadMore ? (
+              <div style={{ fontSize: 12, color: "#0f4f8f", fontWeight: 600 }}>{readMoreLabel} →</div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -2127,6 +2348,9 @@ export function BuilderModuleCard({
     const isTractorNavModule  = module.type === "tractor-nav";
     const isSocialModule = module.type === "social";
     const isPollCategoryListModule = module.type === "poll-category-list";
+    const isBreadcrumbModule = module.type === "breadcrumb";
+    const isBlogPostListModule = module.type === "blog-post-list";
+    const isBlogPostCardModule = module.type === "blog-post-card";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -2316,6 +2540,12 @@ export function BuilderModuleCard({
               <BuilderConfettiModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isTractorNavModule ? (
               <BuilderTractorNavModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBreadcrumbModule ? (
+              <BuilderBreadcrumbModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostListModule ? (
+              <BuilderBlogPostListModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostCardModule ? (
+              <BuilderBlogPostCardModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
