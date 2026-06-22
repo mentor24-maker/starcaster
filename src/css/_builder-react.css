@@ -3452,25 +3452,56 @@
 .builder-react-root .builder-bulk-create-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  column-gap: 24px;
   margin-bottom: 20px;
 }
 
-.builder-react-root .builder-bulk-create-preview {
-  border-top: 1px solid rgba(9, 16, 24, 0.08);
-  padding-top: 16px;
+.builder-react-root .builder-bulk-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.builder-react-root .builder-bulk-create-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-left: 1px solid rgba(9, 16, 24, 0.08);
+  padding-left: 24px;
+}
+
+.builder-react-root .builder-bulk-create-run-info {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
+}
+
+.builder-react-root .builder-bulk-create-run-url {
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.builder-react-root .builder-bulk-create-run-meta {
+  font-size: 12px;
+  color: rgba(9, 16, 24, 0.5);
+  margin-top: 4px;
+}
+
+.builder-react-root .builder-bulk-create-right-placeholder {
+  font-size: 13px;
+  color: rgba(9, 16, 24, 0.4);
+  font-style: italic;
 }
 
 .builder-react-root .builder-bulk-create-preview-label {
   font-size: 13px;
   font-weight: 600;
   color: rgba(9, 16, 24, 0.6);
-  margin-bottom: 10px;
 }
 
 .builder-react-root .builder-bulk-create-item-list {
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -3498,6 +3529,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(9, 16, 24, 0.08);
 }
 
 .builder-react-root .builder-bulk-create-results-shell {

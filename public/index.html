@@ -186,7 +186,7 @@
               data-page="builderThemesPage">Themes</a>
             <a href="#" class="menu-link submenu-link" data-page="builderTemplatesPage">Templates</a>
             <a href="#" class="menu-link submenu-link" data-page="builderModulesPage">Modules</a>
-            <a href="#" class="menu-link submenu-link" data-page="builderManageLandingPagesPage">Pages</a>
+            <a href="#" class="menu-link submenu-link" data-page="builderManagePagesPage">Pages</a>
             <a href="#" class="menu-link submenu-link" data-page="builderToolsPage">Extensions</a>
             <a href="#" class="menu-link submenu-link" onclick="App.builder.openAgentsPage(); return false;"
               data-page="builderAgentsPage">Agents</a>
@@ -2957,7 +2957,7 @@
             <span class="builder-flow-node-kicker">Capture</span>
             <span class="builder-flow-node-title">Forms</span>
           </button>
-          <button class="btn builder-flow-node builder-flow-node-lower-right" type="button" onclick="App.setActivePage('builderManageLandingPagesPage')">
+          <button class="btn builder-flow-node builder-flow-node-lower-right" type="button" onclick="App.setActivePage('builderManagePagesPage')">
             <span class="builder-flow-node-kicker">Publish</span>
             <span class="builder-flow-node-title">Pages</span>
           </button>
@@ -3189,7 +3189,7 @@
         </div>
         <div id="builderReactRootThemes" class="builder-react-root"></div>
       </section>
-      <section id="builderManageLandingPagesPage" class="app-page hidden">
+      <section id="builderManagePagesPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Builder: Pages</h2>
           <div class="page-heading-actions">
@@ -3204,35 +3204,35 @@
           <table>
             <thead>
               <tr class="table-filter-row">
-                <th><input id="builderLandingPagesSelectAllVisible" type="checkbox" aria-label="Select all visible pages" /></th>
-                <th><input id="builderLandingPagesNameFilter" placeholder="Page Name" /></th>
+                <th><input id="builderPagesSelectAllVisible" type="checkbox" aria-label="Select all visible pages" /></th>
+                <th><input id="builderPagesNameFilter" placeholder="Page Name" /></th>
                 <th>
-                  <select id="builderLandingPagesTemplateFilter">
+                  <select id="builderPagesTemplateFilter">
                     <option value="">All Templates</option>
                   </select>
                 </th>
                 <th></th>
                 <th></th>
                 <th></th>
-                <th class="builder-pages-bulk-delete-cell"><button id="builderLandingPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button></th>
+                <th class="builder-pages-bulk-delete-cell"><button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button></th>
               </tr>
               <tr>
                 <th></th>
-                <th id="builderLandingPagesSortNameBtn">Name</th>
-                <th id="builderLandingPagesSortTemplateBtn">Template</th>
-                <th id="builderLandingPagesSortHeadlineBtn">Headline</th>
-                <th id="builderLandingPagesSortFormBtn">Form</th>
-                <th id="builderLandingPagesSortUpdatedBtn">Updated</th>
+                <th id="builderPagesSortNameBtn">Name</th>
+                <th id="builderPagesSortTemplateBtn">Template</th>
+                <th id="builderPagesSortHeadlineBtn">Headline</th>
+                <th id="builderPagesSortFormBtn">Form</th>
+                <th id="builderPagesSortUpdatedBtn">Updated</th>
                 <th class="builder-pages-actions-heading">Actions</th>
               </tr>
             </thead>
-            <tbody id="builderLandingPagesTableBody"></tbody>
+            <tbody id="builderPagesTableBody"></tbody>
           </table>
         </div>
       </section>
       <section id="builderPopulateFromWebPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManageLandingPagesPage">Builder: Pages</a> &rsaquo; Populate from Web</h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManagePagesPage">Builder: Pages</a> &rsaquo; Populate from Web</h2>
           <div class="page-heading-actions">
             <button id="builderPopulateRunBtn" type="button" class="btn" disabled>Run Populate</button>
           </div>
@@ -3300,68 +3300,68 @@
         <div id="builderPopulateDiagnosticsMsg" style="padding:1rem 0; color:#666;"></div>
       </section>
 
-      <section id="builderLandingPagesBulkEditPage" class="app-page hidden">
+      <section id="builderPagesBulkEditPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManageLandingPagesPage">Builder: Pages</a></h2>
+          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManagePagesPage">Builder: Pages</a></h2>
         </div>
-        <p id="builderLandingPagesBulkEditSummary">No pages selected.</p>
-        <form id="builderLandingPagesBulkEditForm" class="standard-form-grid">
+        <p id="builderPagesBulkEditSummary">No pages selected.</p>
+        <form id="builderPagesBulkEditForm" class="standard-form-grid">
           
-            <label for="builderLandingPagesBulkTemplateSelect">Template</label>
-            <select id="builderLandingPagesBulkTemplateSelect" name="template_id">
+            <label for="builderPagesBulkTemplateSelect">Template</label>
+            <select id="builderPagesBulkTemplateSelect" name="template_id">
               <option value="">Leave Unchanged</option>
             </select>
           
           <div class="standard-form-grid-full builder-color-control">
-            <label for="builderLandingPagesBulkPrimaryColorInput" class="builder-color-control-label">
+            <label for="builderPagesBulkPrimaryColorInput" class="builder-color-control-label">
               <span class="builder-color-control-icon" aria-hidden="true"></span>
               Primary Color
             </label>
             <label class="checkbox-row">
-              <input id="builderLandingPagesBulkApplyPrimaryColor" name="apply_primary_color" type="checkbox" />
+              <input id="builderPagesBulkApplyPrimaryColor" name="apply_primary_color" type="checkbox" />
               Apply Primary Color
             </label>
-            <input id="builderLandingPagesBulkPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
+            <input id="builderPagesBulkPrimaryColorInput" name="primary_color" type="color" value="#0b82d4" />
           </div>
           <div class="standard-form-grid-full builder-color-control">
-            <label for="builderLandingPagesBulkBackgroundColorInput" class="builder-color-control-label">
+            <label for="builderPagesBulkBackgroundColorInput" class="builder-color-control-label">
               <span class="builder-color-control-icon" aria-hidden="true"></span>
               Background Color
             </label>
             <label class="checkbox-row">
-              <input id="builderLandingPagesBulkApplyBackgroundColor" name="apply_background_color" type="checkbox" />
+              <input id="builderPagesBulkApplyBackgroundColor" name="apply_background_color" type="checkbox" />
               Apply Background Color
             </label>
-            <input id="builderLandingPagesBulkBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
+            <input id="builderPagesBulkBackgroundColorInput" name="background_color" type="color" value="#f5fbff" />
           </div>
           <div class="standard-form-grid-full builder-color-control">
-            <label for="builderLandingPagesBulkAccentColorInput" class="builder-color-control-label">
+            <label for="builderPagesBulkAccentColorInput" class="builder-color-control-label">
               <span class="builder-color-control-icon" aria-hidden="true"></span>
               Accent Color
             </label>
             <label class="checkbox-row">
-              <input id="builderLandingPagesBulkApplyAccentColor" name="apply_accent_color" type="checkbox" />
+              <input id="builderPagesBulkApplyAccentColor" name="apply_accent_color" type="checkbox" />
               Apply Accent Color
             </label>
-            <input id="builderLandingPagesBulkAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
+            <input id="builderPagesBulkAccentColorInput" name="accent_color" type="color" value="#1a4f81" />
           </div>
           <div></div>
               <button type="submit" class="btn btn-primary">Apply To Selected Pages</button>
         </form>
       </section>
-      <section id="builderLandingPagesPage" class="app-page hidden">
-        <div id="builderLandingPagesHeader" class="page-heading-row">
-          <h2 id="builderLandingPagesFormTitle">Builder: Create Page</h2>
+      <section id="builderPagesPage" class="app-page hidden">
+        <div id="builderPagesHeader" class="page-heading-row">
+          <h2 id="builderPagesFormTitle">Builder: Create Page</h2>
           <div class="page-heading-actions">
             <button id="builderLandingPageHeaderPreviewBtn" type="button" class="btn">Preview</button>
             <button id="builderLandingPageHeaderSaveBtn" type="button" class="btn btn-primary">Save Page</button>
             
           </div>
         </div>
-        <div id="builderLandingPagesModularHost">
+        <div id="builderPagesModularHost">
           <div id="builderReactRootPage" class="builder-react-root hidden" aria-hidden="true"></div>
         </div>
-        <form id="builderLandingPagesForm" class="standard-form-grid">
+        <form id="builderPagesForm" class="standard-form-grid">
           <input id="builderLandingPageIdInput" name="page_id" type="hidden" />
           <div class="builder-landing-pages-grid">
             <div class="builder-landing-pages-column">
@@ -3502,7 +3502,7 @@
             </div>
           </div>
           <div></div>
-              <button id="builderLandingPagesSubmitBtn" type="submit" class="btn btn-primary">Save Page</button>
+              <button id="builderPagesSubmitBtn" type="submit" class="btn btn-primary">Save Page</button>
         </form>
       </section>
       <section id="builderLandingPagePreviewPage" class="app-page hidden">
@@ -3543,7 +3543,7 @@
           <h2>Thank You</h2>
           <div class="page-heading-actions">
             <button id="builderLandingThankYouBackBtn" type="button" class="btn">Back To Preview</button>
-            <button type="button" onclick="App.setActivePage('builderManageLandingPagesPage')" class="btn">Back To Pages</button>
+            <button type="button" onclick="App.setActivePage('builderManagePagesPage')" class="btn">Back To Pages</button>
           </div>
         </div>
         <div id="builderLandingThankYouHost"></div>

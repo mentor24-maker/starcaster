@@ -14,10 +14,7 @@ type JsonObject = Record<string, unknown>;
 
 /** normie key ← starcaster key, applied to response bodies per resource. */
 const RESPONSE_KEY_MAPS: Record<string, Array<[string, string]>> = {
-  pages: [
-    ['pages', 'landingPages'],
-    ['page', 'landingPage']
-  ],
+  pages: [],
   'cell-modules': [
     ['cellModules', 'modules'],
     ['cellModule', 'module']

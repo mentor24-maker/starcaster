@@ -13,9 +13,9 @@ afterEach(() => {
 });
 
 describe('builderAdminFetch', () => {
-  it('rewrites /api/admin/pages to landing pages and re-keys the response', async () => {
+  it('rewrites /api/admin/pages to builder pages endpoint', async () => {
     const fetchMock = vi.fn(async () =>
-      envelopeResponse({ ok: true, data: [], landingPages: [{ id: 7, name: 'Home' }] })
+      envelopeResponse({ ok: true, data: [], pages: [{ id: 7, name: 'Home' }] })
     );
     vi.stubGlobal('fetch', fetchMock);
 

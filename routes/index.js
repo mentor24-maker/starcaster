@@ -49,6 +49,7 @@ const personas    = require('./personas');
 const tasks       = require('./tasks');
 const polls       = require('./polls');
 const platformScreenshots = require('./platformScreenshots');
+const crm         = require('./crm');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -73,6 +74,7 @@ const ROUTE_MODULES = [
   personas,
   tasks,
   polls,
+  crm,
 ];
 
 function maskSecret(value) {

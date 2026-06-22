@@ -115,7 +115,7 @@ App.campaigns = (function () {
   let builderTranscripts = [];
   let builderComments = [];
   let builderCtas = [];
-  let builderLandingPages = [];
+  let builderPages = [];
   let builderForms = [];
   let editingCampaignId = '';
   let channelRulesState = loadChannelRulesState();
@@ -1679,7 +1679,7 @@ App.campaigns = (function () {
       currentValues.primaryVideoId
     );
 
-    const pageOptions = builderLandingPages.map((page) => ({ value: page.id, label: `Builder: ${safeText(page.name) || page.id}` }));
+    const pageOptions = builderPages.map((page) => ({ value: page.id, label: `Builder: ${safeText(page.name) || page.id}` }));
     const externalSites = ['isitas.org', 'isitism.org', 'isitgame.org', 'itcoin.isitas.org'];
     externalSites.forEach(site => {
       pageOptions.push({ value: site, label: `Site: ${site}` });
@@ -1750,7 +1750,7 @@ App.campaigns = (function () {
 
   async function loadBuilderSources() {
     await ensureCampaignProjectContext();
-    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes, topicsRes, headlinesRes, subheadingsRes, taglinesRes, pitchesRes, articlesRes, reportsRes, whitePapersRes, ebooksRes, postsRes, descriptionsRes, transcriptsRes, commentsRes, ctasRes, landingPagesRes, formsRes] = await Promise.allSettled([
+    const [channelsRes, assetsRes, segmentsRes, tweetsRes, hashtagsRes, emailsRes, emailTemplatesRes, topicsRes, headlinesRes, subheadingsRes, taglinesRes, pitchesRes, articlesRes, reportsRes, whitePapersRes, ebooksRes, postsRes, descriptionsRes, transcriptsRes, commentsRes, ctasRes, pagesRes, formsRes] = await Promise.allSettled([
       api('/api/channels'),
       api('/api/assets'),
       api('/api/segments'),
@@ -1828,7 +1828,7 @@ App.campaigns = (function () {
     builderTranscripts = transcriptsRes.status === 'fulfilled' && Array.isArray(transcriptsRes.value.transcripts) ? transcriptsRes.value.transcripts : [];
     builderComments = commentsRes.status === 'fulfilled' && Array.isArray(commentsRes.value.comments) ? commentsRes.value.comments : [];
     builderCtas = ctasRes.status === 'fulfilled' && Array.isArray(ctasRes.value.ctas) ? ctasRes.value.ctas : [];
-    builderLandingPages = landingPagesRes.status === 'fulfilled' && Array.isArray(landingPagesRes.value.landingPages) ? landingPagesRes.value.landingPages : [];
+    builderPages = pagesRes.status === 'fulfilled' && Array.isArray(pagesRes.value.pages) ? pagesRes.value.pages : [];
     builderForms = formsRes.status === 'fulfilled' && Array.isArray(formsRes.value.forms) ? formsRes.value.forms : [];
 
     renderBuilderSelects();
@@ -1906,7 +1906,7 @@ App.campaigns = (function () {
     const assetsById = new Map((Array.isArray(state.assets) ? state.assets : []).map((asset) => [String(asset.id), asset]));
     const segmentsById = new Map((Array.isArray(state.segments) ? state.segments : []).map((segment) => [String(segment.id), segment]));
     const emailTemplatesById = new Map(builderEmailTemplates.map((template) => [String(template.id), template]));
-    const landingPagesById = new Map(builderLandingPages.map((page) => [String(page.id), page]));
+    const landingPagesById = new Map(builderPages.map((page) => [String(page.id), page]));
 
     rows.forEach((campaign) => {
       const config = parseCampaignConfig(campaign);
