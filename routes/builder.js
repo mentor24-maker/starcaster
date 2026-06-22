@@ -1070,6 +1070,7 @@ async function handle(req, res, pathname, method) {
         sourceUrl: r.source_url,
         pageCount: Number(r.pages_succeeded || 0),
         createdAt: r.created_at || '',
+        detectedModelId: r.detected_model_id || '',
       }));
     return sendOk(res, 200, summaries, { runs: summaries }), true;
   }
