@@ -61,6 +61,10 @@ import { BuilderModuleTriggerSettings } from "./builder-module-trigger-settings"
 import { BuilderBreadcrumbModuleSettings, parseBreadcrumbItems } from "./builder-breadcrumb-module-settings";
 import { BuilderBlogPostListModuleSettings } from "./builder-blog-post-list-module-settings";
 import { BuilderBlogPostCardModuleSettings } from "./builder-blog-post-card-module-settings";
+import { BuilderBlogAuthorBioModuleSettings, parseSocialLinks } from "./builder-blog-author-bio-module-settings";
+import { BuilderBlogTocModuleSettings, parseTocItems } from "./builder-blog-toc-module-settings";
+import { BuilderBlogNewsletterSubscribeModuleSettings } from "./builder-blog-newsletter-subscribe-module-settings";
+import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./builder-blog-related-posts-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -190,6 +194,25 @@ function renderContactFormPreview(settings: Record<string, string>, interactive 
         </span>
       )}
     </Tag>
+  );
+}
+
+function renderCrmFormPreview(settings: Record<string, string>) {
+  return (
+    <div className="builder-contact-form">
+      <div className="builder-contact-form-fields">
+        <label className="builder-contact-form-field">
+          <span className="builder-contact-form-input-preview">Email</span>
+        </label>
+        <label className="builder-contact-form-field">
+          <span className="builder-contact-form-input-preview">Name</span>
+        </label>
+      </div>
+      {settings.crmFormId ? null : (
+        <div className="builder-contact-form-stub">Select a CRM form in module settings.</div>
+      )}
+      <span className="builder-contact-form-submit builder-contact-form-submit-preview">Submit</span>
+    </div>
   );
 }
 
@@ -346,6 +369,10 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "contact-form") {
     return renderContactFormPreview(module.settings);
+  }
+
+  if (module.type === "crm-form") {
+    return renderCrmFormPreview(module.settings);
   }
 
   if (module.type === "player-portal") {
@@ -862,6 +889,245 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "blog-author-bio") {
+    const s = module.settings;
+    const isVertical = (s.layout ?? "horizontal") === "vertical";
+    const avatarSize = Math.max(40, parseInt(s.avatarSize ?? "80", 10) || 80);
+    const avatarShape = s.avatarShape ?? "circle";
+    const borderRadius = avatarShape === "circle" ? "50%" : avatarShape === "rounded" ? "12px" : "4px";
+    const name = s.name || "Author Name";
+    const title = s.title || "";
+    const bio = s.bio || "A short bio about the author appears here.";
+    const links = parseSocialLinks(s);
+
+    const avatar = (
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: isVertical ? "center" : undefined }}>
+        {s.avatarUrl ? (
+          <img
+            src={s.avatarUrl}
+            alt={name}
+            style={{ width: avatarSize, height: avatarSize, borderRadius, objectFit: "cover", display: "block" }}
+          />
+        ) : (
+          <div style={{ width: avatarSize, height: avatarSize, borderRadius, background: "#d4e3ef", display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }}>
+            Photo
+          </div>
+        )}
+      </div>
+    );
+
+    const content = (
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#18324a", lineHeight: 1.3 }}>{name}</div>
+        {title ? <div style={{ fontSize: 12, color: "#587592", marginBottom: 4 }}>{title}</div> : null}
+        <div style={{ fontSize: 12, color: "#587592", lineHeight: 1.5, marginTop: 4 }}>{bio}</div>
+        {links.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+            {links.map((l) => (
+              <span key={l.id} style={{ fontSize: 11, color: "#0f4f8f", fontWeight: 600 }}>{l.platform}</span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{
+          display: "flex",
+          flexDirection: isVertical ? "column" : "row",
+          alignItems: isVertical ? "center" : "flex-start",
+          gap: 16,
+          textAlign: isVertical ? "center" : "left",
+        }}>
+          {avatar}
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-toc") {
+    const s = module.settings;
+    const items = parseTocItems(s);
+    const showTitle = s.showTitle !== "false";
+    const title = s.title || "In This Article";
+    const tocStyle = s.style ?? "default";
+    const indentSubs = s.indentSubheadings !== "false";
+    const fontSize = parseInt(s.fontSize ?? "14", 10) || 14;
+    const titleFontSize = parseInt(s.titleFontSize ?? "16", 10) || 16;
+    const color = s.color || "#0f4f8f";
+    const titleColor = s.titleColor || "#18324a";
+    let h2Counter = 0;
+
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle ? (
+          <div style={{ fontWeight: 700, fontSize: titleFontSize, color: titleColor, marginBottom: 8, lineHeight: 1.3 }}>
+            {title}
+          </div>
+        ) : null}
+        {items.length === 0 ? (
+          <div style={{ color: "#aaa", fontStyle: "italic", fontSize }}>No headings yet — add H2 / H3 entries below</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {items.map((item, i) => {
+              if (item.depth === 1) h2Counter++;
+              const isH3 = item.depth === 2;
+              const label = item.label || `Heading ${i + 1}`;
+              let prefix = "";
+              if (tocStyle === "numbered" && item.depth === 1) prefix = `${h2Counter}. `;
+              const dotStyle = tocStyle === "dotted" ? "· " : "";
+
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    marginLeft: isH3 && indentSubs ? 16 : 0,
+                    fontSize: isH3 ? fontSize - 1 : fontSize,
+                    color,
+                    opacity: isH3 ? 0.8 : 1,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {dotStyle}{prefix}{label}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="builder-module-editor-copy" style={{ marginTop: 8 }}>
+          {items.length} heading{items.length !== 1 ? "s" : ""} · {tocStyle} style
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-newsletter-subscribe") {
+    const s = module.settings;
+    const isInline = s.layout === "inline";
+    const accent = s.accentColor || "#0f4f8f";
+    const bg = s.bgColor || "#eaf4ff";
+    const headline = s.headline || "Stay in the loop";
+    const description = s.description || "Get new posts delivered to your inbox.";
+    const hasCrmForm = Boolean(s.crmFormId);
+
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ background: bg, borderRadius: 12, padding: "20px 24px" }}>
+          {s.showImage === "true" && s.imageUrl ? (
+            <img src={s.imageUrl} alt="" style={{ height: 40, marginBottom: 10, display: "block" }} />
+          ) : null}
+          <div style={{ fontWeight: 700, fontSize: 17, color: "#18324a", marginBottom: 4 }}>{headline}</div>
+          <div style={{ fontSize: 13, color: "#587592", marginBottom: 14, lineHeight: 1.5 }}>{description}</div>
+          {isInline ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1, height: 36, background: "#fff", border: "1px solid #c6d8e8", borderRadius: 6, padding: "0 10px", display: "flex", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "#aab" }}>Email address</span>
+              </div>
+              <div style={{ height: 36, padding: "0 16px", background: accent, borderRadius: 6, display: "flex", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "#fff", fontWeight: 600 }}>Subscribe</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ height: 36, background: "#fff", border: "1px solid #c6d8e8", borderRadius: 6, padding: "0 10px", display: "flex", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: "#aab" }}>Email address</span>
+              </div>
+              <div style={{ height: 36, background: accent, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 12, color: "#fff", fontWeight: 600 }}>Subscribe</span>
+              </div>
+            </>
+          )}
+          {!hasCrmForm ? (
+            <div className="builder-contact-form-stub" style={{ marginTop: 10 }}>
+              No CRM form linked — paste a Form ID in settings.
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-related-posts") {
+    const s = module.settings;
+    const isManual = s.matchBy === "manual";
+    const isGrid = (s.layout ?? "grid") === "grid";
+    const cols = Math.min(4, Math.max(2, parseInt(s.columns ?? "3", 10) || 3));
+    const gap = parseInt(s.cardGap ?? "20", 10) || 20;
+    const radius = parseInt(s.cardBorderRadius ?? "12", 10) || 12;
+    const cardStyle = s.cardStyle ?? "default";
+    const cardBorder = cardStyle === "bordered" ? "1px solid #d4e3ef" : "none";
+    const cardShadow = cardStyle === "shadow" ? "0 2px 12px rgba(9,16,24,0.10)" : "none";
+    const showImage = s.showFeaturedImage !== "false";
+    const showDate = s.showDate !== "false";
+    const showCategories = s.showCategories !== "false";
+    const showTitle = s.showTitle !== "false";
+    const title = s.title || "You Might Also Like";
+    const ratioMap: Record<string, number> = { "16:9": 56.25, "4:3": 75, "3:2": 66.67, "1:1": 100 };
+    const paddingTop = `${ratioMap[s.imageAspectRatio ?? "16:9"] ?? 56.25}%`;
+    const manualPosts = parseRelatedPosts(s);
+    const count = parseInt(s.count ?? "3", 10) || 3;
+    const previewCount = isManual ? Math.min(manualPosts.length || cols, cols) : Math.min(count, cols);
+
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle ? (
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#18324a", marginBottom: 14 }}>{title}</div>
+        ) : null}
+        {previewCount === 0 ? (
+          <div style={{ color: "#aaa", fontStyle: "italic", fontSize: 13 }}>
+            {isManual ? "No posts added yet" : `${count} posts matched by ${s.matchBy ?? "categories"}`}
+          </div>
+        ) : (
+          <div style={{
+            display: isGrid ? "grid" : "flex",
+            gridTemplateColumns: isGrid ? `repeat(${cols}, 1fr)` : undefined,
+            flexDirection: isGrid ? undefined : "column",
+            gap,
+          }}>
+            {Array.from({ length: previewCount }).map((_, i) => {
+              const post = isManual ? manualPosts[i] : null;
+              const postTitle = post?.title || `Related Post ${i + 1}`;
+              const postDate = post?.date || "Jun 20, 2026";
+              const postCats = post?.categories ? post.categories.split(",").map((c) => c.trim()).filter(Boolean) : ["Category"];
+
+              return (
+                <div key={i} style={{ border: cardBorder, borderRadius: radius, boxShadow: cardShadow, overflow: "hidden", background: "#fff" }}>
+                  {showImage ? (
+                    <div style={{ position: "relative", width: "100%", paddingTop, background: post?.imageUrl ? undefined : "#d4e3ef", overflow: "hidden" }}>
+                      {post?.imageUrl ? (
+                        <img src={post.imageUrl} alt={postTitle} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }}>Image</span>
+                      )}
+                    </div>
+                  ) : null}
+                  <div style={{ padding: "10px 12px 12px" }}>
+                    {showCategories ? (
+                      <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                        {postCats.slice(0, 2).map((cat) => (
+                          <span key={cat} style={{ background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "1px 5px" }}>{cat}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div style={{ fontWeight: 700, fontSize: 13, color: "#18324a", lineHeight: 1.3, marginBottom: 4 }}>{postTitle}</div>
+                    {showDate ? <div style={{ color: "#8ba9be", fontSize: 11 }}>{postDate}</div> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {!isManual ? (
+          <div className="builder-module-editor-copy" style={{ marginTop: 8 }}>
+            {count} posts · matched by {s.matchBy ?? "categories"}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
@@ -1038,7 +1304,7 @@ function TableCellInlinePalette({
   anchor: BuilderModalAnchor;
 }) {
   const [group, setGroup] = useState<ModulePaletteGroup | null>(null);
-  const groups = modulePaletteGroups.filter((g) => g.value !== "table" && g.value !== "contact-form");
+  const groups = modulePaletteGroups.filter((g) => g.value !== "table" && g.value !== "contact-form" && g.value !== "crm-form");
   const items = group ? modulePaletteItems.filter((item) => item.group === group) : [];
   // Keep the popup on-screen even when the cell sits at the far edge of the
   // workspace (matches the .builder-table-inline-palette CSS box: 260×340).
@@ -2351,6 +2617,10 @@ export function BuilderModuleCard({
     const isBreadcrumbModule = module.type === "breadcrumb";
     const isBlogPostListModule = module.type === "blog-post-list";
     const isBlogPostCardModule = module.type === "blog-post-card";
+    const isBlogAuthorBioModule = module.type === "blog-author-bio";
+    const isBlogTocModule = module.type === "blog-toc";
+    const isBlogNewsletterModule = module.type === "blog-newsletter-subscribe";
+    const isBlogRelatedPostsModule = module.type === "blog-related-posts";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -2546,6 +2816,14 @@ export function BuilderModuleCard({
               <BuilderBlogPostListModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostCardModule ? (
               <BuilderBlogPostCardModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogAuthorBioModule ? (
+              <BuilderBlogAuthorBioModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogTocModule ? (
+              <BuilderBlogTocModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogNewsletterModule ? (
+              <BuilderBlogNewsletterSubscribeModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogRelatedPostsModule ? (
+              <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
@@ -2737,6 +3015,28 @@ export function BuilderModuleCard({
             </div>
           )}
 
+          {module.type === "crm-form" && (
+            <div className="builder-contact-form-settings">
+              <label className="field">
+                <span>CRM Form ID</span>
+                <input
+                  type="text"
+                  value={module.settings.crmFormId ?? ""}
+                  onChange={(event) =>
+                    onUpdateModule((current) => ({
+                      ...current,
+                      settings: { ...current.settings, crmFormId: event.target.value }
+                    }))
+                  }
+                  placeholder="Paste CRM Form ID from Builder › CRM"
+                />
+              </label>
+              <div className="builder-module-runtime-note">
+                <p>Create and manage CRM forms in <strong>Builder › CRM</strong>. Paste the Form ID above to embed it on this page.</p>
+              </div>
+            </div>
+          )}
+
           {module.type === "player-portal" ? (
             <BuilderPlayerPortalSettings module={module} onUpdateModule={onUpdateModule} />
           ) : null}
@@ -2912,6 +3212,7 @@ export function BuilderModuleCard({
           {module.type !== "image" &&
           module.type !== "floating-image" &&
           module.type !== "contact-form" &&
+          module.type !== "crm-form" &&
           module.type !== "player-portal" &&
           module.type !== "table" &&
           module.type !== "slider" &&

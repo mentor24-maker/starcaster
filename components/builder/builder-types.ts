@@ -89,6 +89,7 @@ export const modulePaletteGroups: Array<{
   },
   { value: "button", label: "Buttons", icon: "B", description: "Calls to action and navigation links." },
   { value: "contact-form", label: "Contact Forms", icon: "CF", description: "Lead capture forms with simple presets." },
+  { value: "crm-form", label: "CRM", icon: "CRM", description: "CRM lead-capture forms linked to the project's contact table." },
   { value: "player-portal", label: "Player Portal", icon: "PP", description: "Player login and registration on any page." },
   { value: "previous-results", label: "Previous Results", icon: "PR", description: "Only the live previous-poll results panel." },
   { value: "current-poll", label: "Polls", icon: "P?", description: "The current live poll with vote actions." },
@@ -447,6 +448,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { formMode: "squeeze" }
   },
   {
+    id: "crm-form-default",
+    type: "crm-form",
+    group: "crm-form",
+    label: "CRM Form",
+    icon: "CRM",
+    description: "Renders a CRM lead-capture form configured in Builder > CRM.",
+    name: "",
+    text: "",
+    settings: { crmFormId: "" }
+  },
+  {
     id: "player-portal-login",
     type: "player-portal",
     group: "player-portal",
@@ -574,6 +586,50 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: {}
+  },
+  {
+    id: "blog-related-posts-standard",
+    type: "blog-related-posts",
+    group: "blog",
+    label: "Related Posts",
+    icon: "↗",
+    description: "A row of posts related to the current one by category, tag, or manual selection.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "blog-newsletter-subscribe-standard",
+    type: "blog-newsletter-subscribe",
+    group: "blog",
+    label: "Newsletter Subscribe",
+    icon: "✉",
+    description: "Email capture block backed by a CRM form — headline, description, and styled submit field.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "blog-toc-standard",
+    type: "blog-toc",
+    group: "blog",
+    label: "Table of Contents",
+    icon: "≡",
+    description: "A navigational list of headings that links readers to sections within the post.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "blog-author-bio-standard",
+    type: "blog-author-bio",
+    group: "blog",
+    label: "Author Bio",
+    icon: "👤",
+    description: "Author photo, name, role, bio, and social links — typically placed at the end of a post.",
+    name: "",
+    text: "",
+    settings: { layout: "horizontal" }
   },
   {
     id: "blog-post-card-standard",
