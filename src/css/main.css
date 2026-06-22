@@ -123,3 +123,78 @@
     position: static;
   }
 }
+
+/* ── Project Admin view ─────────────────────────────────────────────────── */
+/* Hide the standard platform chrome when on the Project Admin page.        */
+body.project-admin-view #topNav,
+body.project-admin-view .auth-header-meta,
+body.project-admin-view #brandProfileButton {
+  display: none;
+}
+
+/* Admin login card */
+.admin-login-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-page, #f5f7fa);
+}
+.admin-login-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+}
+.admin-login-logo {
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+.admin-login-logo img {
+  height: 36px;
+  width: auto;
+}
+.admin-login-heading {
+  margin: 0 0 1.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Admin app shell */
+.admin-app-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.admin-shell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 1rem;
+}
+.admin-shell-header-left,
+.admin-shell-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.admin-shell-logo {
+  height: 28px;
+  width: auto;
+}
+.admin-project-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-muted, #64748b);
+}
+.admin-welcome-name {
+  font-size: 0.875rem;
+  color: var(--ink-muted, #64748b);
+}

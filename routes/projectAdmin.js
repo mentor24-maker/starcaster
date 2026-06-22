@@ -1,0 +1,160 @@
+'use strict';
+
+const {
+  parseJsonBody,
+  sendOk,
+  sendErr,
+  parseCookies,
+} = require('./http');
+
+const {
+  createAdminUser,
+  authenticateAdminUser,
+  createAdminSession,
+  deleteAdminSession,
+  getAdminSession,
+} = require('../lib/projectAdminStore');
+
+const ADMIN_SESSION_COOKIE_NAME = 'app_admin_session';
+const ADMIN_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+
+function isSecureRequest(req) {
+  const host = String(req.headers.host || '');
+  if (host.includes('localhost') || host.includes('127.0.0.1')) return false;
+  const proto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  if (proto.includes('https')) return true;
+  return process.env.NODE_ENV === 'production';
+}
+
+function readAdminSessionToken(req) {
+  const cookies = parseCookies(req.headers.cookie || '');
+  const rawCookie = String(cookies[ADMIN_SESSION_COOKIE_NAME] || '').trim();
+  if (rawCookie) {
+    try {
+      return decodeURIComponent(rawCookie).trim() || rawCookie;
+    } catch {
+      return rawCookie;
+    }
+  }
+  const auth = String(req.headers.authorization || '').trim();
+  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
+  return '';
+}
+
+function buildAdminSessionCookieHeader(token, req, { clear = false } = {}) {
+  const secure = isSecureRequest(req);
+  const parts = [
+    `${ADMIN_SESSION_COOKIE_NAME}=${clear ? '' : encodeURIComponent(String(token || ''))}`,
+    'Path=/',
+    'HttpOnly',
+  ];
+  if (clear) {
+    parts.push('Max-Age=0');
+  } else {
+    parts.push(`Max-Age=${ADMIN_SESSION_MAX_AGE_SECONDS}`);
+    parts.push(`Expires=${new Date(Date.now() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000).toUTCString()}`);
+  }
+  if (secure) {
+    parts.push('SameSite=None', 'Secure');
+  } else {
+    parts.push('SameSite=Lax');
+  }
+  return parts.join('; ');
+}
+
+function setAdminSessionCookie(res, token, req) {
+  res.setHeader('Set-Cookie', buildAdminSessionCookieHeader(token, req));
+}
+
+function clearAdminSessionCookie(res, req) {
+  res.setHeader('Set-Cookie', buildAdminSessionCookieHeader('', req, { clear: true }));
+}
+
+async function handle(req, res, pathname, method) {
+  if (!pathname.startsWith('/api/admin')) return false;
+
+  // POST /api/admin/auth/login
+  if (pathname === '/api/admin/auth/login' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const projectId = String(body.projectId || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
+
+    if (!projectId || !email || !password) {
+      return sendErr(res, 400, 'projectId, email, and password are required', { code: 'ADMIN_LOGIN_INVALID' }), true;
+    }
+
+    const auth = await authenticateAdminUser({ projectId, email, password });
+    if (!auth.ok) {
+      return sendErr(res, auth.status || 401, auth.error || 'Invalid credentials', { code: 'ADMIN_AUTH_FAILED' }), true;
+    }
+
+    const session = await createAdminSession(auth.data.id, projectId);
+    if (!session.ok) {
+      return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'ADMIN_SESSION_FAILED' }), true;
+    }
+
+    setAdminSessionCookie(res, session.data.token, req);
+    return sendOk(res, 200, { adminUser: auth.data, sessionToken: session.data.token }, { adminUser: auth.data, sessionToken: session.data.token }), true;
+  }
+
+  // GET /api/admin/auth/me
+  if (pathname === '/api/admin/auth/me' && method === 'GET') {
+    const token = readAdminSessionToken(req);
+    const session = await getAdminSession(token);
+    if (!session) {
+      return sendErr(res, 401, 'Not authenticated', { code: 'ADMIN_AUTH_REQUIRED' }), true;
+    }
+    return sendOk(res, 200, { adminUser: session.adminUser, projectId: session.projectId }, { adminUser: session.adminUser, projectId: session.projectId }), true;
+  }
+
+  // POST /api/admin/auth/logout
+  if (pathname === '/api/admin/auth/logout' && method === 'POST') {
+    const token = readAdminSessionToken(req);
+    if (token) await deleteAdminSession(token);
+    clearAdminSessionCookie(res, req);
+    return sendOk(res, 200, { loggedOut: true }, { loggedOut: true }), true;
+  }
+
+  // POST /api/admin/users — platform-owner creates admin user credentials
+  // Requires a valid platform session (req.authUser set by routes/index.js).
+  if (pathname === '/api/admin/users' && method === 'POST') {
+    if (!req.authUser) {
+      return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    }
+
+    const body = await parseJsonBody(req);
+    const projectId = String(body.projectId || req.projectContext?.project?.id || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    const role = String(body.role || 'editor').trim();
+
+    if (!projectId || !email || !password) {
+      return sendErr(res, 400, 'projectId, email, and password are required', { code: 'ADMIN_USER_INVALID' }), true;
+    }
+
+    const ownerProjectId = String(req.projectContext?.project?.id || '').trim();
+    if (projectId !== ownerProjectId) {
+      return sendErr(res, 403, 'You can only create admin users for your active project', { code: 'ADMIN_USER_FORBIDDEN' }), true;
+    }
+
+    const created = await createAdminUser({ projectId, email, password, role });
+    if (!created.ok) {
+      return sendErr(res, created.status || 400, created.error || 'Unable to create admin user', { code: 'ADMIN_USER_CREATE_FAILED' }), true;
+    }
+
+    return sendOk(res, 201, created.data, { adminUser: created.data }), true;
+  }
+
+  return false;
+}
+
+module.exports = {
+  handle,
+  manifest: {
+    id: 'projectAdmin',
+    label: 'Project Admin',
+    prefixes: ['/api/admin'],
+  },
+  readAdminSessionToken,
+};

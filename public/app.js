@@ -39,6 +39,7 @@ App.manifests = [
   App.activityLog,
   App.observe,          // Integrates observe.js page views and API quotas
   App.envConfig,        // #7 — Env Configuration
+  App.projectAdmin,     // Project Admin — project-scoped CMS for team members
 ];
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,9 @@ App.refresh = async function refresh() {
   const { state, api, notify } = App;
   const activePageId = String(state.activePage || '');
   if (Array.isArray(App.PUBLIC_LEGAL_PAGE_IDS) && App.PUBLIC_LEGAL_PAGE_IDS.includes(activePageId)) {
+    return;
+  }
+  if (Array.isArray(App.PUBLIC_ADMIN_PAGE_IDS) && App.PUBLIC_ADMIN_PAGE_IDS.includes(activePageId)) {
     return;
   }
   const shouldNotifySharedDataErrors = (() => {

@@ -440,6 +440,7 @@ App.notify = function notify(text, isError = false) {
 };
 
 App.PUBLIC_LEGAL_PAGE_IDS = ['privacyPolicyPage', 'termsOfServicePage'];
+App.PUBLIC_ADMIN_PAGE_IDS = ['projectAdminPage'];
 
 function isPublicLegalPageId(pageId) {
   const id = String(pageId || '').trim();
@@ -565,7 +566,8 @@ App.setActivePage = function setActivePage(pageId, options = {}) {
     && App.PUBLIC_LEGAL_PAGE_IDS.includes(target)
     && !(App.auth && App.auth.user)
   );
-  if (!options.skipTracking && !isPublicLegalGuest) {
+  const isAdminPage = Array.isArray(App.PUBLIC_ADMIN_PAGE_IDS) && App.PUBLIC_ADMIN_PAGE_IDS.includes(target);
+  if (!options.skipTracking && !isPublicLegalGuest && !isAdminPage) {
     App.api('/api/observe/page-views', {
       method: 'POST',
       body: JSON.stringify({ pageId: target }),
