@@ -2348,7 +2348,10 @@ App.acquire = (function () {
          page.body_snippet||'-'
         ].forEach((text) => { const td = document.createElement('td'); td.textContent = text; tr.appendChild(td); });
         const actionTd = document.createElement('td');
-        App.finishTableActionsCell(actionTd, App.makeIconButton('plus', 'Create Builder page', () => openAcquirePageCreateModal(page), { primary: true }));
+        App.finishTableActionsCell(actionTd,
+          App.makeIconButton('view', 'View Source', () => openSourceInspectorModal(page)),
+          App.makeIconButton('plus', 'Create Builder page', () => openAcquirePageCreateModal(page), { primary: true })
+        );
         tr.appendChild(actionTd);
         els.directAcquirePagesTable.appendChild(tr);
       });
@@ -5600,6 +5603,142 @@ App.acquire = (function () {
         renderDirectAcquirePagesTable();
       });
     });
+  }
+
+  // ── Source Inspector modal ───────────────────────────────────────────────
+  let _sourceInspectorCache = {};   // keyed by page URL → API response
+  let _sourceInspectorPending = {}; // keyed by page URL → Promise
+
+  function _sourceInspectorFetch(runId, url) {
+    if (_sourceInspectorCache[url]) return Promise.resolve(_sourceInspectorCache[url]);
+    if (_sourceInspectorPending[url]) return _sourceInspectorPending[url];
+    const promise = api(
+      `/api/acquire/direct-runs/${encodeURIComponent(runId)}/page-source?url=${encodeURIComponent(url)}`
+    ).then((res) => {
+      _sourceInspectorCache[url] = res;
+      delete _sourceInspectorPending[url];
+      return res;
+    });
+    _sourceInspectorPending[url] = promise;
+    return promise;
+  }
+
+  function openSourceInspectorModal(page) {
+    const runId = String(state.directAcquireCurrentRun?.run_id || '');
+
+    // Build the modal DOM once, reuse on subsequent opens.
+    let modal = document.getElementById('sourceInspectorModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'sourceInspectorModal';
+      modal.className = 'builder-content-modal-backdrop';
+      modal.innerHTML = [
+        '<div class="builder-content-modal" style="max-width:900px;">',
+        '  <div class="builder-content-modal-header">',
+        '    <div>',
+        '      <strong id="sourceInspectorTitle"></strong>',
+        '      <span id="sourceInspectorUrl" class="builder-content-modal-url"></span>',
+        '    </div>',
+        '    <button type="button" id="sourceInspectorClose" class="btn" aria-label="Close">&times;</button>',
+        '  </div>',
+        '  <div class="source-inspector-tabs">',
+        '    <button type="button" class="source-inspector-tab active" data-tab="raw">Raw HTML</button>',
+        '    <button type="button" class="source-inspector-tab" data-tab="sanitized">Sanitized</button>',
+        '    <button type="button" class="source-inspector-tab" data-tab="patterns">Detected Patterns</button>',
+        '  </div>',
+        '  <div class="builder-content-modal-body">',
+        '    <pre id="sourceInspectorPre" class="source-inspector-pre"></pre>',
+        '    <div id="sourceInspectorPatterns" class="source-inspector-patterns" style="display:none;"></div>',
+        '  </div>',
+        '</div>',
+      ].join('');
+      document.body.appendChild(modal);
+
+      document.getElementById('sourceInspectorClose').addEventListener('click', () => {
+        modal.classList.remove('is-open');
+      });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('is-open');
+      });
+    }
+
+    const titleEl = document.getElementById('sourceInspectorTitle');
+    const urlEl   = document.getElementById('sourceInspectorUrl');
+    const preEl   = document.getElementById('sourceInspectorPre');
+    const patternsEl = document.getElementById('sourceInspectorPatterns');
+    const tabs    = modal.querySelectorAll('.source-inspector-tab');
+
+    titleEl.textContent = page.title || page.url || 'Source Inspector';
+    urlEl.textContent   = page.url || '';
+
+    // Start on Raw HTML — show immediately, no network call needed.
+    function showTab(tab) {
+      tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+      if (tab === 'raw') {
+        preEl.style.display = '';
+        patternsEl.style.display = 'none';
+        preEl.textContent = page.body_raw || '(no raw HTML stored for this page)';
+        return;
+      }
+      if (tab === 'sanitized') {
+        preEl.style.display = '';
+        patternsEl.style.display = 'none';
+        preEl.textContent = 'Loading…';
+        _sourceInspectorFetch(runId, page.url).then((data) => {
+          preEl.textContent = data.withHeaders || data.sanitized || '(empty after sanitization)';
+        }).catch((err) => {
+          preEl.textContent = 'Error: ' + (err.message || 'Failed to load');
+        });
+        return;
+      }
+      if (tab === 'patterns') {
+        preEl.style.display = 'none';
+        patternsEl.style.display = '';
+        patternsEl.innerHTML = '<p class="source-inspector-status">Loading…</p>';
+        _sourceInspectorFetch(runId, page.url).then((data) => {
+          let html = '';
+          if (data.detectedModel) {
+            html += `<div class="source-inspector-model-badge">${data.detectedModel.name}</div>`;
+          } else {
+            html += '<p class="source-inspector-model-none">No content model detected for this page.</p>';
+          }
+          const blocks = Array.isArray(data.extractedBlocks) ? data.extractedBlocks : [];
+          if (blocks.length) {
+            html += `<p class="source-inspector-blocks-heading">${blocks.length} block${blocks.length !== 1 ? 's' : ''} extracted</p>`;
+            blocks.forEach((block, i) => {
+              const previewHtml = String(block.html || '').replace(/</g, '&lt;').slice(0, 300);
+              html += [
+                '<div class="source-inspector-block">',
+                `  <div class="source-inspector-block-meta">`,
+                `    <span class="source-inspector-block-layout">${block.layout || 'unknown'}</span>`,
+                `    <span>Block ${i + 1}</span>`,
+                `  </div>`,
+                `  <div class="source-inspector-block-img">${block.imageUrl || '(no image)'}</div>`,
+                `  <pre class="source-inspector-block-html">${previewHtml}${block.html && block.html.length > 300 ? '\n…' : ''}</pre>`,
+                '</div>',
+              ].join('');
+            });
+          } else if (data.detectedModel) {
+            html += '<p class="source-inspector-model-none">Model detected but extracted 0 blocks.</p>';
+          }
+          patternsEl.innerHTML = html;
+        }).catch((err) => {
+          patternsEl.innerHTML = `<p class="source-inspector-status">Error: ${err.message || 'Failed to load'}</p>`;
+        });
+      }
+    }
+
+    tabs.forEach((tab) => {
+      // Replace listener each open by cloning the node.
+      const fresh = tab.cloneNode(true);
+      tab.replaceWith(fresh);
+    });
+    modal.querySelectorAll('.source-inspector-tab').forEach((tab) => {
+      tab.addEventListener('click', () => showTab(tab.dataset.tab));
+    });
+
+    showTab('raw');
+    modal.classList.add('is-open');
   }
 
   // ── Create-page-from-crawled-page modal ──────────────────────────────────

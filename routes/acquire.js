@@ -16,6 +16,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listAcquireJobs }    = require('../lib/acquireJobs');
 const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
 const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
+const { sanitizeImportHtml, identifyHeaderLines, detectModel: detectContentModel, getModel: getContentModel } = require('../lib/contentDisplayModels');
 const { runPeerDiscovery } = require('../lib/peerDiscovery');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const {
@@ -1219,6 +1220,42 @@ async function handle(req, res, pathname, method) {
     const scope = requestProjectScope(req);
     const runs = await listDirectAcquireRuns(limit, scope);
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
+  }
+
+  // GET /api/acquire/direct-runs/:id/page-source?url=<encoded> — Source Inspector
+  const pageSourceMatch = pathname.match(/^\/api\/acquire\/direct-runs\/([^/]+)\/page-source$/);
+  if (pageSourceMatch && method === 'GET') {
+    const scope = requestProjectScope(req);
+    const runId = decodeURIComponent(pageSourceMatch[1]);
+    const pageUrl = String(urlObj.searchParams.get('url') || '').trim();
+    if (!pageUrl) return sendErr(res, 400, 'url query param is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const run = await getDirectAcquireRun(runId, scope);
+    if (!run) return sendErr(res, 404, 'Run not found', { code: 'NOT_FOUND' }), true;
+
+    const pages = Array.isArray(run.pages) ? run.pages : [];
+    const page = pages.find((p) => String(p.url || '') === pageUrl);
+    if (!page) return sendErr(res, 404, 'Page not found in run', { code: 'NOT_FOUND' }), true;
+
+    const rawHtml = String(page.body_raw || '');
+    const sanitized = sanitizeImportHtml(rawHtml);
+    const withHeaders = identifyHeaderLines(sanitized);
+
+    const detectedModel = rawHtml ? detectContentModel(rawHtml) : null;
+    let extractedBlocks = [];
+    if (detectedModel) {
+      const model = getContentModel(detectedModel.id);
+      try { extractedBlocks = model ? model.extract(rawHtml) : []; } catch (_) { extractedBlocks = []; }
+    }
+
+    return sendOk(res, 200, {
+      url: String(page.url || ''),
+      title: String(page.title || ''),
+      sanitized,
+      withHeaders,
+      detectedModel: detectedModel ? { id: detectedModel.id, name: detectedModel.name } : null,
+      extractedBlocks,
+    }), true;
   }
 
   // GET /api/acquire/direct-runs/:id — read-only
