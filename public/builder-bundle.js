@@ -1093,7 +1093,7 @@
             }
             return dispatcher.useContext(Context);
           }
-          function useState47(initialState2) {
+          function useState48(initialState2) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useState(initialState2);
           }
@@ -1896,7 +1896,7 @@
           exports.useMemo = useMemo19;
           exports.useReducer = useReducer;
           exports.useRef = useRef25;
-          exports.useState = useState47;
+          exports.useState = useState48;
           exports.useSyncExternalStore = useSyncExternalStore3;
           exports.useTransition = useTransition;
           exports.version = ReactVersion;
@@ -2443,7 +2443,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment31 = 7;
+          var Fragment32 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3600,7 +3600,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment31:
+              case Fragment32:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -12029,7 +12029,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment31) {
+              if (current2 === null || current2.tag !== Fragment32) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12432,7 +12432,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment31) {
+                    if (child.tag === Fragment32) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17908,7 +17908,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment31:
+              case Fragment32:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18180,7 +18180,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment31:
+              case Fragment32:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22441,7 +22441,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment31, elements, key, mode);
+            var fiber = createFiber(Fragment32, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -26419,11 +26419,11 @@
               return jsxWithValidation(type, props, key, false);
             }
           }
-          var jsx99 = jsxWithValidationDynamic;
-          var jsxs81 = jsxWithValidationStatic;
+          var jsx101 = jsxWithValidationDynamic;
+          var jsxs83 = jsxWithValidationStatic;
           exports.Fragment = REACT_FRAGMENT_TYPE;
-          exports.jsx = jsx99;
-          exports.jsxs = jsxs81;
+          exports.jsx = jsx101;
+          exports.jsxs = jsxs83;
         })();
       }
     }
@@ -26460,7 +26460,7 @@
               "The result of getSnapshot should be cached to avoid an infinite loop"
             ), didWarnUncachedGetSnapshot = true);
           }
-          cachedValue = useState47({
+          cachedValue = useState48({
             inst: { value, getSnapshot }
           });
           var inst = cachedValue[0].inst, forceUpdate = cachedValue[1];
@@ -26498,7 +26498,7 @@
           return getSnapshot();
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React2 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState47 = React2.useState, useEffect44 = React2.useEffect, useLayoutEffect4 = React2.useLayoutEffect, useDebugValue3 = React2.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
+        var React2 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState48 = React2.useState, useEffect44 = React2.useEffect, useLayoutEffect4 = React2.useLayoutEffect, useDebugValue3 = React2.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
         exports.useSyncExternalStore = void 0 !== React2.useSyncExternalStore ? React2.useSyncExternalStore : shim;
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
       })();
@@ -28078,7 +28078,7 @@
   }
 
   // components/admin-builder-editor.tsx
-  var import_react44 = __toESM(require_react());
+  var import_react45 = __toESM(require_react());
 
   // lib/builder-client/builder-email-template.ts
   var BUILDER_EMAIL_FUNCTIONS = [
@@ -30363,7 +30363,7 @@
   }
   function normalizeModuleType(value) {
     const type = safeText(value, 40).toLowerCase();
-    if (type === "navigation" || type === "heading" || type === "headline-rotator" || type === "code" || type === "merch" || type === "image" || type === "floating-image" || type === "video" || type === "quote" || type === "speech-bubble" || type === "reminder" || type === "button" || type === "contact-form" || type === "player-portal" || type === "table" || type === "slider" || type === "social" || type === "social-share" || type === "previous-results" || type === "current-poll" || type === "poll-category-list" || type === "confetti" || type === "tractor-nav" || type === "breadcrumb" || type === "blog-post-list" || type === "blog-post-card" || type === "blog-author-bio" || type === "crm-form" || type === "blog-toc" || type === "blog-newsletter-subscribe" || type === "blog-related-posts") {
+    if (type === "navigation" || type === "heading" || type === "headline-rotator" || type === "code" || type === "merch" || type === "image" || type === "floating-image" || type === "video" || type === "quote" || type === "speech-bubble" || type === "reminder" || type === "button" || type === "contact-form" || type === "player-portal" || type === "table" || type === "slider" || type === "social" || type === "social-share" || type === "previous-results" || type === "current-poll" || type === "poll-category-list" || type === "confetti" || type === "tractor-nav" || type === "breadcrumb" || type === "blog-post-list" || type === "blog-post-card" || type === "blog-author-bio" || type === "crm-form" || type === "blog-toc" || type === "blog-newsletter-subscribe" || type === "blog-related-posts" || type === "blog-category-filter" || type === "blog-post") {
       return type;
     }
     return "text";
@@ -30970,6 +30970,40 @@
       cardBorderRadius: "12",
       cardGap: "20",
       manualPosts: JSON.stringify([])
+    } : type === "blog-category-filter" ? {
+      categories: JSON.stringify([]),
+      layout: "pills",
+      allLabel: "All",
+      showAll: "true",
+      filterParam: "category",
+      targetPageUrl: "",
+      activeColor: "#0f4f8f",
+      activeBg: "#e8f6fc",
+      inactiveColor: "#587592",
+      inactiveBg: "#f0f4f8",
+      borderRadius: "20",
+      fontSize: "13",
+      gap: "8",
+      alignment: "left"
+    } : type === "blog-post" ? {
+      title: "",
+      slug: "",
+      status: "draft",
+      author: "",
+      publishDate: "",
+      featuredImageUrl: "",
+      showFeaturedImage: "true",
+      excerpt: "",
+      showExcerpt: "true",
+      body: "",
+      categories: "",
+      showCategories: "true",
+      tags: "",
+      showTags: "false",
+      showAuthor: "true",
+      showDate: "true",
+      seoTitle: "",
+      seoDescription: ""
     } : {};
     return {
       id: createLocalId("module"),
@@ -31534,6 +31568,28 @@
       name: "",
       text: "",
       settings: {}
+    },
+    {
+      id: "blog-post-standard",
+      type: "blog-post",
+      group: "blog",
+      label: "Blog Post",
+      icon: "\u270D",
+      description: "Full blog post editor: title, featured image, rich-text body, categories, tags, and SEO fields.",
+      name: "",
+      text: "",
+      settings: { status: "draft" }
+    },
+    {
+      id: "blog-category-filter-pills",
+      type: "blog-category-filter",
+      group: "blog",
+      label: "Category Filter",
+      icon: "\u2299",
+      description: "Pill, list, or dropdown filter that navigates to ?category=slug and pairs with a Post Feed.",
+      name: "",
+      text: "",
+      settings: { layout: "pills" }
     },
     {
       id: "blog-related-posts-standard",
@@ -34140,10 +34196,10 @@
   }
 
   // components/builder/builder-module-repository-list.tsx
-  var import_react41 = __toESM(require_react());
+  var import_react42 = __toESM(require_react());
 
   // components/builder/builder-module-card.tsx
-  var import_react38 = __toESM(require_react());
+  var import_react39 = __toESM(require_react());
 
   // components/builder/builder-centered-modal.tsx
   var import_jsx_runtime14 = __toESM(require_jsx_runtime());
@@ -66774,16 +66830,413 @@ ${prefix}
     ] });
   }
 
-  // components/builder/builder-current-poll-module-settings.tsx
+  // components/builder/builder-blog-category-filter-module-settings.tsx
   var import_jsx_runtime56 = __toESM(require_jsx_runtime());
+  function parseFilterCategories(settings) {
+    try {
+      const parsed = JSON.parse(settings.categories || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((x) => x && typeof x.label === "string");
+    } catch {
+      return [];
+    }
+  }
+  function serializeFilterCategories(cats) {
+    return JSON.stringify(cats);
+  }
+  function BuilderBlogCategoryFilterModuleSettings({ module: module2, onUpdateModule }) {
+    const s = module2.settings;
+    const categories = parseFilterCategories(s);
+    function set(key, value) {
+      onUpdateModule((current) => ({
+        ...current,
+        settings: { ...current.settings, [key]: value }
+      }));
+    }
+    function persist(next) {
+      onUpdateModule((current) => ({
+        ...current,
+        settings: { ...current.settings, categories: serializeFilterCategories(next) }
+      }));
+    }
+    function updateCat(id, field, value) {
+      persist(categories.map((c) => c.id === id ? { ...c, [field]: value } : c));
+    }
+    function moveCat(id, direction) {
+      const index = categories.findIndex((c) => c.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= categories.length) return;
+      const next = [...categories];
+      const [moved] = next.splice(index, 1);
+      next.splice(target, 0, moved);
+      persist(next);
+    }
+    function removeCat(id) {
+      persist(categories.filter((c) => c.id !== id));
+    }
+    function addCat() {
+      persist([...categories, { id: `cat-${Date.now()}`, label: "", slug: "" }]);
+    }
+    return /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-blog-category-filter-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-button-setting-columns", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-button-setting-column", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Layout", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("select", { value: s.layout ?? "pills", onChange: (e) => set("layout", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "pills", children: "Pills" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "list", children: "List" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "dropdown", children: "Dropdown" })
+          ] }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Show 'All'", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("select", { value: s.showAll ?? "true", onChange: (e) => set("showAll", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "true", children: "Yes" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "false", children: "No" })
+          ] }) }),
+          (s.showAll ?? "true") === "true" ? /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "'All' label", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+            "input",
+            {
+              type: "text",
+              value: s.allLabel ?? "All",
+              onChange: (e) => set("allLabel", e.target.value),
+              placeholder: "All"
+            }
+          ) }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("select", { value: s.alignment ?? "left", onChange: (e) => set("alignment", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "left", children: "Left" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "center", children: "Center" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("option", { value: "right", children: "Right" })
+          ] }) })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-button-setting-column", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Active color", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("input", { type: "color", value: s.activeColor ?? "#0f4f8f", onChange: (e) => set("activeColor", e.target.value) }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Active bg", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("input", { type: "color", value: s.activeBg ?? "#e8f6fc", onChange: (e) => set("activeBg", e.target.value) }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Inactive color", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("input", { type: "color", value: s.inactiveColor ?? "#587592", onChange: (e) => set("inactiveColor", e.target.value) }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Inactive bg", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("input", { type: "color", value: s.inactiveBg ?? "#f0f4f8", onChange: (e) => set("inactiveBg", e.target.value) }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Border radius (px)", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+            "input",
+            {
+              type: "number",
+              min: 0,
+              max: 32,
+              step: 2,
+              value: s.borderRadius ?? "20",
+              onChange: (e) => set("borderRadius", e.target.value)
+            }
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Font size (px)", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+            "input",
+            {
+              type: "number",
+              min: 10,
+              max: 20,
+              step: 1,
+              value: s.fontSize ?? "13",
+              onChange: (e) => set("fontSize", e.target.value)
+            }
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Gap (px)", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+            "input",
+            {
+              type: "number",
+              min: 4,
+              max: 24,
+              step: 2,
+              value: s.gap ?? "8",
+              onChange: (e) => set("gap", e.target.value)
+            }
+          ) })
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "URL param", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+        "input",
+        {
+          type: "text",
+          value: s.filterParam ?? "category",
+          onChange: (e) => set("filterParam", e.target.value),
+          placeholder: "category"
+        }
+      ) }),
+      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Target page", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+        "input",
+        {
+          type: "text",
+          value: s.targetPageUrl ?? "",
+          onChange: (e) => set("targetPageUrl", e.target.value),
+          placeholder: "Leave blank to filter on the current page"
+        }
+      ) }),
+      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("div", { className: "builder-breadcrumb-items-label", style: { marginTop: 12 }, children: "Categories" }),
+      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("div", { className: "builder-slider-items", children: categories.map((cat, index) => /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-slider-item-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-slider-item-header", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("strong", { children: cat.label || `Category ${index + 1}` }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-section-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveCat(cat.id, -1), title: "Move left", children: "\u2191" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveCat(cat.id, 1), title: "Move right", children: "\u2193" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeCat(cat.id), title: "Remove", children: "\u2715" })
+          ] })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-slider-item-grid", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("span", { children: "Label" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+              "input",
+              {
+                type: "text",
+                value: cat.label,
+                onChange: (e) => updateCat(cat.id, "label", e.target.value),
+                placeholder: "Technology"
+              }
+            )
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("span", { children: "Slug" }),
+            /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+              "input",
+              {
+                type: "text",
+                value: cat.slug,
+                onChange: (e) => updateCat(cat.id, "slug", e.target.value),
+                placeholder: "technology"
+              }
+            )
+          ] })
+        ] })
+      ] }, cat.id)) }),
+      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)("button", { type: "button", className: "secondary-button", onClick: addCat, children: "Add Category" })
+    ] });
+  }
+
+  // components/builder/builder-blog-post-module-settings.tsx
+  var import_react31 = __toESM(require_react());
+  var import_jsx_runtime57 = __toESM(require_jsx_runtime());
+  var SECTION_LABELS = {
+    content: "Content",
+    meta: "Meta",
+    taxonomy: "Categories & Tags",
+    seo: "SEO",
+    display: "Display"
+  };
+  function BuilderBlogPostModuleSettings({ module: module2, onUpdateModule, richTextGallery }) {
+    const s = module2.settings;
+    const [section, setSection] = (0, import_react31.useState)("content");
+    function set(key, value) {
+      onUpdateModule((current) => ({
+        ...current,
+        settings: { ...current.settings, [key]: value }
+      }));
+    }
+    function setBody(value) {
+      onUpdateModule((current) => ({ ...current, settings: { ...current.settings, body: value } }));
+    }
+    const statusColors = {
+      draft: "#8ba9be",
+      published: "#1d8a4e",
+      archived: "#a06040"
+    };
+    const currentStatus = s.status ?? "draft";
+    return /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-blog-post-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("span", { style: {
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          color: statusColors[currentStatus] ?? "#8ba9be",
+          background: statusColors[currentStatus] + "18",
+          borderRadius: 4,
+          padding: "2px 7px"
+        }, children: currentStatus }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)(
+          "select",
+          {
+            value: currentStatus,
+            onChange: (e) => set("status", e.target.value),
+            style: { fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #c9d8e6" },
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "draft", children: "Draft" }),
+              /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "published", children: "Published" }),
+              /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "archived", children: "Archived" })
+            ]
+          }
+        )
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("div", { className: "builder-settings-section-tabs", style: { display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }, children: Object.keys(SECTION_LABELS).map((key) => /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+        "button",
+        {
+          type: "button",
+          onClick: () => setSection(key),
+          style: {
+            fontSize: 11,
+            padding: "3px 9px",
+            borderRadius: 4,
+            border: "1px solid",
+            borderColor: section === key ? "#0f4f8f" : "#c9d8e6",
+            background: section === key ? "#e8f6fc" : "transparent",
+            color: section === key ? "#0f4f8f" : "#587592",
+            fontWeight: section === key ? 600 : 400,
+            cursor: "pointer"
+          },
+          children: SECTION_LABELS[key]
+        },
+        key
+      )) }),
+      section === "content" ? /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)(import_jsx_runtime57.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Title", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "input",
+          {
+            type: "text",
+            value: s.title ?? "",
+            onChange: (e) => set("title", e.target.value),
+            placeholder: "Post title"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Body", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          BuilderRichTextEditor,
+          {
+            value: s.body ?? "",
+            onChange: setBody,
+            placeholder: "Write your post here\u2026",
+            ...richTextGallery
+          }
+        ) })
+      ] }) : null,
+      section === "meta" ? /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)(import_jsx_runtime57.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Slug", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "input",
+          {
+            type: "text",
+            value: s.slug ?? "",
+            onChange: (e) => set("slug", e.target.value),
+            placeholder: "my-post-title"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Author", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "input",
+          {
+            type: "text",
+            value: s.author ?? "",
+            onChange: (e) => set("author", e.target.value),
+            placeholder: "Author name"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Publish date", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "input",
+          {
+            type: "text",
+            value: s.publishDate ?? "",
+            onChange: (e) => set("publishDate", e.target.value),
+            placeholder: "Jun 22, 2026"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Featured image", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          BuilderImagePickerField,
+          {
+            value: s.featuredImageUrl ?? "",
+            onChange: (url) => set("featuredImageUrl", url)
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Excerpt", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "textarea",
+          {
+            value: s.excerpt ?? "",
+            onChange: (e) => set("excerpt", e.target.value),
+            placeholder: "A short summary shown in post cards and feeds\u2026",
+            rows: 3,
+            style: { resize: "vertical" }
+          }
+        ) })
+      ] }) : null,
+      section === "taxonomy" ? /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)(import_jsx_runtime57.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Categories", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "input",
+          {
+            type: "text",
+            value: s.categories ?? "",
+            onChange: (e) => set("categories", e.target.value),
+            placeholder: "technology, design, ai"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("p", { style: { fontSize: 11, color: "#8ba9be", margin: "2px 0 12px", lineHeight: 1.4 }, children: "Comma-separated slugs matching your Category Filter module." }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Tags", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "input",
+          {
+            type: "text",
+            value: s.tags ?? "",
+            onChange: (e) => set("tags", e.target.value),
+            placeholder: "react, typescript, tutorial"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("p", { style: { fontSize: 11, color: "#8ba9be", margin: "2px 0 0", lineHeight: 1.4 }, children: "Comma-separated tags." })
+      ] }) : null,
+      section === "seo" ? /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)(import_jsx_runtime57.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "SEO title", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "input",
+          {
+            type: "text",
+            value: s.seoTitle ?? "",
+            onChange: (e) => set("seoTitle", e.target.value),
+            placeholder: s.title || "SEO page title"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "SEO description", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+          "textarea",
+          {
+            value: s.seoDescription ?? "",
+            onChange: (e) => set("seoDescription", e.target.value),
+            placeholder: "150\u2013160 character description for search results\u2026",
+            rows: 3,
+            style: { resize: "vertical" }
+          }
+        ) }),
+        s.seoDescription ? /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("p", { style: {
+          fontSize: 11,
+          color: s.seoDescription.length > 160 ? "#c0392b" : "#1d8a4e",
+          margin: "2px 0 0"
+        }, children: [
+          s.seoDescription.length,
+          " / 160 characters"
+        ] }) : null
+      ] }) : null,
+      section === "display" ? /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-button-setting-columns", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-button-setting-column", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Featured image", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("select", { value: s.showFeaturedImage ?? "true", onChange: (e) => set("showFeaturedImage", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "true", children: "Show" }),
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "false", children: "Hide" })
+          ] }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Excerpt", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("select", { value: s.showExcerpt ?? "true", onChange: (e) => set("showExcerpt", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "true", children: "Show" }),
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "false", children: "Hide" })
+          ] }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Author", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("select", { value: s.showAuthor ?? "true", onChange: (e) => set("showAuthor", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "true", children: "Show" }),
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "false", children: "Hide" })
+          ] }) })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-button-setting-column", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Date", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("select", { value: s.showDate ?? "true", onChange: (e) => set("showDate", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "true", children: "Show" }),
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "false", children: "Hide" })
+          ] }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Categories", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("select", { value: s.showCategories ?? "true", onChange: (e) => set("showCategories", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "true", children: "Show" }),
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "false", children: "Hide" })
+          ] }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Tags", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("select", { value: s.showTags ?? "false", onChange: (e) => set("showTags", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "false", children: "Hide" }),
+            /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("option", { value: "true", children: "Show" })
+          ] }) })
+        ] })
+      ] }) : null
+    ] });
+  }
+
+  // components/builder/builder-current-poll-module-settings.tsx
+  var import_jsx_runtime58 = __toESM(require_jsx_runtime());
   function BuilderCurrentPollModuleSettings({
     module: module2,
     onUpdateModule,
     onUpdateModuleBackground
   }) {
     const moduleAlignment = getModuleAlignment(module2.settings);
-    return /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("div", { className: "builder-current-poll-module-settings", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Width", children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime58.jsxs)("div", { className: "builder-current-poll-module-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(BuilderSettingRow, { label: "Width", children: /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
         "select",
         {
           value: module2.settings.size ?? "100",
@@ -66791,13 +67244,13 @@ ${prefix}
             ...current,
             settings: { ...current.settings, size: event.target.value }
           })),
-          children: POLL_CONTENT_WIDTH_OPTIONS.map((width) => /* @__PURE__ */ (0, import_jsx_runtime56.jsxs)("option", { value: width, children: [
+          children: POLL_CONTENT_WIDTH_OPTIONS.map((width) => /* @__PURE__ */ (0, import_jsx_runtime58.jsxs)("option", { value: width, children: [
             width,
             "%"
           ] }, width))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
         BuilderBackgroundControls,
         {
           label: "Background",
@@ -66806,7 +67259,7 @@ ${prefix}
           onChange: onUpdateModuleBackground
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
         BuilderAlignmentIconGroup,
         {
           value: moduleAlignment,
@@ -66816,7 +67269,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(BuilderSettingRow, { label: "Vertical Margin", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime56.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(BuilderSettingRow, { label: "Vertical Margin", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
         BuilderNumberSelectControl,
         {
           fallback: "0",
@@ -66833,8 +67286,8 @@ ${prefix}
   }
 
   // components/builder/builder-social-module-settings.tsx
-  var import_react31 = __toESM(require_react());
-  var import_jsx_runtime57 = __toESM(require_jsx_runtime());
+  var import_react32 = __toESM(require_react());
+  var import_jsx_runtime59 = __toESM(require_jsx_runtime());
   var SOCIAL_ITEM_DRAG_TYPE = "application/normie-builder-social-item";
   function parseSocialItems(settings) {
     try {
@@ -66868,9 +67321,9 @@ ${prefix}
   }) {
     const moduleAlignment = getModuleAlignment(module2.settings);
     const items = parseSocialItems(module2.settings);
-    const [collapsedItems, setCollapsedItems] = (0, import_react31.useState)({});
-    const [draggedItemId, setDraggedItemId] = (0, import_react31.useState)(null);
-    const [dropTargetId, setDropTargetId] = (0, import_react31.useState)(null);
+    const [collapsedItems, setCollapsedItems] = (0, import_react32.useState)({});
+    const [draggedItemId, setDraggedItemId] = (0, import_react32.useState)(null);
+    const [dropTargetId, setDropTargetId] = (0, import_react32.useState)(null);
     function isItemCollapsed(id) {
       return collapsedItems[id] ?? true;
     }
@@ -66945,8 +67398,8 @@ ${prefix}
       ]);
       setCollapsedItems((current) => ({ ...current, [id]: false }));
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-social-module-settings", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-social-module-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderBackgroundControls,
         {
           label: "Background",
@@ -66955,7 +67408,7 @@ ${prefix}
           onChange: onUpdateModuleBackground
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderAlignmentIconGroup,
         {
           value: moduleAlignment,
@@ -66965,7 +67418,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Vertical Margin", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Vertical Margin", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.verticalMargin ?? "0",
@@ -66978,7 +67431,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Icon Size", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Icon Size", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialIconSize ?? "44",
@@ -66992,7 +67445,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Gap", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Gap", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialGap ?? "14",
@@ -67006,7 +67459,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Padding", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Padding", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialPadding ?? "0",
@@ -67020,7 +67473,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Show Labels", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Show Labels", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         "input",
         {
           type: "checkbox",
@@ -67031,8 +67484,8 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Icon BG Color", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-color-with-swatches", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Icon BG Color", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-color-with-swatches", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
           "input",
           {
             type: "color",
@@ -67043,7 +67496,7 @@ ${prefix}
             }))
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
           BuilderThemeSwatches,
           {
             colors: themeColors,
@@ -67054,8 +67507,8 @@ ${prefix}
           }
         )
       ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Border Color", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-color-with-swatches", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Border Color", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-color-with-swatches", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
           "input",
           {
             type: "color",
@@ -67066,7 +67519,7 @@ ${prefix}
             }))
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
           BuilderThemeSwatches,
           {
             colors: themeColors,
@@ -67077,7 +67530,7 @@ ${prefix}
           }
         )
       ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Border Width", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Border Width", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialBorderWidth ?? "0",
@@ -67090,7 +67543,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Border Shape", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Border Shape", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialBorderRadius ?? "0",
@@ -67104,8 +67557,8 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Shadow Color", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-color-with-swatches", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Shadow Color", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-color-with-swatches", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
           "input",
           {
             type: "color",
@@ -67116,7 +67569,7 @@ ${prefix}
             }))
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
           BuilderThemeSwatches,
           {
             colors: themeColors,
@@ -67127,7 +67580,7 @@ ${prefix}
           }
         )
       ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Shadow X", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Shadow X", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialShadowX ?? "0",
@@ -67140,7 +67593,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Shadow Y", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Shadow Y", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialShadowY ?? "0",
@@ -67153,7 +67606,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Shadow Blur", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Shadow Blur", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialShadowBlur ?? "0",
@@ -67167,7 +67620,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Shadow Spread", children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Shadow Spread", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         BuilderNumberSelectControl,
         {
           value: module2.settings.socialShadowSpread ?? "0",
@@ -67180,7 +67633,7 @@ ${prefix}
           }))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
         "div",
         {
           className: "builder-social-module-items",
@@ -67195,7 +67648,7 @@ ${prefix}
             const isDragging = draggedItemId === item.id;
             const isDropTarget = dropTargetId === item.id;
             const iconPreviewSize = Math.max(32, Number.parseInt(module2.settings.socialIconSize ?? "44", 10) || 44);
-            return /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)(
               "div",
               {
                 className: `builder-social-module-item-card builder-cell-panel${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`,
@@ -67204,10 +67657,10 @@ ${prefix}
                 onDragOver: (event) => handleItemDragOver(event, item.id),
                 onDrop: (event) => handleItemDrop(event, index),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                     BuilderCellPanelHeader,
                     {
-                      leadingActions: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                      leadingActions: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                         "div",
                         {
                           "aria-label": "Drag social platform",
@@ -67218,7 +67671,7 @@ ${prefix}
                           children: "\u22EE\u22EE"
                         }
                       ),
-                      headingActions: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                      headingActions: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                         "button",
                         {
                           type: "button",
@@ -67234,9 +67687,9 @@ ${prefix}
                       title: panelTitle
                     }
                   ),
-                  !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime57.jsxs)("div", { className: "builder-social-module-item-settings", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("input", { type: "text", value: item.label, onChange: (event) => updateItem(item.id, { label: event.target.value }) }) }),
-                    /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Link", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                  !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-social-module-item-settings", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)("input", { type: "text", value: item.label, onChange: (event) => updateItem(item.id, { label: event.target.value }) }) }),
+                    /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Link", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                       "input",
                       {
                         type: "text",
@@ -67245,7 +67698,7 @@ ${prefix}
                         placeholder: "https://..."
                       }
                     ) }),
-                    /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(BuilderSettingRow, { label: "Background", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Background", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                       "input",
                       {
                         type: "text",
@@ -67257,15 +67710,15 @@ ${prefix}
                         placeholder: "#ffffff"
                       }
                     ) }),
-                    /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                       BuilderSettingRow,
                       {
-                        label: item.iconUrl ? /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                        label: item.iconUrl ? /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                           "span",
                           {
                             className: "builder-social-item-icon-preview",
                             style: { width: `${iconPreviewSize}px`, height: `${iconPreviewSize}px` },
-                            children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                            children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                               Image,
                               {
                                 alt: item.label || "Selected icon",
@@ -67278,7 +67731,7 @@ ${prefix}
                           }
                         ) : "Icon",
                         fullWidth: true,
-                        children: /* @__PURE__ */ (0, import_jsx_runtime57.jsx)(
+                        children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
                           "button",
                           {
                             className: "secondary-button builder-social-icon-picker-button",
@@ -67297,12 +67750,12 @@ ${prefix}
           })
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime57.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "Add Social Icon" })
+      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "Add Social Icon" })
     ] });
   }
 
   // components/builder/builder-image-preview.tsx
-  var import_jsx_runtime58 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime60 = __toESM(require_jsx_runtime());
   function getImageEffectClassName(effect) {
     if (effect === "bounce") return " normie-effect-bounce";
     if (effect === "fast-bounce") return " normie-effect-fast-bounce";
@@ -67333,12 +67786,12 @@ ${prefix}
     const effectClass = getImageEffectClassName(effect);
     const motionClip = usesHorizontalMotionClip(effect);
     const resolvedVariant = variant ?? module2.settings.variant ?? "default";
-    const figure = /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
+    const figure = /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(
       "figure",
       {
         className: `${imageClassName} builder-preview-image-${resolvedVariant}${effectClass}`,
         style: imageStyle,
-        children: mediaUrl ? isVideoMedia(mediaUrl) ? /* @__PURE__ */ (0, import_jsx_runtime58.jsx)("video", { className: "builder-preview-video", controls: true, preload: "metadata", src: mediaUrl }) : linkUrl ? /* @__PURE__ */ (0, import_jsx_runtime58.jsx)("a", { href: linkUrl, rel: opensInNewTab ? "noopener noreferrer" : void 0, target: opensInNewTab ? "_blank" : void 0, children: /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
+        children: mediaUrl ? isVideoMedia(mediaUrl) ? /* @__PURE__ */ (0, import_jsx_runtime60.jsx)("video", { className: "builder-preview-video", controls: true, preload: "metadata", src: mediaUrl }) : linkUrl ? /* @__PURE__ */ (0, import_jsx_runtime60.jsx)("a", { href: linkUrl, rel: opensInNewTab ? "noopener noreferrer" : void 0, target: opensInNewTab ? "_blank" : void 0, children: /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(
           "img",
           {
             alt: module2.settings.alt || module2.text || "",
@@ -67346,7 +67799,7 @@ ${prefix}
             suppressHydrationWarning: true,
             style: { width: "100%", height: "auto", display: "block", borderRadius: "inherit" }
           }
-        ) }) : /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
+        ) }) : /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(
           "img",
           {
             alt: module2.settings.alt || module2.text || "",
@@ -67354,25 +67807,25 @@ ${prefix}
             suppressHydrationWarning: true,
             style: { width: "100%", height: "auto", display: "block", borderRadius: "inherit" }
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime58.jsx)("div", { className: "builder-module-preview-placeholder", children: placeholder })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime60.jsx)("div", { className: "builder-module-preview-placeholder", children: placeholder })
       }
     );
-    return /* @__PURE__ */ (0, import_jsx_runtime58.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(
       "div",
       {
         className: `builder-preview-image-shell${floating ? " builder-preview-image-shell-overlay" : ""}`,
         style: shellStyle,
-        children: motionClip ? /* @__PURE__ */ (0, import_jsx_runtime58.jsx)("div", { className: "normie-effect-motion-clip", children: figure }) : figure
+        children: motionClip ? /* @__PURE__ */ (0, import_jsx_runtime60.jsx)("div", { className: "normie-effect-motion-clip", children: figure }) : figure
       }
     );
   }
 
   // components/builder/builder-button-design-settings.tsx
-  var import_react35 = __toESM(require_react());
+  var import_react36 = __toESM(require_react());
 
   // components/builder/builder-button-background-picker.tsx
-  var import_react32 = __toESM(require_react());
-  var import_jsx_runtime59 = __toESM(require_jsx_runtime());
+  var import_react33 = __toESM(require_react());
+  var import_jsx_runtime61 = __toESM(require_jsx_runtime());
   var buttonBackgroundModes = [
     { value: "color", label: "Color" },
     { value: "gradient", label: "Gradient" },
@@ -67385,9 +67838,9 @@ ${prefix}
     onChooseImage,
     onUploadImage
   }) {
-    const popupId = (0, import_react32.useId)();
-    const rootRef = (0, import_react32.useRef)(null);
-    const [isOpen, setIsOpen] = (0, import_react32.useState)(false);
+    const popupId = (0, import_react33.useId)();
+    const rootRef = (0, import_react33.useRef)(null);
+    const [isOpen, setIsOpen] = (0, import_react33.useState)(false);
     const activeMode = background.mode === "none" ? "color" : background.mode;
     const swatchStyle = getBuilderBackgroundStyle(background) ?? {
       background: background.color || "#214c71"
@@ -67437,182 +67890,6 @@ ${prefix}
         styleKey: background.styleKey || ""
       });
     }
-    (0, import_react32.useEffect)(() => {
-      if (!isOpen) {
-        return;
-      }
-      function handlePointerDown(event) {
-        if (!rootRef.current?.contains(event.target)) {
-          setIsOpen(false);
-        }
-      }
-      function handleEscape(event) {
-        if (event.key === "Escape") {
-          setIsOpen(false);
-        }
-      }
-      document.addEventListener("mousedown", handlePointerDown);
-      document.addEventListener("keydown", handleEscape);
-      return () => {
-        document.removeEventListener("mousedown", handlePointerDown);
-        document.removeEventListener("keydown", handleEscape);
-      };
-    }, [isOpen]);
-    return /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-button-background-picker", ref: rootRef, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-        "button",
-        {
-          "aria-controls": popupId,
-          "aria-expanded": isOpen,
-          "aria-haspopup": "dialog",
-          className: "builder-button-background-swatch",
-          onClick: () => setIsOpen((current) => !current),
-          style: swatchStyle,
-          title: "Edit button background",
-          type: "button"
-        }
-      ),
-      isOpen ? /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-button-background-popup", id: popupId, role: "dialog", "aria-label": "Button background", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime59.jsx)("div", { className: "builder-button-background-mode-tabs", role: "tablist", "aria-label": "Background type", children: buttonBackgroundModes.map((mode) => /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-          "button",
-          {
-            "aria-selected": activeMode === mode.value,
-            className: activeMode === mode.value ? "builder-button-background-mode-tab builder-button-background-mode-tab-active" : "builder-button-background-mode-tab",
-            onClick: () => setMode(mode.value),
-            role: "tab",
-            type: "button",
-            children: mode.label
-          },
-          mode.value
-        )) }),
-        /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-button-background-popup-body", children: [
-          activeMode === "color" ? /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-            "input",
-            {
-              type: "color",
-              value: background.color,
-              onChange: (event) => updateBackground((current) => ({ ...current, color: event.target.value }))
-            }
-          ) }) : null,
-          activeMode === "gradient" ? /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)(import_jsx_runtime59.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Color 1", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-              "input",
-              {
-                type: "color",
-                value: background.color,
-                onChange: (event) => updateBackground((current) => ({ ...current, color: event.target.value }))
-              }
-            ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Color 2", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-              "input",
-              {
-                type: "color",
-                value: background.color2,
-                onChange: (event) => updateBackground((current) => ({ ...current, color2: event.target.value }))
-              }
-            ) })
-          ] }) : null,
-          activeMode === "image" ? /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)(import_jsx_runtime59.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Image URL", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-              "input",
-              {
-                type: "text",
-                value: background.imageUrl,
-                onChange: (event) => updateBackground((current) => ({
-                  ...current,
-                  imageUrl: normalizeBuilderAssetUrl(event.target.value)
-                })),
-                placeholder: "https://... or /api/admin/media-file/..."
-              }
-            ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("div", { className: "builder-media-actions", children: [
-              onChooseImage ? /* @__PURE__ */ (0, import_jsx_runtime59.jsx)("button", { className: "secondary-button builder-gallery-button", onClick: onChooseImage, type: "button", children: "Choose From Gallery" }) : null,
-              onUploadImage ? /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)("label", { className: "secondary-button builder-gallery-button builder-upload-button", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime59.jsx)("span", { children: "Upload To Gallery" }),
-                /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-                  "input",
-                  {
-                    className: "builder-upload-input",
-                    type: "file",
-                    accept: "image/*",
-                    onChange: (event) => {
-                      onUploadImage(event.target.files?.[0] ?? null);
-                      event.currentTarget.value = "";
-                    }
-                  }
-                )
-              ] }) : null
-            ] })
-          ] }) : null,
-          activeMode === "style" ? /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Style", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime59.jsxs)(
-            "select",
-            {
-              value: background.styleKey,
-              onChange: (event) => updateBackground((current) => ({
-                ...current,
-                styleKey: event.target.value
-              })),
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime59.jsx)("option", { value: "", children: "Choose a style" }),
-                BACKGROUND_STYLE_PRESETS.map((style2) => /* @__PURE__ */ (0, import_jsx_runtime59.jsx)("option", { value: style2.value, children: style2.label }, style2.value))
-              ]
-            }
-          ) }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(BuilderSettingRow, { label: "Reset", children: /* @__PURE__ */ (0, import_jsx_runtime59.jsx)(
-            "button",
-            {
-              className: "secondary-button",
-              onClick: () => onChange({
-                mode: "color",
-                color: "#214c71",
-                color2: "#eaf4ff",
-                imageUrl: "",
-                styleKey: ""
-              }),
-              type: "button",
-              children: "Default"
-            }
-          ) })
-        ] })
-      ] }) : null
-    ] });
-  }
-
-  // components/builder/builder-button-border-picker.tsx
-  var import_react33 = __toESM(require_react());
-  var import_jsx_runtime60 = __toESM(require_jsx_runtime());
-  var borderStyleOptions = [
-    { value: "none", label: "None" },
-    { value: "solid", label: "Solid" },
-    { value: "dashed", label: "Dashed" },
-    { value: "dotted", label: "Dotted" }
-  ];
-  function getButtonBorderSettings(settings) {
-    const style2 = settings.borderStyle;
-    return {
-      style: style2 === "none" || style2 === "dashed" || style2 === "dotted" ? style2 : "solid",
-      color: settings.borderColor || "#214c71"
-    };
-  }
-  function BuilderButtonBorderColorPicker({
-    border,
-    borderWidth,
-    borderRadius,
-    disabled = false,
-    onChange
-  }) {
-    const popupId = (0, import_react33.useId)();
-    const rootRef = (0, import_react33.useRef)(null);
-    const [isOpen, setIsOpen] = (0, import_react33.useState)(false);
-    const width = Math.max(Number.parseInt(borderWidth ?? "2", 10) || 0, 0);
-    const radius = Math.max(Number.parseInt(borderRadius ?? "0", 10) || 0, 0);
-    const swatchStyle = {
-      background: "#ffffff",
-      borderStyle: border.style === "none" ? "solid" : border.style,
-      borderColor: border.style === "none" ? "transparent" : border.color,
-      borderWidth: border.style === "none" ? 0 : `${Math.max(width, 2)}px`,
-      borderRadius: `${radius}px`
-    };
     (0, import_react33.useEffect)(() => {
       if (!isOpen) {
         return;
@@ -67634,104 +67911,119 @@ ${prefix}
         document.removeEventListener("keydown", handleEscape);
       };
     }, [isOpen]);
-    return /* @__PURE__ */ (0, import_jsx_runtime60.jsxs)("div", { className: "builder-button-background-picker", ref: rootRef, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-button-background-picker", ref: rootRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
         "button",
         {
           "aria-controls": popupId,
           "aria-expanded": isOpen,
           "aria-haspopup": "dialog",
-          className: "builder-button-background-swatch builder-button-border-swatch",
-          disabled,
+          className: "builder-button-background-swatch",
           onClick: () => setIsOpen((current) => !current),
           style: swatchStyle,
-          title: "Edit border color",
+          title: "Edit button background",
           type: "button"
         }
       ),
-      isOpen ? /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(
-        "div",
-        {
-          className: "builder-button-background-popup",
-          id: popupId,
-          role: "dialog",
-          "aria-label": "Button border color",
-          children: /* @__PURE__ */ (0, import_jsx_runtime60.jsx)("div", { className: "builder-button-background-popup-body", children: /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime60.jsx)(
+      isOpen ? /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-button-background-popup", id: popupId, role: "dialog", "aria-label": "Button background", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime61.jsx)("div", { className: "builder-button-background-mode-tabs", role: "tablist", "aria-label": "Background type", children: buttonBackgroundModes.map((mode) => /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
+          "button",
+          {
+            "aria-selected": activeMode === mode.value,
+            className: activeMode === mode.value ? "builder-button-background-mode-tab builder-button-background-mode-tab-active" : "builder-button-background-mode-tab",
+            onClick: () => setMode(mode.value),
+            role: "tab",
+            type: "button",
+            children: mode.label
+          },
+          mode.value
+        )) }),
+        /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-button-background-popup-body", children: [
+          activeMode === "color" ? /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
             "input",
             {
               type: "color",
-              value: border.color,
-              onChange: (event) => onChange({ ...border, color: event.target.value })
+              value: background.color,
+              onChange: (event) => updateBackground((current) => ({ ...current, color: event.target.value }))
             }
-          ) }) })
-        }
-      ) : null
-    ] });
-  }
-
-  // components/builder/builder-button-drop-shadow-settings.tsx
-  var import_jsx_runtime61 = __toESM(require_jsx_runtime());
-  function BuilderButtonDropShadowSettings({
-    settings,
-    onUpdateSetting
-  }) {
-    const dropShadowEnabled = settings.dropShadow === "true" || settings.dropShadow === "on";
-    const shadowColor = settings.dropShadowColor?.startsWith("#") ? settings.dropShadowColor : "#000000";
-    return /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-button-drop-shadow-settings", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Drop Shadow", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)(
-        "select",
-        {
-          value: settings.dropShadow ?? "false",
-          onChange: (event) => onUpdateSetting("dropShadow", event.target.value),
-          children: [
-            /* @__PURE__ */ (0, import_jsx_runtime61.jsx)("option", { value: "false", children: "Off" }),
-            /* @__PURE__ */ (0, import_jsx_runtime61.jsx)("option", { value: "true", children: "On" })
-          ]
-        }
-      ) }),
-      dropShadowEnabled ? /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-button-setting-columns", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-button-setting-column", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Shadow Color", children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
-            "input",
+          ) }) : null,
+          activeMode === "gradient" ? /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)(import_jsx_runtime61.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Color 1", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
+              "input",
+              {
+                type: "color",
+                value: background.color,
+                onChange: (event) => updateBackground((current) => ({ ...current, color: event.target.value }))
+              }
+            ) }),
+            /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Color 2", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
+              "input",
+              {
+                type: "color",
+                value: background.color2,
+                onChange: (event) => updateBackground((current) => ({ ...current, color2: event.target.value }))
+              }
+            ) })
+          ] }) : null,
+          activeMode === "image" ? /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)(import_jsx_runtime61.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Image URL", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
+              "input",
+              {
+                type: "text",
+                value: background.imageUrl,
+                onChange: (event) => updateBackground((current) => ({
+                  ...current,
+                  imageUrl: normalizeBuilderAssetUrl(event.target.value)
+                })),
+                placeholder: "https://... or /api/admin/media-file/..."
+              }
+            ) }),
+            /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-media-actions", children: [
+              onChooseImage ? /* @__PURE__ */ (0, import_jsx_runtime61.jsx)("button", { className: "secondary-button builder-gallery-button", onClick: onChooseImage, type: "button", children: "Choose From Gallery" }) : null,
+              onUploadImage ? /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("label", { className: "secondary-button builder-gallery-button builder-upload-button", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime61.jsx)("span", { children: "Upload To Gallery" }),
+                /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
+                  "input",
+                  {
+                    className: "builder-upload-input",
+                    type: "file",
+                    accept: "image/*",
+                    onChange: (event) => {
+                      onUploadImage(event.target.files?.[0] ?? null);
+                      event.currentTarget.value = "";
+                    }
+                  }
+                )
+              ] }) : null
+            ] })
+          ] }) : null,
+          activeMode === "style" ? /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Style", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)(
+            "select",
             {
-              type: "color",
-              value: shadowColor,
-              onChange: (event) => onUpdateSetting("dropShadowColor", event.target.value)
+              value: background.styleKey,
+              onChange: (event) => updateBackground((current) => ({
+                ...current,
+                styleKey: event.target.value
+              })),
+              children: [
+                /* @__PURE__ */ (0, import_jsx_runtime61.jsx)("option", { value: "", children: "Choose a style" }),
+                BACKGROUND_STYLE_PRESETS.map((style2) => /* @__PURE__ */ (0, import_jsx_runtime61.jsx)("option", { value: style2.value, children: style2.label }, style2.value))
+              ]
             }
-          ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Shadow X", children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
-            "input",
+          ) }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Reset", children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
+            "button",
             {
-              type: "number",
-              min: -20,
-              max: 20,
-              step: 1,
-              value: settings.dropShadowX ?? "3",
-              onChange: (event) => onUpdateSetting("dropShadowX", event.target.value)
-            }
-          ) })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime61.jsxs)("div", { className: "builder-button-setting-column", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Shadow Y", children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
-            "input",
-            {
-              type: "number",
-              min: -20,
-              max: 20,
-              step: 1,
-              value: settings.dropShadowY ?? "3",
-              onChange: (event) => onUpdateSetting("dropShadowY", event.target.value)
-            }
-          ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(BuilderSettingRow, { label: "Shadow Blur", children: /* @__PURE__ */ (0, import_jsx_runtime61.jsx)(
-            "input",
-            {
-              type: "number",
-              min: 0,
-              max: 30,
-              step: 1,
-              value: settings.dropShadowBlur ?? "2",
-              onChange: (event) => onUpdateSetting("dropShadowBlur", event.target.value)
+              className: "secondary-button",
+              onClick: () => onChange({
+                mode: "color",
+                color: "#214c71",
+                color2: "#eaf4ff",
+                imageUrl: "",
+                styleKey: ""
+              }),
+              type: "button",
+              children: "Default"
             }
           ) })
         ] })
@@ -67739,24 +68031,41 @@ ${prefix}
     ] });
   }
 
-  // components/builder/builder-button-text-color-picker.tsx
+  // components/builder/builder-button-border-picker.tsx
   var import_react34 = __toESM(require_react());
   var import_jsx_runtime62 = __toESM(require_jsx_runtime());
-  var textColorTabs = [
-    { value: "color", label: "Color" },
-    { value: "hover", label: "Hover" }
+  var borderStyleOptions = [
+    { value: "none", label: "None" },
+    { value: "solid", label: "Solid" },
+    { value: "dashed", label: "Dashed" },
+    { value: "dotted", label: "Dotted" }
   ];
-  function getButtonTextColorSettings(settings) {
+  function getButtonBorderSettings(settings) {
+    const style2 = settings.borderStyle;
     return {
-      color: settings.textColor || "#ffffff",
-      hoverColor: settings.textHoverColor || "#ffffff"
+      style: style2 === "none" || style2 === "dashed" || style2 === "dotted" ? style2 : "solid",
+      color: settings.borderColor || "#214c71"
     };
   }
-  function BuilderButtonTextColorPicker({ colors, onChange }) {
+  function BuilderButtonBorderColorPicker({
+    border,
+    borderWidth,
+    borderRadius,
+    disabled = false,
+    onChange
+  }) {
     const popupId = (0, import_react34.useId)();
     const rootRef = (0, import_react34.useRef)(null);
     const [isOpen, setIsOpen] = (0, import_react34.useState)(false);
-    const [activeTab, setActiveTab] = (0, import_react34.useState)("color");
+    const width = Math.max(Number.parseInt(borderWidth ?? "2", 10) || 0, 0);
+    const radius = Math.max(Number.parseInt(borderRadius ?? "0", 10) || 0, 0);
+    const swatchStyle = {
+      background: "#ffffff",
+      borderStyle: border.style === "none" ? "solid" : border.style,
+      borderColor: border.style === "none" ? "transparent" : border.color,
+      borderWidth: border.style === "none" ? 0 : `${Math.max(width, 2)}px`,
+      borderRadius: `${radius}px`
+    };
     (0, import_react34.useEffect)(() => {
       if (!isOpen) {
         return;
@@ -67785,6 +68094,150 @@ ${prefix}
           "aria-controls": popupId,
           "aria-expanded": isOpen,
           "aria-haspopup": "dialog",
+          className: "builder-button-background-swatch builder-button-border-swatch",
+          disabled,
+          onClick: () => setIsOpen((current) => !current),
+          style: swatchStyle,
+          title: "Edit border color",
+          type: "button"
+        }
+      ),
+      isOpen ? /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(
+        "div",
+        {
+          className: "builder-button-background-popup",
+          id: popupId,
+          role: "dialog",
+          "aria-label": "Button border color",
+          children: /* @__PURE__ */ (0, import_jsx_runtime62.jsx)("div", { className: "builder-button-background-popup-body", children: /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(
+            "input",
+            {
+              type: "color",
+              value: border.color,
+              onChange: (event) => onChange({ ...border, color: event.target.value })
+            }
+          ) }) })
+        }
+      ) : null
+    ] });
+  }
+
+  // components/builder/builder-button-drop-shadow-settings.tsx
+  var import_jsx_runtime63 = __toESM(require_jsx_runtime());
+  function BuilderButtonDropShadowSettings({
+    settings,
+    onUpdateSetting
+  }) {
+    const dropShadowEnabled = settings.dropShadow === "true" || settings.dropShadow === "on";
+    const shadowColor = settings.dropShadowColor?.startsWith("#") ? settings.dropShadowColor : "#000000";
+    return /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-drop-shadow-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Drop Shadow", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)(
+        "select",
+        {
+          value: settings.dropShadow ?? "false",
+          onChange: (event) => onUpdateSetting("dropShadow", event.target.value),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "false", children: "Off" }),
+            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "true", children: "On" })
+          ]
+        }
+      ) }),
+      dropShadowEnabled ? /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-columns", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-column", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Shadow Color", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            "input",
+            {
+              type: "color",
+              value: shadowColor,
+              onChange: (event) => onUpdateSetting("dropShadowColor", event.target.value)
+            }
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Shadow X", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            "input",
+            {
+              type: "number",
+              min: -20,
+              max: 20,
+              step: 1,
+              value: settings.dropShadowX ?? "3",
+              onChange: (event) => onUpdateSetting("dropShadowX", event.target.value)
+            }
+          ) })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-column", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Shadow Y", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            "input",
+            {
+              type: "number",
+              min: -20,
+              max: 20,
+              step: 1,
+              value: settings.dropShadowY ?? "3",
+              onChange: (event) => onUpdateSetting("dropShadowY", event.target.value)
+            }
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Shadow Blur", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            "input",
+            {
+              type: "number",
+              min: 0,
+              max: 30,
+              step: 1,
+              value: settings.dropShadowBlur ?? "2",
+              onChange: (event) => onUpdateSetting("dropShadowBlur", event.target.value)
+            }
+          ) })
+        ] })
+      ] }) : null
+    ] });
+  }
+
+  // components/builder/builder-button-text-color-picker.tsx
+  var import_react35 = __toESM(require_react());
+  var import_jsx_runtime64 = __toESM(require_jsx_runtime());
+  var textColorTabs = [
+    { value: "color", label: "Color" },
+    { value: "hover", label: "Hover" }
+  ];
+  function getButtonTextColorSettings(settings) {
+    return {
+      color: settings.textColor || "#ffffff",
+      hoverColor: settings.textHoverColor || "#ffffff"
+    };
+  }
+  function BuilderButtonTextColorPicker({ colors, onChange }) {
+    const popupId = (0, import_react35.useId)();
+    const rootRef = (0, import_react35.useRef)(null);
+    const [isOpen, setIsOpen] = (0, import_react35.useState)(false);
+    const [activeTab, setActiveTab] = (0, import_react35.useState)("color");
+    (0, import_react35.useEffect)(() => {
+      if (!isOpen) {
+        return;
+      }
+      function handlePointerDown(event) {
+        if (!rootRef.current?.contains(event.target)) {
+          setIsOpen(false);
+        }
+      }
+      function handleEscape(event) {
+        if (event.key === "Escape") {
+          setIsOpen(false);
+        }
+      }
+      document.addEventListener("mousedown", handlePointerDown);
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("mousedown", handlePointerDown);
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [isOpen]);
+    return /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)("div", { className: "builder-button-background-picker", ref: rootRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+        "button",
+        {
+          "aria-controls": popupId,
+          "aria-expanded": isOpen,
+          "aria-haspopup": "dialog",
           className: "builder-button-background-swatch",
           onClick: () => setIsOpen((current) => !current),
           style: { background: colors.color },
@@ -67792,7 +68245,7 @@ ${prefix}
           type: "button"
         }
       ),
-      isOpen ? /* @__PURE__ */ (0, import_jsx_runtime62.jsxs)(
+      isOpen ? /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
         "div",
         {
           className: "builder-button-background-popup",
@@ -67800,7 +68253,7 @@ ${prefix}
           role: "dialog",
           "aria-label": "Button text color",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime62.jsx)("div", { className: "builder-button-background-mode-tabs", role: "tablist", "aria-label": "Text color options", children: textColorTabs.map((tab) => /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("div", { className: "builder-button-background-mode-tabs", role: "tablist", "aria-label": "Text color options", children: textColorTabs.map((tab) => /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
               "button",
               {
                 "aria-selected": activeTab === tab.value,
@@ -67812,8 +68265,8 @@ ${prefix}
               },
               tab.value
             )) }),
-            /* @__PURE__ */ (0, import_jsx_runtime62.jsxs)("div", { className: "builder-button-background-popup-body", children: [
-              activeTab === "color" ? /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)("div", { className: "builder-button-background-popup-body", children: [
+              activeTab === "color" ? /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
                 "input",
                 {
                   type: "color",
@@ -67821,7 +68274,7 @@ ${prefix}
                   onChange: (event) => onChange({ ...colors, color: event.target.value })
                 }
               ) }) : null,
-              activeTab === "hover" ? /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(BuilderSettingRow, { label: "Hover", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime62.jsx)(
+              activeTab === "hover" ? /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Hover", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
                 "input",
                 {
                   type: "color",
@@ -67837,16 +68290,16 @@ ${prefix}
   }
 
   // components/builder/builder-button-design-settings.tsx
-  var import_jsx_runtime63 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime65 = __toESM(require_jsx_runtime());
   function ButtonDesignSection({
     title,
     isCollapsed,
     onToggle,
     children
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-design-panel builder-cell-panel", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderCellPanelHeader, { isCollapsed, onToggle, panelName: title, title }),
-      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("div", { className: "builder-button-design-fields", children }) : null
+    return /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-design-panel builder-cell-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderCellPanelHeader, { isCollapsed, onToggle, panelName: title, title }),
+      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("div", { className: "builder-button-design-fields", children }) : null
     ] });
   }
   function BuilderButtonDesignSettings({
@@ -67860,7 +68313,7 @@ ${prefix}
     const border = getButtonBorderSettings(settings);
     const borderDisabled = border.style === "none";
     const moduleAlignment = getModuleAlignment(settings);
-    const [collapsedPanels, setCollapsedPanels] = (0, import_react35.useState)({
+    const [collapsedPanels, setCollapsedPanels] = (0, import_react36.useState)({
       button: true,
       border: true,
       text: true
@@ -67900,15 +68353,15 @@ ${prefix}
         }
       }));
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-design-sections", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-design-sections", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
         ButtonDesignSection,
         {
           title: "Button",
           isCollapsed: collapsedPanels.button,
           onToggle: () => togglePanel("button"),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Button label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Button label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
               "input",
               {
                 type: "text",
@@ -67917,7 +68370,7 @@ ${prefix}
                 placeholder: "Button text"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Link", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Link", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
               "input",
               {
                 type: "text",
@@ -67926,10 +68379,10 @@ ${prefix}
                 placeholder: isEmailTemplate ? "{{ .ConfirmationURL }}" : "/path-or-url"
               }
             ) }),
-            isEmailTemplate ? /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-email-merge-token-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("p", { className: "builder-email-merge-token-copy", children: "Use Supabase merge tokens in the link \u2014 do not hand-build verify URLs or paste raw tokens." }),
-              /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-email-merge-token-actions", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            isEmailTemplate ? /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-email-merge-token-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("p", { className: "builder-email-merge-token-copy", children: "Use Supabase merge tokens in the link \u2014 do not hand-build verify URLs or paste raw tokens." }),
+              /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-email-merge-token-actions", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   "button",
                   {
                     className: "secondary-button",
@@ -67938,7 +68391,7 @@ ${prefix}
                     children: "Use Confirmation URL"
                   }
                 ),
-                BUILDER_EMAIL_MERGE_TOKENS.filter((entry) => entry.token !== BUILDER_EMAIL_CONFIRMATION_URL_TOKEN).map((entry) => /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+                BUILDER_EMAIL_MERGE_TOKENS.filter((entry) => entry.token !== BUILDER_EMAIL_CONFIRMATION_URL_TOKEN).map((entry) => /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   "button",
                   {
                     className: "secondary-button",
@@ -67950,9 +68403,9 @@ ${prefix}
                 ))
               ] })
             ] }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-columns", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-column", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Background", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-setting-columns", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-setting-column", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Background", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   BuilderButtonBackgroundPicker,
                   {
                     background: getButtonBackgroundSettings(settings),
@@ -67961,7 +68414,7 @@ ${prefix}
                     onUploadImage: onUploadButtonBackgroundMedia
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Hover", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Hover", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   "input",
                   {
                     type: "color",
@@ -67969,19 +68422,19 @@ ${prefix}
                     onChange: (event) => updateSetting("buttonHoverColor", event.target.value)
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Size", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Size", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
                   "select",
                   {
                     value: settings.buttonSize ?? "medium",
                     onChange: (event) => updateSetting("buttonSize", event.target.value),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "small", children: "Small" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "medium", children: "Medium" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "large", children: "Large" })
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "small", children: "Small" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "medium", children: "Medium" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "large", children: "Large" })
                     ]
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   BuilderAlignmentIconGroup,
                   {
                     value: moduleAlignment,
@@ -67989,8 +68442,8 @@ ${prefix}
                   }
                 ) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-column", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "V Padding", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-setting-column", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "V Padding", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   BuilderNumberSelectControl,
                   {
                     value: settings.paddingY ?? "12",
@@ -68000,7 +68453,7 @@ ${prefix}
                     onChange: (value) => updateSetting("paddingY", value)
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "H Padding", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "H Padding", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   BuilderNumberSelectControl,
                   {
                     value: settings.paddingX ?? "24",
@@ -68010,7 +68463,7 @@ ${prefix}
                     onChange: (value) => updateSetting("paddingX", value)
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "V Margin", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "V Margin", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   BuilderNumberSelectControl,
                   {
                     value: settings.verticalMargin ?? "0",
@@ -68020,7 +68473,7 @@ ${prefix}
                     onChange: (value) => updateSetting("verticalMargin", value)
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "H Margin", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "H Margin", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   BuilderNumberSelectControl,
                   {
                     value: settings.horizontalMargin ?? "0",
@@ -68035,14 +68488,14 @@ ${prefix}
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
         ButtonDesignSection,
         {
           title: "Border",
           isCollapsed: collapsedPanels.border,
           onToggle: () => togglePanel("border"),
-          children: /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-border-grid", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Width", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+          children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-border-grid", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Width", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
               BuilderNumberSelectControl,
               {
                 value: settings.borderWidth ?? "2",
@@ -68052,7 +68505,7 @@ ${prefix}
                 onChange: (value) => updateSetting("borderWidth", value)
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
               BuilderButtonBorderColorPicker,
               {
                 border,
@@ -68062,7 +68515,7 @@ ${prefix}
                 onChange: updateButtonBorder
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Style", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Style", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
               "select",
               {
                 value: border.style,
@@ -68070,10 +68523,10 @@ ${prefix}
                   ...border,
                   style: event.target.value
                 }),
-                children: borderStyleOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: option.value, children: option.label }, option.value))
+                children: borderStyleOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: option.value, children: option.label }, option.value))
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Radius", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Radius", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
               BuilderNumberSelectControl,
               {
                 value: settings.borderRadius ?? "0",
@@ -68086,16 +68539,16 @@ ${prefix}
           ] })
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
         ButtonDesignSection,
         {
           title: "Text",
           isCollapsed: collapsedPanels.text,
           onToggle: () => togglePanel("text"),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-columns", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-column", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Size", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-setting-columns", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-setting-column", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Size", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   "input",
                   {
                     type: "number",
@@ -68107,7 +68560,7 @@ ${prefix}
                     onChange: (event) => updateSetting("fontSize", event.target.value)
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
                   BuilderButtonTextColorPicker,
                   {
                     colors: getButtonTextColorSettings(settings),
@@ -68115,43 +68568,43 @@ ${prefix}
                   }
                 ) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)("div", { className: "builder-button-setting-column", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Bold", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-button-setting-column", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Bold", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
                   "select",
                   {
                     value: settings.bold ?? "true",
                     onChange: (event) => updateSetting("bold", event.target.value),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "true", children: "On" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "false", children: "Off" })
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "true", children: "On" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "false", children: "Off" })
                     ]
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Italic", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Italic", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
                   "select",
                   {
                     value: settings.italic ?? "false",
                     onChange: (event) => updateSetting("italic", event.target.value),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "false", children: "Off" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "true", children: "On" })
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "false", children: "Off" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "true", children: "On" })
                     ]
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderSettingRow, { label: "Underline", children: /* @__PURE__ */ (0, import_jsx_runtime63.jsxs)(
+                /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Underline", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
                   "select",
                   {
                     value: settings.underline ?? "false",
                     onChange: (event) => updateSetting("underline", event.target.value),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "false", children: "Off" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime63.jsx)("option", { value: "true", children: "On" })
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "false", children: "Off" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "true", children: "On" })
                     ]
                   }
                 ) })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime63.jsx)(BuilderButtonDropShadowSettings, { settings, onUpdateSetting: updateSetting })
+            /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderButtonDropShadowSettings, { settings, onUpdateSetting: updateSetting })
           ]
         }
       )
@@ -68159,7 +68612,7 @@ ${prefix}
   }
 
   // components/builder/builder-heading-module-settings.tsx
-  var import_jsx_runtime64 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime66 = __toESM(require_jsx_runtime());
   function BuilderHeadingModuleSettings({
     module: module2,
     onUpdateModule,
@@ -68174,8 +68627,8 @@ ${prefix}
     }
     const variantKey = settings.variant ?? "default";
     const stylePresetKey = variantKey in HEADING_VARIANT_PRESETS ? variantKey : "default";
-    return /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)("div", { className: "builder-heading-module-settings", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Style", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)("div", { className: "builder-heading-module-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Style", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
         "select",
         {
           value: stylePresetKey,
@@ -68193,14 +68646,14 @@ ${prefix}
             }));
           },
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "eyebrow", children: "Eyebrow" }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "section", children: "Section Heading" }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "hero", children: "Hero Title" }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "default", children: "Custom" })
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "eyebrow", children: "Eyebrow" }),
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "section", children: "Section Heading" }),
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "hero", children: "Hero Title" }),
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "default", children: "Custom" })
           ]
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Heading", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Heading", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
         "input",
         {
           type: "text",
@@ -68212,32 +68665,32 @@ ${prefix}
           placeholder: "Enter heading"
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Font", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Font", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
         "select",
         {
           value: settings.fontFamily ?? "",
           onChange: (event) => updateSetting("fontFamily", event.target.value),
-          children: BUILDER_HEADING_FONTS.map((font) => /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: font.key, children: font.label }, font.key || "default"))
+          children: BUILDER_HEADING_FONTS.map((font) => /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: font.key, children: font.label }, font.key || "default"))
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)("div", { className: "builder-button-setting-columns", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)("div", { className: "builder-button-setting-column", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Level", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)("div", { className: "builder-button-setting-columns", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)("div", { className: "builder-button-setting-column", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Level", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
             "select",
             {
               value: settings.level ?? "h2",
               onChange: (event) => updateSetting("level", event.target.value),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "h1", children: "H1" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "h2", children: "H2" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "h3", children: "H3" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "h4", children: "H4" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "h5", children: "H5" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "h6", children: "H6" })
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "h1", children: "H1" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "h2", children: "H2" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "h3", children: "H3" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "h4", children: "H4" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "h5", children: "H5" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "h6", children: "H6" })
               ]
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Size (px)", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Size (px)", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
             "input",
             {
               type: "number",
@@ -68248,7 +68701,7 @@ ${prefix}
               onChange: (event) => updateSetting("fontSize", event.target.value)
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
             "input",
             {
               type: "color",
@@ -68256,83 +68709,83 @@ ${prefix}
               onChange: (event) => updateSetting("color", event.target.value)
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Weight", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Weight", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
             "select",
             {
               value: settings.fontWeight ?? (settings.bold === "false" ? "500" : "800"),
               onChange: (event) => updateSetting("fontWeight", event.target.value),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "400", children: "Regular (400)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "500", children: "Medium (500)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "600", children: "Semibold (600)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "700", children: "Bold (700)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "800", children: "Extrabold (800)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "900", children: "Black (900)" })
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "400", children: "Regular (400)" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "500", children: "Medium (500)" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "600", children: "Semibold (600)" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "700", children: "Bold (700)" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "800", children: "Extrabold (800)" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "900", children: "Black (900)" })
               ]
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Align", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Align", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
             "select",
             {
               value: settings.textAlign ?? "left",
               onChange: (event) => updateSetting("textAlign", event.target.value),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "left", children: "Left" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "center", children: "Center" }),
-                /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "right", children: "Right" })
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "left", children: "Left" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "center", children: "Center" }),
+                /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "right", children: "Right" })
               ]
             }
           ) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)("div", { className: "builder-button-setting-column", children: [
-          !compact ? /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(import_jsx_runtime64.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Italic", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)("div", { className: "builder-button-setting-column", children: [
+          !compact ? /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(import_jsx_runtime66.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Italic", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
               "select",
               {
                 value: settings.italic ?? "false",
                 onChange: (event) => updateSetting("italic", event.target.value),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "false", children: "Off" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "true", children: "On" })
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "false", children: "Off" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "true", children: "On" })
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Underline", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Underline", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
               "select",
               {
                 value: settings.underline ?? "false",
                 onChange: (event) => updateSetting("underline", event.target.value),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "false", children: "Off" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "true", children: "On" })
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "false", children: "Off" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "true", children: "On" })
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Outline", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Outline", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
               "select",
               {
                 value: settings.outline ?? "false",
                 onChange: (event) => updateSetting("outline", event.target.value),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "false", children: "Off" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "true", children: "On" })
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "false", children: "Off" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "true", children: "On" })
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Transform", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Transform", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(
               "select",
               {
                 value: settings.textTransform ?? "none",
                 onChange: (event) => updateSetting("textTransform", event.target.value),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "none", children: "None" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "uppercase", children: "UPPERCASE" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "capitalize", children: "Capitalize" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime64.jsx)("option", { value: "lowercase", children: "lowercase" })
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "none", children: "None" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "uppercase", children: "UPPERCASE" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "capitalize", children: "Capitalize" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("option", { value: "lowercase", children: "lowercase" })
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Line Height", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Line Height", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
               "input",
               {
                 type: "number",
@@ -68343,7 +68796,7 @@ ${prefix}
                 onChange: (event) => updateSetting("lineHeight", event.target.value)
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Letter Spacing", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Letter Spacing", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
               "input",
               {
                 type: "number",
@@ -68355,7 +68808,7 @@ ${prefix}
               }
             ) })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Top Margin", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Top Margin", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
             BuilderNumberSelectControl,
             {
               value: settings.marginTop ?? settings.verticalMargin ?? "0",
@@ -68365,7 +68818,7 @@ ${prefix}
               onChange: (marginTop) => updateSetting("marginTop", marginTop)
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderSettingRow, { label: "Bottom Margin", children: /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderSettingRow, { label: "Bottom Margin", children: /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
             BuilderNumberSelectControl,
             {
               value: settings.marginBottom ?? settings.verticalMargin ?? "0",
@@ -68377,9 +68830,9 @@ ${prefix}
           ) })
         ] })
       ] }),
-      !compact ? /* @__PURE__ */ (0, import_jsx_runtime64.jsxs)(import_jsx_runtime64.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(BuilderButtonDropShadowSettings, { settings, onUpdateSetting: updateSetting }),
-        /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+      !compact ? /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)(import_jsx_runtime66.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(BuilderButtonDropShadowSettings, { settings, onUpdateSetting: updateSetting }),
+        /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
           BuilderModuleOffsetFields,
           {
             horizontalOffset: settings.horizontalOffset ?? "0",
@@ -68388,7 +68841,7 @@ ${prefix}
             onVerticalOffsetChange: (verticalOffset) => updateSetting("verticalOffset", verticalOffset)
           }
         )
-      ] }) : /* @__PURE__ */ (0, import_jsx_runtime64.jsx)(
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime66.jsx)(
         BuilderModuleOffsetFields,
         {
           horizontalOffset: settings.horizontalOffset ?? "0",
@@ -68401,7 +68854,7 @@ ${prefix}
   }
 
   // components/builder/builder-player-portal-settings.tsx
-  var import_jsx_runtime65 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime67 = __toESM(require_jsx_runtime());
   function BuilderPlayerPortalSettings({ module: module2, onUpdateModule }) {
     const settings = module2.settings;
     function updateSetting(key, value) {
@@ -68410,9 +68863,9 @@ ${prefix}
         settings: { ...current.settings, [key]: value }
       }));
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-player-portal-settings", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-player-portal-settings-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Intro heading", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime67.jsxs)("div", { className: "builder-player-portal-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime67.jsxs)("div", { className: "builder-player-portal-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime67.jsx)(BuilderSettingRow, { label: "Intro heading", children: /* @__PURE__ */ (0, import_jsx_runtime67.jsx)(
           "input",
           {
             type: "text",
@@ -68424,29 +68877,29 @@ ${prefix}
             placeholder: "Sign in"
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Default mode", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime67.jsx)(BuilderSettingRow, { label: "Default mode", children: /* @__PURE__ */ (0, import_jsx_runtime67.jsxs)(
           "select",
           {
             value: settings.defaultMode === "register" ? "register" : "login",
             onChange: (event) => updateSetting("defaultMode", event.target.value),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "login", children: "Login" }),
-              /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "register", children: "Register" })
+              /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("option", { value: "login", children: "Login" }),
+              /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("option", { value: "register", children: "Register" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Show register", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime67.jsx)(BuilderSettingRow, { label: "Show register", children: /* @__PURE__ */ (0, import_jsx_runtime67.jsxs)(
           "select",
           {
             value: settings.showRegister === "false" ? "false" : "true",
             onChange: (event) => updateSetting("showRegister", event.target.value),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "true", children: "Yes" }),
-              /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "false", children: "No" })
+              /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("option", { value: "true", children: "Yes" }),
+              /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("option", { value: "false", children: "No" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Redirect path", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime67.jsx)(BuilderSettingRow, { label: "Redirect path", children: /* @__PURE__ */ (0, import_jsx_runtime67.jsx)(
           "input",
           {
             type: "text",
@@ -68455,23 +68908,23 @@ ${prefix}
             placeholder: "/portal/dashboard"
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime65.jsx)(BuilderSettingRow, { label: "Forgot password", children: /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime67.jsx)(BuilderSettingRow, { label: "Forgot password", children: /* @__PURE__ */ (0, import_jsx_runtime67.jsxs)(
           "select",
           {
             value: settings.showForgotPassword === "false" ? "false" : "true",
             onChange: (event) => updateSetting("showForgotPassword", event.target.value),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "true", children: "Yes" }),
-              /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("option", { value: "false", children: "No" })
+              /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("option", { value: "true", children: "Yes" }),
+              /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("option", { value: "false", children: "No" })
             ]
           }
         ) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("div", { className: "builder-module-runtime-note", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("strong", { children: "Page copy" }),
-        /* @__PURE__ */ (0, import_jsx_runtime65.jsxs)("p", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime67.jsxs)("div", { className: "builder-module-runtime-note", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("strong", { children: "Page copy" }),
+        /* @__PURE__ */ (0, import_jsx_runtime67.jsxs)("p", { children: [
           "Add instructions and intro copy with a Text module in the column beside this form. Password reset completion still happens at ",
-          /* @__PURE__ */ (0, import_jsx_runtime65.jsx)("code", { children: "/portal/reset" }),
+          /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("code", { children: "/portal/reset" }),
           "."
         ] })
       ] })
@@ -68479,7 +68932,7 @@ ${prefix}
   }
 
   // components/builder/stubs/player-portal-auth-form.tsx
-  var import_jsx_runtime66 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime68 = __toESM(require_jsx_runtime());
   var defaultPlayerPortalAuthSettings = {
     redirectPath: "/portal/dashboard",
     defaultMode: "login",
@@ -68503,21 +68956,21 @@ ${prefix}
     };
   }
   function PlayerPortalAuthForm({ heading = "" }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime66.jsxs)("div", { className: "builder-capability-placeholder", children: [
-      heading ? /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("h3", { children: heading }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime66.jsx)("p", { children: "Player Portal modules are not available in StarCaster." })
+    return /* @__PURE__ */ (0, import_jsx_runtime68.jsxs)("div", { className: "builder-capability-placeholder", children: [
+      heading ? /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("h3", { children: heading }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("p", { children: "Player Portal modules are not available in StarCaster." })
     ] });
   }
 
   // components/builder/compat/next-link.tsx
-  var import_jsx_runtime67 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime69 = __toESM(require_jsx_runtime());
   function Link2({ href, prefetch: _prefetch, children, ...rest }) {
     const resolved = typeof href === "string" ? href : href?.pathname ?? "#";
-    return /* @__PURE__ */ (0, import_jsx_runtime67.jsx)("a", { href: resolved, ...rest, children });
+    return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("a", { href: resolved, ...rest, children });
   }
 
   // components/builder/poll-category-list-preview.tsx
-  var import_react37 = __toESM(require_react());
+  var import_react38 = __toESM(require_react());
 
   // lib/builder-client/adapters/load-poll-category-catalog.ts
   function sortPollCategoryNames(names) {
@@ -68568,7 +69021,7 @@ ${prefix}
   }
 
   // lib/builder-client/use-poll-category-catalog.ts
-  var import_react36 = __toESM(require_react());
+  var import_react37 = __toESM(require_react());
 
   // lib/builder-client/poll-category-catalog-client.ts
   function parsePollCategoriesApiResponse(json) {
@@ -68616,10 +69069,10 @@ ${prefix}
 
   // lib/builder-client/use-poll-category-catalog.ts
   function usePollCategoryCatalog() {
-    const [catalog, setCatalog] = (0, import_react36.useState)(() => getCachedPollCategoryCatalog() ?? []);
-    const [isLoading, setIsLoading] = (0, import_react36.useState)(() => getCachedPollCategoryCatalog() === null);
-    const [error, setError] = (0, import_react36.useState)(null);
-    (0, import_react36.useEffect)(() => {
+    const [catalog, setCatalog] = (0, import_react37.useState)(() => getCachedPollCategoryCatalog() ?? []);
+    const [isLoading, setIsLoading] = (0, import_react37.useState)(() => getCachedPollCategoryCatalog() === null);
+    const [error, setError] = (0, import_react37.useState)(null);
+    (0, import_react37.useEffect)(() => {
       const cached = getCachedPollCategoryCatalog();
       if (cached) {
         setCatalog(cached);
@@ -68651,10 +69104,10 @@ ${prefix}
   }
 
   // components/builder/poll-category-list-preview.tsx
-  var import_jsx_runtime68 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime70 = __toESM(require_jsx_runtime());
   function usePollCategoryListColumnCount() {
-    const [columnCount, setColumnCount] = (0, import_react37.useState)(POLL_CATEGORY_LIST_COLUMN_COUNT);
-    (0, import_react37.useEffect)(() => {
+    const [columnCount, setColumnCount] = (0, import_react38.useState)(POLL_CATEGORY_LIST_COLUMN_COUNT);
+    (0, import_react38.useEffect)(() => {
       const media = window.matchMedia("(max-width: 640px)");
       function syncColumnCount() {
         setColumnCount(media.matches ? 2 : POLL_CATEGORY_LIST_COLUMN_COUNT);
@@ -68669,30 +69122,30 @@ ${prefix}
     module: module2,
     className = "builder-preview-poll-category-list"
   }) {
-    const categoryPickerListId = (0, import_react37.useId)();
+    const categoryPickerListId = (0, import_react38.useId)();
     const { catalog, isLoading, error } = usePollCategoryCatalog();
     const columnCount = usePollCategoryListColumnCount();
     const sort = normalizePollCategoryListSort(module2.settings.categorySort);
     const defaultFlow = normalizePollCategoryListFlow(module2.settings.categoryListFlow);
-    const [flow, setFlow] = (0, import_react37.useState)(defaultFlow);
-    const [categoryFilter, setCategoryFilter] = (0, import_react37.useState)("");
+    const [flow, setFlow] = (0, import_react38.useState)(defaultFlow);
+    const [categoryFilter, setCategoryFilter] = (0, import_react38.useState)("");
     const isTransparentPanel = isPollCategoryListPanelTransparent(module2.settings);
-    (0, import_react37.useEffect)(() => {
+    (0, import_react38.useEffect)(() => {
       setFlow(defaultFlow);
     }, [defaultFlow]);
-    const categoryNames = (0, import_react37.useMemo)(
+    const categoryNames = (0, import_react38.useMemo)(
       () => sortPollCategoryNames(catalog.map((category) => category.name)),
       [catalog]
     );
-    const sortedEntries = (0, import_react37.useMemo)(
+    const sortedEntries = (0, import_react38.useMemo)(
       () => catalog.length > 0 ? buildPollCategoryListEntries(catalog, sort) : [],
       [catalog, sort]
     );
-    const gridEntries = (0, import_react37.useMemo)(
+    const gridEntries = (0, import_react38.useMemo)(
       () => orderPollCategoryListForGrid(sortedEntries, flow, columnCount),
       [sortedEntries, flow, columnCount]
     );
-    const visibleEntries = (0, import_react37.useMemo)(() => {
+    const visibleEntries = (0, import_react38.useMemo)(() => {
       const needle = categoryFilter.trim();
       if (!needle) {
         return gridEntries;
@@ -68714,18 +69167,18 @@ ${prefix}
       gap: `${Math.max(itemGap, 0)}px`
     };
     const panelStyle = getPollCategoryListPanelStyle(module2.settings);
-    return /* @__PURE__ */ (0, import_jsx_runtime68.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)(
       "nav",
       {
         className: `${className}${isTransparentPanel ? ` ${className}--transparent` : ""}`,
         "aria-label": "Poll categories",
         style: panelStyle,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime68.jsxs)("header", { className: `${className}-header`, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("h2", { className: `${className}-title`, children: panelTitle }),
-            /* @__PURE__ */ (0, import_jsx_runtime68.jsxs)("div", { className: `${className}-toolbar`, children: [
-              /* @__PURE__ */ (0, import_jsx_runtime68.jsxs)("div", { className: `${className}-flow-toggle`, role: "group", "aria-label": "Category sort direction", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime68.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("header", { className: `${className}-header`, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("h2", { className: `${className}-title`, children: panelTitle }),
+            /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("div", { className: `${className}-toolbar`, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("div", { className: `${className}-flow-toggle`, role: "group", "aria-label": "Category sort direction", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(
                   "button",
                   {
                     type: "button",
@@ -68735,7 +69188,7 @@ ${prefix}
                     children: "By Row"
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime68.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(
                   "button",
                   {
                     type: "button",
@@ -68746,9 +69199,9 @@ ${prefix}
                   }
                 )
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime68.jsxs)("label", { className: `${className}-picker`, children: [
-                /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("span", { className: "sr-only", children: "Jump to category" }),
-                /* @__PURE__ */ (0, import_jsx_runtime68.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("label", { className: `${className}-picker`, children: [
+                /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("span", { className: "sr-only", children: "Jump to category" }),
+                /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(
                   "input",
                   {
                     "aria-label": "Jump to category",
@@ -68760,21 +69213,21 @@ ${prefix}
                     value: categoryFilter
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("datalist", { id: categoryPickerListId, children: categoryNames.map((name) => /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("option", { value: name }, name)) })
+                /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("datalist", { id: categoryPickerListId, children: categoryNames.map((name) => /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("option", { value: name }, name)) })
               ] })
             ] })
           ] }),
-          isLoading ? /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("p", { className: `${className}-status`, children: "Loading categories\u2026" }) : null,
-          error ? /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("p", { className: `${className}-status ${className}-error`, role: "alert", children: error }) : null,
-          !isLoading && !error && visibleEntries.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("ul", { className: `${className}-items`, style: listStyle, children: visibleEntries.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime68.jsx)(Link2, { href: entry.href, children: entry.name }) }, entry.slug)) }) : null,
-          !isLoading && !error && categoryFilter.trim() && visibleEntries.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime68.jsx)("p", { className: `${className}-status`, children: "No category matches that filter." }) : null
+          isLoading ? /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("p", { className: `${className}-status`, children: "Loading categories\u2026" }) : null,
+          error ? /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("p", { className: `${className}-status ${className}-error`, role: "alert", children: error }) : null,
+          !isLoading && !error && visibleEntries.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("ul", { className: `${className}-items`, style: listStyle, children: visibleEntries.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(Link2, { href: entry.href, children: entry.name }) }, entry.slug)) }) : null,
+          !isLoading && !error && categoryFilter.trim() && visibleEntries.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("p", { className: `${className}-status`, children: "No category matches that filter." }) : null
         ]
       }
     );
   }
 
   // components/builder/builder-module-card.tsx
-  var import_jsx_runtime69 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime71 = __toESM(require_jsx_runtime());
   function getContactFormMode(settings) {
     return settings.formMode === "standard" || settings.formMode === "custom" ? settings.formMode : "squeeze";
   }
@@ -68794,23 +69247,23 @@ ${prefix}
     const mode = getContactFormMode(settings);
     const fields = getContactFormFields(mode);
     const Tag = interactive ? "form" : "div";
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(Tag, { className: "builder-contact-form", onSubmit: interactive ? (event) => event.preventDefault() : void 0, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-contact-form-fields", children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "builder-contact-form-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: field.label }),
-        interactive ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: field.type, placeholder: field.label }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-contact-form-input-preview", children: field.label })
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(Tag, { className: "builder-contact-form", onSubmit: interactive ? (event) => event.preventDefault() : void 0, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-contact-form-fields", children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "builder-contact-form-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: field.label }),
+        interactive ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: field.type, placeholder: field.label }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-contact-form-input-preview", children: field.label })
       ] }, field.id)) }),
-      mode === "custom" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-contact-form-stub", children: "Custom form builder coming soon. Standard fields are shown for now." }) : null,
-      interactive ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { className: "builder-contact-form-submit", type: "submit", children: "Submit" }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-contact-form-submit builder-contact-form-submit-preview", children: "Submit" })
+      mode === "custom" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-contact-form-stub", children: "Custom form builder coming soon. Standard fields are shown for now." }) : null,
+      interactive ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { className: "builder-contact-form-submit", type: "submit", children: "Submit" }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-contact-form-submit builder-contact-form-submit-preview", children: "Submit" })
     ] });
   }
   function renderCrmFormPreview(settings) {
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-contact-form", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-contact-form-fields", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("label", { className: "builder-contact-form-field", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-contact-form-input-preview", children: "Email" }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("label", { className: "builder-contact-form-field", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-contact-form-input-preview", children: "Name" }) })
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-contact-form", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-contact-form-fields", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("label", { className: "builder-contact-form-field", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-contact-form-input-preview", children: "Email" }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("label", { className: "builder-contact-form-field", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-contact-form-input-preview", children: "Name" }) })
       ] }),
-      settings.crmFormId ? null : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-contact-form-stub", children: "Select a CRM form in module settings." }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-contact-form-submit builder-contact-form-submit-preview", children: "Submit" })
+      settings.crmFormId ? null : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-contact-form-stub", children: "Select a CRM form in module settings." }),
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-contact-form-submit builder-contact-form-submit-preview", children: "Submit" })
     ] });
   }
   function renderMerchProductCard(settings) {
@@ -68818,17 +69271,17 @@ ${prefix}
     const imageUrl = normalizeBuilderAssetUrl(settings.imageUrl);
     const productUrl = normalizeBuilderAssetUrl(settings.productUrl);
     const buttonLabel = settings.buttonLabel || "Buy on Redbubble";
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "product-card", children: [
-      imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("img", { src: imageUrl, alt: productName, suppressHydrationWarning: true }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-placeholder", children: "Fetch a product URL" }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("h3", { children: productName }),
-      productUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("a", { href: productUrl, target: "_blank", rel: "noopener noreferrer", children: buttonLabel }) : null
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "product-card", children: [
+      imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("img", { src: imageUrl, alt: productName, suppressHydrationWarning: true }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-placeholder", children: "Fetch a product URL" }),
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("h3", { children: productName }),
+      productUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("a", { href: productUrl, target: "_blank", rel: "noopener noreferrer", children: buttonLabel }) : null
     ] });
   }
   function renderModulePreview(module2) {
     const variant = module2.settings.variant ?? "";
     if (module2.type === "heading") {
       const Tag = module2.settings.level || "h2";
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         Tag,
         {
           className: `builder-module-preview-heading builder-module-preview-heading-${variant || "default"}`,
@@ -68838,22 +69291,22 @@ ${prefix}
       ) });
     }
     if (module2.type === "quote") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("blockquote", { className: `builder-module-preview-quote builder-module-preview-quote-${variant || "default"}`, children: module2.text || "Quote" });
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("blockquote", { className: `builder-module-preview-quote builder-module-preview-quote-${variant || "default"}`, children: module2.text || "Quote" });
     }
     if (module2.type === "speech-bubble") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(SpeechBubblePreview, { classNamePrefix: "builder-module-preview", module: module2 });
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(SpeechBubblePreview, { classNamePrefix: "builder-module-preview", module: module2 });
     }
     if (module2.type === "reminder") {
       const recordCount = parseReminderRecordsFromModule(module2).length;
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-reminder", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("p", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Reminders" }),
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-reminder", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("p", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Reminders" }),
         " \u2014 ",
         recordCount,
         " configured; live overlays when visitor criteria match (not in the column layout)."
       ] }) });
     }
     if (module2.type === "poll-category-list") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(PollCategoryListPreview, { className: "builder-module-preview-poll-category-list", module: module2 }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(PollCategoryListPreview, { className: "builder-module-preview-poll-category-list", module: module2 }) });
     }
     if (module2.type === "headline-rotator") {
       const items = parseHeadlineItems(module2.settings);
@@ -68865,8 +69318,8 @@ ${prefix}
       const minHeight = Math.max(Number.parseInt(module2.settings.minHeight ?? "0", 10) || 0, 0);
       const justify = verticalAlignment === "top" ? "flex-start" : verticalAlignment === "bottom" ? "flex-end" : "center";
       const first2 = items[0]?.label || "Headline Rotator";
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-preview-copy", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-preview-copy", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           "div",
           {
             style: {
@@ -68883,14 +69336,14 @@ ${prefix}
             children: first2
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-editor-copy", children: items.length > 0 ? `${items.length} headline${items.length === 1 ? "" : "s"}` : "No headlines yet" })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-editor-copy", children: items.length > 0 ? `${items.length} headline${items.length === 1 ? "" : "s"}` : "No headlines yet" })
       ] });
     }
     if (module2.type === "button") {
       const s = module2.settings;
       const sizeClass = `builder-preview-button-${s.buttonSize ?? "medium"}`;
       const btnStyle = getButtonModuleStyle(s);
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "span",
         {
           className: `builder-preview-button builder-preview-button-styled builder-preview-button-${variant || "default"} ${sizeClass}`,
@@ -68900,16 +69353,16 @@ ${prefix}
       ) });
     }
     if (module2.type === "code") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-code-module-preview", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-code-module-preview-label", children: module2.settings.label || module2.name || "Code snippet" }),
-        module2.text ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-code-module-preview", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-code-module-preview-label", children: module2.settings.label || module2.name || "Code snippet" }),
+        module2.text ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           BuilderCodeEmbed,
           {
             html: sanitizeEmbedHtml(module2.text),
             className: "builder-code-module-render",
             requireActivation: false
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add embed code or HTML" })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add embed code or HTML" })
       ] });
     }
     if (module2.type === "merch") {
@@ -68922,7 +69375,7 @@ ${prefix}
       return renderCrmFormPreview(module2.settings);
     }
     if (module2.type === "player-portal") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         PlayerPortalAuthForm,
         {
           settings: getPlayerPortalAuthSettings(module2.settings),
@@ -68935,9 +69388,9 @@ ${prefix}
       const embed = getVideoEmbedSource(module2.settings.url);
       const title = module2.settings.videoName || module2.name || module2.text || "Video";
       const opensInNewTab = module2.settings.newTab !== "false";
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("figure", { className: "builder-preview-video-card builder-module-preview-video-card", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-preview-video-frame", children: [
-          embed?.kind === "iframe" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("figure", { className: "builder-preview-video-card builder-module-preview-video-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-preview-video-frame", children: [
+          embed?.kind === "iframe" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "iframe",
             {
               allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
@@ -68945,8 +69398,8 @@ ${prefix}
               src: embed.src,
               title
             }
-          ) : embed?.kind === "video" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("video", { className: "builder-preview-video", controls: true, preload: "metadata", src: embed.src }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add a video embed URL" }),
-          embed ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          ) : embed?.kind === "video" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("video", { className: "builder-preview-video", controls: true, preload: "metadata", src: embed.src }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add a video embed URL" }),
+          embed ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "a",
             {
               "aria-label": `Open ${title} in a new tab`,
@@ -68957,11 +69410,11 @@ ${prefix}
             }
           ) : null
         ] }),
-        title ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("figcaption", { className: "builder-preview-video-caption", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: title }) }) : null
+        title ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("figcaption", { className: "builder-preview-video-caption", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: title }) }) : null
       ] });
     }
     if (module2.type === "image" || module2.type === "floating-image") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         BuilderImagePreview,
         {
           module: module2,
@@ -68978,7 +69431,7 @@ ${prefix}
       const cellPad = Number.parseInt(module2.settings.cellPadding || "8", 10);
       const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module2.settings)) ?? { background: "transparent" };
       const tableMaxWidth = module2.settings.tableMaxWidth ? Math.min(2e3, Math.max(0, Number.parseInt(module2.settings.tableMaxWidth, 10) || 0)) : void 0;
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-table-wrap", style: tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-table-wrap", style: tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
         "table",
         {
           className: "builder-module-preview-table",
@@ -68989,7 +69442,7 @@ ${prefix}
             ...tableBgStyle
           },
           children: [
-            td.headers.length > 0 && module2.settings.showColumnHeads !== "false" && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("tr", { children: td.headers.map((h2, i) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            td.headers.length > 0 && module2.settings.showColumnHeads !== "false" && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("tr", { children: td.headers.map((h2, i) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "th",
               {
                 style: {
@@ -69002,9 +69455,9 @@ ${prefix}
               },
               i
             )) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("tbody", { children: Array.from({ length: td.rowCount }, (_, ri) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("tr", { children: td.headers.map((_2, ci) => {
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("tbody", { children: Array.from({ length: td.rowCount }, (_, ri) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("tr", { children: td.headers.map((_2, ci) => {
               const cellMods = td.cells[`${ri}-${ci}`] || [];
-              return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 "td",
                 {
                   style: {
@@ -69012,7 +69465,7 @@ ${prefix}
                     padding: `${cellPad}px`,
                     verticalAlign: "top"
                   },
-                  children: cellMods.length > 0 ? cellMods.map((m) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-table-cell-module-label", children: m.name || m.type }, m.id)) : "\xA0"
+                  children: cellMods.length > 0 ? cellMods.map((m) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-table-cell-module-label", children: m.name || m.type }, m.id)) : "\xA0"
                 },
                 ci
               );
@@ -69025,13 +69478,13 @@ ${prefix}
       const items = parseSliderItems(module2.settings);
       const gap = Number.parseInt(module2.settings.sliderGap || "16", 10);
       const cardWidth = Number.parseInt(module2.settings.sliderCardWidth || "280", 10);
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-slider", style: { gap: `${gap}px` }, children: items.length > 0 ? items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-slider", style: { gap: `${gap}px` }, children: items.length > 0 ? items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
         "article",
         {
           className: "builder-module-preview-slider-card",
           style: { minWidth: `${cardWidth}px` },
           children: [
-            item.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-slider-image", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            item.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-slider-image", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               Image,
               {
                 alt: item.title || "Slider item",
@@ -69041,14 +69494,14 @@ ${prefix}
                 unoptimized: true
               }
             ) }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-preview-slider-copy", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: item.title || "Slide title" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { children: item.body || "Slide body" })
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-preview-slider-copy", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: item.title || "Slide title" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { children: item.body || "Slide body" })
             ] })
           ]
         },
         item.id
-      )) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add slider items" }) });
+      )) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add slider items" }) });
     }
     if (module2.type === "social") {
       const items = parseSocialItems2(module2.settings);
@@ -69071,13 +69524,13 @@ ${prefix}
         ...borderWidth > 0 ? { border: `${borderWidth}px solid ${borderColor}` } : {},
         ...hasShadow ? { boxShadow: `${shadowX}px ${shadowY}px ${shadowBlur}px ${shadowSpread}px ${shadowColor}` } : {}
       };
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "div",
         {
           className: "builder-module-preview-social",
           style: { gap: `${gap}px`, ...padding > 0 ? { padding: `${padding}px` } : {} },
-          children: items.length > 0 ? items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-preview-social-entry", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          children: items.length > 0 ? items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-preview-social-entry", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "a",
               {
                 className: "builder-module-preview-social-item",
@@ -69091,49 +69544,49 @@ ${prefix}
                   background: globalBg || item.backgroundColor,
                   ...iconStyle
                 },
-                children: item.iconUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(Image, { alt: item.label || "Social icon", fill: true, sizes: `${iconSize}px`, src: item.iconUrl, unoptimized: true }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-module-preview-social-fallback", children: item.label.slice(0, 1) || "@" })
+                children: item.iconUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(Image, { alt: item.label || "Social icon", fill: true, sizes: `${iconSize}px`, src: item.iconUrl, unoptimized: true }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-module-preview-social-fallback", children: item.label.slice(0, 1) || "@" })
               }
             ),
-            showLabels ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-module-preview-social-label", children: item.label || "Social" }) : null
-          ] }, item.id)) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add social icons" })
+            showLabels ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-module-preview-social-label", children: item.label || "Social" }) : null
+          ] }, item.id)) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-placeholder", children: "Add social icons" })
         }
       );
     }
     if (module2.type === "previous-results") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("article", { className: "panel result-panel builder-module-preview-poll", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "panel-label", children: "Previous Results" }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("h2", { children: "Live result bars from the previous community poll." }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "result-list", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "result-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "result-meta", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Option A" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "124 \xB7 62%" })
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("article", { className: "panel result-panel builder-module-preview-poll", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "panel-label", children: "Previous Results" }),
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("h2", { children: "Live result bars from the previous community poll." }),
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "result-list", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "result-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "result-meta", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Option A" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "124 \xB7 62%" })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "result-bar", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "result-bar-fill", style: { width: "62%" } }) })
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "result-bar", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "result-bar-fill", style: { width: "62%" } }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "result-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "result-meta", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Option B" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "76 \xB7 38%" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "result-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "result-meta", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Option B" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "76 \xB7 38%" })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "result-bar", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "result-bar-fill", style: { width: "38%" } }) })
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "result-bar", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "result-bar-fill", style: { width: "38%" } }) })
           ] })
         ] })
       ] });
     }
     if (module2.type === "current-poll") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("article", { className: "panel action-panel builder-module-preview-poll", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "panel-label", children: "Current Question" }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("h2", { children: "Live current poll prompt with answer choices." }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "option-list", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "option-button", children: "Option One" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "option-button", children: "Option Two" })
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("article", { className: "panel action-panel builder-module-preview-poll", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "panel-label", children: "Current Question" }),
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("h2", { children: "Live current poll prompt with answer choices." }),
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "option-list", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "option-button", children: "Option One" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "option-button", children: "Option Two" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { className: "panel-copy", children: "This module uses the real live poll and vote flow in page preview and on the live site." })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { className: "panel-copy", children: "This module uses the real live poll and vote flow in page preview and on the live site." })
       ] });
     }
     if (module2.type === "social-share") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         SocialShareBar,
         {
           preview: true,
@@ -69147,10 +69600,10 @@ ${prefix}
       );
     }
     if (module2.type === "confetti") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderConfettiRuntime, { preview: true, settings: module2.settings });
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderConfettiRuntime, { preview: true, settings: module2.settings });
     }
     if (module2.type === "tractor-nav") {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(TractorNavCardPreview, { settings: module2.settings });
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(TractorNavCardPreview, { settings: module2.settings });
     }
     if (module2.type === "breadcrumb") {
       const items = parseBreadcrumbItems(module2.settings);
@@ -69160,11 +69613,11 @@ ${prefix}
       const activeColor = module2.settings.activeColor || "#18324a";
       const isBold = module2.settings.bold === "true";
       const alignment = module2.settings.alignment ?? "left";
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-copy", style: { textAlign: alignment }, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize, fontWeight: isBold ? 700 : 400 }, children: items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { color: "#aaa", fontStyle: "italic" }, children: "No items yet" }) : items.map((item, i) => {
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", style: { textAlign: alignment }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize, fontWeight: isBold ? 700 : 400 }, children: items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { color: "#aaa", fontStyle: "italic" }, children: "No items yet" }) : items.map((item, i) => {
         const isLast = i === items.length - 1;
-        return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { color: isLast ? activeColor : color, fontWeight: isLast ? 600 : void 0 }, children: item.label || `Item ${i + 1}` }),
-          !isLast && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { color, opacity: 0.5 }, children: sep })
+        return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { color: isLast ? activeColor : color, fontWeight: isLast ? 600 : void 0 }, children: item.label || `Item ${i + 1}` }),
+          !isLast && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { color, opacity: 0.5 }, children: sep })
         ] }, item.id);
       }) }) });
     }
@@ -69187,8 +69640,8 @@ ${prefix}
       const cardShadow = cardStyle === "shadow" ? "0 2px 12px rgba(9,16,24,0.10)" : "none";
       const ratioMap = { "16:9": 56.25, "4:3": 75, "3:2": 66.67, "1:1": 100 };
       const paddingTop = `${ratioMap[s.imageAspectRatio ?? "16:9"] ?? 56.25}%`;
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-preview-copy", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-preview-copy", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           "div",
           {
             style: {
@@ -69197,7 +69650,7 @@ ${prefix}
               flexDirection: isGrid ? void 0 : "column",
               gap
             },
-            children: Array.from({ length: previewCount }).map((_, i) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+            children: Array.from({ length: previewCount }).map((_, i) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
               "div",
               {
                 style: {
@@ -69211,7 +69664,7 @@ ${prefix}
                   gap: isGrid ? 0 : 12
                 },
                 children: [
-                  showImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                  showImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "div",
                     {
                       style: {
@@ -69223,7 +69676,7 @@ ${prefix}
                         background: "#d4e3ef",
                         borderRadius: isGrid ? 0 : radius
                       },
-                      children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: {
+                      children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: {
                         position: "absolute",
                         inset: 0,
                         display: "flex",
@@ -69234,19 +69687,19 @@ ${prefix}
                       }, children: "Image" })
                     }
                   ) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { padding: isGrid ? "12px 14px 14px" : "4px 0", flex: 1 }, children: [
-                    showCategories ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { display: "flex", gap: 4, marginBottom: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "2px 6px" }, children: "Category" }) }) : null,
-                    /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 4, lineHeight: 1.3 }, children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { padding: isGrid ? "12px 14px 14px" : "4px 0", flex: 1 }, children: [
+                    showCategories ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "flex", gap: 4, marginBottom: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "2px 6px" }, children: "Category" }) }) : null,
+                    /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 4, lineHeight: 1.3 }, children: [
                       "Post title ",
                       i + 1
                     ] }),
-                    showDate || showAuthor ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { color: "#8ba9be", fontSize: 11, marginBottom: showExcerpt ? 6 : 8 }, children: [
+                    showDate || showAuthor ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { color: "#8ba9be", fontSize: 11, marginBottom: showExcerpt ? 6 : 8 }, children: [
                       showDate ? "Jun 20, 2026" : "",
                       showDate && showAuthor ? " \xB7 " : "",
                       showAuthor ? "Author Name" : ""
                     ] }) : null,
-                    showExcerpt ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { color: "#587592", fontSize: 12, lineHeight: 1.5, marginBottom: showReadMore ? 8 : 0 }, children: "A short excerpt from this post appears here to give readers a preview." }) : null,
-                    showReadMore ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { fontSize: 12, color: "#0f4f8f", fontWeight: 600 }, children: [
+                    showExcerpt ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { color: "#587592", fontSize: 12, lineHeight: 1.5, marginBottom: showReadMore ? 8 : 0 }, children: "A short excerpt from this post appears here to give readers a preview." }) : null,
+                    showReadMore ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { fontSize: 12, color: "#0f4f8f", fontWeight: 600 }, children: [
                       readMoreLabel,
                       " \u2192"
                     ] }) : null
@@ -69257,7 +69710,7 @@ ${prefix}
             ))
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-editor-copy", style: { marginTop: 8 }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-editor-copy", style: { marginTop: 8 }, children: [
           isGrid ? `${cols}-column grid` : "List layout",
           " \xB7 ",
           s.postsPerPage ?? "9",
@@ -69287,7 +69740,7 @@ ${prefix}
       const author = s.author || "Author Name";
       const date = s.date || "Jun 20, 2026";
       const readMoreLabel = s.readMoreLabel || "Read More";
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
         "div",
         {
           style: {
@@ -69302,17 +69755,17 @@ ${prefix}
             maxWidth: isHorizontal ? "100%" : 480
           },
           children: [
-            showImage ? isHorizontal ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { flex: "0 0 180px", position: "relative", background: s.imageUrl ? void 0 : "#d4e3ef", minHeight: 120, overflow: "hidden" }, children: s.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("img", { src: s.imageUrl, alt: title, style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Image" }) }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { position: "relative", width: "100%", paddingTop, background: s.imageUrl ? void 0 : "#d4e3ef", overflow: "hidden" }, children: s.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("img", { src: s.imageUrl, alt: title, style: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Image" }) }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { padding: "12px 16px 14px", flex: 1 }, children: [
-              showCategories && categories.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }, children: categories.map((cat) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "2px 6px" }, children: cat }, cat)) }) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontWeight: 700, fontSize: 15, color: "#18324a", marginBottom: 4, lineHeight: 1.3 }, children: title }),
-              showDate || showAuthor ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { color: "#8ba9be", fontSize: 11, marginBottom: showExcerpt ? 6 : 8 }, children: [
+            showImage ? isHorizontal ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { flex: "0 0 180px", position: "relative", background: s.imageUrl ? void 0 : "#d4e3ef", minHeight: 120, overflow: "hidden" }, children: s.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("img", { src: s.imageUrl, alt: title, style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Image" }) }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { position: "relative", width: "100%", paddingTop, background: s.imageUrl ? void 0 : "#d4e3ef", overflow: "hidden" }, children: s.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("img", { src: s.imageUrl, alt: title, style: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Image" }) }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { padding: "12px 16px 14px", flex: 1 }, children: [
+              showCategories && categories.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }, children: categories.map((cat) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "2px 6px" }, children: cat }, cat)) }) : null,
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontWeight: 700, fontSize: 15, color: "#18324a", marginBottom: 4, lineHeight: 1.3 }, children: title }),
+              showDate || showAuthor ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { color: "#8ba9be", fontSize: 11, marginBottom: showExcerpt ? 6 : 8 }, children: [
                 showDate ? date : "",
                 showDate && showAuthor ? " \xB7 " : "",
                 showAuthor ? author : ""
               ] }) : null,
-              showExcerpt ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { color: "#587592", fontSize: 12, lineHeight: 1.5, marginBottom: showReadMore ? 10 : 0 }, children: excerpt }) : null,
-              showReadMore ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { fontSize: 12, color: "#0f4f8f", fontWeight: 600 }, children: [
+              showExcerpt ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { color: "#587592", fontSize: 12, lineHeight: 1.5, marginBottom: showReadMore ? 10 : 0 }, children: excerpt }) : null,
+              showReadMore ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { fontSize: 12, color: "#0f4f8f", fontWeight: 600 }, children: [
                 readMoreLabel,
                 " \u2192"
               ] }) : null
@@ -69331,21 +69784,21 @@ ${prefix}
       const title = s.title || "";
       const bio = s.bio || "A short bio about the author appears here.";
       const links = parseSocialLinks(s);
-      const avatar = /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: isVertical ? "center" : void 0 }, children: s.avatarUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      const avatar = /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: isVertical ? "center" : void 0 }, children: s.avatarUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "img",
         {
           src: s.avatarUrl,
           alt: name,
           style: { width: avatarSize, height: avatarSize, borderRadius, objectFit: "cover", display: "block" }
         }
-      ) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { width: avatarSize, height: avatarSize, borderRadius, background: "#d4e3ef", display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Photo" }) });
-      const content = /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { flex: 1, minWidth: 0 }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontWeight: 700, fontSize: 15, color: "#18324a", lineHeight: 1.3 }, children: name }),
-        title ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontSize: 12, color: "#587592", marginBottom: 4 }, children: title }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontSize: 12, color: "#587592", lineHeight: 1.5, marginTop: 4 }, children: bio }),
-        links.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }, children: links.map((l) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { fontSize: 11, color: "#0f4f8f", fontWeight: 600 }, children: l.platform }, l.id)) }) : null
+      ) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { width: avatarSize, height: avatarSize, borderRadius, background: "#d4e3ef", display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Photo" }) });
+      const content = /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { flex: 1, minWidth: 0 }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontWeight: 700, fontSize: 15, color: "#18324a", lineHeight: 1.3 }, children: name }),
+        title ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontSize: 12, color: "#587592", marginBottom: 4 }, children: title }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontSize: 12, color: "#587592", lineHeight: 1.5, marginTop: 4 }, children: bio }),
+        links.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }, children: links.map((l) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { fontSize: 11, color: "#0f4f8f", fontWeight: 600 }, children: l.platform }, l.id)) }) : null
       ] });
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: {
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: {
         display: "flex",
         flexDirection: isVertical ? "column" : "row",
         alignItems: isVertical ? "center" : "flex-start",
@@ -69368,16 +69821,16 @@ ${prefix}
       const color = s.color || "#0f4f8f";
       const titleColor = s.titleColor || "#18324a";
       let h2Counter = 0;
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-preview-copy", children: [
-        showTitle ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontWeight: 700, fontSize: titleFontSize, color: titleColor, marginBottom: 8, lineHeight: 1.3 }, children: title }) : null,
-        items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { color: "#aaa", fontStyle: "italic", fontSize }, children: "No headings yet \u2014 add H2 / H3 entries below" }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: items.map((item, i) => {
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-preview-copy", children: [
+        showTitle ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontWeight: 700, fontSize: titleFontSize, color: titleColor, marginBottom: 8, lineHeight: 1.3 }, children: title }) : null,
+        items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { color: "#aaa", fontStyle: "italic", fontSize }, children: "No headings yet \u2014 add H2 / H3 entries below" }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: items.map((item, i) => {
           if (item.depth === 1) h2Counter++;
           const isH3 = item.depth === 2;
           const label = item.label || `Heading ${i + 1}`;
           let prefix = "";
           if (tocStyle === "numbered" && item.depth === 1) prefix = `${h2Counter}. `;
           const dotStyle = tocStyle === "dotted" ? "\xB7 " : "";
-          return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+          return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
             "div",
             {
               style: {
@@ -69396,7 +69849,7 @@ ${prefix}
             item.id
           );
         }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-editor-copy", style: { marginTop: 8 }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-editor-copy", style: { marginTop: 8 }, children: [
           items.length,
           " heading",
           items.length !== 1 ? "s" : "",
@@ -69414,18 +69867,18 @@ ${prefix}
       const headline = s.headline || "Stay in the loop";
       const description = s.description || "Get new posts delivered to your inbox.";
       const hasCrmForm = Boolean(s.crmFormId);
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { background: bg, borderRadius: 12, padding: "20px 24px" }, children: [
-        s.showImage === "true" && s.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("img", { src: s.imageUrl, alt: "", style: { height: 40, marginBottom: 10, display: "block" } }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontWeight: 700, fontSize: 17, color: "#18324a", marginBottom: 4 }, children: headline }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontSize: 13, color: "#587592", marginBottom: 14, lineHeight: 1.5 }, children: description }),
-        isInline2 ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { display: "flex", gap: 8 }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { flex: 1, height: 36, background: "#fff", border: "1px solid #c6d8e8", borderRadius: 6, padding: "0 10px", display: "flex", alignItems: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { fontSize: 12, color: "#aab" }, children: "Email address" }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { height: 36, padding: "0 16px", background: accent, borderRadius: 6, display: "flex", alignItems: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { fontSize: 12, color: "#fff", fontWeight: 600 }, children: "Subscribe" }) })
-        ] }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { height: 36, background: "#fff", border: "1px solid #c6d8e8", borderRadius: 6, padding: "0 10px", display: "flex", alignItems: "center", marginBottom: 8 }, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { fontSize: 12, color: "#aab" }, children: "Email address" }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { height: 36, background: accent, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { fontSize: 12, color: "#fff", fontWeight: 600 }, children: "Subscribe" }) })
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { background: bg, borderRadius: 12, padding: "20px 24px" }, children: [
+        s.showImage === "true" && s.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("img", { src: s.imageUrl, alt: "", style: { height: 40, marginBottom: 10, display: "block" } }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontWeight: 700, fontSize: 17, color: "#18324a", marginBottom: 4 }, children: headline }),
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontSize: 13, color: "#587592", marginBottom: 14, lineHeight: 1.5 }, children: description }),
+        isInline2 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { display: "flex", gap: 8 }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { flex: 1, height: 36, background: "#fff", border: "1px solid #c6d8e8", borderRadius: 6, padding: "0 10px", display: "flex", alignItems: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { fontSize: 12, color: "#aab" }, children: "Email address" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { height: 36, padding: "0 16px", background: accent, borderRadius: 6, display: "flex", alignItems: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { fontSize: 12, color: "#fff", fontWeight: 600 }, children: "Subscribe" }) })
+        ] }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { height: 36, background: "#fff", border: "1px solid #c6d8e8", borderRadius: 6, padding: "0 10px", display: "flex", alignItems: "center", marginBottom: 8 }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { fontSize: 12, color: "#aab" }, children: "Email address" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { height: 36, background: accent, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { fontSize: 12, color: "#fff", fontWeight: 600 }, children: "Subscribe" }) })
         ] }),
-        !hasCrmForm ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-contact-form-stub", style: { marginTop: 10 }, children: "No CRM form linked \u2014 paste a Form ID in settings." }) : null
+        !hasCrmForm ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-contact-form-stub", style: { marginTop: 10 }, children: "No CRM form linked \u2014 paste a Form ID in settings." }) : null
       ] }) });
     }
     if (module2.type === "blog-related-posts") {
@@ -69448,9 +69901,9 @@ ${prefix}
       const manualPosts = parseRelatedPosts(s);
       const count = parseInt(s.count ?? "3", 10) || 3;
       const previewCount = isManual ? Math.min(manualPosts.length || cols, cols) : Math.min(count, cols);
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-preview-copy", children: [
-        showTitle ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontWeight: 700, fontSize: 16, color: "#18324a", marginBottom: 14 }, children: title }) : null,
-        previewCount === 0 ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { color: "#aaa", fontStyle: "italic", fontSize: 13 }, children: isManual ? "No posts added yet" : `${count} posts matched by ${s.matchBy ?? "categories"}` }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: {
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-preview-copy", children: [
+        showTitle ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontWeight: 700, fontSize: 16, color: "#18324a", marginBottom: 14 }, children: title }) : null,
+        previewCount === 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { color: "#aaa", fontStyle: "italic", fontSize: 13 }, children: isManual ? "No posts added yet" : `${count} posts matched by ${s.matchBy ?? "categories"}` }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: {
           display: isGrid ? "grid" : "flex",
           gridTemplateColumns: isGrid ? `repeat(${cols}, 1fr)` : void 0,
           flexDirection: isGrid ? void 0 : "column",
@@ -69460,23 +69913,127 @@ ${prefix}
           const postTitle = post?.title || `Related Post ${i + 1}`;
           const postDate = post?.date || "Jun 20, 2026";
           const postCats = post?.categories ? post.categories.split(",").map((c) => c.trim()).filter(Boolean) : ["Category"];
-          return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { border: cardBorder, borderRadius: radius, boxShadow: cardShadow, overflow: "hidden", background: "#fff" }, children: [
-            showImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { position: "relative", width: "100%", paddingTop, background: post?.imageUrl ? void 0 : "#d4e3ef", overflow: "hidden" }, children: post?.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("img", { src: post.imageUrl, alt: postTitle, style: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Image" }) }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { style: { padding: "10px 12px 12px" }, children: [
-              showCategories ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { display: "flex", gap: 4, marginBottom: 4 }, children: postCats.slice(0, 2).map((cat) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { style: { background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "1px 5px" }, children: cat }, cat)) }) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { fontWeight: 700, fontSize: 13, color: "#18324a", lineHeight: 1.3, marginBottom: 4 }, children: postTitle }),
-              showDate ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { style: { color: "#8ba9be", fontSize: 11 }, children: postDate }) : null
+          return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { border: cardBorder, borderRadius: radius, boxShadow: cardShadow, overflow: "hidden", background: "#fff" }, children: [
+            showImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { position: "relative", width: "100%", paddingTop, background: post?.imageUrl ? void 0 : "#d4e3ef", overflow: "hidden" }, children: post?.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("img", { src: post.imageUrl, alt: postTitle, style: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 11 }, children: "Image" }) }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { padding: "10px 12px 12px" }, children: [
+              showCategories ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "flex", gap: 4, marginBottom: 4 }, children: postCats.slice(0, 2).map((cat) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { background: "#e8f6fc", color: "#587592", fontSize: 10, borderRadius: 4, padding: "1px 5px" }, children: cat }, cat)) }) : null,
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontWeight: 700, fontSize: 13, color: "#18324a", lineHeight: 1.3, marginBottom: 4 }, children: postTitle }),
+              showDate ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { color: "#8ba9be", fontSize: 11 }, children: postDate }) : null
             ] })
           ] }, i);
         }) }),
-        !isManual ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-editor-copy", style: { marginTop: 8 }, children: [
+        !isManual ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-editor-copy", style: { marginTop: 8 }, children: [
           count,
           " posts \xB7 matched by ",
           s.matchBy ?? "categories"
         ] }) : null
       ] });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+    if (module2.type === "blog-category-filter") {
+      const s = module2.settings;
+      const layout = s.layout ?? "pills";
+      const allLabel = s.allLabel || "All";
+      const showAll = s.showAll !== "false";
+      const activeColor = s.activeColor ?? "#0f4f8f";
+      const activeBg = s.activeBg ?? "#e8f6fc";
+      const inactiveColor = s.inactiveColor ?? "#587592";
+      const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+      const borderRadius = parseInt(s.borderRadius ?? "20", 10) || 20;
+      const fontSize = parseInt(s.fontSize ?? "13", 10) || 13;
+      const gap = parseInt(s.gap ?? "8", 10) || 8;
+      const alignment = s.alignment ?? "left";
+      const justifyMap = { left: "flex-start", center: "center", right: "flex-end" };
+      const categories = parseFilterCategories(s);
+      const pills = [
+        ...showAll ? [{ id: "__all__", label: allLabel, slug: "" }] : [],
+        ...categories
+      ];
+      if (layout === "dropdown") {
+        return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", style: { textAlign: alignment }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
+          "select",
+          {
+            disabled: true,
+            style: {
+              fontSize,
+              padding: "6px 12px",
+              borderRadius: borderRadius / 2,
+              border: "1px solid #c9d8e6",
+              color: inactiveColor,
+              background: inactiveBg,
+              minWidth: 160
+            },
+            children: [
+              pills.map((p) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { children: p.label }, p.id)),
+              pills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { children: "All" }) : null
+            ]
+          }
+        ) });
+      }
+      if (layout === "list") {
+        return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("ul", { style: { listStyle: "none", padding: 0, margin: 0, display: "inline-flex", flexDirection: "column", gap, alignItems: alignment === "center" ? "center" : alignment === "right" ? "flex-end" : "flex-start", width: "100%" }, children: (pills.length > 0 ? pills : [{ id: "__all__", label: "All", slug: "" }, { id: "ph1", label: "Category", slug: "category" }]).map((p, i) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("li", { style: { fontSize, color: i === 0 ? activeColor : inactiveColor, fontWeight: i === 0 ? 600 : 400, cursor: "default" }, children: p.label }, p.id)) }) });
+      }
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-preview-copy", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[alignment] ?? "flex-start" }, children: (pills.length > 0 ? pills : [{ id: "__all__", label: "All", slug: "" }, { id: "ph1", label: "Category", slug: "category" }]).map((p, i) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+        "span",
+        {
+          style: {
+            fontSize,
+            padding: "4px 12px",
+            borderRadius,
+            background: i === 0 ? activeBg : inactiveBg,
+            color: i === 0 ? activeColor : inactiveColor,
+            fontWeight: i === 0 ? 600 : 400,
+            border: `1px solid ${i === 0 ? activeColor + "33" : inactiveBg}`,
+            cursor: "default"
+          },
+          children: p.label
+        },
+        p.id
+      )) }) });
+    }
+    if (module2.type === "blog-post") {
+      const s = module2.settings;
+      const title = s.title || "Untitled Post";
+      const showFeaturedImage = s.showFeaturedImage !== "false";
+      const showAuthor = s.showAuthor !== "false";
+      const showDate = s.showDate !== "false";
+      const showCategories = s.showCategories !== "false";
+      const showExcerpt = s.showExcerpt !== "false";
+      const cats = (s.categories ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+      const statusColors = { draft: "#8ba9be", published: "#1d8a4e", archived: "#a06040" };
+      const status = s.status ?? "draft";
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-preview-copy", style: { maxWidth: 680, margin: "0 auto" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { marginBottom: 10 }, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: {
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: statusColors[status] ?? "#8ba9be",
+          background: (statusColors[status] ?? "#8ba9be") + "18",
+          borderRadius: 4,
+          padding: "2px 7px"
+        }, children: status }) }),
+        showFeaturedImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { width: "100%", paddingTop: "52%", position: "relative", borderRadius: 8, overflow: "hidden", background: s.featuredImageUrl ? void 0 : "#d4e3ef", marginBottom: 16 }, children: s.featuredImageUrl ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("img", { src: s.featuredImageUrl, alt: title, style: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#8ba9be", fontSize: 12 }, children: "Featured Image" }) }) : null,
+        showCategories && cats.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }, children: cats.map((cat) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { style: { fontSize: 11, background: "#e8f6fc", color: "#0f4f8f", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }, children: cat }, cat)) }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontSize: 22, fontWeight: 800, color: "#18324a", lineHeight: 1.25, marginBottom: 10 }, children: title }),
+        showAuthor || showDate ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { style: { display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { width: 28, height: 28, borderRadius: "50%", background: "#c9d8e6", flexShrink: 0 } }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { children: [
+            showAuthor && s.author ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontSize: 12, fontWeight: 600, color: "#18324a" }, children: s.author }) : null,
+            showDate && s.publishDate ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontSize: 11, color: "#8ba9be" }, children: s.publishDate }) : null
+          ] })
+        ] }) : null,
+        showExcerpt && s.excerpt ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { fontSize: 13, color: "#587592", lineHeight: 1.5, marginBottom: 12, borderLeft: "3px solid #c9d8e6", paddingLeft: 10, fontStyle: "italic" }, children: s.excerpt }) : null,
+        s.body ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+          "div",
+          {
+            className: "builder-module-preview-paragraph",
+            style: { fontSize: 13, lineHeight: 1.6, color: "#2c4a62", WebkitLineClamp: 6, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical" },
+            dangerouslySetInnerHTML: { __html: formatRichTextContent(s.body) }
+          }
+        ) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { style: { color: "#aaa", fontStyle: "italic", fontSize: 12 }, children: "No body content yet \u2014 open the Content tab to start writing." })
+      ] });
+    }
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
       "div",
       {
         className: `builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`,
@@ -69511,7 +70068,7 @@ ${prefix}
     return JSON.stringify(items);
   }
   function renderCompactCellModulePreview(module2) {
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-table-cell-module-preview", children: renderModulePreview(module2) });
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-table-cell-module-preview", children: renderModulePreview(module2) });
   }
   function parseSliderItems(settings) {
     try {
@@ -69600,23 +70157,23 @@ ${prefix}
     onClose,
     anchor
   }) {
-    const [group, setGroup] = (0, import_react38.useState)(null);
+    const [group, setGroup] = (0, import_react39.useState)(null);
     const groups = modulePaletteGroups.filter((g) => g.value !== "table" && g.value !== "contact-form" && g.value !== "crm-form");
     const items = group ? modulePaletteItems.filter((item) => item.group === group) : [];
     const style2 = getAnchoredModalStyle(anchor, { width: 260, height: 340, align: "start", gap: 4 });
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
       "div",
       {
         className: "builder-table-inline-palette",
         onClick: (e) => e.stopPropagation(),
         style: style2,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-palette-header", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: group ? "Choose a module" : "Choose a group" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: onClose, children: "\u2715" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-palette-header", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: group ? "Choose a module" : "Choose a group" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: onClose, children: "\u2715" })
           ] }),
-          group ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-table-palette-tabs", children: groups.map((g) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+          group ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-table-palette-tabs", children: groups.map((g) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
               "button",
               {
                 type: "button",
@@ -69630,28 +70187,28 @@ ${prefix}
               },
               g.value
             )) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-table-palette-items", children: items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-table-palette-items", children: items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
               "button",
               {
                 type: "button",
                 className: "builder-table-palette-item",
                 onClick: () => onSelect(item),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-module-item-icon", children: item.icon }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: item.label })
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-module-item-icon", children: item.icon }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: item.label })
                 ]
               },
               item.id
             )) })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-table-palette-groups", children: groups.map((g) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-table-palette-groups", children: groups.map((g) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
             "button",
             {
               type: "button",
               className: "builder-table-palette-group-btn",
               onClick: () => setGroup(g.value),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-module-group-card-icon", children: g.icon }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: g.label })
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-module-group-card-icon", children: g.icon }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: g.label })
               ]
             },
             g.value
@@ -69666,10 +70223,10 @@ ${prefix}
     pages = [],
     onUpdate
   }) {
-    const [paletteOpen, setPaletteOpen] = (0, import_react38.useState)(false);
-    const [editingId, setEditingId] = (0, import_react38.useState)(null);
-    const [paletteAnchor, setPaletteAnchor] = (0, import_react38.useState)({ x: 0, y: 0 });
-    const addBtnRef = (0, import_react38.useRef)(null);
+    const [paletteOpen, setPaletteOpen] = (0, import_react39.useState)(false);
+    const [editingId, setEditingId] = (0, import_react39.useState)(null);
+    const [paletteAnchor, setPaletteAnchor] = (0, import_react39.useState)({ x: 0, y: 0 });
+    const addBtnRef = (0, import_react39.useRef)(null);
     function addModule(item) {
       const mod = createEmptyModule(item.type, "");
       const newMod = { ...mod, name: item.name, text: item.text, settings: { ...mod.settings, ...item.settings } };
@@ -69703,10 +70260,10 @@ ${prefix}
     function updateCellModule(id, updater) {
       onUpdate(cellKey, modules.map((m) => m.id === id ? updater(m) : m));
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-cell-modules", onClick: (e) => e.stopPropagation(), children: [
-      modules.map((mod) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-cell-module", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-cell-module-header", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-cell-modules", onClick: (e) => e.stopPropagation(), children: [
+      modules.map((mod) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-cell-module", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-cell-module-header", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
             "button",
             {
               "aria-expanded": editingId === mod.id,
@@ -69714,22 +70271,22 @@ ${prefix}
               className: "builder-table-cell-module-toggle",
               onClick: () => setEditingId(editingId === mod.id ? null : mod.id),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-table-cell-module-label", children: mod.name || mod.type }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-collapse-chevron", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderCollapseIcon, { expanded: editingId === mod.id }) })
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-table-cell-module-label", children: mod.name || mod.type }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-collapse-chevron", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderCollapseIcon, { expanded: editingId === mod.id }) })
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveModule(mod.id, -1), title: "Move up", children: "\u2191" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveModule(mod.id, 1), title: "Move down", children: "\u2193" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeModule(mod.id), title: "Remove", children: "\u2715" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveModule(mod.id, -1), title: "Move up", children: "\u2191" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveModule(mod.id, 1), title: "Move down", children: "\u2193" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeModule(mod.id), title: "Remove", children: "\u2715" })
         ] }),
         renderCompactCellModulePreview(mod),
-        editingId === mod.id && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderCenteredModal, { title: mod.name || mod.type, onClose: () => setEditingId(null), children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-cell-module-editor", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Module label" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "text", value: mod.name, onChange: (e) => updateModuleField(mod.id, "name", e.target.value), placeholder: "Optional internal label" })
+        editingId === mod.id && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderCenteredModal, { title: mod.name || mod.type, onClose: () => setEditingId(null), children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-cell-module-editor", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Module label" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "text", value: mod.name, onChange: (e) => updateModuleField(mod.id, "name", e.target.value), placeholder: "Optional internal label" })
           ] }),
-          mod.type === "heading" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          mod.type === "heading" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderHeadingModuleSettings,
             {
               compact: true,
@@ -69739,23 +70296,23 @@ ${prefix}
               }
             }
           ) : null,
-          (mod.type === "text" || mod.type === "heading") && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          (mod.type === "text" || mod.type === "heading") && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderAlignmentIconGroup,
             {
               value: getModuleAlignment(mod.settings),
               onChange: (alignment) => updateModuleSettings(mod.id, { alignment })
             }
           ) }),
-          mod.type === "text" && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Content" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderRichTextEditor, { value: mod.text, onChange: (value) => updateModuleField(mod.id, "text", value) })
+          mod.type === "text" && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Content" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderRichTextEditor, { value: mod.text, onChange: (value) => updateModuleField(mod.id, "text", value) })
           ] }),
-          mod.type === "quote" && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Content" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("textarea", { className: "builder-textarea", value: mod.text, onChange: (e) => updateModuleField(mod.id, "text", e.target.value), placeholder: "Enter content", rows: 2 })
+          mod.type === "quote" && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Content" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("textarea", { className: "builder-textarea", value: mod.text, onChange: (e) => updateModuleField(mod.id, "text", e.target.value), placeholder: "Enter content", rows: 2 })
           ] }),
-          mod.type === "button" && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-cell-button-settings", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Button label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          mod.type === "button" && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-cell-button-settings", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Button label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "text",
@@ -69764,7 +70321,7 @@ ${prefix}
                 placeholder: "Button text"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Link", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Link", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "text",
@@ -69773,7 +70330,7 @@ ${prefix}
                 placeholder: "/path-or-url"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Button color", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Button color", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "color",
@@ -69781,7 +70338,7 @@ ${prefix}
                 onChange: (e) => updateModuleSettings(mod.id, { buttonColor: e.target.value })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Text color", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Text color", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "color",
@@ -69790,10 +70347,10 @@ ${prefix}
               }
             ) })
           ] }),
-          mod.type === "image" && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Media URL" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          mod.type === "image" && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Media URL" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderImagePickerField,
                 {
                   value: mod.settings.url ?? "",
@@ -69801,17 +70358,17 @@ ${prefix}
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               BuilderAlignmentIconGroup,
               {
                 value: getModuleAlignment(mod.settings),
                 onChange: (alignment) => updateModuleSettings(mod.id, { alignment })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Link" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-image-link-row", children: [
-                pages.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Link" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-image-link-row", children: [
+                pages.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
                   "select",
                   {
                     value: "",
@@ -69819,12 +70376,12 @@ ${prefix}
                       if (e.target.value) updateModuleSettings(mod.id, { linkUrl: e.target.value });
                     },
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "", children: "\u2014 Page \u2014" }),
-                      pages.map((p) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: `/${p.slug}`, children: p.name }, p.id))
+                      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "", children: "\u2014 Page \u2014" }),
+                      pages.map((p) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: `/${p.slug}`, children: p.name }, p.id))
                     ]
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   "input",
                   {
                     type: "text",
@@ -69835,9 +70392,9 @@ ${prefix}
                 )
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-checkbox-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "New Tab" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-checkbox-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "New Tab" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 "input",
                 {
                   type: "checkbox",
@@ -69846,12 +70403,12 @@ ${prefix}
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderImageModuleSettings, { module: mod, onUpdateModule: (updater) => updateCellModule(mod.id, updater) })
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderImageModuleSettings, { module: mod, onUpdateModule: (updater) => updateCellModule(mod.id, updater) })
           ] })
         ] }) })
       ] }, mod.id)),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-cell-add-wrap", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-cell-add-wrap", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           "button",
           {
             ref: (el) => {
@@ -69871,7 +70428,7 @@ ${prefix}
             children: "\u2295"
           }
         ),
-        paletteOpen && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        paletteOpen && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           TableCellInlinePalette,
           {
             onSelect: addModule,
@@ -69947,10 +70504,10 @@ ${prefix}
     function updateCellModules(cellKey, modules) {
       persist({ ...td, cells: { ...td.cells, [cellKey]: modules } });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-design-grid", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-border-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-design-grid", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-border-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderInlineNumberSelect,
             {
               label: "Border",
@@ -69961,12 +70518,12 @@ ${prefix}
               onChange: (value) => updateSetting("borderWidth", value)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "builder-table-color-field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Color" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "color", value: module2.settings.borderColor ?? "#cccccc", onChange: (e) => updateSetting("borderColor", e.target.value) })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "builder-table-color-field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Color" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "color", value: module2.settings.borderColor ?? "#cccccc", onChange: (e) => updateSetting("borderColor", e.target.value) })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           BuilderInlineNumberSelect,
           {
             label: "Padding",
@@ -69977,9 +70534,9 @@ ${prefix}
             onChange: (value) => updateSetting("cellPadding", value)
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-checkbox-field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Column heads" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-checkbox-field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Column heads" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "input",
             {
               type: "checkbox",
@@ -69988,7 +70545,7 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Max Width (px)", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Max Width (px)", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           "input",
           {
             type: "number",
@@ -70008,32 +70565,32 @@ ${prefix}
           }
         ) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-structure-actions", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-structure-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("span", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-structure-actions", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-structure-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("span", { children: [
             "Columns: ",
             colCount
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "secondary-button", onClick: addColumn, disabled: colCount >= 10, children: "+ Col" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "secondary-button", onClick: removeColumn, disabled: colCount <= 1, children: "\u2212 Col" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "secondary-button", onClick: addColumn, disabled: colCount >= 10, children: "+ Col" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "secondary-button", onClick: removeColumn, disabled: colCount <= 1, children: "\u2212 Col" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-table-structure-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-table-structure-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("span", { children: [
             "Rows: ",
             td.rowCount
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "secondary-button", onClick: addRow, disabled: td.rowCount >= 100, children: "+ Row" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "secondary-button", onClick: removeRow, disabled: td.rowCount <= 1, children: "\u2212 Row" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "secondary-button", onClick: addRow, disabled: td.rowCount >= 100, children: "+ Row" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "secondary-button", onClick: removeRow, disabled: td.rowCount <= 1, children: "\u2212 Row" })
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-table-editor-scroll", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("table", { className: "builder-table-editor builder-table-editor-modules", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("tr", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { className: "builder-table-row-action-heading", children: "Row" }),
-          td.headers.map((h2, i) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "text", value: h2, onChange: (e) => updateHeader(i, e.target.value), placeholder: `Header ${i + 1}` }) }, i))
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-table-editor-scroll", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("table", { className: "builder-table-editor builder-table-editor-modules", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("tr", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { className: "builder-table-row-action-heading", children: "Row" }),
+          td.headers.map((h2, i) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "text", value: h2, onChange: (e) => updateHeader(i, e.target.value), placeholder: `Header ${i + 1}` }) }, i))
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("tbody", { children: Array.from({ length: td.rowCount }, (_, ri) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("tr", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { className: "builder-table-row-actions", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => cloneRow(ri), disabled: td.rowCount >= 100, title: "Clone row", children: "\u29C9" }) }),
-          td.headers.map((_2, ci) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { className: "builder-table-editor-cell", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(TableCellModules, { cellKey: `${ri}-${ci}`, modules: td.cells[`${ri}-${ci}`] || [], pages, onUpdate: updateCellModules }) }, ci))
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("tbody", { children: Array.from({ length: td.rowCount }, (_, ri) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("tr", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { className: "builder-table-row-actions", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => cloneRow(ri), disabled: td.rowCount >= 100, title: "Clone row", children: "\u29C9" }) }),
+          td.headers.map((_2, ci) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { className: "builder-table-editor-cell", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(TableCellModules, { cellKey: `${ri}-${ci}`, modules: td.cells[`${ri}-${ci}`] || [], pages, onUpdate: updateCellModules }) }, ci))
         ] }, ri)) })
       ] }) })
     ] });
@@ -70064,9 +70621,9 @@ ${prefix}
     function addItem() {
       persist([...items, { id: `slide-${Date.now()}-${items.length + 1}`, title: "", body: "", imageUrl: "", linkUrl: "" }]);
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-slider-design-grid", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(BuilderInlineNumberSelectRow, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-slider-design-grid", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(BuilderInlineNumberSelectRow, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           BuilderInlineNumberSelect,
           {
             label: "Card width",
@@ -70078,7 +70635,7 @@ ${prefix}
             onChange: (value) => onUpdateModule((current) => ({ ...current, settings: { ...current.settings, sliderCardWidth: value } }))
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           BuilderInlineNumberSelect,
           {
             label: "Gap",
@@ -70091,35 +70648,35 @@ ${prefix}
           }
         )
       ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-slider-items", children: items.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-item-card", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-item-header", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: item.title || `Slide ${index + 1}` }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-section-actions", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, -1), title: "Move up", children: "\u2191" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, 1), title: "Move down", children: "\u2193" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeItem(item.id), title: "Delete slide", children: "\u2715" })
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-slider-items", children: items.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-item-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-item-header", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: item.title || `Slide ${index + 1}` }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-section-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, -1), title: "Move up", children: "\u2191" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, 1), title: "Move down", children: "\u2193" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeItem(item.id), title: "Delete slide", children: "\u2715" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-item-grid", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Title" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "text", value: item.title, onChange: (e) => updateItem(item.id, { title: e.target.value }) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-item-grid", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Title" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "text", value: item.title, onChange: (e) => updateItem(item.id, { title: e.target.value }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Link" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "text", value: item.linkUrl, onChange: (e) => updateItem(item.id, { linkUrl: e.target.value }), placeholder: "/path-or-url" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Link" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "text", value: item.linkUrl, onChange: (e) => updateItem(item.id, { linkUrl: e.target.value }), placeholder: "/path-or-url" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Image URL" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderImagePickerField, { value: item.imageUrl, onChange: (url) => updateItem(item.id, { imageUrl: url }) })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Image URL" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderImagePickerField, { value: item.imageUrl, onChange: (url) => updateItem(item.id, { imageUrl: url }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Description" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("textarea", { className: "builder-textarea", rows: 3, value: item.body, onChange: (e) => updateItem(item.id, { body: e.target.value }), placeholder: "Add copy for this slide" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Description" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("textarea", { className: "builder-textarea", rows: 3, value: item.body, onChange: (e) => updateItem(item.id, { body: e.target.value }), placeholder: "Add copy for this slide" })
           ] })
         ] })
       ] }, item.id)) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "Add Slide" })
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "Add Slide" })
     ] });
   }
   function SocialShareModuleEditor({
@@ -70136,11 +70693,11 @@ ${prefix}
       const color = module2.settings[platformSettingKey(platformId, "Color")];
       return color?.startsWith("#") ? color : fallback;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-design-grid", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Share label" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-design-grid", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Share label" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "input",
             {
               type: "text",
@@ -70149,9 +70706,9 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "URL override" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "URL override" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "input",
             {
               type: "text",
@@ -70161,9 +70718,9 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Fallback question" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Fallback question" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "input",
             {
               type: "text",
@@ -70173,9 +70730,9 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Hashtags" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Hashtags" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "input",
             {
               type: "text",
@@ -70185,9 +70742,9 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "X via" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "X via" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "input",
             {
               type: "text",
@@ -70197,8 +70754,8 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(BuilderInlineNumberSelectRow, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(BuilderInlineNumberSelectRow, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderInlineNumberSelect,
             {
               label: "Label font size",
@@ -70209,7 +70766,7 @@ ${prefix}
               onChange: (value) => updateSetting("shareLabelSize", value)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderInlineNumberSelect,
             {
               label: "Icon size",
@@ -70222,9 +70779,9 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Icon background" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Icon background" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "input",
             {
               type: "color",
@@ -70233,8 +70790,8 @@ ${prefix}
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(BuilderInlineNumberSelectRow, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(BuilderInlineNumberSelectRow, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderInlineNumberSelect,
             {
               label: "Glyph size",
@@ -70245,7 +70802,7 @@ ${prefix}
               onChange: (value) => updateSetting("shareGlyphSize", value)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderInlineNumberSelect,
             {
               label: "Icon gap",
@@ -70258,9 +70815,9 @@ ${prefix}
           )
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Default post template" }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Default post template" }),
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           "textarea",
           {
             className: "builder-textarea",
@@ -70271,12 +70828,12 @@ ${prefix}
           }
         )
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-slider-items", children: SOCIAL_SHARE_PLATFORMS.map((platform) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-item-card", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-item-header", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: platform.label }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-checkbox-field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Show" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-slider-items", children: SOCIAL_SHARE_PLATFORMS.map((platform) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-item-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-item-header", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: platform.label }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-checkbox-field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Show" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "checkbox",
@@ -70286,10 +70843,10 @@ ${prefix}
             )
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-item-grid", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Button color" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-item-grid", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Button color" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "color",
@@ -70298,9 +70855,9 @@ ${prefix}
               }
             )
           ] }),
-          platform.id === "instagram" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Instagram URL" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          platform.id === "instagram" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Instagram URL" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "text",
@@ -70310,9 +70867,9 @@ ${prefix}
               }
             )
           ] }) : null,
-          platform.supportsText ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Post template" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          platform.supportsText ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-slider-item-grid-full", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Post template" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "textarea",
               {
                 className: "builder-textarea",
@@ -70340,8 +70897,8 @@ ${prefix}
     onChange
   }) {
     const isSet = !!value;
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label, fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-nav-color-field", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label, fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-nav-color-field", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "input",
         {
           type: "color",
@@ -70349,7 +70906,7 @@ ${prefix}
           onChange: (e) => onChange(e.target.value)
         }
       ),
-      isSet ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-nav-color-clear", onClick: () => onChange(""), title: "Reset to default", children: "\u2715" }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { className: "builder-nav-color-hint", children: "default" })
+      isSet ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-nav-color-clear", onClick: () => onChange(""), title: "Reset to default", children: "\u2715" }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { className: "builder-nav-color-hint", children: "default" })
     ] }) });
   }
   function NavModuleEditor({
@@ -70357,8 +70914,8 @@ ${prefix}
     onUpdateModule,
     onUpdateModuleBackground
   }) {
-    const [styleCollapsed, setStyleCollapsed] = (0, import_react38.useState)(false);
-    const [linksCollapsed, setLinksCollapsed] = (0, import_react38.useState)(false);
+    const [styleCollapsed, setStyleCollapsed] = (0, import_react39.useState)(false);
+    const [linksCollapsed, setLinksCollapsed] = (0, import_react39.useState)(false);
     const items = parseNavItems(module2.settings);
     const { v: padV, h: padH } = parseNavPadding(module2.settings.navPadding ?? "");
     function persist(nextItems) {
@@ -70388,9 +70945,9 @@ ${prefix}
     function updatePadding(v, h2) {
       updateSetting("navPadding", `${v}px ${h2}px`);
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-cell-panel", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-cell-panel", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           BuilderCellPanelHeader,
           {
             title: "Style",
@@ -70398,9 +70955,9 @@ ${prefix}
             onToggle: () => setStyleCollapsed((c) => !c)
           }
         ),
-        !styleCollapsed && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-nav-style-grid", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-nav-four-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        !styleCollapsed && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-nav-style-grid", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-nav-four-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               BuilderInlineNumberSelect,
               {
                 label: "Font",
@@ -70411,7 +70968,7 @@ ${prefix}
                 onChange: (v) => updateSetting("navFontSize", v)
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               BuilderInlineNumberSelect,
               {
                 label: "Radius",
@@ -70422,7 +70979,7 @@ ${prefix}
                 onChange: (v) => updateSetting("navBorderRadius", v)
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               BuilderInlineNumberSelect,
               {
                 label: "Pad V",
@@ -70433,7 +70990,7 @@ ${prefix}
                 onChange: (v) => updatePadding(Number(v), padH)
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               BuilderInlineNumberSelect,
               {
                 label: "Pad H",
@@ -70444,7 +71001,7 @@ ${prefix}
                 onChange: (v) => updatePadding(padV, Number(v))
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               BuilderInlineNumberSelect,
               {
                 label: "Margin V",
@@ -70456,48 +71013,48 @@ ${prefix}
               }
             )
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Bold", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "checkbox", checked: module2.settings.navBold === "true", onChange: (e) => updateSetting("navBold", e.target.checked ? "true" : "false") }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Bold", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "checkbox", checked: module2.settings.navBold === "true", onChange: (e) => updateSetting("navBold", e.target.checked ? "true" : "false") }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
             "select",
             {
               value: module2.settings.navAlignment ?? "center",
               onChange: (e) => updateSetting("navAlignment", e.target.value),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "left", children: "Left" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "center", children: "Center" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "right", children: "Right" })
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "left", children: "Left" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "center", children: "Center" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "right", children: "Right" })
               ]
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-nav-dir-levels-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Direction", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-nav-dir-levels-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Direction", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
               "select",
               {
                 value: module2.settings.navDirection ?? "horizontal",
                 onChange: (e) => updateSetting("navDirection", e.target.value),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "horizontal", children: "Horizontal" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "vertical", children: "Vertical" })
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "horizontal", children: "Horizontal" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "vertical", children: "Vertical" })
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Levels", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Levels", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
               "select",
               {
                 value: module2.settings.navLevels ?? "2",
                 onChange: (e) => updateSetting("navLevels", e.target.value),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "1", children: "1" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "2", children: "2" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "3", children: "3" })
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "1", children: "1" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "2", children: "2" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "3", children: "3" })
                 ]
               }
             ) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(NavColorField, { label: "Text", value: module2.settings.navColor ?? "", defaultColor: "#163a5e", onChange: (v) => updateSetting("navColor", v) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(NavColorField, { label: "Hover text", value: module2.settings.navHoverColor ?? "", defaultColor: "#0a8fc4", onChange: (v) => updateSetting("navHoverColor", v) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(NavColorField, { label: "Hover bg", value: module2.settings.navHoverBackground ?? "", defaultColor: "#d0f0fb", onChange: (v) => updateSetting("navHoverBackground", v) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(NavColorField, { label: "Text", value: module2.settings.navColor ?? "", defaultColor: "#163a5e", onChange: (v) => updateSetting("navColor", v) }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(NavColorField, { label: "Hover text", value: module2.settings.navHoverColor ?? "", defaultColor: "#0a8fc4", onChange: (v) => updateSetting("navHoverColor", v) }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(NavColorField, { label: "Hover bg", value: module2.settings.navHoverBackground ?? "", defaultColor: "#d0f0fb", onChange: (v) => updateSetting("navHoverBackground", v) }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             BuilderBackgroundControls,
             {
               label: "Background",
@@ -70507,8 +71064,8 @@ ${prefix}
           )
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-cell-panel", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-cell-panel", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           BuilderCellPanelHeader,
           {
             title: "Links",
@@ -70516,13 +71073,13 @@ ${prefix}
             onToggle: () => setLinksCollapsed((c) => !c)
           }
         ),
-        !linksCollapsed && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-nav-items", children: items.map((item, index) => {
+        !linksCollapsed && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-nav-items", children: items.map((item, index) => {
             const isParent = items.some((i) => i.parentId === item.id);
             const topLevelItems = items.filter((i) => !i.parentId && i.id !== item.id);
-            return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-nav-item-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-nav-item-fields", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-nav-item-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-nav-item-fields", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
                   "select",
                   {
                     className: "builder-nav-item-parent-select",
@@ -70531,22 +71088,22 @@ ${prefix}
                     title: isParent ? "This item has sub-items and cannot itself be a sub-item" : void 0,
                     onChange: (e) => updateItem(item.id, { parentId: e.target.value || void 0 }),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "", children: "Top level" }),
-                      topLevelItems.map((parent) => /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: parent.id, children: parent.label || `Link ${items.indexOf(parent) + 1}` }, parent.id))
+                      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "", children: "Top level" }),
+                      topLevelItems.map((parent) => /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: parent.id, children: parent.label || `Link ${items.indexOf(parent) + 1}` }, parent.id))
                     ]
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "text", className: "builder-nav-item-label", value: item.label, onChange: (e) => updateItem(item.id, { label: e.target.value }), placeholder: `Link ${index + 1}` }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "text", className: "builder-nav-item-href", value: item.href, onChange: (e) => updateItem(item.id, { href: e.target.value }), placeholder: "/path-or-url" })
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "text", className: "builder-nav-item-label", value: item.label, onChange: (e) => updateItem(item.id, { label: e.target.value }), placeholder: `Link ${index + 1}` }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "text", className: "builder-nav-item-href", value: item.href, onChange: (e) => updateItem(item.id, { href: e.target.value }), placeholder: "/path-or-url" })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-nav-item-actions", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, -1), title: "Move up", children: "\u2191" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, 1), title: "Move down", children: "\u2193" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeItem(item.id), title: "Remove", children: "\u2715" })
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-nav-item-actions", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, -1), title: "Move up", children: "\u2191" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, 1), title: "Move down", children: "\u2193" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeItem(item.id), title: "Remove", children: "\u2715" })
               ] })
             ] }, item.id);
           }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "+ Add Link" })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "+ Add Link" })
         ] })
       ] })
     ] });
@@ -70561,9 +71118,9 @@ ${prefix}
     }
     const sort = normalizePollCategoryListSort(module2.settings.categorySort);
     const listFlow = normalizePollCategoryListFlow(module2.settings.categoryListFlow);
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-poll-category-list-module-chrome", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-poll-category-list-module-chrome", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           BuilderBackgroundControls,
           {
             label: "Background",
@@ -70572,7 +71129,7 @@ ${prefix}
             onChange: onUpdateModuleBackground
           }
         ),
-        !isPollCategoryListPanelTransparent(module2.settings) ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Panel Border", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        !isPollCategoryListPanelTransparent(module2.settings) ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Panel Border", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
           "input",
           {
             type: "color",
@@ -70581,7 +71138,7 @@ ${prefix}
           }
         ) }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Headline", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Headline", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "input",
         {
           type: "text",
@@ -70589,29 +71146,29 @@ ${prefix}
           onChange: (event) => updateSetting("listTitle", event.target.value)
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Sort", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Sort", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
         "select",
         {
           value: sort,
           onChange: (event) => updateSetting("categorySort", event.target.value),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "alphabetical", children: "Alphabetical" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "canonical", children: "Canonical" })
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "alphabetical", children: "Alphabetical" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "canonical", children: "Canonical" })
           ]
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Default Layout", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Default Layout", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
         "select",
         {
           value: listFlow,
           onChange: (event) => updateSetting("categoryListFlow", event.target.value),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "rows", children: "By Row" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "columns", children: "By Column" })
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "rows", children: "By Row" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "columns", children: "By Column" })
           ]
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Font Size", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Font Size", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "input",
         {
           type: "number",
@@ -70621,7 +71178,7 @@ ${prefix}
           onChange: (event) => updateSetting("fontSize", event.target.value)
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Color", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "input",
         {
           type: "text",
@@ -70630,7 +71187,7 @@ ${prefix}
           placeholder: "#18324a"
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Bold", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Bold", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "input",
         {
           type: "checkbox",
@@ -70638,14 +71195,14 @@ ${prefix}
           onChange: (event) => updateSetting("bold", event.target.checked ? "true" : "false")
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         BuilderAlignmentIconGroup,
         {
           value: getModuleAlignment(module2.settings),
           onChange: (value) => updateSetting("alignment", value)
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Item Gap", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Item Gap", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
         "input",
         {
           type: "number",
@@ -70655,7 +71212,7 @@ ${prefix}
           onChange: (event) => updateSetting("itemGap", event.target.value)
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { className: "builder-module-editor-copy", children: "Lists seeded categories plus every category used on polls (same set as the Polls Manager filter). Each link opens the home page with that category filter." })
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { className: "builder-module-editor-copy", children: "Lists seeded categories plus every category used on polls (same set as the Polls Manager filter). Each link opens the home page with that category filter." })
     ] });
   }
   function HeadlineRotatorModuleEditor({
@@ -70699,77 +71256,77 @@ ${prefix}
     function updateSetting(key, value) {
       onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-slider-design-grid", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Font size (px)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "number", min: "10", max: "120", value: module2.settings.fontSize ?? HEADLINE_ROTATOR_DEFAULT_FONT_SIZE, onChange: (e) => updateSetting("fontSize", e.target.value) })
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-slider-design-grid", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Font size (px)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "number", min: "10", max: "120", value: module2.settings.fontSize ?? HEADLINE_ROTATOR_DEFAULT_FONT_SIZE, onChange: (e) => updateSetting("fontSize", e.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Color" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "text", value: module2.settings.color ?? "#18324a", onChange: (e) => updateSetting("color", e.target.value), placeholder: "#18324a" })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Color" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "text", value: module2.settings.color ?? "#18324a", onChange: (e) => updateSetting("color", e.target.value), placeholder: "#18324a" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-checkbox-field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Bold" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "checkbox", checked: module2.settings.bold !== "false", onChange: (e) => updateSetting("bold", e.target.checked ? "true" : "false") })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-checkbox-field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Bold" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "checkbox", checked: module2.settings.bold !== "false", onChange: (e) => updateSetting("bold", e.target.checked ? "true" : "false") })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Vertical alignment" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("select", { value: module2.settings.verticalAlignment ?? "center", onChange: (e) => updateSetting("verticalAlignment", e.target.value), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "top", children: "Top" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "center", children: "Center" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "bottom", children: "Bottom" })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Vertical alignment" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("select", { value: module2.settings.verticalAlignment ?? "center", onChange: (e) => updateSetting("verticalAlignment", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "top", children: "Top" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "center", children: "Center" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "bottom", children: "Bottom" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Min height (px)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "number", min: "0", max: "1200", step: "4", value: module2.settings.minHeight ?? "480", onChange: (e) => updateSetting("minHeight", e.target.value) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Min height (px)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "number", min: "0", max: "1200", step: "4", value: module2.settings.minHeight ?? "480", onChange: (e) => updateSetting("minHeight", e.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Fade duration (ms)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "number", min: "0", max: "5000", step: "50", value: module2.settings.fadeDuration ?? "800", onChange: (e) => updateSetting("fadeDuration", e.target.value) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Fade duration (ms)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "number", min: "0", max: "5000", step: "50", value: module2.settings.fadeDuration ?? "800", onChange: (e) => updateSetting("fadeDuration", e.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Display speed (ms)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "number", min: "500", max: "20000", step: "100", value: module2.settings.displaySpeed ?? "3000", onChange: (e) => updateSetting("displaySpeed", e.target.value) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Display speed (ms)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "number", min: "500", max: "20000", step: "100", value: module2.settings.displaySpeed ?? "3000", onChange: (e) => updateSetting("displaySpeed", e.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Drop shadow" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("select", { value: module2.settings.dropShadow ?? "false", onChange: (e) => updateSetting("dropShadow", e.target.value), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "false", children: "Off" }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "true", children: "On" })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Drop shadow" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("select", { value: module2.settings.dropShadow ?? "false", onChange: (e) => updateSetting("dropShadow", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "false", children: "Off" }),
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "true", children: "On" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Shadow color" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "color", value: module2.settings.dropShadowColor?.startsWith("#") ? module2.settings.dropShadowColor : "#000000", onChange: (e) => updateSetting("dropShadowColor", e.target.value) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Shadow color" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "color", value: module2.settings.dropShadowColor?.startsWith("#") ? module2.settings.dropShadowColor : "#000000", onChange: (e) => updateSetting("dropShadowColor", e.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Shadow X" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "number", min: "-20", max: "20", step: "1", value: module2.settings.dropShadowX ?? "3", onChange: (e) => updateSetting("dropShadowX", e.target.value) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Shadow X" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "number", min: "-20", max: "20", step: "1", value: module2.settings.dropShadowX ?? "3", onChange: (e) => updateSetting("dropShadowX", e.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Shadow Y" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "number", min: "-20", max: "20", step: "1", value: module2.settings.dropShadowY ?? "3", onChange: (e) => updateSetting("dropShadowY", e.target.value) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Shadow Y" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "number", min: "-20", max: "20", step: "1", value: module2.settings.dropShadowY ?? "3", onChange: (e) => updateSetting("dropShadowY", e.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Shadow blur" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { type: "number", min: "0", max: "30", step: "1", value: module2.settings.dropShadowBlur ?? "2", onChange: (e) => updateSetting("dropShadowBlur", e.target.value) })
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Shadow blur" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { type: "number", min: "0", max: "30", step: "1", value: module2.settings.dropShadowBlur ?? "2", onChange: (e) => updateSetting("dropShadowBlur", e.target.value) })
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-headline-table-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("table", { className: "builder-headline-table", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("tr", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: "Headline" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: "Link" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: "X-axis" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: "Y-axis" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: "Color" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: "Overlap (ms)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("th", { children: "Order" })
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-headline-table-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("table", { className: "builder-headline-table", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("tr", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: "Headline" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: "Link" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: "X-axis" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: "Y-axis" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: "Color" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: "Overlap (ms)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("th", { children: "Order" })
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("tbody", { children: [
-          items.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("tr", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("tbody", { children: [
+          items.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("tr", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 "aria-label": `Headline ${index + 1}`,
@@ -70778,7 +71335,7 @@ ${prefix}
                 onChange: (e) => updateItem(item.id, { label: e.target.value })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 "aria-label": `Headline ${index + 1} link`,
@@ -70788,7 +71345,7 @@ ${prefix}
                 placeholder: "/path-or-url"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 "aria-label": `Headline ${index + 1} x-axis`,
@@ -70801,7 +71358,7 @@ ${prefix}
                 onChange: (e) => updateItem(item.id, { xAxis: e.target.value })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 "aria-label": `Headline ${index + 1} y-axis`,
@@ -70814,7 +71371,7 @@ ${prefix}
                 onChange: (e) => updateItem(item.id, { yAxis: e.target.value })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 "aria-label": `Headline ${index + 1} color`,
@@ -70823,7 +71380,7 @@ ${prefix}
                 onChange: (e) => updateItem(item.id, { color: e.target.value })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 "aria-label": `Headline ${index + 1} overlap`,
@@ -70836,16 +71393,16 @@ ${prefix}
                 onChange: (e) => updateItem(item.id, { overlap: e.target.value })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-headline-table-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, -1), title: "Move up", children: "\u2191" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, 1), title: "Move down", children: "\u2193" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeItem(item.id), title: "Delete headline", children: "\u2715" })
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-headline-table-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, -1), title: "Move up", children: "\u2191" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => moveItem(item.id, 1), title: "Move down", children: "\u2193" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-danger", onClick: () => removeItem(item.id), title: "Delete headline", children: "\u2715" })
             ] }) })
           ] }, item.id)),
-          items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("td", { className: "empty-cell", colSpan: 7, children: "No headlines yet." }) }) : null
+          items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("td", { className: "empty-cell", colSpan: 7, children: "No headlines yet." }) }) : null
         ] })
       ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "Add Headline" })
+      /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { type: "button", className: "secondary-button", onClick: addItem, children: "Add Headline" })
     ] });
   }
   function ModuleEditorWrapper({
@@ -70855,9 +71412,9 @@ ${prefix}
     children
   }) {
     if (isPopped) {
-      return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderCenteredModal, { title, onClose, maxWidth: 680, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-editor", children }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderCenteredModal, { title, onClose, maxWidth: 680, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-editor", children }) });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-editor", children });
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-editor", children });
   }
   function BuilderModuleCard({
     module: module2,
@@ -70888,10 +71445,10 @@ ${prefix}
     themeColors,
     themeStyle
   }) {
-    const [isPopped, setIsPopped] = (0, import_react38.useState)(false);
-    const moduleHeaderRef = (0, import_react38.useRef)(null);
-    const moduleMountedRef = (0, import_react38.useRef)(false);
-    (0, import_react38.useEffect)(() => {
+    const [isPopped, setIsPopped] = (0, import_react39.useState)(false);
+    const moduleHeaderRef = (0, import_react39.useRef)(null);
+    const moduleMountedRef = (0, import_react39.useRef)(false);
+    (0, import_react39.useEffect)(() => {
       if (!moduleMountedRef.current) {
         moduleMountedRef.current = true;
         return;
@@ -70928,9 +71485,11 @@ ${prefix}
     const isBlogTocModule = module2.type === "blog-toc";
     const isBlogNewsletterModule = module2.type === "blog-newsletter-subscribe";
     const isBlogRelatedPostsModule = module2.type === "blog-related-posts";
+    const isBlogCategoryFilterModule = module2.type === "blog-category-filter";
+    const isBlogPostModule = module2.type === "blog-post";
     const isPollRuntimeModule = isCurrentPollModule || module2.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module2, moduleClassOverride);
-    return /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
       "div",
       {
         className: `builder-module-card ${getAlignmentClass(moduleAlignment)}`,
@@ -70939,7 +71498,7 @@ ${prefix}
           ...isHeadingModule ? getModuleMarginStyle(module2.settings) : module2.type === "button" ? getModuleOuterSpacingStyle(module2.settings) : isFloatingImage || isReminderModule ? {} : getVerticalMarginStyle(module2.settings.verticalMargin)
         },
         children: [
-          onModuleDragStart ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          onModuleDragStart ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "div",
             {
               "aria-label": "Drag module",
@@ -70950,13 +71509,13 @@ ${prefix}
               children: "\u22EE\u22EE"
             }
           ) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { "aria-expanded": isExpanded, className: "builder-module-header", ref: moduleHeaderRef, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-title", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-title-text", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: module2.name || module2.type }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: module2.type })
+          /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { "aria-expanded": isExpanded, className: "builder-module-header", ref: moduleHeaderRef, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-title", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-title-text", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: module2.name || module2.type }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: module2.type })
               ] }),
-              module2.savedModuleId ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.savedModuleId ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 "button",
                 {
                   "aria-label": module2.canonicalLocked ? "Unlock: allow push updates from canonical" : "Lock: block push updates from canonical",
@@ -70971,12 +71530,12 @@ ${prefix}
                 }
               ) : null
             ] }),
-            hideHeaderActions ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-section-actions", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { "aria-label": isExpanded ? "Collapse module" : "Expand module", className: "builder-icon-button", onClick: onToggleExpanded, title: isExpanded ? "Collapse module" : "Expand module", type: "button", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderCollapseIcon, { expanded: isExpanded }) }) }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-section-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { "aria-label": isExpanded ? "Collapse module" : "Expand module", className: "builder-icon-button", onClick: onToggleExpanded, title: isExpanded ? "Collapse module" : "Expand module", type: "button", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderCollapseIcon, { expanded: isExpanded }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { "aria-label": "Open editor in popup", className: `builder-icon-button${isPopped ? " builder-icon-button-active" : ""}`, onClick: () => setIsPopped((p) => !p), title: "Open editor in popup", type: "button", children: "\u2922" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { "aria-label": "Move module up", className: "builder-icon-button", onClick: onMoveUp, title: "Move module up", type: "button", children: "\u2191" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { "aria-label": "Move module down", className: "builder-icon-button", onClick: onMoveDown, title: "Move module down", type: "button", children: "\u2193" }),
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            hideHeaderActions ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-section-actions", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { "aria-label": isExpanded ? "Collapse module" : "Expand module", className: "builder-icon-button", onClick: onToggleExpanded, title: isExpanded ? "Collapse module" : "Expand module", type: "button", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderCollapseIcon, { expanded: isExpanded }) }) }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-section-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { "aria-label": isExpanded ? "Collapse module" : "Expand module", className: "builder-icon-button", onClick: onToggleExpanded, title: isExpanded ? "Collapse module" : "Expand module", type: "button", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderCollapseIcon, { expanded: isExpanded }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { "aria-label": "Open editor in popup", className: `builder-icon-button${isPopped ? " builder-icon-button-active" : ""}`, onClick: () => setIsPopped((p) => !p), title: "Open editor in popup", type: "button", children: "\u2922" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { "aria-label": "Move module up", className: "builder-icon-button", onClick: onMoveUp, title: "Move module up", type: "button", children: "\u2191" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { "aria-label": "Move module down", className: "builder-icon-button", onClick: onMoveDown, title: "Move module down", type: "button", children: "\u2193" }),
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 "button",
                 {
                   "aria-label": "Clone module",
@@ -70987,7 +71546,7 @@ ${prefix}
                   children: "\u29C9"
                 }
               ),
-              onSaveModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              onSaveModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 "button",
                 {
                   "aria-label": "Save module",
@@ -70998,10 +71557,10 @@ ${prefix}
                   children: "\u{1F4BE}"
                 }
               ) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { "aria-label": "Delete module", className: "builder-icon-button builder-icon-button-danger", onClick: onRemove, title: "Delete module", type: "button", children: "\u2715" })
+              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { "aria-label": "Delete module", className: "builder-icon-button builder-icon-button-danger", onClick: onRemove, title: "Delete module", type: "button", children: "\u2715" })
             ] })
           ] }),
-          !isExpanded ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          !isExpanded ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
             "div",
             {
               className: "builder-module-preview-button",
@@ -71017,8 +71576,8 @@ ${prefix}
               children: renderModulePreview(module2)
             }
           ) : null,
-          isExpanded || isPopped ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(ModuleEditorWrapper, { isPopped, title: module2.name || module2.type, onClose: () => setIsPopped(false), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+          isExpanded || isPopped ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(ModuleEditorWrapper, { isPopped, title: module2.name || module2.type, onClose: () => setIsPopped(false), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
               "input",
               {
                 type: "text",
@@ -71027,12 +71586,12 @@ ${prefix}
                 placeholder: "Optional internal label"
               }
             ) }),
-            editorDevice === "mobile" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+            editorDevice === "mobile" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
               "div",
               {
                 className: module2.type === "heading" ? "builder-heading-module-settings" : "builder-module-settings-row builder-module-settings-row-mobile",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Hide Module on Mobile", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Hide Module on Mobile", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "input",
                     {
                       type: "checkbox",
@@ -71043,7 +71602,7 @@ ${prefix}
                       }))
                     }
                   ) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Mobile Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Mobile Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
                     "select",
                     {
                       value: mobileAlignment,
@@ -71052,14 +71611,14 @@ ${prefix}
                         settings: { ...current.settings, mobileAlignment: event.target.value }
                       })),
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "", children: "Use browser setting" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "left", children: "Left" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "center", children: "Center" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "right", children: "Right" })
+                        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "", children: "Use browser setting" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "left", children: "Left" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "center", children: "Center" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "right", children: "Right" })
                       ]
                     }
                   ) }),
-                  module2.type === "heading" || module2.type === "headline-rotator" || module2.type === "poll-category-list" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Mobile Font Size", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                  module2.type === "heading" || module2.type === "headline-rotator" || module2.type === "poll-category-list" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Mobile Font Size", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "input",
                     {
                       type: "number",
@@ -71074,19 +71633,19 @@ ${prefix}
                       placeholder: "Auto"
                     }
                   ) }) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-mobile-context-note", children: "Mobile overrides are kept separate from browser settings." })
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-mobile-context-note", children: "Mobile overrides are kept separate from browser settings." })
                 ]
               }
-            ) : /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(import_jsx_runtime69.Fragment, { children: [
-              showModuleTriggerSettings ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderModuleTriggerSettings, { module: module2, onUpdateModule }) : null,
-              module2.type !== "button" ? isCurrentPollModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+            ) : /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(import_jsx_runtime71.Fragment, { children: [
+              showModuleTriggerSettings ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderModuleTriggerSettings, { module: module2, onUpdateModule }) : null,
+              module2.type !== "button" ? isCurrentPollModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderCurrentPollModuleSettings,
                 {
                   module: module2,
                   onUpdateModule,
                   onUpdateModuleBackground
                 }
-              ) : isConfettiModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderConfettiModuleSettings, { module: module2, onUpdateModule }) : isTractorNavModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderTractorNavModuleSettings, { module: module2, onUpdateModule }) : isBreadcrumbModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderBreadcrumbModuleSettings, { module: module2, onUpdateModule }) : isBlogPostListModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderBlogPostListModuleSettings, { module: module2, onUpdateModule }) : isBlogPostCardModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderBlogPostCardModuleSettings, { module: module2, onUpdateModule }) : isBlogAuthorBioModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderBlogAuthorBioModuleSettings, { module: module2, onUpdateModule }) : isBlogTocModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderBlogTocModuleSettings, { module: module2, onUpdateModule }) : isBlogNewsletterModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderBlogNewsletterSubscribeModuleSettings, { module: module2, onUpdateModule }) : isBlogRelatedPostsModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderBlogRelatedPostsModuleSettings, { module: module2, onUpdateModule }) : isSocialModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              ) : isConfettiModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderConfettiModuleSettings, { module: module2, onUpdateModule }) : isTractorNavModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderTractorNavModuleSettings, { module: module2, onUpdateModule }) : isBreadcrumbModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBreadcrumbModuleSettings, { module: module2, onUpdateModule }) : isBlogPostListModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogPostListModuleSettings, { module: module2, onUpdateModule }) : isBlogPostCardModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogPostCardModuleSettings, { module: module2, onUpdateModule }) : isBlogAuthorBioModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogAuthorBioModuleSettings, { module: module2, onUpdateModule }) : isBlogTocModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogTocModuleSettings, { module: module2, onUpdateModule }) : isBlogNewsletterModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogNewsletterSubscribeModuleSettings, { module: module2, onUpdateModule }) : isBlogRelatedPostsModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogRelatedPostsModuleSettings, { module: module2, onUpdateModule }) : isBlogCategoryFilterModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogCategoryFilterModuleSettings, { module: module2, onUpdateModule }) : isBlogPostModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderBlogPostModuleSettings, { module: module2, onUpdateModule, richTextGallery: richTextGalleryProps }) : isSocialModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderSocialModuleSettings,
                 {
                   module: module2,
@@ -71095,8 +71654,8 @@ ${prefix}
                   onOpenGallery: onOpenSocialIconGallery,
                   themeColors
                 }
-              ) : module2.type === "heading" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-heading-module-chrome", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              ) : module2.type === "heading" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-heading-module-chrome", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   BuilderBackgroundControls,
                   {
                     label: "Background",
@@ -71105,7 +71664,7 @@ ${prefix}
                     onChange: onUpdateModuleBackground
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   BuilderAlignmentIconGroup,
                   {
                     value: moduleAlignment,
@@ -71115,7 +71674,7 @@ ${prefix}
                     }))
                   }
                 ) })
-              ] }) : isPollCategoryListModule ? null : isReminderModule ? null : isFloatingImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-floating-image-module-chrome", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              ] }) : isPollCategoryListModule ? null : isReminderModule ? null : isFloatingImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-floating-image-module-chrome", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderBackgroundControls,
                 {
                   background: getModuleBackgroundSettings(module2.settings),
@@ -71123,8 +71682,8 @@ ${prefix}
                   label: "Background",
                   onChange: onUpdateModuleBackground
                 }
-              ) }) : /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-chrome", children: [
-                module2.type !== "speech-bubble" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              ) }) : /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-chrome", children: [
+                module2.type !== "speech-bubble" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   BuilderBackgroundControls,
                   {
                     label: "Background",
@@ -71133,7 +71692,7 @@ ${prefix}
                     onChange: onUpdateModuleBackground
                   }
                 ) : null,
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Alignment", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   BuilderAlignmentIconGroup,
                   {
                     value: moduleAlignment,
@@ -71143,7 +71702,7 @@ ${prefix}
                     }))
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderSettingRow, { label: "Vertical Margin", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Vertical Margin", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   BuilderNumberSelectControl,
                   {
                     fallback: "0",
@@ -71157,7 +71716,7 @@ ${prefix}
                   }
                 ) })
               ] }) : null,
-              isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderModuleOffsetFields,
                 {
                   horizontalOffset: module2.settings.horizontalOffset ?? "0",
@@ -71172,9 +71731,9 @@ ${prefix}
                   }))
                 }
               ) : null,
-              (isStandardImage || isVideoModule) && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: isVideoModule ? "Video embed URL" : "URL" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              (isStandardImage || isVideoModule) && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: isVideoModule ? "Video embed URL" : "URL" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   "input",
                   {
                     type: "text",
@@ -71190,9 +71749,9 @@ ${prefix}
                   }
                 )
               ] }),
-              isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Link" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Link" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   "input",
                   {
                     type: "text",
@@ -71205,9 +71764,9 @@ ${prefix}
                   }
                 )
               ] }) : null,
-              isVideoModule || isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-checkbox-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "New Tab" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              isVideoModule || isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-checkbox-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "New Tab" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   "input",
                   {
                     type: "checkbox",
@@ -71219,7 +71778,7 @@ ${prefix}
                   }
                 )
               ] }) : null,
-              module2.type === "button" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.type === "button" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderButtonDesignSettings,
                 {
                   isEmailTemplate,
@@ -71229,10 +71788,10 @@ ${prefix}
                   onUploadButtonBackgroundMedia
                 }
               ) : null,
-              module2.type === "contact-form" && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-contact-form-settings", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Form type" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)(
+              module2.type === "contact-form" && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-contact-form-settings", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Form type" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
                     "select",
                     {
                       value: getContactFormMode(module2.settings),
@@ -71241,22 +71800,22 @@ ${prefix}
                         settings: { ...current.settings, formMode: event.target.value }
                       })),
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "squeeze", children: "Squeeze" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "standard", children: "Standard" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("option", { value: "custom", children: "Custom" })
+                        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "squeeze", children: "Squeeze" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "standard", children: "Standard" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "custom", children: "Custom" })
                       ]
                     }
                   )
                 ] }),
-                getContactFormMode(module2.settings) === "custom" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-runtime-note", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Custom form builder stub" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { children: "Custom starts from the standard form. Field adding and advanced form types will be wired in next." })
+                getContactFormMode(module2.settings) === "custom" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-runtime-note", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Custom form builder stub" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { children: "Custom starts from the standard form. Field adding and advanced form types will be wired in next." })
                 ] }) : null
               ] }),
-              module2.type === "crm-form" && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-contact-form-settings", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "CRM Form ID" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.type === "crm-form" && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-contact-form-settings", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "CRM Form ID" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "input",
                     {
                       type: "text",
@@ -71269,17 +71828,17 @@ ${prefix}
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("div", { className: "builder-module-runtime-note", children: /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("p", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-module-runtime-note", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("p", { children: [
                   "Create and manage CRM forms in ",
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Builder \u203A CRM" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Builder \u203A CRM" }),
                   ". Paste the Form ID above to embed it on this page."
                 ] }) })
               ] }),
-              module2.type === "player-portal" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderPlayerPortalSettings, { module: module2, onUpdateModule }) : null,
-              isVideoModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-video-controls-grid", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Video name" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.type === "player-portal" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderPlayerPortalSettings, { module: module2, onUpdateModule }) : null,
+              isVideoModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-video-controls-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Video name" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "input",
                     {
                       type: "text",
@@ -71289,9 +71848,9 @@ ${prefix}
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Description" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Description" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "textarea",
                     {
                       className: "builder-textarea",
@@ -71302,17 +71861,17 @@ ${prefix}
                   )
                 ] })
               ] }) : null,
-              isStandardImage || isVideoModule ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-media-actions", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("button", { className: "secondary-button builder-gallery-button", onClick: onOpenGallery, type: "button", children: "Choose From Gallery" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "secondary-button builder-gallery-button builder-upload-button", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Upload To Gallery" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("input", { className: "builder-upload-input", type: "file", accept: "image/*,video/*", onChange: (event) => {
+              isStandardImage || isVideoModule ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-media-actions", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("button", { className: "secondary-button builder-gallery-button", onClick: onOpenGallery, type: "button", children: "Choose From Gallery" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "secondary-button builder-gallery-button builder-upload-button", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Upload To Gallery" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("input", { className: "builder-upload-input", type: "file", accept: "image/*,video/*", onChange: (event) => {
                     onUploadMedia(event.target.files?.[0] ?? null);
                     event.currentTarget.value = "";
                   } })
                 ] })
               ] }) : null,
-              isFloatingImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              isFloatingImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderFloatingImageModuleSettings,
                 {
                   module: module2,
@@ -71321,7 +71880,7 @@ ${prefix}
                   onUpdateModule
                 }
               ) : null,
-              module2.type === "speech-bubble" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.type === "speech-bubble" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderSpeechBubbleModuleSettings,
                 {
                   module: module2,
@@ -71329,7 +71888,7 @@ ${prefix}
                   richTextGallery: richTextGalleryProps
                 }
               ) : null,
-              module2.type === "reminder" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.type === "reminder" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 BuilderReminderModuleSettings,
                 {
                   module: module2,
@@ -71337,13 +71896,13 @@ ${prefix}
                   richTextGallery: richTextGalleryProps
                 }
               ) : null,
-              isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderImageModuleSettings, { module: module2, onUpdateModule }) : null,
-              module2.type === "heading" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(BuilderHeadingModuleSettings, { module: module2, onUpdateModule }) : null,
-              module2.type === "table" && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(TableModuleEditor, { module: module2, pages, onUpdateModule }),
-              module2.type === "slider" && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(SliderModuleEditor, { module: module2, onUpdateModule }),
-              module2.type === "navigation" && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(NavModuleEditor, { module: module2, onUpdateModule, onUpdateModuleBackground }),
-              module2.type === "headline-rotator" && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(HeadlineRotatorModuleEditor, { module: module2, onUpdateModule }),
-              module2.type === "poll-category-list" && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              isStandardImage ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderImageModuleSettings, { module: module2, onUpdateModule }) : null,
+              module2.type === "heading" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderHeadingModuleSettings, { module: module2, onUpdateModule }) : null,
+              module2.type === "table" && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(TableModuleEditor, { module: module2, pages, onUpdateModule }),
+              module2.type === "slider" && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(SliderModuleEditor, { module: module2, onUpdateModule }),
+              module2.type === "navigation" && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(NavModuleEditor, { module: module2, onUpdateModule, onUpdateModuleBackground }),
+              module2.type === "headline-rotator" && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(HeadlineRotatorModuleEditor, { module: module2, onUpdateModule }),
+              module2.type === "poll-category-list" && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                 PollCategoryListModuleEditor,
                 {
                   module: module2,
@@ -71351,12 +71910,12 @@ ${prefix}
                   onUpdateModuleBackground
                 }
               ),
-              module2.type === "social-share" && /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(SocialShareModuleEditor, { module: module2, onUpdateModule }),
-              module2.type === "merch" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(MerchModuleEditor, { module: module2, products, onUpdateModule }) : null,
-              module2.type === "code" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-code-editor-grid", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Label" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.type === "social-share" && /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(SocialShareModuleEditor, { module: module2, onUpdateModule }),
+              module2.type === "merch" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(MerchModuleEditor, { module: module2, products, onUpdateModule }) : null,
+              module2.type === "code" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-code-editor-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Label" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "input",
                     {
                       type: "text",
@@ -71369,9 +71928,9 @@ ${prefix}
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field builder-code-editor-field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Embed code / snippet" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field builder-code-editor-field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Embed code / snippet" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                     "textarea",
                     {
                       className: "builder-textarea builder-code-textarea",
@@ -71383,29 +71942,29 @@ ${prefix}
                   )
                 ] })
               ] }) : null,
-              (module2.type === "previous-results" || module2.type === "current-poll" || module2.type === "social-share") && /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-runtime-note", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Live poll module" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { children: "This module uses the current poll data from the live poll runtime. Use page preview or a live page to test the real behavior." })
+              (module2.type === "previous-results" || module2.type === "current-poll" || module2.type === "social-share") && /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-runtime-note", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Live poll module" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { children: "This module uses the current poll data from the live poll runtime. Use page preview or a live page to test the real behavior." })
               ] }),
-              module2.type === "confetti" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-runtime-note", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Special effect" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { children: getConfettiTrigger(module2.settings) === "game" ? "Game trigger: no on-page button. Use page preview to test, then wire the game layer to fireConfettiFromModuleSettings with these settings." : "Use page preview or a live page to test the confetti burst. Adjust particle settings in the fields above." })
+              module2.type === "confetti" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-runtime-note", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Special effect" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { children: getConfettiTrigger(module2.settings) === "game" ? "Game trigger: no on-page button. Use page preview to test, then wire the game layer to fireConfettiFromModuleSettings with these settings." : "Use page preview or a live page to test the confetti burst. Adjust particle settings in the fields above." })
               ] }) : null,
-              module2.type === "speech-bubble" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-runtime-note", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Speech bubble" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { children: getModuleTrigger(module2.settings) === "game" ? "Game trigger: overlay on the live site at page load and when portal game events fire (logged-in milestones)." : getModuleTrigger(module2.settings) === "on-load" ? "Page load trigger: overlay when this page loads on the live site." : "Use page preview or a live page to test this speech bubble overlay." })
+              module2.type === "speech-bubble" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-runtime-note", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Speech bubble" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { children: getModuleTrigger(module2.settings) === "game" ? "Game trigger: overlay on the live site at page load and when portal game events fire (logged-in milestones)." : getModuleTrigger(module2.settings) === "on-load" ? "Page load trigger: overlay when this page loads on the live site." : "Use page preview or a live page to test this speech bubble overlay." })
               ] }) : null,
-              module2.type === "floating-image" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-runtime-note", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Floating image" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { children: getModuleTrigger(module2.settings) === "game" ? "Game trigger: the image and translucent backdrop render in the full-screen overlay layer (not in the page row). Z-index on the module stacks above that backdrop." : getModuleTrigger(module2.settings) === "on-load" ? "Page load trigger: fires in the overlay layer when this page loads on the live site." : "Decorative overlays stay in the page row. Use Test Floating Image in page preview for game-style triggers." })
+              module2.type === "floating-image" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-runtime-note", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Floating image" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { children: getModuleTrigger(module2.settings) === "game" ? "Game trigger: the image and translucent backdrop render in the full-screen overlay layer (not in the page row). Z-index on the module stacks above that backdrop." : getModuleTrigger(module2.settings) === "on-load" ? "Page load trigger: fires in the overlay layer when this page loads on the live site." : "Decorative overlays stay in the page row. Use Test Floating Image in page preview for game-style triggers." })
               ] }) : null,
-              module2.type === "reminder" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("div", { className: "builder-module-runtime-note", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("strong", { children: "Reminders" }),
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("p", { children: "One module per page holds every reminder. Records sort by question number (poll order or polls-taken count). Overlays appear on the live site and in page preview when criteria match. Dismisses on the visitor's next click." })
+              module2.type === "reminder" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-module-runtime-note", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("strong", { children: "Reminders" }),
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("p", { children: "One module per page holds every reminder. Records sort by question number (poll order or polls-taken count). Overlays appear on the live site and in page preview when criteria match. Dismisses on the visitor's next click." })
               ] }) : null,
-              module2.type !== "image" && module2.type !== "floating-image" && module2.type !== "contact-form" && module2.type !== "crm-form" && module2.type !== "player-portal" && module2.type !== "table" && module2.type !== "slider" && module2.type !== "social" && module2.type !== "navigation" && module2.type !== "headline-rotator" && module2.type !== "poll-category-list" && module2.type !== "social-share" && module2.type !== "merch" && module2.type !== "code" && module2.type !== "previous-results" && module2.type !== "current-poll" && module2.type !== "confetti" && module2.type !== "speech-bubble" && module2.type !== "reminder" && module2.type !== "button" && module2.type !== "heading" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("span", { children: "Content" }),
-                module2.type === "text" ? /* @__PURE__ */ (0, import_jsx_runtime69.jsx)(
+              module2.type !== "image" && module2.type !== "floating-image" && module2.type !== "contact-form" && module2.type !== "crm-form" && module2.type !== "player-portal" && module2.type !== "table" && module2.type !== "slider" && module2.type !== "social" && module2.type !== "navigation" && module2.type !== "headline-rotator" && module2.type !== "poll-category-list" && module2.type !== "social-share" && module2.type !== "merch" && module2.type !== "code" && module2.type !== "previous-results" && module2.type !== "current-poll" && module2.type !== "confetti" && module2.type !== "speech-bubble" && module2.type !== "reminder" && module2.type !== "button" && module2.type !== "heading" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("span", { children: "Content" }),
+                module2.type === "text" ? /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
                   BuilderRichTextEditor,
                   {
                     value: module2.text,
@@ -71414,7 +71973,7 @@ ${prefix}
                     themeStyle,
                     ...richTextGalleryProps
                   }
-                ) : /* @__PURE__ */ (0, import_jsx_runtime69.jsx)("textarea", { className: "builder-textarea", value: module2.text, onChange: (event) => onUpdateModule((current) => ({ ...current, text: event.target.value })), placeholder: "Enter content" })
+                ) : /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("textarea", { className: "builder-textarea", value: module2.text, onChange: (event) => onUpdateModule((current) => ({ ...current, text: event.target.value })), placeholder: "Enter content" })
               ] }) : null
             ] })
           ] }) : null
@@ -71424,7 +71983,7 @@ ${prefix}
   }
 
   // components/builder/builder-module-palette-modal.tsx
-  var import_react39 = __toESM(require_react());
+  var import_react40 = __toESM(require_react());
 
   // lib/builder-client/builder-saved-module-palette.ts
   var SAVED_MODULE_ONLY_PALETTE_GROUPS = ["special-effects"];
@@ -71464,7 +72023,7 @@ ${prefix}
   }
 
   // components/builder/builder-module-palette-modal.tsx
-  var import_jsx_runtime70 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime72 = __toESM(require_jsx_runtime());
   var MODULE_PALETTE_AZ_SORT_STORAGE_KEY = "normie-module-palette-sort-az";
   var MODULE_PALETTE_POP_SORT_STORAGE_KEY = "normie-module-palette-sort-pop";
   var GROUP_POPULARITY_ORDER = [
@@ -71533,20 +72092,20 @@ ${prefix}
     onSelectSavedModule,
     onClose
   }) {
-    const [mounted, setMounted] = (0, import_react39.useState)(false);
-    const [sortCategoriesAz, setSortCategoriesAz] = (0, import_react39.useState)(false);
-    const [sortCategoriesPopularity, setSortCategoriesPopularity] = (0, import_react39.useState)(false);
-    const displayGroups = (0, import_react39.useMemo)(
+    const [mounted, setMounted] = (0, import_react40.useState)(false);
+    const [sortCategoriesAz, setSortCategoriesAz] = (0, import_react40.useState)(false);
+    const [sortCategoriesPopularity, setSortCategoriesPopularity] = (0, import_react40.useState)(false);
+    const displayGroups = (0, import_react40.useMemo)(
       () => sortModulePaletteGroups(modulePaletteGroups, sortCategoriesAz, sortCategoriesPopularity),
       [sortCategoriesAz, sortCategoriesPopularity]
     );
     const starterModules = activeGroup ? getStarterModulesForPaletteGroup(activeGroup) : [];
     const savedModulesForGroup = activeGroup ? getSavedModulesForPaletteGroup(cellModules, activeGroup) : [];
     const classOnlyGroup = activeGroup ? isSavedModuleOnlyPaletteGroup(activeGroup) : false;
-    (0, import_react39.useEffect)(() => {
+    (0, import_react40.useEffect)(() => {
       setMounted(true);
     }, []);
-    (0, import_react39.useEffect)(() => {
+    (0, import_react40.useEffect)(() => {
       setSortCategoriesAz(readAzSortPreference());
       setSortCategoriesPopularity(readPopularitySortPreference());
     }, []);
@@ -71577,13 +72136,13 @@ ${prefix}
     if (!mounted) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(BuilderBodyPortal, { children: /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderBodyPortal, { children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
       "div",
       {
         className: "builder-gallery-overlay",
         onClick: onClose,
         role: "presentation",
-        children: /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
           "div",
           {
             className: "builder-gallery-modal builder-module-palette-modal",
@@ -71592,11 +72151,11 @@ ${prefix}
             "aria-modal": "true",
             "aria-label": "Module library",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("div", { className: "builder-gallery-header", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("div", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("div", { className: "panel-label", children: "Module Library" }),
-                  activeGroup ? /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("nav", { "aria-label": "Module navigation", className: "builder-module-palette-breadcrumb", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { className: "builder-gallery-header", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("div", { className: "panel-label", children: "Module Library" }),
+                  activeGroup ? /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("nav", { "aria-label": "Module navigation", className: "builder-module-palette-breadcrumb", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
                       "button",
                       {
                         className: "builder-module-palette-breadcrumb-link",
@@ -71605,12 +72164,12 @@ ${prefix}
                         children: "Module Categories"
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("span", { "aria-hidden": "true", className: "builder-module-palette-breadcrumb-sep", children: "\u203A" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("strong", { className: "builder-module-palette-breadcrumb-current", children: modulePaletteGroups.find((g) => g.value === activeGroup)?.label ?? activeGroup })
+                    /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("span", { "aria-hidden": "true", className: "builder-module-palette-breadcrumb-sep", children: "\u203A" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("strong", { className: "builder-module-palette-breadcrumb-current", children: modulePaletteGroups.find((g) => g.value === activeGroup)?.label ?? activeGroup })
                   ] }) : null
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("div", { className: "builder-gallery-header-actions", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { className: "builder-gallery-header-actions", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
                     "button",
                     {
                       "aria-label": sortCategoriesPopularity ? "Use default category order" : "Sort by popularity",
@@ -71619,13 +72178,13 @@ ${prefix}
                       onClick: toggleSortCategoriesPopularity,
                       title: sortCategoriesPopularity ? "Default order" : "Sort by popularity",
                       type: "button",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("span", { className: "builder-palette-sort-stars", "aria-hidden": "true", children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("span", { className: "builder-palette-sort-star-big", children: "\u2605" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("span", { className: "builder-palette-sort-star-small", children: "\u2605" })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("span", { className: "builder-palette-sort-stars", "aria-hidden": "true", children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("span", { className: "builder-palette-sort-star-big", children: "\u2605" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("span", { className: "builder-palette-sort-star-small", children: "\u2605" })
                       ] })
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime70.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
                     "button",
                     {
                       "aria-label": sortCategoriesAz ? "Use default category order" : "Sort categories A to Z",
@@ -71637,57 +72196,57 @@ ${prefix}
                       children: "A\u2013Z"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("button", { className: "secondary-button", onClick: onClose, type: "button", children: "Close" })
+                  /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("button", { className: "secondary-button", onClick: onClose, type: "button", children: "Close" })
                 ] })
               ] }),
-              activeGroup ? /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)(import_jsx_runtime70.Fragment, { children: [
-                starterModules.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("div", { className: "builder-module-palette-section", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("div", { className: "builder-module-palette-section-label", children: "Starter Modules" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("div", { className: "builder-module-item-grid", children: starterModules.map((item) => /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)(
+              activeGroup ? /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(import_jsx_runtime72.Fragment, { children: [
+                starterModules.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { className: "builder-module-palette-section", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("div", { className: "builder-module-palette-section-label", children: "Starter Modules" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("div", { className: "builder-module-item-grid", children: starterModules.map((item) => /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
                     "button",
                     {
                       className: "builder-module-item-card",
                       onClick: () => onSelectItem(item),
                       type: "button",
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("span", { className: "builder-module-item-icon", children: item.icon }),
-                        /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("strong", { children: item.label })
+                        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("span", { className: "builder-module-item-icon", children: item.icon }),
+                        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("strong", { children: item.label })
                       ]
                     },
                     item.id
                   )) })
                 ] }) : null,
-                savedModulesForGroup.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)("div", { className: "builder-module-palette-section", children: [
-                  !classOnlyGroup ? /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("div", { className: "builder-module-palette-section-label", children: "Saved Modules" }) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("div", { className: "builder-module-item-grid", children: savedModulesForGroup.map((cellModule) => {
+                savedModulesForGroup.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { className: "builder-module-palette-section", children: [
+                  !classOnlyGroup ? /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("div", { className: "builder-module-palette-section-label", children: "Saved Modules" }) : null,
+                  /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("div", { className: "builder-module-item-grid", children: savedModulesForGroup.map((cellModule) => {
                     const savedModule = cellModule.modules[0];
                     if (!savedModule) {
                       return null;
                     }
-                    return /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)(
+                    return /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
                       "button",
                       {
                         className: "builder-module-item-card builder-module-item-card-saved",
                         onClick: () => onSelectSavedModule?.(cellModule.id),
                         type: "button",
                         children: [
-                          /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("span", { className: "builder-module-item-icon", children: getSavedModulePaletteIcon(savedModule) }),
-                          /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("strong", { children: getSavedModulePaletteLabel(cellModule) })
+                          /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("span", { className: "builder-module-item-icon", children: getSavedModulePaletteIcon(savedModule) }),
+                          /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("strong", { children: getSavedModulePaletteLabel(cellModule) })
                         ]
                       },
                       cellModule.id
                     );
                   }) })
-                ] }) : classOnlyGroup ? /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("p", { className: "panel-copy builder-module-palette-empty", children: "No saved modules with Module class Special Effects yet. Create one in the Modules workspace, assign that class, then return here." }) : null
-              ] }) : /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("div", { className: "builder-module-group-grid", children: displayGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime70.jsxs)(
+                ] }) : classOnlyGroup ? /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("p", { className: "panel-copy builder-module-palette-empty", children: "No saved modules with Module class Special Effects yet. Create one in the Modules workspace, assign that class, then return here." }) : null
+              ] }) : /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("div", { className: "builder-module-group-grid", children: displayGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
                 "button",
                 {
                   className: "builder-module-group-card",
                   onClick: () => onSelectGroup(group.value),
                   type: "button",
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("span", { className: "builder-module-group-card-icon", children: group.icon }),
-                    /* @__PURE__ */ (0, import_jsx_runtime70.jsx)("strong", { children: group.label })
+                    /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("span", { className: "builder-module-group-card-icon", children: group.icon }),
+                    /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("strong", { children: group.label })
                   ]
                 },
                 group.value
@@ -71700,10 +72259,10 @@ ${prefix}
   }
 
   // components/builder/builder-section-card.tsx
-  var import_react40 = __toESM(require_react());
+  var import_react41 = __toESM(require_react());
 
   // components/builder/builder-cell-style-settings.tsx
-  var import_jsx_runtime71 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime73 = __toESM(require_jsx_runtime());
   function opacityPercentValue(value, fallback = "1") {
     return String(Math.round(Number.parseFloat(value || fallback) * 100));
   }
@@ -71726,7 +72285,7 @@ ${prefix}
     themeColors = []
   }) {
     if (editorDevice === "mobile") {
-      return /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-cell-style-settings", children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Hide on Mobile", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-cell-style-settings", children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Hide on Mobile", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
         "input",
         {
           type: "checkbox",
@@ -71741,23 +72300,23 @@ ${prefix}
     const hAlign = getCellExtra(column, "cellHAlign", "left");
     const vAlign = getCellExtra(column, "cellVAlign", "top");
     const borderDisabled = borderStyle === "none";
-    return /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-cell-style-settings", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-cell-style-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-cell-style-group-label", children: "Border" }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Style", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-style-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-style-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-cell-style-group-label", children: "Border" }),
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Style", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(
           "select",
           {
             value: borderStyle,
             onChange: (event) => onSetCellExtra(column, "cellBorderStyle", event.target.value),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "none", children: "None" }),
-              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "solid", children: "Solid" }),
-              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "dashed", children: "Dashed" }),
-              /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "dotted", children: "Dotted" })
+              /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "none", children: "None" }),
+              /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "solid", children: "Solid" }),
+              /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "dashed", children: "Dashed" }),
+              /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "dotted", children: "Dotted" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Width", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Width", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
           BuilderNumberSelectControl,
           {
             disabled: borderDisabled,
@@ -71768,7 +72327,7 @@ ${prefix}
             onChange: (value) => onUpdateCellBorderWidth(column, value)
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
           BuilderThemeColorField,
           {
             disabled: borderDisabled,
@@ -71778,7 +72337,7 @@ ${prefix}
             onChange: (hex) => onUpdateCellBorderColor(column, hex)
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Radius", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Radius", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
           BuilderNumberSelectControl,
           {
             value: section.cellBorderRadius[column] ?? "24",
@@ -71788,16 +72347,16 @@ ${prefix}
             onChange: (value) => onUpdateCellBorderRadius(column, value)
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Shadow", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("select", { value: shadow, onChange: (event) => onSetCellExtra(column, "cellShadow", event.target.value), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "none", children: "None" }),
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "light", children: "Light" }),
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "medium", children: "Medium" }),
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "heavy", children: "Heavy" })
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Shadow", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("select", { value: shadow, onChange: (event) => onSetCellExtra(column, "cellShadow", event.target.value), children: [
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "none", children: "None" }),
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "light", children: "Light" }),
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "medium", children: "Medium" }),
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "heavy", children: "Heavy" })
         ] }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-cell-style-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-cell-style-group-label", children: "Background" }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-style-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-cell-style-group-label", children: "Background" }),
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
           BuilderBackgroundControls,
           {
             label: "Background",
@@ -71809,7 +72368,7 @@ ${prefix}
             themePrimaryColor
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Opacity", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Opacity", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
           BuilderNumberSelectControl,
           {
             value: opacityPercentValue(opacity),
@@ -71820,9 +72379,9 @@ ${prefix}
           }
         ) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-cell-style-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-cell-style-group-label", children: "Padding" }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Size", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-style-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-cell-style-group-label", children: "Padding" }),
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Size", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
           BuilderNumberSelectControl,
           {
             value: section.cellPadding[column] ?? "18",
@@ -71832,7 +72391,7 @@ ${prefix}
             onChange: (value) => onUpdateCellPadding(column, value)
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Vertical Margin", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Vertical Margin", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
           BuilderNumberSelectControl,
           {
             value: getCellExtra(column, "cellVerticalMargin", "0"),
@@ -71843,17 +72402,17 @@ ${prefix}
           }
         ) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("div", { className: "builder-cell-style-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("div", { className: "builder-cell-style-group-label", children: "Alignment" }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Horizontal", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("select", { value: hAlign, onChange: (event) => onSetCellExtra(column, "cellHAlign", event.target.value), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "left", children: "Left" }),
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "center", children: "Center" }),
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "right", children: "Right" })
+      /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-style-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-cell-style-group-label", children: "Alignment" }),
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Horizontal", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("select", { value: hAlign, onChange: (event) => onSetCellExtra(column, "cellHAlign", event.target.value), children: [
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "left", children: "Left" }),
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "center", children: "Center" }),
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "right", children: "Right" })
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime71.jsx)(BuilderSettingRow, { label: "Vertical", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime71.jsxs)("select", { value: vAlign, onChange: (event) => onSetCellExtra(column, "cellVAlign", event.target.value), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "top", children: "Top" }),
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "center", children: "Middle" }),
-          /* @__PURE__ */ (0, import_jsx_runtime71.jsx)("option", { value: "bottom", children: "Bottom" })
+        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderSettingRow, { label: "Vertical", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("select", { value: vAlign, onChange: (event) => onSetCellExtra(column, "cellVAlign", event.target.value), children: [
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "top", children: "Top" }),
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "center", children: "Middle" }),
+          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: "bottom", children: "Bottom" })
         ] }) })
       ] })
     ] });
@@ -71895,7 +72454,7 @@ ${prefix}
   }
 
   // components/builder/builder-section-controls.tsx
-  var import_jsx_runtime72 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime74 = __toESM(require_jsx_runtime());
   function updateSectionBackground(onUpdateSection, updater) {
     onUpdateSection((current) => ({ ...current, background: updater(current.background) }));
   }
@@ -71910,8 +72469,8 @@ ${prefix}
     themeColors = []
   }) {
     if (editorDevice === "mobile") {
-      return /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { className: "builder-section-settings", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Mobile Layout", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-section-settings", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Mobile Layout", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
           "select",
           {
             value: section.mobileLayout ?? "stack",
@@ -71920,18 +72479,18 @@ ${prefix}
               mobileLayout: event.target.value
             })),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "stack", children: "Stack columns" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "keep", children: "Keep columns" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "reverse-stack", children: "Reverse stack" })
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "stack", children: "Stack columns" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "keep", children: "Keep columns" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "reverse-stack", children: "Reverse stack" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("div", { className: "builder-mobile-context-note", children: "Mobile mode only changes mobile-specific row, cell, and module overrides." })
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "builder-mobile-context-note", children: "Mobile mode only changes mobile-specific row, cell, and module overrides." })
       ] });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { className: "builder-section-settings", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)("div", { className: "builder-section-settings-grid", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Layout", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-section-settings", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-section-settings-grid", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Layout", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
           "select",
           {
             value: section.layout,
@@ -71947,10 +72506,10 @@ ${prefix}
                 }))
               }));
             },
-            children: layoutOptions.map((layout) => /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: layout.value, children: layout.label }, layout.value))
+            children: layoutOptions.map((layout) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: layout.value, children: layout.label }, layout.value))
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Alignment", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
           "select",
           {
             value: section.alignment,
@@ -71959,13 +72518,13 @@ ${prefix}
               alignment: event.target.value
             })),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "left", children: "Left" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "center", children: "Center" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "right", children: "Right" })
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "left", children: "Left" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "center", children: "Center" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "right", children: "Right" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Row Background", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Row Background", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
           "select",
           {
             value: section.background.mode,
@@ -71974,15 +72533,15 @@ ${prefix}
               mode: event.target.value
             })),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "none", children: "None" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "color", children: "Color" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "gradient", children: "Gradient" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "image", children: "Image" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "style", children: "Style" })
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "none", children: "None" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "color", children: "Color" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "gradient", children: "Gradient" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "image", children: "Image" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "style", children: "Style" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Top Margin", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Top Margin", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
           BuilderNumberSelectControl,
           {
             value: section.marginTop ?? "0",
@@ -71995,7 +72554,7 @@ ${prefix}
             }))
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Bottom Margin", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Bottom Margin", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
           BuilderNumberSelectControl,
           {
             value: section.marginBottom ?? "0",
@@ -72008,7 +72567,7 @@ ${prefix}
             }))
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Border Width", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Border Width", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
           BuilderNumberSelectControl,
           {
             value: section.rowBorderWidth ?? "0",
@@ -72018,20 +72577,20 @@ ${prefix}
             onChange: (rowBorderWidth) => onUpdateSection((current) => ({ ...current, rowBorderWidth }))
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Border Style", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Border Style", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
           "select",
           {
             disabled: Number(section.rowBorderWidth ?? "0") === 0,
             value: section.rowBorderStyle ?? "solid",
             onChange: (event) => onUpdateSection((current) => ({ ...current, rowBorderStyle: event.target.value })),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "solid", children: "Solid" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "dashed", children: "Dashed" }),
-              /* @__PURE__ */ (0, import_jsx_runtime72.jsx)("option", { value: "dotted", children: "Dotted" })
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "solid", children: "Solid" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "dashed", children: "Dashed" }),
+              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "dotted", children: "Dotted" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Border Color", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Border Color", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
           BuilderThemeColorField,
           {
             disabled: Number(section.rowBorderWidth ?? "0") === 0,
@@ -72041,7 +72600,7 @@ ${prefix}
             onChange: (rowBorderColor) => onUpdateSection((current) => ({ ...current, rowBorderColor }))
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Border Radius", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Border Radius", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
           BuilderNumberSelectControl,
           {
             disabled: Number(section.rowBorderWidth ?? "0") === 0,
@@ -72052,7 +72611,7 @@ ${prefix}
             onChange: (rowBorderRadius) => onUpdateSection((current) => ({ ...current, rowBorderRadius }))
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(BuilderSettingRow, { label: "Locked", children: /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderSettingRow, { label: "Locked", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
           "input",
           {
             type: "checkbox",
@@ -72061,7 +72620,7 @@ ${prefix}
           }
         ) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime72.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
         BuilderBackgroundControls,
         {
           hideModeRow: true,
@@ -72080,7 +72639,7 @@ ${prefix}
   }
 
   // components/builder/builder-section-card.tsx
-  var import_jsx_runtime73 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime75 = __toESM(require_jsx_runtime());
   function getModulePaletteAnchorFromButton(button) {
     const rect = button.getBoundingClientRect();
     return {
@@ -72151,12 +72710,12 @@ ${prefix}
       const moduleClass = cellModule.moduleClass || paletteGroup?.label || (cellModule.modules.length !== 1 ? "Layout" : "");
       return moduleClass ? `${moduleClass} - ${cellModule.name}` : cellModule.name;
     };
-    const [collapsedCellPanels, setCollapsedCellPanels] = (0, import_react40.useState)({});
-    const [isEditingTitle, setIsEditingTitle] = (0, import_react40.useState)(false);
-    const titleInputRef = (0, import_react40.useRef)(null);
-    const sectionHeaderRef = (0, import_react40.useRef)(null);
-    const sectionMountedRef = (0, import_react40.useRef)(false);
-    (0, import_react40.useEffect)(() => {
+    const [collapsedCellPanels, setCollapsedCellPanels] = (0, import_react41.useState)({});
+    const [isEditingTitle, setIsEditingTitle] = (0, import_react41.useState)(false);
+    const titleInputRef = (0, import_react41.useRef)(null);
+    const sectionHeaderRef = (0, import_react41.useRef)(null);
+    const sectionMountedRef = (0, import_react41.useRef)(false);
+    (0, import_react41.useEffect)(() => {
       if (!sectionMountedRef.current) {
         sectionMountedRef.current = true;
         return;
@@ -72184,7 +72743,7 @@ ${prefix}
         setIsEditingTitle(false);
       }
     }
-    const columnModuleMap = (0, import_react40.useMemo)(
+    const columnModuleMap = (0, import_react41.useMemo)(
       () => Object.fromEntries(columns.map((column) => [column, section.modules.filter((module2) => module2.column === column)])),
       [columns, section.modules]
     );
@@ -72267,12 +72826,12 @@ ${prefix}
         }
       }));
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("article", { className: `builder-section-card${isCanonical ? " builder-section-card-canonical" : ""}`, style: getSectionStyle(), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { "aria-expanded": !isCollapsed, className: "builder-section-header", ref: sectionHeaderRef, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-section-title", children: isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("span", { className: "builder-section-title-label", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("strong", { children: displayTitle }),
-          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("span", { className: "builder-canonical-badge", title: canonicalSourceName ? `Canonical \u2014 linked to "${canonicalSourceName}"` : "Canonical", children: "(canonical)" })
-        ] }) : isEditingTitle ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("article", { className: `builder-section-card${isCanonical ? " builder-section-card-canonical" : ""}`, style: getSectionStyle(), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("div", { "aria-expanded": !isCollapsed, className: "builder-section-header", ref: sectionHeaderRef, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("div", { className: "builder-section-title", children: isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("span", { className: "builder-section-title-label", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("strong", { children: displayTitle }),
+          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("span", { className: "builder-canonical-badge", title: canonicalSourceName ? `Canonical \u2014 linked to "${canonicalSourceName}"` : "Canonical", children: "(canonical)" })
+        ] }) : isEditingTitle ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
           "input",
           {
             ref: titleInputRef,
@@ -72285,7 +72844,7 @@ ${prefix}
             placeholder: `Section ${sectionIndex + 1}`,
             autoFocus: true
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(
+        ) : /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(
           "button",
           {
             className: "builder-section-title-label",
@@ -72293,16 +72852,16 @@ ${prefix}
             title: "Click to rename",
             type: "button",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("strong", { children: displayTitle }),
-              hasCanonicalSource ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("span", { className: "builder-canonical-badge builder-canonical-badge-unlinked", title: "Unlinked from canonical \u2014 click Relink to reconnect", children: "Unlinked" }) : /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("span", { className: "builder-section-title-edit-hint", children: "\u270E" })
+              /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("strong", { children: displayTitle }),
+              hasCanonicalSource ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("span", { className: "builder-canonical-badge builder-canonical-badge-unlinked", title: "Unlinked from canonical \u2014 click Relink to reconnect", children: "Unlinked" }) : /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("span", { className: "builder-section-title-edit-hint", children: "\u270E" })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-section-actions", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": isCollapsed ? "Expand section" : "Collapse section", className: "builder-icon-button", onClick: onToggleCollapsed, title: isCollapsed ? "Expand section" : "Collapse section", type: "button", children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": "Move section up", className: "builder-icon-button", onClick: onMoveUp, title: "Move section up", type: "button", children: "\u2191" }),
-          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": "Move section down", className: "builder-icon-button", onClick: onMoveDown, title: "Move section down", type: "button", children: "\u2193" }),
-          isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("div", { className: "builder-section-actions", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": isCollapsed ? "Expand section" : "Collapse section", className: "builder-icon-button", onClick: onToggleCollapsed, title: isCollapsed ? "Expand section" : "Collapse section", type: "button", children: /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": "Move section up", className: "builder-icon-button", onClick: onMoveUp, title: "Move section up", type: "button", children: "\u2191" }),
+          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": "Move section down", className: "builder-icon-button", onClick: onMoveDown, title: "Move section down", type: "button", children: "\u2193" }),
+          isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
             "button",
             {
               "aria-label": "Unlock canonical section to edit locally",
@@ -72310,13 +72869,13 @@ ${prefix}
               onClick: () => onToggleCanonical?.(false),
               title: "Unlock \u2014 edit locally (detaches from canonical)",
               type: "button",
-              children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("svg", { "aria-hidden": "true", fill: "none", focusable: "false", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2.2", viewBox: "0 0 24 24", width: "1em", height: "1em", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("rect", { height: "11", rx: "2", width: "18", x: "3", y: "11" }),
-                /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("path", { d: "M7 11V7a5 5 0 0 1 9.9-1" })
+              children: /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("svg", { "aria-hidden": "true", fill: "none", focusable: "false", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2.2", viewBox: "0 0 24 24", width: "1em", height: "1em", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("rect", { height: "11", rx: "2", width: "18", x: "3", y: "11" }),
+                /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("path", { d: "M7 11V7a5 5 0 0 1 9.9-1" })
               ] })
             }
-          ) : hasCanonicalSource ? /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(import_jsx_runtime73.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+          ) : hasCanonicalSource ? /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(import_jsx_runtime75.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
               "button",
               {
                 "aria-label": "Relink section to canonical",
@@ -72324,33 +72883,33 @@ ${prefix}
                 onClick: () => onToggleCanonical?.(true),
                 title: "Relink to canonical saved section",
                 type: "button",
-                children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("svg", { "aria-hidden": "true", fill: "none", focusable: "false", height: "1em", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2.2", viewBox: "0 0 24 24", width: "1em", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("rect", { height: "10", rx: "2", width: "14", x: "1", y: "11" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("path", { d: "M5 11V7a3.5 3.5 0 0 1 7 0v4" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("path", { d: "M16 4 L21 2" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("path", { d: "M17 9 L22 9" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("path", { d: "M16 14 L21 16" })
+                children: /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("svg", { "aria-hidden": "true", fill: "none", focusable: "false", height: "1em", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2.2", viewBox: "0 0 24 24", width: "1em", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("rect", { height: "10", rx: "2", width: "14", x: "1", y: "11" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("path", { d: "M5 11V7a3.5 3.5 0 0 1 7 0v4" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("path", { d: "M16 4 L21 2" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("path", { d: "M17 9 L22 9" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("path", { d: "M16 14 L21 16" })
                 ] })
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": "Clone section", className: "builder-icon-button", onClick: onCloneSection, title: "Clone section", type: "button", children: "\u29C9" }),
-            /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": "Save section", className: "builder-icon-button", onClick: onSaveSection, title: "Save section", type: "button", children: "\u{1F4BE}" })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(import_jsx_runtime73.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": "Clone section", className: "builder-icon-button", onClick: onCloneSection, title: "Clone section", type: "button", children: "\u29C9" }),
-            /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": "Save section", className: "builder-icon-button", onClick: onSaveSection, title: "Save section", type: "button", children: "\u{1F4BE}" })
+            /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": "Clone section", className: "builder-icon-button", onClick: onCloneSection, title: "Clone section", type: "button", children: "\u29C9" }),
+            /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": "Save section", className: "builder-icon-button", onClick: onSaveSection, title: "Save section", type: "button", children: "\u{1F4BE}" })
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(import_jsx_runtime75.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": "Clone section", className: "builder-icon-button", onClick: onCloneSection, title: "Clone section", type: "button", children: "\u29C9" }),
+            /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": "Save section", className: "builder-icon-button", onClick: onSaveSection, title: "Save section", type: "button", children: "\u{1F4BE}" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("button", { "aria-label": "Delete section", className: "builder-icon-button builder-icon-button-danger", onClick: onRemove, title: "Delete section", type: "button", children: "\u2715" })
+          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("button", { "aria-label": "Delete section", className: "builder-icon-button builder-icon-button-danger", onClick: onRemove, title: "Delete section", type: "button", children: "\u2715" })
         ] })
       ] }),
-      !isCollapsed && isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-canonical-lock-body", children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("p", { className: "builder-canonical-lock-notice", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("strong", { children: "Canonical section" }),
+      !isCollapsed && isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("div", { className: "builder-canonical-lock-body", children: /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("p", { className: "builder-canonical-lock-notice", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("strong", { children: "Canonical section" }),
         canonicalSourceName ? ` \u2014 linked to "${canonicalSourceName}"` : "",
         ". Click ",
-        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("strong", { children: "Unlock" }),
+        /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("strong", { children: "Unlock" }),
         " in the header to edit this section locally."
       ] }) }) : null,
-      !isCollapsed && !isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(import_jsx_runtime73.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+      !isCollapsed && !isCanonical ? /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(import_jsx_runtime75.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
           BuilderSectionControls,
           {
             section,
@@ -72363,7 +72922,7 @@ ${prefix}
             themePrimaryColor
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
           "div",
           {
             className: `builder-columns builder-columns-${columns.length} ${getAlignmentClass(section.alignment)}`,
@@ -72371,7 +72930,7 @@ ${prefix}
             children: columns.map((column) => {
               const columnModules = columnModuleMap[column] ?? [];
               const cellPanels = getCellPanelState(column);
-              return /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(
+              return /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(
                 "div",
                 {
                   className: "builder-column-card",
@@ -72382,9 +72941,9 @@ ${prefix}
                   },
                   onDrop: (event) => handleModuleDrop(event, column),
                   children: [
-                    columnModules.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-column-header", children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("strong", { children: column }) }) : null,
-                    /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-panel", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+                    columnModules.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("div", { className: "builder-column-header", children: /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("strong", { children: column }) }) : null,
+                    /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("div", { className: "builder-cell-panel", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
                         BuilderCellPanelHeader,
                         {
                           isCollapsed: cellPanels.styles,
@@ -72393,7 +72952,7 @@ ${prefix}
                           title: editorDevice === "mobile" ? "Mobile" : "Styles"
                         }
                       ),
-                      !cellPanels.styles ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+                      !cellPanels.styles ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
                         BuilderCellStyleSettings,
                         {
                           column,
@@ -72412,12 +72971,12 @@ ${prefix}
                         }
                       ) : null
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-panel", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("div", { className: "builder-cell-panel", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
                         BuilderCellPanelHeader,
                         {
                           isCollapsed: cellPanels.content,
-                          headingActions: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+                          headingActions: /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
                             "button",
                             {
                               className: "submit-button admin-blog-add-button builder-panel-heading-button",
@@ -72432,9 +72991,9 @@ ${prefix}
                           title: "Content"
                         }
                       ),
-                      !cellPanels.content ? /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(import_jsx_runtime73.Fragment, { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)("div", { className: "builder-cell-repository-actions", children: [
-                          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("label", { className: "builder-cell-repository-dropdown", children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(
+                      !cellPanels.content ? /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(import_jsx_runtime75.Fragment, { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)("div", { className: "builder-cell-repository-actions", children: [
+                          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("label", { className: "builder-cell-repository-dropdown", children: /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(
                             "select",
                             {
                               defaultValue: "",
@@ -72445,12 +73004,12 @@ ${prefix}
                                 event.target.value = "";
                               },
                               children: [
-                                /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { disabled: true, value: "", children: "Saved Cells" }),
-                                savedCells.map((cellModule) => /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: cellModule.id, children: getSavedModuleOptionLabel(cellModule) }, cellModule.id))
+                                /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("option", { disabled: true, value: "", children: "Saved Cells" }),
+                                savedCells.map((cellModule) => /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("option", { value: cellModule.id, children: getSavedModuleOptionLabel(cellModule) }, cellModule.id))
                               ]
                             }
                           ) }),
-                          /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("label", { className: "builder-cell-repository-dropdown", children: /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(
+                          /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("label", { className: "builder-cell-repository-dropdown", children: /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(
                             "select",
                             {
                               defaultValue: "",
@@ -72461,21 +73020,21 @@ ${prefix}
                                 event.target.value = "";
                               },
                               children: [
-                                /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { disabled: true, value: "", children: "Saved Modules" }),
-                                savedModules.map((cellModule) => /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("option", { value: cellModule.id, children: getSavedModuleOptionLabel(cellModule) }, cellModule.id))
+                                /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("option", { disabled: true, value: "", children: "Saved Modules" }),
+                                savedModules.map((cellModule) => /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("option", { value: cellModule.id, children: getSavedModuleOptionLabel(cellModule) }, cellModule.id))
                               ]
                             }
                           ) })
                         ] }),
-                        columnModules.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+                        columnModules.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
                           "button",
                           {
                             className: "builder-column-empty-button",
                             onClick: (event) => onOpenModulePalette(column, getModulePaletteAnchorFromButton(event.currentTarget)),
                             type: "button",
-                            children: /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("span", { className: "builder-column-empty-plus", children: "+" })
+                            children: /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("span", { className: "builder-column-empty-plus", children: "+" })
                           }
-                        ) : /* @__PURE__ */ (0, import_jsx_runtime73.jsx)("div", { className: "builder-module-list", children: columnModules.map((module2, moduleIndex) => /* @__PURE__ */ (0, import_jsx_runtime73.jsxs)(
+                        ) : /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("div", { className: "builder-module-list", children: columnModules.map((module2, moduleIndex) => /* @__PURE__ */ (0, import_jsx_runtime75.jsxs)(
                           "div",
                           {
                             className: "builder-module-stack-item",
@@ -72486,7 +73045,7 @@ ${prefix}
                             },
                             onDrop: (event) => handleModuleDrop(event, column, module2.id),
                             children: [
-                              /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+                              /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
                                 BuilderModuleCard,
                                 {
                                   isEmailTemplate,
@@ -72525,7 +73084,7 @@ ${prefix}
                                   }
                                 }
                               ),
-                              moduleIndex === columnModules.length - 1 ? /* @__PURE__ */ (0, import_jsx_runtime73.jsx)(
+                              moduleIndex === columnModules.length - 1 ? /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
                                 "button",
                                 {
                                   "aria-label": "Add module",
@@ -72554,7 +73113,7 @@ ${prefix}
 
   // components/builder/builder-module-repository-list.tsx
   init_rich_text_image();
-  var import_jsx_runtime74 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime76 = __toESM(require_jsx_runtime());
   function getModuleClassOptions(currentValue) {
     return getBuilderModuleClassOptions(currentValue);
   }
@@ -72590,7 +73149,7 @@ ${prefix}
   }
   function CrudTruncateCell({ text, title }) {
     const resolvedTitle = title ?? text;
-    return /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-truncate", title: resolvedTitle, children: text });
+    return /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-truncate", title: resolvedTitle, children: text });
   }
   function getModuleLabel(module2) {
     const name = module2.name?.trim();
@@ -72684,7 +73243,7 @@ ${prefix}
   }) {
     const isActive2 = activeSortKey === sortKey;
     const indicator = isActive2 ? sortDirection === "asc" ? "\u25B2" : "\u25BC" : "\u2195";
-    return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
       "button",
       {
         "aria-label": `Sort by ${label}`,
@@ -72692,8 +73251,8 @@ ${prefix}
         onClick: () => onSort(sortKey),
         type: "button",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { children: label }),
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { "aria-hidden": "true", className: "admin-table-sort-indicator", children: indicator })
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { children: label }),
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { "aria-hidden": "true", className: "admin-table-sort-indicator", children: indicator })
         ]
       }
     );
@@ -72857,11 +73416,11 @@ ${prefix}
     onCloneCreatedModule,
     onDeleteCreatedModule
   }) {
-    const [filters, setFilters] = (0, import_react41.useState)(EMPTY_CREATED_MODULE_FILTERS);
-    const [sortKey, setSortKey] = (0, import_react41.useState)("module");
-    const [sortDirection, setSortDirection] = (0, import_react41.useState)("asc");
-    const filterOptions = (0, import_react41.useMemo)(() => getCreatedModuleFilterOptions(items), [items]);
-    const visibleItems = (0, import_react41.useMemo)(() => {
+    const [filters, setFilters] = (0, import_react42.useState)(EMPTY_CREATED_MODULE_FILTERS);
+    const [sortKey, setSortKey] = (0, import_react42.useState)("module");
+    const [sortDirection, setSortDirection] = (0, import_react42.useState)("asc");
+    const filterOptions = (0, import_react42.useMemo)(() => getCreatedModuleFilterOptions(items), [items]);
+    const visibleItems = (0, import_react42.useMemo)(() => {
       const filtered = items.filter((item) => matchesCreatedModuleFilters(item, filters));
       return [...filtered].sort((left, right) => compareCreatedModuleRecords(left, right, sortKey, sortDirection));
     }, [filters, items, sortDirection, sortKey]);
@@ -72877,8 +73436,8 @@ ${prefix}
       setSortKey(typedKey);
       setSortDirection("asc");
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-toolbar-shell", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "builder-panel-toggle-row", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-toolbar-shell", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "builder-panel-toggle-row", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
         "button",
         {
           "aria-expanded": !isCollapsed,
@@ -72888,27 +73447,27 @@ ${prefix}
           title: isCollapsed ? "Expand All Created Modules" : "Collapse All Created Modules",
           type: "button",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "panel-label", children: "All Created Modules" }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "panel-label", children: "All Created Modules" }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) })
           ]
         }
       ) }),
-      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(import_jsx_runtime74.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("p", { className: "panel-copy admin-copy builder-modules-crud-intro", children: "Modules appear here after you add them to a page or template in the Pages workspace. New types such as Speech Bubble live in Pages \u2192 Module Library." }),
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "table-shell builder-templates-shell builder-modules-crud-shell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("table", { className: "polls-table builder-templates-table builder-modules-crud-table", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("colgroup", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("col", { className: "builder-crud-col-module" }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("col", { className: "builder-crud-col-type" }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("col", { className: "builder-crud-col-section" }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("col", { className: "builder-crud-col-class" }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("col", { className: "builder-crud-col-updated" }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("col", { className: "builder-crud-col-actions" })
+      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(import_jsx_runtime76.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("p", { className: "panel-copy admin-copy builder-modules-crud-intro", children: "Modules appear here after you add them to a page or template in the Pages workspace. New types such as Speech Bubble live in Pages \u2192 Module Library." }),
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "table-shell builder-templates-shell builder-modules-crud-shell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("table", { className: "polls-table builder-templates-table builder-modules-crud-table", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("colgroup", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("col", { className: "builder-crud-col-module" }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("col", { className: "builder-crud-col-type" }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("col", { className: "builder-crud-col-section" }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("col", { className: "builder-crud-col-class" }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("col", { className: "builder-crud-col-updated" }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("col", { className: "builder-crud-col-actions" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("thead", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { className: "builder-crud-filter-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Module" }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("thead", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { className: "builder-crud-filter-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Module" }),
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                   "input",
                   {
                     className: "builder-crud-filter-input",
@@ -72919,54 +73478,54 @@ ${prefix}
                   }
                 )
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Type" }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Type" }),
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
                   "select",
                   {
                     className: "builder-crud-filter-select",
                     value: filters.type,
                     onChange: (event) => updateFilter("type", event.target.value),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "", children: "All" }),
-                      filterOptions.types.map((type) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: type, children: type }, type))
+                      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: "", children: "All" }),
+                      filterOptions.types.map((type) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: type, children: type }, type))
                     ]
                   }
                 )
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Section" }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Section" }),
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
                   "select",
                   {
                     className: "builder-crud-filter-select",
                     value: filters.section,
                     onChange: (event) => updateFilter("section", event.target.value),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "", children: "All" }),
-                      filterOptions.sections.map((section) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: section, children: section }, section))
+                      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: "", children: "All" }),
+                      filterOptions.sections.map((section) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: section, children: section }, section))
                     ]
                   }
                 )
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Class" }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Class" }),
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
                   "select",
                   {
                     className: "builder-crud-filter-select",
                     value: filters.className,
                     onChange: (event) => updateFilter("className", event.target.value),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "", children: "All" }),
-                      filterOptions.classes.map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: moduleClass, children: moduleClass }, moduleClass))
+                      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: "", children: "All" }),
+                      filterOptions.classes.map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: moduleClass, children: moduleClass }, moduleClass))
                     ]
                   }
                 )
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Updated" }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Updated" }),
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                   "input",
                   {
                     className: "builder-crud-filter-input",
@@ -72977,10 +73536,10 @@ ${prefix}
                   }
                 )
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { className: "crud-actions-cell", scope: "col" })
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { className: "crud-actions-cell", scope: "col" })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 BuilderCrudSortButton,
                 {
                   activeSortKey: sortKey,
@@ -72990,7 +73549,7 @@ ${prefix}
                   sortKey: "module"
                 }
               ) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 BuilderCrudSortButton,
                 {
                   activeSortKey: sortKey,
@@ -73000,7 +73559,7 @@ ${prefix}
                   sortKey: "type"
                 }
               ) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 BuilderCrudSortButton,
                 {
                   activeSortKey: sortKey,
@@ -73010,7 +73569,7 @@ ${prefix}
                   sortKey: "section"
                 }
               ) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 BuilderCrudSortButton,
                 {
                   activeSortKey: sortKey,
@@ -73020,7 +73579,7 @@ ${prefix}
                   sortKey: "moduleClass"
                 }
               ) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 BuilderCrudSortButton,
                 {
                   activeSortKey: sortKey,
@@ -73030,25 +73589,25 @@ ${prefix}
                   sortKey: "updated"
                 }
               ) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { className: "crud-actions-cell", scope: "col", children: "Actions" })
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { className: "crud-actions-cell", scope: "col", children: "Actions" })
             ] })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tbody", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tbody", { children: [
             visibleItems.map((item) => {
               const moduleLabel = getModuleLabel(item.module);
               const moduleTypeLabel = formatBuilderModuleTypeLabel(item.module.type);
               const sectionLabel = formatSectionTitle(item.sectionTitle);
               const moduleClassLabel = getDisplayModuleClassForModule(item.module);
               const updatedLabel = formatTemplateTimestamp(item.updatedAt);
-              return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(import_react41.Fragment, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "builder-crud-cell-module", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("strong", { className: "builder-crud-truncate", title: moduleLabel, children: moduleLabel }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(CrudTruncateCell, { text: moduleTypeLabel, title: moduleTypeLabel }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(CrudTruncateCell, { text: sectionLabel, title: sectionLabel }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(CrudTruncateCell, { text: moduleClassLabel, title: moduleClassLabel }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "builder-crud-cell-updated", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(CrudTruncateCell, { text: updatedLabel, title: updatedLabel }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "crud-actions-cell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-template-actions", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              return /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(import_react42.Fragment, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "builder-crud-cell-module", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("strong", { className: "builder-crud-truncate", title: moduleLabel, children: moduleLabel }) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(CrudTruncateCell, { text: moduleTypeLabel, title: moduleTypeLabel }) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(CrudTruncateCell, { text: sectionLabel, title: sectionLabel }) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(CrudTruncateCell, { text: moduleClassLabel, title: moduleClassLabel }) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "builder-crud-cell-updated", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(CrudTruncateCell, { text: updatedLabel, title: updatedLabel }) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "crud-actions-cell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-template-actions", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                       "button",
                       {
                         "aria-label": "Edit created module",
@@ -73060,7 +73619,7 @@ ${prefix}
                         children: "\u270E"
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                       "button",
                       {
                         "aria-label": "Clone created module",
@@ -73072,7 +73631,7 @@ ${prefix}
                         children: "\u29C9"
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                       "button",
                       {
                         "aria-label": "Delete created module",
@@ -73086,18 +73645,18 @@ ${prefix}
                     )
                   ] }) })
                 ] }),
-                editingCreatedId === item.id && editingCreatedModule ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { colSpan: 6, children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-saved-module-editor", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-meta-grid", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("strong", { children: getCreatedModuleSourceLabel(item) }),
-                      /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("p", { className: "builder-module-editor-copy", children: [
+                editingCreatedId === item.id && editingCreatedModule ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { colSpan: 6, children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-saved-module-editor", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-meta-grid", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("strong", { children: getCreatedModuleSourceLabel(item) }),
+                      /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("p", { className: "builder-module-editor-copy", children: [
                         "Editing the live module in ",
                         sectionLabel,
                         "."
                       ] })
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-meta-actions", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-meta-actions", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                         "button",
                         {
                           className: "submit-button admin-blog-add-button",
@@ -73120,10 +73679,10 @@ ${prefix}
                           children: isSaving ? "Saving..." : "Save Module"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("button", { className: "secondary-button", onClick: onCancelEditing, type: "button", children: "Cancel" })
+                      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("button", { className: "secondary-button", onClick: onCancelEditing, type: "button", children: "Cancel" })
                     ] })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "builder-saved-module-column-pod", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "builder-saved-module-column-pod", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                     BuilderModuleCard,
                     {
                       editorDevice: "browser",
@@ -73148,7 +73707,7 @@ ${prefix}
                 ] }) }) }) : null
               ] }, item.id);
             }),
-            visibleItems.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "empty-cell", colSpan: 6, children: items.length === 0 ? emptyLabel : "No modules match the current filters." }) }) : null
+            visibleItems.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "empty-cell", colSpan: 6, children: items.length === 0 ? emptyLabel : "No modules match the current filters." }) }) : null
           ] })
         ] }) })
       ] }) : null
@@ -73181,11 +73740,11 @@ ${prefix}
     onCloneSavedModule,
     onDeleteSavedModule
   }) {
-    const [filters, setFilters] = (0, import_react41.useState)(EMPTY_REPOSITORY_FILTERS);
-    const [sortKey, setSortKey] = (0, import_react41.useState)("name");
-    const [sortDirection, setSortDirection] = (0, import_react41.useState)("asc");
-    const filterOptions = (0, import_react41.useMemo)(() => getRepositoryFilterOptions(items), [items]);
-    const visibleItems = (0, import_react41.useMemo)(() => {
+    const [filters, setFilters] = (0, import_react42.useState)(EMPTY_REPOSITORY_FILTERS);
+    const [sortKey, setSortKey] = (0, import_react42.useState)("name");
+    const [sortDirection, setSortDirection] = (0, import_react42.useState)("asc");
+    const filterOptions = (0, import_react42.useMemo)(() => getRepositoryFilterOptions(items), [items]);
+    const visibleItems = (0, import_react42.useMemo)(() => {
       const filtered = items.filter((item) => matchesRepositoryFilters(item, filters));
       return [...filtered].sort((left, right) => compareRepositoryRecords(left, right, sortKey, sortDirection));
     }, [filters, items, sortDirection, sortKey]);
@@ -73201,8 +73760,8 @@ ${prefix}
       setSortKey(typedKey);
       setSortDirection("asc");
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-toolbar-shell", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "builder-panel-toggle-row", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-toolbar-shell", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "builder-panel-toggle-row", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
         "button",
         {
           "aria-expanded": !isCollapsed,
@@ -73212,17 +73771,17 @@ ${prefix}
           title: isCollapsed ? `Expand ${title}` : `Collapse ${title}`,
           type: "button",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "panel-label", children: title }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "panel-label", children: title }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) })
           ]
         }
       ) }),
-      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "table-shell builder-templates-shell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("table", { className: "polls-table builder-templates-table", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("thead", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { className: "builder-crud-filter-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Name" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "table-shell builder-templates-shell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("table", { className: "polls-table builder-templates-table", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("thead", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { className: "builder-crud-filter-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Name" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 "input",
                 {
                   className: "builder-crud-filter-input",
@@ -73233,24 +73792,24 @@ ${prefix}
                 }
               )
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Class" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Class" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
                 "select",
                 {
                   className: "builder-crud-filter-select",
                   value: filters.className,
                   onChange: (event) => updateFilter("className", event.target.value),
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "", children: "All" }),
-                    filterOptions.classes.map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: moduleClass, children: moduleClass }, moduleClass))
+                    /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: "", children: "All" }),
+                    filterOptions.classes.map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: moduleClass, children: moduleClass }, moduleClass))
                   ]
                 }
               )
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Contents" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Contents" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 "input",
                 {
                   className: "builder-crud-filter-input",
@@ -73261,9 +73820,9 @@ ${prefix}
                 }
               )
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter ID" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter ID" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 "input",
                 {
                   className: "builder-crud-filter-input",
@@ -73274,9 +73833,9 @@ ${prefix}
                 }
               )
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Updated" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Updated" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 "input",
                 {
                   className: "builder-crud-filter-input",
@@ -73287,10 +73846,10 @@ ${prefix}
                 }
               )
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { className: "crud-actions-cell", scope: "col" })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { className: "crud-actions-cell", scope: "col" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
               BuilderCrudSortButton,
               {
                 activeSortKey: sortKey,
@@ -73300,7 +73859,7 @@ ${prefix}
                 sortKey: "name"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
               BuilderCrudSortButton,
               {
                 activeSortKey: sortKey,
@@ -73310,7 +73869,7 @@ ${prefix}
                 sortKey: "moduleClass"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
               BuilderCrudSortButton,
               {
                 activeSortKey: sortKey,
@@ -73320,7 +73879,7 @@ ${prefix}
                 sortKey: "contents"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
               BuilderCrudSortButton,
               {
                 activeSortKey: sortKey,
@@ -73330,7 +73889,7 @@ ${prefix}
                 sortKey: "id"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
               BuilderCrudSortButton,
               {
                 activeSortKey: sortKey,
@@ -73340,19 +73899,19 @@ ${prefix}
                 sortKey: "updated"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { className: "crud-actions-cell", children: "Actions" })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { className: "crud-actions-cell", children: "Actions" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tbody", { children: [
-          visibleItems.map((item) => /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(import_react41.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("strong", { children: item.name || "Untitled saved module" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: getDisplayModuleClass(item) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: getModuleSummary(item) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "template-id-cell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("code", { children: item.id }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: formatTemplateTimestamp(item.updatedAt) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "crud-actions-cell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-template-actions", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tbody", { children: [
+          visibleItems.map((item) => /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(import_react42.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("strong", { children: item.name || "Untitled saved module" }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: getDisplayModuleClass(item) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: getModuleSummary(item) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "template-id-cell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("code", { children: item.id }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: formatTemplateTimestamp(item.updatedAt) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "crud-actions-cell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-template-actions", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                   "button",
                   {
                     "aria-label": "Edit saved module",
@@ -73364,7 +73923,7 @@ ${prefix}
                     children: "\u270E"
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                   "button",
                   {
                     "aria-label": "Clone",
@@ -73376,7 +73935,7 @@ ${prefix}
                     children: "\u29C9"
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                   "button",
                   {
                     "aria-label": "Delete saved module",
@@ -73390,11 +73949,11 @@ ${prefix}
                 )
               ] }) })
             ] }, item.id),
-            editingId === item.id ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { colSpan: 6, children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-saved-module-editor", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-meta-grid", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { children: "Saved module name" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+            editingId === item.id ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { colSpan: 6, children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-saved-module-editor", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-meta-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { children: "Saved module name" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                     "input",
                     {
                       type: "text",
@@ -73403,19 +73962,19 @@ ${prefix}
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { children: "Module class" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { children: "Module class" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                     "select",
                     {
                       value: editingModuleClass,
                       onChange: (event) => onSetEditingModuleClass(event.target.value),
-                      children: getModuleClassOptions(editingModuleClass).map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: moduleClass, children: moduleClass }, moduleClass))
+                      children: getModuleClassOptions(editingModuleClass).map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: moduleClass, children: moduleClass }, moduleClass))
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-meta-actions", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-meta-actions", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                     "button",
                     {
                       className: "submit-button admin-blog-add-button",
@@ -73432,10 +73991,10 @@ ${prefix}
                       children: isSaving ? "Saving..." : "Save Module"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("button", { className: "secondary-button", onClick: onCancelEditing, type: "button", children: "Cancel" })
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("button", { className: "secondary-button", onClick: onCancelEditing, type: "button", children: "Cancel" })
                 ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "builder-saved-module-column-pod builder-saved-module-editor-stack", children: editingModules.map((module2) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "builder-saved-module-column-pod builder-saved-module-editor-stack", children: editingModules.map((module2) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 BuilderModuleCard,
                 {
                   editorDevice: "browser",
@@ -73461,7 +74020,7 @@ ${prefix}
               )) })
             ] }) }) }, `${item.id}-editor`) : null
           ] }, item.id)),
-          visibleItems.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "empty-cell", colSpan: 6, children: items.length === 0 ? emptyLabel : "No saved records match the current filters." }) }) : null
+          visibleItems.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "empty-cell", colSpan: 6, children: items.length === 0 ? emptyLabel : "No saved records match the current filters." }) }) : null
         ] })
       ] }) }) : null
     ] });
@@ -73503,11 +74062,11 @@ ${prefix}
     onUpdateEditingSectionModuleBackground,
     onUpdateEditingSection
   }) {
-    const [filters, setFilters] = (0, import_react41.useState)(EMPTY_SAVED_SECTION_FILTERS);
-    const [sortKey, setSortKey] = (0, import_react41.useState)("name");
-    const [sortDirection, setSortDirection] = (0, import_react41.useState)("asc");
-    const filterOptions = (0, import_react41.useMemo)(() => getSavedSectionFilterOptions(savedSections), [savedSections]);
-    const visibleSections = (0, import_react41.useMemo)(() => {
+    const [filters, setFilters] = (0, import_react42.useState)(EMPTY_SAVED_SECTION_FILTERS);
+    const [sortKey, setSortKey] = (0, import_react42.useState)("name");
+    const [sortDirection, setSortDirection] = (0, import_react42.useState)("asc");
+    const filterOptions = (0, import_react42.useMemo)(() => getSavedSectionFilterOptions(savedSections), [savedSections]);
+    const visibleSections = (0, import_react42.useMemo)(() => {
       const filtered = savedSections.filter((section) => matchesSavedSectionFilters(section, filters));
       return [...filtered].sort((left, right) => compareSavedSections(left, right, sortKey, sortDirection));
     }, [filters, savedSections, sortDirection, sortKey]);
@@ -73523,8 +74082,8 @@ ${prefix}
       setSortKey(typedKey);
       setSortDirection("asc");
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-toolbar-shell", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "builder-panel-toggle-row", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-toolbar-shell", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "builder-panel-toggle-row", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(
         "button",
         {
           "aria-expanded": !isCollapsed,
@@ -73534,73 +74093,73 @@ ${prefix}
           title: isCollapsed ? "Expand Saved Sections" : "Collapse Saved Sections",
           type: "button",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "panel-label", children: "Saved Sections" }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "panel-label", children: "Saved Sections" }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCollapseIcon, { expanded: !isCollapsed }) })
           ]
         }
       ) }),
-      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "table-shell builder-templates-shell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("table", { className: "polls-table builder-templates-table", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("thead", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { className: "builder-crud-filter-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Name" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.name, onChange: (event) => updateFilter("name", event.target.value) })
+      !isCollapsed ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "table-shell builder-templates-shell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("table", { className: "polls-table builder-templates-table", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("thead", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { className: "builder-crud-filter-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Name" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.name, onChange: (event) => updateFilter("name", event.target.value) })
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Layout" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("select", { className: "builder-crud-filter-select", value: filters.layout, onChange: (event) => updateFilter("layout", event.target.value), children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: "", children: "All" }),
-                filterOptions.layouts.map((layout) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: layout, children: layout }, layout))
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Layout" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("select", { className: "builder-crud-filter-select", value: filters.layout, onChange: (event) => updateFilter("layout", event.target.value), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: "", children: "All" }),
+                filterOptions.layouts.map((layout) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: layout, children: layout }, layout))
               ] })
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Modules" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.modules, onChange: (event) => updateFilter("modules", event.target.value) })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Modules" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.modules, onChange: (event) => updateFilter("modules", event.target.value) })
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter ID" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.id, onChange: (event) => updateFilter("id", event.target.value) })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter ID" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.id, onChange: (event) => updateFilter("id", event.target.value) })
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "builder-crud-filter-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Updated" }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.updated, onChange: (event) => updateFilter("updated", event.target.value) })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "builder-crud-filter-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { className: "builder-crud-filter-label", children: "Filter Updated" }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("input", { className: "builder-crud-filter-input", placeholder: "Search", type: "search", value: filters.updated, onChange: (event) => updateFilter("updated", event.target.value) })
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { className: "crud-actions-cell", scope: "col" })
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { className: "crud-actions-cell", scope: "col" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Name", onSort: handleSort, sortDirection, sortKey: "name" }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Layout", onSort: handleSort, sortDirection, sortKey: "layout" }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Modules", onSort: handleSort, sortDirection, sortKey: "modules" }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "ID", onSort: handleSort, sortDirection, sortKey: "id" }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Updated", onSort: handleSort, sortDirection, sortKey: "updated" }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("th", { className: "crud-actions-cell", children: "Actions" })
+          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Name", onSort: handleSort, sortDirection, sortKey: "name" }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Layout", onSort: handleSort, sortDirection, sortKey: "layout" }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Modules", onSort: handleSort, sortDirection, sortKey: "modules" }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "ID", onSort: handleSort, sortDirection, sortKey: "id" }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { scope: "col", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderCrudSortButton, { activeSortKey: sortKey, label: "Updated", onSort: handleSort, sortDirection, sortKey: "updated" }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("th", { className: "crud-actions-cell", children: "Actions" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tbody", { children: [
-          visibleSections.map((section) => /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(import_react41.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("tr", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("strong", { children: section.name || "Untitled saved section" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: section.section.layout }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: section.section.modules.length }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "template-id-cell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("code", { children: section.id }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { children: formatTemplateTimestamp(section.updatedAt) }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "crud-actions-cell", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-template-actions", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("button", { "aria-label": "Edit saved section", className: "polls-icon-button polls-icon-button-edit", disabled: isSaving, onClick: () => onStartEditingSection(section), title: "Edit section", type: "button", children: "\u270E" }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("button", { "aria-label": "Delete saved section", className: "polls-icon-button polls-icon-button-danger", disabled: isSaving, onClick: () => onDeleteSavedSection(section.id, section.name), title: "Delete", type: "button", children: "\u{1F5D1}" })
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tbody", { children: [
+          visibleSections.map((section) => /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(import_react42.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("tr", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("strong", { children: section.name || "Untitled saved section" }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: section.section.layout }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: section.section.modules.length }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "template-id-cell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("code", { children: section.id }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { children: formatTemplateTimestamp(section.updatedAt) }),
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "crud-actions-cell", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-template-actions", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("button", { "aria-label": "Edit saved section", className: "polls-icon-button polls-icon-button-edit", disabled: isSaving, onClick: () => onStartEditingSection(section), title: "Edit section", type: "button", children: "\u270E" }),
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("button", { "aria-label": "Delete saved section", className: "polls-icon-button polls-icon-button-danger", disabled: isSaving, onClick: () => onDeleteSavedSection(section.id, section.name), title: "Delete", type: "button", children: "\u{1F5D1}" })
               ] }) })
             ] }),
-            editingSectionId === section.id && editingSection ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { colSpan: 6, children: /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-saved-module-editor", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-meta-grid", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("label", { className: "field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("span", { children: "Saved section name" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("input", { type: "text", value: editingSectionName, onChange: (event) => onSetEditingSectionName(event.target.value) })
+            editingSectionId === section.id && editingSection ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { colSpan: 6, children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-saved-module-editor", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-meta-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("span", { children: "Saved section name" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("input", { type: "text", value: editingSectionName, onChange: (event) => onSetEditingSectionName(event.target.value) })
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-meta-actions", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("button", { className: "submit-button admin-blog-add-button", disabled: isSaving || !editingSection, onClick: () => void onSaveSavedSection(editingSectionId, editingSectionName, editingSection), type: "button", children: isSaving ? "Saving..." : "Save Section" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("button", { className: "secondary-button", onClick: onCancelEditingSection, type: "button", children: "Cancel" })
+                /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-meta-actions", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("button", { className: "submit-button admin-blog-add-button", disabled: isSaving || !editingSection, onClick: () => void onSaveSavedSection(editingSectionId, editingSectionName, editingSection), type: "button", children: isSaving ? "Saving..." : "Save Section" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("button", { className: "secondary-button", onClick: onCancelEditingSection, type: "button", children: "Cancel" })
                 ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("div", { className: "builder-rows-pod", children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("div", { className: "builder-rows-pod", children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
                 BuilderSectionCard,
                 {
                   cellModules,
@@ -73647,7 +74206,7 @@ ${prefix}
               ) })
             ] }) }) }) : null
           ] }, section.id)),
-          visibleSections.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("td", { className: "empty-cell", colSpan: 6, children: savedSections.length === 0 ? "No saved sections found." : "No saved sections match the current filters." }) }) : null
+          visibleSections.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("td", { className: "empty-cell", colSpan: 6, children: savedSections.length === 0 ? "No saved sections found." : "No saved sections match the current filters." }) }) : null
         ] })
       ] }) }) : null
     ] });
@@ -73673,34 +74232,34 @@ ${prefix}
     onModuleEditorFocusChange,
     onRepositoryEditingActiveChange
   }) {
-    const [collapsedPanels, setCollapsedPanels] = (0, import_react41.useState)({
+    const [collapsedPanels, setCollapsedPanels] = (0, import_react42.useState)({
       createdModules: true,
       modules: true,
       cells: true,
       sections: true
     });
-    const [editingCreatedId, setEditingCreatedId] = (0, import_react41.useState)("");
-    const [editingCreatedModule, setEditingCreatedModule] = (0, import_react41.useState)(null);
-    const [editingCreatedExpanded, setEditingCreatedExpanded] = (0, import_react41.useState)(false);
-    const [editingId, setEditingId] = (0, import_react41.useState)("");
-    const [editingName, setEditingName] = (0, import_react41.useState)("");
-    const [editingModuleClass, setEditingModuleClass] = (0, import_react41.useState)("");
-    const [editingModules, setEditingModules] = (0, import_react41.useState)([]);
-    const [editingExpandedModuleIds, setEditingExpandedModuleIds] = (0, import_react41.useState)([]);
-    const [editingSectionId, setEditingSectionId] = (0, import_react41.useState)("");
-    const [editingSectionName, setEditingSectionName] = (0, import_react41.useState)("");
-    const [editingSection, setEditingSection] = (0, import_react41.useState)(null);
-    const [editingSectionCollapsed, setEditingSectionCollapsed] = (0, import_react41.useState)(false);
-    const [editingSectionExpandedModuleIds, setEditingSectionExpandedModuleIds] = (0, import_react41.useState)([]);
-    const [editingSectionGalleryTarget, setEditingSectionGalleryTarget] = (0, import_react41.useState)(null);
-    const [editingSectionPaletteColumn, setEditingSectionPaletteColumn] = (0, import_react41.useState)("");
-    const [editingSectionPaletteAnchor, setEditingSectionPaletteAnchor] = (0, import_react41.useState)(null);
-    const [activeModuleGroup, setActiveModuleGroup] = (0, import_react41.useState)(null);
-    const [editingGalleryTarget, setEditingGalleryTarget] = (0, import_react41.useState)(null);
-    const [editingGalleryAnchor, setEditingGalleryAnchor] = (0, import_react41.useState)(null);
+    const [editingCreatedId, setEditingCreatedId] = (0, import_react42.useState)("");
+    const [editingCreatedModule, setEditingCreatedModule] = (0, import_react42.useState)(null);
+    const [editingCreatedExpanded, setEditingCreatedExpanded] = (0, import_react42.useState)(false);
+    const [editingId, setEditingId] = (0, import_react42.useState)("");
+    const [editingName, setEditingName] = (0, import_react42.useState)("");
+    const [editingModuleClass, setEditingModuleClass] = (0, import_react42.useState)("");
+    const [editingModules, setEditingModules] = (0, import_react42.useState)([]);
+    const [editingExpandedModuleIds, setEditingExpandedModuleIds] = (0, import_react42.useState)([]);
+    const [editingSectionId, setEditingSectionId] = (0, import_react42.useState)("");
+    const [editingSectionName, setEditingSectionName] = (0, import_react42.useState)("");
+    const [editingSection, setEditingSection] = (0, import_react42.useState)(null);
+    const [editingSectionCollapsed, setEditingSectionCollapsed] = (0, import_react42.useState)(false);
+    const [editingSectionExpandedModuleIds, setEditingSectionExpandedModuleIds] = (0, import_react42.useState)([]);
+    const [editingSectionGalleryTarget, setEditingSectionGalleryTarget] = (0, import_react42.useState)(null);
+    const [editingSectionPaletteColumn, setEditingSectionPaletteColumn] = (0, import_react42.useState)("");
+    const [editingSectionPaletteAnchor, setEditingSectionPaletteAnchor] = (0, import_react42.useState)(null);
+    const [activeModuleGroup, setActiveModuleGroup] = (0, import_react42.useState)(null);
+    const [editingGalleryTarget, setEditingGalleryTarget] = (0, import_react42.useState)(null);
+    const [editingGalleryAnchor, setEditingGalleryAnchor] = (0, import_react42.useState)(null);
     const savedModules = cellModules.filter((cellModule) => cellModule.modules.length === 1);
     const savedCells = cellModules.filter((cellModule) => cellModule.modules.length !== 1);
-    const createdModules = (0, import_react41.useMemo)(() => getCreatedModules(templates, pages), [pages, templates]);
+    const createdModules = (0, import_react42.useMemo)(() => getCreatedModules(templates, pages), [pages, templates]);
     function buildCreatedModuleFocus() {
       if (!editingCreatedId || !editingCreatedModule) {
         return null;
@@ -73743,7 +74302,7 @@ ${prefix}
         section: editingSection
       };
     }
-    const lastPublishedEditingSessionKeyRef = (0, import_react41.useRef)("");
+    const lastPublishedEditingSessionKeyRef = (0, import_react42.useRef)("");
     function publishRepositorySaveFocus(focus2) {
       lastPublishedEditingSessionKeyRef.current = focus2 ? repositoryEditingSessionKeyFromFocus(focus2) : "";
       onModuleEditorFocusChange(focus2, false);
@@ -73755,7 +74314,7 @@ ${prefix}
       }
       onModuleEditorFocusChange(focus2, true);
     }
-    const editingSessionKey = (0, import_react41.useMemo)(() => {
+    const editingSessionKey = (0, import_react42.useMemo)(() => {
       const focus2 = buildSectionFocus() ?? buildCreatedModuleFocus() ?? buildSavedModuleFocus();
       return focus2 ? repositoryEditingSessionKeyFromFocus(focus2) : "";
     }, [
@@ -73771,10 +74330,10 @@ ${prefix}
       editingSectionName
     ]);
     const repositoryEditorOpen = Boolean(editingCreatedId || editingId || editingSectionId);
-    (0, import_react41.useEffect)(() => {
+    (0, import_react42.useEffect)(() => {
       onRepositoryEditingActiveChange(repositoryEditorOpen);
     }, [onRepositoryEditingActiveChange, repositoryEditorOpen]);
-    (0, import_react41.useEffect)(() => {
+    (0, import_react42.useEffect)(() => {
       if (!editingSessionKey) {
         if (lastPublishedEditingSessionKeyRef.current) {
           publishRepositorySaveFocus(null);
@@ -74280,10 +74839,10 @@ ${prefix}
       }
       setEditingSectionGalleryTarget(null);
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)(import_jsx_runtime74.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("datalist", { id: "builder-module-class-options", children: BUILDER_MODULE_CLASS_OPTIONS.map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime74.jsx)("option", { value: moduleClass }, moduleClass)) }),
-      /* @__PURE__ */ (0, import_jsx_runtime74.jsxs)("div", { className: "builder-modules-repository", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)(import_jsx_runtime76.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("datalist", { id: "builder-module-class-options", children: BUILDER_MODULE_CLASS_OPTIONS.map((moduleClass) => /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("option", { value: moduleClass }, moduleClass)) }),
+      /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { className: "builder-modules-repository", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
           CreatedModulesTable,
           {
             emptyLabel: "No modules on pages or templates yet. Add one from Pages \u2192 Module Library (for example Speech Bubble).",
@@ -74311,7 +74870,7 @@ ${prefix}
             onUpdateEditingCreatedModuleBackground: updateEditingCreatedModuleBackground
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
           RepositoryTable,
           {
             emptyLabel: "No saved modules found.",
@@ -74344,7 +74903,7 @@ ${prefix}
             title: "Saved Modules"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
           RepositoryTable,
           {
             emptyLabel: "No saved cells found.",
@@ -74377,7 +74936,7 @@ ${prefix}
             title: "Saved Cells"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
           SavedSectionsTable,
           {
             cellModules,
@@ -74424,7 +74983,7 @@ ${prefix}
           }
         )
       ] }),
-      editingGalleryTarget ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+      editingGalleryTarget ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
         BuilderGalleryModal,
         {
           anchor: editingGalleryTarget.kind === "rich-text" || editingGalleryTarget.kind === "created-rich-text" ? editingGalleryAnchor : null,
@@ -74436,7 +74995,7 @@ ${prefix}
           }
         }
       ) : null,
-      editingSectionGalleryTarget ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+      editingSectionGalleryTarget ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
         BuilderGalleryModal,
         {
           anchor: editingSectionGalleryTarget.kind === "rich-text" ? editingGalleryAnchor : null,
@@ -74448,7 +75007,7 @@ ${prefix}
           }
         }
       ) : null,
-      editingSectionPaletteColumn ? /* @__PURE__ */ (0, import_jsx_runtime74.jsx)(
+      editingSectionPaletteColumn ? /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(
         BuilderModulePaletteModal,
         {
           activeGroup: activeModuleGroup,
@@ -74472,8 +75031,8 @@ ${prefix}
   }
 
   // components/builder/builder-floating-save-rail.tsx
-  var import_react42 = __toESM(require_react());
-  var import_jsx_runtime75 = __toESM(require_jsx_runtime());
+  var import_react43 = __toESM(require_react());
+  var import_jsx_runtime77 = __toESM(require_jsx_runtime());
   var FALLBACK_POSITION = {
     top: "50%",
     right: "20px",
@@ -74564,12 +75123,12 @@ ${prefix}
     return `${style2.top ?? ""}|${style2.left ?? ""}|${style2.right ?? ""}|${style2.transform ?? ""}|${style2.visibility ?? ""}`;
   }
   function BuilderFloatingSaveRail({ actions, isSaving }) {
-    const [position, setPosition] = (0, import_react42.useState)(FALLBACK_POSITION);
-    const actionsRef = (0, import_react42.useRef)(actions);
-    const positionSignatureRef = (0, import_react42.useRef)("");
+    const [position, setPosition] = (0, import_react43.useState)(FALLBACK_POSITION);
+    const actionsRef = (0, import_react43.useRef)(actions);
+    const positionSignatureRef = (0, import_react43.useRef)("");
     const actionKey = actions.length > 0 ? actions[0]?.label ?? "" : "";
     actionsRef.current = actions;
-    (0, import_react42.useLayoutEffect)(() => {
+    (0, import_react43.useLayoutEffect)(() => {
       if (actions.length === 0) {
         positionSignatureRef.current = "";
         return;
@@ -74612,7 +75171,7 @@ ${prefix}
     if (typeof document === "undefined") {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(BuilderBodyPortal, { children: /* @__PURE__ */ (0, import_jsx_runtime75.jsx)("aside", { "aria-label": "Save actions", className: "builder-floating-save-rail", style: position, children: actionsRef.current.map((action) => /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(BuilderBodyPortal, { children: /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("aside", { "aria-label": "Save actions", className: "builder-floating-save-rail", style: position, children: actionsRef.current.map((action) => /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
       "button",
       {
         className: "submit-button admin-blog-add-button",
@@ -74626,8 +75185,8 @@ ${prefix}
   }
 
   // components/builder/builder-save-debug-panel.tsx
-  var import_react43 = __toESM(require_react());
-  var import_jsx_runtime76 = __toESM(require_jsx_runtime());
+  var import_react44 = __toESM(require_react());
+  var import_jsx_runtime78 = __toESM(require_jsx_runtime());
   var DEBUG_STORAGE_KEY = "builderSaveDebug";
   function isBuilderSaveDebugEnabled() {
     if (typeof window === "undefined") {
@@ -74654,12 +75213,12 @@ ${prefix}
     selectedTemplateId,
     templateEditorFocused
   }) {
-    const [enabled, setEnabled] = (0, import_react43.useState)(false);
-    const [anchorInfo, setAnchorInfo] = (0, import_react43.useState)("\u2014");
-    (0, import_react43.useEffect)(() => {
+    const [enabled, setEnabled] = (0, import_react44.useState)(false);
+    const [anchorInfo, setAnchorInfo] = (0, import_react44.useState)("\u2014");
+    (0, import_react44.useEffect)(() => {
       setEnabled(isBuilderSaveDebugEnabled());
     }, []);
-    (0, import_react43.useEffect)(() => {
+    (0, import_react44.useEffect)(() => {
       if (!enabled) {
         return;
       }
@@ -74686,65 +75245,65 @@ ${prefix}
     }
     const stateFocusKind = repositorySaveFocus?.kind ?? "(none)";
     const refFocusKind = repositorySaveRefFocus?.kind ?? "(none)";
-    return /* @__PURE__ */ (0, import_jsx_runtime76.jsx)(BuilderBodyPortal, { children: /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("aside", { "aria-label": "Builder save diagnostics", className: "builder-save-debug-panel", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("strong", { children: "Builder Save Debug" }),
-      /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("p", { className: "builder-save-debug-hint", children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime78.jsx)(BuilderBodyPortal, { children: /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("aside", { "aria-label": "Builder save diagnostics", className: "builder-save-debug-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("strong", { children: "Builder Save Debug" }),
+      /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("p", { className: "builder-save-debug-hint", children: [
         "Enable with ",
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("code", { children: "?builderSaveDebug=1" }),
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("code", { children: "?builderSaveDebug=1" }),
         " or",
         " ",
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("code", { children: "localStorage.setItem('builderSaveDebug', '1')" }),
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("code", { children: "localStorage.setItem('builderSaveDebug', '1')" }),
         " then reload. Focus Ref updates when the parent re-renders (payload-only sync may lag until the next edit)."
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("dl", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Mode" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: builderMode })
+      /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("dl", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Mode" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: builderMode })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Repository Editor Open" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: repositorySaveActive ? "yes" : "no" })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Repository Editor Open" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: repositorySaveActive ? "yes" : "no" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Focus State Kind" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: stateFocusKind })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Focus State Kind" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: stateFocusKind })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Focus Ref Kind" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: refFocusKind })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Focus Ref Kind" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: refFocusKind })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Page Editor Focused" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: pageEditorFocused ? "yes" : "no" })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Page Editor Focused" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: pageEditorFocused ? "yes" : "no" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Template Editor Focused" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: templateEditorFocused ? "yes" : "no" })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Template Editor Focused" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: templateEditorFocused ? "yes" : "no" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Selected Page Id" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: selectedPageId || "(empty)" })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Selected Page Id" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: selectedPageId || "(empty)" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Selected Template Id" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: selectedTemplateId || "(empty)" })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Selected Template Id" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: selectedTemplateId || "(empty)" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Floating Actions" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("dd", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Floating Actions" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("dd", { children: [
             floatingActionCount,
             " (",
             floatingActionLabel || "\u2014",
             ")"
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Rail Mounted" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: floatingActionCount > 0 ? "yes" : "no" })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Rail Mounted" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: floatingActionCount > 0 ? "yes" : "no" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime76.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dt", { children: "Save Anchor" }),
-          /* @__PURE__ */ (0, import_jsx_runtime76.jsx)("dd", { children: anchorInfo })
+        /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dt", { children: "Save Anchor" }),
+          /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("dd", { children: anchorInfo })
         ] })
       ] })
     ] }) });
@@ -74756,7 +75315,7 @@ ${prefix}
   }
 
   // components/admin-builder-editor.tsx
-  var import_jsx_runtime77 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime79 = __toESM(require_jsx_runtime());
   async function readAdminJson2(response, fallbackMessage) {
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
@@ -74773,56 +75332,56 @@ ${prefix}
     return data;
   }
   function AdminBuilderEditor({ initialMode, initialRecordId } = {}) {
-    const [builderMode, setBuilderMode] = (0, import_react44.useState)(initialMode ?? "templates");
-    const [previewDevice, setPreviewDevice] = (0, import_react44.useState)("desktop");
-    const [pageTemplates, setPageTemplates] = (0, import_react44.useState)([]);
-    const [acquireRuns, setAcquireRuns] = (0, import_react44.useState)([]);
-    const [builderThemes, setBuilderThemes] = (0, import_react44.useState)([]);
-    const [pageThemeId, setPageThemeId] = (0, import_react44.useState)("");
-    const [pages, setPages] = (0, import_react44.useState)([]);
-    const [cellModules, setCellModules] = (0, import_react44.useState)([]);
-    const [savedSections, setSavedSections] = (0, import_react44.useState)([]);
-    const [products, setProducts] = (0, import_react44.useState)([]);
-    const [selectedTemplateId, setSelectedTemplateId] = (0, import_react44.useState)("");
-    const [selectedPageId, setSelectedPageId] = (0, import_react44.useState)("");
-    const [pageSlug, setPageSlug] = (0, import_react44.useState)("");
-    const [pageTemplateId, setPageTemplateId] = (0, import_react44.useState)("");
-    const [isPublishedPage, setIsPublishedPage] = (0, import_react44.useState)(true);
-    const [draft, setDraft] = (0, import_react44.useState)(createDraftFromTemplate(null));
-    const [collapsedSectionIds, setCollapsedSectionIds] = (0, import_react44.useState)([]);
-    const [expandedModuleIds, setExpandedModuleIds] = (0, import_react44.useState)([]);
-    const [pageEditorFocused, setPageEditorFocused] = (0, import_react44.useState)(false);
-    const [templateEditorFocused, setTemplateEditorFocused] = (0, import_react44.useState)(false);
-    const [repositorySaveFocus, setRepositorySaveFocus] = (0, import_react44.useState)(null);
-    const [repositorySaveActive, setRepositorySaveActive] = (0, import_react44.useState)(false);
-    const repositorySaveRef = (0, import_react44.useRef)(null);
-    const hydratedPageSelectionRef = (0, import_react44.useRef)("");
-    const hydratedTemplateSelectionRef = (0, import_react44.useRef)("");
-    const [galleryMedia, setGalleryMedia] = (0, import_react44.useState)([]);
-    const [isLoading, setIsLoading] = (0, import_react44.useState)(false);
-    const [isSaving, setIsSaving] = (0, import_react44.useState)(false);
-    const [dragOverWorkspace, setDragOverWorkspace] = (0, import_react44.useState)(false);
-    const [isGalleryOpen, setIsGalleryOpen] = (0, import_react44.useState)(false);
-    const [isModulePaletteOpen, setIsModulePaletteOpen] = (0, import_react44.useState)(false);
-    const [galleryTarget, setGalleryTarget] = (0, import_react44.useState)(null);
-    const [galleryAnchor, setGalleryAnchor] = (0, import_react44.useState)(null);
-    const [modulePaletteTarget, setModulePaletteTarget] = (0, import_react44.useState)(null);
-    const [modulePaletteAnchor, setModulePaletteAnchor] = (0, import_react44.useState)(null);
-    const [activeModuleGroup, setActiveModuleGroup] = (0, import_react44.useState)(null);
-    const [collapsedBuilderPanels, setCollapsedBuilderPanels] = (0, import_react44.useState)({
+    const [builderMode, setBuilderMode] = (0, import_react45.useState)(initialMode ?? "templates");
+    const [previewDevice, setPreviewDevice] = (0, import_react45.useState)("desktop");
+    const [pageTemplates, setPageTemplates] = (0, import_react45.useState)([]);
+    const [acquireRuns, setAcquireRuns] = (0, import_react45.useState)([]);
+    const [builderThemes, setBuilderThemes] = (0, import_react45.useState)([]);
+    const [pageThemeId, setPageThemeId] = (0, import_react45.useState)("");
+    const [pages, setPages] = (0, import_react45.useState)([]);
+    const [cellModules, setCellModules] = (0, import_react45.useState)([]);
+    const [savedSections, setSavedSections] = (0, import_react45.useState)([]);
+    const [products, setProducts] = (0, import_react45.useState)([]);
+    const [selectedTemplateId, setSelectedTemplateId] = (0, import_react45.useState)("");
+    const [selectedPageId, setSelectedPageId] = (0, import_react45.useState)("");
+    const [pageSlug, setPageSlug] = (0, import_react45.useState)("");
+    const [pageTemplateId, setPageTemplateId] = (0, import_react45.useState)("");
+    const [isPublishedPage, setIsPublishedPage] = (0, import_react45.useState)(true);
+    const [draft, setDraft] = (0, import_react45.useState)(createDraftFromTemplate(null));
+    const [collapsedSectionIds, setCollapsedSectionIds] = (0, import_react45.useState)([]);
+    const [expandedModuleIds, setExpandedModuleIds] = (0, import_react45.useState)([]);
+    const [pageEditorFocused, setPageEditorFocused] = (0, import_react45.useState)(false);
+    const [templateEditorFocused, setTemplateEditorFocused] = (0, import_react45.useState)(false);
+    const [repositorySaveFocus, setRepositorySaveFocus] = (0, import_react45.useState)(null);
+    const [repositorySaveActive, setRepositorySaveActive] = (0, import_react45.useState)(false);
+    const repositorySaveRef = (0, import_react45.useRef)(null);
+    const hydratedPageSelectionRef = (0, import_react45.useRef)("");
+    const hydratedTemplateSelectionRef = (0, import_react45.useRef)("");
+    const [galleryMedia, setGalleryMedia] = (0, import_react45.useState)([]);
+    const [isLoading, setIsLoading] = (0, import_react45.useState)(false);
+    const [isSaving, setIsSaving] = (0, import_react45.useState)(false);
+    const [dragOverWorkspace, setDragOverWorkspace] = (0, import_react45.useState)(false);
+    const [isGalleryOpen, setIsGalleryOpen] = (0, import_react45.useState)(false);
+    const [isModulePaletteOpen, setIsModulePaletteOpen] = (0, import_react45.useState)(false);
+    const [galleryTarget, setGalleryTarget] = (0, import_react45.useState)(null);
+    const [galleryAnchor, setGalleryAnchor] = (0, import_react45.useState)(null);
+    const [modulePaletteTarget, setModulePaletteTarget] = (0, import_react45.useState)(null);
+    const [modulePaletteAnchor, setModulePaletteAnchor] = (0, import_react45.useState)(null);
+    const [activeModuleGroup, setActiveModuleGroup] = (0, import_react45.useState)(null);
+    const [collapsedBuilderPanels, setCollapsedBuilderPanels] = (0, import_react45.useState)({
       rowConfigurations: true,
       // Reveal the workspace immediately when we mount to edit a specific record;
       // otherwise the page's sections stay hidden behind a collapsed panel.
       workspace: !initialRecordId
     });
-    const appliedInitialSelectionRef = (0, import_react44.useRef)(false);
-    const [savedSectionSelectKey, setSavedSectionSelectKey] = (0, import_react44.useState)(0);
-    const [insertCanonical, setInsertCanonical] = (0, import_react44.useState)(true);
-    const [isUploadingMedia, setIsUploadingMedia] = (0, import_react44.useState)(false);
-    const [error, setError] = (0, import_react44.useState)(null);
-    const [message, setMessage] = (0, import_react44.useState)(null);
-    const [showBulkCreate, setShowBulkCreate] = (0, import_react44.useState)(false);
-    const pageLayoutTemplates = (0, import_react44.useMemo)(
+    const appliedInitialSelectionRef = (0, import_react45.useRef)(false);
+    const [savedSectionSelectKey, setSavedSectionSelectKey] = (0, import_react45.useState)(0);
+    const [insertCanonical, setInsertCanonical] = (0, import_react45.useState)(true);
+    const [isUploadingMedia, setIsUploadingMedia] = (0, import_react45.useState)(false);
+    const [error, setError] = (0, import_react45.useState)(null);
+    const [message, setMessage] = (0, import_react45.useState)(null);
+    const [showBulkCreate, setShowBulkCreate] = (0, import_react45.useState)(false);
+    const pageLayoutTemplates = (0, import_react45.useMemo)(
       () => pageTemplates.filter((template) => template.templateKind !== "email"),
       [pageTemplates]
     );
@@ -74924,7 +75483,7 @@ ${prefix}
         setProducts([]);
       }
     }
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       void loadPageTemplates();
       void loadPages();
       void loadCellModules();
@@ -74933,19 +75492,19 @@ ${prefix}
       void loadAcquireRuns();
       void loadDevelopThemes();
     }, []);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       if (!pageThemeId || builderThemes.length === 0) return;
       const found3 = builderThemes.find((t) => t.id === pageThemeId);
       if (found3?.typography) {
         setDraft((c) => ({ ...c, theme: { ...c.theme, typography: found3.typography } }));
       }
     }, [pageThemeId, builderThemes]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       const handler = () => setShowBulkCreate(true);
       window.addEventListener("builder:openBulkCreate", handler);
       return () => window.removeEventListener("builder:openBulkCreate", handler);
     }, []);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       async function loadMediaLibrary() {
         try {
           const response = await builderAdminFetch("/api/admin/media", { cache: "no-store" });
@@ -74957,7 +75516,7 @@ ${prefix}
       }
       void loadMediaLibrary();
     }, []);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       if (builderMode !== "templates") {
         return;
       }
@@ -74975,7 +75534,7 @@ ${prefix}
       setDraft(createDraftFromTemplate(template));
       setCollapsedSectionIds(template.layoutSections.map((section) => section.id));
     }, [builderMode, selectedTemplateId, pageTemplates]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       if (builderMode !== "pages") {
         return;
       }
@@ -74995,7 +75554,7 @@ ${prefix}
       setIsPublishedPage(page?.isPublished ?? true);
       setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
     }, [builderMode, selectedPageId, pages]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       if (appliedInitialSelectionRef.current || !initialRecordId) {
         return;
       }
@@ -75013,7 +75572,7 @@ ${prefix}
         setSelectedTemplateId(match.id);
       }
     }, [initialMode, initialRecordId, pages, pageTemplates]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       if (builderMode !== "pages") {
         setPageEditorFocused(false);
       }
@@ -75026,20 +75585,20 @@ ${prefix}
         repositorySaveRef.current = null;
       }
     }, [builderMode]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       if (builderMode === "pages" && selectedPageId) {
         setPageEditorFocused(true);
       }
     }, [builderMode, selectedPageId]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       if (builderMode === "templates" && selectedTemplateId) {
         setTemplateEditorFocused(true);
       }
     }, [builderMode, selectedTemplateId]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       setCollapsedSectionIds((c) => c.filter((id) => draft.layoutSections.some((s) => s.id === id)));
     }, [draft.layoutSections]);
-    (0, import_react44.useEffect)(() => {
+    (0, import_react45.useEffect)(() => {
       setExpandedModuleIds(
         (c) => c.filter((id) => draft.layoutSections.some((s) => s.modules.some((m) => m.id === id)))
       );
@@ -76301,12 +76860,12 @@ Click Cancel to discard local changes and revert to canonical.`
     function renderLayoutTile(layout) {
       const columns = getLayoutColumns(layout.value);
       const gridTemplateColumns = getLayoutGridTemplate(layout.value);
-      return /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("button", { className: "builder-layout-tile", draggable: true, onClick: () => addSection(layout.value), onDragStart: (event) => handleLayoutDragStart(layout.value, event), type: "button", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("span", { className: `builder-layout-icon builder-layout-icon-${columns.length}`, style: { gridTemplateColumns }, children: columns.map((column) => /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("span", { className: "builder-layout-bar" }, column)) }),
-        /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("span", { className: "builder-layout-label", children: layout.label })
+      return /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("button", { className: "builder-layout-tile", draggable: true, onClick: () => addSection(layout.value), onDragStart: (event) => handleLayoutDragStart(layout.value, event), type: "button", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("span", { className: `builder-layout-icon builder-layout-icon-${columns.length}`, style: { gridTemplateColumns }, children: columns.map((column) => /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("span", { className: "builder-layout-bar" }, column)) }),
+        /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("span", { className: "builder-layout-label", children: layout.label })
       ] }, layout.value);
     }
-    const handleModuleEditorFocusChange = (0, import_react44.useCallback)(
+    const handleModuleEditorFocusChange = (0, import_react45.useCallback)(
       (focus2, syncOnly = false) => {
         repositorySaveRef.current = focus2;
         if (!syncOnly) {
@@ -76315,7 +76874,7 @@ Click Cancel to discard local changes and revert to canonical.`
       },
       []
     );
-    const handleRepositoryEditingActiveChange = (0, import_react44.useCallback)((active) => {
+    const handleRepositoryEditingActiveChange = (0, import_react45.useCallback)((active) => {
       setRepositorySaveActive(active);
       if (!active) {
         repositorySaveRef.current = null;
@@ -76380,23 +76939,23 @@ Click Cancel to discard local changes and revert to canonical.`
       }
       return [];
     })();
-    return /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)(
       "section",
       {
         className: `admin-section builder-editor-section${builderMode === "modules" ? " builder-editor-section-modules" : ""}`,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-editor-layout", children: /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "builder-editor-layout-main", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "admin-toolbar", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("h2", { className: "admin-section-heading", children: "Page Builder" }),
-              /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "admin-actions builder-header-actions", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("button", { className: builderMode === "templates" ? "submit-button" : "secondary-button", onClick: () => setBuilderMode("templates"), type: "button", children: "Templates" }),
-                /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("button", { className: builderMode === "modules" ? "submit-button" : "secondary-button", onClick: () => setBuilderMode("modules"), type: "button", children: "Modules" }),
-                /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("button", { className: builderMode === "pages" ? "submit-button" : "secondary-button", onClick: () => setBuilderMode("pages"), type: "button", children: "Pages" })
+          /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-editor-layout", children: /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "builder-editor-layout-main", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "admin-toolbar", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("h2", { className: "admin-section-heading", children: "Page Builder" }),
+              /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "admin-actions builder-header-actions", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("button", { className: builderMode === "templates" ? "submit-button" : "secondary-button", onClick: () => setBuilderMode("templates"), type: "button", children: "Templates" }),
+                /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("button", { className: builderMode === "modules" ? "submit-button" : "secondary-button", onClick: () => setBuilderMode("modules"), type: "button", children: "Modules" }),
+                /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("button", { className: builderMode === "pages" ? "submit-button" : "secondary-button", onClick: () => setBuilderMode("pages"), type: "button", children: "Pages" })
               ] })
             ] }),
-            message ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "notice success admin-notice", children: message }) : null,
-            error ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "notice error admin-notice", children: error }) : null,
-            builderMode === "pages" ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+            message ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "notice success admin-notice", children: message }) : null,
+            error ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "notice error admin-notice", children: error }) : null,
+            builderMode === "pages" ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
               AdminLegacyRemindersImportPanel,
               {
                 pageSlug,
@@ -76427,7 +76986,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 }
               }
             ) : null,
-            builderMode === "templates" ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+            builderMode === "templates" ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
               BuilderTemplateList,
               {
                 templates: pageTemplates,
@@ -76452,7 +77011,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 onNewTemplate: startNewTemplate,
                 onTemplateEditorFocus: setTemplateEditorFocused
               }
-            ) : builderMode === "modules" ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+            ) : builderMode === "modules" ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
               BuilderModuleRepositoryList,
               {
                 cellModules,
@@ -76475,7 +77034,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 onModuleEditorFocusChange: handleModuleEditorFocusChange,
                 onRepositoryEditingActiveChange: handleRepositoryEditingActiveChange
               }
-            ) : showBulkCreate ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+            ) : showBulkCreate ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
               BuilderBulkCreate,
               {
                 templates: pageLayoutTemplates,
@@ -76491,7 +77050,7 @@ Click Cancel to discard local changes and revert to canonical.`
                   setSelectedPageId(pageId);
                 }
               }
-            ) : /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+            ) : /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
               BuilderPageList,
               {
                 pages,
@@ -76527,8 +77086,8 @@ Click Cancel to discard local changes and revert to canonical.`
                 onSavePage: () => void savePage()
               }
             ),
-            builderMode !== "modules" ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(import_jsx_runtime77.Fragment, { children: /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "builder-toolbar-shell builder-workspace-shell", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)(
+            builderMode !== "modules" ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(import_jsx_runtime79.Fragment, { children: /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "builder-toolbar-shell builder-workspace-shell", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)(
                 "button",
                 {
                   "aria-expanded": !collapsedBuilderPanels.workspace,
@@ -76536,32 +77095,32 @@ Click Cancel to discard local changes and revert to canonical.`
                   onClick: () => toggleBuilderPanel("workspace"),
                   type: "button",
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("span", { className: "panel-label", children: "Workspace" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(BuilderCollapseIcon, { expanded: !collapsedBuilderPanels.workspace }) })
+                    /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("span", { className: "panel-label", children: "Workspace" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("span", { className: "builder-panel-toggle-icon", children: /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(BuilderCollapseIcon, { expanded: !collapsedBuilderPanels.workspace }) })
                   ]
                 }
               ),
-              !collapsedBuilderPanels.workspace ? /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "builder-workspace-pods", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "builder-layout-toolbar", children: [
+              !collapsedBuilderPanels.workspace ? /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "builder-workspace-pods", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "builder-layout-toolbar", children: [
                   layoutOptions.map((layout) => renderLayoutTile(layout)),
-                  /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "builder-saved-section-group", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("label", { className: "field builder-cell-repository-select", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("strong", { children: "Saved Section" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "builder-saved-section-group", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("label", { className: "field builder-cell-repository-select", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("strong", { children: "Saved Section" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)(
                         "select",
                         {
                           defaultValue: "",
                           onChange: handleSavedSectionSelect,
                           children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("option", { disabled: true, value: "", children: "\u2014 select \u2014" }),
-                            savedSections.map((savedSection) => /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("option", { value: savedSection.id, children: savedSection.name }, savedSection.id))
+                            /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("option", { disabled: true, value: "", children: "\u2014 select \u2014" }),
+                            savedSections.map((savedSection) => /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("option", { value: savedSection.id, children: savedSection.name }, savedSection.id))
                           ]
                         },
                         savedSectionSelectKey
                       )
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("label", { className: "builder-canonical-insert-label", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("label", { className: "builder-canonical-insert-label", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
                         "input",
                         {
                           type: "checkbox",
@@ -76569,11 +77128,11 @@ Click Cancel to discard local changes and revert to canonical.`
                           onChange: (e) => setInsertCanonical(e.target.checked)
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("strong", { children: "Canonical" })
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("strong", { children: "Canonical" })
                     ] })
                   ] })
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
                   "div",
                   {
                     className: `builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}`,
@@ -76583,13 +77142,13 @@ Click Cancel to discard local changes and revert to canonical.`
                     },
                     onDragLeave: () => setDragOverWorkspace(false),
                     onDrop: handleWorkspaceDrop,
-                    children: isEmailTemplateDraft ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-email-workspace-pod", children: draft.layoutSections.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "builder-workspace-empty", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-workspace-empty-title", children: "Drop a row onto the email pod" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-workspace-empty-copy", children: "Email templates render inside a 600px-wide pod. Add rows and modules the same way as page templates." })
-                    ] }) : /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-sections", children: draft.layoutSections.map((section, sectionIndex) => {
+                    children: isEmailTemplateDraft ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-email-workspace-pod", children: draft.layoutSections.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "builder-workspace-empty", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-workspace-empty-title", children: "Drop a row onto the email pod" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-workspace-empty-copy", children: "Email templates render inside a 600px-wide pod. Add rows and modules the same way as page templates." })
+                    ] }) : /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-sections", children: draft.layoutSections.map((section, sectionIndex) => {
                       const sectionAny = section;
                       const canonicalSourceName = sectionAny.savedSectionId ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name : void 0;
-                      return /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+                      return /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
                         BuilderSectionCard,
                         {
                           isEmailTemplate: true,
@@ -76643,13 +77202,13 @@ Click Cancel to discard local changes and revert to canonical.`
                         },
                         section.id
                       );
-                    }) }) }) : draft.layoutSections.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime77.jsxs)("div", { className: "builder-workspace-empty", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-workspace-empty-title", children: "Drop a row onto the workspace" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-workspace-empty-copy", children: "Click a row layout above, or drag one onto the workspace." })
-                    ] }) : /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-sections", children: draft.layoutSections.map((section, sectionIndex) => {
+                    }) }) }) : draft.layoutSections.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("div", { className: "builder-workspace-empty", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-workspace-empty-title", children: "Drop a row onto the workspace" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-workspace-empty-copy", children: "Click a row layout above, or drag one onto the workspace." })
+                    ] }) : /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-sections", children: draft.layoutSections.map((section, sectionIndex) => {
                       const sectionAny = section;
                       const canonicalSourceName = sectionAny.savedSectionId ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name : void 0;
-                      return /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+                      return /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
                         BuilderSectionCard,
                         {
                           isEmailTemplate: isEmailTemplateDraft,
@@ -76708,8 +77267,8 @@ Click Cancel to discard local changes and revert to canonical.`
                 )
               ] }) : null
             ] }) }) : null,
-            builderMode !== "modules" && draft.id ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("div", { className: "builder-footer-actions", children: /* @__PURE__ */ (0, import_jsx_runtime77.jsx)("button", { className: "danger-button", onClick: () => void (builderMode === "templates" ? deleteTemplateById(draft.id, draft.name) : deletePageById(selectedPageId, draft.name)), type: "button", children: builderMode === "templates" ? "Delete Template" : "Delete Page" }) }) : null,
-            isGalleryOpen ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+            builderMode !== "modules" && draft.id ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("div", { className: "builder-footer-actions", children: /* @__PURE__ */ (0, import_jsx_runtime79.jsx)("button", { className: "danger-button", onClick: () => void (builderMode === "templates" ? deleteTemplateById(draft.id, draft.name) : deletePageById(selectedPageId, draft.name)), type: "button", children: builderMode === "templates" ? "Delete Template" : "Delete Page" }) }) : null,
+            isGalleryOpen ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
               BuilderGalleryModal,
               {
                 anchor: galleryTarget?.kind === "rich-text" ? galleryAnchor : null,
@@ -76718,7 +77277,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 onClose: closeGallery
               }
             ) : null,
-            isModulePaletteOpen ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+            isModulePaletteOpen ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
               BuilderModulePaletteModal,
               {
                 activeGroup: activeModuleGroup,
@@ -76739,8 +77298,8 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             ) : null
           ] }) }),
-          floatingSaveActions.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(BuilderFloatingSaveRail, { actions: floatingSaveActions, isSaving }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime77.jsx)(
+          floatingSaveActions.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(BuilderFloatingSaveRail, { actions: floatingSaveActions, isSaving }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime79.jsx)(
             BuilderSaveDebugPanel,
             {
               builderMode,
@@ -76761,19 +77320,19 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder/BuilderWorkspace.tsx
-  var import_jsx_runtime78 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime80 = __toESM(require_jsx_runtime());
   function BuilderWorkspace({ surface = "hub", editorMode, record, onClose }) {
     const initialMode = editorMode === "page" ? "pages" : editorMode === "template" ? "templates" : void 0;
     const recordId = record?.id;
     const initialRecordId = recordId === void 0 || recordId === null || recordId === "" ? void 0 : String(recordId);
-    return /* @__PURE__ */ (0, import_jsx_runtime78.jsxs)("div", { className: "builder-react-root", children: [
-      surface !== "hub" && typeof onClose === "function" ? /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("div", { className: "builder-workspace-topbar", children: /* @__PURE__ */ (0, import_jsx_runtime78.jsx)("button", { className: "secondary-button", onClick: onClose, type: "button", children: "Close Builder" }) }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime78.jsx)(AdminBuilderEditor, { initialMode, initialRecordId })
+    return /* @__PURE__ */ (0, import_jsx_runtime80.jsxs)("div", { className: "builder-react-root", children: [
+      surface !== "hub" && typeof onClose === "function" ? /* @__PURE__ */ (0, import_jsx_runtime80.jsx)("div", { className: "builder-workspace-topbar", children: /* @__PURE__ */ (0, import_jsx_runtime80.jsx)("button", { className: "secondary-button", onClick: onClose, type: "button", children: "Close Builder" }) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime80.jsx)(AdminBuilderEditor, { initialMode, initialRecordId })
     ] });
   }
 
   // components/builder-preview-page.tsx
-  var import_react55 = __toESM(require_react());
+  var import_react56 = __toESM(require_react());
 
   // lib/builder-client/adapters/navigation.ts
   function usePathname() {
@@ -76786,11 +77345,11 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder-template-preview.tsx
-  var import_react54 = __toESM(require_react());
+  var import_react55 = __toESM(require_react());
   init_sanitize_html();
 
   // components/builder-poll-runtime.tsx
-  var import_react46 = __toESM(require_react());
+  var import_react47 = __toESM(require_react());
 
   // lib/builder-client/poll-done-copy.ts
   function getPollDoneMessage(doneReason) {
@@ -76815,20 +77374,20 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/site-home/poll-category-headline.tsx
-  var import_jsx_runtime79 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime81 = __toESM(require_jsx_runtime());
   function PollCategoryHeadline({ category }) {
     const label = formatPollCategoryDisplayName(String(category ?? ""));
     if (!label) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime79.jsxs)("p", { className: "poll-panel-category", children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime81.jsxs)("p", { className: "poll-panel-category", children: [
       "Category: ",
       label
     ] });
   }
 
   // components/site-home/current-poll-panel.tsx
-  var import_jsx_runtime80 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime82 = __toESM(require_jsx_runtime());
   function CurrentPollPanel({
     currentPoll,
     isAwaitingNextPoll = false,
@@ -76840,24 +77399,24 @@ Click Cancel to discard local changes and revert to canonical.`
     showSkipPoll = false
   }) {
     const panelBusy = isSubmitting || isAwaitingNextPoll;
-    return /* @__PURE__ */ (0, import_jsx_runtime80.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)(
       "article",
       {
         className: `panel action-panel poll-module-panel${isAwaitingNextPoll ? " poll-module-panel-awaiting-next" : ""}`,
         style: getCurrentPollPanelStyle(moduleSettings, settings),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime80.jsx)("div", { className: "panel-label", children: "Current Question" }),
-          /* @__PURE__ */ (0, import_jsx_runtime80.jsx)(PollCategoryHeadline, { category: currentPoll.category }),
-          isAwaitingNextPoll ? /* @__PURE__ */ (0, import_jsx_runtime80.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "panel-label", children: "Current Question" }),
+          /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(PollCategoryHeadline, { category: currentPoll.category }),
+          isAwaitingNextPoll ? /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(
             "div",
             {
               "aria-busy": "true",
               "aria-label": "Loading next question",
               className: "poll-question-area poll-question-area-hold"
             }
-          ) : /* @__PURE__ */ (0, import_jsx_runtime80.jsxs)("div", { className: "poll-question-area", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime80.jsx)("h2", { className: "poll-question", children: currentPoll.question }),
-            /* @__PURE__ */ (0, import_jsx_runtime80.jsx)("div", { className: "option-list", children: currentPoll.options.map((option, index) => /* @__PURE__ */ (0, import_jsx_runtime80.jsx)(
+          ) : /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)("div", { className: "poll-question-area", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("h2", { className: "poll-question", children: currentPoll.question }),
+            /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "option-list", children: currentPoll.options.map((option, index) => /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(
               "button",
               {
                 className: `option-button poll-answer-button-${index === 0 ? "a" : "b"}`,
@@ -76868,7 +77427,7 @@ Click Cancel to discard local changes and revert to canonical.`
               },
               option.id
             )) }),
-            showSkipPoll && onSkip ? /* @__PURE__ */ (0, import_jsx_runtime80.jsx)("div", { className: "poll-pod-action-row", children: /* @__PURE__ */ (0, import_jsx_runtime80.jsx)(
+            showSkipPoll && onSkip ? /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "poll-pod-action-row", children: /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(
               "button",
               {
                 className: "secondary-button poll-pod-action-button",
@@ -76879,22 +77438,22 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             ) }) : null
           ] }),
-          isSubmitting ? /* @__PURE__ */ (0, import_jsx_runtime80.jsx)("p", { className: "panel-copy", children: "Saving your answer..." }) : null
+          isSubmitting ? /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("p", { className: "panel-copy", children: "Saving your answer..." }) : null
         ]
       }
     );
   }
 
   // components/site-home/previous-results-panel.tsx
-  var import_react45 = __toESM(require_react());
+  var import_react46 = __toESM(require_react());
 
   // components/builder/stubs/poll-deep-dive-content.tsx
-  var import_jsx_runtime81 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime83 = __toESM(require_jsx_runtime());
   function PollDeepDiveContentView({ content }) {
     if (content.kind === "empty") {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime81.jsx)("p", { className: "builder-capability-placeholder", children: "Deep-dive content is not available in StarCaster." });
+    return /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("p", { className: "builder-capability-placeholder", children: "Deep-dive content is not available in StarCaster." });
   }
 
   // lib/builder-client/adapters/poll-deep-dive.ts
@@ -76912,7 +77471,7 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/site-home/previous-results-panel.tsx
-  var import_jsx_runtime82 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime84 = __toESM(require_jsx_runtime());
   function formatDisplayCount(value) {
     if (value >= 1e3) {
       return `${(value / 1e3).toFixed(1)}K`;
@@ -76920,11 +77479,11 @@ Click Cancel to discard local changes and revert to canonical.`
     return String(value);
   }
   function PreviousResultsPanel({ previousPoll, settings }) {
-    const [deepDiveOpen, setDeepDiveOpen] = (0, import_react45.useState)(false);
+    const [deepDiveOpen, setDeepDiveOpen] = (0, import_react46.useState)(false);
     const podType = previousPoll ? "previous_results" : "initial_page";
     const panelPodAppearanceStyle = getPollPodAppearanceStyle(settings, podType);
     const initialContent = resolvePollPod(settings?.pods, "initial_page").content;
-    (0, import_react45.useEffect)(() => {
+    (0, import_react46.useEffect)(() => {
       if (!deepDiveOpen) {
         return;
       }
@@ -76936,32 +77495,32 @@ Click Cancel to discard local changes and revert to canonical.`
       window.addEventListener("keydown", onKeyDown);
       return () => window.removeEventListener("keydown", onKeyDown);
     }, [deepDiveOpen]);
-    (0, import_react45.useEffect)(() => {
+    (0, import_react46.useEffect)(() => {
       setDeepDiveOpen(false);
     }, [previousPoll?.id]);
-    return /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)(
       "article",
       {
         className: "panel result-panel poll-module-panel poll-previous-results-panel",
         style: panelPodAppearanceStyle,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "panel-label", children: "Previous Results" }),
-          /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(PollCategoryHeadline, { category: previousPoll?.category }),
-          /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "poll-question-area", children: previousPoll ? /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)("div", { className: "poll-previous-results-question-pod", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("h2", { className: "poll-question", children: previousPoll.question }),
-            /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "result-list", children: previousPoll.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)("div", { className: "result-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)("div", { className: "result-meta", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("span", { children: option.label }),
-                /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)("span", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "panel-label", children: "Previous Results" }),
+          /* @__PURE__ */ (0, import_jsx_runtime84.jsx)(PollCategoryHeadline, { category: previousPoll?.category }),
+          /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "poll-question-area", children: previousPoll ? /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)("div", { className: "poll-previous-results-question-pod", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("h2", { className: "poll-question", children: previousPoll.question }),
+            /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "result-list", children: previousPoll.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)("div", { className: "result-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)("div", { className: "result-meta", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("span", { children: option.label }),
+                /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)("span", { children: [
                   formatDisplayCount(option.votes),
                   " \xB7 ",
                   option.percentage,
                   "%"
                 ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "result-bar", children: /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "result-bar-fill", style: { width: `${option.percentage}%` } }) })
+              /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "result-bar", children: /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "result-bar-fill", style: { width: `${option.percentage}%` } }) })
             ] }, option.id)) }),
-            /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "poll-pod-action-row", children: /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "poll-pod-action-row", children: /* @__PURE__ */ (0, import_jsx_runtime84.jsx)(
               "button",
               {
                 className: "secondary-button poll-pod-action-button poll-deep-dive-trigger",
@@ -76970,9 +77529,9 @@ Click Cancel to discard local changes and revert to canonical.`
                 children: "Deep Dive"
               }
             ) })
-          ] }) : initialContent ? /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)(import_jsx_runtime82.Fragment, { children: [
-            initialContent.headerLabel.trim() ? /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "panel-label", children: initialContent.headerLabel }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(
+          ] }) : initialContent ? /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)(import_jsx_runtime84.Fragment, { children: [
+            initialContent.headerLabel.trim() ? /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "panel-label", children: initialContent.headerLabel }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime84.jsx)(
               "div",
               {
                 className: "poll-empty-state-content blog-post-body",
@@ -76980,7 +77539,7 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             )
           ] }) : null }),
-          previousPoll ? /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(import_jsx_runtime82.Fragment, { children: deepDiveOpen ? /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)(
+          previousPoll ? /* @__PURE__ */ (0, import_jsx_runtime84.jsx)(import_jsx_runtime84.Fragment, { children: deepDiveOpen ? /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)(
             "div",
             {
               className: "poll-deep-dive-overlay",
@@ -76988,12 +77547,12 @@ Click Cancel to discard local changes and revert to canonical.`
               "aria-modal": "true",
               "aria-labelledby": "poll-deep-dive-title",
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)("div", { className: "poll-deep-dive-overlay-header", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime82.jsxs)("div", { className: "poll-deep-dive-overlay-title-stack", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("p", { className: "poll-deep-dive-eyebrow", children: "Deep Dive" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime82.jsx)("div", { className: "poll-deep-dive-overlay-pill", id: "poll-deep-dive-title", children: getPollDeepDiveOverlayPillLabel(previousPoll.deepDive) })
+                /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)("div", { className: "poll-deep-dive-overlay-header", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)("div", { className: "poll-deep-dive-overlay-title-stack", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("p", { className: "poll-deep-dive-eyebrow", children: "Deep Dive" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("div", { className: "poll-deep-dive-overlay-pill", id: "poll-deep-dive-title", children: getPollDeepDiveOverlayPillLabel(previousPoll.deepDive) })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime84.jsx)(
                     "button",
                     {
                       className: "poll-deep-dive-dismiss",
@@ -77004,11 +77563,11 @@ Click Cancel to discard local changes and revert to canonical.`
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime84.jsx)(
                   "div",
                   {
                     className: previousPoll.deepDive.kind === "related" ? "poll-deep-dive-body poll-deep-dive-body--related" : "poll-deep-dive-body",
-                    children: /* @__PURE__ */ (0, import_jsx_runtime82.jsx)(PollDeepDiveContentView, { content: previousPoll.deepDive })
+                    children: /* @__PURE__ */ (0, import_jsx_runtime84.jsx)(PollDeepDiveContentView, { content: previousPoll.deepDive })
                   }
                 )
               ]
@@ -77275,7 +77834,7 @@ Click Cancel to discard local changes and revert to canonical.`
   var PLAYER_GAME_REMINDERS_REFRESH_EVENT = "normie-reminders-refresh";
 
   // components/builder-poll-runtime.tsx
-  var import_jsx_runtime83 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime85 = __toESM(require_jsx_runtime());
   function getPollModuleLabel(kind) {
     return kind === "previous-results" ? "Poll Slider" : "Current Question";
   }
@@ -77400,8 +77959,8 @@ Click Cancel to discard local changes and revert to canonical.`
     }
   }
   function useSharedPollRuntime(categoryParam, startPollParam) {
-    const [state, setState] = (0, import_react46.useState)(runtimeState);
-    (0, import_react46.useEffect)(() => {
+    const [state, setState] = (0, import_react47.useState)(runtimeState);
+    (0, import_react47.useEffect)(() => {
       const sync = () => setState(runtimeState);
       listeners.add(sync);
       sync();
@@ -77409,15 +77968,15 @@ Click Cancel to discard local changes and revert to canonical.`
         listeners.delete(sync);
       };
     }, []);
-    (0, import_react46.useEffect)(() => {
+    (0, import_react47.useEffect)(() => {
       void loadPolls(categoryParam, startPollParam);
     }, [categoryParam, startPollParam]);
-    (0, import_react46.useEffect)(() => {
+    (0, import_react47.useEffect)(() => {
       return subscribePlayerPreferencesUpdated(() => {
         void loadPolls(categoryParam, startPollParam, { force: true });
       });
     }, [categoryParam, startPollParam]);
-    (0, import_react46.useEffect)(() => {
+    (0, import_react47.useEffect)(() => {
       const reloadForTestMode = () => {
         void loadPolls(categoryParam, startPollParam, { force: true });
       };
@@ -77449,35 +78008,35 @@ Click Cancel to discard local changes and revert to canonical.`
     const panelStyle = getPollPodAppearanceStyle(payload?.settings, builderPodType);
     const panelClassName = className ? `${className} panel poll-module-panel` : "panel poll-module-panel";
     function wrapPollModule(content) {
-      return /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className: "builder-poll-module-shell", style: shellStyle, children: content });
+      return /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className: "builder-poll-module-shell", style: shellStyle, children: content });
     }
     if (isLoading && !payload?.currentPoll && (!payload || payload.done)) {
       return wrapPollModule(
-        /* @__PURE__ */ (0, import_jsx_runtime83.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className: "panel-label", children: getPollModuleLabel(kind) }),
-          /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("p", { className: "panel-copy", children: "Loading polls..." })
+        /* @__PURE__ */ (0, import_jsx_runtime85.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className: "panel-label", children: getPollModuleLabel(kind) }),
+          /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("p", { className: "panel-copy", children: "Loading polls..." })
         ] })
       );
     }
     if (error) {
       return wrapPollModule(
-        /* @__PURE__ */ (0, import_jsx_runtime83.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className: "panel-label", children: getPollModuleLabel(kind) }),
-          /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("p", { className: "panel-copy", children: error })
+        /* @__PURE__ */ (0, import_jsx_runtime85.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className: "panel-label", children: getPollModuleLabel(kind) }),
+          /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("p", { className: "panel-copy", children: error })
         ] })
       );
     }
     if (payload?.done) {
       return wrapPollModule(
-        /* @__PURE__ */ (0, import_jsx_runtime83.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className: "panel-label", children: getPollModuleLabel(kind) }),
-          /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("p", { className: "panel-copy", children: getPollDoneMessage(payload.doneReason) })
+        /* @__PURE__ */ (0, import_jsx_runtime85.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className: "panel-label", children: getPollModuleLabel(kind) }),
+          /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("p", { className: "panel-copy", children: getPollDoneMessage(payload.doneReason) })
         ] })
       );
     }
     if (kind === "previous-results") {
       return wrapPollModule(
-        /* @__PURE__ */ (0, import_jsx_runtime83.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime85.jsx)(
           PreviousResultsPanel,
           {
             previousPoll: payload?.previousPoll ?? null,
@@ -77488,7 +78047,7 @@ Click Cancel to discard local changes and revert to canonical.`
     }
     if (payload?.currentPoll) {
       return wrapPollModule(
-        /* @__PURE__ */ (0, import_jsx_runtime83.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime85.jsx)(
           CurrentPollPanel,
           {
             currentPoll: payload.currentPoll,
@@ -77502,9 +78061,9 @@ Click Cancel to discard local changes and revert to canonical.`
       );
     }
     return wrapPollModule(
-      /* @__PURE__ */ (0, import_jsx_runtime83.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className: "panel-label", children: "Current Question" }),
-        /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("p", { className: "panel-copy", children: activeCategory ? `No published polls are available in ${activeCategory.name} yet.` : "No published polls are available yet." })
+      /* @__PURE__ */ (0, import_jsx_runtime85.jsxs)("article", { className: panelClassName, style: panelStyle, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className: "panel-label", children: "Current Question" }),
+        /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("p", { className: "panel-copy", children: activeCategory ? `No published polls are available in ${activeCategory.name} yet.` : "No published polls are available yet." })
       ] })
     );
   }
@@ -77517,16 +78076,16 @@ Click Cancel to discard local changes and revert to canonical.`
     const startPollParam = searchParams?.get("startPoll")?.trim() ?? "";
     const { error, isLoading, payload } = useSharedPollRuntime(categoryParam, startPollParam);
     if (isLoading) {
-      return /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className, children: /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className: "poll-share-bar", children: /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("span", { className: "poll-share-label", children: "Loading share links..." }) }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className, children: /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className: "poll-share-bar", children: /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("span", { className: "poll-share-label", children: "Loading share links..." }) }) });
     }
     if (error) {
-      return settings.shareShowErrors === "true" ? /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className, children: /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("p", { className: "panel-copy", children: error }) }) : null;
+      return settings.shareShowErrors === "true" ? /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className, children: /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("p", { className: "panel-copy", children: error }) }) : null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime83.jsx)("div", { className, children: /* @__PURE__ */ (0, import_jsx_runtime83.jsx)(SocialShareBar, { settings, poll: payload?.currentPoll ?? null }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { className, children: /* @__PURE__ */ (0, import_jsx_runtime85.jsx)(SocialShareBar, { settings, poll: payload?.currentPoll ?? null }) });
   }
 
   // components/builder-floating-image-runtime.tsx
-  var import_react47 = __toESM(require_react());
+  var import_react48 = __toESM(require_react());
   init_game_floating_image_trigger();
   init_module_game_audience();
   init_module_trigger();
@@ -77540,7 +78099,7 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder-floating-image-runtime.tsx
-  var import_jsx_runtime84 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime86 = __toESM(require_jsx_runtime());
   function shouldFloatingImageUseOverlayHost(trigger) {
     return trigger === "game" || trigger === "on-load";
   }
@@ -77552,7 +78111,7 @@ Click Cancel to discard local changes and revert to canonical.`
     sitePlayerRegistered = false
   }) {
     const trigger = getModuleTrigger(module2.settings);
-    const hasFiredOnLoadRef = (0, import_react47.useRef)(false);
+    const hasFiredOnLoadRef = (0, import_react48.useRef)(false);
     const firesOnThisSite = moduleFiresForGameContext(module2.settings, gamePlayContext);
     const gameLayerAllowed = shouldRunGameLayerOnSite(sitePlayerRegistered, gamePlayContext);
     function fireFloatingImage() {
@@ -77564,7 +78123,7 @@ Click Cancel to discard local changes and revert to canonical.`
       }
       fireGameFloatingImageModule(module2);
     }
-    (0, import_react47.useEffect)(() => {
+    (0, import_react48.useEffect)(() => {
       if (previewMode || !firesOnThisSite || !gameLayerAllowed || overlayFlowDecor) {
         return;
       }
@@ -77586,9 +78145,9 @@ Click Cancel to discard local changes and revert to canonical.`
     if (!previewMode) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime84.jsxs)("div", { className: "builder-confetti-module builder-confetti-module-game-stub", "aria-hidden": "true", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("p", { className: "panel-copy builder-confetti-module-copy", children: trigger === "game" ? "Game trigger \u2014 floating image and backdrop fire in the full-screen overlay layer on the live site." : "Page load trigger \u2014 floating image fires in the overlay layer when this page loads." }),
-      /* @__PURE__ */ (0, import_jsx_runtime84.jsx)("button", { className: "secondary-button", onClick: fireFloatingImage, type: "button", children: "Test Floating Image" })
+    return /* @__PURE__ */ (0, import_jsx_runtime86.jsxs)("div", { className: "builder-confetti-module builder-confetti-module-game-stub", "aria-hidden": "true", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime86.jsx)("p", { className: "panel-copy builder-confetti-module-copy", children: trigger === "game" ? "Game trigger \u2014 floating image and backdrop fire in the full-screen overlay layer on the live site." : "Page load trigger \u2014 floating image fires in the overlay layer when this page loads." }),
+      /* @__PURE__ */ (0, import_jsx_runtime86.jsx)("button", { className: "secondary-button", onClick: fireFloatingImage, type: "button", children: "Test Floating Image" })
     ] });
   }
 
@@ -77596,17 +78155,17 @@ Click Cancel to discard local changes and revert to canonical.`
   init_module_trigger();
 
   // components/player-game-event-backdrop.tsx
-  var import_react48 = __toESM(require_react());
+  var import_react49 = __toESM(require_react());
   init_game_floating_image_trigger();
   init_game_speech_bubble_trigger();
-  var import_jsx_runtime85 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime87 = __toESM(require_jsx_runtime());
   function PlayerGameEventBackdrop() {
     const pathname = usePathname();
-    const [activeLayers, setActiveLayers] = (0, import_react48.useState)(() => /* @__PURE__ */ new Set());
-    (0, import_react48.useEffect)(() => {
+    const [activeLayers, setActiveLayers] = (0, import_react49.useState)(() => /* @__PURE__ */ new Set());
+    (0, import_react49.useEffect)(() => {
       setActiveLayers(/* @__PURE__ */ new Set());
     }, [pathname]);
-    (0, import_react48.useEffect)(() => {
+    (0, import_react49.useEffect)(() => {
       function showLayer(layer) {
         setActiveLayers((current) => {
           if (current.has(layer)) {
@@ -77659,17 +78218,17 @@ Click Cancel to discard local changes and revert to canonical.`
     if (activeLayers.size === 0) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime85.jsx)("div", { "aria-hidden": "true", className: "player-game-event-backdrop" });
+    return /* @__PURE__ */ (0, import_jsx_runtime87.jsx)("div", { "aria-hidden": "true", className: "player-game-event-backdrop" });
   }
 
   // components/player-game-floating-image-host.tsx
-  var import_react49 = __toESM(require_react());
+  var import_react50 = __toESM(require_react());
   init_game_floating_image_trigger();
-  var import_jsx_runtime86 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime88 = __toESM(require_jsx_runtime());
   function PlayerGameFloatingImageHost() {
     const pathname = usePathname();
-    const [activeModule, setActiveModule] = (0, import_react49.useState)(null);
-    (0, import_react49.useEffect)(() => {
+    const [activeModule, setActiveModule] = (0, import_react50.useState)(null);
+    (0, import_react50.useEffect)(() => {
       function handleFloatingImage(event) {
         const detail = event.detail;
         if (!detail?.module || detail.module.type !== "floating-image") {
@@ -77682,10 +78241,10 @@ Click Cancel to discard local changes and revert to canonical.`
         window.removeEventListener(PLAYER_GAME_FLOATING_IMAGE_EVENT, handleFloatingImage);
       };
     }, []);
-    (0, import_react49.useEffect)(() => {
+    (0, import_react50.useEffect)(() => {
       setActiveModule(null);
     }, [pathname]);
-    (0, import_react49.useEffect)(() => {
+    (0, import_react50.useEffect)(() => {
       if (!activeModule) {
         return;
       }
@@ -77697,7 +78256,7 @@ Click Cancel to discard local changes and revert to canonical.`
         window.removeEventListener("click", dismissOnNextClick);
       };
     }, [activeModule]);
-    (0, import_react49.useEffect)(() => {
+    (0, import_react50.useEffect)(() => {
       if (!activeModule) {
         return;
       }
@@ -77712,7 +78271,7 @@ Click Cancel to discard local changes and revert to canonical.`
         window.clearTimeout(timeoutId);
       };
     }, [activeModule]);
-    (0, import_react49.useEffect)(() => {
+    (0, import_react50.useEffect)(() => {
       if (!activeModule) {
         return;
       }
@@ -77723,17 +78282,17 @@ Click Cancel to discard local changes and revert to canonical.`
     if (!activeModule) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime86.jsx)("div", { "aria-live": "polite", className: "player-game-floating-image-host", children: /* @__PURE__ */ (0, import_jsx_runtime86.jsx)(BuilderImagePreview, { gameOverlayHost: true, module: activeModule }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime88.jsx)("div", { "aria-live": "polite", className: "player-game-floating-image-host", children: /* @__PURE__ */ (0, import_jsx_runtime88.jsx)(BuilderImagePreview, { gameOverlayHost: true, module: activeModule }) });
   }
 
   // components/player-game-speech-bubble-host.tsx
-  var import_react50 = __toESM(require_react());
+  var import_react51 = __toESM(require_react());
   init_game_speech_bubble_trigger();
-  var import_jsx_runtime87 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime89 = __toESM(require_jsx_runtime());
   function PlayerGameSpeechBubbleHost() {
     const pathname = usePathname();
-    const [activeModule, setActiveModule] = (0, import_react50.useState)(null);
-    (0, import_react50.useEffect)(() => {
+    const [activeModule, setActiveModule] = (0, import_react51.useState)(null);
+    (0, import_react51.useEffect)(() => {
       function handleSpeechBubble(event) {
         const detail = event.detail;
         if (!detail?.module || detail.module.type !== "speech-bubble") {
@@ -77746,10 +78305,10 @@ Click Cancel to discard local changes and revert to canonical.`
         window.removeEventListener(PLAYER_GAME_SPEECH_BUBBLE_EVENT, handleSpeechBubble);
       };
     }, []);
-    (0, import_react50.useEffect)(() => {
+    (0, import_react51.useEffect)(() => {
       setActiveModule(null);
     }, [pathname]);
-    (0, import_react50.useEffect)(() => {
+    (0, import_react51.useEffect)(() => {
       if (!activeModule) {
         return;
       }
@@ -77761,7 +78320,7 @@ Click Cancel to discard local changes and revert to canonical.`
         window.removeEventListener("click", dismissOnNextClick);
       };
     }, [activeModule]);
-    (0, import_react50.useEffect)(() => {
+    (0, import_react51.useEffect)(() => {
       if (!activeModule) {
         return;
       }
@@ -77772,16 +78331,16 @@ Click Cancel to discard local changes and revert to canonical.`
     if (!activeModule) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime87.jsx)("div", { "aria-live": "polite", className: "player-game-speech-bubble-host", children: /* @__PURE__ */ (0, import_jsx_runtime87.jsx)(SpeechBubblePreview, { classNamePrefix: "builder-preview", layoutMode: "overlay", module: activeModule }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime89.jsx)("div", { "aria-live": "polite", className: "player-game-speech-bubble-host", children: /* @__PURE__ */ (0, import_jsx_runtime89.jsx)(SpeechBubblePreview, { classNamePrefix: "builder-preview", layoutMode: "overlay", module: activeModule }) });
   }
 
   // components/game-module-overlay-hosts.tsx
-  var import_jsx_runtime88 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime90 = __toESM(require_jsx_runtime());
   function GameModuleOverlayHosts() {
-    return /* @__PURE__ */ (0, import_jsx_runtime88.jsxs)(import_jsx_runtime88.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime88.jsx)(PlayerGameEventBackdrop, {}),
-      /* @__PURE__ */ (0, import_jsx_runtime88.jsx)(PlayerGameFloatingImageHost, {}),
-      /* @__PURE__ */ (0, import_jsx_runtime88.jsx)(PlayerGameSpeechBubbleHost, {})
+    return /* @__PURE__ */ (0, import_jsx_runtime90.jsxs)(import_jsx_runtime90.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(PlayerGameEventBackdrop, {}),
+      /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(PlayerGameFloatingImageHost, {}),
+      /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(PlayerGameSpeechBubbleHost, {})
     ] });
   }
 
@@ -77791,11 +78350,11 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder-speech-bubble-runtime.tsx
-  var import_react51 = __toESM(require_react());
+  var import_react52 = __toESM(require_react());
   init_game_speech_bubble_trigger();
   init_module_game_audience();
   init_module_trigger();
-  var import_jsx_runtime89 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime91 = __toESM(require_jsx_runtime());
   function shouldSpeechBubbleUseOverlayRuntime(trigger) {
     return trigger === "game" || trigger === "on-load" || trigger === "button";
   }
@@ -77806,7 +78365,7 @@ Click Cancel to discard local changes and revert to canonical.`
     sitePlayerRegistered = false
   }) {
     const trigger = getModuleTrigger(module2.settings);
-    const hasFiredOnLoadRef = (0, import_react51.useRef)(false);
+    const hasFiredOnLoadRef = (0, import_react52.useRef)(false);
     const firesOnThisSite = moduleFiresForGameContext(module2.settings, gamePlayContext);
     const gameLayerAllowed = shouldRunGameLayerOnSite(sitePlayerRegistered, gamePlayContext);
     function fireBubble() {
@@ -77818,7 +78377,7 @@ Click Cancel to discard local changes and revert to canonical.`
       }
       fireGameSpeechBubbleModule(module2);
     }
-    (0, import_react51.useEffect)(() => {
+    (0, import_react52.useEffect)(() => {
       if (previewMode || !firesOnThisSite || !gameLayerAllowed) {
         return;
       }
@@ -77842,21 +78401,21 @@ Click Cancel to discard local changes and revert to canonical.`
         return null;
       }
       if (!gameLayerAllowed) {
-        return /* @__PURE__ */ (0, import_jsx_runtime89.jsx)("div", { className: "builder-confetti-module builder-confetti-module-game-stub", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime89.jsx)("p", { className: "panel-copy builder-confetti-module-copy", children: "Game layer modules do not run for anonymous visitors on the live site. Log in to preview, or use reminders for public users." }) });
+        return /* @__PURE__ */ (0, import_jsx_runtime91.jsx)("div", { className: "builder-confetti-module builder-confetti-module-game-stub", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime91.jsx)("p", { className: "panel-copy builder-confetti-module-copy", children: "Game layer modules do not run for anonymous visitors on the live site. Log in to preview, or use reminders for public users." }) });
       }
-      return /* @__PURE__ */ (0, import_jsx_runtime89.jsxs)("div", { className: "builder-confetti-module builder-confetti-module-game-stub", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime89.jsx)("p", { className: "panel-copy builder-confetti-module-copy", children: trigger === "game" ? "Game trigger \u2014 overlay fires on the live site when this page loads and when portal game events run." : "Page load trigger \u2014 overlay fires when this page loads on the live site." }),
-        /* @__PURE__ */ (0, import_jsx_runtime89.jsx)("button", { className: "secondary-button", onClick: fireBubble, type: "button", children: "Test Speech Bubble" })
+      return /* @__PURE__ */ (0, import_jsx_runtime91.jsxs)("div", { className: "builder-confetti-module builder-confetti-module-game-stub", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime91.jsx)("p", { className: "panel-copy builder-confetti-module-copy", children: trigger === "game" ? "Game trigger \u2014 overlay fires on the live site when this page loads and when portal game events run." : "Page load trigger \u2014 overlay fires when this page loads on the live site." }),
+        /* @__PURE__ */ (0, import_jsx_runtime91.jsx)("button", { className: "secondary-button", onClick: fireBubble, type: "button", children: "Test Speech Bubble" })
       ] });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime89.jsx)("div", { className: "builder-speech-bubble-runtime", children: /* @__PURE__ */ (0, import_jsx_runtime89.jsx)("button", { className: "secondary-button builder-speech-bubble-runtime-button", onClick: fireBubble, type: "button", children: module2.settings.buttonLabel?.trim() || "Show Message" }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime91.jsx)("div", { className: "builder-speech-bubble-runtime", children: /* @__PURE__ */ (0, import_jsx_runtime91.jsx)("button", { className: "secondary-button builder-speech-bubble-runtime-button", onClick: fireBubble, type: "button", children: module2.settings.buttonLabel?.trim() || "Show Message" }) });
   }
 
   // components/builder-reminder-runtime.tsx
-  var import_react53 = __toESM(require_react());
+  var import_react54 = __toESM(require_react());
 
   // components/player-game-reminder-displays.tsx
-  var import_react52 = __toESM(require_react());
+  var import_react53 = __toESM(require_react());
   var import_react_dom4 = __toESM(require_react_dom());
 
   // lib/builder-client/game-reminder-presentation.ts
@@ -77956,13 +78515,13 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/player-game-reminder-displays.tsx
-  var import_jsx_runtime90 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime92 = __toESM(require_jsx_runtime());
   function useVisibleReminders(reminders) {
-    const [dismissedIds, setDismissedIds] = (0, import_react52.useState)([]);
-    (0, import_react52.useEffect)(() => {
+    const [dismissedIds, setDismissedIds] = (0, import_react53.useState)([]);
+    (0, import_react53.useEffect)(() => {
       setDismissedIds(readDismissedReminderIds());
     }, [reminders]);
-    const visibleReminders = (0, import_react52.useMemo)(
+    const visibleReminders = (0, import_react53.useMemo)(
       () => reminders.filter((reminder) => !dismissedIds.includes(reminder.id)),
       [dismissedIds, reminders]
     );
@@ -77976,7 +78535,7 @@ Click Cancel to discard local changes and revert to canonical.`
     return { visibleReminders, dismissReminder };
   }
   function useDismissActiveReminderOnClick(activeReminder, dismissReminder) {
-    (0, import_react52.useEffect)(() => {
+    (0, import_react53.useEffect)(() => {
       if (!activeReminder) {
         return;
       }
@@ -77991,7 +78550,7 @@ Click Cancel to discard local changes and revert to canonical.`
     }, [activeReminder, dismissReminder]);
   }
   function ReminderRichMessage({ messageHtml }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
       "div",
       {
         className: "player-game-reminder-message",
@@ -78000,10 +78559,10 @@ Click Cancel to discard local changes and revert to canonical.`
     );
   }
   function PlayerGameRemindersSpeechBubble({ reminders }) {
-    const [isMounted, setIsMounted] = (0, import_react52.useState)(false);
+    const [isMounted, setIsMounted] = (0, import_react53.useState)(false);
     const { visibleReminders, dismissReminder } = useVisibleReminders(reminders);
     const activeReminder = visibleReminders[0] ?? null;
-    (0, import_react52.useEffect)(() => {
+    (0, import_react53.useEffect)(() => {
       setIsMounted(true);
     }, []);
     useDismissActiveReminderOnClick(activeReminder, dismissReminder);
@@ -78014,15 +78573,15 @@ Click Cancel to discard local changes and revert to canonical.`
     const bodyStyle = getReminderSpeechBubbleBodyStyle(activeReminder.metadata);
     const hostZIndex = resolveReminderHostZIndex(activeReminder.metadata);
     return (0, import_react_dom4.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
         "div",
         {
           "aria-live": "polite",
           className: "player-game-reminder-speech-host",
           style: { zIndex: hostZIndex },
-          children: /* @__PURE__ */ (0, import_jsx_runtime90.jsx)("div", { className: "builder-preview-speech-bubble", style: shellStyle, children: /* @__PURE__ */ (0, import_jsx_runtime90.jsxs)("div", { className: "builder-preview-speech-bubble-body", style: bodyStyle, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime90.jsx)("div", { className: "builder-preview-speech-bubble-content", children: /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(ReminderRichMessage, { messageHtml: activeReminder.messageHtml }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime90.jsx)("span", { "aria-hidden": "true", className: "builder-preview-speech-bubble-tail" })
+          children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-speech-bubble", style: shellStyle, children: /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "builder-preview-speech-bubble-body", style: bodyStyle, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-speech-bubble-content", children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(ReminderRichMessage, { messageHtml: activeReminder.messageHtml }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("span", { "aria-hidden": "true", className: "builder-preview-speech-bubble-tail" })
           ] }) })
         }
       ),
@@ -78039,16 +78598,16 @@ Click Cancel to discard local changes and revert to canonical.`
     const placement = resolveReminderStripPlacement(activeReminder.metadata);
     const hostZIndex = resolveReminderHostZIndex(activeReminder.metadata);
     const offsetStyle = getReminderStripOffsetStyle(activeReminder.metadata);
-    return /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
       "div",
       {
         "aria-live": "polite",
         className: `player-game-reminder-strip player-game-reminder-strip-${placement}`,
         role: "status",
         style: { zIndex: hostZIndex },
-        children: /* @__PURE__ */ (0, import_jsx_runtime90.jsxs)("div", { className: "player-game-reminder-strip-inner", style: offsetStyle, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime90.jsx)("strong", { className: "player-game-reminder-strip-title", children: activeReminder.name }),
-          /* @__PURE__ */ (0, import_jsx_runtime90.jsx)(ReminderRichMessage, { messageHtml: activeReminder.messageHtml })
+        children: /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "player-game-reminder-strip-inner", style: offsetStyle, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("strong", { className: "player-game-reminder-strip-title", children: activeReminder.name }),
+          /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(ReminderRichMessage, { messageHtml: activeReminder.messageHtml })
         ] })
       }
     );
@@ -78154,12 +78713,12 @@ Click Cancel to discard local changes and revert to canonical.`
 
   // components/builder-reminder-runtime.tsx
   init_game_audience();
-  var import_jsx_runtime91 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime93 = __toESM(require_jsx_runtime());
   function BuilderReminderRuntime({ layoutSections }) {
-    const [contextPayload, setContextPayload] = (0, import_react53.useState)(null);
-    const [fetchError, setFetchError] = (0, import_react53.useState)(null);
-    const [isLoading, setIsLoading] = (0, import_react53.useState)(true);
-    const refreshContext = (0, import_react53.useCallback)(async (options) => {
+    const [contextPayload, setContextPayload] = (0, import_react54.useState)(null);
+    const [fetchError, setFetchError] = (0, import_react54.useState)(null);
+    const [isLoading, setIsLoading] = (0, import_react54.useState)(true);
+    const refreshContext = (0, import_react54.useCallback)(async (options) => {
       if (!options?.silent) {
         setIsLoading(true);
       }
@@ -78177,10 +78736,10 @@ Click Cancel to discard local changes and revert to canonical.`
         setIsLoading(false);
       }
     }, []);
-    (0, import_react53.useEffect)(() => {
+    (0, import_react54.useEffect)(() => {
       void refreshContext();
     }, [refreshContext]);
-    (0, import_react53.useEffect)(() => {
+    (0, import_react54.useEffect)(() => {
       const handleRefresh = () => {
         void refreshContext({ silent: true });
       };
@@ -78191,15 +78750,15 @@ Click Cancel to discard local changes and revert to canonical.`
         window.removeEventListener(POLL_TEST_MODE_CHANGED_EVENT, handleRefresh);
       };
     }, [refreshContext]);
-    const pageReminders = (0, import_react53.useMemo)(() => collectEvaluableRemindersFromLayout(layoutSections), [layoutSections]);
+    const pageReminders = (0, import_react54.useMemo)(() => collectEvaluableRemindersFromLayout(layoutSections), [layoutSections]);
     const playContext = contextPayload?.evaluationSource === "authenticated" ? "portal" : "public";
-    const eligibleReminders = (0, import_react53.useMemo)(
+    const eligibleReminders = (0, import_react54.useMemo)(
       () => pageReminders.filter(
         (reminder) => reminder.isActive && gameAudienceFiresForContext(reminder.audience, playContext)
       ),
       [pageReminders, playContext]
     );
-    const playerContext = (0, import_react53.useMemo)(() => {
+    const playerContext = (0, import_react54.useMemo)(() => {
       if (!contextPayload) {
         return null;
       }
@@ -78210,13 +78769,13 @@ Click Cancel to discard local changes and revert to canonical.`
         answeredPollIds: new Set(contextPayload.context.answeredPollIds)
       };
     }, [contextPayload]);
-    const matched = (0, import_react53.useMemo)(() => {
+    const matched = (0, import_react54.useMemo)(() => {
       if (!playerContext) {
         return [];
       }
       return evaluatePlayerReminders(eligibleReminders, playerContext);
     }, [eligibleReminders, playerContext]);
-    (0, import_react53.useEffect)(() => {
+    (0, import_react54.useEffect)(() => {
       if (matched.length === 0) {
         return;
       }
@@ -78229,7 +78788,7 @@ Click Cancel to discard local changes and revert to canonical.`
     }, [matched, pageReminders]);
     const speechBubbleReminders = matched.filter((reminder) => reminder.appearance === "speech_bubble");
     const stripReminders = matched.filter((reminder) => reminder.appearance === "strip");
-    const diagnostics = (0, import_react53.useMemo)(() => {
+    const diagnostics = (0, import_react54.useMemo)(() => {
       const matchedIds = new Set(matched.map((reminder) => reminder.id));
       const context = contextPayload?.context ?? {
         pollsTaken: 0,
@@ -78275,15 +78834,15 @@ Click Cancel to discard local changes and revert to canonical.`
     if (pageReminders.length === 0) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime91.jsxs)(import_jsx_runtime91.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime91.jsx)(PlayerGameRemindersSpeechBubble, { reminders: speechBubbleReminders }),
-      /* @__PURE__ */ (0, import_jsx_runtime91.jsx)(PlayerGameRemindersStrip, { reminders: stripReminders }),
-      /* @__PURE__ */ (0, import_jsx_runtime91.jsx)(PlayerGameReminderDiagnosticsGate, { diagnostics, isLoading })
+    return /* @__PURE__ */ (0, import_jsx_runtime93.jsxs)(import_jsx_runtime93.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime93.jsx)(PlayerGameRemindersSpeechBubble, { reminders: speechBubbleReminders }),
+      /* @__PURE__ */ (0, import_jsx_runtime93.jsx)(PlayerGameRemindersStrip, { reminders: stripReminders }),
+      /* @__PURE__ */ (0, import_jsx_runtime93.jsx)(PlayerGameReminderDiagnosticsGate, { diagnostics, isLoading })
     ] });
   }
 
   // components/builder-template-preview.tsx
-  var import_jsx_runtime92 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime94 = __toESM(require_jsx_runtime());
   function normalizeNavPath(value) {
     const path = value.split("?")[0]?.split("#")[0] || "/";
     const normalized = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
@@ -78307,11 +78866,11 @@ Click Cancel to discard local changes and revert to canonical.`
   function ContactFormPreview({ settings, projectId = "" }) {
     const mode = getContactFormMode2(settings);
     const fields = getContactFormFields2(mode);
-    const [values, setValues] = (0, import_react54.useState)({});
-    const [honeypot, setHoneypot] = (0, import_react54.useState)("");
-    const [message, setMessage] = (0, import_react54.useState)("");
-    const [error, setError] = (0, import_react54.useState)("");
-    const [isSubmitting, setIsSubmitting] = (0, import_react54.useState)(false);
+    const [values, setValues] = (0, import_react55.useState)({});
+    const [honeypot, setHoneypot] = (0, import_react55.useState)("");
+    const [message, setMessage] = (0, import_react55.useState)("");
+    const [error, setError] = (0, import_react55.useState)("");
+    const [isSubmitting, setIsSubmitting] = (0, import_react55.useState)(false);
     async function submitContactForm(event) {
       event.preventDefault();
       setError("");
@@ -78346,8 +78905,8 @@ Click Cancel to discard local changes and revert to canonical.`
         setIsSubmitting(false);
       }
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("form", { className: "builder-contact-form", onSubmit: submitContactForm, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("form", { className: "builder-contact-form", onSubmit: submitContactForm, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
         "input",
         {
           type: "text",
@@ -78360,11 +78919,11 @@ Click Cancel to discard local changes and revert to canonical.`
           onChange: (event) => setHoneypot(event.target.value)
         }
       ),
-      message ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-message", children: message }) : null,
-      error ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-error", children: error }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-fields", children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("label", { className: "builder-contact-form-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("span", { children: field.label }),
-        /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      message ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-message", children: message }) : null,
+      error ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-error", children: error }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-fields", children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("label", { className: "builder-contact-form-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { children: field.label }),
+        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
           "input",
           {
             type: field.type,
@@ -78375,19 +78934,19 @@ Click Cancel to discard local changes and revert to canonical.`
           }
         )
       ] }, field.id)) }),
-      mode === "custom" ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-stub", children: "Custom form builder coming soon. Standard fields are shown for now." }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("button", { className: "builder-contact-form-submit", disabled: isSubmitting, type: "submit", children: isSubmitting ? "Submitting..." : "Submit" })
+      mode === "custom" ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-stub", children: "Custom form builder coming soon. Standard fields are shown for now." }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("button", { className: "builder-contact-form-submit", disabled: isSubmitting, type: "submit", children: isSubmitting ? "Submitting..." : "Submit" })
     ] });
   }
   function CrmFormPreview({ settings }) {
     const crmFormId = settings.crmFormId ?? "";
-    const [form, setForm] = (0, import_react54.useState)(null);
-    const [values, setValues] = (0, import_react54.useState)({});
-    const [honeypot, setHoneypot] = (0, import_react54.useState)("");
-    const [message, setMessage] = (0, import_react54.useState)("");
-    const [error, setError] = (0, import_react54.useState)("");
-    const [isSubmitting, setIsSubmitting] = (0, import_react54.useState)(false);
-    (0, import_react54.useEffect)(() => {
+    const [form, setForm] = (0, import_react55.useState)(null);
+    const [values, setValues] = (0, import_react55.useState)({});
+    const [honeypot, setHoneypot] = (0, import_react55.useState)("");
+    const [message, setMessage] = (0, import_react55.useState)("");
+    const [error, setError] = (0, import_react55.useState)("");
+    const [isSubmitting, setIsSubmitting] = (0, import_react55.useState)(false);
+    (0, import_react55.useEffect)(() => {
       if (!crmFormId) return;
       fetch(`/api/crm/forms/${crmFormId}`).then((r) => r.json()).then((d) => setForm(d.data ?? d ?? null)).catch(() => {
       });
@@ -78417,17 +78976,17 @@ Click Cancel to discard local changes and revert to canonical.`
       }
     }
     if (!crmFormId) {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-stub", children: "No CRM form selected. Set a Form ID in module settings." });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-stub", children: "No CRM form selected. Set a Form ID in module settings." });
     }
     if (!form) {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-stub", children: "Loading form\u2026" });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-stub", children: "Loading form\u2026" });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("form", { className: "builder-contact-form", onSubmit: submitCrmForm, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("input", { type: "text", name: "_trap", value: honeypot, onChange: (e) => setHoneypot(e.target.value), style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 }),
-      form.heading ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-heading", children: form.heading }) : null,
-      message ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-message", children: message }) : null,
-      error ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-error", children: error }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-contact-form-fields", children: form.fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("label", { className: "builder-contact-form-field", children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("form", { className: "builder-contact-form", onSubmit: submitCrmForm, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("input", { type: "text", name: "_trap", value: honeypot, onChange: (e) => setHoneypot(e.target.value), style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 }),
+      form.heading ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-heading", children: form.heading }) : null,
+      message ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-message", children: message }) : null,
+      error ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-error", children: error }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-contact-form-fields", children: form.fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("label", { className: "builder-contact-form-field", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
         "input",
         {
           type: field.type || "text",
@@ -78438,7 +78997,7 @@ Click Cancel to discard local changes and revert to canonical.`
           onChange: (e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))
         }
       ) }, field.key)) }),
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("button", { className: "builder-contact-form-submit", disabled: isSubmitting, type: "submit", children: isSubmitting ? "Submitting\u2026" : form.submitLabel || "Submit" })
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("button", { className: "builder-contact-form-submit", disabled: isSubmitting, type: "submit", children: isSubmitting ? "Submitting\u2026" : form.submitLabel || "Submit" })
     ] });
   }
   function MerchProductCard({ settings }) {
@@ -78446,10 +79005,10 @@ Click Cancel to discard local changes and revert to canonical.`
     const imageUrl = resolvePublicBuilderAssetUrl(settings.imageUrl);
     const productUrl = resolvePublicBuilderAssetUrl(settings.productUrl);
     const buttonLabel = settings.buttonLabel || "Buy on Redbubble";
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "product-card", children: [
-      imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("img", { src: imageUrl, alt: productName, suppressHydrationWarning: true }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("h3", { children: productName }),
-      productUrl ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("a", { href: productUrl, target: "_blank", rel: "noopener noreferrer", children: buttonLabel }) : null
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "product-card", children: [
+      imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("img", { src: imageUrl, alt: productName, suppressHydrationWarning: true }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("h3", { children: productName }),
+      productUrl ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("a", { href: productUrl, target: "_blank", rel: "noopener noreferrer", children: buttonLabel }) : null
     ] });
   }
   function BuilderTemplatePreview({
@@ -78466,13 +79025,13 @@ Click Cancel to discard local changes and revert to canonical.`
     const sitePlayerRegistered = useSitePlayerRegistration();
     const shellClassName = !emailPreview ? "builder-preview-shell" : void 0;
     const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)(
       "div",
       {
         className: shellClassName ? pageOverlaySections.length > 0 ? `${shellClassName} builder-preview-shell-has-overlay` : shellClassName : void 0,
         style: rootStyle,
         children: [
-          pageOverlaySections.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-overlay-layer", "aria-hidden": false, children: pageOverlaySections.map((section) => /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+          pageOverlaySections.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-overlay-layer", "aria-hidden": false, children: pageOverlaySections.map((section) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
             BuilderSectionPreview,
             {
               emailPreview,
@@ -78483,7 +79042,7 @@ Click Cancel to discard local changes and revert to canonical.`
             },
             section.id
           )) }) : null,
-          layoutSections.filter((section) => !sectionHasOnlyPageOverlayImageModules(section)).map((section) => /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+          layoutSections.filter((section) => !sectionHasOnlyPageOverlayImageModules(section)).map((section) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
             BuilderSectionPreview,
             {
               emailPreview,
@@ -78493,8 +79052,8 @@ Click Cancel to discard local changes and revert to canonical.`
             },
             section.id
           )),
-          shellClassName ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(GameModuleOverlayHosts, {}) : null,
-          shellClassName ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(BuilderReminderRuntime, { layoutSections }) : null
+          shellClassName ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(GameModuleOverlayHosts, {}) : null,
+          shellClassName ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderReminderRuntime, { layoutSections }) : null
         ]
       }
     );
@@ -78531,7 +79090,7 @@ Click Cancel to discard local changes and revert to canonical.`
       gap: isOverlayLayoutCollapsed ? 0 : "16px",
       "--builder-layout-grid": getLayoutGridTemplate(section.layout)
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
       "section",
       {
         className: `builder-preview-section builder-preview-section-layout-${section.layout || "single"} builder-preview-section-mobile-${section.mobileLayout || "stack"} ${isNavigationSection ? "builder-preview-section-navigation" : ""}${isPageOverlayFlowSection ? " builder-preview-section-overlay-flow" : ""}${isSectionOverlaySlot ? " builder-preview-section-overlay-slot" : ""}${hasPollModules ? " builder-preview-section-poll-row" : ""}`,
@@ -78562,7 +79121,7 @@ Click Cancel to discard local changes and revert to canonical.`
             ),
             position: "relative"
           };
-          return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
             "div",
             {
               className: `builder-preview-column ${section.cellMobileHidden?.[columnKey] === "true" ? "builder-preview-column-mobile-hidden" : ""} ${isNavigationColumn ? "builder-preview-column-navigation" : ""}${isPageOverlayFlowColumn ? " builder-preview-column-overlay-flow" : ""} ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}`,
@@ -78572,7 +79131,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 const isSectionOverlayModule = isSectionScopedOverlayDecor(module2);
                 const isCurrentPollModule = module2.type === "current-poll";
                 const isPollCategoryListModule = module2.type === "poll-category-list";
-                return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+                return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
                   "div",
                   {
                     className: `builder-preview-module ${module2.type !== "table" ? getAlignmentClass(getModuleAlignment(module2.settings)) : ""} ${module2.settings.mobileHidden === "true" ? "builder-preview-module-mobile-hidden" : ""} ${module2.settings.mobileAlignment ? `builder-preview-module-mobile-align-${module2.settings.mobileAlignment}` : ""} ${module2.settings.mobileFontSize ? "builder-preview-module-mobile-font-size" : ""}${isPageOverlayFlowModule ? " builder-preview-module-overlay-flow" : ""}${isSectionOverlayModule ? " builder-preview-module-overlay-slot" : ""}${isCurrentPollModule ? " builder-preview-module-current-poll" : ""}`,
@@ -78583,7 +79142,7 @@ Click Cancel to discard local changes and revert to canonical.`
                       ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                       "--builder-mobile-font-size": module2.settings.mobileFontSize ? `${module2.settings.mobileFontSize}px` : void 0
                     },
-                    children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+                    children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
                       BuilderModulePreview,
                       {
                         emailPreview,
@@ -78615,11 +79174,11 @@ Click Cancel to discard local changes and revert to canonical.`
   }) {
     const variant = module2.settings.variant ?? "";
     if (module2.type === "navigation") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(NavigationModulePreview, { module: module2, previewMode });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(NavigationModulePreview, { module: module2, previewMode });
     }
     if (module2.type === "heading") {
       const Tag = module2.settings.level || "h2";
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
         Tag,
         {
           className: `builder-preview-heading builder-preview-heading-${variant || "default"}`,
@@ -78629,13 +79188,13 @@ Click Cancel to discard local changes and revert to canonical.`
       );
     }
     if (module2.type === "headline-rotator") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(HeadlineRotatorPreview, { module: module2 });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(HeadlineRotatorPreview, { module: module2 });
     }
     if (module2.type === "poll-category-list") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(PollCategoryListPreview, { module: module2 });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(PollCategoryListPreview, { module: module2 });
     }
     if (module2.type === "text") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
         "div",
         {
           className: `builder-preview-text builder-preview-text-${variant || "default"}`,
@@ -78644,22 +79203,22 @@ Click Cancel to discard local changes and revert to canonical.`
       );
     }
     if (module2.type === "code") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: `builder-preview-code builder-preview-code-${variant || "default"}`, children: [
-        module2.settings.label ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-code-label", children: module2.settings.label }) : null,
-        module2.text ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(BuilderCodeEmbed, { html: sanitizeEmbedHtml(module2.text) }) : null
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: `builder-preview-code builder-preview-code-${variant || "default"}`, children: [
+        module2.settings.label ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-code-label", children: module2.settings.label }) : null,
+        module2.text ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderCodeEmbed, { html: sanitizeEmbedHtml(module2.text) }) : null
       ] });
     }
     if (module2.type === "merch") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(MerchProductCard, { settings: module2.settings });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(MerchProductCard, { settings: module2.settings });
     }
     if (module2.type === "quote") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("blockquote", { className: `builder-preview-quote builder-preview-quote-${variant || "default"}`, children: module2.text || "" });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("blockquote", { className: `builder-preview-quote builder-preview-quote-${variant || "default"}`, children: module2.text || "" });
     }
     if (module2.type === "speech-bubble") {
       if (emailPreview) {
-        return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(SpeechBubblePreview, { module: module2 });
+        return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(SpeechBubblePreview, { module: module2 });
       }
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
         BuilderSpeechBubbleRuntime,
         {
           gamePlayContext: "public",
@@ -78673,7 +79232,7 @@ Click Cancel to discard local changes and revert to canonical.`
       const s = module2.settings;
       const btnStyle = getButtonModuleStyle(s);
       const href = emailPreview ? resolveEmailMergeTokensForPreview(module2.settings.href || "#") : module2.settings.href || "#";
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
         Link2,
         {
           className: `builder-preview-button builder-preview-button-styled builder-preview-button-${variant || "default"} builder-preview-button-${s.buttonSize ?? "medium"}`,
@@ -78684,13 +79243,13 @@ Click Cancel to discard local changes and revert to canonical.`
       );
     }
     if (module2.type === "contact-form") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(ContactFormPreview, { projectId, settings: module2.settings });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(ContactFormPreview, { projectId, settings: module2.settings });
     }
     if (module2.type === "crm-form") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(CrmFormPreview, { settings: module2.settings });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(CrmFormPreview, { settings: module2.settings });
     }
     if (module2.type === "player-portal") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
         PlayerPortalAuthForm,
         {
           settings: getPlayerPortalAuthSettings(module2.settings),
@@ -78702,9 +79261,9 @@ Click Cancel to discard local changes and revert to canonical.`
       const embed = getVideoEmbedSource(module2.settings.url);
       const title = module2.settings.videoName || module2.name || module2.text || "Video";
       const opensInNewTab = module2.settings.newTab !== "false";
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("figure", { className: "builder-preview-video-card", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "builder-preview-video-frame", children: [
-          embed?.kind === "iframe" ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("figure", { className: "builder-preview-video-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-preview-video-frame", children: [
+          embed?.kind === "iframe" ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
             "iframe",
             {
               allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
@@ -78712,8 +79271,8 @@ Click Cancel to discard local changes and revert to canonical.`
               src: embed.src,
               title
             }
-          ) : embed?.kind === "video" ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("video", { className: "builder-preview-video", controls: true, preload: "metadata", src: embed.src }) : null,
-          embed ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+          ) : embed?.kind === "video" ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("video", { className: "builder-preview-video", controls: true, preload: "metadata", src: embed.src }) : null,
+          embed ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
             "a",
             {
               "aria-label": `Open ${title} in a new tab`,
@@ -78724,12 +79283,12 @@ Click Cancel to discard local changes and revert to canonical.`
             }
           ) : null
         ] }),
-        title ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("figcaption", { className: "builder-preview-video-caption", children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("strong", { children: title }) }) : null
+        title ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("figcaption", { className: "builder-preview-video-caption", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("strong", { children: title }) }) : null
       ] });
     }
     if (module2.type === "floating-image") {
       if (emailPreview) {
-        return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
           BuilderImagePreview,
           {
             module: module2,
@@ -78741,8 +79300,8 @@ Click Cancel to discard local changes and revert to canonical.`
       const trigger = getModuleTrigger(module2.settings);
       const usesOverlayHost = shouldFloatingImageUseOverlayHost(trigger);
       const showInlineDecor = !usesOverlayHost || overlayFlowDecor;
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)(import_jsx_runtime92.Fragment, { children: [
-        showInlineDecor ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)(import_jsx_runtime94.Fragment, { children: [
+        showInlineDecor ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
           BuilderImagePreview,
           {
             module: module2,
@@ -78751,7 +79310,7 @@ Click Cancel to discard local changes and revert to canonical.`
             placeholder: "Choose a floating image"
           }
         ) : null,
-        usesOverlayHost ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+        usesOverlayHost ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
           BuilderFloatingImageRuntime,
           {
             gamePlayContext: "public",
@@ -78764,28 +79323,28 @@ Click Cancel to discard local changes and revert to canonical.`
       ] });
     }
     if (module2.type === "image") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(BuilderImagePreview, { module: module2, variant, placeholder: "Choose an image" });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderImagePreview, { module: module2, variant, placeholder: "Choose an image" });
     }
     if (module2.type === "table") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(TableModulePreview, { module: module2 });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(TableModulePreview, { module: module2 });
     }
     if (module2.type === "slider") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(SliderModulePreview, { module: module2 });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(SliderModulePreview, { module: module2 });
     }
     if (module2.type === "social") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(SocialModulePreview, { module: module2 });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(SocialModulePreview, { module: module2 });
     }
     if (module2.type === "previous-results" || module2.type === "current-poll") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(import_react54.Suspense, { fallback: null, children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(BuilderPollModuleRuntime, { kind: module2.type, settings: module2.settings }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(import_react55.Suspense, { fallback: null, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderPollModuleRuntime, { kind: module2.type, settings: module2.settings }) });
     }
     if (module2.type === "social-share") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(import_react54.Suspense, { fallback: null, children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(BuilderSocialShareRuntime, { settings: module2.settings }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(import_react55.Suspense, { fallback: null, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSocialShareRuntime, { settings: module2.settings }) });
     }
     if (module2.type === "confetti") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(BuilderConfettiRuntime, { preview: true, settings: module2.settings });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderConfettiRuntime, { preview: true, settings: module2.settings });
     }
     if (module2.type === "tractor-nav") {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(TractorNavRuntime, { settings: module2.settings });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(TractorNavRuntime, { settings: module2.settings });
     }
     return null;
   }
@@ -78793,7 +79352,7 @@ Click Cancel to discard local changes and revert to canonical.`
     module: module2
   }) {
     const color = module2.settings.color || "#18324a";
-    const entries = (0, import_react54.useMemo)(
+    const entries = (0, import_react55.useMemo)(
       () => parseHeadlineRotatorEntries(module2.settings.headlines ?? "", color),
       [module2.settings.headlines, color]
     );
@@ -78806,13 +79365,13 @@ Click Cancel to discard local changes and revert to canonical.`
     const minHeight = resolveHeadlineRotatorMinHeight(module2.settings.minHeight);
     const justify = verticalAlignment === "top" ? "flex-start" : verticalAlignment === "bottom" ? "flex-end" : "center";
     const alignSelf = horizontal === "left" ? "flex-start" : horizontal === "right" ? "flex-end" : "center";
-    const [stableIndex, setStableIndex] = (0, import_react54.useState)(0);
-    const [transition, setTransition] = (0, import_react54.useState)(null);
-    const stableIndexRef = (0, import_react54.useRef)(0);
-    (0, import_react54.useEffect)(() => {
+    const [stableIndex, setStableIndex] = (0, import_react55.useState)(0);
+    const [transition, setTransition] = (0, import_react55.useState)(null);
+    const stableIndexRef = (0, import_react55.useRef)(0);
+    (0, import_react55.useEffect)(() => {
       stableIndexRef.current = stableIndex;
     }, [stableIndex]);
-    (0, import_react54.useEffect)(() => {
+    (0, import_react55.useEffect)(() => {
       if (entries.length <= 1) {
         setStableIndex(0);
         stableIndexRef.current = 0;
@@ -78884,7 +79443,7 @@ Click Cancel to discard local changes and revert to canonical.`
       ...{ textShadow: getHeadingModuleStyle(module2.settings).textShadow }
     };
     if (entries.length === 0) {
-      return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-headline-rotator", style: containerStyle, children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("span", { style: { alignSelf }, children: "Add headlines in the editor" }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-headline-rotator", style: containerStyle, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { style: { alignSelf }, children: "Add headlines in the editor" }) });
     }
     function getPositionedHeadlineStyle(entry, opacity) {
       const anchor = getHeadlineRotatorPositionStyle(entry.xAxis, entry.yAxis);
@@ -78911,9 +79470,9 @@ Click Cancel to discard local changes and revert to canonical.`
       }
       return 0;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-headline-rotator", style: containerStyle, children: entries.map((entry, index) => {
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-headline-rotator", style: containerStyle, children: entries.map((entry, index) => {
       const opacity = getEntryOpacity(index);
-      return entry.href ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(Link2, { href: entry.href, style: getPositionedHeadlineStyle(entry, opacity), children: entry.label }, entry.id) : /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("span", { style: getPositionedHeadlineStyle(entry, opacity), children: entry.label }, entry.id);
+      return entry.href ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(Link2, { href: entry.href, style: getPositionedHeadlineStyle(entry, opacity), children: entry.label }, entry.id) : /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { style: getPositionedHeadlineStyle(entry, opacity), children: entry.label }, entry.id);
     }) });
   }
   function toPreviewHref(href) {
@@ -78953,7 +79512,7 @@ Click Cancel to discard local changes and revert to canonical.`
     const flexAlign = rawAlignment === "left" ? "flex-start" : rawAlignment === "right" ? "flex-end" : "center";
     const isVertical = module2.settings.navDirection === "vertical";
     const navLevels = Number.parseInt(module2.settings.navLevels ?? "2", 10) || 2;
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
       "nav",
       {
         className: `site-nav builder-preview-nav-${variant || "site-nav"}${isVertical ? " site-nav--vertical" : ""}`,
@@ -78978,7 +79537,7 @@ Click Cancel to discard local changes and revert to canonical.`
           const itemId = item.id ?? `${href}-${item.label}`;
           const children = navLevels >= 2 ? childrenOf(itemId) : [];
           if (children.length === 0) {
-            return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+            return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
               Link2,
               {
                 "aria-current": isActive2 ? "page" : void 0,
@@ -78989,8 +79548,8 @@ Click Cancel to discard local changes and revert to canonical.`
               itemId
             );
           }
-          return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "site-nav-dropdown", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)(
+          return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "site-nav-dropdown", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)(
               Link2,
               {
                 "aria-current": isActive2 ? "page" : void 0,
@@ -78998,14 +79557,14 @@ Click Cancel to discard local changes and revert to canonical.`
                 href,
                 children: [
                   item.label,
-                  !isVertical && /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("span", { className: "site-nav-dropdown-arrow", "aria-hidden": true, children: "\u25BE" })
+                  !isVertical && /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "site-nav-dropdown-arrow", "aria-hidden": true, children: "\u25BE" })
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "site-nav-dropdown-menu", children: children.map((child) => {
+            /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "site-nav-dropdown-menu", children: children.map((child) => {
               const childHref = previewMode ? toPreviewHref(child.href || "#") : child.href || "#";
               const childActive = normalizeNavPath(child.href || "#") === activePath;
-              return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+              return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
                 Link2,
                 {
                   href: childHref,
@@ -79040,16 +79599,16 @@ Click Cancel to discard local changes and revert to canonical.`
     const cellPad = Number.parseInt(module2.settings.cellPadding || "8", 10);
     const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module2.settings)) ?? { background: "transparent" };
     const tableMaxWidth = module2.settings.tableMaxWidth ? Math.min(2e3, Math.max(0, Number.parseInt(module2.settings.tableMaxWidth, 10) || 0)) : void 0;
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-table-wrap", style: tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}, children: /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-table-wrap", style: tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)(
       "table",
       {
         className: "builder-preview-table",
         style: { borderCollapse: "collapse", width: "100%", border: `${borderW}px solid ${borderC}`, ...tableBgStyle },
         children: [
-          td.headers.length > 0 && module2.settings.showColumnHeads !== "false" && /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("tr", { children: td.headers.map((h2, i) => /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("th", { style: { border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, textAlign: "left", fontWeight: 600 }, children: h2 }, i)) }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("tbody", { children: Array.from({ length: td.rowCount }, (_, ri) => /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("tr", { children: td.headers.map((_2, ci) => {
+          td.headers.length > 0 && module2.settings.showColumnHeads !== "false" && /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("tr", { children: td.headers.map((h2, i) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("th", { style: { border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, textAlign: "left", fontWeight: 600 }, children: h2 }, i)) }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("tbody", { children: Array.from({ length: td.rowCount }, (_, ri) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("tr", { children: td.headers.map((_2, ci) => {
             const cellMods = td.cells[`${ri}-${ci}`] || [];
-            return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("td", { style: { border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, verticalAlign: "top" }, children: cellMods.map((m) => /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: `builder-preview-module ${getAlignmentClass(getModuleAlignment(m.settings))}`, children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(BuilderModulePreview, { module: m }) }, m.id)) }, ci);
+            return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("td", { style: { border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, verticalAlign: "top" }, children: cellMods.map((m) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: `builder-preview-module ${getAlignmentClass(getModuleAlignment(m.settings))}`, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderModulePreview, { module: m }) }, m.id)) }, ci);
           }) }, ri)) })
         ]
       }
@@ -79077,10 +79636,10 @@ Click Cancel to discard local changes and revert to canonical.`
     const items = parseSliderItems2(module2.settings);
     const gap = Number.parseInt(module2.settings.sliderGap || "16", 10);
     const cardWidth = Number.parseInt(module2.settings.sliderCardWidth || "280", 10);
-    const scrollRef = (0, import_react54.useRef)(null);
-    const [canScrollLeft, setCanScrollLeft] = (0, import_react54.useState)(false);
-    const [canScrollRight, setCanScrollRight] = (0, import_react54.useState)(false);
-    (0, import_react54.useEffect)(() => {
+    const scrollRef = (0, import_react55.useRef)(null);
+    const [canScrollLeft, setCanScrollLeft] = (0, import_react55.useState)(false);
+    const [canScrollRight, setCanScrollRight] = (0, import_react55.useState)(false);
+    (0, import_react55.useEffect)(() => {
       const el = scrollRef.current;
       if (!el) return;
       function update2() {
@@ -79101,16 +79660,16 @@ Click Cancel to discard local changes and revert to canonical.`
       if (!el) return;
       el.scrollBy({ left: direction === "left" ? -320 : 320, behavior: "smooth" });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "builder-preview-slider-wrap", children: [
-      canScrollLeft && /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("button", { type: "button", className: "builder-preview-slider-arrow builder-preview-slider-arrow-left", onClick: () => scroll("left"), children: "\u2039" }),
-      /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-slider", ref: scrollRef, style: { gap: `${gap}px` }, children: items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("article", { className: "builder-preview-slider-card", style: { minWidth: `${cardWidth}px` }, children: [
-        item.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-slider-image", children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(Image, { alt: item.title || "Slider item", fill: true, sizes: "280px", src: item.imageUrl, unoptimized: true }) }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "builder-preview-slider-copy", children: [
-          item.linkUrl ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(Link2, { href: item.linkUrl, children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("strong", { children: item.title }) }) : /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("strong", { children: item.title }),
-          /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("p", { children: item.body })
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-preview-slider-wrap", children: [
+      canScrollLeft && /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("button", { type: "button", className: "builder-preview-slider-arrow builder-preview-slider-arrow-left", onClick: () => scroll("left"), children: "\u2039" }),
+      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-slider", ref: scrollRef, style: { gap: `${gap}px` }, children: items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("article", { className: "builder-preview-slider-card", style: { minWidth: `${cardWidth}px` }, children: [
+        item.imageUrl ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-slider-image", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(Image, { alt: item.title || "Slider item", fill: true, sizes: "280px", src: item.imageUrl, unoptimized: true }) }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-preview-slider-copy", children: [
+          item.linkUrl ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(Link2, { href: item.linkUrl, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("strong", { children: item.title }) }) : /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("strong", { children: item.title }),
+          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("p", { children: item.body })
         ] })
       ] }, item.id)) }),
-      canScrollRight && /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("button", { type: "button", className: "builder-preview-slider-arrow builder-preview-slider-arrow-right", onClick: () => scroll("right"), children: "\u203A" })
+      canScrollRight && /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("button", { type: "button", className: "builder-preview-slider-arrow builder-preview-slider-arrow-right", onClick: () => scroll("right"), children: "\u203A" })
     ] });
   }
   function parseSocialItems3(settings) {
@@ -79152,13 +79711,13 @@ Click Cancel to discard local changes and revert to canonical.`
       ...borderWidth > 0 ? { border: `${borderWidth}px solid ${borderColor}` } : {},
       ...hasShadow ? { boxShadow: `${shadowX}px ${shadowY}px ${shadowBlur}px ${shadowSpread}px ${shadowColor}` } : {}
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("div", { className: "builder-preview-social-row", children: /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("div", { className: "builder-preview-social-row", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
       "div",
       {
         className: "builder-preview-social",
         style: { gap: `${gap}px`, ...padding > 0 ? { padding: `${padding}px` } : {} },
-        children: items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime92.jsxs)("div", { className: "builder-preview-social-entry", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(
+        children: items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-preview-social-entry", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
             "a",
             {
               className: "builder-preview-social-item",
@@ -79172,17 +79731,17 @@ Click Cancel to discard local changes and revert to canonical.`
                 background: globalBg || item.backgroundColor,
                 ...iconStyle
               },
-              children: item.iconUrl ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)(Image, { alt: item.label || "Social icon", fill: true, sizes: `${iconSize}px`, src: item.iconUrl, unoptimized: true }) : /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("span", { className: "builder-preview-social-fallback", children: item.label.slice(0, 1) || "@" })
+              children: item.iconUrl ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(Image, { alt: item.label || "Social icon", fill: true, sizes: `${iconSize}px`, src: item.iconUrl, unoptimized: true }) : /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-preview-social-fallback", children: item.label.slice(0, 1) || "@" })
             }
           ),
-          showLabels ? /* @__PURE__ */ (0, import_jsx_runtime92.jsx)("span", { className: "builder-preview-social-label", children: item.label }) : null
+          showLabels ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-preview-social-label", children: item.label }) : null
         ] }, item.id))
       }
     ) });
   }
 
   // components/builder-preview-page.tsx
-  var import_jsx_runtime93 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime95 = __toESM(require_jsx_runtime());
   function slugFromPathname(pathname) {
     const withoutExt = pathname.replace(/\.html$/, "");
     return withoutExt.replace(/^\//, "").replace(/\/$/, "");
@@ -79210,11 +79769,11 @@ Click Cancel to discard local changes and revert to canonical.`
     }
   }
   function BuilderPreviewPage() {
-    const [draft, setDraft] = (0, import_react55.useState)(null);
-    const [loaded, setLoaded] = (0, import_react55.useState)(false);
-    const [previewDevice, setPreviewDevice] = (0, import_react55.useState)("desktop");
+    const [draft, setDraft] = (0, import_react56.useState)(null);
+    const [loaded, setLoaded] = (0, import_react56.useState)(false);
+    const [previewDevice, setPreviewDevice] = (0, import_react56.useState)("desktop");
     const isEmailPreview = previewDevice === "email";
-    (0, import_react55.useEffect)(() => {
+    (0, import_react56.useEffect)(() => {
       const storedDevice = window.localStorage.getItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY);
       if (storedDevice === "mobile" || storedDevice === "desktop" || storedDevice === "email") {
         setPreviewDevice(storedDevice);
@@ -79257,16 +79816,16 @@ Click Cancel to discard local changes and revert to canonical.`
         }
       }
     }, []);
-    return /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("main", { className: "admin-page", children: /* @__PURE__ */ (0, import_jsx_runtime93.jsxs)("section", { className: "admin-shell admin-shell-wide", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime93.jsxs)("div", { className: "admin-header", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime93.jsxs)("div", { className: "admin-brand-copy", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("div", { className: "page-eyebrow", children: "Builder Preview" }),
-          /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("h1", { className: "admin-title", children: draft?.name || "Unsaved Template Preview" }),
-          /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("p", { className: "page-copy admin-copy", children: isEmailPreview ? "This is the 600px email pod preview for the current Builder draft." : "This is the fully rendered page preview for the current Builder draft." })
+    return /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("main", { className: "admin-page", children: /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("section", { className: "admin-shell admin-shell-wide", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "admin-header", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "admin-brand-copy", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("div", { className: "page-eyebrow", children: "Builder Preview" }),
+          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("h1", { className: "admin-title", children: draft?.name || "Unsaved Template Preview" }),
+          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("p", { className: "page-copy admin-copy", children: isEmailPreview ? "This is the 600px email pod preview for the current Builder draft." : "This is the fully rendered page preview for the current Builder draft." })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime93.jsxs)("div", { className: "admin-actions", children: [
-          isEmailPreview ? /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("span", { className: "builder-email-preview-badge", children: "Email \xB7 600px" }) : /* @__PURE__ */ (0, import_jsx_runtime93.jsxs)("div", { className: "builder-device-toggle", role: "group", "aria-label": "Preview device", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime93.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "admin-actions", children: [
+          isEmailPreview ? /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("span", { className: "builder-email-preview-badge", children: "Email \xB7 600px" }) : /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-device-toggle", role: "group", "aria-label": "Preview device", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
               "button",
               {
                 className: previewDevice === "desktop" ? "submit-button" : "secondary-button",
@@ -79278,7 +79837,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 children: "Browser"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime93.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
               "button",
               {
                 className: previewDevice === "mobile" ? "submit-button" : "secondary-button",
@@ -79291,10 +79850,10 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             )
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("button", { className: "secondary-button", onClick: () => window.close(), type: "button", children: "Close Preview" })
+          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("button", { className: "secondary-button", onClick: () => window.close(), type: "button", children: "Close Preview" })
         ] })
       ] }),
-      loaded && draft && draft.layoutSections.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("div", { className: `builder-preview-device-frame builder-preview-device-${previewDevice}`, children: isEmailPreview ? /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("div", { className: "builder-email-workspace-pod builder-email-preview-pod", children: /* @__PURE__ */ (0, import_jsx_runtime93.jsx)(
+      loaded && draft && draft.layoutSections.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("div", { className: `builder-preview-device-frame builder-preview-device-${previewDevice}`, children: isEmailPreview ? /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("div", { className: "builder-email-workspace-pod builder-email-preview-pod", children: /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
         BuilderTemplatePreview,
         {
           emailPreview: true,
@@ -79302,7 +79861,7 @@ Click Cancel to discard local changes and revert to canonical.`
           pageBackground: draft.pageBackground,
           showShell: false
         }
-      ) }) : /* @__PURE__ */ (0, import_jsx_runtime93.jsx)(
+      ) }) : /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
         BuilderTemplatePreview,
         {
           layoutSections: draft.layoutSections,
@@ -79311,19 +79870,19 @@ Click Cancel to discard local changes and revert to canonical.`
           previewMode: true,
           showShell: false
         }
-      ) }) : loaded ? /* @__PURE__ */ (0, import_jsx_runtime93.jsxs)("section", { className: "admin-section", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("div", { className: "panel-label", children: "Preview" }),
-        /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("h2", { children: "No preview content found" }),
-        /* @__PURE__ */ (0, import_jsx_runtime93.jsx)("p", { className: "page-copy admin-copy", children: "Open this page from the Builder using the `Preview` button so the current draft can be loaded here." })
+      ) }) : loaded ? /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("section", { className: "admin-section", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("div", { className: "panel-label", children: "Preview" }),
+        /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("h2", { children: "No preview content found" }),
+        /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("p", { className: "page-copy admin-copy", children: "Open this page from the Builder using the `Preview` button so the current draft can be loaded here." })
       ] }) : null
     ] }) });
   }
 
   // components/builder/builder-themes-page.tsx
-  var import_react56 = __toESM(require_react());
+  var import_react57 = __toESM(require_react());
 
   // components/builder/builder-theme-typography-settings.tsx
-  var import_jsx_runtime94 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime96 = __toESM(require_jsx_runtime());
   var SCALE_RATIOS = [
     { value: "", label: "Off" },
     { value: "1.2", label: "Minor third (1.2)" },
@@ -79375,21 +79934,21 @@ Click Cancel to discard local changes and revert to canonical.`
         }
       }));
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-theme-typography", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-theme-typography-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("h4", { className: "builder-theme-typography-heading", children: "Fonts" }),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label: "Heading font", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("select", { value: fonts.heading, onChange: (event) => updateFont("heading", event.target.value), children: BUILDER_HEADING_FONTS.map((font) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("option", { value: font.key, children: font.label }, font.key)) }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label: "Body font", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("select", { value: fonts.body, onChange: (event) => updateFont("body", event.target.value), children: BUILDER_HEADING_FONTS.map((font) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("option", { value: font.key, children: font.label }, font.key)) }) })
+    return /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-theme-typography", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-theme-typography-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-theme-typography-heading", children: "Fonts" }),
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Heading font", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("select", { value: fonts.heading, onChange: (event) => updateFont("heading", event.target.value), children: BUILDER_HEADING_FONTS.map((font) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: font.key, children: font.label }, font.key)) }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Body font", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("select", { value: fonts.body, onChange: (event) => updateFont("body", event.target.value), children: BUILDER_HEADING_FONTS.map((font) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: font.key, children: font.label }, font.key)) }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-theme-typography-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("h4", { className: "builder-theme-typography-heading", children: "Colors" }),
+      /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-theme-typography-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-theme-typography-heading", children: "Colors" }),
         [
           ["text", "Body text"],
           ["heading", "Headings"],
           ["link", "Links"],
           ["linkHover", "Link hover"]
-        ].map(([role, label]) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label, children: /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("span", { className: "builder-theme-color-control", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+        ].map(([role, label]) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("span", { className: "builder-theme-color-control", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
             "input",
             {
               type: "color",
@@ -79397,7 +79956,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (event) => updateColor(role, event.target.value)
             }
           ),
-          colors[role] ? /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+          colors[role] ? /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
             "button",
             {
               className: "builder-theme-color-reset",
@@ -79405,10 +79964,10 @@ Click Cancel to discard local changes and revert to canonical.`
               onClick: () => updateColor(role, ""),
               children: "Reset"
             }
-          ) : /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-theme-color-inherit", children: "Inherit" })
+          ) : /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-theme-color-inherit", children: "Inherit" })
         ] }) }, role)),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label: "Link underline", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("label", { className: "builder-theme-checkbox-label", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Link underline", children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("label", { className: "builder-theme-checkbox-label", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
             "input",
             {
               type: "checkbox",
@@ -79416,10 +79975,10 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (event) => updateColorFlag("linkUnderline", event.target.checked)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { children: "Underline links" })
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { children: "Underline links" })
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label: "Hover underline", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("label", { className: "builder-theme-checkbox-label", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Hover underline", children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("label", { className: "builder-theme-checkbox-label", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
             "input",
             {
               type: "checkbox",
@@ -79427,12 +79986,12 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (event) => updateColorFlag("linkHoverUnderline", event.target.checked)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { children: "Underline on hover" })
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { children: "Underline on hover" })
         ] }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-theme-typography-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("h4", { className: "builder-theme-typography-heading", children: "Type scale" }),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label: "Base size (px)", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-theme-typography-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-theme-typography-heading", children: "Type scale" }),
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Base size (px)", children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
           "input",
           {
             type: "number",
@@ -79444,15 +80003,15 @@ Click Cancel to discard local changes and revert to canonical.`
             onChange: (event) => updateScale("baseSize", Number.parseInt(event.target.value, 10) || 0)
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label: "Scale ratio", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Scale ratio", children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
           "select",
           {
             value: scale.ratio ? String(scale.ratio) : "",
             onChange: (event) => updateScale("ratio", Number.parseFloat(event.target.value) || 0),
-            children: SCALE_RATIOS.map((option) => /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("option", { value: option.value, children: option.label }, option.value))
+            children: SCALE_RATIOS.map((option) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: option.value, children: option.label }, option.value))
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(BuilderSettingRow, { label: "Line height", children: /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Line height", children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
           "input",
           {
             type: "number",
@@ -79464,15 +80023,15 @@ Click Cancel to discard local changes and revert to canonical.`
             onChange: (event) => updateScale("baseLineHeight", Number.parseFloat(event.target.value) || 0)
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-theme-scale-col-headers", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-setting-label" }),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-theme-scale-col-label", children: "Size (px)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-theme-scale-col-label", children: "Line height" }),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-theme-scale-col-label", children: "Weight" })
+        /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-theme-scale-col-headers", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-setting-label" }),
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-theme-scale-col-label", children: "Size (px)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-theme-scale-col-label", children: "Line height" }),
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-theme-scale-col-label", children: "Weight" })
         ] }),
-        ["h1", "h2", "h3", "h4", "h5", "h6"].map((h2) => /* @__PURE__ */ (0, import_jsx_runtime94.jsxs)("div", { className: "builder-theme-scale-dual-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("span", { className: "builder-setting-label", children: h2.toUpperCase() }),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+        ["h1", "h2", "h3", "h4", "h5", "h6"].map((h2) => /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-theme-scale-dual-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-setting-label", children: h2.toUpperCase() }),
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
             "input",
             {
               type: "number",
@@ -79484,7 +80043,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (event) => updateScale(h2, Number.parseInt(event.target.value, 10) || 0)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
             "input",
             {
               type: "number",
@@ -79496,7 +80055,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (event) => updateScale(`${h2}Lh`, Number.parseFloat(event.target.value) || 0)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime94.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
             "input",
             {
               type: "number",
@@ -79510,12 +80069,12 @@ Click Cancel to discard local changes and revert to canonical.`
           )
         ] }, h2))
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime94.jsx)("p", { className: "builder-theme-typography-note", children: "Theme defaults apply to page content in Preview. Headings and text inherit these unless a specific module overrides them." })
+      /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("p", { className: "builder-theme-typography-note", children: "Theme defaults apply to page content in Preview. Headings and text inherit these unless a specific module overrides them." })
     ] });
   }
 
   // components/builder/builder-themes-page.tsx
-  var import_jsx_runtime95 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime97 = __toESM(require_jsx_runtime());
   var DEFAULT_TYPOGRAPHY = {
     fonts: { heading: "", body: "", mono: "" },
     scale: { baseSize: 0, ratio: 0, baseLineHeight: 0 },
@@ -79565,8 +80124,8 @@ Click Cancel to discard local changes and revert to canonical.`
     };
   }
   function SliderRow({ label, value, min, max, step = 1, onChange }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(BuilderSettingRow, { label, children: /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("span", { className: "builder-themes-slider-row", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(BuilderSettingRow, { label, children: /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("span", { className: "builder-themes-slider-row", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
         "input",
         {
           type: "range",
@@ -79577,19 +80136,19 @@ Click Cancel to discard local changes and revert to canonical.`
           onChange: (e) => onChange(Number(e.target.value))
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("span", { className: "builder-themes-slider-value", children: value })
+      /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("span", { className: "builder-themes-slider-value", children: value })
     ] }) });
   }
   function ColorRow({ label, value, onChange }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(BuilderSettingRow, { label, children: /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("input", { type: "color", value: value || "#000000", onChange: (e) => onChange(e.target.value) }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(BuilderSettingRow, { label, children: /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("input", { type: "color", value: value || "#000000", onChange: (e) => onChange(e.target.value) }) });
   }
   function BuilderThemesPage() {
-    const [themes, setThemes] = (0, import_react56.useState)([]);
-    const [selectedId, setSelectedId] = (0, import_react56.useState)("");
-    const [draft, setDraft] = (0, import_react56.useState)(defaultDraft());
-    const [status, setStatus] = (0, import_react56.useState)(null);
-    const [isSaving, setIsSaving] = (0, import_react56.useState)(false);
-    const loadThemes = (0, import_react56.useCallback)(async () => {
+    const [themes, setThemes] = (0, import_react57.useState)([]);
+    const [selectedId, setSelectedId] = (0, import_react57.useState)("");
+    const [draft, setDraft] = (0, import_react57.useState)(defaultDraft());
+    const [status, setStatus] = (0, import_react57.useState)(null);
+    const [isSaving, setIsSaving] = (0, import_react57.useState)(false);
+    const loadThemes = (0, import_react57.useCallback)(async () => {
       try {
         const res = await appApi("/api/builder/themes");
         const list = unwrapEnvelope(res, "themes") ?? [];
@@ -79598,7 +80157,7 @@ Click Cancel to discard local changes and revert to canonical.`
         setStatus({ message: "Could not load themes", isError: true });
       }
     }, []);
-    (0, import_react56.useEffect)(() => {
+    (0, import_react57.useEffect)(() => {
       loadThemes();
     }, [loadThemes]);
     function handleSelect(id) {
@@ -79669,21 +80228,21 @@ Click Cancel to discard local changes and revert to canonical.`
       setStatus(null);
     }
     const isEditing = Boolean(draft.id);
-    return /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-page", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-header", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-page", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-header", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)(
           "select",
           {
             className: "builder-themes-selector",
             value: selectedId,
             onChange: (e) => handleSelect(e.target.value),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("option", { value: "", children: "\u2014 Select theme \u2014" }),
-              themes.map((t) => /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("option", { value: t.id, children: t.name || t.id }, t.id))
+              /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("option", { value: "", children: "\u2014 Select theme \u2014" }),
+              themes.map((t) => /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("option", { value: t.id, children: t.name || t.id }, t.id))
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
           "input",
           {
             className: "builder-themes-name-input",
@@ -79693,8 +80252,8 @@ Click Cancel to discard local changes and revert to canonical.`
             onChange: (e) => updateDraft({ name: e.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("button", { type: "button", className: "secondary-button builder-themes-btn", onClick: handleNew, children: "New" }),
-        /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("button", { type: "button", className: "secondary-button builder-themes-btn", onClick: handleNew, children: "New" }),
+        /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
           "button",
           {
             type: "button",
@@ -79704,7 +80263,7 @@ Click Cancel to discard local changes and revert to canonical.`
             children: isSaving ? "Saving\u2026" : isEditing ? "Save" : "Create"
           }
         ),
-        isEditing && /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+        isEditing && /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
           "button",
           {
             type: "button",
@@ -79715,7 +80274,7 @@ Click Cancel to discard local changes and revert to canonical.`
           }
         )
       ] }),
-      status && /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+      status && /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
         "div",
         {
           className: `builder-themes-status${status.isError ? " builder-themes-status-error" : ""}`,
@@ -79723,10 +80282,10 @@ Click Cancel to discard local changes and revert to canonical.`
           children: status.message
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-columns", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-col", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("h3", { className: "builder-themes-col-heading", children: "Palette" }),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-columns", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-col", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("h3", { className: "builder-themes-col-heading", children: "Palette" }),
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             ColorRow,
             {
               label: "Primary",
@@ -79734,7 +80293,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (v) => updateDraft({ primaryColor: v })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             ColorRow,
             {
               label: "Secondary",
@@ -79742,7 +80301,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (v) => updateDraft({ secondaryColor: v })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             ColorRow,
             {
               label: "Background",
@@ -79750,7 +80309,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (v) => updateDraft({ backgroundColor: v })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             ColorRow,
             {
               label: "Accent",
@@ -79758,8 +80317,8 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (v) => updateDraft({ accentColor: v })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("h4", { className: "builder-themes-sub-heading", children: "Styles" }),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("h4", { className: "builder-themes-sub-heading", children: "Styles" }),
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             SliderRow,
             {
               label: "Border thickness",
@@ -79769,7 +80328,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (v) => updateDraft({ borderThickness: v })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             SliderRow,
             {
               label: "Border radius",
@@ -79779,7 +80338,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (v) => updateDraft({ borderRadius: v })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             SliderRow,
             {
               label: "Container blur",
@@ -79789,7 +80348,7 @@ Click Cancel to discard local changes and revert to canonical.`
               onChange: (v) => updateDraft({ containerBlur: v })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             SliderRow,
             {
               label: "Contrast",
@@ -79800,9 +80359,9 @@ Click Cancel to discard local changes and revert to canonical.`
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-col", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("h3", { className: "builder-themes-col-heading", children: "Typography" }),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-col", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("h3", { className: "builder-themes-col-heading", children: "Typography" }),
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
             BuilderThemeTypographySettings,
             {
               theme: toBuilderTheme(draft),
@@ -79810,11 +80369,11 @@ Click Cancel to discard local changes and revert to canonical.`
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-col", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("h3", { className: "builder-themes-col-heading", children: "Assets" }),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-asset-group", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("p", { className: "builder-themes-asset-label", children: "Logo \u2014 Wide" }),
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-col", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("h3", { className: "builder-themes-col-heading", children: "Assets" }),
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-asset-group", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("p", { className: "builder-themes-asset-label", children: "Logo \u2014 Wide" }),
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
               BuilderImagePickerField,
               {
                 value: draft.logoWideId,
@@ -79824,9 +80383,9 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             )
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-asset-group", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("p", { className: "builder-themes-asset-label", children: "Logo \u2014 Square" }),
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-asset-group", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("p", { className: "builder-themes-asset-label", children: "Logo \u2014 Square" }),
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
               BuilderImagePickerField,
               {
                 value: draft.logoSquareId,
@@ -79836,9 +80395,9 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             )
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-asset-group", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("p", { className: "builder-themes-asset-label", children: "Feature Image" }),
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-asset-group", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("p", { className: "builder-themes-asset-label", children: "Feature Image" }),
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
               BuilderImagePickerField,
               {
                 value: draft.featureImageId,
@@ -79848,9 +80407,9 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             )
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime95.jsxs)("div", { className: "builder-themes-asset-group", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)("p", { className: "builder-themes-asset-label", children: "Background Image" }),
-            /* @__PURE__ */ (0, import_jsx_runtime95.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-themes-asset-group", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("p", { className: "builder-themes-asset-label", children: "Background Image" }),
+            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
               BuilderImagePickerField,
               {
                 value: draft.backgroundImageId,
@@ -79866,8 +80425,8 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder/builder-forms-page.tsx
-  var import_react57 = __toESM(require_react());
-  var import_jsx_runtime96 = __toESM(require_jsx_runtime());
+  var import_react58 = __toESM(require_react());
+  var import_jsx_runtime98 = __toESM(require_jsx_runtime());
   var FORM_TEMPLATES = [
     {
       id: "squeeze-form",
@@ -79983,14 +80542,14 @@ Click Cancel to discard local changes and revert to canonical.`
   }
   function FormPreview({ draft, ctaLabel }) {
     const accent = draft.matchLandingColor ? "#6b7a8d" : draft.accentColor || DEFAULT_ACCENT;
-    return /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)(
       "div",
       {
         className: "builder-forms-preview-card",
         style: { borderColor: accent, boxShadow: `0 6px 20px ${accent}22` },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h3", { className: "builder-forms-preview-heading", style: { color: accent }, children: draft.heading || "Form Heading" }),
-          draft.fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h3", { className: "builder-forms-preview-heading", style: { color: accent }, children: draft.heading || "Form Heading" }),
+          draft.fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
             "input",
             {
               type: field.type,
@@ -80000,7 +80559,7 @@ Click Cancel to discard local changes and revert to canonical.`
             },
             field.key
           )),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
             "button",
             {
               type: "button",
@@ -80014,13 +80573,13 @@ Click Cancel to discard local changes and revert to canonical.`
     );
   }
   function BuilderFormsPage() {
-    const [forms, setForms] = (0, import_react57.useState)([]);
-    const [ctas, setCtas] = (0, import_react57.useState)([]);
-    const [assets, setAssets] = (0, import_react57.useState)([]);
-    const [draft, setDraft] = (0, import_react57.useState)(null);
-    const [status, setStatus] = (0, import_react57.useState)(null);
-    const [isSaving, setIsSaving] = (0, import_react57.useState)(false);
-    const loadAll = (0, import_react57.useCallback)(async () => {
+    const [forms, setForms] = (0, import_react58.useState)([]);
+    const [ctas, setCtas] = (0, import_react58.useState)([]);
+    const [assets, setAssets] = (0, import_react58.useState)([]);
+    const [draft, setDraft] = (0, import_react58.useState)(null);
+    const [status, setStatus] = (0, import_react58.useState)(null);
+    const [isSaving, setIsSaving] = (0, import_react58.useState)(false);
+    const loadAll = (0, import_react58.useCallback)(async () => {
       try {
         const [formsRes, ctasRes, assetsRes] = await Promise.allSettled([
           appApi("/api/builder/forms"),
@@ -80034,7 +80593,7 @@ Click Cancel to discard local changes and revert to canonical.`
         setStatus({ message: "Could not load data", isError: true });
       }
     }, []);
-    (0, import_react57.useEffect)(() => {
+    (0, import_react58.useEffect)(() => {
       loadAll();
     }, [loadAll]);
     const filteredLeadMagnets = draft ? assets.filter((a) => assetMatchesLeadMagnetType(a, draft.leadMagnetType)) : [];
@@ -80141,14 +80700,14 @@ Click Cancel to discard local changes and revert to canonical.`
         setStatus({ message: err.message || "Could not clone form", isError: true });
       }
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-forms-page", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("div", { className: "builder-forms-page-header", children: draft ? /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)(import_jsx_runtime96.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-forms-page-title", children: draft.id ? `Edit: ${draft.name || "Form"}` : "New Form" }),
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => {
+    return /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-forms-page", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("div", { className: "builder-forms-page-header", children: draft ? /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)(import_jsx_runtime98.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("span", { className: "builder-forms-page-title", children: draft.id ? `Edit: ${draft.name || "Form"}` : "New Form" }),
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => {
           setDraft(null);
           setStatus(null);
         }, children: "\u2190 Back to list" }),
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
           "button",
           {
             type: "button",
@@ -80158,42 +80717,42 @@ Click Cancel to discard local changes and revert to canonical.`
             children: isSaving ? "Saving\u2026" : draft.id ? "Save" : "Create"
           }
         ),
-        draft.id && /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => handleDelete2(draft), disabled: isSaving, children: "Delete" })
-      ] }) : /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)(import_jsx_runtime96.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-forms-page-title", children: "Saved Forms" }),
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-active", onClick: () => setDraft(defaultDraft2()), children: "+ Create Form" })
+        draft.id && /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => handleDelete2(draft), disabled: isSaving, children: "Delete" })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)(import_jsx_runtime98.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("span", { className: "builder-forms-page-title", children: "Saved Forms" }),
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "button", className: "builder-icon-button builder-icon-button-active", onClick: () => setDraft(defaultDraft2()), children: "+ Create Form" })
       ] }) }),
-      status && /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("div", { className: `builder-themes-status${status.isError ? " builder-themes-status-error" : ""}`, role: "status", children: status.message }),
-      draft && /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-forms-editor", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-forms-editor-fields", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("section", { className: "builder-forms-section", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-forms-section-heading", children: "Basic" }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Form name", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("input", { type: "text", value: draft.name, placeholder: "My Form", onChange: (e) => patch({ name: e.target.value }) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Form type", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("select", { value: draft.formType, onChange: (e) => handleFormTypeChange(e.target.value), children: FORM_TEMPLATES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: t.id, children: t.name }, t.id)) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Contact type", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("select", { value: draft.contactType, onChange: (e) => patch({ contactType: e.target.value }), children: CONTACT_TYPE_OPTIONS.map((o) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: o.value, children: o.label }, o.value)) }) })
+      status && /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("div", { className: `builder-themes-status${status.isError ? " builder-themes-status-error" : ""}`, role: "status", children: status.message }),
+      draft && /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-forms-editor", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-forms-editor-fields", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("section", { className: "builder-forms-section", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h4", { className: "builder-forms-section-heading", children: "Basic" }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Form name", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("input", { type: "text", value: draft.name, placeholder: "My Form", onChange: (e) => patch({ name: e.target.value }) }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Form type", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("select", { value: draft.formType, onChange: (e) => handleFormTypeChange(e.target.value), children: FORM_TEMPLATES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: t.id, children: t.name }, t.id)) }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Contact type", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("select", { value: draft.contactType, onChange: (e) => patch({ contactType: e.target.value }), children: CONTACT_TYPE_OPTIONS.map((o) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: o.value, children: o.label }, o.value)) }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("section", { className: "builder-forms-section", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-forms-section-heading", children: "Content" }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Heading", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("input", { type: "text", value: draft.heading, onChange: (e) => patch({ heading: e.target.value }) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "CTA / submit label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("select", { value: draft.ctaId, onChange: (e) => patch({ ctaId: e.target.value }), children: [
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: "", children: "\u2014 Use custom label \u2014" }),
-              ctas.map((c) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: String(c.id), children: c.cta }, c.id))
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("section", { className: "builder-forms-section", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h4", { className: "builder-forms-section-heading", children: "Content" }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Heading", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("input", { type: "text", value: draft.heading, onChange: (e) => patch({ heading: e.target.value }) }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "CTA / submit label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("select", { value: draft.ctaId, onChange: (e) => patch({ ctaId: e.target.value }), children: [
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "", children: "\u2014 Use custom label \u2014" }),
+              ctas.map((c) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: String(c.id), children: c.cta }, c.id))
             ] }) }),
-            !draft.ctaId && /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Submit label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("input", { type: "text", value: draft.submitLabel, onChange: (e) => patch({ submitLabel: e.target.value }) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Success message", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("textarea", { rows: 2, value: draft.successMessage, onChange: (e) => patch({ successMessage: e.target.value }) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Error message", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("textarea", { rows: 2, value: draft.errorMessage, onChange: (e) => patch({ errorMessage: e.target.value }) }) })
+            !draft.ctaId && /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Submit label", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("input", { type: "text", value: draft.submitLabel, onChange: (e) => patch({ submitLabel: e.target.value }) }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Success message", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("textarea", { rows: 2, value: draft.successMessage, onChange: (e) => patch({ successMessage: e.target.value }) }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Error message", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("textarea", { rows: 2, value: draft.errorMessage, onChange: (e) => patch({ errorMessage: e.target.value }) }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("section", { className: "builder-forms-section", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-forms-section-heading", children: "Lead Magnet" }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Type", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("select", { value: draft.leadMagnetType, onChange: (e) => handleLeadMagnetTypeChange(e.target.value), children: LEAD_MAGNET_TYPES.map((o) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: o.value, children: o.label }, o.value)) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Asset", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("select", { value: draft.leadMagnetId, onChange: (e) => patch({ leadMagnetId: e.target.value }), children: [
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: "", children: "\u2014 Optional \u2014" }),
-              filteredLeadMagnets.map((a) => /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: String(a.id), children: assetLabel(a) }, String(a.id)))
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("section", { className: "builder-forms-section", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h4", { className: "builder-forms-section-heading", children: "Lead Magnet" }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Type", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("select", { value: draft.leadMagnetType, onChange: (e) => handleLeadMagnetTypeChange(e.target.value), children: LEAD_MAGNET_TYPES.map((o) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: o.value, children: o.label }, o.value)) }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Asset", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("select", { value: draft.leadMagnetId, onChange: (e) => patch({ leadMagnetId: e.target.value }), children: [
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "", children: "\u2014 Optional \u2014" }),
+              filteredLeadMagnets.map((a) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: String(a.id), children: assetLabel(a) }, String(a.id)))
             ] }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("section", { className: "builder-forms-section", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-forms-section-heading", children: "Color" }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Accent color", children: /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("section", { className: "builder-forms-section", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h4", { className: "builder-forms-section-heading", children: "Color" }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Accent color", children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
               "input",
               {
                 type: "color",
@@ -80202,8 +80761,8 @@ Click Cancel to discard local changes and revert to canonical.`
                 onChange: (e) => patch({ accentColor: e.target.value })
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Match page color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("label", { className: "builder-forms-checkbox-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Match page color", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("label", { className: "builder-forms-checkbox-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
                 "input",
                 {
                   type: "checkbox",
@@ -80213,13 +80772,13 @@ Click Cancel to discard local changes and revert to canonical.`
               ),
               "Use page primary/accent color"
             ] }) }),
-            draft.matchLandingColor && /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)(import_jsx_runtime96.Fragment, { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Color role", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("select", { value: draft.landingColorMode, onChange: (e) => patch({ landingColorMode: e.target.value }), children: [
-                /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: "primary", children: "Primary Color" }),
-                /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("option", { value: "accent", children: "Accent Color" })
+            draft.matchLandingColor && /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)(import_jsx_runtime98.Fragment, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Color role", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("select", { value: draft.landingColorMode, onChange: (e) => patch({ landingColorMode: e.target.value }), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "primary", children: "Primary Color" }),
+                /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "accent", children: "Accent Color" })
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(BuilderSettingRow, { label: "Add background", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("label", { className: "builder-forms-checkbox-row", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(BuilderSettingRow, { label: "Add background", fullWidth: true, children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("label", { className: "builder-forms-checkbox-row", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
                   "input",
                   {
                     type: "checkbox",
@@ -80231,13 +80790,13 @@ Click Cancel to discard local changes and revert to canonical.`
               ] }) })
             ] })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("section", { className: "builder-forms-section", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-forms-section-heading", children: "Fields" }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("p", { className: "builder-forms-section-note", children: "Toggle which fields are required." }),
-            draft.fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-forms-field-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("span", { className: "builder-forms-field-label", children: field.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("label", { className: "builder-forms-checkbox-row", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("section", { className: "builder-forms-section", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h4", { className: "builder-forms-section-heading", children: "Fields" }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("p", { className: "builder-forms-section-note", children: "Toggle which fields are required." }),
+            draft.fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-forms-field-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("span", { className: "builder-forms-field-label", children: field.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("label", { className: "builder-forms-checkbox-row", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
                   "input",
                   {
                     type: "checkbox",
@@ -80250,38 +80809,38 @@ Click Cancel to discard local changes and revert to canonical.`
             ] }, field.key))
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("div", { className: "builder-forms-editor-preview", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("h4", { className: "builder-forms-section-heading", children: "Preview" }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)(FormPreview, { draft, ctaLabel })
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-forms-editor-preview", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h4", { className: "builder-forms-section-heading", children: "Preview" }),
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(FormPreview, { draft, ctaLabel })
         ] })
       ] }),
-      !draft && /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("div", { className: "builder-forms-list", children: forms.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("p", { className: "builder-forms-empty", children: "No saved forms yet." }) : /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("table", { className: "builder-forms-table", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("tr", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("th", { children: "Name" }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("th", { children: "Type" }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("th", { children: "Contact" }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("th", { children: "Lead Magnet" }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("th", { children: "CTA" }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("th", { children: "Updated" }),
-          /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("th", { children: "Actions" })
+      !draft && /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("div", { className: "builder-forms-list", children: forms.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("p", { className: "builder-forms-empty", children: "No saved forms yet." }) : /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("table", { className: "builder-forms-table", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("tr", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "Name" }),
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "Type" }),
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "Contact" }),
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "Lead Magnet" }),
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "CTA" }),
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "Updated" }),
+          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "Actions" })
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("tbody", { children: forms.map((form) => {
+        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("tbody", { children: forms.map((form) => {
           const leadMagnetAsset = assets.find((a) => String(a.id) === form.leadMagnetId);
           const ctaRecord = ctas.find((c) => String(c.id) === form.ctaId);
-          return /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("tr", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("td", { children: form.name || "\u2014" }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("td", { children: getTemplate(form.formType).name }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("td", { children: CONTACT_TYPE_OPTIONS.find((o) => o.value === form.contactType)?.label ?? form.contactType }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("td", { children: leadMagnetAsset ? assetLabel(leadMagnetAsset) : form.leadMagnetId ? form.leadMagnetId : "\u2014" }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("td", { children: ctaRecord?.cta ?? (form.ctaId ? form.ctaId : "\u2014") }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("td", { children: formatDate(form.updatedAt || form.createdAt) }),
-            /* @__PURE__ */ (0, import_jsx_runtime96.jsxs)("td", { className: "builder-forms-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => {
+          return /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("tr", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: form.name || "\u2014" }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: getTemplate(form.formType).name }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: CONTACT_TYPE_OPTIONS.find((o) => o.value === form.contactType)?.label ?? form.contactType }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: leadMagnetAsset ? assetLabel(leadMagnetAsset) : form.leadMagnetId ? form.leadMagnetId : "\u2014" }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: ctaRecord?.cta ?? (form.ctaId ? form.ctaId : "\u2014") }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: formatDate(form.updatedAt || form.createdAt) }),
+            /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("td", { className: "builder-forms-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => {
                 setDraft(draftFromRecord(form));
                 setStatus(null);
               }, children: "Edit" }),
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => handleClone(form), children: "Clone" }),
-              /* @__PURE__ */ (0, import_jsx_runtime96.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => handleDelete2(form), children: "Delete" })
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => handleClone(form), children: "Clone" }),
+              /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "button", className: "builder-icon-button", onClick: () => handleDelete2(form), children: "Delete" })
             ] })
           ] }, form.id);
         }) })
@@ -80290,8 +80849,8 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder/builder-module-classes-panel.tsx
-  var import_react58 = __toESM(require_react());
-  var import_jsx_runtime97 = __toESM(require_jsx_runtime());
+  var import_react59 = __toESM(require_react());
+  var import_jsx_runtime99 = __toESM(require_jsx_runtime());
   function formatDate2(iso) {
     return iso ? new Date(iso).toLocaleDateString() : "";
   }
@@ -80300,12 +80859,12 @@ Click Cancel to discard local changes and revert to canonical.`
     if (api?.refreshModuleClasses) await api.refreshModuleClasses();
   }
   function BuilderModuleClassesPanel() {
-    const [classes, setClasses] = (0, import_react58.useState)([]);
-    const [newName, setNewName] = (0, import_react58.useState)("");
-    const [editingId, setEditingId] = (0, import_react58.useState)(null);
-    const [editName, setEditName] = (0, import_react58.useState)("");
-    const [status, setStatus] = (0, import_react58.useState)("");
-    const [isLoading, setIsLoading] = (0, import_react58.useState)(true);
+    const [classes, setClasses] = (0, import_react59.useState)([]);
+    const [newName, setNewName] = (0, import_react59.useState)("");
+    const [editingId, setEditingId] = (0, import_react59.useState)(null);
+    const [editName, setEditName] = (0, import_react59.useState)("");
+    const [status, setStatus] = (0, import_react59.useState)("");
+    const [isLoading, setIsLoading] = (0, import_react59.useState)(true);
     async function load() {
       try {
         const res = await appApi("/api/builder/module-classes");
@@ -80317,7 +80876,7 @@ Click Cancel to discard local changes and revert to canonical.`
         setIsLoading(false);
       }
     }
-    (0, import_react58.useEffect)(() => {
+    (0, import_react59.useEffect)(() => {
       load();
     }, []);
     async function handleCreate(e) {
@@ -80376,9 +80935,9 @@ Click Cancel to discard local changes and revert to canonical.`
         setStatus(err.message || "Error deleting class");
       }
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("div", { className: "builder-mc-panel", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("form", { className: "builder-mc-create-form", onSubmit: handleCreate, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("div", { className: "builder-mc-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("form", { className: "builder-mc-create-form", onSubmit: handleCreate, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
           "input",
           {
             type: "text",
@@ -80389,17 +80948,17 @@ Click Cancel to discard local changes and revert to canonical.`
             required: true
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("button", { type: "submit", className: "btn btn-primary", children: "Add Class" })
+        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("button", { type: "submit", className: "btn btn-primary", children: "Add Class" })
       ] }),
-      status && /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("p", { className: "builder-mc-status meta", children: status }),
-      isLoading ? /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("p", { className: "meta", children: "Loading classes\u2026" }) : classes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("p", { className: "meta", children: "No module classes created yet." }) : /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("div", { className: "table-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("table", { className: "builder-mc-table", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("tr", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("th", { children: "Class Name" }),
-          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("th", { children: "Created" }),
-          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("th", { style: { width: 140 }, children: "Actions" })
+      status && /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("p", { className: "builder-mc-status meta", children: status }),
+      isLoading ? /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("p", { className: "meta", children: "Loading classes\u2026" }) : classes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("p", { className: "meta", children: "No module classes created yet." }) : /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("div", { className: "table-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("table", { className: "builder-mc-table", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("tr", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { children: "Class Name" }),
+          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { children: "Created" }),
+          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { style: { width: 140 }, children: "Actions" })
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("tbody", { children: classes.map((cls) => /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)("tr", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("td", { children: editingId === cls.id ? /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("tbody", { children: classes.map((cls) => /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("tr", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { children: editingId === cls.id ? /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
             "input",
             {
               type: "text",
@@ -80413,9 +80972,9 @@ Click Cancel to discard local changes and revert to canonical.`
               }
             }
           ) : cls.name }),
-          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("td", { className: "meta", children: formatDate2(cls.createdAt) }),
-          /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("td", { className: "builder-mc-actions", children: editingId === cls.id ? /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)(import_jsx_runtime97.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { className: "meta", children: formatDate2(cls.createdAt) }),
+          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { className: "builder-mc-actions", children: editingId === cls.id ? /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)(import_jsx_runtime99.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
               "button",
               {
                 type: "button",
@@ -80424,10 +80983,10 @@ Click Cancel to discard local changes and revert to canonical.`
                 children: "Save"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("button", { type: "button", className: "btn btn-sm", onClick: cancelEdit, children: "Cancel" })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime97.jsxs)(import_jsx_runtime97.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)("button", { type: "button", className: "btn btn-sm", onClick: () => startEdit(cls), children: "Rename" }),
-            /* @__PURE__ */ (0, import_jsx_runtime97.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("button", { type: "button", className: "btn btn-sm", onClick: cancelEdit, children: "Cancel" })
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)(import_jsx_runtime99.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("button", { type: "button", className: "btn btn-sm", onClick: () => startEdit(cls), children: "Rename" }),
+            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
               "button",
               {
                 type: "button",
@@ -80443,8 +81002,8 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder/builder-extensions-page.tsx
-  var import_react59 = __toESM(require_react());
-  var import_jsx_runtime98 = __toESM(require_jsx_runtime());
+  var import_react60 = __toESM(require_react());
+  var import_jsx_runtime100 = __toESM(require_jsx_runtime());
   var EXTENSION_TYPES = [
     { value: "manager", label: "Manager" },
     { value: "utility", label: "Utility" },
@@ -80502,14 +81061,14 @@ Click Cancel to discard local changes and revert to canonical.`
     return iso ? new Date(iso).toLocaleString() : "-";
   }
   function BuilderExtensionsPage({ onRegisterOpenItem }) {
-    const [extensions, setExtensions] = (0, import_react59.useState)([]);
-    const [draft, setDraft] = (0, import_react59.useState)(emptyDraft);
-    const [filters, setFilters] = (0, import_react59.useState)({ name: "", extensionType: "", status: "", tags: "" });
-    const [sort, setSort] = (0, import_react59.useState)({ key: "updatedAt", dir: "desc" });
-    const [status, setStatus] = (0, import_react59.useState)(null);
-    const [isSaving, setIsSaving] = (0, import_react59.useState)(false);
-    const [isLoading, setIsLoading] = (0, import_react59.useState)(true);
-    const configLoaded = (0, import_react59.useRef)(false);
+    const [extensions, setExtensions] = (0, import_react60.useState)([]);
+    const [draft, setDraft] = (0, import_react60.useState)(emptyDraft);
+    const [filters, setFilters] = (0, import_react60.useState)({ name: "", extensionType: "", status: "", tags: "" });
+    const [sort, setSort] = (0, import_react60.useState)({ key: "updatedAt", dir: "desc" });
+    const [status, setStatus] = (0, import_react60.useState)(null);
+    const [isSaving, setIsSaving] = (0, import_react60.useState)(false);
+    const [isLoading, setIsLoading] = (0, import_react60.useState)(true);
+    const configLoaded = (0, import_react60.useRef)(false);
     async function load() {
       try {
         const res = await appApi("/api/builder/extensions");
@@ -80545,12 +81104,12 @@ Click Cancel to discard local changes and revert to canonical.`
       } catch {
       }
     }
-    (0, import_react59.useEffect)(() => {
+    (0, import_react60.useEffect)(() => {
       onRegisterOpenItem((item) => setDraft(draftFromRecord2(item)));
       load();
       loadConfig();
     }, []);
-    const saveTimer = (0, import_react59.useRef)(null);
+    const saveTimer = (0, import_react60.useRef)(null);
     function deferSaveConfig(f, s) {
       if (!configLoaded.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -80570,11 +81129,11 @@ Click Cancel to discard local changes and revert to canonical.`
         return next;
       });
     }
-    const parentOptions = (0, import_react59.useMemo)(() => {
+    const parentOptions = (0, import_react60.useMemo)(() => {
       const map2 = new Map(extensions.map((e) => [e.id, e]));
       return extensions.filter((e) => e.id !== draft.id).map((e) => ({ value: e.id, label: buildPath(e.id, map2) })).sort((a, b) => a.label.localeCompare(b.label));
     }, [extensions, draft.id]);
-    const tableRows = (0, import_react59.useMemo)(() => {
+    const tableRows = (0, import_react60.useMemo)(() => {
       const map2 = new Map(extensions.map((e) => [e.id, e]));
       let rows = extensions.filter((e) => {
         const n = (e.name || "").toLowerCase();
@@ -80667,49 +81226,49 @@ Click Cancel to discard local changes and revert to canonical.`
       }
     }
     const sortIndicator = (key) => sort.key === key ? sort.dir === "asc" ? " \u25B2" : " \u25BC" : "";
-    return /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-ext-page", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-ext-form-wrap", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("h3", { className: "builder-ext-form-heading", children: draft.id ? "Edit Extension" : "New Extension" }),
-        /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("form", { className: "standard-form-grid builder-ext-form", onSubmit: handleSave, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("label", { children: "Extension Name" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("input", { type: "text", value: draft.name, onChange: (e) => set("name", e.target.value), required: true }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("label", { children: "Extension Type" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("select", { value: draft.extensionType, onChange: (e) => set("extensionType", e.target.value), required: true, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "", children: "Extension Type" }),
-            EXTENSION_TYPES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: t.value, children: t.label }, t.value))
+    return /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("div", { className: "builder-ext-page", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("div", { className: "builder-ext-form-wrap", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("h3", { className: "builder-ext-form-heading", children: draft.id ? "Edit Extension" : "New Extension" }),
+        /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("form", { className: "standard-form-grid builder-ext-form", onSubmit: handleSave, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("label", { children: "Extension Name" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("input", { type: "text", value: draft.name, onChange: (e) => set("name", e.target.value), required: true }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("label", { children: "Extension Type" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("select", { value: draft.extensionType, onChange: (e) => set("extensionType", e.target.value), required: true, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "", children: "Extension Type" }),
+            EXTENSION_TYPES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: t.value, children: t.label }, t.value))
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("label", { children: "Parent Extension" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("select", { value: draft.parentId, onChange: (e) => set("parentId", e.target.value), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "", children: "Parent Extension (Optional)" }),
-            parentOptions.map((o) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: o.value, children: o.label }, o.value))
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("label", { children: "Parent Extension" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("select", { value: draft.parentId, onChange: (e) => set("parentId", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "", children: "Parent Extension (Optional)" }),
+            parentOptions.map((o) => /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: o.value, children: o.label }, o.value))
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("label", { children: "Status" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("select", { value: draft.status, onChange: (e) => set("status", e.target.value), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "active", children: "Active" }),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "draft", children: "Draft" }),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "archived", children: "Archived" })
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("label", { children: "Status" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("select", { value: draft.status, onChange: (e) => set("status", e.target.value), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "active", children: "Active" }),
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "draft", children: "Draft" }),
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "archived", children: "Archived" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("label", { children: "Tags" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("input", { type: "text", value: draft.tags, onChange: (e) => set("tags", e.target.value) }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("label", { children: "Summary" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("textarea", { rows: 3, value: draft.summary, onChange: (e) => set("summary", e.target.value) }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("label", { children: "Definition" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("textarea", { rows: 6, value: draft.definition, onChange: (e) => set("definition", e.target.value) }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("div", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("div", { className: "builder-ext-form-actions", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "submit", className: "btn btn-primary", disabled: isSaving, children: isSaving ? "Saving\u2026" : draft.id ? "Update Extension" : "Save Extension" }),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("button", { type: "button", className: "btn", onClick: () => {
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("label", { children: "Tags" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("input", { type: "text", value: draft.tags, onChange: (e) => set("tags", e.target.value) }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("label", { children: "Summary" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("textarea", { rows: 3, value: draft.summary, onChange: (e) => set("summary", e.target.value) }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("label", { children: "Definition" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("textarea", { rows: 6, value: draft.definition, onChange: (e) => set("definition", e.target.value) }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("div", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("div", { className: "builder-ext-form-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("button", { type: "submit", className: "btn btn-primary", disabled: isSaving, children: isSaving ? "Saving\u2026" : draft.id ? "Update Extension" : "Save Extension" }),
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("button", { type: "button", className: "btn", onClick: () => {
               setDraft(emptyDraft());
               setStatus(null);
             }, children: "Reset" })
           ] })
         ] }),
-        status && /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("p", { className: `builder-ext-status${status.isError ? " is-error" : ""}`, children: status.message })
+        status && /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("p", { className: `builder-ext-status${status.isError ? " is-error" : ""}`, children: status.message })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("div", { className: "builder-ext-table-wrap", children: isLoading ? /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("p", { className: "meta", children: "Loading extensions\u2026" }) : /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("table", { className: "builder-ext-table", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("thead", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("tr", { className: "builder-ext-filter-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("div", { className: "builder-ext-table-wrap", children: isLoading ? /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("p", { className: "meta", children: "Loading extensions\u2026" }) : /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("table", { className: "builder-ext-table", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("thead", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("tr", { className: "builder-ext-filter-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
               "input",
               {
                 type: "text",
@@ -80719,34 +81278,34 @@ Click Cancel to discard local changes and revert to canonical.`
                 className: "builder-ext-filter-input"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)(
               "select",
               {
                 value: filters.extensionType,
                 onChange: (e) => updateFilter("extensionType", e.target.value),
                 className: "builder-ext-filter-input",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "", children: "All Types" }),
-                  EXTENSION_TYPES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: t.value, children: t.label }, t.value))
+                  /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "", children: "All Types" }),
+                  EXTENSION_TYPES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: t.value, children: t.label }, t.value))
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", {}),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("th", {}),
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)(
               "select",
               {
                 value: filters.status,
                 onChange: (e) => updateFilter("status", e.target.value),
                 className: "builder-ext-filter-input",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "", children: "All Statuses" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "active", children: "Active" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "draft", children: "Draft" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("option", { value: "archived", children: "Archived" })
+                  /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "", children: "All Statuses" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "active", children: "Active" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "draft", children: "Draft" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("option", { value: "archived", children: "Archived" })
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("th", { children: /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
               "input",
               {
                 type: "text",
@@ -80756,10 +81315,10 @@ Click Cancel to discard local changes and revert to canonical.`
                 className: "builder-ext-filter-input"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", {})
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("th", {})
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("tr", { children: [
-            SORT_COLS.map((col) => /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("tr", { children: [
+            SORT_COLS.map((col) => /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)(
               "th",
               {
                 className: "builder-ext-sort-th",
@@ -80771,17 +81330,17 @@ Click Cancel to discard local changes and revert to canonical.`
               },
               col.key
             )),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("th", { children: "Actions" })
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("th", { children: "Actions" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("tbody", { children: tableRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { colSpan: 6, children: "No extensions yet." }) }) : tableRows.map((item) => /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("tr", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: item.name || "-" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: typeLabel(item.extensionType) }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { className: "meta", children: item.taxonomyPath || "-" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { children: item.status || "-" }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsx)("td", { className: "meta", children: formatDate3(item.updatedAt) }),
-          /* @__PURE__ */ (0, import_jsx_runtime98.jsxs)("td", { className: "builder-ext-actions", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("tbody", { children: tableRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("td", { colSpan: 6, children: "No extensions yet." }) }) : tableRows.map((item) => /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("tr", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("td", { children: item.name || "-" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("td", { children: typeLabel(item.extensionType) }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("td", { className: "meta", children: item.taxonomyPath || "-" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("td", { children: item.status || "-" }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("td", { className: "meta", children: formatDate3(item.updatedAt) }),
+          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("td", { className: "builder-ext-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
               "button",
               {
                 type: "button",
@@ -80793,7 +81352,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 children: "Edit"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime98.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
               "button",
               {
                 type: "button",
@@ -80809,8 +81368,8 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // components/builder/builder-agents-page.tsx
-  var import_react60 = __toESM(require_react());
-  var import_jsx_runtime99 = __toESM(require_jsx_runtime());
+  var import_react61 = __toESM(require_react());
+  var import_jsx_runtime101 = __toESM(require_jsx_runtime());
   var STORAGE_KEY = "builder_saved_agents_v1";
   var AGENT_ACTIONS = [
     "agent_api_setup_orchestrator",
@@ -80913,14 +81472,14 @@ Click Cancel to discard local changes and revert to canonical.`
     throw new Error("Unsupported action");
   }
   function BuilderAgentsPage({ initialView, onRegisterSetView }) {
-    const [agents, setAgents] = (0, import_react60.useState)(() => loadFromStorage());
-    const [view, setView] = (0, import_react60.useState)(initialView);
-    const [draft, setDraft] = (0, import_react60.useState)(emptyDraft2);
-    const [requestPreview, setRequestPreview] = (0, import_react60.useState)(null);
-    const [response, setResponse] = (0, import_react60.useState)(null);
-    const [status, setStatus] = (0, import_react60.useState)(null);
-    const [isSending, setIsSending] = (0, import_react60.useState)(false);
-    (0, import_react60.useEffect)(() => {
+    const [agents, setAgents] = (0, import_react61.useState)(() => loadFromStorage());
+    const [view, setView] = (0, import_react61.useState)(initialView);
+    const [draft, setDraft] = (0, import_react61.useState)(emptyDraft2);
+    const [requestPreview, setRequestPreview] = (0, import_react61.useState)(null);
+    const [response, setResponse] = (0, import_react61.useState)(null);
+    const [status, setStatus] = (0, import_react61.useState)(null);
+    const [isSending, setIsSending] = (0, import_react61.useState)(false);
+    (0, import_react61.useEffect)(() => {
       onRegisterSetView((v) => setView(v));
     }, [onRegisterSetView]);
     function set(field, value) {
@@ -81012,26 +81571,26 @@ Click Cancel to discard local changes and revert to canonical.`
       (a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
     );
     if (view === "list") {
-      return /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("div", { className: "builder-agents-page", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("div", { className: "builder-agents-list-toolbar", children: /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("button", { type: "button", className: "btn btn-primary", onClick: openCreate, children: "Create Agent" }) }),
-        agents.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("p", { className: "meta", children: "No saved agents yet." }) : /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("div", { className: "table-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("table", { className: "builder-agents-table", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("tr", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { children: "Agent" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { children: "Action" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { children: "Workspace" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { children: "Type" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { children: "Updated" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("th", { className: "builder-agents-actions-heading", children: "Actions" })
+      return /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("div", { className: "builder-agents-page", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("div", { className: "builder-agents-list-toolbar", children: /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("button", { type: "button", className: "btn btn-primary", onClick: openCreate, children: "Create Agent" }) }),
+        agents.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("p", { className: "meta", children: "No saved agents yet." }) : /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("div", { className: "table-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("table", { className: "builder-agents-table", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("tr", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("th", { children: "Agent" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("th", { children: "Action" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("th", { children: "Workspace" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("th", { children: "Type" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("th", { children: "Updated" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("th", { className: "builder-agents-actions-heading", children: "Actions" })
           ] }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("tbody", { children: sorted.map((item) => /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("tr", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { children: item.name || "Untitled Agent" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { children: item.action || "-" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { children: item.workspace_id || "-" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { children: item.type || "-" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("td", { className: "meta", children: item.updatedAt || "-" }),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("td", { className: "builder-agents-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("button", { type: "button", className: "btn btn-sm", onClick: () => openEdit(item), children: "Edit" }),
-              /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("tbody", { children: sorted.map((item) => /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("tr", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("td", { children: item.name || "Untitled Agent" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("td", { children: item.action || "-" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("td", { children: item.workspace_id || "-" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("td", { children: item.type || "-" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("td", { className: "meta", children: item.updatedAt || "-" }),
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("td", { className: "builder-agents-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("button", { type: "button", className: "btn btn-sm", onClick: () => openEdit(item), children: "Edit" }),
+              /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
                 "button",
                 {
                   type: "button",
@@ -81043,7 +81602,7 @@ Click Cancel to discard local changes and revert to canonical.`
                   children: "Clone"
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
                 "button",
                 {
                   type: "button",
@@ -81057,12 +81616,12 @@ Click Cancel to discard local changes and revert to canonical.`
         ] }) })
       ] });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("div", { className: "builder-agents-page", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("div", { className: "builder-agents-builder-panel card", children: /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("form", { className: "standard-form-grid", onSubmit: handleSend, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("div", { className: "standard-form-grid-full page-heading-row", style: { marginBottom: "0.75rem" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("h3", { style: { margin: 0 }, children: "Agent Builder" }),
-          /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("div", { className: "page-heading-actions", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("div", { className: "builder-agents-page", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("div", { className: "builder-agents-builder-panel card", children: /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("form", { className: "standard-form-grid", onSubmit: handleSend, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("div", { className: "standard-form-grid-full page-heading-row", style: { marginBottom: "0.75rem" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("h3", { style: { margin: 0 }, children: "Agent Builder" }),
+          /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("div", { className: "page-heading-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
               "button",
               {
                 type: "button",
@@ -81071,7 +81630,7 @@ Click Cancel to discard local changes and revert to canonical.`
                 children: "Save Agent"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
               "button",
               {
                 type: "button",
@@ -81080,15 +81639,15 @@ Click Cancel to discard local changes and revert to canonical.`
                 children: "Clone Agent"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("button", { type: "button", className: "btn", onClick: openList, children: "Back To Agents" })
+            /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("button", { type: "button", className: "btn", onClick: openList, children: "Back To Agents" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Agent Name" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("input", { type: "text", value: draft.name, onChange: (e) => set("name", e.target.value) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Action" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("select", { value: draft.action, onChange: (e) => set("action", e.target.value), children: AGENT_ACTIONS.map((a) => /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("option", { value: a, children: a }, a)) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Job ID" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Agent Name" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("input", { type: "text", value: draft.name, onChange: (e) => set("name", e.target.value) }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Action" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("select", { value: draft.action, onChange: (e) => set("action", e.target.value), children: AGENT_ACTIONS.map((a) => /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("option", { value: a, children: a }, a)) }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Job ID" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
           "input",
           {
             type: "text",
@@ -81097,16 +81656,16 @@ Click Cancel to discard local changes and revert to canonical.`
             placeholder: "Required for preview/approve/execute/status"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Workspace ID" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("input", { type: "text", value: draft.workspace_id, onChange: (e) => set("workspace_id", e.target.value) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Job Type" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("input", { type: "text", value: draft.type, onChange: (e) => set("type", e.target.value) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Requested By User ID" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("input", { type: "text", value: draft.requested_by_user_id, onChange: (e) => set("requested_by_user_id", e.target.value) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Requested By Email" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("input", { type: "text", value: draft.requested_by_email, onChange: (e) => set("requested_by_email", e.target.value) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Payload JSON" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Workspace ID" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("input", { type: "text", value: draft.workspace_id, onChange: (e) => set("workspace_id", e.target.value) }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Job Type" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("input", { type: "text", value: draft.type, onChange: (e) => set("type", e.target.value) }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Requested By User ID" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("input", { type: "text", value: draft.requested_by_user_id, onChange: (e) => set("requested_by_user_id", e.target.value) }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Requested By Email" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("input", { type: "text", value: draft.requested_by_email, onChange: (e) => set("requested_by_email", e.target.value) }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Payload JSON" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
           "textarea",
           {
             rows: 6,
@@ -81115,13 +81674,13 @@ Click Cancel to discard local changes and revert to canonical.`
             placeholder: '{"source_urls":["https://example.com"],"max_pages":20}'
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Approval Decision" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("select", { value: draft.approval_decision, onChange: (e) => set("approval_decision", e.target.value), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("option", { value: "APPROVE", children: "APPROVE" }),
-          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("option", { value: "REJECT", children: "REJECT" })
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Approval Decision" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("select", { value: draft.approval_decision, onChange: (e) => set("approval_decision", e.target.value), children: [
+          /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("option", { value: "APPROVE", children: "APPROVE" }),
+          /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("option", { value: "REJECT", children: "REJECT" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Approval Token" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Approval Token" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
           "input",
           {
             type: "text",
@@ -81130,10 +81689,10 @@ Click Cancel to discard local changes and revert to canonical.`
             placeholder: "For execute_job"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("label", { children: "Approval Comment" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("input", { type: "text", value: draft.approval_comment, onChange: (e) => set("approval_comment", e.target.value) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("div", { className: "standard-form-grid-full", children: /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)("label", { className: "checkbox-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime99.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("label", { children: "Approval Comment" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("input", { type: "text", value: draft.approval_comment, onChange: (e) => set("approval_comment", e.target.value) }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("div", { className: "standard-form-grid-full", children: /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)("label", { className: "checkbox-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
             "input",
             {
               type: "checkbox",
@@ -81143,25 +81702,25 @@ Click Cancel to discard local changes and revert to canonical.`
           ),
           "I manually confirm this API action."
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("div", {}),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("button", { type: "submit", className: "btn btn-primary", disabled: isSending, children: isSending ? "Sending\u2026" : "Send Agent Request" })
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("div", {}),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("button", { type: "submit", className: "btn btn-primary", disabled: isSending, children: isSending ? "Sending\u2026" : "Send Agent Request" })
       ] }) }),
-      status && /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("p", { className: `builder-agents-status${status.isError ? " is-error" : ""}`, children: status.message }),
-      requestPreview !== null && /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)(import_jsx_runtime99.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("h3", { children: "Request Preview" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("pre", { className: "code-box", children: JSON.stringify(requestPreview, null, 2) })
+      status && /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("p", { className: `builder-agents-status${status.isError ? " is-error" : ""}`, children: status.message }),
+      requestPreview !== null && /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)(import_jsx_runtime101.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("h3", { children: "Request Preview" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("pre", { className: "code-box", children: JSON.stringify(requestPreview, null, 2) })
       ] }),
-      response !== null && /* @__PURE__ */ (0, import_jsx_runtime99.jsxs)(import_jsx_runtime99.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("h3", { children: "Response" }),
-        /* @__PURE__ */ (0, import_jsx_runtime99.jsx)("pre", { className: "code-box", children: JSON.stringify(response, null, 2) })
+      response !== null && /* @__PURE__ */ (0, import_jsx_runtime101.jsxs)(import_jsx_runtime101.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("h3", { children: "Response" }),
+        /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("pre", { className: "code-box", children: JSON.stringify(response, null, 2) })
       ] })
     ] });
   }
 
   // components/builder/saved-section-editor-modal.tsx
-  var import_react61 = __toESM(require_react());
+  var import_react62 = __toESM(require_react());
   init_rich_text_image();
-  var import_jsx_runtime100 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime102 = __toESM(require_jsx_runtime());
   function SavedSectionEditorModal({
     savedSectionId,
     savedSectionName,
@@ -81170,22 +81729,22 @@ Click Cancel to discard local changes and revert to canonical.`
     onClose,
     onSaved
   }) {
-    const [draft, setDraft] = (0, import_react61.useState)(initialSection);
-    const [isCollapsed, setIsCollapsed] = (0, import_react61.useState)(false);
-    const [expandedModuleIds, setExpandedModuleIds] = (0, import_react61.useState)([]);
-    const [isGalleryOpen, setIsGalleryOpen] = (0, import_react61.useState)(false);
-    const [galleryTarget, setGalleryTarget] = (0, import_react61.useState)(null);
-    const [galleryAnchor, setGalleryAnchor] = (0, import_react61.useState)(null);
-    const [isModulePaletteOpen, setIsModulePaletteOpen] = (0, import_react61.useState)(false);
-    const [modulePaletteColumn, setModulePaletteColumn] = (0, import_react61.useState)("main");
-    const [modulePaletteAnchor, setModulePaletteAnchor] = (0, import_react61.useState)(null);
-    const [activeModuleGroup, setActiveModuleGroup] = (0, import_react61.useState)(null);
-    const [localName, setLocalName] = (0, import_react61.useState)(savedSectionName);
-    const [isSaving, setIsSaving] = (0, import_react61.useState)(false);
-    const [error, setError] = (0, import_react61.useState)(null);
-    const onCloseRef = (0, import_react61.useRef)(onClose);
+    const [draft, setDraft] = (0, import_react62.useState)(initialSection);
+    const [isCollapsed, setIsCollapsed] = (0, import_react62.useState)(false);
+    const [expandedModuleIds, setExpandedModuleIds] = (0, import_react62.useState)([]);
+    const [isGalleryOpen, setIsGalleryOpen] = (0, import_react62.useState)(false);
+    const [galleryTarget, setGalleryTarget] = (0, import_react62.useState)(null);
+    const [galleryAnchor, setGalleryAnchor] = (0, import_react62.useState)(null);
+    const [isModulePaletteOpen, setIsModulePaletteOpen] = (0, import_react62.useState)(false);
+    const [modulePaletteColumn, setModulePaletteColumn] = (0, import_react62.useState)("main");
+    const [modulePaletteAnchor, setModulePaletteAnchor] = (0, import_react62.useState)(null);
+    const [activeModuleGroup, setActiveModuleGroup] = (0, import_react62.useState)(null);
+    const [localName, setLocalName] = (0, import_react62.useState)(savedSectionName);
+    const [isSaving, setIsSaving] = (0, import_react62.useState)(false);
+    const [error, setError] = (0, import_react62.useState)(null);
+    const onCloseRef = (0, import_react62.useRef)(onClose);
     onCloseRef.current = onClose;
-    (0, import_react61.useEffect)(() => {
+    (0, import_react62.useEffect)(() => {
       function handleHashChange() {
         onCloseRef.current();
       }
@@ -81415,18 +81974,18 @@ Click Cancel to discard local changes and revert to canonical.`
         setIsSaving(false);
       }
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)(BuilderBodyPortal, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("div", { className: "saved-section-editor-overlay", onClick: (e) => {
+    return /* @__PURE__ */ (0, import_jsx_runtime102.jsxs)(BuilderBodyPortal, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime102.jsx)("div", { className: "saved-section-editor-overlay", onClick: (e) => {
         if (e.target === e.currentTarget) onClose();
-      }, children: /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("div", { className: "saved-section-editor-dialog", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("div", { className: "saved-section-editor-header", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime100.jsxs)("h2", { className: "saved-section-editor-title", children: [
+      }, children: /* @__PURE__ */ (0, import_jsx_runtime102.jsxs)("div", { className: "saved-section-editor-dialog", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime102.jsxs)("div", { className: "saved-section-editor-header", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime102.jsxs)("h2", { className: "saved-section-editor-title", children: [
             "Edit: ",
             localName || savedSectionName
           ] }),
-          error && /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("span", { className: "saved-section-editor-error", children: error })
+          error && /* @__PURE__ */ (0, import_jsx_runtime102.jsx)("span", { className: "saved-section-editor-error", children: error })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("div", { className: "saved-section-editor-body", children: /* @__PURE__ */ (0, import_jsx_runtime100.jsx)("div", { className: "builder-workspace", children: /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime102.jsx)("div", { className: "saved-section-editor-body", children: /* @__PURE__ */ (0, import_jsx_runtime102.jsx)("div", { className: "builder-workspace", children: /* @__PURE__ */ (0, import_jsx_runtime102.jsx)(
           BuilderSectionCard,
           {
             section: draft,
@@ -81485,14 +82044,14 @@ Click Cancel to discard local changes and revert to canonical.`
           }
         ) }) })
       ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime102.jsx)(
         BuilderFloatingSaveRail,
         {
           actions: [{ label: "Save Section", savingLabel: "Saving\u2026", onSave: () => void handleSave() }],
           isSaving
         }
       ),
-      isGalleryOpen && /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
+      isGalleryOpen && /* @__PURE__ */ (0, import_jsx_runtime102.jsx)(
         BuilderGalleryModal,
         {
           anchor: galleryTarget?.kind === "rich-text" ? galleryAnchor : null,
@@ -81501,7 +82060,7 @@ Click Cancel to discard local changes and revert to canonical.`
           onClose: closeGallery
         }
       ),
-      isModulePaletteOpen && /* @__PURE__ */ (0, import_jsx_runtime100.jsx)(
+      isModulePaletteOpen && /* @__PURE__ */ (0, import_jsx_runtime102.jsx)(
         BuilderModulePaletteModal,
         {
           activeGroup: activeModuleGroup,
@@ -81523,7 +82082,7 @@ Click Cancel to discard local changes and revert to canonical.`
   }
 
   // builder-react-entry.tsx
-  var import_jsx_runtime101 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime103 = __toESM(require_jsx_runtime());
   var activeRoot = null;
   var activeHost = null;
   function clearHost(host) {
@@ -81548,7 +82107,7 @@ Click Cancel to discard local changes and revert to canonical.`
     activeHost = host;
     showHost(host);
     activeRoot = (0, import_client.createRoot)(host);
-    activeRoot.render(/* @__PURE__ */ (0, import_jsx_runtime101.jsx)(BuilderWorkspace, { ...props }));
+    activeRoot.render(/* @__PURE__ */ (0, import_jsx_runtime103.jsx)(BuilderWorkspace, { ...props }));
     return true;
   }
   function unmountBuilderReact() {
@@ -81564,7 +82123,7 @@ Click Cancel to discard local changes and revert to canonical.`
   function mountBuilderPreview(host) {
     if (!host) return false;
     (0, import_client.createRoot)(host).render(
-      /* @__PURE__ */ (0, import_jsx_runtime101.jsx)("div", { className: "builder-react-root", children: /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(BuilderPreviewPage, {}) })
+      /* @__PURE__ */ (0, import_jsx_runtime103.jsx)("div", { className: "builder-react-root", children: /* @__PURE__ */ (0, import_jsx_runtime103.jsx)(BuilderPreviewPage, {}) })
     );
     return true;
   }
@@ -81583,7 +82142,7 @@ Click Cancel to discard local changes and revert to canonical.`
     if (themesRoot) themesRoot.unmount();
     themesHost = host;
     themesRoot = (0, import_client.createRoot)(host);
-    themesRoot.render(/* @__PURE__ */ (0, import_jsx_runtime101.jsx)(BuilderThemesPage, {}));
+    themesRoot.render(/* @__PURE__ */ (0, import_jsx_runtime103.jsx)(BuilderThemesPage, {}));
   }
   function unmountThemesReact() {
     if (themesRoot) {
@@ -81596,7 +82155,7 @@ Click Cancel to discard local changes and revert to canonical.`
     if (!host) return;
     if (formsRoot) formsRoot.unmount();
     formsRoot = (0, import_client.createRoot)(host);
-    formsRoot.render(/* @__PURE__ */ (0, import_jsx_runtime101.jsx)(BuilderFormsPage, {}));
+    formsRoot.render(/* @__PURE__ */ (0, import_jsx_runtime103.jsx)(BuilderFormsPage, {}));
   }
   function unmountFormsReact() {
     if (formsRoot) {
@@ -81608,7 +82167,7 @@ Click Cancel to discard local changes and revert to canonical.`
     if (!host) return;
     if (moduleClassesRoot) moduleClassesRoot.unmount();
     moduleClassesRoot = (0, import_client.createRoot)(host);
-    moduleClassesRoot.render(/* @__PURE__ */ (0, import_jsx_runtime101.jsx)(BuilderModuleClassesPanel, {}));
+    moduleClassesRoot.render(/* @__PURE__ */ (0, import_jsx_runtime103.jsx)(BuilderModuleClassesPanel, {}));
   }
   function unmountModuleClassesReact() {
     if (moduleClassesRoot) {
@@ -81621,7 +82180,7 @@ Click Cancel to discard local changes and revert to canonical.`
     if (extensionsRoot) return;
     extensionsRoot = (0, import_client.createRoot)(host);
     extensionsRoot.render(
-      /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime103.jsx)(
         BuilderExtensionsPage,
         {
           onRegisterOpenItem: (fn) => {
@@ -81658,7 +82217,7 @@ Click Cancel to discard local changes and revert to canonical.`
     }
     agentsRoot = (0, import_client.createRoot)(host);
     agentsRoot.render(
-      /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime103.jsx)(
         BuilderAgentsPage,
         {
           initialView,
@@ -81686,7 +82245,7 @@ Click Cancel to discard local changes and revert to canonical.`
     savedSectionEditorHost = host;
     savedSectionEditorRoot = (0, import_client.createRoot)(host);
     savedSectionEditorRoot.render(
-      /* @__PURE__ */ (0, import_jsx_runtime101.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime103.jsx)(
         SavedSectionEditorModal,
         {
           savedSectionId: props.savedSectionId,
