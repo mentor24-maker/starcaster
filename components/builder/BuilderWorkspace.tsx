@@ -28,6 +28,10 @@ export default function BuilderWorkspace({ surface = 'hub', editorMode, record, 
   const initialRecordId =
     recordId === undefined || recordId === null || recordId === '' ? undefined : String(recordId);
 
+  // When mounted in page mode with no existing record, open Page Details
+  // immediately so the user can start filling in the new page.
+  const autoNewPage = editorMode === 'page' && !initialRecordId;
+
   return (
     <div className="builder-react-root">
       {surface !== 'hub' && typeof onClose === 'function' ? (
@@ -37,7 +41,7 @@ export default function BuilderWorkspace({ surface = 'hub', editorMode, record, 
           </button>
         </div>
       ) : null}
-      <AdminBuilderEditor initialMode={initialMode} initialRecordId={initialRecordId} />
+      <AdminBuilderEditor initialMode={initialMode} initialRecordId={initialRecordId} autoNewPage={autoNewPage} />
     </div>
   );
 }
