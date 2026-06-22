@@ -17,6 +17,15 @@ export type BulkCreateResult = {
   contentNote?: string;
 };
 
+export type ExtractionPreviewItem = {
+  name: string;
+  slug: string;
+  detected: boolean;
+  blockCount: number;
+  reason?: string;
+  blocks?: Array<{ imageUrl: string; imageAlt: string; htmlPreview: string; layout: string }>;
+};
+
 export type AcquireRunSummary = {
   runId: string;
   sourceUrl: string;
@@ -45,6 +54,11 @@ type BuilderBulkCreateProps = {
     runId: string,
     themeId?: string,
   ) => Promise<BulkCreateResult[]>;
+  onPreviewExtraction?: (
+    contentModelId: string,
+    runId: string,
+    items: BulkCreateItem[],
+  ) => Promise<ExtractionPreviewItem[]>;
   onEditPage: (pageId: string) => void;
 };
 
@@ -57,6 +71,7 @@ export function BuilderBulkCreate({
   onRefreshRuns,
   onBulkCreatePages,
   onBulkCreateWithModel,
+  onPreviewExtraction,
   onEditPage,
 }: BuilderBulkCreateProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -68,6 +83,9 @@ export function BuilderBulkCreate({
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generated, setGenerated] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewItems, setPreviewItems] = useState<ExtractionPreviewItem[]>([]);
+  const [previewDone, setPreviewDone] = useState(false);
 
   // Refresh crawl runs when this panel mounts so the list is current.
   useEffect(() => { onRefreshRuns?.(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -130,11 +148,17 @@ export function BuilderBulkCreate({
   const selectedTemplate = createableTemplates.find((t) => t.id === selectedTemplateId) ?? null;
   const useContentModel = Boolean(selectedModelId);
 
+  function resetPreview() {
+    setPreviewDone(false);
+    setPreviewItems([]);
+  }
+
   function handleMenuChange(menuId: string) {
     setSelectedMenuId(menuId);
     setGenerated(false);
     setResults([]);
     setError(null);
+    resetPreview();
   }
 
   function handleModelChange(modelId: string) {
@@ -142,6 +166,7 @@ export function BuilderBulkCreate({
     setGenerated(false);
     setResults([]);
     setError(null);
+    resetPreview();
   }
 
   async function handleGenerate() {
@@ -174,8 +199,39 @@ export function BuilderBulkCreate({
     }
   }
 
+  async function handlePreview() {
+    if (!selectedTemplateId) { setError("Select a template."); return; }
+    if (!selectedMenuId) { setError("Select a pages menu."); return; }
+    if (menuItems.length === 0) { setError("The selected pages menu has no items."); return; }
+    if (!selectedModelId) { setError("Select a content model."); return; }
+    if (!selectedRunId) { setError("Select a source website."); return; }
+    if (!onPreviewExtraction) return;
+
+    const items: BulkCreateItem[] = menuItems.map((item) => {
+      const pathSlug = item.href.startsWith("/")
+        ? item.href.replace(/^\/+/, "").replace(/\/+$/, "")
+        : "";
+      const slug = pathSlug || item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      return { name: item.label, slug };
+    });
+
+    setIsPreviewing(true);
+    setError(null);
+    resetPreview();
+    try {
+      const preview = await onPreviewExtraction(selectedModelId, selectedRunId, items);
+      setPreviewItems(preview);
+      setPreviewDone(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Preview failed.");
+    } finally {
+      setIsPreviewing(false);
+    }
+  }
+
   const successCount = results.filter((r) => r.page).length;
   const errorCount = results.filter((r) => r.error).length;
+  const previewDetectedCount = previewItems.filter((p) => p.detected).length;
 
   return (
     <>
@@ -195,7 +251,7 @@ export function BuilderBulkCreate({
               <span>Source Website <span className="builder-bulk-create-optional">(optional)</span></span>
               <select
                 value={selectedRunId}
-                onChange={(e) => { setSelectedRunId(e.target.value); setGenerated(false); setResults([]); setError(null); }}
+                onChange={(e) => { setSelectedRunId(e.target.value); setGenerated(false); setResults([]); setError(null); resetPreview(); }}
               >
                 <option value="">Select a source website</option>
                 {acquireRuns.map((run) => (
@@ -301,6 +357,16 @@ export function BuilderBulkCreate({
 
         {menuItems.length > 0 && !generated ? (
           <div className="builder-bulk-create-actions">
+            {useContentModel && onPreviewExtraction ? (
+              <button
+                className="secondary-button"
+                disabled={isPreviewing || isGenerating || !selectedModelId || !selectedRunId}
+                onClick={() => void handlePreview()}
+                type="button"
+              >
+                {isPreviewing ? "Previewing…" : "Preview Extraction"}
+              </button>
+            ) : null}
             <button
               className="submit-button"
               disabled={isGenerating || !selectedTemplateId || (useContentModel && !selectedRunId)}
@@ -312,6 +378,76 @@ export function BuilderBulkCreate({
           </div>
         ) : null}
       </div>
+
+      {previewDone && previewItems.length > 0 ? (
+        <div className="builder-toolbar-shell builder-bulk-create-preview-shell">
+          <div className="builder-bulk-create-results-header">
+            <span className="builder-bulk-create-results-summary">
+              Extraction Preview — {previewDetectedCount}/{previewItems.length} page{previewItems.length !== 1 ? "s" : ""} matched
+            </span>
+          </div>
+          <div className="table-shell">
+            <table className="polls-table builder-bulk-create-preview-table">
+              <colgroup>
+                <col className="builder-bulk-create-col-title" />
+                <col className="builder-bulk-create-col-status" />
+                <col className="builder-bulk-create-col-content" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th>Detection</th>
+                  <th>Blocks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewItems.map((item, i) => (
+                  <tr key={i} className={item.detected ? undefined : "builder-bulk-create-row-warn"}>
+                    <td>
+                      <strong>{item.name}</strong>
+                      <br />
+                      <code>/{item.slug}</code>
+                    </td>
+                    <td>
+                      {item.detected ? (
+                        <span className="builder-bulk-create-status-ok">✓ Detected</span>
+                      ) : (
+                        <span className="builder-bulk-create-status-warn" title={item.reason}>✗ Not detected</span>
+                      )}
+                    </td>
+                    <td>
+                      {item.detected && item.blocks ? (
+                        <details className="builder-bulk-create-preview-blocks">
+                          <summary>{item.blockCount} block{item.blockCount !== 1 ? "s" : ""}</summary>
+                          <div className="builder-bulk-create-preview-block-list">
+                            {item.blocks.map((b, j) => (
+                              <div key={j} className="builder-bulk-create-preview-block">
+                                <span className="builder-bulk-create-preview-block-layout">{b.layout}</span>
+                                {b.imageUrl ? (
+                                  <img
+                                    src={b.imageUrl}
+                                    alt={b.imageAlt || ""}
+                                    className="builder-bulk-create-preview-block-img"
+                                  />
+                                ) : null}
+                                <p className="builder-bulk-create-preview-block-html">
+                                  {b.htmlPreview.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {generated && results.length > 0 ? (
         <div className="builder-toolbar-shell builder-bulk-create-results-shell">

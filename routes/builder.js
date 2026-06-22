@@ -1085,6 +1085,68 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { deleted }), true;
   }
 
+  // POST /api/builder/acquire-runs/:runId/extraction-preview
+  // Dry-runs a content model against a crawl run for a set of items.
+  // Returns per-item detection results without creating any pages.
+  const extractionPreviewMatch = pathname.match(/^\/api\/builder\/acquire-runs\/([^/]+)\/extraction-preview$/);
+  if (extractionPreviewMatch && requestMethod === 'POST') {
+    const runId = decodeURIComponent(extractionPreviewMatch[1]);
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const contentModelId = String(body.contentModelId || '').trim();
+    const items = Array.isArray(body.items) ? body.items : [];
+
+    if (!contentModelId) return sendErr(res, 400, 'contentModelId is required'), true;
+    if (!items.length) return sendErr(res, 400, 'items array is required'), true;
+
+    const model = getContentDisplayModel(contentModelId);
+    if (!model) return sendErr(res, 400, `Unknown content model: ${contentModelId}`), true;
+
+    const run = await getDirectAcquireRun(runId, scope).catch(() => null);
+    if (!run) return sendErr(res, 404, `Crawl run not found: ${runId}`), true;
+    const crawlPages = Array.isArray(run.pages) ? run.pages : [];
+
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const findCrawledPage = (name) => {
+      if (!crawlPages.length) return null;
+      const target = norm(name);
+      let best = null;
+      let bestScore = 0;
+      for (const cp of crawlPages) {
+        const t = norm(cp.title || '');
+        const u = norm(cp.url   || '');
+        if (t === target || u.endsWith(target)) { best = cp; break; }
+        if (t.includes(target) || target.includes(t)) {
+          const score = Math.min(t.length, target.length) / Math.max(t.length, target.length) || 0;
+          if (score > bestScore) { bestScore = score; best = cp; }
+        }
+      }
+      return best;
+    };
+
+    const preview = items.map((item) => {
+      const name = String(item.name || '').trim();
+      const slug = String(item.slug || '').trim();
+      const crawled = findCrawledPage(name);
+      if (!crawled) return { name, slug, detected: false, blockCount: 0, reason: 'No matching crawled page found' };
+      const rawHtml = String(crawled.body_raw || '');
+      if (!rawHtml) return { name, slug, detected: false, blockCount: 0, reason: 'No raw HTML — re-crawl to enable extraction' };
+      if (!model.detect(rawHtml)) return { name, slug, detected: false, blockCount: 0, reason: 'Content model pattern not detected' };
+      const blocks = model.extract(rawHtml);
+      if (!blocks.length) return { name, slug, detected: false, blockCount: 0, reason: 'Detected but 0 blocks extracted' };
+      return {
+        name, slug, detected: true, blockCount: blocks.length,
+        blocks: blocks.map((b) => ({
+          imageUrl: b.imageUrl || '',
+          imageAlt: b.imageAlt || '',
+          htmlPreview: (b.html || '').slice(0, 300),
+          layout: b.layout || 'image-left',
+        })),
+      };
+    });
+
+    return sendOk(res, 200, { preview }, { preview }), true;
+  }
+
   // DELETE /api/builder/acquire-runs/:runId  — delete a specific run
   const acquireRunMatch = pathname.match(/^\/api\/builder\/acquire-runs\/([^/]+)$/);
   if (acquireRunMatch && requestMethod === 'DELETE') {
