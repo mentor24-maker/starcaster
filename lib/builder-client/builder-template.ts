@@ -60,7 +60,11 @@ export type BuilderTemplateModuleType =
   | "breadcrumb"
   | "blog-post-list"
   | "blog-post-card"
-  | "blog-author-bio";
+  | "blog-author-bio"
+  | "crm-form"
+  | "blog-toc"
+  | "blog-newsletter-subscribe"
+  | "blog-related-posts";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -988,7 +992,11 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "breadcrumb" ||
     type === "blog-post-list" ||
     type === "blog-post-card" ||
-    type === "blog-author-bio"
+    type === "blog-author-bio" ||
+    type === "crm-form" ||
+    type === "blog-toc" ||
+    type === "blog-newsletter-subscribe" ||
+    type === "blog-related-posts"
   ) {
     return type;
   }
@@ -1618,6 +1626,10 @@ export function createEmptyModule(
             paddingX: "24",
             paddingY: "12"
           }
+        : type === "crm-form"
+          ? {
+              crmFormId: ""
+            }
         : type === "contact-form"
           ? {
               formMode: "squeeze"
@@ -1762,6 +1774,61 @@ export function createEmptyModule(
                             showCategories: "true",
                             showReadMore: "true",
                             readMoreLabel: "Read More"
+                          }
+                      : type === "blog-author-bio"
+                        ? {
+                            name: "",
+                            title: "",
+                            bio: "",
+                            avatarUrl: "",
+                            avatarShape: "circle",
+                            avatarSize: "80",
+                            layout: "horizontal",
+                            socialLinks: JSON.stringify([])
+                          }
+                      : type === "blog-toc"
+                        ? {
+                            title: "In This Article",
+                            showTitle: "true",
+                            items: JSON.stringify([]),
+                            style: "default",
+                            showNumbers: "false",
+                            indentSubheadings: "true",
+                            fontSize: "14",
+                            titleFontSize: "16",
+                            color: "#0f4f8f",
+                            titleColor: "#18324a"
+                          }
+                      : type === "blog-newsletter-subscribe"
+                        ? {
+                            crmFormId: "",
+                            headline: "Stay in the loop",
+                            description: "Get new posts delivered to your inbox. No spam, ever.",
+                            layout: "stacked",
+                            showImage: "false",
+                            imageUrl: "",
+                            accentColor: "#0f4f8f",
+                            bgColor: "#eaf4ff",
+                            successMessage: "You're subscribed! Check your inbox."
+                          }
+                      : type === "blog-related-posts"
+                        ? {
+                            title: "You Might Also Like",
+                            showTitle: "true",
+                            count: "3",
+                            matchBy: "categories",
+                            layout: "grid",
+                            columns: "3",
+                            showFeaturedImage: "true",
+                            imageAspectRatio: "16:9",
+                            showExcerpt: "false",
+                            showAuthor: "false",
+                            showDate: "true",
+                            showCategories: "true",
+                            cardStyle: "default",
+                            cardBorderRadius: "12",
+                            cardGap: "20",
+                            manualPosts: JSON.stringify([])
                           }
           : {};
 

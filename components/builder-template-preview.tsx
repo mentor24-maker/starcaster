@@ -200,6 +200,96 @@ function ContactFormPreview({ settings, projectId = "" }: { settings: Record<str
   );
 }
 
+type CrmFormField = { key: string; label: string; type: string; required: boolean };
+type CrmFormData = {
+  heading: string;
+  submitLabel: string;
+  successMessage: string;
+  errorMessage: string;
+  fields: CrmFormField[];
+  crmConfigId: string;
+};
+
+function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
+  const crmFormId = settings.crmFormId ?? "";
+  const [form, setForm] = useState<CrmFormData | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [honeypot, setHoneypot] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!crmFormId) return;
+    fetch(`/api/crm/forms/${crmFormId}`)
+      .then((r) => r.json())
+      .then((d) => setForm(d.data ?? d ?? null))
+      .catch(() => {});
+  }, [crmFormId]);
+
+  async function submitCrmForm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/crm/contact-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...values, crm_form_id: crmFormId, _trap: honeypot })
+      });
+      const data = (await response.json()) as { message?: string; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to submit the form.");
+      }
+
+      setMessage(data.message ?? form?.successMessage ?? "Thank you!");
+      setValues({});
+      setHoneypot("");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : form?.errorMessage ?? "Something went wrong. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (!crmFormId) {
+    return <div className="builder-contact-form-stub">No CRM form selected. Set a Form ID in module settings.</div>;
+  }
+
+  if (!form) {
+    return <div className="builder-contact-form-stub">Loading form…</div>;
+  }
+
+  return (
+    <form className="builder-contact-form" onSubmit={submitCrmForm}>
+      <input type="text" name="_trap" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
+      {form.heading ? <div className="builder-contact-form-heading">{form.heading}</div> : null}
+      {message ? <div className="builder-contact-form-message">{message}</div> : null}
+      {error ? <div className="builder-contact-form-error">{error}</div> : null}
+      <div className="builder-contact-form-fields">
+        {form.fields.map((field) => (
+          <label className="builder-contact-form-field" key={field.key}>
+            <input
+              type={field.type || "text"}
+              name={field.key}
+              placeholder={field.label}
+              required={field.required}
+              value={values[field.key] ?? ""}
+              onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+            />
+          </label>
+        ))}
+      </div>
+      <button className="builder-contact-form-submit" disabled={isSubmitting} type="submit">
+        {isSubmitting ? "Submitting…" : form.submitLabel || "Submit"}
+      </button>
+    </form>
+  );
+}
+
 function MerchProductCard({ settings }: { settings: Record<string, string> }) {
   const productName = settings.productName || "Merch product";
   const imageUrl = resolvePublicBuilderAssetUrl(settings.imageUrl);
@@ -552,6 +642,10 @@ function BuilderModulePreview({
 
   if (module.type === "contact-form") {
     return <ContactFormPreview projectId={projectId} settings={module.settings} />;
+  }
+
+  if (module.type === "crm-form") {
+    return <CrmFormPreview settings={module.settings} />;
   }
 
   if (module.type === "player-portal") {
