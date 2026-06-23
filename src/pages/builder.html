@@ -161,7 +161,7 @@
             <button id="builderOpenCreateLandingPageBtn" type="button" class="btn">Create Page</button>
             <button type="button" onclick="App.builder.openBulkCreateFromManagePage();" class="btn">Bulk Create</button>
             <button type="button" onclick="App.builder.openPopulateFromWebPage();" class="btn">Populate from Web</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+            <button type="button" onclick="App.setActivePage('builderPageArchivesPage')" class="btn">Archive</button>
           </div>
         </div>
         <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
@@ -180,7 +180,10 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th class="builder-pages-bulk-delete-cell"><button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button></th>
+                <th class="builder-pages-bulk-delete-cell">
+                  <button id="builderPagesBulkArchiveBtn" class="btn" type="button" disabled>Archive</button>
+                  <button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button>
+                </th>
               </tr>
               <tr>
                 <th></th>
@@ -197,6 +200,49 @@
           </table>
         </div>
       </section>
+      <section id="builderPageArchivesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManagePagesPage">Builder: Pages</a> &rsaquo; Archives</h2>
+        </div>
+        <p>Saved page archives. Click an archive to view or restore its pages.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Saved</th>
+                <th>Pages</th>
+                <th class="builder-pages-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="builderPageArchivesTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="builderPageArchiveDetailPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="builderPageArchiveDetailHeading"></h2>
+          <div class="page-heading-actions">
+            <button id="builderPageArchiveRestoreAllBtn" type="button" class="btn btn-primary">Restore All</button>
+          </div>
+        </div>
+        <p id="builderPageArchiveDetailDesc"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Template</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="builderPageArchiveDetailTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
       <section id="builderPopulateFromWebPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="builderManagePagesPage">Builder: Pages</a> &rsaquo; Populate from Web</h2>
