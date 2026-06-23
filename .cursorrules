@@ -199,6 +199,7 @@ Do not add new production features that write `data/*.json`. Known file stores: 
 - `polls.js` is loaded in layout but may need explicit registration in `App.manifests` when wiring UI.
 - Supabase free tier pauses after inactivity — resume from dashboard if connections fail.
 - Production: env vars override `data/api_settings.json` for secrets.
+- **Builder module types — dual registration required:** Adding a new module type to `lib/builder-client/builder-template.ts` (the TypeScript source) is not enough. `lib/builder/template.js` is a separately generated CJS bundle used server-side for page save/load normalization. If `normalizeModuleType` in the server bundle doesn't include the new type, the server coerces it to `"text"` on every load, silently replacing the module. After editing `builder-template.ts`, always run `node scripts/build_template_bundle.mjs` to regenerate `lib/builder/template.js`.
 
 ## Agent Documentation
 - **Start here:** `docs/AI_AGENT_HANDOFF.md` (canonical; supersedes older handoffs and wrong paths).
