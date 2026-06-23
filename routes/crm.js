@@ -156,9 +156,15 @@ async function handle(req, res, pathname, method) {
   // ── CRM Forms ────────────────────────────────────────────────────────────
 
   if (pathname === '/api/crm/forms' && method === 'GET') {
-    const crmConfigId = String(urlObj.searchParams.get('configId') || '').trim();
-    if (!crmConfigId) return sendErr(res, 400, 'configId is required', { code: 'VALIDATION_ERROR' }), true;
-    const forms = await listForms(crmConfigId, requestScope(req));
+    const scope = requestScope(req);
+    let crmConfigId = String(urlObj.searchParams.get('configId') || '').trim();
+    if (!crmConfigId) {
+      // Auto-resolve from project scope (e.g. builder module settings dropdown)
+      const configs = await listConfigs(scope);
+      crmConfigId = configs[0]?.id || '';
+    }
+    if (!crmConfigId) return sendOk(res, 200, [], { forms: [] }, { total: 0 }), true;
+    const forms = await listForms(crmConfigId, scope);
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
   }
 
@@ -187,8 +193,9 @@ async function handle(req, res, pathname, method) {
   const formMatch = pathname.match(/^\/api\/crm\/forms\/([^/]+)$/);
 
   if (formMatch && method === 'GET') {
+    // Public — needed to render CRM forms on public landing pages
     const id = decodeURIComponent(formMatch[1]);
-    const form = await getForm(id, requestScope(req));
+    const form = await getForm(id, { projectId: '', userId: '' });
     if (!form) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, form, { form }), true;
   }
