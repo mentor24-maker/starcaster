@@ -242,7 +242,13 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
       const response = await fetch("/api/crm/contact-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, crmConfigId: form?.crmConfigId ?? "", crm_form_id: crmFormId, _trap: honeypot })
+        body: JSON.stringify({
+          email: values.email ?? "",
+          data: Object.fromEntries(Object.entries(values).filter(([k]) => k !== "email")),
+          crmConfigId: form?.crmConfigId ?? "",
+          crm_form_id: crmFormId,
+          _trap: honeypot
+        })
       });
       const data = (await response.json()) as { message?: string; error?: string };
 
