@@ -296,6 +296,13 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
 
 // ── CRM Contacts Table ────────────────────────────────────────────────────────
 
+function getCrmProjectHeaders(): Record<string, string> {
+  const projectId =
+    (window as unknown as { App?: { projectContext?: { getSessionProjectId?: () => string } } })
+      ?.App?.projectContext?.getSessionProjectId?.() ?? "";
+  return projectId ? { "X-Project-ID": projectId } : {};
+}
+
 type CrmContactsField = { key: string; label: string; type: string; required?: boolean };
 type CrmContact = { id: string; email: string; data: Record<string, string>; createdAt?: string; source?: string };
 type CrmConfigData = { id: string; name?: string; standardFields?: string[]; standard_fields?: string[]; customFields?: CrmContactsField[]; custom_fields?: CrmContactsField[] };
@@ -358,8 +365,9 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
   useEffect(() => {
     setLoading(true);
     setLoadError("");
+    const headers = getCrmProjectHeaders();
     const configUrl = crmConfigId ? `/api/crm/configs/${encodeURIComponent(crmConfigId)}` : "/api/crm/configs";
-    fetch(configUrl)
+    fetch(configUrl, { headers })
       .then((r) => r.json())
       .then((d) => {
         const cfg: CrmConfigData | null = crmConfigId
@@ -367,7 +375,7 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
           : (d?.configs?.[0] ?? d?.data?.[0] ?? null);
         setConfig(cfg);
         if (!cfg) return;
-        return fetch(`/api/crm/contacts?configId=${encodeURIComponent(cfg.id)}`)
+        return fetch(`/api/crm/contacts?configId=${encodeURIComponent(cfg.id)}`, { headers })
           .then((r) => r.json())
           .then((d2) => {
             const list = d2?.contacts ?? d2?.data ?? [];
@@ -397,7 +405,7 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
 
   async function deleteContact(id: string) {
     if (!confirm("Delete this contact? This cannot be undone.")) return;
-    await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, { method: "DELETE", headers: getCrmProjectHeaders() });
     setContacts((prev) => prev.filter((c) => c.id !== id));
     if (viewContact?.id === id) setViewContact(null);
   }
@@ -418,7 +426,7 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
       fields.forEach((f) => { if (f.key !== "email") data[f.key] = editValues[f.key] ?? ""; });
       const res  = await fetch(`/api/crm/contacts/${encodeURIComponent(editContact.id)}`, {
         method:  "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
         body:    JSON.stringify({ email, data }),
       });
       const d       = await res.json();
@@ -439,7 +447,7 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
       fields.forEach((f) => { if (f.key !== "email") data[f.key] = addValues[f.key] ?? ""; });
       const res  = await fetch("/api/crm/contacts", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
         body:    JSON.stringify({ crmConfigId: config.id, email, data, source: "manual" }),
       });
       const d          = await res.json();
@@ -1295,8 +1303,14 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Failed to create post.");
+      const data = (await res.json()) as { error?: { message?: string } | string };
+      if (!res.ok) {
+        const errMsg =
+          typeof data.error === "string"
+            ? data.error
+            : (data.error as { message?: string } | undefined)?.message || "Failed to create post.";
+        throw new Error(errMsg);
+      }
       setStatusMsg(successMessage);
       setValues({});
       if (redirectAfterCreate) {
