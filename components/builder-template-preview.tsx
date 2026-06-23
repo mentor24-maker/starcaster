@@ -1141,7 +1141,572 @@ function BuilderModulePreview({
     return <TractorNavRuntime settings={module.settings} />;
   }
 
+  if (module.type === "blog-post-list") {
+    return <BlogPostListPreview settings={module.settings} />;
+  }
+  if (module.type === "blog-post-create") {
+    return <BlogPostCreatePreview settings={module.settings} />;
+  }
+  if (module.type === "blog-category-filter") {
+    return <BlogCategoryFilterPreview settings={module.settings} />;
+  }
+  if (module.type === "blog-tag-cloud") {
+    return <BlogTagCloudPreview settings={module.settings} />;
+  }
+  if (module.type === "blog-post-tags") {
+    return <BlogPostTagsPreview settings={module.settings} />;
+  }
+  if (module.type === "blog-post" || module.type === "blog-post-view") {
+    return <BlogPostViewPreview settings={module.settings} />;
+  }
+  if (
+    module.type === "blog-post-card" ||
+    module.type === "blog-author-bio" ||
+    module.type === "blog-toc" ||
+    module.type === "blog-newsletter-subscribe" ||
+    module.type === "blog-related-posts"
+  ) {
+    return <BlogModulePlaceholder type={module.type} />;
+  }
+
   return null;
+}
+
+// ── Blog preview components ─────────────────────────────────────────────────
+
+type BlogPostRecord = {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt?: string;
+  author?: string;
+  featured_image_url?: string;
+  published_at?: string;
+};
+
+function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
+  const [posts, setPosts] = useState<BlogPostRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/blog/posts?status=published&limit=6", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setPosts(Array.isArray(d?.posts) ? (d.posts as BlogPostRecord[]) : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const accent = settings.accentColor || "#0f4f8f";
+  const layout = settings.layout || "grid";
+
+  if (loading) {
+    return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
+  }
+
+  if (!posts.length) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+        No published posts yet. Use the Create Post module to add your first post.
+      </div>
+    );
+  }
+
+  const gridStyle: CSSProperties =
+    layout === "list"
+      ? { display: "flex", flexDirection: "column", gap: "1.5rem" }
+      : { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.5rem" };
+
+  return (
+    <div style={gridStyle}>
+      {posts.map((post) => (
+        <article
+          key={post.id}
+          style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", background: "#fff" }}
+        >
+          {post.featured_image_url ? (
+            <img
+              alt={post.title}
+              src={post.featured_image_url}
+              style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }}
+            />
+          ) : null}
+          <div style={{ padding: "1rem" }}>
+            <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.1rem", color: "#1a202c" }}>{post.title}</h3>
+            {post.excerpt ? (
+              <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#4a5568" }}>{post.excerpt}</p>
+            ) : null}
+            <a href={`/blog/${post.slug}`} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600 }}>
+              Read more →
+            </a>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function BlogPostCreatePreview({ settings }: { settings: Record<string, string> }) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const formTitle = settings.formTitle || "Create New Post";
+  const showFormTitle = (settings.showFormTitle ?? "true") !== "false";
+  const showSlug = (settings.showSlug ?? "true") !== "false";
+  const showFeaturedImage = (settings.showFeaturedImage ?? "true") !== "false";
+  const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+  const showAuthorField = settings.showAuthorField === "true";
+  const showCategories = (settings.showCategories ?? "true") !== "false";
+  const showTags = (settings.showTags ?? "true") !== "false";
+  const showSeoFields = settings.showSeoFields === "true";
+  const submitLabel = settings.submitLabel || "Publish Post";
+  const draftLabel = settings.draftLabel || "Save as Draft";
+  const successMessage = settings.successMessage || "Post created successfully.";
+  const redirectAfterCreate = settings.redirectAfterCreate || "";
+
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  function setField(key: string, value: string) {
+    setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function submitPost(status: "published" | "draft") {
+    if (!values.title?.trim()) {
+      setErrorMsg("Title is required.");
+      return;
+    }
+    setErrorMsg("");
+    setStatusMsg("");
+    setSubmitting(true);
+    try {
+      const payload = {
+        ...values,
+        status,
+        tags: values.tags
+          ? values.tags
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : []
+      };
+      const res = await fetch("/api/blog/posts", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to create post.");
+      setStatusMsg(successMessage);
+      setValues({});
+      if (redirectAfterCreate) {
+        setTimeout(() => {
+          window.location.href = redirectAfterCreate;
+        }, 1500);
+      }
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputStyle: CSSProperties = {
+    width: "100%",
+    padding: "0.5rem 0.75rem",
+    border: "1px solid #d1d5db",
+    borderRadius: 6,
+    fontSize: "0.875rem",
+    boxSizing: "border-box"
+  };
+  const labelStyle: CSSProperties = {
+    display: "block",
+    marginBottom: "0.25rem",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "#374151"
+  };
+  const fieldStyle: CSSProperties = { marginBottom: "1rem" };
+
+  return (
+    <div
+      style={{
+        maxWidth: 720,
+        margin: "0 auto",
+        padding: "1.5rem",
+        background: "#fff",
+        borderRadius: 8,
+        border: "1px solid #e5e7eb"
+      }}
+    >
+      {showFormTitle ? <h2 style={{ margin: "0 0 1.5rem", color: "#111827" }}>{formTitle}</h2> : null}
+
+      {statusMsg ? (
+        <div
+          style={{
+            marginBottom: "1rem",
+            padding: "0.75rem 1rem",
+            background: "#f0fdf4",
+            border: "1px solid #86efac",
+            borderRadius: 6,
+            color: "#166534"
+          }}
+        >
+          {statusMsg}
+        </div>
+      ) : null}
+      {errorMsg ? (
+        <div
+          style={{
+            marginBottom: "1rem",
+            padding: "0.75rem 1rem",
+            background: "#fef2f2",
+            border: "1px solid #fca5a5",
+            borderRadius: 6,
+            color: "#991b1b"
+          }}
+        >
+          {errorMsg}
+        </div>
+      ) : null}
+
+      <div style={fieldStyle}>
+        <label style={labelStyle}>Title *</label>
+        <input
+          style={inputStyle}
+          type="text"
+          value={values.title || ""}
+          onChange={(e) => setField("title", e.target.value)}
+          placeholder="Post title"
+        />
+      </div>
+
+      {showSlug ? (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Slug</label>
+          <input
+            style={inputStyle}
+            type="text"
+            value={values.slug || ""}
+            onChange={(e) => setField("slug", e.target.value)}
+            placeholder="post-slug (auto-generated if blank)"
+          />
+        </div>
+      ) : null}
+
+      {showAuthorField ? (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Author</label>
+          <input
+            style={inputStyle}
+            type="text"
+            value={values.author || ""}
+            onChange={(e) => setField("author", e.target.value)}
+            placeholder="Author name"
+          />
+        </div>
+      ) : null}
+
+      {showFeaturedImage ? (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Featured Image URL</label>
+          <input
+            style={inputStyle}
+            type="url"
+            value={values.featuredImageUrl || ""}
+            onChange={(e) => setField("featuredImageUrl", e.target.value)}
+            placeholder="https://…"
+          />
+        </div>
+      ) : null}
+
+      {showExcerpt ? (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Excerpt</label>
+          <textarea
+            style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+            value={values.excerpt || ""}
+            onChange={(e) => setField("excerpt", e.target.value)}
+            placeholder="Short summary of the post"
+          />
+        </div>
+      ) : null}
+
+      <div style={fieldStyle}>
+        <label style={labelStyle}>Body</label>
+        <textarea
+          style={{ ...inputStyle, resize: "vertical", minHeight: 200 }}
+          value={values.body || ""}
+          onChange={(e) => setField("body", e.target.value)}
+          placeholder="Post content…"
+        />
+      </div>
+
+      {showCategories ? (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Categories (slugs, comma-separated)</label>
+          <input
+            style={inputStyle}
+            type="text"
+            value={values.categoryIds || ""}
+            onChange={(e) => setField("categoryIds", e.target.value)}
+            placeholder="news, announcements"
+          />
+        </div>
+      ) : null}
+
+      {showTags ? (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Tags (comma-separated)</label>
+          <input
+            style={inputStyle}
+            type="text"
+            value={values.tags || ""}
+            onChange={(e) => setField("tags", e.target.value)}
+            placeholder="react, tutorial, design"
+          />
+        </div>
+      ) : null}
+
+      {showSeoFields ? (
+        <>
+          <div style={fieldStyle}>
+            <label style={labelStyle}>SEO Title</label>
+            <input
+              style={inputStyle}
+              type="text"
+              value={values.seoTitle || ""}
+              onChange={(e) => setField("seoTitle", e.target.value)}
+              placeholder="SEO title"
+            />
+          </div>
+          <div style={fieldStyle}>
+            <label style={labelStyle}>SEO Description</label>
+            <textarea
+              style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+              value={values.seoDescription || ""}
+              onChange={(e) => setField("seoDescription", e.target.value)}
+              placeholder="Meta description (≤ 160 chars)"
+            />
+          </div>
+        </>
+      ) : null}
+
+      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+        <button
+          disabled={submitting}
+          onClick={() => submitPost("draft")}
+          style={{
+            padding: "0.5rem 1.25rem",
+            border: `2px solid ${accent}`,
+            borderRadius: 6,
+            background: "#fff",
+            color: accent,
+            fontWeight: 600,
+            cursor: "pointer"
+          }}
+          type="button"
+        >
+          {draftLabel}
+        </button>
+        <button
+          disabled={submitting}
+          onClick={() => submitPost("published")}
+          style={{
+            padding: "0.5rem 1.25rem",
+            border: "none",
+            borderRadius: 6,
+            background: accent,
+            color: "#fff",
+            fontWeight: 600,
+            cursor: "pointer"
+          }}
+          type="button"
+        >
+          {submitLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BlogCategoryFilterPreview({ settings }: { settings: Record<string, string> }) {
+  let cats: Array<{ id: string; label: string; slug: string }> = [];
+  try {
+    cats = JSON.parse(settings.categories || "[]") as typeof cats;
+  } catch {}
+  const accent = settings.activeColor || "#0f4f8f";
+  const activeBg = settings.activeBg || accent;
+  const layout = settings.layout || "pills";
+  const allLabel = settings.allLabel || "All";
+  const items = [{ id: "_all", label: allLabel, slug: "" }, ...cats];
+
+  if (layout === "dropdown") {
+    return (
+      <select
+        style={{ padding: "0.5rem 0.75rem", borderRadius: 6, border: "1px solid #d1d5db", fontSize: "0.875rem" }}
+      >
+        {items.map((c) => (
+          <option key={c.id} value={c.slug}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: settings.gap || "0.5rem" }}>
+      {items.map((c, i) => (
+        <span
+          key={c.id}
+          style={{
+            padding: "0.3rem 0.85rem",
+            borderRadius: settings.borderRadius || "999px",
+            background: i === 0 ? activeBg : (settings.inactiveBg || "#f3f4f6"),
+            color: i === 0 ? "#fff" : (settings.inactiveColor || "#374151"),
+            fontSize: settings.fontSize || "0.8rem",
+            fontWeight: i === 0 ? 600 : 400,
+            cursor: "pointer"
+          }}
+        >
+          {c.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function BlogTagCloudPreview({ settings }: { settings: Record<string, string> }) {
+  let tags: Array<{ id: string; label: string; slug: string; count?: number }> = [];
+  try {
+    tags = JSON.parse(settings.tags || "[]") as typeof tags;
+  } catch {}
+  if (!tags.length) {
+    tags = [
+      { id: "a", label: "News", slug: "news" },
+      { id: "b", label: "Tutorial", slug: "tutorial" },
+      { id: "c", label: "Design", slug: "design" }
+    ];
+  }
+  const activeColor = settings.activeColor || "#0f4f8f";
+  const inactiveBg = settings.inactiveBg || "#f3f4f6";
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: settings.gap || "0.5rem" }}>
+      {tags.map((tag) => (
+        <span
+          key={tag.id}
+          style={{
+            padding: "0.3rem 0.85rem",
+            borderRadius: "999px",
+            background: inactiveBg,
+            color: activeColor,
+            fontSize: "0.8rem",
+            cursor: "pointer"
+          }}
+        >
+          {tag.label}
+          {settings.showCounts !== "false" && tag.count ? ` (${tag.count})` : ""}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function BlogPostTagsPreview({ settings }: { settings: Record<string, string> }) {
+  const rawTags = settings.tags || "";
+  const tags = rawTags
+    ? rawTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : ["Example", "Tag"];
+  const layout = settings.layout || "pills";
+  const color = settings.color || "#0f4f8f";
+  const bgColor = settings.bgColor || "#eff6ff";
+  const prefix = settings.prefix || "Tags:";
+  const showPrefix = (settings.showPrefix ?? "true") !== "false";
+
+  if (layout === "inline") {
+    return (
+      <p style={{ fontSize: "0.875rem", color: "#4a5568" }}>
+        {showPrefix ? <strong>{prefix} </strong> : null}
+        {tags.join(", ")}
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem" }}>
+      {showPrefix ? (
+        <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#6b7280" }}>{prefix}</span>
+      ) : null}
+      {tags.map((tag, i) => (
+        <span
+          key={i}
+          style={{
+            padding: "0.2rem 0.7rem",
+            borderRadius: settings.borderRadius || "999px",
+            background: bgColor,
+            color,
+            fontSize: settings.fontSize || "0.75rem"
+          }}
+        >
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function BlogPostViewPreview({ settings }: { settings: Record<string, string> }) {
+  const title = settings.title || "Post Title";
+  const body = settings.body || "";
+  const author = settings.author || "";
+  const excerpt = settings.excerpt || "";
+
+  return (
+    <article style={{ maxWidth: 720, margin: "0 auto" }}>
+      <h1 style={{ margin: "0 0 0.75rem", fontSize: "2rem", color: "#111827" }}>{title}</h1>
+      {author ? <p style={{ margin: "0 0 1rem", fontSize: "0.875rem", color: "#6b7280" }}>By {author}</p> : null}
+      {excerpt ? (
+        <p style={{ margin: "0 0 1.5rem", fontSize: "1.1rem", color: "#4a5568", fontStyle: "italic" }}>{excerpt}</p>
+      ) : null}
+      {body ? (
+        <div
+          className="builder-preview-text"
+          dangerouslySetInnerHTML={{ __html: formatRichTextContent(body) || "" }}
+        />
+      ) : (
+        <p style={{ color: "#9ca3af" }}>Post body will appear here.</p>
+      )}
+    </article>
+  );
+}
+
+function BlogModulePlaceholder({ type }: { type: string }) {
+  const labels: Record<string, string> = {
+    "blog-post-card": "Post Card",
+    "blog-author-bio": "Author Bio",
+    "blog-toc": "Table of Contents",
+    "blog-newsletter-subscribe": "Newsletter Subscribe",
+    "blog-related-posts": "Related Posts"
+  };
+  return (
+    <div
+      style={{
+        padding: "1.5rem",
+        border: "1px dashed #d1d5db",
+        borderRadius: 8,
+        textAlign: "center",
+        color: "#9ca3af",
+        fontSize: "0.875rem"
+      }}
+    >
+      {labels[type] || type}
+    </div>
+  );
 }
 
 function HeadlineRotatorPreview({
