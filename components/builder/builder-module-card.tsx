@@ -70,6 +70,7 @@ import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settin
 import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
+import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
@@ -1608,6 +1609,35 @@ function renderModulePreview(module: BuilderTemplateModule) {
             {submitLabel}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-post-manager") {
+    const accent = module.settings.accentColor ?? "#0f4f8f";
+    const rows = [
+      { title: "Introducing Starcaster", status: "published", date: "Jun 23, 2026" },
+      { title: "How to Build a Blog", status: "draft", date: "Jun 22, 2026" },
+      { title: "Tips & Tricks", status: "draft", date: "Jun 20, 2026" },
+    ];
+    const statusColor = (s: string) => s === "published" ? "#16a34a" : "#6b7280";
+    const statusBg   = (s: string) => s === "published" ? "#f0fdf4" : "#f3f4f6";
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "0 12px", padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2", fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase" }}>
+          <span>Title</span><span>Status</span><span>Date</span><span>Actions</span>
+        </div>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "0 12px", padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#18324a", fontWeight: 500 }}>{row.title}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: statusColor(row.status), background: statusBg(row.status), borderRadius: 4, padding: "2px 6px" }}>{row.status}</span>
+            <span style={{ fontSize: 11, color: "#8ba9be" }}>{row.date}</span>
+            <span style={{ display: "flex", gap: 6 }}>
+              <span style={{ fontSize: 13, color: accent, cursor: "default" }}>✎</span>
+              <span style={{ fontSize: 13, color: "#c0392b", cursor: "default" }}>✕</span>
+            </span>
+          </div>
+        ))}
       </div>
     );
   }
@@ -3151,6 +3181,7 @@ export function BuilderModuleCard({
     const isBlogTagCloudModule = module.type === "blog-tag-cloud";
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
+    const isBlogPostManagerModule = module.type === "blog-post-manager";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
@@ -3365,6 +3396,8 @@ export function BuilderModuleCard({
               <BuilderBlogPostTagsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostCreateModule ? (
               <BuilderBlogPostCreateModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostManagerModule ? (
+              <BuilderBlogPostManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isCrmContactsTableModule ? (
               <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
