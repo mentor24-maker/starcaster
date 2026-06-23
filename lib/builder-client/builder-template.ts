@@ -66,7 +66,10 @@ export type BuilderTemplateModuleType =
   | "blog-newsletter-subscribe"
   | "blog-related-posts"
   | "blog-category-filter"
-  | "blog-post";
+  | "blog-post"
+  | "blog-tag-cloud"
+  | "blog-post-tags"
+  | "blog-post-create";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -1000,7 +1003,10 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-newsletter-subscribe" ||
     type === "blog-related-posts" ||
     type === "blog-category-filter" ||
-    type === "blog-post"
+    type === "blog-post" ||
+    type === "blog-tag-cloud" ||
+    type === "blog-post-tags" ||
+    type === "blog-post-create"
   ) {
     return type;
   }
@@ -1871,6 +1877,55 @@ export function createEmptyModule(
                             showDate: "true",
                             seoTitle: "",
                             seoDescription: ""
+                          }
+                      : type === "blog-tag-cloud"
+                        ? {
+                            tags: JSON.stringify([]),
+                            layout: "cloud",
+                            showCounts: "false",
+                            minFontSize: "12",
+                            maxFontSize: "22",
+                            filterParam: "tag",
+                            targetPageUrl: "",
+                            activeColor: "#0f4f8f",
+                            inactiveColor: "#587592",
+                            inactiveBg: "#f0f4f8",
+                            gap: "8",
+                            alignment: "left"
+                          }
+                      : type === "blog-post-tags"
+                        ? {
+                            tags: "",
+                            prefix: "Tags:",
+                            showPrefix: "true",
+                            layout: "pills",
+                            linkToFilter: "true",
+                            filterParam: "tag",
+                            targetPageUrl: "",
+                            color: "#587592",
+                            bgColor: "#f0f4f8",
+                            borderRadius: "4",
+                            fontSize: "12",
+                            gap: "6"
+                          }
+                      : type === "blog-post-create"
+                        ? {
+                            formTitle: "Create New Post",
+                            showFormTitle: "true",
+                            submitLabel: "Publish Post",
+                            draftLabel: "Save as Draft",
+                            defaultStatus: "draft",
+                            allowStatusChange: "true",
+                            showSlug: "true",
+                            showFeaturedImage: "true",
+                            showExcerpt: "true",
+                            showCategories: "true",
+                            showTags: "true",
+                            showSeoFields: "false",
+                            showAuthorField: "false",
+                            successMessage: "Post created successfully.",
+                            redirectAfterCreate: "",
+                            accentColor: "#0f4f8f"
                           }
           : {};
 

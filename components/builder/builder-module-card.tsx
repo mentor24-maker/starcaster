@@ -69,6 +69,7 @@ import { BuilderBlogCategoryFilterModuleSettings, parseFilterCategories } from "
 import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settings";
 import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
+import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -1403,6 +1404,145 @@ function renderModulePreview(module: BuilderTemplateModule) {
             {tag}
           </span>
         ))}
+      </div>
+    );
+  }
+
+  if (module.type === "blog-post-create") {
+    const s = module.settings;
+    const accent = s.accentColor ?? "#0f4f8f";
+    const showFormTitle = s.showFormTitle !== "false";
+    const formTitle = s.formTitle || "Create New Post";
+    const submitLabel = s.submitLabel || "Publish Post";
+    const draftLabel = s.draftLabel || "Save as Draft";
+    const showSlug = s.showSlug !== "false";
+    const showFeaturedImage = s.showFeaturedImage !== "false";
+    const showExcerpt = s.showExcerpt !== "false";
+    const showAuthorField = s.showAuthorField === "true";
+    const showCategories = s.showCategories !== "false";
+    const showTags = s.showTags !== "false";
+    const showSeoFields = s.showSeoFields === "true";
+
+    const fieldStyle: React.CSSProperties = {
+      display: "block",
+      width: "100%",
+      padding: "6px 10px",
+      border: "1px solid #c9d8e6",
+      borderRadius: 4,
+      fontSize: 12,
+      color: "#18324a",
+      background: "#fff",
+      boxSizing: "border-box",
+    };
+    const labelStyle: React.CSSProperties = {
+      display: "block",
+      fontSize: 11,
+      fontWeight: 600,
+      color: "#587592",
+      marginBottom: 3,
+    };
+    const fieldWrap: React.CSSProperties = { marginBottom: 10 };
+
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#f8fafc", border: "1px solid #dde8f0", borderRadius: 8, padding: 16 }}>
+        {showFormTitle ? (
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#18324a", marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid #e4ecf2" }}>
+            {formTitle}
+          </div>
+        ) : null}
+
+        {/* Title — always shown */}
+        <div style={fieldWrap}>
+          <span style={labelStyle}>Title <span style={{ color: "#c0392b" }}>*</span></span>
+          <div style={{ ...fieldStyle, height: 28, background: "#fff" }} />
+        </div>
+
+        {showSlug ? (
+          <div style={fieldWrap}>
+            <span style={labelStyle}>Slug</span>
+            <div style={{ ...fieldStyle, height: 28, background: "#f8fafc", color: "#8ba9be", fontSize: 11, lineHeight: "28px", paddingLeft: 10 }}>
+              auto-generated from title
+            </div>
+          </div>
+        ) : null}
+
+        {showAuthorField ? (
+          <div style={fieldWrap}>
+            <span style={labelStyle}>Author</span>
+            <div style={{ ...fieldStyle, height: 28 }} />
+          </div>
+        ) : null}
+
+        {showFeaturedImage ? (
+          <div style={fieldWrap}>
+            <span style={labelStyle}>Featured Image</span>
+            <div style={{ border: "1px dashed #c9d8e6", borderRadius: 4, height: 52, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", color: "#8ba9be", fontSize: 11 }}>
+              Click to upload or paste URL
+            </div>
+          </div>
+        ) : null}
+
+        {showExcerpt ? (
+          <div style={fieldWrap}>
+            <span style={labelStyle}>Excerpt</span>
+            <div style={{ ...fieldStyle, height: 44 }} />
+          </div>
+        ) : null}
+
+        {/* Body — always shown */}
+        <div style={fieldWrap}>
+          <span style={labelStyle}>Body <span style={{ color: "#c0392b" }}>*</span></span>
+          <div style={{ border: "1px solid #c9d8e6", borderRadius: 4, background: "#fff", overflow: "hidden" }}>
+            <div style={{ padding: "5px 8px", borderBottom: "1px solid #e4ecf2", display: "flex", gap: 6 }}>
+              {["B", "I", "U", "¶", "⌘"].map((icon) => (
+                <span key={icon} style={{ fontSize: 10, fontWeight: 700, color: "#8ba9be", cursor: "default", padding: "1px 3px" }}>{icon}</span>
+              ))}
+            </div>
+            <div style={{ height: 60, padding: 8 }} />
+          </div>
+        </div>
+
+        {showCategories ? (
+          <div style={fieldWrap}>
+            <span style={labelStyle}>Categories</span>
+            <div style={{ ...fieldStyle, height: 28, display: "flex", alignItems: "center", color: "#8ba9be", fontSize: 11 }}>
+              Select categories…
+            </div>
+          </div>
+        ) : null}
+
+        {showTags ? (
+          <div style={fieldWrap}>
+            <span style={labelStyle}>Tags</span>
+            <div style={{ ...fieldStyle, height: 28, display: "flex", alignItems: "center", color: "#8ba9be", fontSize: 11 }}>
+              Add tags, comma-separated…
+            </div>
+          </div>
+        ) : null}
+
+        {showSeoFields ? (
+          <div style={{ ...fieldWrap, paddingTop: 8, borderTop: "1px solid #e4ecf2" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#8ba9be", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>SEO</div>
+            <div style={{ ...fieldWrap }}>
+              <span style={labelStyle}>SEO Title</span>
+              <div style={{ ...fieldStyle, height: 28 }} />
+            </div>
+            <div>
+              <span style={labelStyle}>SEO Description</span>
+              <div style={{ ...fieldStyle, height: 44 }} />
+            </div>
+          </div>
+        ) : null}
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
+          <div style={{ padding: "6px 14px", border: `1px solid ${accent}44`, borderRadius: 4, color: accent, fontSize: 12, fontWeight: 600, background: "#fff", cursor: "default" }}>
+            {draftLabel}
+          </div>
+          <div style={{ padding: "6px 14px", borderRadius: 4, background: accent, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "default" }}>
+            {submitLabel}
+          </div>
+        </div>
       </div>
     );
   }
@@ -2945,6 +3085,7 @@ export function BuilderModuleCard({
     const isBlogPostModule = module.type === "blog-post";
     const isBlogTagCloudModule = module.type === "blog-tag-cloud";
     const isBlogPostTagsModule = module.type === "blog-post-tags";
+    const isBlogPostCreateModule = module.type === "blog-post-create";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3156,6 +3297,8 @@ export function BuilderModuleCard({
               <BuilderBlogTagCloudModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostTagsModule ? (
               <BuilderBlogPostTagsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostCreateModule ? (
+              <BuilderBlogPostCreateModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
