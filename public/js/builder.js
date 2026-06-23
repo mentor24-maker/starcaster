@@ -467,6 +467,8 @@ App.builder = (function () {
   let selectedPageIds = new Set();
   let pageArchiveSnapshots = [];
   let activeArchiveSnapshotId = null;
+  let activeArchivePages = [];
+  let pendingRestorePage = null;
   let activeLandingPagePreviewRecord = null;
   let activeLandingPagePreviewMode = 'page';
   let activeLandingPageVisualRecord = null;
@@ -3891,6 +3893,7 @@ App.builder = (function () {
         heading.appendChild(document.createTextNode(` › ${label}${timestamp ? ' — ' + timestamp : ''}`));
       }
       const archivePages = Array.isArray(snap.pages) ? snap.pages : [];
+      activeArchivePages = archivePages;
       if (desc) desc.textContent = `${archivePages.length} page${archivePages.length === 1 ? '' : 's'} saved on ${timestamp}`;
       renderArchiveDetailTable(archivePages);
       App.setActivePage('builderPageArchiveDetailPage');
@@ -3906,7 +3909,7 @@ App.builder = (function () {
     if (!pages.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.setAttribute('colspan', '4');
+      td.setAttribute('colspan', '5');
       td.className = 'empty-cell';
       td.textContent = 'No pages in this archive.';
       tr.appendChild(td);
@@ -3926,12 +3929,72 @@ App.builder = (function () {
       tpl.textContent = tplName;
       const updated = document.createElement('td');
       updated.textContent = page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '—';
+      const actions = document.createElement('td');
+      const restoreBtn = document.createElement('button');
+      restoreBtn.type = 'button';
+      restoreBtn.className = 'btn btn-sm';
+      restoreBtn.title = 'Restore this page';
+      restoreBtn.innerHTML = '&#128190;';
+      restoreBtn.addEventListener('click', () => openRestorePageDialog(page));
+      actions.appendChild(restoreBtn);
       tr.appendChild(name);
       tr.appendChild(slug);
       tr.appendChild(tpl);
       tr.appendChild(updated);
+      tr.appendChild(actions);
       tbody.appendChild(tr);
     });
+  }
+
+  function openRestorePageDialog(archivedPage) {
+    const dialog = byId('builderRestorePageConfirmDialog');
+    const msgEl = byId('builderRestorePageDialogMsg');
+    if (!dialog || !msgEl) return;
+
+    const pageName = safeText(archivedPage.name) || 'Untitled';
+    const current = (Array.isArray(savedPages) ? savedPages : []).find(
+      (p) => (p.name || '').toLowerCase() === pageName.toLowerCase()
+    );
+
+    if (current) {
+      msgEl.textContent = `"${pageName}" already exists. Restoring will overwrite the current version with the archived one.`;
+    } else {
+      msgEl.textContent = `"${pageName}" does not exist in the current pages. Restoring will create it as a new page.`;
+    }
+
+    pendingRestorePage = { archivedPage, currentPageId: current ? safeText(current.id) : null };
+    dialog.showModal();
+  }
+
+  async function restoreSinglePage() {
+    if (!pendingRestorePage) return;
+    const { archivedPage, currentPageId } = pendingRestorePage;
+    pendingRestorePage = null;
+
+    const dialog = byId('builderRestorePageConfirmDialog');
+    const confirmBtn = byId('builderRestorePageConfirmBtn');
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Restoring…'; }
+    try {
+      if (currentPageId) {
+        await api(`/api/builder/landing-pages/${encodeURIComponent(currentPageId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(archivedPage),
+        });
+      } else {
+        await api('/api/builder/landing-pages', {
+          method: 'POST',
+          body: JSON.stringify(archivedPage),
+        });
+      }
+      await loadSavedPages();
+      renderPagesTable();
+      notify(`Page "${safeText(archivedPage.name) || 'Untitled'}" restored`);
+      if (dialog) dialog.close();
+    } catch (err) {
+      notify(err.message || 'Could not restore page', true);
+    } finally {
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Restore'; }
+    }
   }
 
   async function deleteArchive(snapshotId, btn) {
@@ -13070,6 +13133,28 @@ App.builder = (function () {
     if (archiveRestoreAllBtn && !archiveRestoreAllBtn.dataset.bound) {
       archiveRestoreAllBtn.dataset.bound = '1';
       archiveRestoreAllBtn.addEventListener('click', () => restoreArchiveAll(activeArchiveSnapshotId));
+    }
+
+    const restorePageConfirmBtn = byId('builderRestorePageConfirmBtn');
+    if (restorePageConfirmBtn && !restorePageConfirmBtn.dataset.bound) {
+      restorePageConfirmBtn.dataset.bound = '1';
+      restorePageConfirmBtn.addEventListener('click', () => restoreSinglePage());
+    }
+    const restorePageCancelBtn = byId('builderRestorePageCancelBtn');
+    if (restorePageCancelBtn && !restorePageCancelBtn.dataset.bound) {
+      restorePageCancelBtn.dataset.bound = '1';
+      restorePageCancelBtn.addEventListener('click', () => {
+        pendingRestorePage = null;
+        byId('builderRestorePageConfirmDialog')?.close();
+      });
+    }
+    const restorePageCancelBtn2 = byId('builderRestorePageCancelBtn2');
+    if (restorePageCancelBtn2 && !restorePageCancelBtn2.dataset.bound) {
+      restorePageCancelBtn2.dataset.bound = '1';
+      restorePageCancelBtn2.addEventListener('click', () => {
+        pendingRestorePage = null;
+        byId('builderRestorePageConfirmDialog')?.close();
+      });
     }
 
     const populateFromWebBtn = byId('builderPopulateFromWebBtn');

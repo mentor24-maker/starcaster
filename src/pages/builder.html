@@ -236,12 +236,27 @@
                 <th>Slug</th>
                 <th>Template</th>
                 <th>Updated</th>
+                <th class="builder-pages-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody id="builderPageArchiveDetailTableBody"></tbody>
           </table>
         </div>
       </section>
+
+      <dialog id="builderRestorePageConfirmDialog" class="builder-nested-modal-dialog">
+        <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:480px;">
+          <div class="page-heading-row" style="margin-bottom:1rem;">
+            <h3 style="margin:0;">Restore Page</h3>
+            <button type="button" class="btn" id="builderRestorePageCancelBtn">Cancel</button>
+          </div>
+          <p id="builderRestorePageDialogMsg"></p>
+          <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem;">
+            <button type="button" class="btn" id="builderRestorePageCancelBtn2">Cancel</button>
+            <button type="button" class="btn btn-primary" id="builderRestorePageConfirmBtn">Restore</button>
+          </div>
+        </div>
+      </dialog>
 
       <section id="builderPopulateFromWebPage" class="app-page hidden">
         <div class="page-heading-row">
