@@ -373,18 +373,22 @@
               <table>
                 <thead>
                   <tr class="table-filter-row">
+                    <th style="width: 44px;"></th>
                     <th><input id="directAcquirePagesFilterUrl" type="search" placeholder="Filter URL" autocomplete="off" /></th>
                     <th><input id="directAcquirePagesFilterTitle" type="search" placeholder="Filter title" autocomplete="off" /></th>
                     <th><input id="directAcquirePagesFilterEmails" type="search" placeholder="Filter emails" autocomplete="off" /></th>
                     <th></th>
-                    <th></th>
+                    <th class="actions-col contacts-go-cell">
+                      <button id="directAcquirePagesGoBtn" type="button" class="btn">Filter</button>
+                    </th>
                   </tr>
                   <tr>
+                    <th style="width: 44px;"><input id="directAcquirePagesSelectAll" type="checkbox" aria-label="Select All" /></th>
                     <th id="directAcquirePagesSortUrl">URL</th>
                     <th id="directAcquirePagesSortTitle">Title</th>
                     <th id="directAcquirePagesSortEmails">Emails</th>
                     <th id="directAcquirePagesSortSnippet">Snippet</th>
-                    <th class="actions-col">Action</th>
+                    <th class="actions-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="directAcquirePagesTable"></tbody>
