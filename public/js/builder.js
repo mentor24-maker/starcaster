@@ -465,6 +465,8 @@ App.builder = (function () {
   const landingPageSelectorFilterState = {};
   let pendingLandingPageFormRecord = null;
   let selectedPageIds = new Set();
+  let pageArchiveSnapshots = [];
+  let activeArchiveSnapshotId = null;
   let activeLandingPagePreviewRecord = null;
   let activeLandingPagePreviewMode = 'page';
   let activeLandingPageVisualRecord = null;
@@ -3813,6 +3815,155 @@ App.builder = (function () {
   async function loadSavedPages() {
     const result = await api('/api/builder/landing-pages');
     savedPages = Array.isArray(result.pages) ? result.pages : [];
+  }
+
+  async function loadPageArchives() {
+    try {
+      const result = await api('/api/builder/page-snapshots');
+      pageArchiveSnapshots = Array.isArray(result.snapshots) ? result.snapshots : [];
+    } catch (_) {
+      pageArchiveSnapshots = [];
+    }
+  }
+
+  function renderPageArchivesTable() {
+    const tbody = byId('builderPageArchivesTableBody');
+    if (!tbody) return;
+    tbody.textContent = '';
+    if (!pageArchiveSnapshots.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.setAttribute('colspan', '4');
+      td.className = 'empty-cell';
+      td.textContent = 'No archives yet. Select pages and click Archive to save one.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    pageArchiveSnapshots.forEach((snap) => {
+      const tr = document.createElement('tr');
+      const label = document.createElement('td');
+      label.textContent = safeText(snap.label) || 'Untitled';
+      const saved = document.createElement('td');
+      saved.textContent = snap.createdAt ? new Date(snap.createdAt).toLocaleString() : '—';
+      const count = document.createElement('td');
+      count.textContent = String(Number(snap.pageCount) || 0);
+      const actions = document.createElement('td');
+      actions.className = 'crud-actions-cell';
+      const viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'btn';
+      viewBtn.textContent = 'View';
+      viewBtn.addEventListener('click', () => openArchiveDetail(safeText(snap.id)));
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn btn-danger';
+      delBtn.style.marginLeft = '0.5rem';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', () => deleteArchive(safeText(snap.id), delBtn));
+      actions.appendChild(viewBtn);
+      actions.appendChild(delBtn);
+      tr.appendChild(label);
+      tr.appendChild(saved);
+      tr.appendChild(count);
+      tr.appendChild(actions);
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function openArchiveDetail(snapshotId) {
+    try {
+      const result = await api(`/api/builder/page-snapshots/${encodeURIComponent(snapshotId)}`);
+      activeArchiveSnapshotId = snapshotId;
+      const heading = byId('builderPageArchiveDetailHeading');
+      const desc = byId('builderPageArchiveDetailDesc');
+      const label = safeText(result.label) || 'Untitled';
+      const timestamp = result.createdAt ? new Date(result.createdAt).toLocaleString() : '';
+      if (heading) {
+        heading.textContent = '';
+        const backLink = document.createElement('a');
+        backLink.href = '#';
+        backLink.className = 'page-heading-back-link';
+        backLink.dataset.backPage = 'builderPageArchivesPage';
+        backLink.textContent = 'Archives';
+        heading.appendChild(backLink);
+        heading.appendChild(document.createTextNode(` › ${label}${timestamp ? ' — ' + timestamp : ''}`));
+      }
+      const archivePages = Array.isArray(result.pages) ? result.pages : [];
+      if (desc) desc.textContent = `${archivePages.length} page${archivePages.length === 1 ? '' : 's'} saved on ${timestamp}`;
+      renderArchiveDetailTable(archivePages);
+      App.setActivePage('builderPageArchiveDetailPage');
+    } catch (err) {
+      notify(err.message || 'Could not load archive', true);
+    }
+  }
+
+  function renderArchiveDetailTable(pages) {
+    const tbody = byId('builderPageArchiveDetailTableBody');
+    if (!tbody) return;
+    tbody.textContent = '';
+    if (!pages.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.setAttribute('colspan', '4');
+      td.className = 'empty-cell';
+      td.textContent = 'No pages in this archive.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    pages.forEach((page) => {
+      const tr = document.createElement('tr');
+      const tplName = (Array.isArray(savedPageTemplates) ? savedPageTemplates : []).find((t) => safeText(t.id) === safeText(page.templateId))?.name || safeText(page.templateId) || '—';
+      const name = document.createElement('td');
+      name.textContent = safeText(page.name) || 'Untitled';
+      const slug = document.createElement('td');
+      const code = document.createElement('code');
+      code.textContent = '/' + safeText(page.slug);
+      slug.appendChild(code);
+      const tpl = document.createElement('td');
+      tpl.textContent = tplName;
+      const updated = document.createElement('td');
+      updated.textContent = page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '—';
+      tr.appendChild(name);
+      tr.appendChild(slug);
+      tr.appendChild(tpl);
+      tr.appendChild(updated);
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function deleteArchive(snapshotId, btn) {
+    if (!window.confirm('Delete this archive? This cannot be undone.')) return;
+    if (btn) btn.disabled = true;
+    try {
+      await api(`/api/builder/page-snapshots/${encodeURIComponent(snapshotId)}`, { method: 'DELETE' });
+      pageArchiveSnapshots = pageArchiveSnapshots.filter((s) => safeText(s.id) !== snapshotId);
+      renderPageArchivesTable();
+      notify('Archive deleted');
+    } catch (err) {
+      notify(err.message || 'Could not delete archive', true);
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function restoreArchiveAll(snapshotId) {
+    if (!snapshotId) return;
+    if (!window.confirm('Restore all pages from this archive? Current page content will be overwritten.')) return;
+    const restoreBtn = byId('builderPageArchiveRestoreAllBtn');
+    if (restoreBtn) { restoreBtn.disabled = true; restoreBtn.textContent = 'Restoring…'; }
+    try {
+      const result = await api(`/api/builder/page-snapshots/${encodeURIComponent(snapshotId)}/restore`, { method: 'POST' });
+      const n = Number(result.restored) || 0;
+      const f = Number(result.failed) || 0;
+      await loadSavedPages();
+      renderPagesTable();
+      notify(`Restored ${n} page${n === 1 ? '' : 's'}${f ? `, ${f} failed` : ''}`);
+    } catch (err) {
+      notify(err.message || 'Could not restore archive', true);
+    } finally {
+      if (restoreBtn) { restoreBtn.disabled = false; restoreBtn.textContent = 'Restore All'; }
+    }
   }
 
   async function loadSavedPageTemplates() {
@@ -7827,6 +7978,8 @@ App.builder = (function () {
       selectAll.disabled = visibleIds.length === 0;
     }
     if (bulkDeleteBtn) bulkDeleteBtn.disabled = !selectedPageIds.size;
+    const bulkArchiveBtn2 = byId('builderPagesBulkArchiveBtn');
+    if (bulkArchiveBtn2) bulkArchiveBtn2.disabled = !selectedPageIds.size;
   }
 
   function renderPagesTable() {
@@ -12887,6 +13040,37 @@ App.builder = (function () {
       });
     }
 
+    const landingPageBulkArchiveBtn = byId('builderPagesBulkArchiveBtn');
+    if (landingPageBulkArchiveBtn) {
+      landingPageBulkArchiveBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedPageIds);
+        if (!ids.length) { notify('Select at least one page first', true); return; }
+        landingPageBulkArchiveBtn.disabled = true;
+        landingPageBulkArchiveBtn.textContent = 'Archiving…';
+        try {
+          const selectedPages = savedPages.filter((p) => ids.includes(safeText(p.id)));
+          const label = new Date().toLocaleString();
+          await api('/api/builder/page-snapshots', {
+            method: 'POST',
+            body: JSON.stringify({ label, pages: selectedPages }),
+          });
+          const n = selectedPages.length;
+          notify(`Archived ${n} page${n === 1 ? '' : 's'}`);
+        } catch (err) {
+          notify(err.message || 'Could not archive pages', true);
+        } finally {
+          landingPageBulkArchiveBtn.disabled = !selectedPageIds.size;
+          landingPageBulkArchiveBtn.textContent = 'Archive';
+        }
+      });
+    }
+
+    const archiveRestoreAllBtn = byId('builderPageArchiveRestoreAllBtn');
+    if (archiveRestoreAllBtn && !archiveRestoreAllBtn.dataset.bound) {
+      archiveRestoreAllBtn.dataset.bound = '1';
+      archiveRestoreAllBtn.addEventListener('click', () => restoreArchiveAll(activeArchiveSnapshotId));
+    }
+
     const populateFromWebBtn = byId('builderPopulateFromWebBtn');
     if (populateFromWebBtn && !populateFromWebBtn.dataset.bound) {
       populateFromWebBtn.dataset.bound = '1';
@@ -13525,7 +13709,9 @@ App.builder = (function () {
     refresh,
     onPageActivated: async function onPageActivated(pageId) {
       try { await refresh(); } catch (_) {}
-      if (pageId === 'builderThemesPage') mountThemesReact();
+      if (pageId === 'builderPageArchivesPage') {
+        loadPageArchives().then(() => renderPageArchivesTable()).catch(() => {});
+      } else if (pageId === 'builderThemesPage') mountThemesReact();
       else if (pageId === 'builderFormsPage') mountFormsReact();
       else if (pageId === 'builderBuilderWorkspacePage') {
         if (!builderActiveMount || builderActiveMount.surface !== 'hub') {

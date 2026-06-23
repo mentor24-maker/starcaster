@@ -270,6 +270,13 @@
           </div>
         </li>
         <li class="menu-item menu-item-right has-submenu">
+          <a href="#" class="menu-link" data-page="adminPage">Admin</a>
+          <div class="submenu">
+            <a href="#" class="menu-link submenu-link" onclick="App.admin.openPage(); return false;" data-page="adminPage">Users</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.admin.openAddUserPage(); return false;" data-page="adminAddUserPage">Add User</a>
+          </div>
+        </li>
+        <li class="menu-item menu-item-right has-submenu">
           <a href="#" class="menu-link" data-page="devDashboardPage">Dev</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" data-page="devDashboardPage">Dashboard</a>
@@ -2192,6 +2199,87 @@
         <p>Medium acquire module placeholder.</p>
       </section>
 
+      <!-- INJECTED PAGE: admin.html -->
+      <section id="adminPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Admin Users</h2>
+          <div class="page-heading-actions">
+            <button type="button" id="adminAddUserBtn" class="btn btn-primary" onclick="App.admin.openAddUserPage()">+ Add User</button>
+          </div>
+        </div>
+        <div id="adminUsersTableWrap" class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Created</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersTableBody">
+              <tr><td colspan="5" class="meta">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="adminAddUserPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Add Admin User</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.admin.openPage()">Cancel</button>
+          </div>
+        </div>
+        <form id="adminAddUserForm" class="standard-form-grid" style="max-width:420px;">
+          <label>Name</label>
+          <input id="adminAddName" type="text" autocomplete="off" required />
+          <label>Email</label>
+          <input id="adminAddEmail" type="email" autocomplete="off" required />
+          <label>Password</label>
+          <input id="adminAddPassword" type="password" autocomplete="new-password" minlength="8" required />
+          <label>Role</label>
+          <select id="adminAddRole">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
+          <div></div>
+          <div class="page-heading-actions" style="justify-content:flex-start; gap:0.5rem;">
+            <button type="submit" class="btn btn-primary">Create User</button>
+          </div>
+          <p id="adminAddMsg" class="meta hidden" style="grid-column:1/-1;"></p>
+        </form>
+      </section>
+
+      <section id="adminEditUserPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Admin User</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.admin.openPage()">Cancel</button>
+          </div>
+        </div>
+        <form id="adminEditUserForm" class="standard-form-grid" style="max-width:420px;">
+          <input type="hidden" id="adminEditUserId" />
+          <label>Name</label>
+          <input id="adminEditName" type="text" autocomplete="off" required />
+          <label>Email</label>
+          <input id="adminEditEmail" type="text" disabled style="opacity:0.6;" />
+          <label>Role</label>
+          <select id="adminEditRole">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
+          <div></div>
+          <div class="page-heading-actions" style="justify-content:flex-start; gap:0.5rem;">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+          <p id="adminEditMsg" class="meta hidden" style="grid-column:1/-1;"></p>
+        </form>
+      </section>
+
       <!-- INJECTED PAGE: assets.html -->
 
       <section id="assetsPage" class="app-page hidden">
@@ -3202,7 +3290,7 @@
             <button id="builderOpenCreateLandingPageBtn" type="button" class="btn">Create Page</button>
             <button type="button" onclick="App.builder.openBulkCreateFromManagePage();" class="btn">Bulk Create</button>
             <button type="button" onclick="App.builder.openPopulateFromWebPage();" class="btn">Populate from Web</button>
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+            <button type="button" onclick="App.setActivePage('builderPageArchivesPage')" class="btn">Archive</button>
           </div>
         </div>
         <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
@@ -3221,7 +3309,10 @@
                 <th></th>
                 <th></th>
                 <th></th>
-                <th class="builder-pages-bulk-delete-cell"><button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button></th>
+                <th class="builder-pages-bulk-delete-cell">
+                  <button id="builderPagesBulkArchiveBtn" class="btn" type="button" disabled>Archive</button>
+                  <button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete Selected</button>
+                </th>
               </tr>
               <tr>
                 <th></th>
@@ -3238,6 +3329,49 @@
           </table>
         </div>
       </section>
+      <section id="builderPageArchivesPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-page="builderManagePagesPage">Builder: Pages</a> &rsaquo; Archives</h2>
+        </div>
+        <p>Saved page archives. Click an archive to view or restore its pages.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Saved</th>
+                <th>Pages</th>
+                <th class="builder-pages-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="builderPageArchivesTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="builderPageArchiveDetailPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2 id="builderPageArchiveDetailHeading"></h2>
+          <div class="page-heading-actions">
+            <button id="builderPageArchiveRestoreAllBtn" type="button" class="btn btn-primary">Restore All</button>
+          </div>
+        </div>
+        <p id="builderPageArchiveDetailDesc"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Template</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="builderPageArchiveDetailTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
       <section id="builderPopulateFromWebPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="builderManagePagesPage">Builder: Pages</a> &rsaquo; Populate from Web</h2>
@@ -10336,6 +10470,7 @@
   <script src="/js/envConfig.js"></script>
   <script src="/js/training.js"></script>
   <script src="/js/crm.js"></script>
+  <script src="/js/admin.js"></script>
   <script src="/js/projectAdmin.js"></script>
   <script src="/app.js"></script>
   <script src="/bundle.js"></script>
