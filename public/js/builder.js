@@ -3874,11 +3874,12 @@ App.builder = (function () {
   async function openArchiveDetail(snapshotId) {
     try {
       const result = await api(`/api/builder/page-snapshots/${encodeURIComponent(snapshotId)}`);
+      const snap = result.snapshot || result.data || result;
       activeArchiveSnapshotId = snapshotId;
       const heading = byId('builderPageArchiveDetailHeading');
       const desc = byId('builderPageArchiveDetailDesc');
-      const label = safeText(result.label) || 'Untitled';
-      const timestamp = result.createdAt ? new Date(result.createdAt).toLocaleString() : '';
+      const label = safeText(snap.label) || 'Untitled';
+      const timestamp = snap.createdAt ? new Date(snap.createdAt).toLocaleString() : '';
       if (heading) {
         heading.textContent = '';
         const backLink = document.createElement('a');
@@ -3889,7 +3890,7 @@ App.builder = (function () {
         heading.appendChild(backLink);
         heading.appendChild(document.createTextNode(` › ${label}${timestamp ? ' — ' + timestamp : ''}`));
       }
-      const archivePages = Array.isArray(result.pages) ? result.pages : [];
+      const archivePages = Array.isArray(snap.pages) ? snap.pages : [];
       if (desc) desc.textContent = `${archivePages.length} page${archivePages.length === 1 ? '' : 's'} saved on ${timestamp}`;
       renderArchiveDetailTable(archivePages);
       App.setActivePage('builderPageArchiveDetailPage');
