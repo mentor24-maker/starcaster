@@ -2839,7 +2839,10 @@ function CrmFormModuleSettings({ crmFormId, onChange }: { crmFormId: string; onC
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/crm/forms")
+    const projectId = (window as unknown as { App?: { projectContext?: { getSessionProjectId?: () => string } } })?.App?.projectContext?.getSessionProjectId?.() ?? '';
+    const headers: Record<string, string> = {};
+    if (projectId) headers['X-Project-ID'] = projectId;
+    fetch("/api/crm/forms", { headers })
       .then((r) => r.json())
       .then((d) => {
         const list = d?.forms ?? d?.data ?? [];
