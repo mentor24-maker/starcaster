@@ -1197,7 +1197,10 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/blog/posts?status=published&limit=6", { credentials: "include" })
+    fetch("/api/blog/posts?status=published&limit=6", {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setPosts(Array.isArray(d?.posts) ? (d.posts as BlogPostRecord[]) : []))
       .catch(() => {})
@@ -1300,7 +1303,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
       const res = await fetch("/api/blog/posts", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
         body: JSON.stringify(payload)
       });
       const data = (await res.json()) as { error?: { message?: string } | string };
