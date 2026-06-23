@@ -297,10 +297,24 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
 // ── CRM Contacts Table ────────────────────────────────────────────────────────
 
 function getCrmProjectHeaders(): Record<string, string> {
-  const projectId =
+  // Prefer window.App (available inside builder admin where projectContext.js is loaded).
+  const fromApp =
     (window as unknown as { App?: { projectContext?: { getSessionProjectId?: () => string } } })
       ?.App?.projectContext?.getSessionProjectId?.() ?? "";
-  return projectId ? { "X-Project-ID": projectId } : {};
+  if (fromApp) return { "X-Project-ID": fromApp };
+
+  // Fall back to localStorage — projectContext.js stores the active project ID there
+  // under 'alphire.currentProjectId'. builder-preview.html doesn't load projectContext.js
+  // but the key is already written by the main builder session.
+  try {
+    const key =
+      (window as unknown as { App?: { CURRENT_PROJECT_ID_STORAGE_KEY?: string } })
+        ?.App?.CURRENT_PROJECT_ID_STORAGE_KEY ?? "alphire.currentProjectId";
+    const fromStorage = localStorage.getItem(key) ?? "";
+    if (fromStorage) return { "X-Project-ID": fromStorage };
+  } catch {}
+
+  return {};
 }
 
 type CrmContactsField = { key: string; label: string; type: string; required?: boolean };
