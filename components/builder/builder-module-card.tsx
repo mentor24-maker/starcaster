@@ -67,6 +67,8 @@ import { BuilderBlogNewsletterSubscribeModuleSettings } from "./builder-blog-new
 import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./builder-blog-related-posts-module-settings";
 import { BuilderBlogCategoryFilterModuleSettings, parseFilterCategories } from "./builder-blog-category-filter-module-settings";
 import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settings";
+import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
+import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -1300,6 +1302,107 @@ function renderModulePreview(module: BuilderTemplateModule) {
         ) : (
           <div style={{ color: "#aaa", fontStyle: "italic", fontSize: 12 }}>No body content yet — open the Content tab to start writing.</div>
         )}
+      </div>
+    );
+  }
+
+  if (module.type === "blog-tag-cloud") {
+    const s = module.settings;
+    const layout = s.layout ?? "cloud";
+    const inactiveColor = s.inactiveColor ?? "#587592";
+    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+    const activeColor = s.activeColor ?? "#0f4f8f";
+    const minFont = parseInt(s.minFontSize ?? "12", 10) || 12;
+    const maxFont = parseInt(s.maxFontSize ?? "22", 10) || 22;
+    const gap = parseInt(s.gap ?? "8", 10) || 8;
+    const showCounts = s.showCounts === "true";
+    const justifyMap: Record<string, string> = { left: "flex-start", center: "center" };
+    const tags = parseCloudTags(s);
+    const placeholders = tags.length === 0
+      ? [{ id: "p1", label: "react", slug: "react", count: 24 }, { id: "p2", label: "typescript", slug: "typescript", count: 18 }, { id: "p3", label: "design", slug: "design", count: 12 }, { id: "p4", label: "tutorial", slug: "tutorial", count: 8 }]
+      : tags;
+    const maxCount = Math.max(...placeholders.map((t) => t.count ?? 1), 1);
+
+    function tagFontSize(count: number | undefined) {
+      if (layout !== "cloud") return minFont;
+      const pct = (count ?? 1) / maxCount;
+      return Math.round(minFont + pct * (maxFont - minFont));
+    }
+
+    if (layout === "list") {
+      return (
+        <div className="builder-module-preview-copy">
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap }}>
+            {placeholders.map((tag, i) => (
+              <li key={tag.id} style={{ fontSize: minFont, color: i === 0 ? activeColor : inactiveColor, fontWeight: i === 0 ? 600 : 400 }}>
+                {tag.label}{showCounts ? <span style={{ marginLeft: 4, opacity: 0.6 }}>({tag.count ?? 1})</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[s.alignment ?? "left"] ?? "flex-start", alignItems: "baseline" }}>
+          {placeholders.map((tag, i) => {
+            const fs = tagFontSize(tag.count);
+            return (
+              <span
+                key={tag.id}
+                style={{
+                  fontSize: fs,
+                  padding: layout === "cloud" ? `${Math.round(fs * 0.2)}px ${Math.round(fs * 0.55)}px` : "3px 10px",
+                  borderRadius: layout === "cloud" ? 4 : 20,
+                  background: i === 0 ? activeColor + "18" : inactiveBg,
+                  color: i === 0 ? activeColor : inactiveColor,
+                  fontWeight: i === 0 ? 600 : 400,
+                  cursor: "default",
+                }}
+              >
+                {tag.label}{showCounts ? <span style={{ marginLeft: 3, opacity: 0.6, fontSize: fs * 0.8 }}>({tag.count ?? 1})</span> : null}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-post-tags") {
+    const s = module.settings;
+    const tags = (s.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    const layout = s.layout ?? "pills";
+    const showPrefix = s.showPrefix !== "false";
+    const prefix = s.prefix || "Tags:";
+    const color = s.color ?? "#587592";
+    const bgColor = s.bgColor ?? "#f0f4f8";
+    const borderRadius = parseInt(s.borderRadius ?? "4", 10) || 4;
+    const fontSize = parseInt(s.fontSize ?? "12", 10) || 12;
+    const gap = parseInt(s.gap ?? "6", 10) || 6;
+    const displayTags = tags.length > 0 ? tags : ["react", "typescript", "tutorial"];
+
+    if (layout === "inline") {
+      return (
+        <div className="builder-module-preview-copy" style={{ fontSize, color, lineHeight: 1.6 }}>
+          {showPrefix ? <span style={{ fontWeight: 600, marginRight: 4 }}>{prefix}</span> : null}
+          {displayTags.join(" · ")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="builder-module-preview-copy" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap }}>
+        {showPrefix ? <span style={{ fontSize, fontWeight: 600, color, marginRight: 2 }}>{prefix}</span> : null}
+        {displayTags.map((tag) => (
+          <span
+            key={tag}
+            style={{ fontSize, padding: "2px 8px", borderRadius, background: bgColor, color, cursor: "default" }}
+          >
+            {tag}
+          </span>
+        ))}
       </div>
     );
   }
@@ -2731,6 +2834,44 @@ function ModuleEditorWrapper({
   return <div className="builder-module-editor">{children}</div>;
 }
 
+function CrmFormModuleSettings({ crmFormId, onChange }: { crmFormId: string; onChange: (id: string) => void }) {
+  const [forms, setForms] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/crm/forms")
+      .then((r) => r.json())
+      .then((d) => {
+        const list = d?.forms ?? d?.data ?? [];
+        setForms(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="builder-contact-form-settings">
+      <label className="field">
+        <span>CRM Form</span>
+        {loading ? (
+          <select disabled><option>Loading forms…</option></select>
+        ) : forms.length === 0 ? (
+          <div className="builder-module-runtime-note" style={{ marginTop: 0 }}>
+            <p>No CRM forms found. Create one in <strong>Builder › CRM › Forms</strong>.</p>
+          </div>
+        ) : (
+          <select value={crmFormId} onChange={(e) => onChange(e.target.value)}>
+            <option value="">— Select a form —</option>
+            {forms.map((f) => (
+              <option key={f.id} value={f.id}>{f.name || f.id}</option>
+            ))}
+          </select>
+        )}
+      </label>
+    </div>
+  );
+}
+
 export function BuilderModuleCard({
   module,
   sectionId,
@@ -2799,6 +2940,8 @@ export function BuilderModuleCard({
     const isBlogRelatedPostsModule = module.type === "blog-related-posts";
     const isBlogCategoryFilterModule = module.type === "blog-category-filter";
     const isBlogPostModule = module.type === "blog-post";
+    const isBlogTagCloudModule = module.type === "blog-tag-cloud";
+    const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3006,6 +3149,10 @@ export function BuilderModuleCard({
               <BuilderBlogCategoryFilterModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostModule ? (
               <BuilderBlogPostModuleSettings module={module} onUpdateModule={onUpdateModule} richTextGallery={richTextGalleryProps} />
+            ) : isBlogTagCloudModule ? (
+              <BuilderBlogTagCloudModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostTagsModule ? (
+              <BuilderBlogPostTagsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
@@ -3198,25 +3345,15 @@ export function BuilderModuleCard({
           )}
 
           {module.type === "crm-form" && (
-            <div className="builder-contact-form-settings">
-              <label className="field">
-                <span>CRM Form ID</span>
-                <input
-                  type="text"
-                  value={module.settings.crmFormId ?? ""}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({
-                      ...current,
-                      settings: { ...current.settings, crmFormId: event.target.value }
-                    }))
-                  }
-                  placeholder="Paste CRM Form ID from Builder › CRM"
-                />
-              </label>
-              <div className="builder-module-runtime-note">
-                <p>Create and manage CRM forms in <strong>Builder › CRM</strong>. Paste the Form ID above to embed it on this page.</p>
-              </div>
-            </div>
+            <CrmFormModuleSettings
+              crmFormId={module.settings.crmFormId ?? ""}
+              onChange={(id) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, crmFormId: id }
+                }))
+              }
+            />
           )}
 
           {module.type === "player-portal" ? (
