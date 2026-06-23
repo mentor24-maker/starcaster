@@ -223,7 +223,11 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
     if (!crmFormId) return;
     fetch(`/api/crm/forms/${crmFormId}`)
       .then((r) => r.json())
-      .then((d) => setForm(d.data ?? d ?? null))
+      .then((d) => {
+        const formData = d?.data ?? d ?? null;
+        // Guard: only set state if the response looks like a form (has an id)
+        setForm(formData && typeof formData === "object" && formData.id ? formData : null);
+      })
       .catch(() => {});
   }, [crmFormId]);
 
@@ -237,7 +241,7 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
       const response = await fetch("/api/crm/contact-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, crm_form_id: crmFormId, _trap: honeypot })
+        body: JSON.stringify({ ...values, crmConfigId: form?.crmConfigId ?? "", crm_form_id: crmFormId, _trap: honeypot })
       });
       const data = (await response.json()) as { message?: string; error?: string };
 
@@ -270,7 +274,7 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
       {message ? <div className="builder-contact-form-message">{message}</div> : null}
       {error ? <div className="builder-contact-form-error">{error}</div> : null}
       <div className="builder-contact-form-fields">
-        {form.fields.map((field) => (
+        {(form.fields ?? []).map((field) => (
           <label className="builder-contact-form-field" key={field.key}>
             <input
               type={field.type || "text"}
