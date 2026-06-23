@@ -208,6 +208,8 @@ async function handleRequest(req, res) {
   const isDebugRoute = pathname === '/api/debug-routes';
   const isWebhookRoute = pathname === '/api/builder/devAgent/worker' || pathname.startsWith('/api/tasks');
   const isPublicContactSubmit = pathname === '/api/contact' && method === 'POST';
+  const isPublicCrmRoute = (pathname === '/api/crm/contact-submit' && method === 'POST')
+    || (/^\/api\/crm\/forms\/[^/]+$/.test(pathname) && method === 'GET');
   const isFacebookOAuthCallback =
     pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
   const isImportDriveFolderHealth =
@@ -252,7 +254,7 @@ async function handleRequest(req, res) {
     if (handled) return;
   }
 
-  if (!isAuthRoute && !isAdminAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !authUser) {
+  if (!isAuthRoute && !isAdminAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !isPublicCrmRoute && !authUser) {
 
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
