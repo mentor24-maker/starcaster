@@ -139,14 +139,24 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
       </BuilderSettingRow>
 
       {(s.showReadMore ?? "true") === "true" ? (
-        <BuilderSettingRow label="Read more label" fullWidth>
-          <input
-            type="text"
-            value={s.readMoreLabel ?? "Read More"}
-            onChange={(e) => set("readMoreLabel", e.target.value)}
-            placeholder="Read More"
-          />
-        </BuilderSettingRow>
+        <>
+          <BuilderSettingRow label="Read more label" fullWidth>
+            <input
+              type="text"
+              value={s.readMoreLabel ?? "Read More"}
+              onChange={(e) => set("readMoreLabel", e.target.value)}
+              placeholder="Read More"
+            />
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Post view page URL" fullWidth>
+            <input
+              type="text"
+              value={s.postPageUrl ?? ""}
+              onChange={(e) => set("postPageUrl", e.target.value)}
+              placeholder="/blog-post  (the page that displays a single post)"
+            />
+          </BuilderSettingRow>
+        </>
       ) : null}
 
       <BuilderSettingRow label="Filter by category" fullWidth>

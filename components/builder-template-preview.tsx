@@ -1223,6 +1223,9 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
   const accent = settings.accentColor || "#0f4f8f";
   const layout = settings.layout || "grid";
+  const postPageUrl = (settings.postPageUrl || "").trim();
+  const readMoreLabel = settings.readMoreLabel || "Read more";
+  const showReadMore = (settings.showReadMore ?? "true") !== "false";
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
@@ -1243,7 +1246,9 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
   return (
     <div style={gridStyle}>
-      {posts.map((post) => (
+      {posts.map((post) => {
+        const href = postPageUrl ? `${postPageUrl}?slug=${encodeURIComponent(post.slug)}` : "#";
+        return (
         <article
           key={post.id}
           style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", background: "#fff" }}
@@ -1260,12 +1265,15 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             {post.excerpt ? (
               <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#4a5568" }}>{post.excerpt}</p>
             ) : null}
-            <a href={`/blog/${post.slug}`} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600 }}>
-              Read more →
-            </a>
+            {showReadMore ? (
+              <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600 }}>
+                {readMoreLabel} →
+              </a>
+            ) : null}
           </div>
         </article>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1692,6 +1700,64 @@ function BlogPostTagsPreview({ settings }: { settings: Record<string, string> })
 }
 
 function BlogPostViewPreview({ settings }: { settings: Record<string, string> }) {
+  const [post, setPost] = useState<BlogPostRecord & { body?: string; author?: string; excerpt?: string; published_at?: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const slug = new URLSearchParams(window.location.search).get("slug") ?? "";
+    if (!slug) return;
+    setLoading(true);
+    fetch(`/api/blog/posts/${encodeURIComponent(slug)}?by=slug`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const p = d?.data ?? d?.post ?? null;
+        setPost(p && typeof p === "object" ? (p as BlogPostRecord & { body?: string; author?: string; excerpt?: string; published_at?: string }) : null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading post…</div>;
+  }
+
+  // Render live fetched post when navigated via ?slug=
+  if (post) {
+    const pubDate = post.published_at ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : "";
+    return (
+      <article style={{ maxWidth: 720, margin: "0 auto" }}>
+        {(post as unknown as { featured_image_url?: string }).featured_image_url ? (
+          <img
+            alt={post.title}
+            src={(post as unknown as { featured_image_url?: string }).featured_image_url}
+            style={{ width: "100%", borderRadius: 8, marginBottom: "1.5rem", display: "block" }}
+          />
+        ) : null}
+        <h1 style={{ margin: "0 0 0.75rem", fontSize: "2rem", color: "#111827" }}>{post.title}</h1>
+        <p style={{ margin: "0 0 1.5rem", fontSize: "0.875rem", color: "#6b7280" }}>
+          {post.author ? <>By {post.author}</> : null}
+          {post.author && pubDate ? " · " : null}
+          {pubDate}
+        </p>
+        {post.excerpt ? (
+          <p style={{ margin: "0 0 1.5rem", fontSize: "1.1rem", color: "#4a5568", fontStyle: "italic", borderLeft: "3px solid #e2e8f0", paddingLeft: "1rem" }}>
+            {post.excerpt}
+          </p>
+        ) : null}
+        {post.body ? (
+          <div
+            className="builder-preview-text"
+            dangerouslySetInnerHTML={{ __html: formatRichTextContent(post.body) || "" }}
+          />
+        ) : null}
+      </article>
+    );
+  }
+
+  // Canvas preview (no ?slug= in URL) — show placeholder from settings
   const title = settings.title || "Post Title";
   const body = settings.body || "";
   const author = settings.author || "";
