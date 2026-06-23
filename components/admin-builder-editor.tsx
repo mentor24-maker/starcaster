@@ -147,6 +147,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [message, setMessage] = useState<string | null>(null);
   const [showBulkCreate, setShowBulkCreate] = useState(false);
   const [snapshots, setSnapshots] = useState<BuilderPageSnapshotSummary[]>([]);
+  const [activeArchive, setActiveArchive] = useState<{ id: string; label: string; createdAt: string; pages: BuilderPageRecord[] } | null>(null);
   const [isSnapshoting, setIsSnapshoting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -238,33 +239,51 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  async function takeSnapshot(label: string) {
+  async function archivePages(pageIds: string[]) {
+    if (!pageIds.length) return;
     setIsSnapshoting(true);
     try {
+      const selectedPages = pages.filter((p) => pageIds.includes(p.id));
+      const label = new Date().toLocaleString();
       const response = await builderAdminFetch("/api/admin/page-snapshots", {
         method: "POST",
-        body: JSON.stringify({ label }),
+        body: JSON.stringify({ label, pages: selectedPages }),
       });
-      await readAdminJson<{ snapshot?: BuilderPageSnapshotSummary; error?: string }>(response, "Failed to save snapshot.");
+      await readAdminJson<{ snapshot?: BuilderPageSnapshotSummary; error?: string }>(response, "Failed to archive pages.");
       await loadSnapshots();
-      setMessage(`Snapshot "${label}" saved.`);
+      setMessage(`Archived ${selectedPages.length} page(s).`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save snapshot.");
+      setError(e instanceof Error ? e.message : "Failed to archive pages.");
     } finally {
       setIsSnapshoting(false);
     }
   }
 
-  async function restoreSnapshot(snapshotId: string) {
-    if (!window.confirm("Restore this snapshot? Current page content will be overwritten.")) return;
+  async function loadArchive(snapshotId: string) {
+    try {
+      const response = await builderAdminFetch(`/api/admin/page-snapshots/${snapshotId}`, { cache: "no-store" });
+      const data = await readAdminJson<{ id?: string; label?: string; createdAt?: string; pages?: BuilderPageRecord[]; error?: string }>(response, "Failed to load archive.");
+      setActiveArchive({
+        id: String(data.id ?? snapshotId),
+        label: String(data.label ?? ""),
+        createdAt: String(data.createdAt ?? ""),
+        pages: Array.isArray(data.pages) ? data.pages : [],
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load archive.");
+    }
+  }
+
+  async function restoreArchive(snapshotId: string) {
+    if (!window.confirm("Restore this archive? Current page content will be overwritten.")) return;
     setIsRestoring(true);
     try {
       const response = await builderAdminFetch(`/api/admin/page-snapshots/${snapshotId}/restore`, { method: "POST" });
-      const data = await readAdminJson<{ restored?: number; failed?: number; error?: string }>(response, "Failed to restore snapshot.");
+      const data = await readAdminJson<{ restored?: number; failed?: number; error?: string }>(response, "Failed to restore archive.");
       await loadPages();
       setMessage(`Restored ${data.restored ?? 0} page(s)${data.failed ? `, ${data.failed} failed` : ""}.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to restore snapshot.");
+      setError(e instanceof Error ? e.message : "Failed to restore archive.");
     } finally {
       setIsRestoring(false);
     }
@@ -273,10 +292,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   async function deleteSnapshot(snapshotId: string) {
     try {
       const response = await builderAdminFetch(`/api/admin/page-snapshots/${snapshotId}`, { method: "DELETE" });
-      await readAdminJson<{ snapshot?: BuilderPageSnapshotSummary; error?: string }>(response, "Failed to delete snapshot.");
+      await readAdminJson<{ snapshot?: BuilderPageSnapshotSummary; error?: string }>(response, "Failed to delete archive.");
       setSnapshots((prev) => prev.filter((s) => s.id !== snapshotId));
+      setActiveArchive((prev) => (prev?.id === snapshotId ? null : prev));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete snapshot.");
+      setError(e instanceof Error ? e.message : "Failed to delete archive.");
     }
   }
 
@@ -2177,17 +2197,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onApplyTheme={applyThemeToPage}
           onNewPage={startNewPage}
           onBulkCreate={() => setShowBulkCreate(true)}
-          onPopulateFromWeb={() => void populateFromAcquire()}
+
           onPreviewDraft={openPreviewPage}
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}
           onSavePage={() => void savePage()}
           autoNewPage={autoNewPage}
           snapshots={snapshots}
+          activeArchive={activeArchive}
           isSnapshoting={isSnapshoting}
           isRestoring={isRestoring}
-          onTakeSnapshot={(label) => void takeSnapshot(label)}
-          onRestoreSnapshot={(id) => void restoreSnapshot(id)}
+          onArchivePages={(ids) => void archivePages(ids)}
+          onLoadArchive={(id) => void loadArchive(id)}
+          onRestoreArchive={(id) => void restoreArchive(id)}
           onDeleteSnapshot={(id) => void deleteSnapshot(id)}
         />
       )}

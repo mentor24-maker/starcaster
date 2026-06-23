@@ -1604,6 +1604,15 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { restored, failed, results }, { restored, failed, results }), true;
   }
 
+  // GET /api/builder/page-snapshots/:id — get full snapshot including pages data
+  if (pageSnapshotIdMatch && requestMethod === 'GET') {
+    const snapId = decodeURIComponent(pageSnapshotIdMatch[1] || '').trim();
+    if (!snapId) return sendErr(res, 400, 'snapshot id is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await getPageSnapshot(snapId, scope);
+    if (!result.ok) return sendErr(res, result.status || 404, result.error || 'Snapshot not found'), true;
+    return sendOk(res, 200, result.data, { snapshot: result.data }), true;
+  }
+
   // DELETE /api/builder/page-snapshots/:id — delete a snapshot
   if (pageSnapshotIdMatch && requestMethod === 'DELETE') {
     const snapId = decodeURIComponent(pageSnapshotIdMatch[1] || '').trim();

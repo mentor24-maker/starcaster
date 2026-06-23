@@ -6,6 +6,14 @@ import { formatTemplateTimestamp } from "./builder-utils";
 
 type SortField = "name" | "slug" | "template" | "updatedAt";
 type SortDir = "asc" | "desc";
+type ArchiveView = "pages" | "archive-list" | "archive-detail";
+
+type ActiveArchive = {
+  id: string;
+  label: string;
+  createdAt: string;
+  pages: BuilderPageRecord[];
+};
 
 type BuilderPageListProps = {
   pages: BuilderPageRecord[];
@@ -32,7 +40,6 @@ type BuilderPageListProps = {
   onApplyTheme: (themeId: string) => void;
   onNewPage: () => void;
   onBulkCreate: () => void;
-  onPopulateFromWeb: () => void;
   onPreviewDraft: () => void;
   onMakeTemplate: () => void;
   onPageEditorFocus: (focused: boolean) => void;
@@ -41,8 +48,10 @@ type BuilderPageListProps = {
   snapshots: BuilderPageSnapshotSummary[];
   isSnapshoting: boolean;
   isRestoring: boolean;
-  onTakeSnapshot: (label: string) => void;
-  onRestoreSnapshot: (snapshotId: string) => void;
+  activeArchive: ActiveArchive | null;
+  onArchivePages: (pageIds: string[]) => void;
+  onLoadArchive: (snapshotId: string) => void;
+  onRestoreArchive: (snapshotId: string) => void;
   onDeleteSnapshot: (snapshotId: string) => void;
 };
 
@@ -69,7 +78,6 @@ export function BuilderPageList({
   onApplyTheme,
   onNewPage,
   onBulkCreate,
-  onPopulateFromWeb,
   onPreviewDraft,
   onMakeTemplate,
   onPageEditorFocus,
@@ -78,9 +86,11 @@ export function BuilderPageList({
   snapshots,
   isSnapshoting,
   isRestoring,
-  onTakeSnapshot,
-  onRestoreSnapshot,
-  onDeleteSnapshot
+  activeArchive,
+  onArchivePages,
+  onLoadArchive,
+  onRestoreArchive,
+  onDeleteSnapshot,
 }: BuilderPageListProps) {
   const [collapsedPanels, setCollapsedPanels] = useState({
     pages: true,
@@ -90,8 +100,7 @@ export function BuilderPageList({
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>("updatedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [showSnapshotHistory, setShowSnapshotHistory] = useState(false);
-  const [snapshotLabelDraft, setSnapshotLabelDraft] = useState("");
+  const [archiveView, setArchiveView] = useState<ArchiveView>("pages");
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const shouldFocusDetailsRef = useRef(false);
@@ -126,6 +135,11 @@ export function BuilderPageList({
       return next.size === prev.size ? prev : next;
     });
   }, [pages]);
+
+  // When an archive is loaded, switch to detail view
+  useEffect(() => {
+    if (activeArchive) setArchiveView("archive-detail");
+  }, [activeArchive?.id]);
 
   const filteredPages = useMemo(() => {
     const q = filterText.trim().toLowerCase();
@@ -230,6 +244,193 @@ export function BuilderPageList({
     });
   }, [collapsedPanels.details, selectedPageId]);
 
+  function handleOpenArchiveList() {
+    setArchiveView("archive-list");
+  }
+
+  function handleViewArchive(snapshotId: string) {
+    onLoadArchive(snapshotId);
+    // archiveView switches to "archive-detail" via the useEffect above when activeArchive loads
+  }
+
+  function handleBackToPages() {
+    setArchiveView("pages");
+  }
+
+  function handleBackToArchiveList() {
+    setArchiveView("archive-list");
+  }
+
+  // --- Archive list view ---
+
+  if (archiveView === "archive-list") {
+    return (
+      <div className="builder-toolbar-shell builder-pages-list-shell">
+        <div className="builder-pages-list-heading-layout">
+          <div className="builder-pages-list-heading-primary">
+            <button
+              className="builder-panel-toggle builder-archive-back-button"
+              onClick={handleBackToPages}
+              type="button"
+              aria-label="Back to Pages"
+            >
+              <span className="builder-archive-back-arrow">←</span>
+              <span className="panel-label">Pages</span>
+            </button>
+            <span className="builder-archive-heading-label">Archives</span>
+          </div>
+        </div>
+
+        <div className="table-shell builder-templates-shell">
+          <table className="polls-table builder-templates-table builder-pages-list-table">
+            <colgroup>
+              <col className="builder-pages-col-title" />
+              <col className="builder-pages-col-updated" />
+              <col className="builder-pages-col-slug" />
+              <col className="builder-pages-col-actions" />
+            </colgroup>
+            <thead>
+              <tr className="builder-pages-list-columns-row">
+                <th>Label</th>
+                <th>Saved</th>
+                <th>Pages</th>
+                <th className="crud-actions-cell">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshots.map((snap) => (
+                <tr key={snap.id}>
+                  <td><strong>{snap.label || <em>Untitled</em>}</strong></td>
+                  <td>{new Date(snap.createdAt).toLocaleString()}</td>
+                  <td>{snap.pageCount}</td>
+                  <td className="crud-actions-cell">
+                    <div className="builder-template-actions">
+                      <button
+                        aria-label="View archived pages"
+                        className="polls-icon-button polls-icon-button-edit"
+                        onClick={() => handleViewArchive(snap.id)}
+                        title="View archive"
+                        type="button"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        aria-label="Delete archive"
+                        className="polls-icon-button polls-icon-button-danger"
+                        onClick={() => onDeleteSnapshot(snap.id)}
+                        title="Delete archive"
+                        type="button"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {snapshots.length === 0 ? (
+                <tr>
+                  <td className="empty-cell" colSpan={4}>
+                    No archives yet. Select pages and click Archive to save one.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Archive detail view ---
+
+  if (archiveView === "archive-detail" && activeArchive) {
+    const archivePages = Array.isArray(activeArchive.pages) ? activeArchive.pages : [];
+    const archiveLabel = activeArchive.label || new Date(activeArchive.createdAt).toLocaleString();
+    const archiveTimestamp = new Date(activeArchive.createdAt).toLocaleString();
+
+    return (
+      <div className="builder-toolbar-shell builder-pages-list-shell">
+        <div className="builder-pages-list-heading-layout">
+          <div className="builder-pages-list-heading-primary">
+            <button
+              className="builder-panel-toggle builder-archive-back-button"
+              onClick={handleBackToArchiveList}
+              type="button"
+              aria-label="Back to Archives"
+            >
+              <span className="builder-archive-back-arrow">←</span>
+              <span className="panel-label">Archives</span>
+            </button>
+            <span className="builder-archive-heading-label">
+              {archiveLabel} — {archiveTimestamp}
+            </span>
+          </div>
+          <div className="builder-pages-list-heading-actions">
+            <button
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
+              disabled={isRestoring}
+              onClick={() => onRestoreArchive(activeArchive.id)}
+              type="button"
+            >
+              {isRestoring ? "Restoring…" : "Restore All"}
+            </button>
+          </div>
+        </div>
+
+        <div className="table-shell builder-templates-shell">
+          <table className="polls-table builder-templates-table builder-pages-list-table">
+            <colgroup>
+              <col className="builder-pages-col-title" />
+              <col className="builder-pages-col-slug" />
+              <col className="builder-pages-col-template" />
+              <col className="builder-pages-col-updated" />
+              <col className="builder-pages-col-actions" />
+            </colgroup>
+            <thead>
+              <tr className="builder-pages-list-columns-row">
+                <th>Title</th>
+                <th>Slug</th>
+                <th>Template</th>
+                <th>Updated</th>
+                <th className="crud-actions-cell">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {archivePages.map((page) => (
+                <tr key={page.id}>
+                  <td><strong>{page.name || "Untitled page"}</strong></td>
+                  <td className="template-id-cell"><code>/{page.slug}</code></td>
+                  <td>{templates.find((t) => t.id === page.templateId)?.name || "Unknown"}</td>
+                  <td>{formatTemplateTimestamp(page.updatedAt)}</td>
+                  <td className="crud-actions-cell">
+                    <div className="builder-template-actions">
+                      <button
+                        aria-label="Preview page"
+                        className="polls-icon-button polls-icon-button-view"
+                        onClick={() => onPreviewPage(page.slug || page.id)}
+                        title="Preview page"
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="polls-icon-glyph-eye" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {archivePages.length === 0 ? (
+                <tr>
+                  <td className="empty-cell" colSpan={5}>No pages in this archive.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Normal pages view ---
+
   return (
     <>
       <div className="builder-toolbar-shell builder-pages-list-shell">
@@ -250,18 +451,17 @@ export function BuilderPageList({
           <div className="builder-pages-list-heading-actions">
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
+              onClick={handleOpenArchiveList}
+              type="button"
+            >
+              Archive
+            </button>
+            <button
+              className="submit-button admin-blog-add-button builder-panel-heading-button"
               onClick={onBulkCreate}
               type="button"
             >
               Bulk Create
-            </button>
-            <button
-              className="submit-button admin-blog-add-button builder-panel-heading-button"
-              disabled={isSaving}
-              onClick={onPopulateFromWeb}
-              type="button"
-            >
-              Populate from Builder
             </button>
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
@@ -274,134 +474,32 @@ export function BuilderPageList({
         </div>
 
         {!collapsedPanels.pages ? (
-          <>
-            <div className="builder-pages-filter-bar">
-              <input
-                className="builder-pages-filter-input"
-                onChange={(e) => setFilterText(e.target.value)}
-                placeholder="Search pages…"
-                type="search"
-                value={filterText}
-              />
-              <button
-                aria-label="Snapshot all pages"
-                className="polls-icon-button builder-pages-snapshot-button"
-                disabled={isSaving || isSnapshoting}
-                onClick={() => {
-                  const label = snapshotLabelDraft.trim() || new Date().toLocaleString();
-                  onTakeSnapshot(label);
-                  setSnapshotLabelDraft("");
-                }}
-                title="Snapshot all pages"
-                type="button"
-              >
-                💾
-              </button>
-              <button
-                aria-label={showSnapshotHistory ? "Hide snapshot history" : "Show snapshot history"}
-                aria-pressed={showSnapshotHistory}
-                className={`polls-icon-button builder-pages-snapshot-history-button${showSnapshotHistory ? " is-active" : ""}`}
-                onClick={() => setShowSnapshotHistory((v) => !v)}
-                title={showSnapshotHistory ? "Hide snapshot history" : "Show snapshot history"}
-                type="button"
-              >
-                🗂
-              </button>
-              <button
-                className={`danger-button builder-pages-delete-selected${checkedIds.size === 0 ? " is-no-selection" : ""}`}
-                disabled={isSaving}
-                onClick={() => { if (checkedIds.size > 0) onDeletePages([...checkedIds]); }}
-                type="button"
-              >
-                {isSaving ? "Deleting…" : checkedIds.size > 0 ? `Delete Selected (${checkedIds.size})` : "Delete Selected"}
-              </button>
-            </div>
-
-            {showSnapshotHistory ? (
-              <div className="builder-pages-snapshot-panel">
-                <div className="builder-pages-snapshot-panel-header">
-                  <span className="builder-pages-snapshot-panel-title">Page Snapshots</span>
-                  <div className="builder-pages-snapshot-new-row">
-                    <input
-                      className="builder-pages-snapshot-label-input"
-                      onChange={(e) => setSnapshotLabelDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          const label = snapshotLabelDraft.trim() || new Date().toLocaleString();
-                          onTakeSnapshot(label);
-                          setSnapshotLabelDraft("");
-                        }
-                      }}
-                      placeholder="Snapshot label (optional)…"
-                      type="text"
-                      value={snapshotLabelDraft}
-                    />
-                    <button
-                      className="submit-button builder-pages-snapshot-save-button"
-                      disabled={isSnapshoting}
-                      onClick={() => {
-                        const label = snapshotLabelDraft.trim() || new Date().toLocaleString();
-                        onTakeSnapshot(label);
-                        setSnapshotLabelDraft("");
-                      }}
-                      type="button"
-                    >
-                      {isSnapshoting ? "Saving…" : "Save Snapshot"}
-                    </button>
-                  </div>
-                </div>
-
-                {snapshots.length === 0 ? (
-                  <p className="builder-pages-snapshot-empty">No snapshots yet. Click 💾 to save one.</p>
-                ) : (
-                  <div className="table-shell builder-pages-snapshot-table-shell">
-                    <table className="polls-table builder-pages-snapshot-table">
-                      <thead>
-                        <tr>
-                          <th>Label</th>
-                          <th>Pages</th>
-                          <th>Saved</th>
-                          <th className="crud-actions-cell">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {snapshots.map((snap) => (
-                          <tr key={snap.id}>
-                            <td>{snap.label || <em>Untitled</em>}</td>
-                            <td>{snap.pageCount}</td>
-                            <td>{new Date(snap.createdAt).toLocaleString()}</td>
-                            <td className="crud-actions-cell">
-                              <div className="builder-template-actions">
-                                <button
-                                  aria-label="Restore this snapshot"
-                                  className="submit-button polls-icon-button"
-                                  disabled={isRestoring}
-                                  onClick={() => onRestoreSnapshot(snap.id)}
-                                  title="Restore this snapshot"
-                                  type="button"
-                                >
-                                  ↩
-                                </button>
-                                <button
-                                  aria-label="Delete this snapshot"
-                                  className="polls-icon-button polls-icon-button-danger"
-                                  onClick={() => onDeleteSnapshot(snap.id)}
-                                  title="Delete snapshot"
-                                  type="button"
-                                >
-                                  🗑
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </>
+          <div className="builder-pages-filter-bar">
+            <input
+              className="builder-pages-filter-input"
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Search pages…"
+              type="search"
+              value={filterText}
+            />
+            <button
+              className={`submit-button builder-pages-archive-selected${checkedIds.size === 0 ? " is-no-selection" : ""}`}
+              disabled={isSaving || isSnapshoting || checkedIds.size === 0}
+              onClick={() => { if (checkedIds.size > 0) onArchivePages([...checkedIds]); }}
+              title={checkedIds.size > 0 ? `Archive ${checkedIds.size} selected page(s)` : "Select pages to archive"}
+              type="button"
+            >
+              {isSnapshoting ? "Archiving…" : checkedIds.size > 0 ? `Archive (${checkedIds.size})` : "Archive"}
+            </button>
+            <button
+              className={`danger-button builder-pages-delete-selected${checkedIds.size === 0 ? " is-no-selection" : ""}`}
+              disabled={isSaving}
+              onClick={() => { if (checkedIds.size > 0) onDeletePages([...checkedIds]); }}
+              type="button"
+            >
+              {isSaving ? "Deleting…" : checkedIds.size > 0 ? `Delete (${checkedIds.size})` : "Delete"}
+            </button>
+          </div>
         ) : null}
 
         <div className="table-shell builder-templates-shell">
