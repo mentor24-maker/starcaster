@@ -15,7 +15,7 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listAcquireJobs }    = require('../lib/acquireJobs');
 const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
-const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun } = require('../lib/directAcquire');
+const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun, patchDirectAcquireRunPages } = require('../lib/directAcquire');
 const { sanitizeImportHtml, identifyHeaderLines, detectModel: detectContentModel, getModel: getContentModel } = require('../lib/contentDisplayModels');
 const { runPeerDiscovery } = require('../lib/peerDiscovery');
 const { requestProjectScope } = require('../lib/requestProjectScope');
@@ -1265,6 +1265,19 @@ async function handle(req, res, pathname, method) {
     const run = await getDirectAcquireRun(decodeURIComponent(directRunMatch[1]), scope);
     if (!run) return sendErr(res, 404, 'Run not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, run, { run }), true;
+  }
+
+  // PATCH /api/acquire/direct-runs/:id/pages — delete or edit individual pages within a run
+  const directRunPagesMatch = pathname.match(/^\/api\/acquire\/direct-runs\/([^/]+)\/pages$/);
+  if (directRunPagesMatch && method === 'PATCH') {
+    const scope = requestProjectScope(req);
+    const body = await parseJsonBody(req);
+    const deleteUrls = Array.isArray(body?.delete_urls) ? body.delete_urls : [];
+    const editPage = body?.edit_page && typeof body.edit_page === 'object' ? body.edit_page : null;
+    if (!deleteUrls.length && !editPage) return sendErr(res, 400, 'delete_urls or edit_page is required'), true;
+    const result = await patchDirectAcquireRunPages(decodeURIComponent(directRunPagesMatch[1]), { deleteUrls, editPage }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, { run: result.data }), true;
   }
 
   // GET /api/acquire/website-peers — project-scoped persistent peer website dataset

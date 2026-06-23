@@ -1,4 +1,4 @@
--- Add detected_model_id to direct_acquire_runs.
+--- Add detected_model_id to direct_acquire_runs.
 -- Populated automatically at crawl time by running detectModel() against
 -- a sample page's raw HTML. Null means no registered model matched.
 

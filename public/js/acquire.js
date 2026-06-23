@@ -96,6 +96,7 @@ App.acquire = (function () {
     filters: { url: '', title: '', emails: '' },
     sort: { key: '', dir: 'asc' },
   };
+  let directAcquirePagesSelected = new Set();
   const directAcquirePeerDiscoveryBulkDraft = {
     type: '',
     category: '',
@@ -696,6 +697,15 @@ App.acquire = (function () {
   function isPeerDiscoveryBulkMode() {
     const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
     return results.some((item) => item.selected !== false);
+  }
+
+  function isPagesBulkMode() {
+    return directAcquirePagesSelected.size > 0;
+  }
+
+  function syncPagesFilterControls() {
+    const goBtn = document.getElementById('directAcquirePagesGoBtn');
+    if (goBtn) goBtn.textContent = isPagesBulkMode() ? 'Delete Checked' : 'Filter';
   }
 
   function resetPeerDiscoveryBulkDraft() {
@@ -2316,6 +2326,101 @@ App.acquire = (function () {
     return pages;
   }
 
+  function updatePagesSelectAllState() {
+    const selectAll = document.getElementById('directAcquirePagesSelectAll');
+    if (!selectAll) return;
+    const pages = getFilteredSortedAcquirePages();
+    const selectedVisible = pages.filter((p) => directAcquirePagesSelected.has(String(p.url || ''))).length;
+    selectAll.checked = selectedVisible === pages.length && pages.length > 0;
+    selectAll.indeterminate = selectedVisible > 0 && selectedVisible < pages.length;
+  }
+
+  async function deleteCheckedAcquirePages() {
+    const urls = Array.from(directAcquirePagesSelected);
+    if (!urls.length) { notify('Select one or more pages first', true); return; }
+    const runId = String(state.directAcquireCurrentRun?.run_id || '');
+    if (!runId) return;
+    if (!confirm(`Delete ${urls.length} selected page${urls.length === 1 ? '' : 's'}?`)) return;
+    try {
+      const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}/pages`, {
+        method: 'PATCH',
+        body: JSON.stringify({ delete_urls: urls }),
+      });
+      state.directAcquireCurrentRun = res.run || null;
+      directAcquirePagesSelected.clear();
+      renderDirectAcquirePagesTable();
+      notify(`Deleted ${urls.length} page${urls.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      notify(err.message || 'Could not delete pages', true);
+    }
+  }
+
+  function openEditAcquirePageModal(page) {
+    let modal = document.getElementById('acquirePageEditModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'acquirePageEditModal';
+      modal.className = 'builder-content-modal-backdrop';
+      modal.innerHTML = [
+        '<div class="builder-content-modal" style="max-width:540px;">',
+        '  <div class="builder-content-modal-header">',
+        '    <strong>Edit Page</strong>',
+        '    <button type="button" id="acquirePageEditModalClose" class="btn" aria-label="Close">&times;</button>',
+        '  </div>',
+        '  <div class="builder-content-modal-body" style="padding:1rem;">',
+        '    <div class="form-group" style="margin-bottom:0.75rem;">',
+        '      <label for="acquirePageEditUrl" style="display:block;margin-bottom:0.25rem;">URL</label>',
+        '      <input id="acquirePageEditUrl" type="text" class="form-control" readonly style="background:var(--input-bg,#f5f5f5);cursor:default;" />',
+        '    </div>',
+        '    <div class="form-group" style="margin-bottom:0.75rem;">',
+        '      <label for="acquirePageEditTitle" style="display:block;margin-bottom:0.25rem;">Title</label>',
+        '      <input id="acquirePageEditTitle" type="text" class="form-control" />',
+        '    </div>',
+        '    <div class="form-group" style="margin-bottom:1rem;">',
+        '      <label for="acquirePageEditEmails" style="display:block;margin-bottom:0.25rem;">Emails (comma-separated)</label>',
+        '      <input id="acquirePageEditEmails" type="text" class="form-control" />',
+        '    </div>',
+        '    <div style="display:flex;gap:0.5rem;justify-content:flex-end;">',
+        '      <button type="button" id="acquirePageEditCancelBtn" class="btn">Cancel</button>',
+        '      <button type="button" id="acquirePageEditSaveBtn" class="btn btn-primary">Save</button>',
+        '    </div>',
+        '  </div>',
+        '</div>',
+      ].join('');
+      document.body.appendChild(modal);
+
+      document.getElementById('acquirePageEditModalClose').addEventListener('click', () => modal.classList.remove('is-open'));
+      document.getElementById('acquirePageEditCancelBtn').addEventListener('click', () => modal.classList.remove('is-open'));
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('is-open'); });
+
+      document.getElementById('acquirePageEditSaveBtn').addEventListener('click', async () => {
+        const runId = String(state.directAcquireCurrentRun?.run_id || '');
+        const url = document.getElementById('acquirePageEditUrl').value;
+        const title = document.getElementById('acquirePageEditTitle').value.trim();
+        const emailsRaw = document.getElementById('acquirePageEditEmails').value;
+        const emails = emailsRaw.split(',').map((e) => e.trim()).filter(Boolean);
+        if (!runId || !url) return;
+        try {
+          const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}/pages`, {
+            method: 'PATCH',
+            body: JSON.stringify({ edit_page: { url, title, emails } }),
+          });
+          state.directAcquireCurrentRun = res.run || null;
+          modal.classList.remove('is-open');
+          renderDirectAcquirePagesTable();
+          notify('Page updated');
+        } catch (err) {
+          notify(err.message || 'Could not update page', true);
+        }
+      });
+    }
+
+    document.getElementById('acquirePageEditUrl').value = String(page.url || '');
+    document.getElementById('acquirePageEditTitle').value = String(page.title || '');
+    document.getElementById('acquirePageEditEmails').value = Array.isArray(page.emails) ? page.emails.join(', ') : '';
+    modal.classList.add('is-open');
+  }
+
   function renderDirectAcquirePagesTable() {
     if (!els.directAcquirePagesTable) return;
     els.directAcquirePagesTable.innerHTML = '';
@@ -2338,24 +2443,62 @@ App.acquire = (function () {
     const pages = getFilteredSortedAcquirePages();
     if (!pages.length) {
       const tr = document.createElement('tr');
-      const td = document.createElement('td'); td.colSpan = 5; td.textContent = 'No website pages loaded yet.';
+      const td = document.createElement('td'); td.colSpan = 6; td.textContent = 'No website pages loaded yet.';
       tr.appendChild(td); els.directAcquirePagesTable.appendChild(tr);
     } else {
       pages.forEach((page) => {
         const tr = document.createElement('tr');
+
+        const checkTd = document.createElement('td');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = directAcquirePagesSelected.has(String(page.url || ''));
+        checkbox.addEventListener('change', () => {
+          const url = String(page.url || '');
+          if (checkbox.checked) directAcquirePagesSelected.add(url);
+          else directAcquirePagesSelected.delete(url);
+          syncPagesFilterControls();
+          updatePagesSelectAllState();
+        });
+        checkTd.appendChild(checkbox);
+        tr.appendChild(checkTd);
+
         [page.url||'-', page.title||'-',
          Array.isArray(page.emails)?page.emails.join(', ')||'-':'-',
          page.body_snippet||'-'
         ].forEach((text) => { const td = document.createElement('td'); td.textContent = text; tr.appendChild(td); });
+
         const actionTd = document.createElement('td');
         App.finishTableActionsCell(actionTd,
           App.makeIconButton('view', 'View Source', () => openSourceInspectorModal(page)),
+          App.makeIconButton('edit', 'Edit Page', () => openEditAcquirePageModal(page)),
+          App.makeIconButton('delete', 'Delete Page', async () => {
+            const label = String(page.title || page.url || 'this page').trim();
+            if (!confirm(`Delete "${label}"?`)) return;
+            const runId = String(state.directAcquireCurrentRun?.run_id || '');
+            if (!runId) return;
+            try {
+              const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}/pages`, {
+                method: 'PATCH',
+                body: JSON.stringify({ delete_urls: [page.url] }),
+              });
+              state.directAcquireCurrentRun = res.run || null;
+              directAcquirePagesSelected.delete(String(page.url || ''));
+              renderDirectAcquirePagesTable();
+              notify('Page deleted');
+            } catch (err) {
+              notify(err.message || 'Could not delete page', true);
+            }
+          }, { danger: true }),
           App.makeIconButton('plus', 'Create Builder page', () => openAcquirePageCreateModal(page), { primary: true })
         );
         tr.appendChild(actionTd);
         els.directAcquirePagesTable.appendChild(tr);
       });
     }
+
+    updatePagesSelectAllState();
+    syncPagesFilterControls();
     if (els.directAcquireErrorsPreview) {
       const errors = Array.isArray(state.directAcquireCurrentRun?.errors) ? state.directAcquireCurrentRun.errors : [];
       els.directAcquireErrorsPreview.textContent = errors.length ? prettyJson({ errors }) : '{}';
@@ -4279,6 +4422,7 @@ App.acquire = (function () {
   async function loadDirectAcquireRun(runId) {
     const res = await api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}`);
     state.directAcquireCurrentRun = res.run || null;
+    directAcquirePagesSelected = new Set();
     directAcquireSelectedImages = new Set();
     directAcquireImageCategoryByUrl = new Map();
     directAcquireImagesExpanded = false;
@@ -5603,6 +5747,37 @@ App.acquire = (function () {
         renderDirectAcquirePagesTable();
       });
     });
+
+    const pagesSelectAll = document.getElementById('directAcquirePagesSelectAll');
+    if (pagesSelectAll && !pagesSelectAll.dataset.bound) {
+      pagesSelectAll.dataset.bound = '1';
+      pagesSelectAll.addEventListener('change', () => {
+        const checked = !!pagesSelectAll.checked;
+        const pages = getFilteredSortedAcquirePages();
+        pages.forEach((p) => {
+          const url = String(p.url || '');
+          if (checked) directAcquirePagesSelected.add(url);
+          else directAcquirePagesSelected.delete(url);
+        });
+        renderDirectAcquirePagesTable();
+      });
+    }
+
+    const pagesGoBtn = document.getElementById('directAcquirePagesGoBtn');
+    if (pagesGoBtn && !pagesGoBtn.dataset.bound) {
+      pagesGoBtn.dataset.bound = '1';
+      pagesGoBtn.addEventListener('click', async () => {
+        try {
+          if (isPagesBulkMode()) {
+            await deleteCheckedAcquirePages();
+          } else {
+            renderDirectAcquirePagesTable();
+          }
+        } catch (err) {
+          notify(err.message || 'Could not complete action', true);
+        }
+      });
+    }
   }
 
   // ── Source Inspector modal ───────────────────────────────────────────────
