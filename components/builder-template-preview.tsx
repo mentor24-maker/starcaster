@@ -294,6 +294,365 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
   );
 }
 
+// ── CRM Contacts Table ────────────────────────────────────────────────────────
+
+type CrmContactsField = { key: string; label: string; type: string; required?: boolean };
+type CrmContact = { id: string; email: string; data: Record<string, string>; createdAt?: string; source?: string };
+type CrmConfigData = { id: string; name?: string; standardFields?: string[]; standard_fields?: string[]; customFields?: CrmContactsField[]; custom_fields?: CrmContactsField[] };
+
+const STANDARD_CONTACT_FIELDS: CrmContactsField[] = [
+  { key: "first_name", label: "First Name", type: "text" },
+  { key: "last_name",  label: "Last Name",  type: "text" },
+  { key: "phone",      label: "Phone",      type: "tel"  },
+  { key: "company",    label: "Company",    type: "text" },
+  { key: "job_title",  label: "Job Title",  type: "text" },
+  { key: "city",       label: "City",       type: "text" },
+  { key: "state",      label: "State",      type: "text" },
+  { key: "zip",        label: "Zip",        type: "text" },
+  { key: "country",    label: "Country",    type: "text" },
+  { key: "website",    label: "Website",    type: "url"  },
+  { key: "notes",      label: "Notes",      type: "textarea" },
+  { key: "source",     label: "Source",     type: "text" },
+  { key: "tags",       label: "Tags",       type: "text" },
+];
+
+function getContactFields(config: CrmConfigData | null): CrmContactsField[] {
+  if (!config) return [{ key: "email", label: "Email", type: "email" }];
+  const stdKeys = new Set<string>(
+    Array.isArray(config.standardFields) ? config.standardFields
+    : Array.isArray(config.standard_fields) ? config.standard_fields
+    : []
+  );
+  const stdFields = STANDARD_CONTACT_FIELDS.filter((f) => stdKeys.has(f.key));
+  const customFields = Array.isArray(config.customFields) ? config.customFields
+    : Array.isArray(config.custom_fields) ? config.custom_fields
+    : [];
+  return [{ key: "email", label: "Email", type: "email" }, ...stdFields, ...customFields];
+}
+
+function CrmContactsTablePreview({ settings }: { settings: Record<string, string> }) {
+  const crmConfigId    = settings.crmConfigId ?? "";
+  const tableTitle     = settings.tableTitle || "Contacts";
+  const showTitle      = settings.showTitle !== "false";
+  const rowsPerPage    = Math.max(1, parseInt(settings.rowsPerPage ?? "20", 10) || 20);
+  const showSearch     = settings.showSearch !== "false";
+  const showAddButton  = settings.showAddButton !== "false";
+  const addButtonLabel = settings.addButtonLabel || "Add Contact";
+  const showViewBtn    = settings.showViewButton !== "false";
+  const showEditBtn    = settings.showEditButton !== "false";
+  const showDeleteBtn  = settings.showDeleteButton !== "false";
+
+  const [config, setConfig]         = useState<CrmConfigData | null>(null);
+  const [contacts, setContacts]     = useState<CrmContact[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState("");
+  const [search, setSearch]         = useState("");
+  const [page, setPage]             = useState(1);
+  const [viewContact, setViewContact] = useState<CrmContact | null>(null);
+  const [editContact, setEditContact] = useState<CrmContact | null>(null);
+  const [editValues, setEditValues]   = useState<Record<string, string>>({});
+  const [addMode, setAddMode]         = useState(false);
+  const [addValues, setAddValues]     = useState<Record<string, string>>({});
+  const [saving, setSaving]           = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setLoadError("");
+    const configUrl = crmConfigId ? `/api/crm/configs/${encodeURIComponent(crmConfigId)}` : "/api/crm/configs";
+    fetch(configUrl)
+      .then((r) => r.json())
+      .then((d) => {
+        const cfg: CrmConfigData | null = crmConfigId
+          ? (d?.config ?? d?.data ?? (d?.id ? d : null))
+          : (d?.configs?.[0] ?? d?.data?.[0] ?? null);
+        setConfig(cfg);
+        if (!cfg) return;
+        return fetch(`/api/crm/contacts?configId=${encodeURIComponent(cfg.id)}`)
+          .then((r) => r.json())
+          .then((d2) => {
+            const list = d2?.contacts ?? d2?.data ?? [];
+            setContacts(Array.isArray(list) ? list : []);
+          });
+      })
+      .catch((e: Error) => setLoadError(e.message || "Failed to load contacts."))
+      .finally(() => setLoading(false));
+  }, [crmConfigId]);
+
+  const fields = getContactFields(config);
+
+  const filtered = contacts.filter((c) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      (c.email ?? "").toLowerCase().includes(q) ||
+      Object.values(c.data ?? {}).some((v) => String(v).toLowerCase().includes(q))
+    );
+  });
+
+  const totalPages   = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safePage     = Math.min(page, totalPages);
+  const pageContacts = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+  const tableCols    = fields.slice(0, 5);
+  const hasActions   = showViewBtn || showEditBtn || showDeleteBtn;
+
+  async function deleteContact(id: string) {
+    if (!confirm("Delete this contact? This cannot be undone.")) return;
+    await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, { method: "DELETE" });
+    setContacts((prev) => prev.filter((c) => c.id !== id));
+    if (viewContact?.id === id) setViewContact(null);
+  }
+
+  function openEdit(contact: CrmContact) {
+    const vals: Record<string, string> = { email: contact.email ?? "" };
+    fields.forEach((f) => { if (f.key !== "email") vals[f.key] = String(contact.data?.[f.key] ?? ""); });
+    setEditValues(vals);
+    setEditContact(contact);
+  }
+
+  async function saveEdit() {
+    if (!editContact) return;
+    setSaving(true);
+    try {
+      const email = (editValues.email ?? "").trim().toLowerCase();
+      const data: Record<string, string> = {};
+      fields.forEach((f) => { if (f.key !== "email") data[f.key] = editValues[f.key] ?? ""; });
+      const res  = await fetch(`/api/crm/contacts/${encodeURIComponent(editContact.id)}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ email, data }),
+      });
+      const d       = await res.json();
+      const updated = d?.contact ?? d?.data ?? { ...editContact, email, data };
+      setContacts((prev) => prev.map((c) => (c.id === editContact.id ? updated : c)));
+      setEditContact(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveAdd() {
+    if (!config) return;
+    setSaving(true);
+    try {
+      const email = (addValues.email ?? "").trim().toLowerCase();
+      const data: Record<string, string> = {};
+      fields.forEach((f) => { if (f.key !== "email") data[f.key] = addValues[f.key] ?? ""; });
+      const res  = await fetch("/api/crm/contacts", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ crmConfigId: config.id, email, data, source: "manual" }),
+      });
+      const d          = await res.json();
+      const newContact = d?.contact ?? d?.data;
+      if (newContact) setContacts((prev) => [newContact, ...prev]);
+      setAddMode(false);
+      setAddValues({});
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading)    return <div className="builder-contact-form-stub">Loading contacts…</div>;
+  if (loadError)  return <div className="builder-contact-form-stub">{loadError}</div>;
+  if (!config)    return <div className="builder-contact-form-stub">No CRM configured. Set one up in Builder › CRM, or select a config in module settings.</div>;
+
+  return (
+    <div className="crm-contacts-table-module">
+      {showTitle && <h2 className="crm-contacts-table-title">{tableTitle}</h2>}
+
+      <div className="crm-contacts-table-toolbar">
+        {showSearch && (
+          <input
+            className="crm-contacts-table-search"
+            type="search"
+            placeholder="Search contacts…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          />
+        )}
+        {showAddButton && (
+          <button
+            className="crm-contacts-table-add-btn"
+            type="button"
+            onClick={() => { setAddValues({}); setAddMode(true); }}
+          >
+            {addButtonLabel}
+          </button>
+        )}
+      </div>
+
+      <div className="crm-contacts-table-wrap">
+        <table className="crm-contacts-table">
+          <thead>
+            <tr>
+              {tableCols.map((f) => <th key={f.key}>{f.label}</th>)}
+              <th>Added</th>
+              {hasActions && <th>Actions</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {pageContacts.length === 0 ? (
+              <tr>
+                <td colSpan={tableCols.length + 1 + (hasActions ? 1 : 0)} className="crm-contacts-table-empty">
+                  {search ? "No contacts match your search." : "No contacts yet."}
+                </td>
+              </tr>
+            ) : pageContacts.map((c) => (
+              <tr key={c.id}>
+                {tableCols.map((f) => (
+                  <td key={f.key} className="crm-contacts-table-cell">
+                    {f.key === "email" ? (c.email ?? "") : String(c.data?.[f.key] ?? "")}
+                  </td>
+                ))}
+                <td className="crm-contacts-table-cell crm-contacts-table-date">
+                  {c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}
+                </td>
+                {hasActions && (
+                  <td className="crm-contacts-table-actions">
+                    {showViewBtn   && <button type="button" className="crm-contacts-action-btn" onClick={() => setViewContact(c)}>View</button>}
+                    {showEditBtn   && <button type="button" className="crm-contacts-action-btn" onClick={() => openEdit(c)}>Edit</button>}
+                    {showDeleteBtn && <button type="button" className="crm-contacts-action-btn crm-contacts-action-btn-danger" onClick={() => deleteContact(c.id)}>Delete</button>}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="crm-contacts-table-pagination">
+          <button type="button" disabled={safePage <= 1} onClick={() => setPage((p) => p - 1)}>‹ Prev</button>
+          <span>Page {safePage} of {totalPages}</span>
+          <button type="button" disabled={safePage >= totalPages} onClick={() => setPage((p) => p + 1)}>Next ›</button>
+        </div>
+      )}
+      <div className="crm-contacts-table-count">
+        {filtered.length} contact{filtered.length !== 1 ? "s" : ""}
+      </div>
+
+      {/* View modal */}
+      {viewContact && (
+        <div className="crm-contacts-modal-overlay" onClick={() => setViewContact(null)}>
+          <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="crm-contacts-modal-header">
+              <strong>Contact Details</strong>
+              <button type="button" className="crm-contacts-modal-close" onClick={() => setViewContact(null)}>✕</button>
+            </div>
+            <div className="crm-contacts-modal-body">
+              {fields.map((f) => {
+                const val = f.key === "email" ? (viewContact.email ?? "") : String(viewContact.data?.[f.key] ?? "");
+                if (!val) return null;
+                return (
+                  <div key={f.key} className="crm-contacts-modal-row">
+                    <span className="crm-contacts-modal-label">{f.label}</span>
+                    <span className="crm-contacts-modal-value">{val}</span>
+                  </div>
+                );
+              })}
+              {viewContact.source && (
+                <div className="crm-contacts-modal-row">
+                  <span className="crm-contacts-modal-label">Source</span>
+                  <span className="crm-contacts-modal-value">{viewContact.source}</span>
+                </div>
+              )}
+              {viewContact.createdAt && (
+                <div className="crm-contacts-modal-row">
+                  <span className="crm-contacts-modal-label">Added</span>
+                  <span className="crm-contacts-modal-value">{new Date(viewContact.createdAt).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            <div className="crm-contacts-modal-footer">
+              <button type="button" className="crm-contacts-modal-btn" onClick={() => setViewContact(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editContact && (
+        <div className="crm-contacts-modal-overlay" onClick={() => !saving && setEditContact(null)}>
+          <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="crm-contacts-modal-header">
+              <strong>Edit Contact</strong>
+              <button type="button" className="crm-contacts-modal-close" onClick={() => setEditContact(null)} disabled={saving}>✕</button>
+            </div>
+            <div className="crm-contacts-modal-body">
+              {fields.map((f) => (
+                <div key={f.key} className="crm-contacts-modal-row crm-contacts-modal-row-edit">
+                  <label className="crm-contacts-modal-label">{f.label}</label>
+                  {f.type === "textarea" ? (
+                    <textarea
+                      className="crm-contacts-modal-input"
+                      rows={3}
+                      value={editValues[f.key] ?? ""}
+                      onChange={(e) => setEditValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    />
+                  ) : (
+                    <input
+                      className="crm-contacts-modal-input"
+                      type={f.type || "text"}
+                      value={editValues[f.key] ?? ""}
+                      onChange={(e) => setEditValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="crm-contacts-modal-footer">
+              <button type="button" className="crm-contacts-modal-btn" onClick={() => setEditContact(null)} disabled={saving}>Cancel</button>
+              <button type="button" className="crm-contacts-modal-btn crm-contacts-modal-btn-primary" onClick={saveEdit} disabled={saving}>
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add contact modal */}
+      {addMode && (
+        <div className="crm-contacts-modal-overlay" onClick={() => !saving && setAddMode(false)}>
+          <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="crm-contacts-modal-header">
+              <strong>Add Contact</strong>
+              <button type="button" className="crm-contacts-modal-close" onClick={() => setAddMode(false)} disabled={saving}>✕</button>
+            </div>
+            <div className="crm-contacts-modal-body">
+              {fields.map((f) => (
+                <div key={f.key} className="crm-contacts-modal-row crm-contacts-modal-row-edit">
+                  <label className="crm-contacts-modal-label">{f.label}</label>
+                  {f.type === "textarea" ? (
+                    <textarea
+                      className="crm-contacts-modal-input"
+                      rows={3}
+                      value={addValues[f.key] ?? ""}
+                      onChange={(e) => setAddValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    />
+                  ) : (
+                    <input
+                      className="crm-contacts-modal-input"
+                      type={f.type || "text"}
+                      value={addValues[f.key] ?? ""}
+                      onChange={(e) => setAddValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="crm-contacts-modal-footer">
+              <button type="button" className="crm-contacts-modal-btn" onClick={() => setAddMode(false)} disabled={saving}>Cancel</button>
+              <button type="button" className="crm-contacts-modal-btn crm-contacts-modal-btn-primary" onClick={saveAdd} disabled={saving}>
+                {saving ? "Adding…" : "Add Contact"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MerchProductCard({ settings }: { settings: Record<string, string> }) {
   const productName = settings.productName || "Merch product";
   const imageUrl = resolvePublicBuilderAssetUrl(settings.imageUrl);
@@ -650,6 +1009,10 @@ function BuilderModulePreview({
 
   if (module.type === "crm-form") {
     return <CrmFormPreview settings={module.settings} />;
+  }
+
+  if (module.type === "crm-contacts-table") {
+    return <CrmContactsTablePreview settings={module.settings} />;
   }
 
   if (module.type === "player-portal") {
