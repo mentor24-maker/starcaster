@@ -70,7 +70,8 @@ export type BuilderTemplateModuleType =
   | "blog-post"
   | "blog-tag-cloud"
   | "blog-post-tags"
-  | "blog-post-create";
+  | "blog-post-create"
+  | "blog-post-manager";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -1008,7 +1009,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-post" ||
     type === "blog-tag-cloud" ||
     type === "blog-post-tags" ||
-    type === "blog-post-create"
+    type === "blog-post-create" ||
+    type === "blog-post-manager"
   ) {
     return type;
   }
@@ -1928,6 +1930,14 @@ export function createEmptyModule(
                             showAuthorField: "false",
                             successMessage: "Post created successfully.",
                             redirectAfterCreate: "",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "blog-post-manager"
+                        ? {
+                            editPageUrl: "",
+                            showStatus: "true",
+                            showDate: "true",
+                            showDelete: "true",
                             accentColor: "#0f4f8f"
                           }
                       : type === "crm-contacts-table"

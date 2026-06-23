@@ -1169,6 +1169,9 @@ function BuilderModulePreview({
   if (module.type === "blog-post-create") {
     return <BlogPostCreatePreview settings={module.settings} />;
   }
+  if (module.type === "blog-post-manager") {
+    return <BlogPostManagerPreview settings={module.settings} />;
+  }
   if (module.type === "blog-category-filter") {
     return <BlogCategoryFilterPreview settings={module.settings} />;
   }
@@ -1282,7 +1285,6 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
 function BlogPostCreatePreview({ settings }: { settings: Record<string, string> }) {
   const accent = settings.accentColor || "#0f4f8f";
-  const formTitle = settings.formTitle || "Create New Post";
   const showFormTitle = (settings.showFormTitle ?? "true") !== "false";
   const showSlug = (settings.showSlug ?? "true") !== "false";
   const showFeaturedImage = (settings.showFeaturedImage ?? "true") !== "false";
@@ -1296,10 +1298,46 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const successMessage = settings.successMessage || "Post created successfully.";
   const redirectAfterCreate = settings.redirectAfterCreate || "";
 
+  // Edit mode: ?id= in URL means we're editing an existing post
+  const editId = new URLSearchParams(window.location.search).get("id") ?? "";
+  const isEditMode = Boolean(editId);
+  const formTitle = isEditMode
+    ? "Edit Post"
+    : (settings.formTitle || "Create New Post");
+
   const [values, setValues] = useState<Record<string, string>>({});
+  const [loadingPost, setLoadingPost] = useState(isEditMode);
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!editId) return;
+    fetch(`/api/blog/posts/${encodeURIComponent(editId)}`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const p = d?.data ?? d?.post ?? null;
+        if (p && typeof p === "object") {
+          const post = p as Record<string, unknown>;
+          setValues({
+            title: String(post.title ?? ""),
+            slug: String(post.slug ?? ""),
+            author: String(post.author ?? ""),
+            featuredImageUrl: String(post.featuredImageUrl ?? post.featured_image_url ?? ""),
+            excerpt: String(post.excerpt ?? ""),
+            body: String(post.body ?? ""),
+            tags: Array.isArray(post.tags) ? (post.tags as string[]).join(", ") : String(post.tags ?? ""),
+            seoTitle: String(post.seoTitle ?? post.seo_title ?? ""),
+            seoDescription: String(post.seoDescription ?? post.seo_description ?? ""),
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPost(false));
+  }, [editId]);
 
   function setField(key: string, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -1318,14 +1356,13 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         ...values,
         status,
         tags: values.tags
-          ? values.tags
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
+          ? values.tags.split(",").map((t) => t.trim()).filter(Boolean)
           : []
       };
-      const res = await fetch("/api/blog/posts", {
-        method: "POST",
+      const url = isEditMode ? `/api/blog/posts/${encodeURIComponent(editId)}` : "/api/blog/posts";
+      const method = isEditMode ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
         credentials: "include",
         headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
         body: JSON.stringify(payload)
@@ -1335,21 +1372,23 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         const errMsg =
           typeof data.error === "string"
             ? data.error
-            : (data.error as { message?: string } | undefined)?.message || "Failed to create post.";
+            : (data.error as { message?: string } | undefined)?.message || (isEditMode ? "Failed to update post." : "Failed to create post.");
         throw new Error(errMsg);
       }
-      setStatusMsg(successMessage);
-      setValues({});
+      setStatusMsg(isEditMode ? "Post updated successfully." : successMessage);
+      if (!isEditMode) setValues({});
       if (redirectAfterCreate) {
-        setTimeout(() => {
-          window.location.href = redirectAfterCreate;
-        }, 1500);
+        setTimeout(() => { window.location.href = redirectAfterCreate; }, 1500);
       }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (loadingPost) {
+    return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading post…</div>;
   }
 
   const inputStyle: CSSProperties = {
@@ -1567,6 +1606,120 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
           {submitLabel}
         </button>
       </div>
+    </div>
+  );
+}
+
+function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const editPageUrl = (settings.editPageUrl || "").trim();
+  const showStatus = (settings.showStatus ?? "true") !== "false";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showDelete = (settings.showDelete ?? "true") !== "false";
+
+  type PostRow = BlogPostRecord & { status?: string; created_at?: string };
+  const [posts, setPosts] = useState<PostRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function loadPosts() {
+    setLoading(true);
+    fetch("/api/blog/posts?limit=50", {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setPosts(Array.isArray(d?.posts) ? (d.posts as PostRow[]) : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadPosts(); }, []);
+
+  async function deletePost(id: string) {
+    if (!window.confirm("Delete this post?")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/blog/posts/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getCrmProjectHeaders()
+      });
+      if (res.ok) setPosts((prev) => prev.filter((p) => p.id !== id));
+    } catch {}
+    setDeletingId(null);
+  }
+
+  const statusColor = (s?: string) => s === "published" ? "#16a34a" : s === "archived" ? "#9ca3af" : "#d97706";
+  const statusBg   = (s?: string) => s === "published" ? "#f0fdf4" : s === "archived" ? "#f9fafb" : "#fffbeb";
+
+  const thStyle: CSSProperties = { padding: "0.6rem 0.75rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e5e7eb", background: "#f9fafb" };
+  const tdStyle: CSSProperties = { padding: "0.6rem 0.75rem", fontSize: "0.875rem", color: "#111827", borderBottom: "1px solid #f3f4f6", verticalAlign: "middle" };
+
+  if (loading) {
+    return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
+  }
+
+  if (!posts.length) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+        No posts yet. Use the Create Post module to add your first post.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Title</th>
+            {showStatus ? <th style={{ ...thStyle, width: 100 }}>Status</th> : null}
+            {showDate ? <th style={{ ...thStyle, width: 120 }}>Date</th> : null}
+            <th style={{ ...thStyle, width: 80, textAlign: "center" }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {posts.map((post) => {
+            const editHref = editPageUrl
+              ? `${editPageUrl}${editPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`
+              : "#";
+            const dateStr = post.published_at ?? post.created_at ?? "";
+            const displayDate = dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+            return (
+              <tr key={post.id}>
+                <td style={tdStyle}>
+                  <span style={{ fontWeight: 500 }}>{post.title}</span>
+                </td>
+                {showStatus ? (
+                  <td style={tdStyle}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 600, color: statusColor(post.status), background: statusBg(post.status), borderRadius: 4, padding: "2px 8px" }}>
+                      {post.status ?? "draft"}
+                    </span>
+                  </td>
+                ) : null}
+                {showDate ? <td style={{ ...tdStyle, color: "#6b7280", fontSize: "0.8rem" }}>{displayDate}</td> : null}
+                <td style={{ ...tdStyle, textAlign: "center" }}>
+                  <span style={{ display: "inline-flex", gap: "0.75rem", alignItems: "center" }}>
+                    <a href={editHref} style={{ color: accent, fontSize: "1rem", textDecoration: "none", lineHeight: 1 }} title="Edit">✎</a>
+                    {showDelete ? (
+                      <button
+                        disabled={deletingId === post.id}
+                        onClick={() => deletePost(post.id)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "1rem", padding: 0, lineHeight: 1 }}
+                        title="Delete"
+                        type="button"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

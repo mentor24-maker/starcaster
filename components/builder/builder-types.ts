@@ -620,6 +620,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { defaultStatus: "draft" }
   },
   {
+    id: "blog-post-manager-standard",
+    type: "blog-post-manager",
+    group: "blog",
+    label: "Post Manager (Admin)",
+    icon: "⊞",
+    description: "Admin CRUD table listing all blog posts with edit and delete actions. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "blog-tag-cloud-standard",
     type: "blog-tag-cloud",
     group: "blog",
