@@ -153,7 +153,7 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
               type="text"
               value={s.postPageUrl ?? ""}
               onChange={(e) => set("postPageUrl", e.target.value)}
-              placeholder="/blog-post  (the page that displays a single post)"
+              placeholder="/builder-preview.html?slug=blog-post-view"
             />
           </BuilderSettingRow>
         </>

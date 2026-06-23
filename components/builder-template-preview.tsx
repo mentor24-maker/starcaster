@@ -1247,7 +1247,9 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   return (
     <div style={gridStyle}>
       {posts.map((post) => {
-        const href = postPageUrl ? `${postPageUrl}?slug=${encodeURIComponent(post.slug)}` : "#";
+        // Use ?post= so it doesn't collide with builder-preview.html's own ?slug= page param
+        const sep = postPageUrl.includes("?") ? "&" : "?";
+        const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
         return (
         <article
           key={post.id}
@@ -1704,7 +1706,8 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const slug = new URLSearchParams(window.location.search).get("slug") ?? "";
+    // ?post= carries the blog post slug; ?slug= is reserved for the builder page slug
+    const slug = new URLSearchParams(window.location.search).get("post") ?? "";
     if (!slug) return;
     setLoading(true);
     fetch(`/api/blog/posts/${encodeURIComponent(slug)}?by=slug`, {
