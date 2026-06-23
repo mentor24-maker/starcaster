@@ -3919,13 +3919,11 @@ App.builder = (function () {
     pages.forEach((page) => {
       const tr = document.createElement('tr');
       const tplName = (Array.isArray(savedPageTemplates) ? savedPageTemplates : []).find((t) => safeText(t.id) === safeText(page.templateId))?.name || safeText(page.templateId) || '—';
-      const pageUrl = window.location.origin + '/' + safeText(page.slug);
       const name = document.createElement('td');
       const nameLink = document.createElement('a');
-      nameLink.href = pageUrl;
-      nameLink.target = '_blank';
-      nameLink.rel = 'noopener noreferrer';
+      nameLink.href = '#';
       nameLink.textContent = safeText(page.name) || 'Untitled';
+      nameLink.addEventListener('click', (e) => { e.preventDefault(); openLandingPagePreview(page); });
       name.appendChild(nameLink);
       const slug = document.createElement('td');
       const code = document.createElement('code');
@@ -3936,7 +3934,7 @@ App.builder = (function () {
       const updated = document.createElement('td');
       updated.textContent = page.updatedAt ? new Date(page.updatedAt).toLocaleString() : '—';
       const actions = document.createElement('td');
-      const viewBtn = App.makeIconButton('view', 'View page', () => window.open(pageUrl, '_blank'));
+      const viewBtn = App.makeIconButton('view', 'View page', () => openLandingPagePreview(page));
       const restoreBtn = App.makeIconButton('restore', 'Restore page', () => openRestorePageDialog(page));
       App.finishTableActionsCell(actions, viewBtn, restoreBtn);
       tr.appendChild(name);
