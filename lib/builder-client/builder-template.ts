@@ -285,6 +285,21 @@ export type BuilderProductRecord = {
   updatedAt: string;
 };
 
+export type BuilderPageSnapshot = {
+  id: string;
+  label: string;
+  pageCount: number;
+  pages: BuilderPageRecord[];
+  createdAt: string;
+};
+
+export type BuilderPageSnapshotSummary = {
+  id: string;
+  label: string;
+  pageCount: number;
+  createdAt: string;
+};
+
 export const BUILDER_PREVIEW_STORAGE_KEY = "normie_builder_preview_draft";
 export const BUILDER_PREVIEW_DEVICE_STORAGE_KEY = "normie_builder_preview_device";
 export const BACKGROUND_STYLE_PRESETS: Array<{ value: BackgroundStylePreset; label: string }> = [

@@ -28,6 +28,7 @@ const PATH_REWRITES: Array<[RegExp, string, string]> = [
   [/^\/api\/admin\/pages\/bulk-create-with-model$/, '/api/builder/landing-pages/bulk-create-with-model', 'pages'],
   [/^\/api\/admin\/pages\/populate-from-acquire$/, '/api/builder/landing-pages/populate-from-acquire', 'pages'],
   [/^\/api\/admin\/pages(\/|$)/, '/api/builder/landing-pages$1', 'pages'],
+  [/^\/api\/admin\/page-snapshots(\/|$)/, '/api/builder/page-snapshots$1', 'page-snapshots'],
   [/^\/api\/admin\/acquire-runs(\/|$)/, '/api/builder/acquire-runs$1', 'acquire-runs'],
   [/^\/api\/admin\/cell-modules(\/|$)/, '/api/builder/modules$1', 'cell-modules'],
   [/^\/api\/admin\/saved-sections(\/|$)/, '/api/builder/saved-sections$1', 'saved-sections'],
