@@ -17,6 +17,7 @@ import {
   type BackgroundSettings,
   type BuilderCellModuleRecord,
   type BuilderPageRecord,
+  type BuilderPageSnapshotSummary,
   type BuilderProductRecord,
   type BuilderSavedSectionRecord,
   type BuilderTemplateKind,
@@ -145,6 +146,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showBulkCreate, setShowBulkCreate] = useState(false);
+  const [snapshots, setSnapshots] = useState<BuilderPageSnapshotSummary[]>([]);
+  const [isSnapshoting, setIsSnapshoting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   // --- Derived values ---
 
@@ -224,6 +228,58 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
+  async function loadSnapshots() {
+    try {
+      const response = await builderAdminFetch("/api/admin/page-snapshots", { cache: "no-store" });
+      const data = await readAdminJson<{ snapshots?: BuilderPageSnapshotSummary[]; error?: string }>(response, "Failed to load snapshots.");
+      setSnapshots(data.snapshots ?? []);
+    } catch {
+      setSnapshots([]);
+    }
+  }
+
+  async function takeSnapshot(label: string) {
+    setIsSnapshoting(true);
+    try {
+      const response = await builderAdminFetch("/api/admin/page-snapshots", {
+        method: "POST",
+        body: JSON.stringify({ label }),
+      });
+      await readAdminJson<{ snapshot?: BuilderPageSnapshotSummary; error?: string }>(response, "Failed to save snapshot.");
+      await loadSnapshots();
+      setMessage(`Snapshot "${label}" saved.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save snapshot.");
+    } finally {
+      setIsSnapshoting(false);
+    }
+  }
+
+  async function restoreSnapshot(snapshotId: string) {
+    if (!window.confirm("Restore this snapshot? Current page content will be overwritten.")) return;
+    setIsRestoring(true);
+    try {
+      const response = await builderAdminFetch(`/api/admin/page-snapshots/${snapshotId}/restore`, { method: "POST" });
+      const data = await readAdminJson<{ restored?: number; failed?: number; error?: string }>(response, "Failed to restore snapshot.");
+      await loadPages();
+      setMessage(`Restored ${data.restored ?? 0} page(s)${data.failed ? `, ${data.failed} failed` : ""}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to restore snapshot.");
+    } finally {
+      setIsRestoring(false);
+    }
+  }
+
+  async function deleteSnapshot(snapshotId: string) {
+    try {
+      const response = await builderAdminFetch(`/api/admin/page-snapshots/${snapshotId}`, { method: "DELETE" });
+      await readAdminJson<{ snapshot?: BuilderPageSnapshotSummary; error?: string }>(response, "Failed to delete snapshot.");
+      setSnapshots((prev) => prev.filter((s) => s.id !== snapshotId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete snapshot.");
+    }
+  }
+
   async function loadCellModules() {
     try {
       const response = await builderAdminFetch("/api/admin/cell-modules", { cache: "no-store" });
@@ -266,7 +322,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); void loadAcquireRuns(); void loadDevelopThemes(); }, []);
+  useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); void loadAcquireRuns(); void loadDevelopThemes(); void loadSnapshots(); }, []);
 
   // When the linked theme finishes loading, refresh the page's typography from the latest
   // theme data so changes made in the Themes editor (link underline, fonts, etc.) are
@@ -2127,6 +2183,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onPageEditorFocus={setPageEditorFocused}
           onSavePage={() => void savePage()}
           autoNewPage={autoNewPage}
+          snapshots={snapshots}
+          isSnapshoting={isSnapshoting}
+          isRestoring={isRestoring}
+          onTakeSnapshot={(label) => void takeSnapshot(label)}
+          onRestoreSnapshot={(id) => void restoreSnapshot(id)}
+          onDeleteSnapshot={(id) => void deleteSnapshot(id)}
         />
       )}
 

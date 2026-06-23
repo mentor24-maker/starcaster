@@ -1,4 +1,4 @@
-import type { BackgroundSettings, BuilderPageRecord, BuilderTemplateRecord, BuilderTheme, BuilderThemeSummary } from "@/lib/builder-template";
+import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary, BuilderTemplateRecord, BuilderTheme, BuilderThemeSummary } from "@/lib/builder-template";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -38,6 +38,12 @@ type BuilderPageListProps = {
   onPageEditorFocus: (focused: boolean) => void;
   onSavePage: () => void;
   autoNewPage?: boolean;
+  snapshots: BuilderPageSnapshotSummary[];
+  isSnapshoting: boolean;
+  isRestoring: boolean;
+  onTakeSnapshot: (label: string) => void;
+  onRestoreSnapshot: (snapshotId: string) => void;
+  onDeleteSnapshot: (snapshotId: string) => void;
 };
 
 export function BuilderPageList({
@@ -68,7 +74,13 @@ export function BuilderPageList({
   onMakeTemplate,
   onPageEditorFocus,
   onSavePage,
-  autoNewPage
+  autoNewPage,
+  snapshots,
+  isSnapshoting,
+  isRestoring,
+  onTakeSnapshot,
+  onRestoreSnapshot,
+  onDeleteSnapshot
 }: BuilderPageListProps) {
   const [collapsedPanels, setCollapsedPanels] = useState({
     pages: true,
@@ -78,6 +90,8 @@ export function BuilderPageList({
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>("updatedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [showSnapshotHistory, setShowSnapshotHistory] = useState(false);
+  const [snapshotLabelDraft, setSnapshotLabelDraft] = useState("");
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const shouldFocusDetailsRef = useRef(false);
@@ -260,23 +274,134 @@ export function BuilderPageList({
         </div>
 
         {!collapsedPanels.pages ? (
-          <div className="builder-pages-filter-bar">
-            <input
-              className="builder-pages-filter-input"
-              onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Search pages…"
-              type="search"
-              value={filterText}
-            />
-            <button
-              className={`danger-button builder-pages-delete-selected${checkedIds.size === 0 ? " is-no-selection" : ""}`}
-              disabled={isSaving}
-              onClick={() => { if (checkedIds.size > 0) onDeletePages([...checkedIds]); }}
-              type="button"
-            >
-              {isSaving ? "Deleting…" : checkedIds.size > 0 ? `Delete Selected (${checkedIds.size})` : "Delete Selected"}
-            </button>
-          </div>
+          <>
+            <div className="builder-pages-filter-bar">
+              <input
+                className="builder-pages-filter-input"
+                onChange={(e) => setFilterText(e.target.value)}
+                placeholder="Search pages…"
+                type="search"
+                value={filterText}
+              />
+              <button
+                aria-label="Snapshot all pages"
+                className="polls-icon-button builder-pages-snapshot-button"
+                disabled={isSaving || isSnapshoting}
+                onClick={() => {
+                  const label = snapshotLabelDraft.trim() || new Date().toLocaleString();
+                  onTakeSnapshot(label);
+                  setSnapshotLabelDraft("");
+                }}
+                title="Snapshot all pages"
+                type="button"
+              >
+                💾
+              </button>
+              <button
+                aria-label={showSnapshotHistory ? "Hide snapshot history" : "Show snapshot history"}
+                aria-pressed={showSnapshotHistory}
+                className={`polls-icon-button builder-pages-snapshot-history-button${showSnapshotHistory ? " is-active" : ""}`}
+                onClick={() => setShowSnapshotHistory((v) => !v)}
+                title={showSnapshotHistory ? "Hide snapshot history" : "Show snapshot history"}
+                type="button"
+              >
+                🗂
+              </button>
+              <button
+                className={`danger-button builder-pages-delete-selected${checkedIds.size === 0 ? " is-no-selection" : ""}`}
+                disabled={isSaving}
+                onClick={() => { if (checkedIds.size > 0) onDeletePages([...checkedIds]); }}
+                type="button"
+              >
+                {isSaving ? "Deleting…" : checkedIds.size > 0 ? `Delete Selected (${checkedIds.size})` : "Delete Selected"}
+              </button>
+            </div>
+
+            {showSnapshotHistory ? (
+              <div className="builder-pages-snapshot-panel">
+                <div className="builder-pages-snapshot-panel-header">
+                  <span className="builder-pages-snapshot-panel-title">Page Snapshots</span>
+                  <div className="builder-pages-snapshot-new-row">
+                    <input
+                      className="builder-pages-snapshot-label-input"
+                      onChange={(e) => setSnapshotLabelDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const label = snapshotLabelDraft.trim() || new Date().toLocaleString();
+                          onTakeSnapshot(label);
+                          setSnapshotLabelDraft("");
+                        }
+                      }}
+                      placeholder="Snapshot label (optional)…"
+                      type="text"
+                      value={snapshotLabelDraft}
+                    />
+                    <button
+                      className="submit-button builder-pages-snapshot-save-button"
+                      disabled={isSnapshoting}
+                      onClick={() => {
+                        const label = snapshotLabelDraft.trim() || new Date().toLocaleString();
+                        onTakeSnapshot(label);
+                        setSnapshotLabelDraft("");
+                      }}
+                      type="button"
+                    >
+                      {isSnapshoting ? "Saving…" : "Save Snapshot"}
+                    </button>
+                  </div>
+                </div>
+
+                {snapshots.length === 0 ? (
+                  <p className="builder-pages-snapshot-empty">No snapshots yet. Click 💾 to save one.</p>
+                ) : (
+                  <div className="table-shell builder-pages-snapshot-table-shell">
+                    <table className="polls-table builder-pages-snapshot-table">
+                      <thead>
+                        <tr>
+                          <th>Label</th>
+                          <th>Pages</th>
+                          <th>Saved</th>
+                          <th className="crud-actions-cell">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {snapshots.map((snap) => (
+                          <tr key={snap.id}>
+                            <td>{snap.label || <em>Untitled</em>}</td>
+                            <td>{snap.pageCount}</td>
+                            <td>{new Date(snap.createdAt).toLocaleString()}</td>
+                            <td className="crud-actions-cell">
+                              <div className="builder-template-actions">
+                                <button
+                                  aria-label="Restore this snapshot"
+                                  className="submit-button polls-icon-button"
+                                  disabled={isRestoring}
+                                  onClick={() => onRestoreSnapshot(snap.id)}
+                                  title="Restore this snapshot"
+                                  type="button"
+                                >
+                                  ↩
+                                </button>
+                                <button
+                                  aria-label="Delete this snapshot"
+                                  className="polls-icon-button polls-icon-button-danger"
+                                  onClick={() => onDeleteSnapshot(snap.id)}
+                                  title="Delete snapshot"
+                                  type="button"
+                                >
+                                  🗑
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </>
         ) : null}
 
         <div className="table-shell builder-templates-shell">

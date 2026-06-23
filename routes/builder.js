@@ -28,6 +28,12 @@ const {
   propagateCanonicalSection,
 } = require('../lib/builderPagesStore');
 const {
+  listPageSnapshots,
+  getPageSnapshot,
+  createPageSnapshot,
+  deletePageSnapshot,
+} = require('../lib/builderPageSnapshotsStore');
+const {
   listPageTemplates,
   createPageTemplate,
   updatePageTemplate,
@@ -1548,6 +1554,64 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
     return sendOk(res, 200, result.data, { page: result.data }), true;
+  }
+
+  // GET /api/builder/page-snapshots — list snapshots (summary, no page data)
+  if (pathname === '/api/builder/page-snapshots' && requestMethod === 'GET') {
+    const result = await listPageSnapshots(scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load snapshots'), true;
+    const snapshots = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, snapshots, { snapshots }, { total: snapshots.length }), true;
+  }
+
+  // POST /api/builder/page-snapshots — snapshot all current pages
+  if (pathname === '/api/builder/page-snapshots' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const label = String(body.label || '').trim();
+
+    const pagesResult = await listPages(5000, scope);
+    if (!pagesResult.ok) return sendErr(res, pagesResult.status || 500, pagesResult.error || 'Could not load pages'), true;
+    const pages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
+
+    const result = await createPageSnapshot({ label, pages }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create snapshot'), true;
+    return sendOk(res, 201, result.data, { snapshot: result.data }), true;
+  }
+
+  const pageSnapshotIdMatch = pathname.match(/^\/api\/builder\/page-snapshots\/([^/]+)$/);
+  const pageSnapshotRestoreMatch = pathname.match(/^\/api\/builder\/page-snapshots\/([^/]+)\/restore$/);
+
+  // POST /api/builder/page-snapshots/:id/restore — restore all pages from a snapshot
+  if (pageSnapshotRestoreMatch && requestMethod === 'POST') {
+    const snapId = decodeURIComponent(pageSnapshotRestoreMatch[1] || '').trim();
+    if (!snapId) return sendErr(res, 400, 'snapshot id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const snapResult = await getPageSnapshot(snapId, scope);
+    if (!snapResult.ok) return sendErr(res, snapResult.status || 404, snapResult.error || 'Snapshot not found'), true;
+    const snapshotPages = Array.isArray(snapResult.data.pages) ? snapResult.data.pages : [];
+
+    const results = await Promise.all(
+      snapshotPages.map(async (snapPage) => {
+        const pageId = String(snapPage.id || '');
+        if (!pageId) return { id: pageId, ok: false, error: 'missing id' };
+        const res2 = await updatePage(pageId, snapPage, scope);
+        return { id: pageId, name: snapPage.name, ok: res2.ok, error: res2.error || null };
+      })
+    );
+
+    const restored = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok).length;
+    return sendOk(res, 200, { restored, failed, results }, { restored, failed, results }), true;
+  }
+
+  // DELETE /api/builder/page-snapshots/:id — delete a snapshot
+  if (pageSnapshotIdMatch && requestMethod === 'DELETE') {
+    const snapId = decodeURIComponent(pageSnapshotIdMatch[1] || '').trim();
+    if (!snapId) return sendErr(res, 400, 'snapshot id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const result = await deletePageSnapshot(snapId, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete snapshot'), true;
+    return sendOk(res, 200, result.data, { snapshot: result.data }), true;
   }
 
   if (pageTemplateIdMatch && requestMethod === 'PATCH') {
