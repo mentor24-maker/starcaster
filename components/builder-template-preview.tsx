@@ -55,6 +55,8 @@ import {
 } from "@/components/builder/builder-utils";
 import { BuilderCodeEmbed } from "@/components/builder/builder-code-embed";
 import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
+import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
+import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -1506,12 +1508,10 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
 
       {showFeaturedImage ? (
         <div style={fieldStyle}>
-          <label style={labelStyle}>Featured Image URL</label>
-          <input
-            style={inputStyle}
-            type="url"
+          <label style={labelStyle}>Featured Image</label>
+          <BuilderImagePickerField
             value={values.featuredImageUrl || ""}
-            onChange={(e) => setField("featuredImageUrl", e.target.value)}
+            onChange={(url) => setField("featuredImageUrl", url)}
             placeholder="https://…"
           />
         </div>
@@ -1531,10 +1531,9 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
 
       <div style={fieldStyle}>
         <label style={labelStyle}>Body</label>
-        <textarea
-          style={{ ...inputStyle, resize: "vertical", minHeight: 200 }}
+        <BuilderRichTextEditor
           value={values.body || ""}
-          onChange={(e) => setField("body", e.target.value)}
+          onChange={(html) => setField("body", html)}
           placeholder="Post content…"
         />
       </div>
