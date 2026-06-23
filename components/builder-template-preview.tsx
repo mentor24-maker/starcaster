@@ -54,6 +54,7 @@ import {
   isVideoMedia
 } from "@/components/builder/builder-utils";
 import { BuilderCodeEmbed } from "@/components/builder/builder-code-embed";
+import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -419,7 +420,11 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
 
   async function deleteContact(id: string) {
     if (!confirm("Delete this contact? This cannot be undone.")) return;
-    await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, { method: "DELETE", headers: getCrmProjectHeaders() });
+    const res = await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, { method: "DELETE", headers: getCrmProjectHeaders() });
+    if (!res.ok) {
+      alert("Failed to delete contact. Please try again.");
+      return;
+    }
     setContacts((prev) => prev.filter((c) => c.id !== id));
     if (viewContact?.id === id) setViewContact(null);
   }
@@ -555,6 +560,7 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
 
       {/* View modal */}
       {viewContact && (
+        <BuilderBodyPortal>
         <div className="crm-contacts-modal-overlay" onClick={() => setViewContact(null)}>
           <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
             <div className="crm-contacts-modal-header">
@@ -590,10 +596,12 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
             </div>
           </div>
         </div>
+        </BuilderBodyPortal>
       )}
 
       {/* Edit modal */}
       {editContact && (
+        <BuilderBodyPortal>
         <div className="crm-contacts-modal-overlay" onClick={() => !saving && setEditContact(null)}>
           <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
             <div className="crm-contacts-modal-header">
@@ -630,10 +638,12 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
             </div>
           </div>
         </div>
+        </BuilderBodyPortal>
       )}
 
       {/* Add contact modal */}
       {addMode && (
+        <BuilderBodyPortal>
         <div className="crm-contacts-modal-overlay" onClick={() => !saving && setAddMode(false)}>
           <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
             <div className="crm-contacts-modal-header">
@@ -670,6 +680,7 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
             </div>
           </div>
         </div>
+        </BuilderBodyPortal>
       )}
     </div>
   );
