@@ -1761,6 +1761,7 @@ export function createEmptyModule(
                             showCategories: "true",
                             showReadMore: "true",
                             readMoreLabel: "Read More",
+                            postPageUrl: "",
                             cardStyle: "default",
                             cardBorderRadius: "12",
                             cardGap: "24",
