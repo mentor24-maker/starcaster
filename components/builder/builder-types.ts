@@ -588,6 +588,39 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "blog-post-create-standard",
+    type: "blog-post-create",
+    group: "blog",
+    label: "Create Post (Admin)",
+    icon: "✎",
+    description: "Admin form that lets a logged-in project user create a new blog post. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: { defaultStatus: "draft" }
+  },
+  {
+    id: "blog-tag-cloud-standard",
+    type: "blog-tag-cloud",
+    group: "blog",
+    label: "Tag Cloud",
+    icon: "#",
+    description: "Tag navigation widget — cloud, pills, or list — that filters posts by ?tag=slug.",
+    name: "",
+    text: "",
+    settings: { layout: "cloud" }
+  },
+  {
+    id: "blog-post-tags-standard",
+    type: "blog-post-tags",
+    group: "blog",
+    label: "Post Tags",
+    icon: "⊕",
+    description: "Displays the tags attached to a blog post as styled pills at the bottom of the post.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "blog-post-standard",
     type: "blog-post",
     group: "blog",
