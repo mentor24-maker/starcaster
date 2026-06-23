@@ -459,6 +459,27 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { crmFormId: "" }
   },
   {
+    id: "crm-contacts-table-default",
+    type: "crm-contacts-table",
+    group: "crm-form",
+    label: "Contacts Table (Admin)",
+    icon: "CRM",
+    description: "Admin CRUD table showing all CRM contacts — view, edit, and delete rows. Place on a back-end admin page.",
+    name: "Contacts",
+    text: "",
+    settings: {
+      tableTitle: "Contacts",
+      showTitle: "true",
+      rowsPerPage: "20",
+      showSearch: "true",
+      showAddButton: "true",
+      addButtonLabel: "Add Contact",
+      showViewButton: "true",
+      showEditButton: "true",
+      showDeleteButton: "true"
+    }
+  },
+  {
     id: "player-portal-login",
     type: "player-portal",
     group: "player-portal",

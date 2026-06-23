@@ -70,6 +70,7 @@ import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settin
 import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
+import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -378,6 +379,70 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "crm-form") {
     return renderCrmFormPreview(module.settings);
+  }
+
+  if (module.type === "crm-contacts-table") {
+    const s = module.settings;
+    const showTitle = s.showTitle !== "false";
+    const title = s.tableTitle || "Contacts";
+    const showSearch = s.showSearch !== "false";
+    const showAdd = s.showAddButton !== "false";
+    const addLabel = s.addButtonLabel || "Add Contact";
+    const previewRows = [
+      { email: "alice@example.com", name: "Alice Johnson", company: "Acme Co." },
+      { email: "bob@example.com", name: "Bob Smith", company: "Globex" },
+      { email: "carol@example.com", name: "Carol White", company: "Initech" },
+    ];
+    const thStyle: React.CSSProperties = { background: "#e8f2fb", color: "#18324a", fontWeight: 700, fontSize: 11, padding: "6px 10px", textAlign: "left", borderBottom: "1px solid #c9dcea" };
+    const tdStyle: React.CSSProperties = { padding: "6px 10px", fontSize: 11, color: "#18324a", borderBottom: "1px solid #edf2f7", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+    const actionBtnStyle: React.CSSProperties = { fontSize: 10, padding: "2px 6px", border: "1px solid #c9dcea", borderRadius: 4, background: "#fff", color: "#18324a", cursor: "default", marginRight: 3 };
+    const dangerBtnStyle: React.CSSProperties = { ...actionBtnStyle, borderColor: "#e8c0c0", color: "#8f1f1f" };
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && (
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#18324a", marginBottom: 8 }}>{title}</div>
+        )}
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          {showSearch && (
+            <div style={{ flex: 1, height: 28, border: "1px solid #c9dcea", borderRadius: 6, background: "#fff", display: "flex", alignItems: "center", padding: "0 8px" }}>
+              <span style={{ color: "#9ab0c4", fontSize: 11 }}>Search contacts…</span>
+            </div>
+          )}
+          {showAdd && (
+            <div style={{ height: 28, padding: "0 10px", border: "1px solid #c9dcea", borderRadius: 6, background: "#f0f7ff", display: "flex", alignItems: "center", fontSize: 11, color: "#0b4f8f", fontWeight: 600, whiteSpace: "nowrap" }}>
+              + {addLabel}
+            </div>
+          )}
+        </div>
+        <div style={{ border: "1px solid #c9dcea", borderRadius: 8, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Email</th>
+                <th style={thStyle}>Name</th>
+                <th style={thStyle}>Company</th>
+                <th style={{ ...thStyle, width: 90 }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {previewRows.map((row) => (
+                <tr key={row.email}>
+                  <td style={tdStyle}>{row.email}</td>
+                  <td style={tdStyle}>{row.name}</td>
+                  <td style={tdStyle}>{row.company}</td>
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                    {s.showViewButton !== "false" && <span style={actionBtnStyle}>View</span>}
+                    {s.showEditButton !== "false" && <span style={actionBtnStyle}>Edit</span>}
+                    {s.showDeleteButton !== "false" && <span style={dangerBtnStyle}>Delete</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: 6, fontSize: 10, color: "#9ab0c4", textAlign: "right" }}>3 contacts · Page 1 of 1</div>
+      </div>
+    );
   }
 
   if (module.type === "player-portal") {
@@ -3086,6 +3151,7 @@ export function BuilderModuleCard({
     const isBlogTagCloudModule = module.type === "blog-tag-cloud";
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
+    const isCrmContactsTableModule = module.type === "crm-contacts-table";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3299,6 +3365,8 @@ export function BuilderModuleCard({
               <BuilderBlogPostTagsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostCreateModule ? (
               <BuilderBlogPostCreateModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isCrmContactsTableModule ? (
+              <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}

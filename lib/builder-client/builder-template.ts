@@ -62,6 +62,7 @@ export type BuilderTemplateModuleType =
   | "blog-post-card"
   | "blog-author-bio"
   | "crm-form"
+  | "crm-contacts-table"
   | "blog-toc"
   | "blog-newsletter-subscribe"
   | "blog-related-posts"
@@ -999,6 +1000,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-post-card" ||
     type === "blog-author-bio" ||
     type === "crm-form" ||
+    type === "crm-contacts-table" ||
     type === "blog-toc" ||
     type === "blog-newsletter-subscribe" ||
     type === "blog-related-posts" ||
@@ -1926,6 +1928,19 @@ export function createEmptyModule(
                             successMessage: "Post created successfully.",
                             redirectAfterCreate: "",
                             accentColor: "#0f4f8f"
+                          }
+                      : type === "crm-contacts-table"
+                        ? {
+                            crmConfigId: "",
+                            tableTitle: "Contacts",
+                            showTitle: "true",
+                            rowsPerPage: "20",
+                            showSearch: "true",
+                            showAddButton: "true",
+                            addButtonLabel: "Add Contact",
+                            showViewButton: "true",
+                            showEditButton: "true",
+                            showDeleteButton: "true"
                           }
           : {};
 
