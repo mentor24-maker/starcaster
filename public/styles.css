@@ -12591,12 +12591,13 @@ body.asset-associations-modal-open {
   color: #18324a;
 }
 .builder-react-root .crm-contacts-table thead th {
-  background: #e8f2fb;
+  background: #0b3d7a;
+  color: #fff;
   font-weight: 700;
   font-size: 0.8rem;
   padding: 9px 12px;
   text-align: left;
-  border-bottom: 1px solid #c9dcea;
+  border-bottom: 1px solid #09306a;
   white-space: nowrap;
 }
 .builder-react-root .crm-contacts-table tbody tr:nth-child(even) {
@@ -12684,7 +12685,7 @@ body.asset-associations-modal-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9000;
+  z-index: 2147483647;
   padding: 16px;
 }
 .builder-react-root .crm-contacts-modal {
