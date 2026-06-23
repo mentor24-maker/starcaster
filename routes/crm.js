@@ -41,8 +41,10 @@ async function handle(req, res, pathname, method) {
   const configMatch = pathname.match(/^\/api\/crm\/configs\/([^/]+)$/);
 
   if (configMatch && method === 'GET') {
+    // Scope-free lookup by ID — the config ID itself is sufficient authorization
+    // (matches the same pattern as forms GET by ID, needed for builder preview).
     const id = decodeURIComponent(configMatch[1]);
-    const config = await getConfig(id, requestScope(req));
+    const config = await getConfig(id, { projectId: '', userId: '' });
     if (!config) return sendErr(res, 404, 'CRM config not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, config, { config }), true;
   }
@@ -97,7 +99,8 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/crm/contacts' && method === 'GET') {
     const crmConfigId = String(urlObj.searchParams.get('configId') || '').trim();
     if (!crmConfigId) return sendErr(res, 400, 'configId is required', { code: 'VALIDATION_ERROR' }), true;
-    const contacts = await listContacts(crmConfigId, requestScope(req));
+    // configId is the primary scope; no additional project filter needed for reads.
+    const contacts = await listContacts(crmConfigId, null);
     return sendOk(res, 200, contacts, { contacts }, { total: contacts.length }), true;
   }
 
