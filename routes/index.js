@@ -160,6 +160,8 @@ async function handleRequest(req, res) {
       routesVersion: 'custom-domain-client-v1',
       message: 'API is up. Log in via the app, then use Import From Folder.',
       _host: req.headers['x-forwarded-host'] || req.headers.host || '',
+      _url: req.url,
+      _pathname: pathnameEarly,
     });
   }
 
