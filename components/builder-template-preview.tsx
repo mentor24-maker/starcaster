@@ -1194,6 +1194,12 @@ function BuilderModulePreview({
   if (module.type === "blog-category-manager") {
     return <BlogCategoryManagerPreview settings={module.settings} />;
   }
+  if (module.type === "messaging-topic-list") {
+    return <MessagingTopicListPreview settings={module.settings} />;
+  }
+  if (module.type === "messaging-tag-list") {
+    return <MessagingTagListPreview settings={module.settings} />;
+  }
   if (module.type === "blog-category-filter") {
     return <BlogCategoryFilterPreview settings={module.settings} />;
   }
@@ -1298,12 +1304,15 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         const fetchedCats = Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : [];
         setAllPosts(fetchedPosts);
         setCategories(fetchedCats);
-        // Pre-seed category filter from URL ?category=slug
-        const urlCatSlug = new URLSearchParams(window.location.search).get("category") ?? "";
+        // Pre-seed filters from URL params
+        const params = new URLSearchParams(window.location.search);
+        const urlCatSlug = params.get("category") ?? "";
         if (urlCatSlug) {
           const match = fetchedCats.find((c) => c.slug === urlCatSlug);
           if (match) setCatFilter(match.id);
         }
+        const urlTag = params.get("tag") ?? "";
+        if (urlTag) setTagFilter(urlTag);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -1946,11 +1955,198 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   );
 }
 
-type CategoryFormValues = { name: string; slug: string; description: string; color: string; sortOrder: string };
-
-function slugify(str: string) {
+function textToSlug(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
+
+function MessagingTopicListPreview({ settings }: { settings: Record<string, string> }) {
+  const [topics, setTopics] = useState<Array<{ id: number; topic: string }>>([]);
+
+  useEffect(() => {
+    fetch("/api/messaging/topics", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.topics)) setTopics(d.topics); })
+      .catch(() => {});
+  }, []);
+
+  const layout = settings.layout || "pills";
+  const showAll = settings.showAll !== "false";
+  const allLabel = settings.allLabel || "All Topics";
+  const activeColor = settings.activeColor || "#0f4f8f";
+  const activeBg = settings.activeBg || activeColor;
+  const inactiveColor = settings.inactiveColor || "#587592";
+  const inactiveBg = settings.inactiveBg || "#f0f4f8";
+  const borderRadius = parseInt(settings.borderRadius || "20", 10) || 20;
+  const fontSize = parseInt(settings.fontSize || "13", 10) || 13;
+  const gap = parseInt(settings.gap || "8", 10) || 8;
+  const alignment = settings.alignment || "left";
+  const targetPageUrl = (settings.targetPageUrl || "").trim();
+  const filterParam = (settings.filterParam || "topic").trim();
+  const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+
+  const currentParam = new URLSearchParams(window.location.search).get(filterParam) ?? "";
+
+  function makeHref(slug: string) {
+    if (!targetPageUrl) return "#";
+    const sep = targetPageUrl.includes("?") ? "&" : "?";
+    return slug ? `${targetPageUrl}${sep}${filterParam}=${encodeURIComponent(slug)}` : targetPageUrl;
+  }
+
+  const items = [
+    ...(showAll ? [{ id: 0, topic: allLabel, slug: "" }] : []),
+    ...topics.map((t) => ({ id: t.id, topic: t.topic, slug: textToSlug(t.topic) })),
+  ];
+
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: "0.75rem", color: "#94a3b8", fontSize: "0.875rem", fontStyle: "italic" }}>
+        No topics found. Add topics in the Messaging section.
+      </div>
+    );
+  }
+
+  if (layout === "dropdown") {
+    return (
+      <div style={{ textAlign: alignment as "left" | "center" | "right" }}>
+        <select
+          style={{ padding: "0.5rem 0.75rem", borderRadius: borderRadius / 2, border: "1px solid #d1d5db", fontSize, color: inactiveColor, background: inactiveBg, cursor: "pointer" }}
+          onChange={(e) => { window.location.href = makeHref(e.target.value); }}
+        >
+          {items.map((item) => <option key={item.id} value={item.slug}>{item.topic}</option>)}
+        </select>
+      </div>
+    );
+  }
+
+  if (layout === "list") {
+    return (
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: gap / 2 }}>
+        {items.map((item) => {
+          const isActive = item.slug === "" ? !currentParam : currentParam === item.slug;
+          return (
+            <li key={item.id}>
+              <a href={makeHref(item.slug)} style={{ fontSize, color: isActive ? activeBg : inactiveColor, fontWeight: isActive ? 700 : 400, textDecoration: "none", display: "block", padding: "0.25rem 0" }}>
+                {item.topic}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[alignment] || "flex-start" }}>
+      {items.map((item) => {
+        const isActive = item.slug === "" ? !currentParam : currentParam === item.slug;
+        return (
+          <a
+            key={item.id}
+            href={makeHref(item.slug)}
+            style={{
+              padding: `0.3rem ${borderRadius > 12 ? "0.85rem" : "0.65rem"}`,
+              borderRadius,
+              background: isActive ? activeBg : inactiveBg,
+              color: isActive ? "#fff" : inactiveColor,
+              fontSize,
+              fontWeight: isActive ? 600 : 400,
+              textDecoration: "none",
+              display: "inline-block",
+            }}
+          >
+            {item.topic}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function MessagingTagListPreview({ settings }: { settings: Record<string, string> }) {
+  const [tags, setTags] = useState<Array<{ id: number; tag: string }>>([]);
+
+  useEffect(() => {
+    fetch("/api/messaging/tags", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.tags)) setTags(d.tags); })
+      .catch(() => {});
+  }, []);
+
+  const layout = settings.layout || "cloud";
+  const activeColor = settings.activeColor || "#0f4f8f";
+  const inactiveColor = settings.inactiveColor || "#587592";
+  const inactiveBg = settings.inactiveBg || "#f0f4f8";
+  const gap = parseInt(settings.gap || "8", 10) || 8;
+  const minFs = parseInt(settings.minFontSize || "12", 10) || 12;
+  const maxFs = parseInt(settings.maxFontSize || "22", 10) || 22;
+  const alignment = settings.alignment || "left";
+  const targetPageUrl = (settings.targetPageUrl || "").trim();
+  const filterParam = (settings.filterParam || "tag").trim();
+  const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+
+  const currentParam = new URLSearchParams(window.location.search).get(filterParam) ?? "";
+
+  function makeHref(slug: string) {
+    if (!targetPageUrl) return "#";
+    const sep = targetPageUrl.includes("?") ? "&" : "?";
+    return `${targetPageUrl}${sep}${filterParam}=${encodeURIComponent(slug)}`;
+  }
+
+  if (tags.length === 0) {
+    return (
+      <div style={{ padding: "0.75rem", color: "#94a3b8", fontSize: "0.875rem", fontStyle: "italic" }}>
+        No tags found. Add tags in the Messaging section.
+      </div>
+    );
+  }
+
+  // Assign a pseudo-weight (1–5) by alphabetic hash so the cloud looks varied
+  const withWeight = tags.map((t, i) => ({ ...t, slug: textToSlug(t.tag), weight: ((i * 7 + t.tag.length) % 5) + 1 }));
+  const maxWeight = 5;
+
+  if (layout === "list") {
+    return (
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: gap / 2 }}>
+        {withWeight.map((t) => {
+          const isActive = currentParam === t.slug;
+          return (
+            <li key={t.id}>
+              <a href={makeHref(t.slug)} style={{ fontSize: minFs, color: isActive ? activeColor : inactiveColor, fontWeight: isActive ? 700 : 400, textDecoration: "none", display: "block", padding: "0.2rem 0" }}>
+                # {t.tag}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[alignment] || "flex-start" }}>
+      {withWeight.map((t) => {
+        const isActive = currentParam === t.slug;
+        const fs = Math.round(minFs + (maxFs - minFs) * (t.weight / maxWeight));
+        return (
+          <a
+            key={t.id}
+            href={makeHref(t.slug)}
+            style={{
+              fontSize: fs,
+              color: isActive ? activeColor : inactiveColor,
+              fontWeight: isActive ? 700 : 400,
+              textDecoration: "none",
+              ...(layout === "pills" ? { padding: "0.25rem 0.75rem", borderRadius: 999, background: inactiveBg } : {}),
+            }}
+          >
+            {t.tag}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+type CategoryFormValues = { name: string; slug: string; description: string; color: string; sortOrder: string };
 
 function BlogCategoryManagerPreview({ settings }: { settings: Record<string, string> }) {
   const accent = settings.accentColor || "#0f4f8f";
@@ -2014,7 +2210,7 @@ function BlogCategoryManagerPreview({ settings }: { settings: Record<string, str
     setStatusMsg("");
     const body = {
       name: form.name.trim(),
-      slug: form.slug.trim() || slugify(form.name.trim()),
+      slug: form.slug.trim() || textToSlug(form.name.trim()),
       description: form.description.trim(),
       color: form.color,
       sortOrder: parseInt(form.sortOrder || "0", 10) || 0,
@@ -2092,7 +2288,7 @@ function BlogCategoryManagerPreview({ settings }: { settings: Record<string, str
                 value={form.name}
                 onChange={(e) => {
                   const n = e.target.value;
-                  setForm((f) => ({ ...f, name: n, slug: f.slug || slugify(n) }));
+                  setForm((f) => ({ ...f, name: n, slug: f.slug || textToSlug(n) }));
                 }}
                 placeholder="Technology"
               />

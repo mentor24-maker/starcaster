@@ -73,6 +73,8 @@ export type BuilderTemplateModuleType =
   | "blog-post-create"
   | "blog-post-manager"
   | "blog-category-manager"
+  | "messaging-topic-list"
+  | "messaging-tag-list"
   | "admin-team-users"
   | "admin-modules"
   | "admin-login";
@@ -1036,6 +1038,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-post-create" ||
     type === "blog-post-manager" ||
     type === "blog-category-manager" ||
+    type === "messaging-topic-list" ||
+    type === "messaging-tag-list" ||
     type === "admin-team-users" ||
     type === "admin-modules" ||
     type === "admin-login"
@@ -1986,6 +1990,35 @@ export function createEmptyModule(
                             showSortOrder: "false",
                             showDelete: "true",
                             accentColor: "#0f4f8f"
+                          }
+                      : type === "messaging-topic-list"
+                        ? {
+                            layout: "pills",
+                            showAll: "true",
+                            allLabel: "All Topics",
+                            targetPageUrl: "",
+                            filterParam: "topic",
+                            activeColor: "#0f4f8f",
+                            activeBg: "#0f4f8f",
+                            inactiveColor: "#587592",
+                            inactiveBg: "#f0f4f8",
+                            borderRadius: "20",
+                            fontSize: "13",
+                            gap: "8",
+                            alignment: "left"
+                          }
+                      : type === "messaging-tag-list"
+                        ? {
+                            layout: "cloud",
+                            targetPageUrl: "",
+                            filterParam: "tag",
+                            activeColor: "#0f4f8f",
+                            inactiveColor: "#587592",
+                            inactiveBg: "#f0f4f8",
+                            minFontSize: "12",
+                            maxFontSize: "22",
+                            gap: "8",
+                            alignment: "left"
                           }
                       : type === "crm-contacts-table"
                         ? {
